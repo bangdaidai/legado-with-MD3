@@ -184,6 +184,18 @@ fun MyScreen(
                     imageVector = Icons.Default.Sell,
                     onClick = { onNavigate(PrefClickEvent.OpenHighlightTagRule) }
                 )
+                ClickableSettingItem(
+                    title = stringResource(R.string.book_tag_manage),
+                    description = stringResource(R.string.book_tag_manage_desc),
+                    imageVector = Icons.Default.Sell,
+                    onClick = {
+                        onNavigate(
+                            PrefClickEvent.StartActivity(
+                                io.legado.app.ui.book.tag.BookTagManageActivity::class.java
+                            )
+                        )
+                    }
+                )
             }
 
             SplicedColumnGroup(

@@ -62,7 +62,7 @@ fun BookTagEditSheet(
     var name by remember(show, tag) { mutableStateOf(tag?.name ?: "") }
     var groupName by remember(show, tag) { mutableStateOf(initialGroup) }
     var color by remember(show, tag) {
-        mutableStateOf(if (tag != null && tag.color != 0) tag.color else TAG_PALETTE.random())
+        mutableStateOf(if (tag != null && tag.color != 0) tag.color else TAG_PALETTE.first())
     }
     var showMenu by remember { mutableStateOf(false) }
 

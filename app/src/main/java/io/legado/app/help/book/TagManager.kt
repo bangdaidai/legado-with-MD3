@@ -65,6 +65,25 @@ object TagManager {
         return tags.filter { it.name !in excluded }
     }
 
+    /**
+     * 从所有书籍的分类(kind + customTag)自动生成标签并建立书籍-标签关联。
+     * 已有标签复用(ensureTag)，首次创建时随机生成颜色，用户可后续在标签库修改。
+     */
+    suspend fun syncTagsFromBooks() {
+        val books = appDb.bookDao.getAll()
+        books.forEach { book ->
+            val names = book.getDisplayTagList()
+            if (names.isEmpty()) return@forEach
+            val existing = appDb.bookTagRelationDao.getTagIdsByBook(book.bookUrl).toSet()
+            names.forEach { name ->
+                val tag = ensureTag(name)
+                if (tag.id !in existing) {
+                    addTagToBook(book.bookUrl, tag.id)
+                }
+            }
+        }
+    }
+
     private fun postUpdated(bookUrl: String) {
         FlowEventBus.post(EventBus.TAGS_UPDATED, bookUrl)
     }

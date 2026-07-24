@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.tag
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
@@ -13,7 +14,13 @@ class BookTagManageActivity : BaseComposeActivity() {
     override fun Content() {
         BookTagManageScreen(
             viewModel = viewModel,
-            onBack = { finish() }
+            onBack = { finish() },
+            onOpenDetail = { tag ->
+                startActivity(
+                    Intent(this@BookTagManageActivity, BookTagDetailActivity::class.java)
+                        .putExtra("tagId", tag.id)
+                )
+            }
         )
     }
 }

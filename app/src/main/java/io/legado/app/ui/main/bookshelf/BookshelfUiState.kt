@@ -112,7 +112,7 @@ data class BookshelfUiState(
     val settings: BookshelfSettings = BookshelfSettings(),
     val useRaisedBottomInset: Boolean = false,
     val enableCustomTagColors: Boolean = false,
-    val customTagColors: ImmutableList<TagColorPair> = persistentListOf(),
+    val tagColors: ImmutableMap<String, Int> = persistentMapOf(),
     val themeColor: Int = 0,
     val pendingUploadUrl: String? = null,
 ) : ListUiState<BookUiItem>

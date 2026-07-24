@@ -228,6 +228,12 @@
             android:configChanges="locale|layoutDirection|uiMode|screenLayout"
             android:enableOnBackInvokedCallback="true"
             android:launchMode="singleTask" />
+        <!-- 标签详情 -->
+        <activity
+            android:name=".ui.book.tag.BookTagDetailActivity"
+            android:configChanges="locale|layoutDirection|uiMode|screenLayout"
+            android:enableOnBackInvokedCallback="true"
+            android:launchMode="singleTask" />
         <!-- 音频播放界面 -->
         <activity
             android:name="io.legado.app.ui.book.audio.AudioPlayActivity"

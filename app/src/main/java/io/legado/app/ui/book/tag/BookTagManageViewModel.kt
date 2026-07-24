@@ -6,6 +6,7 @@ import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.repository.BookTagGroupRepository
 import io.legado.app.data.repository.BookTagRepository
+import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,5 +61,10 @@ class BookTagManageViewModel : ViewModel() {
                 .forEach { BookTagRepository.update(it.copy(groupId = 0)) }
             BookTagGroupRepository.delete(group)
         }
+    }
+
+    /** 进入标签库时调用：从书籍分类自动生成标签与关联 */
+    fun syncFromBooks() {
+        viewModelScope.launch { TagManager.syncTagsFromBooks() }
     }
 }

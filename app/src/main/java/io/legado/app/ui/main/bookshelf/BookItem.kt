@@ -661,7 +661,7 @@ fun BookGroupItemHorizontalCovers(
 @Composable
 fun BookItem(
     settings: BookshelfSettings,
-    customTagColors: ImmutableList<TagColorPair>,
+    tagColors: ImmutableMap<String, Int>,
     bookUi: BookUiItem,
     layoutMode: Int,
     modifier: Modifier = Modifier,
@@ -765,16 +765,22 @@ fun BookItem(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        kindList.forEachIndexed { index, label ->
-                            val colorPair = if (customTagColors.isNotEmpty()) {
-                                customTagColors[index % customTagColors.size]
+                        kindList.forEach { label ->
+                            val tagColor = tagColors[label]
+                            val bg = if (tagColor != null && tagColor != 0) {
+                                Color(tagColor).copy(alpha = 0.16f)
                             } else {
-                                null
+                                LegadoTheme.colorScheme.surfaceContainerHigh
+                            }
+                            val fg = if (tagColor != null && tagColor != 0) {
+                                Color(tagColor)
+                            } else {
+                                LegadoTheme.colorScheme.primary.copy(alpha = 0.8f)
                             }
                             TextCard(
                                 text = label,
-                                backgroundColor = if (colorPair != null && colorPair.bgColor != 0) Color(colorPair.bgColor) else LegadoTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = if (colorPair != null && colorPair.textColor != 0) Color(colorPair.textColor) else LegadoTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                backgroundColor = bg,
+                                contentColor = fg,
                                 cornerRadius = 4.dp,
                                 horizontalPadding = 4.dp,
                                 verticalPadding = 2.dp,

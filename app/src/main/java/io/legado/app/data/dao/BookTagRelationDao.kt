@@ -40,4 +40,7 @@ interface BookTagRelationDao {
 
     @Query("SELECT COUNT(*) FROM bookTagRelations WHERE tagId = :tagId")
     suspend fun countBooks(tagId: Long): Int
+
+    @Query("SELECT bookUrl FROM bookTagRelations WHERE tagId = :tagId")
+    suspend fun getBookUrlsByTag(tagId: Long): List<String>
 }

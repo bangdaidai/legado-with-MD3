@@ -14,4 +14,5 @@ object BookTagRelationRepository {
     suspend fun delete(bookUrl: String, tagId: Long) = dao.delete(bookUrl, tagId)
     suspend fun deleteByBook(bookUrl: String) = dao.deleteByBook(bookUrl)
     suspend fun countBooks(tagId: Long) = dao.countBooks(tagId)
+    suspend fun getBookUrlsByTag(tagId: Long) = dao.getBookUrlsByTag(tagId)
 }

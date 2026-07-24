@@ -40,6 +40,13 @@ class BookRepository(
         }
     }
 
+    suspend fun getByUrls(bookUrls: List<String>): List<Book> {
+        if (bookUrls.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            bookDao.getByBookUrls(bookUrls)
+        }
+    }
+
     suspend fun getBook(name: String, author: String): Book? {
         return withContext(Dispatchers.IO) {
             bookDao.getBook(name, author)
