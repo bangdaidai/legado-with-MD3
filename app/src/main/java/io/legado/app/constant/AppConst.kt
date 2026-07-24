@@ -2,6 +2,7 @@ package io.legado.app.constant
 
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
 import androidx.annotation.Keep
 import cn.hutool.crypto.digest.DigestUtil
@@ -77,10 +78,21 @@ object AppConst {
     }
 
     @Suppress("DEPRECATION")
-    private val sha256Signature: String by lazy {
-        val packageInfo =
-            appCtx.packageManager.getPackageInfo(appCtx.packageName, PackageManager.GET_SIGNATURES)
-        DigestUtil.sha256Hex(packageInfo.signatures!![0].toByteArray()).uppercase()
+    private val sha256Signature: String? by lazy {
+        val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        val packageInfo = runCatching {
+            appCtx.packageManager.getPackageInfo(appCtx.packageName, flag)
+        }.getOrNull() ?: return@lazy null
+        val signature = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.signingInfo?.apkContentsSigners?.firstOrNull()
+        } else {
+            packageInfo.signatures?.firstOrNull()
+        }
+        signature?.let { DigestUtil.sha256Hex(it.toByteArray()).uppercase() }
     }
 
     private val isOfficial = sha256Signature == OFFICIAL_SIGNATURE

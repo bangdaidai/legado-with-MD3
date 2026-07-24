@@ -268,8 +268,9 @@ jobs:
 
   create_release:
     needs: [ prepare, build ]
-    # 只有 Release APK workflow 调用时才发布；普通 Auto Build 仍然只构建产物。
-    if: inputs.publish && github.actor == 'HapeLee' && github.ref == 'refs/heads/main'
+    # 像 readdai 一样：push 到 main 自动创建 GitHub Release 并发布；
+    # 也保留手动 workflow_dispatch（release.yml 传入 publish=true）的发道路径。
+    if: github.ref == 'refs/heads/main' && github.actor == 'HapeLee' && (inputs.publish || github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
