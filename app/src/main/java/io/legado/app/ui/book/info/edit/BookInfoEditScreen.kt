@@ -73,6 +73,10 @@ import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import android.content.Intent
+import io.legado.app.ui.book.tag.BookTagManageActivity
+import io.legado.app.ui.book.tag.BookTagSection
+import io.legado.app.ui.book.tag.BookTagSelectSheet
 import io.legado.app.utils.SelectImageContract
 import io.legado.app.utils.launch
 import io.legado.app.utils.showDialogFragment
@@ -151,6 +155,8 @@ fun BookInfoEditContent(
             viewModel.coverChangeTo(context, uri)
         }
     }
+
+    var showTagSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier.padding(16.dp)
@@ -264,6 +270,16 @@ fun BookInfoEditContent(
             backgroundColor = LegadoTheme.colorScheme.surfaceInput,
         )
         Spacer(modifier = Modifier.height(8.dp))
+        if (uiState.book?.bookUrl?.isNotEmpty() == true) {
+            BookTagSection(
+                bookUrl = uiState.book!!.bookUrl,
+                onManageClick = {
+                    context.startActivity(Intent(context, BookTagManageActivity::class.java))
+                },
+                onSelectClick = { showTagSheet = true }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         AppTextField(
             value = uiState.intro ?: "",
             onValueChange = { viewModel.onIntroChange(it) },
@@ -279,6 +295,13 @@ fun BookInfoEditContent(
             backgroundColor = LegadoTheme.colorScheme.surfaceInput,
             modifier = Modifier.fillMaxWidth()
         )
+        if (showTagSheet) {
+            BookTagSelectSheet(
+                show = true,
+                bookUrl = uiState.book?.bookUrl ?: "",
+                onDismissRequest = { showTagSheet = false }
+            )
+        }
     }
 }
 

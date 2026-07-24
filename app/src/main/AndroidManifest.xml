@@ -222,6 +222,12 @@
             android:enableOnBackInvokedCallback="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <!-- 标签库管理 -->
+        <activity
+            android:name=".ui.book.tag.BookTagManageActivity"
+            android:configChanges="locale|layoutDirection|uiMode|screenLayout"
+            android:enableOnBackInvokedCallback="true"
+            android:launchMode="singleTask" />
         <!-- 音频播放界面 -->
         <activity
             android:name="io.legado.app.ui.book.audio.AudioPlayActivity"
