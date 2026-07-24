@@ -55,16 +55,19 @@ jobs:
           grep "RELEASE_" gradle.properties
 
           echo ""
-          echo "🔍 校验 keystore 别名与密码是否匹配..."
-          if keytool -list -keystore "$GITHUB_WORKSPACE/release.keystore" -storepass "$STORE_PW" -alias "$KEY_ALIAS" -keypass "$KEY_PW" >/dev/null 2>&1; then
-            echo "✅ 校验通过：别名 '$KEY_ALIAS' 存在且密码正确"
-          else
-            echo "❌ 校验失败！请确认："
-            echo "   1) RELEASE_KEY_ALIAS 的值必须正好是 'legado'（无空格/换行）"
-            echo "   2) RELEASE_STORE_PASSWORD 与 RELEASE_KEY_PASSWORD 都必须是 '123456'"
-            echo "   当前读取到的别名='$KEY_ALIAS' 长度=${#KEY_ALIAS}"
+          echo "🔍 校验 keystore..."
+          if ! keytool -list -keystore "$GITHUB_WORKSPACE/release.keystore" -storepass "$STORE_PW" >/dev/null 2>&1; then
+            echo "❌ 步骤A失败：keystore 无法用 RELEASE_STORE_PASSWORD 打开"
+            echo "   → 说明 RELEASE_STORE_PASSWORD 不对，或 RELEASE_KEY_STORE_BASE64 解码出的文件已损坏"
             exit 1
           fi
+          if ! keytool -list -keystore "$GITHUB_WORKSPACE/release.keystore" -storepass "$STORE_PW" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "❌ 步骤B失败：别名 '$KEY_ALIAS'(长度=${#KEY_ALIAS}) 不存在于该 keystore"
+            echo "   → 说明 RELEASE_KEY_STORE_BASE64 不是配套的 legado keystore（可能仍是旧 readdai 的那个）"
+            echo "   请检查 GitHub 上该 Secret 的开头：最新的必须是 'MIIKlAIBAz...'，旧的 readdai 是 'MIIJxAIBAz...'"
+            exit 1
+          fi
+          echo "✅ 校验通过：别名 '$KEY_ALIAS' 存在且 store 密码正确"
 
       - name: Verify Gradle Signing Config
         run: |
