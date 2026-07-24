@@ -29,7 +29,8 @@ jobs:
             echo "📝 正在解码 keystore 文件..."
             
             mkdir -p $GITHUB_WORKSPACE
-            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > $GITHUB_WORKSPACE/release.keystore
+            # 去除可能混入的空白/换行，避免 base64: invalid input
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > $GITHUB_WORKSPACE/release.keystore
             
             echo "✅ Keystore 文件创建成功: $GITHUB_WORKSPACE/release.keystore"
             echo "📊 文件大小: $(stat -c%s $GITHUB_WORKSPACE/release.keystore) 字节"
