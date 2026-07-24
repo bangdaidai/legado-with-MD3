@@ -598,21 +598,23 @@ class BookshelfViewModel(
         appShellSettingsGateway.settings,
         themeSettingsGateway.settings,
         pendingUploadUrlFlow,
-        BookTagRepository.observeAll(),
-    ) { state, settings, appShellSettings, themeSettings, pendingUploadUrl, tags ->
+    ) { state, settings, appShellSettings, themeSettings, pendingUploadUrl ->
         state.copy(
             settings = settings,
             useRaisedBottomInset = appShellSettings.useFloatingBottomBar || themeSettings.enableBlur,
             enableCustomTagColors = themeSettings.enableCustomTagColors,
-            tagColors = if (themeSettings.enableCustomTagColors) {
+            themeColor = themeSettings.themeColor,
+            pendingUploadUrl = pendingUploadUrl,
+        )
+    }.combine(BookTagRepository.observeAll()) { prev, tags ->
+        prev.copy(
+            tagColors = if (prev.enableCustomTagColors) {
                 tags.filter { it.color != 0 }
                     .associate { it.name to it.color }
                     .toImmutableMap()
             } else {
                 persistentMapOf()
-            },
-            themeColor = themeSettings.themeColor,
-            pendingUploadUrl = pendingUploadUrl,
+            }
         )
     }.stateIn(
         viewModelScope,

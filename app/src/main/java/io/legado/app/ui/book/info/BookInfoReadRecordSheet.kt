@@ -114,7 +114,7 @@ fun BookReadRecordSheet(
 }
 
 @Composable
-private fun TimelineSessionRow(session: ReadRecordSession) {
+fun TimelineSessionRow(session: ReadRecordSession) {
     val lineColor = LegadoTheme.colorScheme.surfaceContainerHigh
     val nodeColor = LegadoTheme.colorScheme.primary
     val duration = (session.endTime - session.startTime).coerceAtLeast(0L)

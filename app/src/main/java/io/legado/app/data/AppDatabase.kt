@@ -46,6 +46,7 @@ import io.legado.app.data.dao.BookTagDao
 import io.legado.app.data.dao.BookTagGroupDao
 import io.legado.app.data.dao.BookTagRelationDao
 import io.legado.app.data.dao.ExcludedTagDao
+import io.legado.app.data.dao.ReadingMemoryDao
 import io.legado.app.data.dao.RemovedAutoTagDao
 import io.legado.app.data.dao.TagGroupRuleDao
 import io.legado.app.data.dao.TxtTocRuleDao
@@ -98,6 +99,7 @@ import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.BookTagRelation
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.RemovedAutoTag
+import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.TagGroupRule
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.entities.readRecord.ReadRecord
@@ -118,7 +120,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 97,
+    version = 98,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -135,7 +137,7 @@ val appDb by lazy {
         BookOutlineNode::class, ReadAloudVoiceEntity::class, BookVoiceBindingEntity::class,
         ChapterSpeechAnalysisEntity::class, ChapterSpeechSegmentEntity::class,
         CloudTtsEngineEntity::class, BookTag::class, BookTagGroup::class, BookTagRelation::class,
-        ExcludedTag::class, RemovedAutoTag::class],
+        ExcludedTag::class, RemovedAutoTag::class, ReadingMemory::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -233,6 +235,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val bookTagRelationDao: BookTagRelationDao
     abstract val excludedTagDao: ExcludedTagDao
     abstract val removedAutoTagDao: RemovedAutoTagDao
+    abstract val readingMemoryDao: ReadingMemoryDao
     abstract val aiProfileDao: AiProfileDao
     abstract val aiArtifactDao: AiArtifactDao
     abstract val aiChatDao: AiChatDao

@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
-import io.legado.app.data.repository.BookRepository
+import io.legado.app.data.appDb
 import io.legado.app.data.repository.BookTagGroupRepository
 import io.legado.app.data.repository.BookTagRelationRepository
 import io.legado.app.data.repository.BookTagRepository
@@ -43,7 +43,7 @@ class BookTagDetailViewModel : ViewModel() {
             _groupName.value =
                 if (gid == 0L) "未分组" else BookTagGroupRepository.get(gid)?.name ?: "未分组"
             val urls = BookTagRelationRepository.getBookUrlsByTag(tagId)
-            _books.value = BookRepository.getByUrls(urls)
+            _books.value = appDb.bookDao.getByBookUrls(urls)
         }
     }
 

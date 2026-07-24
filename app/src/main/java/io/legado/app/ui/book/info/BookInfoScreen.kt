@@ -800,6 +800,10 @@ private fun BookInfoOverflowMenu(
             text = stringResource(R.string.read_record),
             onClick = { onMenuAction(BookInfoMenuAction.ReadRecord) }
         )
+        RoundDropdownMenuItem(
+            text = stringResource(R.string.reading_memory),
+            onClick = { onMenuAction(BookInfoMenuAction.ReadingMemory) }
+        )
         if (book?.isLocal == true) {
             RoundDropdownMenuItem(
                 text = stringResource(R.string.re_sync_webdav),

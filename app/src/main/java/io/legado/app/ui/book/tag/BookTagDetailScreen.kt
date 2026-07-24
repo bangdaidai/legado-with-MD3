@@ -48,7 +48,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookTag
 import io.legado.app.ui.theme.AppTheme
-import io.legado.app.ui.theme.AppUiConfiguration
+import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import kotlinx.coroutines.launch
@@ -105,7 +105,7 @@ fun BookTagDetailScreen(
                     onBack()
                 }
             },
-            onCreateGroup = { scope.launch { viewModel.createGroup(it) } }
+            onCreateGroup = { viewModel.createGroup(it) }
         )
     }
 }

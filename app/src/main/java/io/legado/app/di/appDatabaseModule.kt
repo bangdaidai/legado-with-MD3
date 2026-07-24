@@ -40,6 +40,7 @@ val appDatabaseModule = module {
     factory<CookieDao> { get<AppDatabase>().cookieDao }
     factory<TxtTocRuleDao> { get<AppDatabase>().txtTocRuleDao }
     factory<ReadRecordDao> { get<AppDatabase>().readRecordDao }
+    factory<ReadingMemoryDao> { get<AppDatabase>().readingMemoryDao }
     factory<HttpTTSDao> { get<AppDatabase>().httpTTSDao }
     factory<CacheDao> { get<AppDatabase>().cacheDao }
     factory<RuleSubDao> { get<AppDatabase>().ruleSubDao }

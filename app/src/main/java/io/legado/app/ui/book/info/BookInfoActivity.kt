@@ -3,6 +3,7 @@ package io.legado.app.ui.book.info
 import android.os.Bundle
 import androidx.compose.runtime.Composable
 import io.legado.app.base.BaseComposeActivity
+import io.legado.app.ui.book.readingmemory.ReadingMemoryDetailActivity
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.utils.startActivity
@@ -73,6 +74,11 @@ class BookInfoActivity : BaseComposeActivity(), VariableDialog.Callback {
             },
             onOpenEventList = { bookUrl ->
                 startActivity(MainActivity.createBookEventListIntent(this, bookUrl))
+            },
+            onOpenReadingMemory = { bookUrl ->
+                startActivity<ReadingMemoryDetailActivity> {
+                    putExtra("bookUrl", bookUrl)
+                }
             },
         )
     }

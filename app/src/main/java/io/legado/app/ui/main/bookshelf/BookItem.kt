@@ -62,6 +62,7 @@ import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toTimeAgo
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
 
 /**
  * 通用的书架条目布局组件

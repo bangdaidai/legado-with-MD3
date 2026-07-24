@@ -1186,6 +1186,7 @@ private fun BookshelfOverlays(
     exportLauncher: ManagedActivityResultLauncher<String, Uri?>,
     clearSelection: () -> Unit
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     BookshelfConfigSheet(
         show = activeOverlay == BookshelfOverlay.ConfigSheet,
         settings = uiState.settings,
@@ -1195,7 +1196,6 @@ private fun BookshelfOverlays(
             onIntent(BookshelfIntent.SetCustomTagColorsEnabled(it))
         },
         onManageTags = {
-            val ctx = androidx.compose.ui.platform.LocalContext.current
             ctx.startActivity(
                 android.content.Intent(
                     ctx,

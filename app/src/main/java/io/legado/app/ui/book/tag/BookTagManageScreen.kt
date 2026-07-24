@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.AutoMirrored.Filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.FilterChip
@@ -51,6 +51,7 @@ import io.legado.app.data.repository.BookTagRepository
 import io.legado.app.data.repository.ExcludedTagRepository
 import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.domain.model.settings.AppUiConfiguration
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import io.legado.app.utils.TagColorUtils

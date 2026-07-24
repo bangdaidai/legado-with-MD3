@@ -62,6 +62,7 @@ import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.data.repository.ReadAloudVoiceRepository
 import io.legado.app.data.repository.ReadBookStyleConfigRepository
 import io.legado.app.data.repository.ReadRecordRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.ReadStyleRepository
 import io.legado.app.data.repository.RemoteBookRepository
@@ -214,6 +215,7 @@ import io.legado.app.ui.book.manga.ReadMangaViewModel
 import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordViewModel
+import io.legado.app.ui.book.readingmemory.ReadingMemoryDetailViewModel
 import io.legado.app.ui.book.readaloud.cache.TtsCacheViewModel
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingViewModel
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
@@ -283,6 +285,7 @@ val appModule = module {
     single { get<AppDatabase>().ruleSubDao }
 
     singleOf(::ReadRecordRepository)
+    singleOf(::ReadingMemoryRepository)
     single<HomeDashboardGateway> { HomeDashboardRepository(get(), get()) }
     singleOf(::BookRepository)
     singleOf(::BookGroupRepository)
@@ -454,6 +457,13 @@ val appModule = module {
     viewModelOf(::RuleSubViewModel)
     viewModelOf(::ReadRecordViewModel)
     viewModelOf(::ReadRecordOverviewViewModel)
+    viewModel { (bookUrl: String) ->
+        ReadingMemoryDetailViewModel(
+            repository = get(),
+            bookDao = get(),
+            bookUrl = bookUrl,
+        )
+    }
     viewModelOf(::ExploreShowViewModel)
     viewModelOf(::MyViewModel)
     viewModelOf(::BookshelfViewModel)
