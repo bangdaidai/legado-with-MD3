@@ -153,7 +153,7 @@ fun BookTagEditSheet(
         AppFloatingActionButton(
             onClick = { save() },
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(Alignment.End)
                 .padding(16.dp),
             icon = Icons.Default.Check
         )

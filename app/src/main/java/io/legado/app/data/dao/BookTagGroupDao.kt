@@ -27,6 +27,9 @@ interface BookTagGroupDao {
     @Query("SELECT * FROM bookTagGroups WHERE id = :id")
     suspend fun getById(id: Long): BookTagGroup?
 
+    @Query("SELECT * FROM bookTagGroups WHERE id = :id")
+    suspend fun get(id: Long): BookTagGroup?
+
     @Query("SELECT * FROM bookTagGroups WHERE name = :name")
     suspend fun getByName(name: String): BookTagGroup?
 

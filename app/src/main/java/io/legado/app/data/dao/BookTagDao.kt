@@ -27,6 +27,9 @@ interface BookTagDao {
     @Query("SELECT * FROM bookTags WHERE name = :name")
     suspend fun getTagByName(name: String): BookTag?
 
+    @Query("SELECT * FROM bookTags WHERE name = :name")
+    suspend fun getByName(name: String): BookTag?
+
     @Query("SELECT * FROM bookTags WHERE name LIKE '%' || :keyword || '%' ORDER BY name ASC")
     suspend fun searchByKeyword(keyword: String): List<BookTag>
 

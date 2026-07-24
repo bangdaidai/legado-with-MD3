@@ -276,7 +276,7 @@ fun BookTagSelectSheet(
         AppFloatingActionButton(
             onClick = onDismissRequest,
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(Alignment.End)
                 .padding(16.dp),
             icon = Icons.Default.Check
         )
