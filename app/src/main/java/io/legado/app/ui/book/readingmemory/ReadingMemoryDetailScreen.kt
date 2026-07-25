@@ -812,3 +812,4 @@ private fun shareBookplate(context: Context, uiState: ReadingMemoryDetailUiState
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(intent, book.name))
+}
