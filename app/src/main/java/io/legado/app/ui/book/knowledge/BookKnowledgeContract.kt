@@ -18,6 +18,7 @@ data class CharacterDetailUiState(
     val role: String = "",
     val voiceGender: String = "unknown",
     val voiceAgeBand: String = "unknown",
+    val isProtagonist: Boolean = false,
     val personality: String = "",
     val summary: String = "",
     val events: ImmutableList<CharacterEventUi> = persistentListOf(),
@@ -51,6 +52,7 @@ sealed interface CharacterDetailIntent {
     data class SetRole(val value: String) : CharacterDetailIntent
     data class SetVoiceGender(val value: String) : CharacterDetailIntent
     data class SetVoiceAgeBand(val value: String) : CharacterDetailIntent
+    data class SetIsProtagonist(val value: Boolean) : CharacterDetailIntent
     data class SetPersonality(val value: String) : CharacterDetailIntent
     data class SetSummary(val value: String) : CharacterDetailIntent
     data object Save : CharacterDetailIntent

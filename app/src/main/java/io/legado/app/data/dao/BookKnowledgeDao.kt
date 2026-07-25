@@ -171,4 +171,41 @@ interface BookKnowledgeDao {
 
     @Query("delete from book_knowledge_entries where id = :entryId")
     suspend fun deleteKnowledgeEntry(entryId: String)
+
+    // region 主角相关（统一数据源 = book_character_profiles.isProtagonist）
+
+    /** 获取指定书籍的全部主角 */
+    @Query(
+        """
+        select * from book_character_profiles
+        where bookUrl = :bookUrl
+          and isProtagonist = 1
+          and status != ${BookCharacterProfile.STATUS_DELETED}
+        order by updatedAt desc
+        """
+    )
+    suspend fun getProtagonists(bookUrl: String): List<BookCharacterProfile>
+
+    /** 按书+名查主角（用于去重检查） */
+    @Query(
+        """
+        select * from book_character_profiles
+        where bookUrl = :bookUrl
+          and name = :name
+          and status != ${BookCharacterProfile.STATUS_DELETED}
+        limit 1
+        """
+    )
+    suspend fun getProtagonistByName(bookUrl: String, name: String): BookCharacterProfile?
+
+    /** 设置/取消主角标志 */
+    @Query("UPDATE book_character_profiles SET isProtagonist = :isProtagonist, updatedAt = :updatedAt WHERE bookUrl = :bookUrl AND name = :name")
+    suspend fun setProtagonist(
+        bookUrl: String,
+        name: String,
+        isProtagonist: Boolean,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
+
+    // endregion
 }

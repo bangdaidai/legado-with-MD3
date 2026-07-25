@@ -63,6 +63,7 @@ import io.legado.app.data.repository.ReadAloudVoiceRepository
 import io.legado.app.data.repository.ReadBookStyleConfigRepository
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.data.repository.ReadSettingsRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.data.repository.ReadStyleRepository
 import io.legado.app.data.repository.RemoteBookRepository
 import io.legado.app.data.repository.ReplaceRuleRepository
@@ -161,6 +162,7 @@ import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
+import io.legado.app.domain.usecase.GetReadingMemoryDetailUseCase
 import io.legado.app.domain.usecase.GetReadingProgressUseCase
 import io.legado.app.domain.usecase.HomeDashboardUseCase
 import io.legado.app.domain.usecase.IdentifyBookCharactersUseCase
@@ -214,6 +216,8 @@ import io.legado.app.ui.book.manga.ReadMangaViewModel
 import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordViewModel
+import io.legado.app.ui.book.readingmemory.ReadingMemoryViewModel
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailViewModel
 import io.legado.app.ui.book.readaloud.cache.TtsCacheViewModel
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingViewModel
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
@@ -355,6 +359,7 @@ val appModule = module {
     singleOf(::CoverAlbumUseCase)
     singleOf(::DeleteBooksUseCase)
     singleOf(::GetReadingProgressUseCase)
+    singleOf(::GetReadingMemoryDetailUseCase)
     single { HomeDashboardUseCase(get(), Clock.systemDefaultZone()) }
     singleOf(::RemoveBookGroupAssignmentUseCase)
     singleOf(::UpdateBooksGroupUseCase)
@@ -396,6 +401,7 @@ val appModule = module {
     single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get()) }
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
+    singleOf(::ReadingMemoryRepository)
     single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get()) }
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }
@@ -454,6 +460,13 @@ val appModule = module {
     viewModelOf(::RuleSubViewModel)
     viewModelOf(::ReadRecordViewModel)
     viewModelOf(::ReadRecordOverviewViewModel)
+    viewModelOf(::ReadingMemoryViewModel)
+    viewModel { (bookUrl: String) ->
+        ReadingMemoryDetailViewModel(
+            bookUrl = bookUrl,
+            repository = get(),
+        )
+    }
     viewModelOf(::ExploreShowViewModel)
     viewModelOf(::MyViewModel)
     viewModelOf(::BookshelfViewModel)
@@ -625,7 +638,8 @@ val appModule = module {
             changeBookSourceUseCase = get(),
             clearBookCacheUseCase = get(),
             deleteBooksUseCase = get(),
-            updateBooksGroupUseCase = get()
+            updateBooksGroupUseCase = get(),
+            readingMemoryRepository = get()
         )
     }
 

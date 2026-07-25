@@ -12,6 +12,7 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.repository.BookGroupRepository
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.gateway.BookExportSettingsGateway
 import io.legado.app.domain.model.settings.BookExportSettings
@@ -104,7 +105,7 @@ sealed interface BookshelfManageScreenIntent {
     data class DeleteBookDownload(val bookUrl: String) : BookshelfManageScreenIntent
     data class ClearBookCache(val book: Book) : BookshelfManageScreenIntent
     data class MoveBooksToGroup(val bookUrls: Set<String>, val groupId: Long) : BookshelfManageScreenIntent
-    data class DeleteBooks(val bookUrls: Set<String>, val deleteOriginal: Boolean) : BookshelfManageScreenIntent
+    data class DeleteBooks(val bookUrls: Set<String>, val deleteOriginal: Boolean, val abandoned: Boolean = false) : BookshelfManageScreenIntent
     data class ClearCachesForBooks(val bookUrls: Set<String>) : BookshelfManageScreenIntent
     data class MoveBookOrder(val fromIndex: Int, val toIndex: Int) : BookshelfManageScreenIntent
     data class DownloadBooks(val bookUrls: Set<String>, val downloadAllChapters: Boolean) : BookshelfManageScreenIntent
@@ -166,7 +167,8 @@ class BookshelfManageScreenViewModel(
     private val changeBookSourceUseCase: ChangeBookSourceUseCase,
     private val clearBookCacheUseCase: ClearBookCacheUseCase,
     private val deleteBooksUseCase: DeleteBooksUseCase,
-    private val updateBooksGroupUseCase: UpdateBooksGroupUseCase
+    private val updateBooksGroupUseCase: UpdateBooksGroupUseCase,
+    private val readingMemoryRepository: ReadingMemoryRepository,
 ) : BaseViewModel(application) {
 
     private companion object {
@@ -216,7 +218,7 @@ class BookshelfManageScreenViewModel(
             is BookshelfManageScreenIntent.DeleteBookDownload -> CacheBook.remove(context, intent.bookUrl)
             is BookshelfManageScreenIntent.ClearBookCache -> clearCacheForBook(intent.book)
             is BookshelfManageScreenIntent.MoveBooksToGroup -> moveBooksToGroup(intent.bookUrls, intent.groupId)
-            is BookshelfManageScreenIntent.DeleteBooks -> deleteBooks(intent.bookUrls, intent.deleteOriginal)
+            is BookshelfManageScreenIntent.DeleteBooks -> deleteBooks(intent.bookUrls, intent.deleteOriginal, intent.abandoned)
             is BookshelfManageScreenIntent.ClearCachesForBooks -> clearCachesForBooks(intent.bookUrls)
             is BookshelfManageScreenIntent.MoveBookOrder -> moveBookOrder(intent.fromIndex, intent.toIndex)
             is BookshelfManageScreenIntent.DownloadBooks -> downloadBooks(intent.bookUrls, intent.downloadAllChapters)
@@ -633,9 +635,15 @@ class BookshelfManageScreenViewModel(
         }
     }
 
-    private fun deleteBooks(bookUrls: Set<String>, deleteOriginal: Boolean) {
+    private fun deleteBooks(bookUrls: Set<String>, deleteOriginal: Boolean, abandoned: Boolean = false) {
         if (bookUrls.isEmpty()) return
         execute {
+            // 标记弃文 + 生成阅读记忆快照（在删除前）
+            if (abandoned) {
+                bookUrls.forEach { readingMemoryRepository.markAbandoned(it) }
+            }
+            bookUrls.forEach { readingMemoryRepository.snapshotOnDelete(it) }
+            // 执行删除
             LocalConfig.deleteBookOriginal = deleteOriginal
             deleteBooksUseCase.execute(bookUrls, deleteOriginal)
         }.onSuccess { deletedBookUrls ->

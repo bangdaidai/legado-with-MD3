@@ -31,6 +31,8 @@ data class BookCharacterProfile(
     val source: String = SOURCE_USER,
     val confidence: Float = 1f,
     val schemaVersion: Int = 1,
+    @ColumnInfo(defaultValue = "0")
+    val isProtagonist: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {

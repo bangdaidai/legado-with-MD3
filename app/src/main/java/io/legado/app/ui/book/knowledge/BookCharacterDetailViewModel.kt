@@ -71,6 +71,7 @@ class BookCharacterDetailViewModel(
             is CharacterDetailIntent.SetRole -> _uiState.update { it.copy(role = intent.value) }
             is CharacterDetailIntent.SetVoiceGender -> _uiState.update { it.copy(voiceGender = intent.value) }
             is CharacterDetailIntent.SetVoiceAgeBand -> _uiState.update { it.copy(voiceAgeBand = intent.value) }
+            is CharacterDetailIntent.SetIsProtagonist -> _uiState.update { it.copy(isProtagonist = intent.value) }
             is CharacterDetailIntent.SetPersonality -> _uiState.update { it.copy(personality = intent.value) }
             is CharacterDetailIntent.SetSummary -> _uiState.update { it.copy(summary = intent.value) }
             CharacterDetailIntent.Save -> save()
@@ -117,6 +118,7 @@ class BookCharacterDetailViewModel(
                             ?: BookCharacterProfile.VOICE_GENDER_UNKNOWN,
                         voiceAgeBand = profile?.voiceAgeBand
                             ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
+                        isProtagonist = profile?.isProtagonist ?: false,
                         personality = profile?.personality.orEmpty(),
                         summary = profile?.summary.orEmpty(),
                         events = events.map { event ->
@@ -177,6 +179,7 @@ class BookCharacterDetailViewModel(
                     role = state.role,
                     voiceGender = state.voiceGender,
                     voiceAgeBand = state.voiceAgeBand,
+                    isProtagonist = state.isProtagonist,
                     personality = state.personality.trim(),
                     summary = state.summary.trim(),
                     status = existing?.status ?: BookCharacterProfile.STATUS_ACTIVE,

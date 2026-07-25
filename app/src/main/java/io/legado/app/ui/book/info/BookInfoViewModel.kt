@@ -1234,6 +1234,12 @@ class BookInfoViewModel(
             )
 
             BookInfoMenuAction.ShowLog -> showAppLog()
+
+            BookInfoMenuAction.ReadingMemory -> {
+                currentBook?.bookUrl?.let { url ->
+                    emitEffect(BookInfoEffect.NavigateToReadingMemory(bookUrl = url))
+                }
+            }
         }
     }
 

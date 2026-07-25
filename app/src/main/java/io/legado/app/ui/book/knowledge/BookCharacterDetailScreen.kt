@@ -158,6 +158,7 @@ private fun CharacterDetailContent(
     var dialogRole by remember(state.role) { mutableStateOf(state.role) }
     var dialogVoiceGender by remember(state.voiceGender) { mutableStateOf(state.voiceGender) }
     var dialogVoiceAgeBand by remember(state.voiceAgeBand) { mutableStateOf(state.voiceAgeBand) }
+    var dialogIsProtagonist by remember(state.isProtagonist) { mutableStateOf(state.isProtagonist) }
 
     Column(
         modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -178,6 +179,7 @@ private fun CharacterDetailContent(
                 dialogRole = state.role
                 dialogVoiceGender = state.voiceGender
                 dialogVoiceAgeBand = state.voiceAgeBand
+                dialogIsProtagonist = state.isProtagonist
                 showProfileDialog = true
             },
         )
@@ -239,6 +241,7 @@ private fun CharacterDetailContent(
             onIntent(CharacterDetailIntent.SetRole(dialogRole))
             onIntent(CharacterDetailIntent.SetVoiceGender(dialogVoiceGender))
             onIntent(CharacterDetailIntent.SetVoiceAgeBand(dialogVoiceAgeBand))
+            onIntent(CharacterDetailIntent.SetIsProtagonist(dialogIsProtagonist))
             showProfileDialog = false
         },
         dismissText = stringResource(R.string.cancel),
@@ -277,6 +280,10 @@ private fun CharacterDetailContent(
                     displayName = { voiceAgeBandDisplayName(it) },
                     onSelected = { dialogVoiceAgeBand = it },
                 )
+                CheckboxItem(
+                    "主角",
+                    checked = dialogIsProtagonist,
+                ) { dialogIsProtagonist = it }
             }
         },
     )

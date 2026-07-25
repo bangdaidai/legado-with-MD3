@@ -865,6 +865,10 @@ private fun BookInfoOverflowMenu(
             text = stringResource(R.string.log),
             onClick = { onMenuAction(BookInfoMenuAction.ShowLog) }
         )
+        RoundDropdownMenuItem(
+            text = "阅读记忆",
+            onClick = { onMenuAction(BookInfoMenuAction.ReadingMemory) }
+        )
     }
 }
 

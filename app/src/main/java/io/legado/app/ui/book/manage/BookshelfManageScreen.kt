@@ -160,6 +160,8 @@ private fun BookshelfManageScreen(
     var showLogSheet by remember { mutableStateOf(false) }
     var showGroupSelectSheet by remember { mutableStateOf(false) }
     var showDeleteBookConfirmDialog by remember { mutableStateOf(false) }
+    var showAbandonedDeleteDialog by remember { mutableStateOf(false) }
+    var pendingAbandonedDelete by remember { mutableStateOf(false) }
     var showCustomExportDialog by remember { mutableStateOf(false) }
     var showBatchSourcePickerSheet by remember { mutableStateOf(false) }
     var pendingBatchSources by remember { mutableStateOf<List<BookSource>>(emptyList()) }
@@ -440,8 +442,8 @@ private fun BookshelfManageScreen(
         ) {
             if (selectedBookUrls.isNotEmpty()) {
                 pendingDeleteBookUrls = selectedBookUrls
-            deleteOriginalBookFile = state.deleteBookOriginal
-                showDeleteBookConfirmDialog = true
+                deleteOriginalBookFile = state.deleteBookOriginal
+                showAbandonedDeleteDialog = true
             }
         }
     )
@@ -788,7 +790,7 @@ private fun BookshelfManageScreen(
                                             onClick = {
                                                 pendingDeleteBookUrls = setOf(book.bookUrl)
                                                 deleteOriginalBookFile = state.deleteBookOriginal
-                                                showDeleteBookConfirmDialog = true
+                                                showAbandonedDeleteDialog = true
                                                 dismiss()
                                             }
                                         )
@@ -1003,6 +1005,28 @@ private fun BookshelfManageScreen(
         onDismiss = { showBatchDownloadConfirmDialog = false }
     )
 
+    // 弃文确认 dialog（删除前先询问）
+    AppAlertDialog(
+        show = showAbandonedDeleteDialog,
+        onDismissRequest = { showAbandonedDeleteDialog = false },
+        title = stringResource(R.string.draw),
+        content = {
+            AppText(text = "这本书是否已经放弃了？\n弃文标记后，阅读记录仍会保留。")
+        },
+        confirmText = "已弃文",
+        onConfirm = {
+            showAbandonedDeleteDialog = false
+            pendingAbandonedDelete = true
+            showDeleteBookConfirmDialog = true
+        },
+        dismissText = "仅仅删除",
+        onDismiss = {
+            showAbandonedDeleteDialog = false
+            pendingAbandonedDelete = false
+            showDeleteBookConfirmDialog = true
+        }
+    )
+
     AppAlertDialog(
         show = showDeleteBookConfirmDialog,
         onDismissRequest = { showDeleteBookConfirmDialog = false },
@@ -1035,7 +1059,8 @@ private fun BookshelfManageScreen(
             viewModel.dispatch(
                 BookshelfManageScreenIntent.DeleteBooks(
                     bookUrls = pendingDeleteBookUrls,
-                    deleteOriginal = deleteOriginalBookFile
+                    deleteOriginal = deleteOriginalBookFile,
+                    abandoned = pendingAbandonedDelete
                 )
             )
             pendingDeleteBookUrls = emptySet()

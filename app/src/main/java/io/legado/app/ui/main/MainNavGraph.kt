@@ -68,6 +68,12 @@ import io.legado.app.ui.book.read.ReadBookRouteScreen
 import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewRouteScreen
 import io.legado.app.ui.book.readRecord.ReadRecordRouteScreen
+import io.legado.app.ui.book.readingmemory.ReadingMemoryScreen
+import io.legado.app.ui.book.readingmemory.ReadingMemoryViewModel
+import io.legado.app.ui.book.readingmemory.ReadingMemoryEffect
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailScreen
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailViewModel
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailEffect
 import io.legado.app.ui.book.readaloud.cache.TtsCacheRouteScreen
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingScreen
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingViewModel
@@ -759,6 +765,9 @@ fun MainActivity.mainEntryProvider(
             onOpenEventList = { bookUrl ->
                 onNavigateToRoute(MainRouteBookEventList(bookUrl))
             },
+            onNavigateToReadingMemory = { bookUrl ->
+                onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl))
+            },
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = LocalNavAnimatedContentScope.current,
             sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(route.bookUrl),
@@ -1023,6 +1032,56 @@ fun MainActivity.mainEntryProvider(
             state = viewModel.uiState.collectAsStateWithLifecycle().value,
             onIntent = viewModel::onIntent,
             onBack = { onNavigateBack() },
+        )
+    }
+
+    entry<MainRouteReadingMemory> {
+        val viewModel = koinViewModel<ReadingMemoryViewModel>()
+        val memoryList by viewModel.memoryList.collectAsStateWithLifecycle()
+        val statusFilter by viewModel.statusFilter.collectAsStateWithLifecycle()
+        val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
+
+        LaunchedEffect(viewModel) {
+            viewModel.effect.collectLatest { effect ->
+                when (effect) {
+                    is ReadingMemoryEffect.NavigateToDetail -> {
+                        onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = effect.bookUrl))
+                    }
+                    is ReadingMemoryEffect.Back -> onNavigateBack()
+                }
+            }
+        }
+
+        ReadingMemoryScreen(
+            memories = memoryList,
+            statusFilter = statusFilter,
+            sortBy = sortBy,
+            onBack = { onNavigateBack() },
+            onIntent = viewModel::onIntent,
+        )
+    }
+
+    entry<MainRouteReadingMemoryDetail> { route ->
+        val viewModel = koinViewModel<ReadingMemoryDetailViewModel>(
+            key = "ReadingMemoryDetail:${route.bookUrl}",
+            parameters = { parametersOf(route.bookUrl) }
+        )
+        val context = LocalContext.current
+        val state by viewModel.detailState.collectAsStateWithLifecycle()
+
+        LaunchedEffect(viewModel) {
+            viewModel.effect.collectLatest { effect ->
+                when (effect) {
+                    is ReadingMemoryDetailEffect.Back -> onNavigateBack()
+                    is ReadingMemoryDetailEffect.ShowToast -> context.toastOnUi(effect.message)
+                }
+            }
+        }
+
+        ReadingMemoryDetailScreen(
+            state = state,
+            onBack = { onNavigateBack() },
+            onIntent = viewModel::onIntent,
         )
     }
 }

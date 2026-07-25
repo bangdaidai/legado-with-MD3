@@ -21,6 +21,7 @@ object DatabaseMigrations {
             migration_35_36, migration_36_37, migration_37_38, migration_38_39,
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83,
+            migration_97_98, migration_98_99,
         )
     }
 
@@ -496,4 +497,61 @@ object DatabaseMigrations {
         columnName = "enabledReview"
     )
     class Migration_64_65 : AutoMigrationSpec
+
+    // region 阅读记忆 — 新建 readingMemory 表
+
+    private val migration_97_98 = object : Migration(97, 98) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS readingMemory (
+                    bookUrl TEXT NOT NULL,
+                    bookName TEXT NOT NULL DEFAULT '',
+                    bookAuthor TEXT NOT NULL DEFAULT '',
+                    coverUrl TEXT,
+                    intro TEXT,
+                    userModifiedIntro INTEGER NOT NULL DEFAULT 0,
+                    kind TEXT,
+                    wordCount TEXT,
+                    type INTEGER NOT NULL DEFAULT 0,
+                    progress REAL NOT NULL DEFAULT 0.0,
+                    totalChapterNum INTEGER NOT NULL DEFAULT 0,
+                    durChapterIndex INTEGER NOT NULL DEFAULT 0,
+                    durChapterPos INTEGER NOT NULL DEFAULT 0,
+                    rating REAL NOT NULL DEFAULT 0.0,
+                    review TEXT,
+                    abandoned INTEGER NOT NULL DEFAULT 0,
+                    firstReadTime INTEGER NOT NULL DEFAULT 0,
+                    finishReadTime INTEGER NOT NULL DEFAULT 0,
+                    lastReadTime INTEGER NOT NULL DEFAULT 0,
+                    createTime INTEGER NOT NULL DEFAULT 0,
+                    updateTime INTEGER NOT NULL DEFAULT 0,
+                    annotationCount INTEGER NOT NULL DEFAULT 0,
+                    protagonistsJson TEXT,
+                    excerptsJson TEXT,
+                    statTotalReadTime INTEGER NOT NULL DEFAULT 0,
+                    statReadingDays INTEGER NOT NULL DEFAULT 0,
+                    statMaxDayReadTime INTEGER NOT NULL DEFAULT 0,
+                    statMaxDayReadDate TEXT,
+                    statTotalWords INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (bookUrl)
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    // endregion
+
+    // region BookCharacterProfile 增加 isProtagonist 列
+
+    private val migration_98_99 = object : Migration(98, 99) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE book_character_profiles ADD COLUMN isProtagonist INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+
+    // endregion
 }

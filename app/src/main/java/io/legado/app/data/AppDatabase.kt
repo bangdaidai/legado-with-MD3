@@ -32,6 +32,7 @@ import io.legado.app.data.dao.HttpTTSDao
 import io.legado.app.data.dao.KeyboardAssistsDao
 import io.legado.app.data.dao.ReadAloudVoiceDao
 import io.legado.app.data.dao.ReadRecordDao
+import io.legado.app.data.dao.ReadingMemoryDao
 import io.legado.app.data.dao.ReplaceRuleDao
 import io.legado.app.data.dao.RssArticleDao
 import io.legado.app.data.dao.RssReadRecordDao
@@ -78,6 +79,7 @@ import io.legado.app.data.entities.HomepageModule
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ReadAloudVoiceEntity
+import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssReadRecord
@@ -108,7 +110,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 97,
+    version = 99,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -124,7 +126,7 @@ val appDb by lazy {
         BookCharacterEvent::class, BookCharacterRelation::class, BookKnowledgeEntry::class,
         BookOutlineNode::class, ReadAloudVoiceEntity::class, BookVoiceBindingEntity::class,
         ChapterSpeechAnalysisEntity::class, ChapterSpeechSegmentEntity::class,
-        CloudTtsEngineEntity::class],
+        CloudTtsEngineEntity::class, ReadingMemory::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -180,7 +182,9 @@ val appDb by lazy {
         AutoMigration(from = 93, to = 94),
         AutoMigration(from = 94, to = 95),
         AutoMigration(from = 95, to = 96),
-        AutoMigration(from = 96, to = 97)
+        AutoMigration(from = 96, to = 97),
+        AutoMigration(from = 97, to = 98),
+        AutoMigration(from = 98, to = 99)
     ]
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -205,6 +209,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val cookieDao: CookieDao
     abstract val txtTocRuleDao: TxtTocRuleDao
     abstract val readRecordDao: ReadRecordDao
+    abstract val readingMemoryDao: ReadingMemoryDao
     abstract val httpTTSDao: HttpTTSDao
     abstract val cacheDao: CacheDao
     abstract val ruleSubDao: RuleSubDao

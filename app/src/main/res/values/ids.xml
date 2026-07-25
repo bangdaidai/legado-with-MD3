@@ -30,4 +30,5 @@
     <item name="menu_search_content" type="id" />
     <item name="menu_browser" type="id" />
     <item name="menu_share_str" type="id" />
+    <item name="menu_set_protagonist" type="id" />
 </resources>

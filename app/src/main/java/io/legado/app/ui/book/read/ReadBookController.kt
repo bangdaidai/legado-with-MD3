@@ -683,8 +683,36 @@ class ReadBookController(
                 viewModel.onIntent(ReadBookIntent.TextActionDict(selectedText))
                 return true
             }
+
+            R.id.menu_set_protagonist -> {
+                setProtagonistBySelection(selectedText)
+                return true
+            }
         }
         return false
+    }
+
+    private fun setProtagonistBySelection(name: String) {
+        val book = ReadBook.book ?: return
+        viewModel.viewModelScope.launch(Dispatchers.IO) {
+            val dao = appDb.bookKnowledgeDao
+            val existing = dao.getCharacterProfile(book.bookUrl, name)
+            if (existing != null) {
+                dao.upsertCharacterProfile(existing.copy(isProtagonist = true))
+            } else {
+                val newProfile = io.legado.app.data.entities.BookCharacterProfile(
+                    id = java.util.UUID.randomUUID().toString(),
+                    bookUrl = book.bookUrl,
+                    name = name,
+                    isProtagonist = true,
+                    role = "主角"
+                )
+                dao.upsertCharacterProfile(newProfile)
+            }
+            withContext(Dispatchers.Main) {
+                activity.toastOnUi("已将「$name」设为主角")
+            }
+        }
     }
 
     fun onMenuActionFinally() {
@@ -708,6 +736,7 @@ class ReadBookController(
             items.add(ActionMenuItem(R.id.menu_ai_clean, activity.getString(R.string.ai_text_clean)))
             items.add(ActionMenuItem(R.id.menu_ai_rewrite, activity.getString(R.string.ai_text_rewrite)))
             items.add(ActionMenuItem(R.id.menu_search_content, activity.getString(R.string.search_content)))
+            items.add(ActionMenuItem(R.id.menu_set_protagonist, "设为主角"))
 
             val thirdPartyItems = mutableListOf<ActionMenuItem>()
             runCatching {

@@ -185,6 +185,14 @@ data object MainRouteHighlightTagRule : MainRoute
 @Serializable
 data object MainRouteAbout : MainRoute
 
+@Serializable
+data object MainRouteReadingMemory : MainRoute
+
+@Serializable
+data class MainRouteReadingMemoryDetail(
+    val bookUrl: String,
+) : MainRoute
+
 object MainRouteConst {
     const val ROUTE_MAIN = "main"
     const val ROUTE_SETTINGS = "settings"
