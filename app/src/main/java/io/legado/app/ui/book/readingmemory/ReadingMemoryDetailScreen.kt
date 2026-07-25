@@ -188,12 +188,7 @@ fun ReadingMemoryDetailScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             GlassMediumFlexibleTopAppBar(
-                title = {
-                    AppText(
-                        text = book?.name ?: stringResource(R.string.rm_reading_memory),
-                        style = LegadoTheme.typography.titleLarge,
-                    )
-                },
+                title = book?.name ?: stringResource(R.string.rm_reading_memory),
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 scrollBehavior = scrollBehavior,
                 actions = {
@@ -307,7 +302,7 @@ fun ReadingMemoryDetailScreen(
         content = {
             AppTextField(
                 state = tagState,
-                label = { AppText(stringResource(R.string.rm_input_tag_hint)) },
+                label = stringResource(R.string.rm_input_tag_hint),
             )
         },
         confirmText = stringResource(R.string.rm_add_tag),
@@ -328,7 +323,7 @@ fun ReadingMemoryDetailScreen(
         content = {
             AppTextField(
                 state = protagonistState,
-                label = { AppText(stringResource(R.string.rm_input_protagonist_hint)) },
+                label = stringResource(R.string.rm_input_protagonist_hint),
             )
         },
         confirmText = stringResource(R.string.rm_add_protagonist),
@@ -473,7 +468,7 @@ private fun ReadingMemoryHeader(
                 style = LegadoTheme.typography.labelSmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
-            val intro = book.getDisplayIntro()
+            val intro = book?.getDisplayIntro().orEmpty()
             if (intro.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 IntroBlock(intro)
@@ -661,7 +656,7 @@ private fun ReviewSection(
             Spacer(Modifier.height(8.dp))
             if (reviews.isEmpty()) {
                 EmptyMessage(stringResource(R.string.rm_no_review))
-                TextCard(stringResource(R.string.rm_add_review), onClick = onAdd)
+                TextCard(text = stringResource(R.string.rm_add_review), onClick = onAdd)
             } else {
                 reviews.forEach { rv ->
                     Column(Modifier.padding(vertical = 8.dp)) {
@@ -773,7 +768,7 @@ private fun ProtagonistSection(
             Spacer(Modifier.height(8.dp))
             if (protagonists.isEmpty()) {
                 EmptyMessage(stringResource(R.string.rm_no_protagonist))
-                TextCard(stringResource(R.string.rm_add_protagonist), onClick = onAdd)
+                TextCard(text = stringResource(R.string.rm_add_protagonist), onClick = onAdd)
             } else {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -816,5 +811,4 @@ private fun shareBookplate(context: Context, uiState: ReadingMemoryDetailUiState
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, book.name))
-}
+    context.startActivity(Intent.createChooser(intent, book.name

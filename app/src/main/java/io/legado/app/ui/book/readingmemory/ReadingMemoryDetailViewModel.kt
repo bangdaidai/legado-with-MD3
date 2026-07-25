@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.readingmemory
 
+import android.app.Application
 import androidx.lifecycle.viewModelScope
 import io.legado.app.constant.ReadingStatus
 import io.legado.app.data.dao.BookDao
@@ -41,10 +42,11 @@ import java.util.regex.Pattern
  * 主角 / 书评 / 标签 复用各自实体表（与 readdai 同构）。
  */
 class ReadingMemoryDetailViewModel(
+    application: Application,
     private val repository: ReadingMemoryRepository,
     private val bookDao: BookDao,
     private val bookUrl: String,
-) : BaseViewModel() {
+) : BaseViewModel(application) {
 
     val memoryFlow: Flow<ReadingMemory?> = repository.observeMemory(bookUrl)
     val bookFlow: Flow<Book?> = bookDao.flowGetBook(bookUrl)

@@ -1010,12 +1010,12 @@ private fun BookInfoHeader(
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
+            val context = LocalContext.current
+            var showBookTagSheet by rememberSaveable { mutableStateOf(false) }
             BookTagSection(
                 bookUrl = book?.bookUrl.orEmpty(),
                 onManageClick = {
-                    LocalContext.current.startActivity(
-                        Intent(LocalContext.current, TagManagementActivity::class.java)
-                    )
+                    context.startActivity(Intent(context, TagManagementActivity::class.java))
                 },
                 onSelectClick = { showBookTagSheet = true },
             )
