@@ -73,7 +73,7 @@ private fun TagChip(
     onClick: () -> Unit,
 ) {
     val bg = Color(tagColorInt(bookTag))
-    val content = if (ColorUtils.isColorLight(bg.toArgb())) Color.Black else Color.White
+    val content = if (ColorUtils.isColorLight(bg.value.toInt())) Color.Black else Color.White
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
