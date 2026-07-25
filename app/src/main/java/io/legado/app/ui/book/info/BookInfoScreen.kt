@@ -260,6 +260,7 @@ private fun BookInfoScreenContent(
         alwaysDrawBehindBars = true,
     ) { paddingValues ->
         val book = state.book
+        var showBookTagSheet by rememberSaveable { mutableStateOf(false) }
         if (book == null) {
             Box(modifier = Modifier.fillMaxSize())
         } else {
@@ -1012,8 +1013,8 @@ private fun BookInfoHeader(
             BookTagSection(
                 bookUrl = book?.bookUrl.orEmpty(),
                 onManageClick = {
-                    context.startActivity(
-                        Intent(context, TagManagementActivity::class.java)
+                    LocalContext.current.startActivity(
+                        Intent(LocalContext.current, TagManagementActivity::class.java)
                     )
                 },
                 onSelectClick = { showBookTagSheet = true },

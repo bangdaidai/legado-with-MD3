@@ -69,6 +69,7 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -83,7 +84,6 @@ import io.legado.app.utils.formatReadDuration
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import java.text.SimpleDateFormat
-import kotlin.math.roundToInt
 import java.util.Date
 import java.util.Locale
 

@@ -1,7 +1,7 @@
 package io.legado.app.ui.book.tag
 
 import androidx.compose.runtime.Composable
-import io.legado.app.ui.common.BaseComposeActivity
+import io.legado.app.base.BaseComposeActivity
 
 class TagManagementActivity : BaseComposeActivity() {
     @Composable
