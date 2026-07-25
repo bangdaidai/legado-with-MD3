@@ -52,7 +52,6 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.repository.BookTagRepository
 import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.ui.theme.AppTheme
-import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
@@ -273,6 +272,23 @@ fun BookTagManageContent(
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
     val expandedGroups = remember { mutableStateMapOf<Long?, Boolean>() }
 
+    val ungroupedLabel = stringResource(R.string.ungrouped)
+    val sections = remember(groups, allTags, selectedGroupId) {
+        val gList = if (selectedGroupId == null) groups else groups.filter { it.id == selectedGroupId }
+        val result = gList.map { group ->
+            group to allTags.filter { it.groupId == group.id }
+        }.toMutableList()
+        if (selectedGroupId == null) {
+            val ungrouped = allTags.filter { it.groupId == 0L }
+            if (ungrouped.isNotEmpty()) {
+                result.add(
+                    BookTagGroup(id = -1, name = ungroupedLabel) to ungrouped
+                )
+            }
+        }
+        result
+    }
+
     AppScaffold(
         topBar = {
             GlassMediumFlexibleTopAppBar(
@@ -320,23 +336,6 @@ fun BookTagManageContent(
                     onAdd = onAddExcluded,
                     onRemove = onRemoveExcluded
                 )
-            }
-
-            val ungroupedLabel = stringResource(R.string.ungrouped)
-            val sections = remember(groups, allTags, selectedGroupId) {
-                val gList = if (selectedGroupId == null) groups else groups.filter { it.id == selectedGroupId }
-                val result = gList.map { group ->
-                    group to allTags.filter { it.groupId == group.id }
-                }.toMutableList()
-                if (selectedGroupId == null) {
-                    val ungrouped = allTags.filter { it.groupId == 0L }
-                    if (ungrouped.isNotEmpty()) {
-                        result.add(
-                            BookTagGroup(id = -1, name = ungroupedLabel) to ungrouped
-                        )
-                    }
-                }
-                result
             }
 
             sections.forEach { (group, tags) ->
@@ -403,7 +402,7 @@ fun BookTagManageScreen(
 @Composable
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 private fun BookTagManagePreview() {
-    LegadoTheme {
+    AppTheme(AppUiConfiguration()) {
         BookTagManageContent(
             groups = listOf(
                 BookTagGroup(id = 1, name = "男频"),
