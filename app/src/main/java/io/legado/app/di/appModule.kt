@@ -216,6 +216,7 @@ import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordViewModel
 import io.legado.app.ui.book.readingmemory.ReadingMemoryDetailViewModel
+import io.legado.app.ui.book.tag.TagManagementViewModel
 import io.legado.app.ui.book.readaloud.cache.TtsCacheViewModel
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingViewModel
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
@@ -464,6 +465,7 @@ val appModule = module {
             bookUrl = bookUrl,
         )
     }
+    viewModelOf(::TagManagementViewModel)
     viewModelOf(::ExploreShowViewModel)
     viewModelOf(::MyViewModel)
     viewModelOf(::BookshelfViewModel)

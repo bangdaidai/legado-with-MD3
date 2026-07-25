@@ -58,6 +58,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import io.legado.app.ui.book.tag.BookTagSection
+import io.legado.app.ui.book.tag.BookTagSelectSheet
+import io.legado.app.ui.book.tag.TagManagementActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -1004,6 +1009,15 @@ private fun BookInfoHeader(
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
+            BookTagSection(
+                bookUrl = book?.bookUrl.orEmpty(),
+                onManageClick = {
+                    context.startActivity(
+                        Intent(context, TagManagementActivity::class.java)
+                    )
+                },
+                onSelectClick = { showBookTagSheet = true },
+            )
             if (kindLabels.isNotEmpty() || !groupNames.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
@@ -1037,6 +1051,11 @@ private fun BookInfoHeader(
                 }
             }
         }
+        BookTagSelectSheet(
+            show = showBookTagSheet,
+            bookUrl = book?.bookUrl.orEmpty(),
+            onDismissRequest = { showBookTagSheet = false },
+        )
     }
 }
 

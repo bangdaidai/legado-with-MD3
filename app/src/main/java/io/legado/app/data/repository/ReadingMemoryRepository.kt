@@ -115,5 +115,5 @@ class ReadingMemoryRepository(
 
     // ===== 阅读会话（用于阅读数据维度计算，对齐 readdai） =====
     fun observeSessions(bookName: String, bookAuthor: String): Flow<List<ReadRecordSession>> =
-        appDb.readRecordDao.getSessionsByBookFlow(getCurrentDeviceId(), bookName, bookAuthor)
+        appDb.readRecordDao.getSessionsByBookFlow("", bookName, bookAuthor)
 }

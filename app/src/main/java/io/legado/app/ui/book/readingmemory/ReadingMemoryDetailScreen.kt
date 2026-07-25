@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
@@ -25,6 +24,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
@@ -37,7 +37,7 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,9 +67,9 @@ import io.legado.app.ui.book.readRecord.component.StatsGridCard
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
-import io.legado.app.ui.widget.components.AppText
+import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.EmptyMessage
-import io.legado.app.ui.widget.components.TopBarNavigationButton
+import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.AppIconButton
 import io.legado.app.ui.widget.components.card.GlassCard
@@ -78,10 +78,11 @@ import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
-import io.legado.app.utils.ReadRecordTimeFormatter.formatReadDuration
+import io.legado.app.utils.formatReadDuration
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import java.text.SimpleDateFormat
+import kotlin.math.roundToInt
 import java.util.Date
 import java.util.Locale
 
@@ -196,7 +197,7 @@ fun ReadingMemoryDetailScreen(
                 scrollBehavior = scrollBehavior,
                 actions = {
                     AppIconButton(onClick = onEditBook) {
-                        AppIcon(Icons.Default.Edit, tint = LegadoTheme.colorScheme.onSurface)
+                        AppIcon(Icons.Default.Edit, contentDescription = null, tint = LegadoTheme.colorScheme.onSurface)
                     }
                     AppIconButton(onClick = onShareBookplate) {
                         AppIcon(Icons.Default.Share, tint = LegadoTheme.colorScheme.onSurface)
