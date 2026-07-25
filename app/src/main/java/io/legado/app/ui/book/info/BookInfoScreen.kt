@@ -306,6 +306,8 @@ private fun BookInfoScreenContent(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 sharedCoverKey = sharedCoverKey,
+                                showBookTagSheet = showBookTagSheet,
+                                onShowBookTagSheetChange = { showBookTagSheet = it },
                             )
                         }
                         item {
@@ -895,6 +897,8 @@ private fun BookInfoHeader(
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedCoverKey: String?,
+    showBookTagSheet: Boolean,
+    onShowBookTagSheetChange: (Boolean) -> Unit,
 ) {
     val coverDescription = stringResource(R.string.a11y_book_cover_actions, book.name)
     Column(
@@ -1016,7 +1020,7 @@ private fun BookInfoHeader(
                 onManageClick = {
                     context.startActivity(Intent(context, TagManagementActivity::class.java))
                 },
-                onSelectClick = { showBookTagSheet = true },
+                onSelectClick = { onShowBookTagSheetChange(true) },
             )
             if (kindLabels.isNotEmpty() || !groupNames.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
@@ -1054,7 +1058,7 @@ private fun BookInfoHeader(
         BookTagSelectSheet(
             show = showBookTagSheet,
             bookUrl = book?.bookUrl.orEmpty(),
-            onDismissRequest = { showBookTagSheet = false },
+            onDismissRequest = { onShowBookTagSheetChange(false) },
         )
     }
 }
