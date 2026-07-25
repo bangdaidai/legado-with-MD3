@@ -11,7 +11,6 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.readRecord.ReadRecordSession
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
-import io.legado.app.utils.getCurrentDeviceId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 

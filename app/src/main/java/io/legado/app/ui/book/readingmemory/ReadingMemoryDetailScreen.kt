@@ -56,6 +56,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import kotlin.math.roundToInt
 import io.legado.app.constant.ReadingStatus
 import io.legado.app.data.entities.BookProtagonist
 import io.legado.app.data.entities.BookReview
@@ -200,7 +201,7 @@ fun ReadingMemoryDetailScreen(
                         AppIcon(Icons.Default.Edit, contentDescription = null, tint = LegadoTheme.colorScheme.onSurface)
                     }
                     AppIconButton(onClick = onShareBookplate) {
-                        AppIcon(Icons.Default.Share, tint = LegadoTheme.colorScheme.onSurface)
+                        AppIcon(Icons.Default.Share, contentDescription = null, tint = LegadoTheme.colorScheme.onSurface)
                     }
                 },
             )
@@ -420,7 +421,6 @@ private fun ReadingMemoryHeader(
                     modifier = Modifier
                         .size(width = 96.dp, height = 132.dp)
                         .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.FillBounds,
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(
@@ -443,6 +443,7 @@ private fun ReadingMemoryHeader(
                             val filled = i < rating.roundToInt()
                             AppIconButton(onClick = { onRatingSelected((i + 1).toFloat()) }) {
                                 AppIcon(
+                                    contentDescription = null,
                                     imageVector = if (filled) Icons.Default.Star else Icons.Default.StarBorder,
                                     tint = LegadoTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),
@@ -505,6 +506,7 @@ private fun IntroBlock(intro: String) {
 private fun SectionHeader(icon: ImageVector, title: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         AppIcon(
+            contentDescription = null,
             imageVector = icon,
             tint = LegadoTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),
@@ -653,7 +655,7 @@ private fun ReviewSection(
                 SectionHeader(Icons.Default.Edit, stringResource(R.string.rm_book_reviews))
                 Spacer(Modifier.weight(1f))
                 AppIconButton(onClick = onAdd) {
-                    AppIcon(Icons.Default.Add, tint = LegadoTheme.colorScheme.primary)
+                    AppIcon(Icons.Default.Add, contentDescription = null, tint = LegadoTheme.colorScheme.primary)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -680,14 +682,16 @@ private fun ReviewSection(
                     ) {
                         AppIconButton(onClick = { onEdit(rv) }) {
                             AppIcon(
-                                Icons.Default.Edit,
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
                                 tint = LegadoTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
                         }
                         AppIconButton(onClick = { onDelete(rv) }) {
                             AppIcon(
-                                Icons.Default.Delete,
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
                                 tint = LegadoTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
@@ -719,7 +723,7 @@ private fun TagSection(
                 SectionHeader(Icons.Default.LocalOffer, stringResource(R.string.rm_book_tags))
                 Spacer(Modifier.weight(1f))
                 AppIconButton(onClick = onAdd) {
-                    AppIcon(Icons.Default.Add, tint = LegadoTheme.colorScheme.primary)
+                    AppIcon(Icons.Default.Add, contentDescription = null, tint = LegadoTheme.colorScheme.primary)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -760,10 +764,10 @@ private fun ProtagonistSection(
                 SectionHeader(Icons.Default.Person, stringResource(R.string.rm_protagonists))
                 Spacer(Modifier.weight(1f))
                 AppIconButton(onClick = onExtract) {
-                    AppIcon(Icons.Default.AutoAwesome, tint = LegadoTheme.colorScheme.primary)
+                    AppIcon(Icons.Default.AutoAwesome, contentDescription = null, tint = LegadoTheme.colorScheme.primary)
                 }
                 AppIconButton(onClick = onAdd) {
-                    AppIcon(Icons.Default.Add, tint = LegadoTheme.colorScheme.primary)
+                    AppIcon(Icons.Default.Add, contentDescription = null, tint = LegadoTheme.colorScheme.primary)
                 }
             }
             Spacer(Modifier.height(8.dp))
