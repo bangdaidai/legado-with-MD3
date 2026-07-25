@@ -42,6 +42,8 @@ import io.legado.app.data.dao.SearchBookDao
 import io.legado.app.data.dao.SearchContentHistoryDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
+import io.legado.app.data.dao.BookProtagonistDao
+import io.legado.app.data.dao.BookReviewDao
 import io.legado.app.data.dao.BookTagDao
 import io.legado.app.data.dao.BookTagGroupDao
 import io.legado.app.data.dao.BookTagRelationDao
@@ -59,6 +61,8 @@ import io.legado.app.data.entities.AiPromptPreset
 import io.legado.app.data.entities.AiProviderProfile
 import io.legado.app.data.entities.AiTaskPreset
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookProtagonist
+import io.legado.app.data.entities.BookReview
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookCharacterEvent
 import io.legado.app.data.entities.BookCharacterProfile
@@ -137,7 +141,7 @@ val appDb by lazy {
         BookOutlineNode::class, ReadAloudVoiceEntity::class, BookVoiceBindingEntity::class,
         ChapterSpeechAnalysisEntity::class, ChapterSpeechSegmentEntity::class,
         CloudTtsEngineEntity::class, BookTag::class, BookTagGroup::class, BookTagRelation::class,
-        ExcludedTag::class, RemovedAutoTag::class, ReadingMemory::class],
+        ExcludedTag::class, RemovedAutoTag::class, BookProtagonist::class, BookReview::class, ReadingMemory::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -236,6 +240,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val excludedTagDao: ExcludedTagDao
     abstract val removedAutoTagDao: RemovedAutoTagDao
     abstract val readingMemoryDao: ReadingMemoryDao
+    abstract val bookProtagonistDao: BookProtagonistDao
+    abstract val bookReviewDao: BookReviewDao
     abstract val aiProfileDao: AiProfileDao
     abstract val aiArtifactDao: AiArtifactDao
     abstract val aiChatDao: AiChatDao
