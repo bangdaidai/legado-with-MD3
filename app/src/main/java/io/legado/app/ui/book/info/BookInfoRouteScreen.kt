@@ -61,7 +61,6 @@ fun BookInfoRouteScreen(
     onOpenCharacterList: (bookUrl: String) -> Unit = {},
     onOpenKnowledgeList: (bookUrl: String) -> Unit = {},
     onOpenEventList: (bookUrl: String) -> Unit = {},
-    onOpenReadingMemory: (bookUrl: String) -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -231,10 +230,6 @@ fun BookInfoRouteScreen(
                 is BookInfoEffect.OpenEventList -> {
                     onOpenEventList(effect.bookUrl)
                 }
-
-                is BookInfoEffect.OpenReadingMemory -> {
-                    onOpenReadingMemory(effect.bookUrl)
-                }
             }
         }
     }
@@ -245,7 +240,6 @@ fun BookInfoRouteScreen(
             .collectAsStateWithLifecycle(persistentListOf<BookGroup>()).value,
         onIntent = viewModel::onIntent,
         onBack = onBack,
-        onOpenReadingMemory = onOpenReadingMemory,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedCoverKey = sharedCoverKey,

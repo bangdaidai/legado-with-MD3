@@ -1186,22 +1186,18 @@ private fun BookshelfOverlays(
     exportLauncher: ManagedActivityResultLauncher<String, Uri?>,
     clearSelection: () -> Unit
 ) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     BookshelfConfigSheet(
         show = activeOverlay == BookshelfOverlay.ConfigSheet,
         settings = uiState.settings,
         onUpdate = { onIntent(BookshelfIntent.UpdateSetting(it)) },
         enableCustomTagColors = uiState.enableCustomTagColors,
+        customTagColors = uiState.customTagColors,
+        themeColor = uiState.themeColor,
         onCustomTagColorsEnabledChange = {
             onIntent(BookshelfIntent.SetCustomTagColorsEnabled(it))
         },
-        onManageTags = {
-            ctx.startActivity(
-                android.content.Intent(
-                    ctx,
-                    io.legado.app.ui.book.tag.BookTagManageActivity::class.java
-                )
-            )
+        onCustomTagColorsChange = {
+            onIntent(BookshelfIntent.SetCustomTagColors(it))
         },
         onDismissRequest = { onIntent(BookshelfIntent.DismissOverlay) }
     )
@@ -1470,7 +1466,11 @@ fun BookshelfPage(
                 ) { isDragging ->
                     BookItem(
                         settings = uiState.settings,
-                        tagColors = uiState.tagColors,
+                        customTagColors = if (uiState.enableCustomTagColors) {
+                            uiState.customTagColors
+                        } else {
+                            persistentListOf()
+                        },
                         bookUi = bookUi,
                         modifier = Modifier
                             .reorderAccessibility(

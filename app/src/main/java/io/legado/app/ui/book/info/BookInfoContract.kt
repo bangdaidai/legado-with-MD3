@@ -278,10 +278,6 @@ sealed interface BookInfoEffect {
     data class OpenEventList(
         val bookUrl: String,
     ) : BookInfoEffect
-
-    data class OpenReadingMemory(
-        val bookUrl: String,
-    ) : BookInfoEffect
 }
 
 sealed interface BookInfoCallbackAction {
@@ -300,7 +296,6 @@ enum class BookInfoMenuAction {
     SyncRemote,
     Refresh,
     ReadRecord,
-    ReadingMemory,
     Login,
     Top,
     SetSourceVariable,

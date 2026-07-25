@@ -279,7 +279,6 @@ fun BookInfoEditContent(
             backgroundColor = LegadoTheme.colorScheme.surfaceInput,
             modifier = Modifier.fillMaxWidth()
         )
-
     }
 }
 

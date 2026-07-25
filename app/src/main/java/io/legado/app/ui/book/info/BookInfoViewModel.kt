@@ -1196,9 +1196,6 @@ class BookInfoViewModel(
             BookInfoMenuAction.SyncRemote -> syncFromRemote()
             BookInfoMenuAction.Refresh -> refreshCurrentBook()
             BookInfoMenuAction.ReadRecord -> setSheet(BookInfoSheet.ReadRecord)
-            BookInfoMenuAction.ReadingMemory -> emitEffect(
-                BookInfoEffect.OpenReadingMemory(book.bookUrl)
-            )
             BookInfoMenuAction.Login -> bookSource?.let {
                 emitEffect(BookInfoEffect.OpenSourceLogin(it.bookSourceUrl))
             }

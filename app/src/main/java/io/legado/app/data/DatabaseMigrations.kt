@@ -21,7 +21,6 @@ object DatabaseMigrations {
             migration_35_36, migration_36_37, migration_37_38, migration_38_39,
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83,
-            migration_97_98,
         )
     }
 
@@ -497,45 +496,4 @@ object DatabaseMigrations {
         columnName = "enabledReview"
     )
     class Migration_64_65 : AutoMigrationSpec
-
-    private val migration_97_98 = object : Migration(97, 98) {
-        override fun migrate(database: SupportSQLiteDatabase) {
-            database.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS `readingMemories` (
-                    `id` TEXT NOT NULL PRIMARY KEY,
-                    `bookUrl` TEXT NOT NULL,
-                    `bookName` TEXT NOT NULL,
-                    `bookAuthor` TEXT NOT NULL,
-                    `wordCount` TEXT,
-                    `kind` TEXT,
-                    `coverUrl` TEXT,
-                    `intro` TEXT,
-                    `rating` REAL NOT NULL,
-                    `totalChapterNum` INTEGER NOT NULL,
-                    `durChapterIndex` INTEGER NOT NULL,
-                    `durChapterTitle` TEXT,
-                    `durChapterPos` INTEGER NOT NULL,
-                    `progress` REAL NOT NULL,
-                    `readTime` INTEGER NOT NULL,
-                    `annotationCount` INTEGER NOT NULL,
-                    `readingStatus` INTEGER NOT NULL,
-                    `userModifiedReadingStatus` INTEGER NOT NULL DEFAULT 0,
-                    `createTime` INTEGER NOT NULL,
-                    `updateTime` INTEGER NOT NULL,
-                    `userModifiedRating` INTEGER NOT NULL DEFAULT 0,
-                    `userModifiedIntro` INTEGER NOT NULL DEFAULT 0,
-                    `userModifiedCover` INTEGER NOT NULL DEFAULT 0,
-                    `userModifiedWordCount` INTEGER NOT NULL DEFAULT 0,
-                    `userModifiedKind` INTEGER NOT NULL DEFAULT 0,
-                    `finishReadTime` INTEGER NOT NULL DEFAULT 0,
-                    `firstReadTime` INTEGER NOT NULL DEFAULT 0,
-                    `lastReadTime` INTEGER NOT NULL DEFAULT 0,
-                    `readIteration` INTEGER NOT NULL DEFAULT 0,
-                    `type` INTEGER NOT NULL DEFAULT 0
-                )
-                """.trimIndent()
-            )
-        }
-    }
 }

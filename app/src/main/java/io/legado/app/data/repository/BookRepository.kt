@@ -1,12 +1,10 @@
 package io.legado.app.data.repository
 
-import io.legado.app.constant.ReadingStatus
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.GroupBookCount
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.main.bookshelf.BookShelfItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -14,9 +12,7 @@ import kotlinx.coroutines.withContext
 
 class BookRepository(
     private val bookDao: BookDao,
-    private val bookChapterDao: BookChapterDao,
-    private val readingMemoryRepository: ReadingMemoryRepository,
-    private val readingMemoryDao: io.legado.app.data.dao.ReadingMemoryDao,
+    private val bookChapterDao: BookChapterDao
 ) {
     fun getAllBooks(): Flow<List<Book>> {
         return bookDao.flowAll()
@@ -41,13 +37,6 @@ class BookRepository(
     suspend fun getBook(bookUrl: String): Book? {
         return withContext(Dispatchers.IO) {
             bookDao.getBook(bookUrl)
-        }
-    }
-
-    suspend fun getByUrls(bookUrls: List<String>): List<Book> {
-        if (bookUrls.isEmpty()) return emptyList()
-        return withContext(Dispatchers.IO) {
-            bookDao.getByBookUrls(bookUrls)
         }
     }
 
@@ -104,37 +93,6 @@ class BookRepository(
     suspend fun insert(book: Book) {
         withContext(Dispatchers.IO) {
             bookDao.insert(book)
-            createReadingMemoryIfNotExists(book)
-        }
-    }
-
-    private suspend fun createReadingMemoryIfNotExists(book: Book) {
-        withContext(Dispatchers.IO) {
-            val existing = readingMemoryDao.getByBookUrl(book.bookUrl)
-            if (existing == null) {
-                val total = book.totalChapterNum
-                val progress = if (total > 0) {
-                    book.durChapterIndex.toFloat() / total
-                } else {
-                    0f
-                }
-                val memory = ReadingMemory(
-                    id = book.bookUrl,
-                    bookUrl = book.bookUrl,
-                    bookName = book.name,
-                    bookAuthor = book.author,
-                    coverUrl = book.getDisplayCover(),
-                    totalChapterNum = total,
-                    durChapterIndex = book.durChapterIndex,
-                    durChapterTitle = book.durChapterTitle,
-                    durChapterPos = book.durChapterPos,
-                    progress = progress,
-                    readingStatus = ReadingStatus.PENDING.value,
-                    createTime = System.currentTimeMillis(),
-                    updateTime = System.currentTimeMillis(),
-                )
-                readingMemoryDao.insert(memory)
-            }
         }
     }
 

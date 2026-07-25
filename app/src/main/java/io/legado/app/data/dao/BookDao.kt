@@ -700,9 +700,6 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE bookUrl = :bookUrl")
     fun getBook(bookUrl: String): Book?
 
-    @Query("SELECT * FROM books WHERE bookUrl IN (:bookUrls)")
-    suspend fun getByBookUrls(bookUrls: List<String>): List<Book>
-
     @Query(
         """
         SELECT

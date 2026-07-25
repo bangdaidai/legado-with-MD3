@@ -39,5 +39,4 @@ object EventBus {
     const val UP_TOC = "upToc"
 
     const val UP_ALL_BOOK_TOC = "upAllBookToc"
-    const val TAGS_UPDATED = "tagsUpdated"
 }

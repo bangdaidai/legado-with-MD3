@@ -51,8 +51,10 @@ fun BookshelfConfigSheet(
     settings: BookshelfSettings,
     onUpdate: ((BookshelfSettings) -> BookshelfSettings) -> Unit,
     enableCustomTagColors: Boolean,
+    customTagColors: List<TagColorPair>,
+    themeColor: Int,
     onCustomTagColorsEnabledChange: (Boolean) -> Unit,
-    onManageTags: () -> Unit,
+    onCustomTagColorsChange: (List<TagColorPair>) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
@@ -484,7 +486,7 @@ fun BookshelfConfigSheet(
                                         CompactClickableSettingItem(
                                             title = stringResource(R.string.manage_tag_colors),
                                             color = LegadoTheme.colorScheme.surface,
-                                            onClick = onManageTags
+                                            onClick = { showLabelColorManage = true }
                                         )
                                     }
                                 }
@@ -614,6 +616,14 @@ fun BookshelfConfigSheet(
             Spacer(modifier = Modifier.height(32.dp))
 
         }
+
+        LabelColorManageSheet(
+            show = showLabelColorManage,
+            themeColor = themeColor,
+            colors = customTagColors,
+            onColorsChange = onCustomTagColorsChange,
+            onDismissRequest = { showLabelColorManage = false }
+        )
 
         ColorPickerSheet(
             show = showColorPicker,

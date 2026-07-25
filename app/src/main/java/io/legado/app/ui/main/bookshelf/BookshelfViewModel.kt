@@ -14,7 +14,6 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.repository.BookGroupRepository
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
-import io.legado.app.data.repository.BookTagRepository
 import io.legado.app.data.repository.BookshelfRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.domain.usecase.AddBookUseCase
@@ -603,18 +602,9 @@ class BookshelfViewModel(
             settings = settings,
             useRaisedBottomInset = appShellSettings.useFloatingBottomBar || themeSettings.enableBlur,
             enableCustomTagColors = themeSettings.enableCustomTagColors,
+            customTagColors = parseTagColors(themeSettings.customTagColorsJson),
             themeColor = themeSettings.themeColor,
             pendingUploadUrl = pendingUploadUrl,
-        )
-    }.combine(BookTagRepository.observeAll()) { prev, tags ->
-        prev.copy(
-            tagColors = if (prev.enableCustomTagColors) {
-                tags.filter { it.color != 0 }
-                    .associate { it.name to it.color }
-                    .toImmutableMap()
-            } else {
-                persistentMapOf()
-            }
         )
     }.stateIn(
         viewModelScope,
@@ -623,7 +613,7 @@ class BookshelfViewModel(
             settings = initialSettings,
             useRaisedBottomInset = initialAppShellSettings.useFloatingBottomBar || initialThemeSettings.enableBlur,
             enableCustomTagColors = initialThemeSettings.enableCustomTagColors,
-            tagColors = persistentMapOf(),
+            customTagColors = parseTagColors(initialThemeSettings.customTagColorsJson),
             themeColor = initialThemeSettings.themeColor,
         ),
     )

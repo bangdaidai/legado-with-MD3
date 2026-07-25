@@ -135,7 +135,6 @@ fun BookInfoScreen(
     groups: ImmutableList<BookGroup>,
     onIntent: (BookInfoIntent) -> Unit,
     onBack: () -> Unit,
-    onOpenReadingMemory: (String) -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -622,7 +621,6 @@ private fun resolveBookInfoBackdropStyle(
 private fun BookInfoTopBarActions(
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
-    onOpenReadingMemory: (String) -> Unit = {},
 ) {
     if (state.inBookshelf) {
         TopBarActionButton(
@@ -639,7 +637,6 @@ private fun BookInfoTopBarActions(
     BookInfoOverflowAction(
         state = state,
         onMenuAction = onMenuAction,
-        onOpenReadingMemory = onOpenReadingMemory,
     )
 }
 
@@ -647,7 +644,6 @@ private fun BookInfoTopBarActions(
 private fun BookInfoOverflowAction(
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
-    onOpenReadingMemory: (String) -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -665,7 +661,6 @@ private fun BookInfoOverflowAction(
                 expanded = false
                 onMenuAction(it)
             },
-            onOpenReadingMemory = onOpenReadingMemory,
         )
     }
 }
@@ -782,7 +777,6 @@ private fun BookInfoOverflowMenu(
     onDismissRequest: () -> Unit,
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
-    onOpenReadingMemory: (String) -> Unit = {},
 ) {
     val book = state.book
     RoundDropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest) {
@@ -805,10 +799,6 @@ private fun BookInfoOverflowMenu(
         RoundDropdownMenuItem(
             text = stringResource(R.string.read_record),
             onClick = { onMenuAction(BookInfoMenuAction.ReadRecord) }
-        )
-        RoundDropdownMenuItem(
-            text = stringResource(R.string.reading_memory),
-            onClick = { book?.bookUrl?.let { onOpenReadingMemory(it) } }
         )
         if (book?.isLocal == true) {
             RoundDropdownMenuItem(

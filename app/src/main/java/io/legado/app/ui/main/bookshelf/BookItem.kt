@@ -62,7 +62,6 @@ import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toTimeAgo
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.ImmutableMap
 
 /**
  * 通用的书架条目布局组件
@@ -662,7 +661,7 @@ fun BookGroupItemHorizontalCovers(
 @Composable
 fun BookItem(
     settings: BookshelfSettings,
-    tagColors: ImmutableMap<String, Int>,
+    customTagColors: ImmutableList<TagColorPair>,
     bookUi: BookUiItem,
     layoutMode: Int,
     modifier: Modifier = Modifier,
@@ -766,22 +765,16 @@ fun BookItem(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        kindList.forEach { label ->
-                            val tagColor = tagColors[label]
-                            val bg = if (tagColor != null && tagColor != 0) {
-                                Color(tagColor).copy(alpha = 0.16f)
+                        kindList.forEachIndexed { index, label ->
+                            val colorPair = if (customTagColors.isNotEmpty()) {
+                                customTagColors[index % customTagColors.size]
                             } else {
-                                LegadoTheme.colorScheme.surfaceContainerHigh
-                            }
-                            val fg = if (tagColor != null && tagColor != 0) {
-                                Color(tagColor)
-                            } else {
-                                LegadoTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                null
                             }
                             TextCard(
                                 text = label,
-                                backgroundColor = bg,
-                                contentColor = fg,
+                                backgroundColor = if (colorPair != null && colorPair.bgColor != 0) Color(colorPair.bgColor) else LegadoTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = if (colorPair != null && colorPair.textColor != 0) Color(colorPair.textColor) else LegadoTheme.colorScheme.primary.copy(alpha = 0.8f),
                                 cornerRadius = 4.dp,
                                 horizontalPadding = 4.dp,
                                 verticalPadding = 2.dp,
