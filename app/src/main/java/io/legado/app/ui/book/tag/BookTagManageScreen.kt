@@ -39,7 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +50,7 @@ import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.repository.BookTagRepository
+import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
@@ -57,6 +58,7 @@ import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.TagColorUtils
 import kotlinx.coroutines.flow.flow
 
@@ -71,7 +73,7 @@ private fun TagChip(
     onClick: () -> Unit,
 ) {
     val bg = Color(tagColorInt(bookTag))
-    val content = if (bg.isLight) Color.Black else Color.White
+    val content = if (ColorUtils.isColorLight(bg.toArgb())) Color.Black else Color.White
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
@@ -191,7 +193,7 @@ private fun ExcludedGroupCard(
                     AppTextField(
                         value = pattern,
                         onValueChange = { pattern = it },
-                        label = { Text(stringResource(R.string.excluded_tag_pattern)) },
+                        label = stringResource(R.string.excluded_tag_pattern),
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
@@ -274,8 +276,8 @@ fun BookTagManageContent(
     AppScaffold(
         topBar = {
             GlassMediumFlexibleTopAppBar(
-                navigationIcon = { TopBarNavigationButton() },
-                title = { Text(stringResource(R.string.book_tag_manage)) },
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
+                title = stringResource(R.string.book_tag_manage),
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -320,6 +322,7 @@ fun BookTagManageContent(
                 )
             }
 
+            val ungroupedLabel = stringResource(R.string.ungrouped)
             val sections = remember(groups, allTags, selectedGroupId) {
                 val gList = if (selectedGroupId == null) groups else groups.filter { it.id == selectedGroupId }
                 val result = gList.map { group ->
@@ -329,7 +332,7 @@ fun BookTagManageContent(
                     val ungrouped = allTags.filter { it.groupId == 0L }
                     if (ungrouped.isNotEmpty()) {
                         result.add(
-                            BookTagGroup(id = -1, name = stringResource(R.string.ungrouped)) to ungrouped
+                            BookTagGroup(id = -1, name = ungroupedLabel) to ungrouped
                         )
                     }
                 }
@@ -366,7 +369,7 @@ fun BookTagManageScreen(
     var showEdit by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<BookTag?>(null) }
 
-    AppTheme {
+    AppTheme(AppUiConfiguration()) {
         BookTagManageContent(
             groups = groups,
             allTags = allTags,
