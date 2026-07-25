@@ -1,16 +1,13 @@
 package io.legado.app.ui.book.readingmemory
 
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import androidx.compose.runtime.LaunchedEffect
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,66 +17,72 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextFieldLineLimits
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.unit.sp
-import io.coil.compose.AsyncImage
+import io.legado.app.R
 import io.legado.app.constant.ReadingStatus
-import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookProtagonist
 import io.legado.app.data.entities.BookReview
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.Bookmark
-import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.book.info.BookInfoActivity
-import io.legado.app.utils.formatReadDuration
+import io.legado.app.ui.book.readRecord.component.StatItem
+import io.legado.app.ui.book.readRecord.component.StatsGridCard
+import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
+import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.AppText
+import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.TopBarNavigationButton
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.button.AppIconButton
+import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.card.TextCard
+import io.legado.app.ui.widget.components.icon.AppIcon
+import io.legado.app.ui.widget.components.image.cover.CoilBookCover
+import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.utils.ReadRecordTimeFormatter.formatReadDuration
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -92,9 +95,9 @@ fun ReadingMemoryDetailRoute(
     val protagonists by viewModel.protagonists.collectAsState(initial = emptyList())
     val reviews by viewModel.reviews.collectAsState(initial = emptyList())
     val excerpts by viewModel.excerpts.collectAsState(initial = emptyList())
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         viewModel.toastEvents.collect { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
@@ -150,10 +153,11 @@ fun ReadingMemoryDetailScreen(
 ) {
     val book = uiState.book
     val memory = uiState.memory
-    val status = memory?.getStatus() ?: ReadingStatus.PENDING
+    val status = ReadingStatus.fromValue(memory?.readingStatus ?: 0)
     val rating = memory?.rating ?: 0f
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
 
+    var statusDialogOpen by remember { mutableStateOf(false) }
     var tagDialogOpen by remember { mutableStateOf(false) }
     var protagonistDialogOpen by remember { mutableStateOf(false) }
     var reviewDialogOpen by remember { mutableStateOf(false) }
@@ -162,59 +166,91 @@ fun ReadingMemoryDetailScreen(
     var protagonistToRemove by remember { mutableStateOf<BookProtagonist?>(null) }
     var reviewToDelete by remember { mutableStateOf<BookReview?>(null) }
 
-    Scaffold(
+    val tagState = rememberTextFieldState()
+    val protagonistState = rememberTextFieldState()
+    val reviewState = rememberTextFieldState()
+
+    LaunchedEffect(tagDialogOpen) {
+        if (tagDialogOpen) tagState.edit { replace(0, tagState.text.length, "") }
+    }
+    LaunchedEffect(protagonistDialogOpen) {
+        if (protagonistDialogOpen) protagonistState.edit { replace(0, protagonistState.text.length, "") }
+    }
+    LaunchedEffect(reviewDialogOpen, reviewDialogEdit) {
+        if (reviewDialogOpen) {
+            reviewState.edit { replace(0, reviewState.text.length, reviewDialogEdit?.reviewContent ?: "") }
+        }
+    }
+
+    AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeTopAppBar(
-                title = { Text(book?.name ?: "阅读记忆") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+            GlassMediumFlexibleTopAppBar(
+                title = {
+                    AppText(
+                        text = book?.name ?: stringResource(R.string.rm_reading_memory),
+                        style = LegadoTheme.typography.titleLarge,
+                    )
                 },
-                actions = {
-                    IconButton(onClick = onEditBook) {
-                        Icon(Icons.Default.Edit, contentDescription = "编辑书籍信息")
-                    }
-                    IconButton(onClick = onShareBookplate) {
-                        Icon(Icons.Default.Share, contentDescription = "藏书票")
-                    }
-                },
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 scrollBehavior = scrollBehavior,
+                actions = {
+                    AppIconButton(onClick = onEditBook) {
+                        AppIcon(Icons.Default.Edit, tint = LegadoTheme.colorScheme.onSurface)
+                    }
+                    AppIconButton(onClick = onShareBookplate) {
+                        AppIcon(Icons.Default.Share, tint = LegadoTheme.colorScheme.onSurface)
+                    }
+                },
             )
         },
     ) { padding ->
+        if (book == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppText(stringResource(R.string.rm_loading))
+            }
+            return@AppScaffold
+        }
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = padding,
         ) {
             item {
                 ReadingMemoryHeader(
                     book = book,
                     status = status,
                     rating = rating,
-                    memory = memory,
-                    onStatusSelected = onStatusSelected,
+                    onStatusClick = { statusDialogOpen = true },
                     onRatingSelected = onRatingSelected,
                 )
             }
             item {
-                ReadingDataSection(uiState = uiState, excerptsCount = excerpts.size, reviewsCount = reviews.size)
+                StatsGridCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .adaptiveHorizontalPadding(vertical = 8.dp),
+                    title = stringResource(R.string.reading_data),
+                    items = buildStats(uiState, reviews, excerpts),
+                )
             }
-            item {
-                ReadingSessionsSection(months = uiState.sessionsByMonth)
-            }
-            item {
-                ExcerptSection(excerpts = excerpts)
-            }
+            item { SessionSection(uiState.sessionsByMonth) }
+            item { ExcerptSection(excerpts) }
             item {
                 ReviewSection(
                     reviews = reviews,
-                    onAdd = { reviewDialogEdit = null; reviewDialogOpen = true },
-                    onEdit = { reviewDialogEdit = it; reviewDialogOpen = true },
+                    onAdd = {
+                        reviewDialogEdit = null
+                        reviewDialogOpen = true
+                    },
+                    onEdit = {
+                        reviewDialogEdit = it
+                        reviewDialogOpen = true
+                    },
                     onDelete = { reviewToDelete = it },
                 )
             }
@@ -233,303 +269,328 @@ fun ReadingMemoryDetailScreen(
                     onRemove = { protagonistToRemove = it },
                 )
             }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 
-    if (tagDialogOpen) {
-        InputDialog(
-            title = "添加标签",
-            placeholder = "输入标签名",
-            onDismiss = { tagDialogOpen = false },
-            onConfirm = { text ->
-                onAddTag(text)
-                tagDialogOpen = false
-            },
-        )
-    }
-    if (protagonistDialogOpen) {
-        InputDialog(
-            title = "添加主角",
-            placeholder = "输入主角名",
-            onDismiss = { protagonistDialogOpen = false },
-            onConfirm = { text ->
-                onAddProtagonist(text)
-                protagonistDialogOpen = false
-            },
-        )
-    }
-    if (reviewDialogOpen) {
-        ReviewDialog(
-            review = reviewDialogEdit,
-            onDismiss = { reviewDialogOpen = false },
-            onConfirm = { text ->
-                if (reviewDialogEdit != null) {
-                    onUpdateReview(reviewDialogEdit!!, text)
-                } else {
-                    onAddReview(text)
-                }
-                reviewDialogOpen = false
-            },
-        )
-    }
-    if (tagToRemove != null) {
-        ConfirmDialog(
-            title = "移除标签",
-            text = "确定移除标签「${tagToRemove!!.name}」？",
-            onDismiss = { tagToRemove = null },
-            onConfirm = { onRemoveTag(tagToRemove!!); tagToRemove = null },
-        )
-    }
-    if (protagonistToRemove != null) {
-        ConfirmDialog(
-            title = "移除主角",
-            text = "确定移除主角「${protagonistToRemove!!.name}」？",
-            onDismiss = { protagonistToRemove = null },
-            onConfirm = { onRemoveProtagonist(protagonistToRemove!!.id); protagonistToRemove = null },
-        )
-    }
-    if (reviewToDelete != null) {
-        ConfirmDialog(
-            title = "删除书评",
-            text = "确定删除这条书评？",
-            onDismiss = { reviewToDelete = null },
-            onConfirm = { onDeleteReview(reviewToDelete!!.id); reviewToDelete = null },
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ReadingMemoryHeader(
-    book: Book?,
-    status: ReadingStatus,
-    rating: Float,
-    memory: ReadingMemory?,
-    onStatusSelected: (ReadingStatus) -> Unit,
-    onRatingSelected: (Float) -> Unit,
-) {
-    var introExpanded by remember { mutableStateOf(false) }
-    val intro = book?.getDisplayIntro().orEmpty()
-    val progress = memory?.progress
-        ?: book?.let { if (it.totalChapterNum > 0) it.durChapterIndex.toFloat() / it.totalChapterNum else 0f }
-        ?: 0f
-    val finished = status == ReadingStatus.FINISHED && (memory?.finishReadTime ?: 0L) > 0
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(16.dp)) {
-            AsyncImage(
-                model = book?.getDisplayCover(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .width(84.dp)
-                    .height(116.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    book?.name ?: "",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    book?.author ?: "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    ReadingStatus.values().forEach { s ->
-                        FilterChip(
-                            selected = s == status,
-                            onClick = { onStatusSelected(s) },
-                            label = { Text(s.displayName) },
+    // 阅读状态选择
+    if (statusDialogOpen) {
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { statusDialogOpen = false },
+            title = stringResource(R.string.rm_status_choose),
+            content = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReadingStatus.entries.forEach { s ->
+                        TextCard(
+                            text = s.displayName,
+                            onClick = {
+                                onStatusSelected(s)
+                                statusDialogOpen = false
+                            },
                         )
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                RatingBar(rating = rating, onRatingSelected = onRatingSelected)
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    if (finished) {
-                        "读完于 ${formatDay(memory?.finishReadTime ?: 0L)}"
-                    } else {
-                        "${(progress * 100).toInt()}%"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                )
-                if (intro.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        intro,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (introExpanded) Int.MAX_VALUE else 3,
-                        modifier = Modifier.clickable { introExpanded = !introExpanded },
-                    )
-                }
-            }
-        }
+            },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { statusDialogOpen = false },
+        )
     }
-}
 
-@Composable
-private fun RatingBar(rating: Float, onRatingSelected: (Float) -> Unit) {
-    Row {
-        for (i in 1..5) {
-            val filled = i <= rating
-            IconButton(
-                onClick = { onRatingSelected(i.toFloat()) },
-                modifier = Modifier.size(28.dp),
-            ) {
-                Icon(
-                    imageVector = if (filled) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = null,
-                    tint = if (filled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.outline
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReadingDataSection(
-    uiState: ReadingMemoryDetailUiState,
-    excerptsCount: Int,
-    reviewsCount: Int,
-) {
-    val stats = uiState.stats
-    val items = listOf(
-        "总阅读时长" to formatReadDuration(stats.totalReadTime),
-        "阅读天数" to "${stats.readingDays}天",
-        "阅读进度" to "${stats.progressPercent}%",
-        "已读章节" to if (stats.totalChapterNum > 0) "${stats.readChapterIndex}/${stats.totalChapterNum}" else "—",
-        "单日最久" to if (stats.maxDayReadTime > 0) "${formatReadDuration(stats.maxDayReadTime)}\n${formatDay(stats.maxDayReadDate)}" else "—",
-        "总阅读字数" to stats.totalReadWordsWan?.let { String.format(Locale.CHINA, "%.1f万字", it) } ?: "—",
-        "剩余字数" to stats.remainingWordsWan?.let { String.format(Locale.CHINA, "%.1f万字", it) } ?: "—",
-        "字数" to stats.wordCountText.ifBlank { "未知" },
-        "状态" to stats.kindText,
-        "上次阅读" to stats.lastReadText,
-        "开始阅读" to stats.firstReadText,
-        "书摘" to "$excerptsCount",
-        "书评" to "$reviewsCount",
+    // 添加标签
+    AppAlertDialog(
+        show = tagDialogOpen,
+        onDismissRequest = { tagDialogOpen = false },
+        title = stringResource(R.string.rm_add_tag),
+        content = {
+            AppTextField(
+                state = tagState,
+                label = { AppText(stringResource(R.string.rm_input_tag_hint)) },
+            )
+        },
+        confirmText = stringResource(R.string.rm_add_tag),
+        onConfirm = {
+            val text = tagState.text.toString().trim()
+            if (text.isNotEmpty()) onAddTag(text)
+            tagDialogOpen = false
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { tagDialogOpen = false },
     )
-    Column {
-        SectionTitle("阅读数据")
-        Spacer(Modifier.height(8.dp))
-        val chunked = items.chunked(2)
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            chunked.forEach { rowItems ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    rowItems.forEach { (label, value) ->
-                        StatCard(label = label, value = value, modifier = Modifier.weight(1f))
+
+    // 添加主角
+    AppAlertDialog(
+        show = protagonistDialogOpen,
+        onDismissRequest = { protagonistDialogOpen = false },
+        title = stringResource(R.string.rm_add_protagonist),
+        content = {
+            AppTextField(
+                state = protagonistState,
+                label = { AppText(stringResource(R.string.rm_input_protagonist_hint)) },
+            )
+        },
+        confirmText = stringResource(R.string.rm_add_protagonist),
+        onConfirm = {
+            val text = protagonistState.text.toString().trim()
+            if (text.isNotEmpty()) onAddProtagonist(text)
+            protagonistDialogOpen = false
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { protagonistDialogOpen = false },
+    )
+
+    // 书评编辑
+    AppAlertDialog(
+        show = reviewDialogOpen,
+        onDismissRequest = { reviewDialogOpen = false },
+        title = stringResource(if (reviewDialogEdit == null) R.string.rm_add_review else R.string.rm_edit_review),
+        content = {
+            AppTextField(
+                state = reviewState,
+                label = { AppText(stringResource(R.string.rm_input_review_hint)) },
+                lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 3, maxHeightInLines = 8),
+            )
+        },
+        confirmText = stringResource(R.string.ok),
+        onConfirm = {
+            val text = reviewState.text.toString().trim()
+            if (text.isNotEmpty()) {
+                if (reviewDialogEdit == null) onAddReview(text)
+                else onUpdateReview(reviewDialogEdit!!, text)
+            }
+            reviewDialogOpen = false
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { reviewDialogOpen = false },
+    )
+
+    // 移除确认
+    AppAlertDialog(
+        data = tagToRemove,
+        onDismissRequest = { tagToRemove = null },
+        title = stringResource(R.string.rm_confirm_remove),
+        textProvider = { name },
+        confirmText = stringResource(R.string.delete),
+        onConfirm = { onRemoveTag(it) },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { tagToRemove = null },
+    )
+    AppAlertDialog(
+        data = protagonistToRemove,
+        onDismissRequest = { protagonistToRemove = null },
+        title = stringResource(R.string.rm_confirm_remove),
+        textProvider = { name },
+        confirmText = stringResource(R.string.delete),
+        onConfirm = { onRemoveProtagonist(it.id) },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { protagonistToRemove = null },
+    )
+    AppAlertDialog(
+        data = reviewToDelete,
+        onDismissRequest = { reviewToDelete = null },
+        title = stringResource(R.string.rm_confirm_remove),
+        textProvider = { reviewContent },
+        confirmText = stringResource(R.string.delete),
+        onConfirm = { onDeleteReview(it.id) },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { reviewToDelete = null },
+    )
+}
+
+@Composable
+private fun ReadingMemoryHeader(
+    book: io.legado.app.data.entities.Book,
+    status: ReadingStatus,
+    rating: Float,
+    onStatusClick: () -> Unit,
+    onRatingSelected: (Float) -> Unit,
+) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .adaptiveHorizontalPadding(vertical = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                CoilBookCover(
+                    name = book.name,
+                    author = book.author,
+                    path = book.getDisplayCover(),
+                    modifier = Modifier
+                        .size(width = 96.dp, height = 132.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.FillBounds,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AppText(
+                        text = book.name,
+                        style = LegadoTheme.typography.titleLarge,
+                        color = LegadoTheme.colorScheme.onSurface,
+                    )
+                    AppText(
+                        text = book.author,
+                        style = LegadoTheme.typography.labelMedium,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextCard(text = status.displayName, onClick = onStatusClick)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        for (i in 0..4) {
+                            val filled = i < rating.roundToInt()
+                            AppIconButton(onClick = { onRatingSelected((i + 1).toFloat()) }) {
+                                AppIcon(
+                                    imageVector = if (filled) Icons.Default.Star else Icons.Default.StarBorder,
+                                    tint = LegadoTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
                     }
-                    if (rowItems.size == 1) Spacer(Modifier.weight(1f))
                 }
+            }
+            Spacer(Modifier.height(12.dp))
+            val progress = if (book.totalChapterNum > 0) {
+                (book.durChapterIndex.toFloat() / book.totalChapterNum).coerceIn(0f, 1f)
+            } else 0f
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth(),
+                color = LegadoTheme.colorScheme.primary,
+                trackColor = LegadoTheme.colorScheme.surfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            AppText(
+                text = if (book.totalChapterNum > 0) {
+                    stringResource(R.string.rm_read_progress_chapters, book.durChapterIndex, book.totalChapterNum)
+                } else {
+                    stringResource(R.string.rm_progress_unknown)
+                },
+                style = LegadoTheme.typography.labelSmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+            val intro = book.getDisplayIntro()
+            if (intro.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                IntroBlock(intro)
             }
         }
     }
 }
 
 @Composable
-private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun IntroBlock(intro: String) {
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        AppText(
+            text = intro,
+            style = LegadoTheme.typography.bodyMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (intro.length > 80) {
+            TextCard(
+                text = stringResource(if (expanded) R.string.rm_collapse else R.string.rm_expand),
+                onClick = { expanded = !expanded },
             )
         }
     }
 }
 
 @Composable
-private fun ReadingSessionsSection(months: List<MonthReadingSessions>) {
-    val expanded = remember { mutableStateListOf<String>() }
-    Column {
-        SectionTitle("阅读会话")
-        if (months.isEmpty()) {
-            EmptyHint("暂无阅读记录")
-        } else {
-            months.forEach { month ->
-                val isExpanded = expanded.contains(month.monthTitle)
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable {
-                            if (isExpanded) expanded.remove(month.monthTitle) else expanded.add(month.monthTitle)
-                        },
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+private fun SectionHeader(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AppIcon(
+            imageVector = icon,
+            tint = LegadoTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        AppText(
+            text = title,
+            style = LegadoTheme.typography.titleMedium,
+            color = LegadoTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun buildStats(
+    uiState: ReadingMemoryDetailUiState,
+    reviews: List<BookReview>,
+    excerpts: List<Bookmark>,
+): List<StatItem> {
+    val s = uiState.stats
+    val longest = buildString {
+        append(formatReadDuration(s.maxDayReadTime))
+        if (s.maxDayReadDate > 0) append(" (${formatDate(s.maxDayReadDate)})")
+    }
+    return listOf(
+        StatItem(stringResource(R.string.reading_time), formatReadDuration(s.totalReadTime)),
+        StatItem(stringResource(R.string.rm_reading_days), s.readingDays.toString()),
+        StatItem(stringResource(R.string.rm_reading_progress), "${s.progressPercent}%"),
+        StatItem(stringResource(R.string.rm_read_chapters), "${s.readChapterIndex}/${s.totalChapterNum}"),
+        StatItem(stringResource(R.string.rm_longest_single_day), longest),
+        StatItem(
+            stringResource(R.string.rm_total_words_read),
+            s.totalReadWordsWan?.let { String.format(Locale.CHINA, "%.1f万字", it) } ?: "-",
+        ),
+        StatItem(
+            stringResource(R.string.rm_remaining_words),
+            s.remainingWordsWan?.let { String.format(Locale.CHINA, "%.1f万字", it) } ?: "-",
+        ),
+        StatItem(stringResource(R.string.rm_total_words), s.wordCountText.ifEmpty { "-" }),
+        StatItem(stringResource(R.string.rm_book_status), s.kindText.ifEmpty { "-" }),
+        StatItem(stringResource(R.string.rm_last_read), s.lastReadText.ifEmpty { "-" }),
+        StatItem(stringResource(R.string.rm_start_reading), s.firstReadText.ifEmpty { "-" }),
+        StatItem(stringResource(R.string.rm_excerpt_count), excerpts.size.toString()),
+        StatItem(stringResource(R.string.rm_review_count), reviews.size.toString()),
+    )
+}
+
+@Composable
+private fun SessionSection(sessionsByMonth: List<MonthReadingSessions>) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .adaptiveHorizontalPadding(vertical = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            SectionHeader(Icons.Default.History, stringResource(R.string.rm_reading_session))
+            Spacer(Modifier.height(8.dp))
+            if (sessionsByMonth.isEmpty()) {
+                EmptyMessage(stringResource(R.string.rm_no_session))
+            } else {
+                sessionsByMonth.forEach { month ->
+                    AppText(
+                        text = month.monthTitle,
+                        style = LegadoTheme.typography.titleMedium,
+                        color = LegadoTheme.colorScheme.primary,
+                    )
+                    month.days.forEach { day ->
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                month.monthTitle,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
+                            AppText(
+                                text = formatDay(day.date),
+                                style = LegadoTheme.typography.labelMedium,
+                                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    formatReadDuration(month.totalTime),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Icon(
-                                    if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
-                                )
-                            }
-                        }
-                        if (isExpanded) {
-                            Spacer(Modifier.height(8.dp))
-                            HorizontalDivider()
-                            month.days.forEach { day ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(
-                                        formatDay(day.date),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Text(
-                                        formatReadDuration(day.time),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                            }
+                            AppText(
+                                text = formatReadDuration(day.time),
+                                style = LegadoTheme.typography.labelMedium,
+                                color = LegadoTheme.colorScheme.onSurface,
+                            )
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
@@ -538,47 +599,34 @@ private fun ReadingSessionsSection(months: List<MonthReadingSessions>) {
 
 @Composable
 private fun ExcerptSection(excerpts: List<Bookmark>) {
-    Column {
-        SectionTitle("书摘（带笔记的书签）")
-        if (excerpts.isEmpty()) {
-            EmptyHint("暂无书摘")
-        } else {
-            excerpts.forEach { bm ->
-                ExcerptCard(bookmark = bm)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExcerptCard(bookmark: Bookmark) {
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .adaptiveHorizontalPadding(vertical = 8.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            if (bookmark.chapterName.isNotBlank()) {
-                Text(
-                    bookmark.chapterName,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (bookmark.bookText.isNotBlank()) {
-                Text(
-                    "“${bookmark.bookText}”",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (bookmark.content.isNotBlank()) {
-                Text(
-                    bookmark.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+        Column(Modifier.padding(16.dp)) {
+            SectionHeader(Icons.Default.Bookmark, stringResource(R.string.rm_book_excerpts))
+            Spacer(Modifier.height(8.dp))
+            if (excerpts.isEmpty()) {
+                EmptyMessage(stringResource(R.string.rm_no_bookmark))
+            } else {
+                excerpts.forEach { bm ->
+                    Column(Modifier.padding(vertical = 8.dp)) {
+                        AppText(
+                            text = bm.content,
+                            style = LegadoTheme.typography.bodyMedium,
+                            color = LegadoTheme.colorScheme.onSurface,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        AppText(
+                            text = "${bm.chapterName} · ${formatDate(bm.time)}",
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HorizontalDivider(color = LegadoTheme.colorScheme.surfaceVariant)
+                }
             }
         }
     }
@@ -591,53 +639,99 @@ private fun ReviewSection(
     onEdit: (BookReview) -> Unit,
     onDelete: (BookReview) -> Unit,
 ) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SectionTitle("书评")
-            IconButton(onClick = onAdd) {
-                Icon(Icons.Default.Add, contentDescription = "添加书评")
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .adaptiveHorizontalPadding(vertical = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SectionHeader(Icons.Default.Edit, stringResource(R.string.rm_book_reviews))
+                Spacer(Modifier.weight(1f))
+                AppIconButton(onClick = onAdd) {
+                    AppIcon(Icons.Default.Add, tint = LegadoTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (reviews.isEmpty()) {
+                EmptyMessage(stringResource(R.string.rm_no_review))
+                TextCard(stringResource(R.string.rm_add_review), onClick = onAdd)
+            } else {
+                reviews.forEach { rv ->
+                    Column(Modifier.padding(vertical = 8.dp)) {
+                        AppText(
+                            text = rv.reviewContent,
+                            style = LegadoTheme.typography.bodyMedium,
+                            color = LegadoTheme.colorScheme.onSurface,
+                        )
+                        AppText(
+                            text = formatDate(rv.createTime),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        AppIconButton(onClick = { onEdit(rv) }) {
+                            AppIcon(
+                                Icons.Default.Edit,
+                                tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        AppIconButton(onClick = { onDelete(rv) }) {
+                            AppIcon(
+                                Icons.Default.Delete,
+                                tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = LegadoTheme.colorScheme.surfaceVariant)
+                }
             }
         }
-        if (reviews.isEmpty()) {
-            EmptyHint("暂无书评")
-        } else {
-            reviews.forEach { review ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable { onEdit(review) },
+    }
+}
+
+@Composable
+private fun TagSection(
+    tags: List<BookTag>,
+    onAdd: () -> Unit,
+    onRemove: (BookTag) -> Unit,
+) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .adaptiveHorizontalPadding(vertical = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SectionHeader(Icons.Default.LocalOffer, stringResource(R.string.rm_book_tags))
+                Spacer(Modifier.weight(1f))
+                AppIconButton(onClick = onAdd) {
+                    AppIcon(Icons.Default.Add, tint = LegadoTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (tags.isEmpty()) {
+                EmptyMessage(stringResource(R.string.rm_no_tag))
+                TextCard(stringResource(R.string.rm_add_tag), onClick = onAdd)
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            review.reviewContent,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                formatDay(review.updateTime),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            IconButton(
-                                onClick = { onDelete(review) },
-                                modifier = Modifier.size(20.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "删除书评",
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
-                        }
+                    tags.forEach { tag ->
+                        TextCard(text = tag.name, onClick = { onRemove(tag) })
                     }
                 }
             }
@@ -645,47 +739,6 @@ private fun ReviewSection(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TagSection(
-    tags: List<BookTag>,
-    onAdd: () -> Unit,
-    onRemove: (BookTag) -> Unit,
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SectionTitle("标签")
-            IconButton(onClick = onAdd) {
-                Icon(Icons.Default.Add, contentDescription = "添加标签")
-            }
-        }
-        if (tags.isEmpty()) {
-            EmptyHint("暂无标签")
-        } else {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                tags.forEach { tag ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { onRemove(tag) },
-                        label = { Text(tag.name) },
-                        trailingIcon = {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProtagonistSection(
     protagonists: List<BookProtagonist>,
@@ -693,163 +746,70 @@ private fun ProtagonistSection(
     onExtract: () -> Unit,
     onRemove: (BookProtagonist) -> Unit,
 ) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SectionTitle("主角")
-            Row {
-                TextButton(onClick = onExtract) { Text("提取") }
-                IconButton(onClick = onAdd) {
-                    Icon(Icons.Default.Add, contentDescription = "添加主角")
-                }
-            }
-        }
-        if (protagonists.isEmpty()) {
-            EmptyHint("暂无主角，可手动添加或从简介提取")
-        } else {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                protagonists.forEach { p ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { onRemove(p) },
-                        label = { Text(p.name) },
-                        trailingIcon = {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InputDialog(
-    title: String,
-    placeholder: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var text by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) { Text("确定") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text(placeholder) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-            )
-        },
-    )
-}
-
-@Composable
-private fun ReviewDialog(
-    review: BookReview?,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var text by remember { mutableStateOf(review?.reviewContent ?: "") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) { Text("确定") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text(if (review != null) "编辑书评" else "添加书评") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("写点什么…") },
-                minLines = 3,
-                maxLines = 6,
-            )
-        },
-    )
-}
-
-@Composable
-private fun ConfirmDialog(
-    title: String,
-    text: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onConfirm) { Text("确定") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text(title) },
-        text = { Text(text) },
-    )
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-    )
-}
-
-@Composable
-private fun EmptyHint(text: String) {
-    Box(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
+            .adaptiveHorizontalPadding(vertical = 8.dp),
     ) {
-        Text(
-            text,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp,
-        )
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SectionHeader(Icons.Default.Person, stringResource(R.string.rm_protagonists))
+                Spacer(Modifier.weight(1f))
+                AppIconButton(onClick = onExtract) {
+                    AppIcon(Icons.Default.AutoAwesome, tint = LegadoTheme.colorScheme.primary)
+                }
+                AppIconButton(onClick = onAdd) {
+                    AppIcon(Icons.Default.Add, tint = LegadoTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (protagonists.isEmpty()) {
+                EmptyMessage(stringResource(R.string.rm_no_protagonist))
+                TextCard(stringResource(R.string.rm_add_protagonist), onClick = onAdd)
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    protagonists.forEach { p ->
+                        TextCard(text = p.name, onClick = { onRemove(p) })
+                    }
+                }
+            }
+        }
     }
 }
 
-private val DAY_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
+private fun formatDate(millis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(Date(millis))
 
-private fun formatDay(time: Long): String {
-    if (time <= 0) return "—"
-    return DAY_FORMAT.format(java.util.Date(time))
-}
+private fun formatDay(millis: Long): String =
+    SimpleDateFormat("M月d日", Locale.CHINA).format(Date(millis))
 
-private fun shareBookplate(context: android.content.Context, uiState: ReadingMemoryDetailUiState) {
-    val book = uiState.book
-    val stats = uiState.stats
-    val sb = StringBuilder()
-    sb.append("📖 ${book?.name ?: "未知书籍"}\n")
-    sb.append("作者：${book?.author ?: "未知"}\n")
-    sb.append("状态：${uiState.memory?.getReadingStatusTag() ?: "待读"}\n")
-    sb.append("评分：${String.format(Locale.CHINA, "%.1f", uiState.memory?.rating ?: 0f)}\n")
-    sb.append("总阅读时长：${formatReadDuration(stats.totalReadTime)}\n")
-    sb.append("阅读天数：${stats.readingDays}天\n")
-    sb.append("阅读进度：${stats.progressPercent}%\n")
-    if (stats.totalReadWordsWan != null) sb.append("总阅读字数：${String.format(Locale.CHINA, "%.1f万字", stats.totalReadWordsWan)}\n")
-    if (uiState.tags.isNotEmpty()) sb.append("标签：${uiState.tags.joinToString("、") { it.name }}\n")
-    if (uiState.protagonists.isNotEmpty()) sb.append("主角：${uiState.protagonists.joinToString("、") { it.name }}\n")
-    if (uiState.reviews.isNotEmpty()) sb.append("书评：${uiState.reviews.size}条\n")
-
+private fun shareBookplate(context: Context, uiState: ReadingMemoryDetailUiState) {
+    val book = uiState.book ?: return
+    val s = uiState.stats
+    val text = buildString {
+        appendLine("📖 ${book.name} / ${book.author}")
+        appendLine("阅读时长：${formatReadDuration(s.totalReadTime)}")
+        appendLine("阅读天数：${s.readingDays} 天")
+        appendLine("进度：${s.progressPercent}%（${s.readChapterIndex}/${s.totalChapterNum} 章）")
+        appendLine("单日最久：${formatReadDuration(s.maxDayReadTime)}")
+        s.totalReadWordsWan?.let { appendLine("累计字数：${String.format(Locale.CHINA, "%.1f 万字", it)}") }
+        appendLine("状态：${s.kindText}")
+        if (uiState.tags.isNotEmpty()) {
+            appendLine("标签：${uiState.tags.joinToString("、") { it.name }}")
+        }
+        if (uiState.protagonists.isNotEmpty()) {
+            appendLine("主角：${uiState.protagonists.joinToString("、") { it.name }}")
+        }
+    }
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, sb.toString())
-        putExtra(Intent.EXTRA_TITLE, "藏书票 · ${book?.name ?: ""}")
+        putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, "分享藏书票"))
+    context.startActivity(Intent.createChooser(intent, book.name))
 }
