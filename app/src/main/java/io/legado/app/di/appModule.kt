@@ -288,7 +288,14 @@ val appModule = module {
     singleOf(::ReadRecordRepository)
     singleOf(::ReadingMemoryRepository)
     single<HomeDashboardGateway> { HomeDashboardRepository(get(), get()) }
-    singleOf(::BookRepository)
+    single {
+        BookRepository(
+            bookDao = get(),
+            bookChapterDao = get(),
+            readingMemoryRepository = get(),
+            readingMemoryDao = get(),
+        )
+    }
     singleOf(::BookGroupRepository)
     singleOf(::TagGroupRuleApplier)
     single<BookGroupMutationGateway> { BookGroupMutationRepository(get(), get()) }

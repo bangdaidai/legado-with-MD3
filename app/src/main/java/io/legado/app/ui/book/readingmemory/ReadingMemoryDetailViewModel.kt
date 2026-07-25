@@ -59,8 +59,18 @@ class ReadingMemoryDetailViewModel(
     init {
         viewModelScope.launch {
             bookDao.flowGetBook(bookUrl).collect { book ->
-                if (book != null) bookNameAuthor.emit(book.name to book.author)
+                if (book != null) {
+                    bookNameAuthor.emit(book.name to book.author)
+                    ensureReadingMemoryExists(book)
+                }
             }
+        }
+    }
+
+    private suspend fun ensureReadingMemoryExists(book: Book) {
+        val existing = repository.observeMemory(bookUrl).first()
+        if (existing == null) {
+            repository.saveMemory(defaultMemory(book))
         }
     }
 
