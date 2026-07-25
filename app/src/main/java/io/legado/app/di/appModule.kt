@@ -460,6 +460,7 @@ val appModule = module {
     viewModelOf(::ReadRecordOverviewViewModel)
     viewModel { (bookUrl: String) ->
         ReadingMemoryDetailViewModel(
+            application = get(),
             repository = get(),
             bookDao = get(),
             bookUrl = bookUrl,

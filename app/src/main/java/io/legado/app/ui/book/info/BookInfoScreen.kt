@@ -1011,7 +1011,6 @@ private fun BookInfoHeader(
                 HighlightTagRow(tags = highlightedTags)
             }
             val context = LocalContext.current
-            var showBookTagSheet by rememberSaveable { mutableStateOf(false) }
             BookTagSection(
                 bookUrl = book?.bookUrl.orEmpty(),
                 onManageClick = {

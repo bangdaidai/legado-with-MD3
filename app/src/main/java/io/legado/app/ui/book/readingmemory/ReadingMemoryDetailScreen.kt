@@ -344,7 +344,7 @@ fun ReadingMemoryDetailScreen(
         content = {
             AppTextField(
                 state = reviewState,
-                label = { AppText(stringResource(R.string.rm_input_review_hint)) },
+                label = stringResource(R.string.rm_input_review_hint),
                 lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 3, maxHeightInLines = 8),
             )
         },
@@ -724,7 +724,7 @@ private fun TagSection(
             Spacer(Modifier.height(8.dp))
             if (tags.isEmpty()) {
                 EmptyMessage(stringResource(R.string.rm_no_tag))
-                TextCard(stringResource(R.string.rm_add_tag), onClick = onAdd)
+                TextCard(text = stringResource(R.string.rm_add_tag), onClick = onAdd)
             } else {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -811,4 +811,4 @@ private fun shareBookplate(context: Context, uiState: ReadingMemoryDetailUiState
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, book.name
+    context.startActivity(Intent.createChooser(intent, book.name))
