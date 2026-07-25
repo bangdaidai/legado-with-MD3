@@ -298,6 +298,7 @@ fun ReadingMemoryDetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReadingMemoryHeader(
     book: Book?,
@@ -342,7 +343,7 @@ private fun ReadingMemoryHeader(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    ReadingStatus.entries.forEach { s ->
+                    ReadingStatus.values().forEach { s ->
                         FilterChip(
                             selected = s == status,
                             onClick = { onStatusSelected(s) },
@@ -644,6 +645,7 @@ private fun ReviewSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TagSection(
     tags: List<BookTag>,
@@ -683,6 +685,7 @@ private fun TagSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProtagonistSection(
     protagonists: List<BookProtagonist>,
