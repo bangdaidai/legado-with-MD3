@@ -79,6 +79,10 @@ fun BookTagDetailScreen(
 
     LaunchedEffect(tagId) { viewModel.load(tagId) }
 
+    val onExclude: (String) -> Unit = { name ->
+        scope.launch { viewModel.excludeTag(name) }
+    }
+
     BookTagDetailContent(
         tag = tag,
         groupName = groupName,
@@ -87,7 +91,8 @@ fun BookTagDetailScreen(
         onEdit = {
             editing = tag
             showEdit = true
-        }
+        },
+        onExclude = onExclude,
     )
 
     if (showEdit) {
@@ -125,6 +130,7 @@ private fun BookTagDetailContent(
     books: List<Book>,
     onBack: () -> Unit,
     onEdit: () -> Unit,
+    onExclude: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
@@ -138,7 +144,7 @@ private fun BookTagDetailContent(
                     IconButton(
                         onClick = {
                             tag?.name?.let { name ->
-                                scope.launch { viewModel.excludeTag(name) }
+                                onExclude(name)
                                 Toast.makeText(
                                     context,
                                     R.string.excluded_tag_added,

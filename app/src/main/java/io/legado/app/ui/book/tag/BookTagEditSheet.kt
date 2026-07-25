@@ -23,6 +23,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.menuAnchor
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +53,7 @@ import kotlinx.coroutines.launch
 /**
  * 标签编辑底部面板：名称、颜色（颜色选择器）、分组（必选），支持删除。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookTagEditSheet(
     show: Boolean,
@@ -159,7 +161,7 @@ fun BookTagEditSheet(
                     readOnly = false,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGroup) },
                     backgroundColor = LegadoTheme.colorScheme.surface,
-                    modifier = Modifier.menuAnchor().fillMaxWidth().padding(bottom = 8.dp)
+                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth().padding(bottom = 8.dp)
                 )
                 ExposedDropdownMenu(
                     expanded = expandedGroup,

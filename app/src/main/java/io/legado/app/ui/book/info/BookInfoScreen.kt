@@ -622,6 +622,7 @@ private fun resolveBookInfoBackdropStyle(
 private fun BookInfoTopBarActions(
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
+    onOpenReadingMemory: (String) -> Unit = {},
 ) {
     if (state.inBookshelf) {
         TopBarActionButton(

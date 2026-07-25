@@ -45,7 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.R
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
@@ -59,11 +58,10 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.TagColorUtils
-import io.legado.app.utils.ext.colorFromInt
 import kotlinx.coroutines.flow.flow
 
 private fun tagColorInt(bookTag: BookTag): Int {
-    return if (bookTag.color != 0) bookTag.color else TagColorUtils.getNextColor(0)
+    return if (bookTag.color != 0) bookTag.color else TagColorUtils.generateRandomColor()
 }
 
 @Composable
@@ -72,7 +70,7 @@ private fun TagChip(
     bookCount: Int,
     onClick: () -> Unit,
 ) {
-    val bg = tagColorInt(bookTag).colorFromInt()
+    val bg = Color(tagColorInt(bookTag))
     val content = if (bg.isLight) Color.Black else Color.White
     Column(
         modifier = Modifier
@@ -264,7 +262,7 @@ fun BookTagManageContent(
     allTags: List<BookTag>,
     excluded: List<ExcludedTag>,
     onNewTag: () -> Unit,
-    onOpenDetail: (Long) -> Unit,
+    onOpenDetail: (BookTag) -> Unit,
     onAddExcluded: (String, Boolean) -> Unit,
     onRemoveExcluded: (String) -> Unit,
     onBack: () -> Unit,
@@ -325,10 +323,10 @@ fun BookTagManageContent(
             val sections = remember(groups, allTags, selectedGroupId) {
                 val gList = if (selectedGroupId == null) groups else groups.filter { it.id == selectedGroupId }
                 val result = gList.map { group ->
-                    group to allTags.filter { it.group == group.name }
+                    group to allTags.filter { it.groupId == group.id }
                 }.toMutableList()
                 if (selectedGroupId == null) {
-                    val ungrouped = allTags.filter { it.group.isNullOrBlank() }
+                    val ungrouped = allTags.filter { it.groupId == 0L }
                     if (ungrouped.isNotEmpty()) {
                         result.add(
                             BookTagGroup(id = -1, name = stringResource(R.string.ungrouped)) to ungrouped
@@ -357,26 +355,45 @@ fun BookTagManageContent(
 
 @Composable
 fun BookTagManageScreen(
+    viewModel: BookTagManageViewModel,
     onBack: () -> Unit,
-    onNewTag: () -> Unit,
-    onOpenDetail: (Long) -> Unit,
+    onOpenDetail: (BookTag) -> Unit,
 ) {
-    val viewModel: BookTagManageViewModel = viewModel()
     val groups by viewModel.groups.collectAsStateWithLifecycle(initialValue = emptyList())
     val allTags by viewModel.tags.collectAsStateWithLifecycle(initialValue = emptyList())
     val excluded by viewModel.excludedTags.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    var showEdit by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<BookTag?>(null) }
 
     AppTheme {
         BookTagManageContent(
             groups = groups,
             allTags = allTags,
             excluded = excluded,
-            onNewTag = onNewTag,
+            onNewTag = { editing = null; showEdit = true },
             onOpenDetail = onOpenDetail,
             onAddExcluded = { name, regex -> viewModel.addExcludedTag(name, regex) },
             onRemoveExcluded = { name -> viewModel.removeExcludedTag(name) },
-            onBack = onBack
+            onBack = onBack,
         )
+        if (showEdit) {
+            BookTagEditSheet(
+                show = true,
+                tag = editing,
+                groups = groups,
+                onDismissRequest = { showEdit = false },
+                onSave = { tag ->
+                    viewModel.saveTag(tag)
+                    showEdit = false
+                },
+                onDelete = { tag ->
+                    viewModel.deleteTag(tag)
+                    showEdit = false
+                },
+                onCreateGroup = { viewModel.createGroup(it) },
+            )
+        }
     }
 }
 
@@ -390,13 +407,12 @@ private fun BookTagManagePreview() {
                 BookTagGroup(id = 2, name = "女频")
             ),
             allTags = listOf(
-                BookTag(id = 1, group = "男频", name = "玄幻"),
-                BookTag(id = 2, group = "女频", name = "言情")
+                BookTag(id = 1, groupId = 1, name = "玄幻"),
+                BookTag(id = 2, groupId = 2, name = "言情")
             ),
             excluded = listOf(ExcludedTag(id = 1, name = "短篇")),
-            onSelectGroup = {},
             onNewTag = {},
-            onOpenDetail = {},
+            onOpenDetail = { _ -> },
             onAddExcluded = { _, _ -> },
             onRemoveExcluded = {},
             onBack = {}
