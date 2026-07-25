@@ -245,6 +245,7 @@ fun BookInfoRouteScreen(
             .collectAsStateWithLifecycle(persistentListOf<BookGroup>()).value,
         onIntent = viewModel::onIntent,
         onBack = onBack,
+        onOpenReadingMemory = onOpenReadingMemory,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedCoverKey = sharedCoverKey,

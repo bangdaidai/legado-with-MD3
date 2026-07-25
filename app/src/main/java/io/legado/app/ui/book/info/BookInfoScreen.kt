@@ -140,6 +140,7 @@ fun BookInfoScreen(
     groups: ImmutableList<BookGroup>,
     onIntent: (BookInfoIntent) -> Unit,
     onBack: () -> Unit,
+    onOpenReadingMemory: (String) -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -669,6 +670,7 @@ private fun BookInfoOverflowAction(
                 expanded = false
                 onMenuAction(it)
             },
+            onOpenReadingMemory = onOpenReadingMemory,
         )
     }
 }
@@ -785,6 +787,7 @@ private fun BookInfoOverflowMenu(
     onDismissRequest: () -> Unit,
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
+    onOpenReadingMemory: (String) -> Unit = {},
 ) {
     val book = state.book
     RoundDropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest) {
@@ -810,7 +813,7 @@ private fun BookInfoOverflowMenu(
         )
         RoundDropdownMenuItem(
             text = stringResource(R.string.reading_memory),
-            onClick = { onMenuAction(BookInfoMenuAction.ReadingMemory) }
+            onClick = { book?.bookUrl?.let { onOpenReadingMemory(it) } }
         )
         if (book?.isLocal == true) {
             RoundDropdownMenuItem(
