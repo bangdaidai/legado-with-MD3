@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.repository.BookTagGroupRepository
 import io.legado.app.data.repository.BookTagRepository
+import io.legado.app.data.repository.ExcludedTagRepository
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,7 @@ class BookTagManageViewModel : ViewModel() {
 
     val groups: Flow<List<BookTagGroup>> = BookTagGroupRepository.observeAll()
     val tags: Flow<List<BookTag>> = BookTagRepository.observeAll()
+    val excludedTags: Flow<List<ExcludedTag>> = ExcludedTagRepository.observeAll()
 
     private val _selectedGroupId = MutableStateFlow<Long?>(null)
     val selectedGroupId: StateFlow<Long?> = _selectedGroupId
@@ -66,5 +69,13 @@ class BookTagManageViewModel : ViewModel() {
     /** 进入标签库时调用：从书籍分类自动生成标签与关联 */
     fun syncFromBooks() {
         viewModelScope.launch { TagManager.syncTagsFromBooks() }
+    }
+
+    fun addExcludedTag(name: String, isRegex: Boolean) {
+        viewModelScope.launch { ExcludedTagRepository.add(name, isRegex) }
+    }
+
+    fun removeExcludedTag(name: String) {
+        viewModelScope.launch { ExcludedTagRepository.remove(name) }
     }
 }

@@ -57,12 +57,11 @@ object TagManager {
         postUpdated(bookUrl)
     }
 
-    /** 获取某书籍关联的全部标签（已剔除排除标签） */
+    /** 获取某书籍关联的全部标签（已剔除排除标签，支持正则） */
     suspend fun getBookTags(bookUrl: String): List<BookTag> {
         val ids = appDb.bookTagRelationDao.getTagIdsByBook(bookUrl)
         val tags = ids.mapNotNull { appDb.bookTagDao.get(it) }
-        val excluded = ExcludedTagRepository.excludedNames()
-        return tags.filter { it.name !in excluded }
+        return tags.filter { !ExcludedTagRepository.isExcluded(it.name) }
     }
 
     /**
@@ -76,6 +75,7 @@ object TagManager {
             if (names.isEmpty()) return@forEach
             val existing = appDb.bookTagRelationDao.getTagIdsByBook(book.bookUrl).toSet()
             names.forEach { name ->
+                if (ExcludedTagRepository.isExcluded(name)) return@forEach
                 val tag = ensureTag(name)
                 if (tag.id !in existing) {
                     addTagToBook(book.bookUrl, tag.id)

@@ -9,6 +9,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.repository.BookTagGroupRepository
 import io.legado.app.data.repository.BookTagRelationRepository
 import io.legado.app.data.repository.BookTagRepository
+import io.legado.app.data.repository.ExcludedTagRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,5 +62,10 @@ class BookTagDetailViewModel : ViewModel() {
 
     suspend fun createGroup(name: String): Long {
         return BookTagGroupRepository.insert(BookTagGroup(name = name))
+    }
+
+    /** 将当前标签加入排除列表（精确匹配） */
+    suspend fun excludeTag(name: String) {
+        ExcludedTagRepository.add(name, isRegex = false)
     }
 }

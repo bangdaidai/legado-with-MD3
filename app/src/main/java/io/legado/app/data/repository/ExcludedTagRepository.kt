@@ -12,13 +12,24 @@ object ExcludedTagRepository {
 
     suspend fun getByName(name: String) = dao.getByName(name)
 
-    suspend fun add(name: String) {
-        if (dao.getByName(name) == null) {
-            dao.insert(ExcludedTag(name = name))
+    suspend fun add(name: String, isRegex: Boolean = false) {
+        val t = name.trim()
+        if (t.isNotEmpty() && dao.getByName(t) == null) {
+            dao.insert(ExcludedTag(name = t, isRegex = isRegex))
         }
     }
 
     suspend fun remove(name: String) = dao.deleteByName(name)
+
+    /** 判断给定标签名是否被排除（精确匹配或正则匹配） */
+    suspend fun isExcluded(name: String): Boolean =
+        dao.observeAll().first().any { ex ->
+            if (ex.isRegex) {
+                runCatching { Regex(ex.name).containsMatchIn(name) }.getOrDefault(false)
+            } else {
+                ex.name == name
+            }
+        }
 
     /** 当前排除的标签名称集合，供书架/标签选择过滤使用 */
     suspend fun excludedNames(): Set<String> =

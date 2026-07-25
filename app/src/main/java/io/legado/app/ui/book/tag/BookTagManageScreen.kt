@@ -3,38 +3,35 @@ package io.legado.app.ui.book.tag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,284 +39,315 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.R
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.repository.BookTagRepository
-import io.legado.app.data.repository.ExcludedTagRepository
 import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.domain.model.settings.AppUiConfiguration
-import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.tooling.preview.Preview
+import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.TagColorUtils
+import io.legado.app.utils.ext.colorFromInt
 import kotlinx.coroutines.flow.flow
 
-private fun tagColorInt(tag: BookTag): Int =
-    if (tag.color != 0) tag.color else TagColorUtils.generateRandomColor(tag.name)
+private fun tagColorInt(bookTag: BookTag): Int {
+    return if (bookTag.color != 0) bookTag.color else TagColorUtils.getNextColor(0)
+}
 
 @Composable
-private fun TagBookCount(tagId: Long) {
-    if (LocalInspectionMode.current) {
+private fun TagChip(
+    bookTag: BookTag,
+    bookCount: Int,
+    onClick: () -> Unit,
+) {
+    val bg = tagColorInt(bookTag).colorFromInt()
+    val content = if (bg.isLight) Color.Black else Color.White
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(text = bookTag.name, color = content, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Text(
-            text = "0 本",
-            style = LegadoTheme.typography.bodySmall,
-            color = LegadoTheme.colorScheme.outline
+            text = stringResource(R.string.book_count, bookCount),
+            color = content.copy(alpha = 0.8f),
+            fontSize = 11.sp
         )
-        return
     }
-    val count by flow { emit(BookTagRepository.countBooks(tagId)) }
-        .collectAsState(initial = 0)
-    Text(
-        text = "$count 本",
-        style = LegadoTheme.typography.bodySmall,
-        color = LegadoTheme.colorScheme.outline
-    )
 }
 
 @Composable
-private fun TagChip(tag: BookTag, onClick: () -> Unit) {
-    val color = Color(tagColorInt(tag))
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = color.copy(alpha = 0.16f),
-        modifier = Modifier.clickable(onClick = onClick)
+private fun TagFlowRow(
+    tags: List<Pair<BookTag, Int>>,
+    onTagClick: (BookTag) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = tag.name,
-                style = LegadoTheme.typography.labelLarge,
-                color = LegadoTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.width(4.dp))
-            TagBookCount(tag.id)
+        tags.forEach { (tag, count) ->
+            TagChip(bookTag = tag, bookCount = count, onClick = { onTagClick(tag) })
         }
     }
 }
 
 @Composable
-private fun TagFlowRow(tags: List<BookTag>, onClick: (BookTag) -> Unit) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        tags.forEach { tag ->
-            TagChip(tag = tag, onClick = { onClick(tag) })
-        }
-    }
+private fun TagListWithCounts(tags: List<BookTag>, onTagClick: (BookTag) -> Unit) {
+    val key = tags.joinToString { it.id.toString() }
+    val counts by remember(key) {
+        flow { emit(tags.map { it to BookTagRepository.countBooks(it.id) }) }
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    TagFlowRow(tags = counts, onTagClick = onTagClick)
 }
 
 @Composable
-private fun GroupTitle(text: String) {
-    Text(
-        text = text,
-        style = LegadoTheme.typography.titleSmall,
-        color = LegadoTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-    )
-}
-
-@Composable
-private fun ExcludedTagEntry(onClick: () -> Unit) {
-    val excludedCount = if (LocalInspectionMode.current) {
-        0
-    } else {
-        ExcludedTagRepository.observeAll()
-            .collectAsState(initial = emptyList()).value.size
-    }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = LegadoTheme.colorScheme.surfaceContainer,
+private fun GroupTitle(
+    name: String,
+    count: Int,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Label,
-                contentDescription = null,
-                tint = LegadoTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = stringResource(R.string.excluded_tag_manage),
-                style = LegadoTheme.typography.bodyLarge,
-                color = LegadoTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "$excludedCount 个",
-                style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.outline
-            )
-        }
-    }
-}
-
-/**
- * 标签库管理主界面：分组筛选 + 按组聚合的标签流(每个标签带计数) + 新建/编辑/删除。
- * 使用 Scaffold + TopAppBar 遵循 MD3 规范，并修复状态栏遮挡。
- */
-@Composable
-fun BookTagManageScreen(
-    viewModel: BookTagManageViewModel,
-    onBack: () -> Unit,
-    onManageExcluded: () -> Unit = {},
-    onOpenDetail: (BookTag) -> Unit = {},
-) {
-    val groups by viewModel.groups.collectAsState(initial = emptyList())
-    val allTags by viewModel.tags.collectAsState(initial = emptyList())
-    val selectedGroupId by viewModel.selectedGroupId.collectAsState()
-
-    var showEdit by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<BookTag?>(null) }
-
-    LaunchedEffect(Unit) { viewModel.syncFromBooks() }
-
-    BookTagManageContent(
-        groups = groups,
-        allTags = allTags,
-        selectedGroupId = selectedGroupId,
-        onBack = onBack,
-        onManageExcluded = onManageExcluded,
-        onNewTag = {
-            editing = null
-            showEdit = true
-        },
-        onSelectGroup = { viewModel.setSelectedGroup(it) },
-        onOpenDetail = onOpenDetail
-    )
-
-    if (showEdit) {
-        BookTagEditSheet(
-            show = true,
-            tag = editing,
-            groups = groups,
-            onDismissRequest = { showEdit = false },
-            onSave = {
-                viewModel.saveTag(it)
-                showEdit = false
-            },
-            onDelete = {
-                viewModel.deleteTag(it)
-                showEdit = false
-            },
-            onCreateGroup = { viewModel.createGroup(it) }
+        Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "($count)",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.weight(1f))
+        Icon(
+            imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
-/**
- * 纯展示层：不依赖 ViewModel / 数据库，供 [BookTagManageScreen] 与 @Preview 复用。
- */
 @Composable
-private fun BookTagManageContent(
-    groups: List<BookTagGroup>,
-    allTags: List<BookTag>,
-    selectedGroupId: Long?,
-    onBack: () -> Unit,
-    onManageExcluded: () -> Unit,
-    onNewTag: () -> Unit,
-    onOpenDetail: (BookTag) -> Unit,
-    onSelectGroup: (Long?) -> Unit,
+private fun ExcludedGroupCard(
+    excluded: List<ExcludedTag>,
+    onAdd: (String, Boolean) -> Unit,
+    onRemove: (String) -> Unit,
 ) {
-    // 按组聚合：未分组 + 各分组，依次排列
-    val sections = remember(allTags, groups) {
-        val ungrouped = allTags.filter { it.groupId == 0L }
-        val grouped = groups.mapNotNull { g ->
-            val ts = allTags.filter { it.groupId == g.id }
-            if (ts.isEmpty()) null else g to ts
-        }
-        buildList {
-            if (ungrouped.isNotEmpty()) add(null to ungrouped)
-            addAll(grouped)
-        }
-    }
+    var expanded by remember { mutableStateOf(false) }
+    var pattern by remember { mutableStateOf("") }
+    var isRegex by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.book_tag_manage)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.excluded_tags),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                stringResource(R.string.count_items, excluded.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (expanded) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppTextField(
+                        value = pattern,
+                        onValueChange = { pattern = it },
+                        label = { Text(stringResource(R.string.excluded_tag_pattern)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Switch(checked = isRegex, onCheckedChange = { isRegex = it })
+                        Text(stringResource(R.string.regex), style = MaterialTheme.typography.labelSmall)
+                    }
+                    IconButton(onClick = {
+                        if (pattern.isNotBlank()) {
+                            onAdd(pattern.trim(), isRegex)
+                            pattern = ""
+                        }
+                    }) {
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add))
                     }
                 }
+                Spacer(Modifier.height(4.dp))
+                if (excluded.isEmpty()) {
+                    Text(
+                        stringResource(R.string.no_excluded_tags),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                } else {
+                    excluded.forEach { et ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (et.isRegex) {
+                                Text(
+                                    stringResource(R.string.regex),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(
+                                et.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { onRemove(et.name) }) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = stringResource(R.string.delete),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BookTagManageContent(
+    groups: List<BookTagGroup>,
+    allTags: List<BookTag>,
+    excluded: List<ExcludedTag>,
+    onNewTag: () -> Unit,
+    onOpenDetail: (Long) -> Unit,
+    onAddExcluded: (String, Boolean) -> Unit,
+    onRemoveExcluded: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    var selectedGroupId by remember { mutableStateOf<Long?>(null) }
+    val expandedGroups = remember { mutableStateMapOf<Long?, Boolean>() }
+
+    AppScaffold(
+        topBar = {
+            GlassMediumFlexibleTopAppBar(
+                navigationIcon = { TopBarNavigationButton() },
+                title = { Text(stringResource(R.string.book_tag_manage)) },
+                scrollBehavior = scrollBehavior,
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onNewTag) {
-                Icon(Icons.Default.Add, contentDescription = "新建标签")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_tag))
             }
         }
-    ) { innerPadding ->
-        Column(
+    ) { padding ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = selectedGroupId == null,
-                        onClick = { onSelectGroup(null) },
-                        label = { Text("全部") }
-                    )
-                }
-                items(groups) { group ->
-                    FilterChip(
-                        selected = selectedGroupId == group.id,
-                        onClick = { onSelectGroup(group.id) },
-                        label = { Text(group.name) }
-                    )
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = selectedGroupId == null,
+                            onClick = { selectedGroupId = null },
+                            label = { Text(stringResource(R.string.all_groups)) }
+                        )
+                    }
+                    items(groups) { group ->
+                        FilterChip(
+                            selected = selectedGroupId == group.id,
+                            onClick = { selectedGroupId = group.id },
+                            label = { Text(group.name) }
+                        )
+                    }
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            item {
+                ExcludedGroupCard(
+                    excluded = excluded,
+                    onAdd = onAddExcluded,
+                    onRemove = onRemoveExcluded
+                )
+            }
+
+            val sections = remember(groups, allTags, selectedGroupId) {
+                val gList = if (selectedGroupId == null) groups else groups.filter { it.id == selectedGroupId }
+                val result = gList.map { group ->
+                    group to allTags.filter { it.group == group.name }
+                }.toMutableList()
                 if (selectedGroupId == null) {
-                    item(key = "excluded") { ExcludedTagEntry(onClick = onManageExcluded) }
-                    sections.forEach { (group, tags) ->
-                        item(key = "title-${group?.id ?: -1}") {
-                            GroupTitle(text = group?.name ?: stringResource(R.string.ungrouped))
-                        }
-                        item(key = "flow-${group?.id ?: -1}") {
-                            TagFlowRow(tags = tags, onClick = onOpenDetail)
-                        }
+                    val ungrouped = allTags.filter { it.group.isNullOrBlank() }
+                    if (ungrouped.isNotEmpty()) {
+                        result.add(
+                            BookTagGroup(id = -1, name = stringResource(R.string.ungrouped)) to ungrouped
+                        )
                     }
-                } else {
-                    item(key = "excluded2") { ExcludedTagEntry(onClick = onManageExcluded) }
-                    val tags = allTags.filter { it.groupId == selectedGroupId }
-                    item(key = "flow-sel") {
-                        TagFlowRow(tags = tags, onClick = onOpenDetail)
+                }
+                result
+            }
+
+            sections.forEach { (group, tags) ->
+                val expanded = expandedGroups.getOrPut(group.id) { true }
+                item(key = "header_${group.id}") {
+                    GroupTitle(name = group.name, count = tags.size, expanded = expanded) {
+                        expandedGroups[group.id] = !expanded
+                    }
+                }
+                if (expanded) {
+                    item(key = "body_${group.id}") {
+                        TagListWithCounts(tags = tags, onTagClick = onOpenDetail)
                     }
                 }
             }
@@ -327,32 +355,51 @@ private fun BookTagManageContent(
     }
 }
 
-@Preview(showBackground = true, name = "标签管理")
 @Composable
-private fun BookTagManageScreenPreview() {
-    AppTheme(AppUiConfiguration()) {
+fun BookTagManageScreen(
+    onBack: () -> Unit,
+    onNewTag: () -> Unit,
+    onOpenDetail: (Long) -> Unit,
+) {
+    val viewModel: BookTagManageViewModel = viewModel()
+    val groups by viewModel.groups.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allTags by viewModel.tags.collectAsStateWithLifecycle(initialValue = emptyList())
+    val excluded by viewModel.excludedTags.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    AppTheme {
+        BookTagManageContent(
+            groups = groups,
+            allTags = allTags,
+            excluded = excluded,
+            onNewTag = onNewTag,
+            onOpenDetail = onOpenDetail,
+            onAddExcluded = { name, regex -> viewModel.addExcludedTag(name, regex) },
+            onRemoveExcluded = { name -> viewModel.removeExcludedTag(name) },
+            onBack = onBack
+        )
+    }
+}
+
+@Composable
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+private fun BookTagManagePreview() {
+    LegadoTheme {
         BookTagManageContent(
             groups = listOf(
-                BookTagGroup(id = 1, name = "题材"),
-                BookTagGroup(id = 2, name = "状态"),
-                BookTagGroup(id = 3, name = "口味"),
+                BookTagGroup(id = 1, name = "男频"),
+                BookTagGroup(id = 2, name = "女频")
             ),
             allTags = listOf(
-                BookTag(id = 1, name = "言情", color = 0xFFFF8A80.toInt(), groupId = 1),
-                BookTag(id = 2, name = "悬疑", color = 0xFF82B1FF.toInt(), groupId = 1),
-                BookTag(id = 3, name = "科幻", color = 0xFFB388FF.toInt(), groupId = 1),
-                BookTag(id = 4, name = "连载中", color = 0xFFFFD180.toInt(), groupId = 2),
-                BookTag(id = 5, name = "已完结", color = 0xFFA7FFEB.toInt(), groupId = 2),
-                BookTag(id = 6, name = "甜宠", color = 0xFFFF80AB.toInt(), groupId = 3),
-                BookTag(id = 7, name = "热血", color = 0xFFFF5252.toInt(), groupId = 0),
-                BookTag(id = 8, name = "轻松", color = 0xFF69F0AE.toInt(), groupId = 0),
+                BookTag(id = 1, group = "男频", name = "玄幻"),
+                BookTag(id = 2, group = "女频", name = "言情")
             ),
-            selectedGroupId = null,
-            onBack = {},
-            onManageExcluded = {},
+            excluded = listOf(ExcludedTag(id = 1, name = "短篇")),
+            onSelectGroup = {},
             onNewTag = {},
             onOpenDetail = {},
-            onSelectGroup = {},
+            onAddExcluded = { _, _ -> },
+            onRemoveExcluded = {},
+            onBack = {}
         )
     }
 }

@@ -220,11 +220,6 @@
             android:name=".ui.book.readingmemory.ReadingMemoryDetailActivity"
             android:configChanges="locale|layoutDirection|uiMode|screenLayout"
             android:enableOnBackInvokedCallback="true" />
-        <!-- 标签库管理 -->
-        <activity
-            android:name=".ui.book.tag.TagManagementActivity"
-            android:configChanges="locale|layoutDirection|uiMode|screenLayout"
-            android:enableOnBackInvokedCallback="true" />
         <!-- 书籍信息编辑 -->
         <activity
             android:name=".ui.book.info.edit.BookInfoEditActivity"

@@ -58,11 +58,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import android.content.Intent
-import androidx.compose.ui.platform.LocalContext
-import io.legado.app.ui.book.tag.BookTagSection
-import io.legado.app.ui.book.tag.BookTagSelectSheet
-import io.legado.app.ui.book.tag.TagManagementActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -261,7 +256,6 @@ private fun BookInfoScreenContent(
         alwaysDrawBehindBars = true,
     ) { paddingValues ->
         val book = state.book
-        var showBookTagSheet by rememberSaveable { mutableStateOf(false) }
         if (book == null) {
             Box(modifier = Modifier.fillMaxSize())
         } else {
@@ -307,8 +301,6 @@ private fun BookInfoScreenContent(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 sharedCoverKey = sharedCoverKey,
-                                showBookTagSheet = showBookTagSheet,
-                                onShowBookTagSheetChange = { showBookTagSheet = it },
                             )
                         }
                         item {
@@ -646,6 +638,7 @@ private fun BookInfoTopBarActions(
     BookInfoOverflowAction(
         state = state,
         onMenuAction = onMenuAction,
+        onOpenReadingMemory = onOpenReadingMemory,
     )
 }
 
@@ -653,6 +646,7 @@ private fun BookInfoTopBarActions(
 private fun BookInfoOverflowAction(
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
+    onOpenReadingMemory: (String) -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -900,8 +894,6 @@ private fun BookInfoHeader(
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedCoverKey: String?,
-    showBookTagSheet: Boolean,
-    onShowBookTagSheetChange: (Boolean) -> Unit,
 ) {
     val coverDescription = stringResource(R.string.a11y_book_cover_actions, book.name)
     Column(
@@ -1017,14 +1009,6 @@ private fun BookInfoHeader(
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
-            val context = LocalContext.current
-            BookTagSection(
-                bookUrl = book?.bookUrl.orEmpty(),
-                onManageClick = {
-                    context.startActivity(Intent(context, TagManagementActivity::class.java))
-                },
-                onSelectClick = { onShowBookTagSheetChange(true) },
-            )
             if (kindLabels.isNotEmpty() || !groupNames.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
@@ -1058,11 +1042,6 @@ private fun BookInfoHeader(
                 }
             }
         }
-        BookTagSelectSheet(
-            show = showBookTagSheet,
-            bookUrl = book?.bookUrl.orEmpty(),
-            onDismissRequest = { onShowBookTagSheetChange(false) },
-        )
     }
 }
 

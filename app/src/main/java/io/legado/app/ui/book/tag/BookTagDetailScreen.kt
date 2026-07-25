@@ -20,14 +20,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,8 +50,13 @@ import io.legado.app.data.entities.BookTag
 import io.legado.app.ui.theme.AppTheme
 import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
+import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import kotlinx.coroutines.launch
+import android.widget.Toast
 
 /**
  * 标签详情页（F1）
@@ -121,18 +126,34 @@ private fun BookTagDetailContent(
     onBack: () -> Unit,
     onEdit: () -> Unit,
 ) {
-    Scaffold(
+    val context = LocalContext.current
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    AppScaffold(
         topBar = {
-            TopAppBar(
+            GlassMediumFlexibleTopAppBar(
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 title = { Text(text = tag?.name ?: "") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
+                scrollBehavior = scrollBehavior,
                 actions = {
+                    IconButton(
+                        onClick = {
+                            tag?.name?.let { name ->
+                                scope.launch { viewModel.excludeTag(name) }
+                                Toast.makeText(
+                                    context,
+                                    R.string.excluded_tag_added,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Filled.Block,
+                            contentDescription = stringResource(R.string.exclude_this_tag)
+                        )
+                    }
                     IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "编辑")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit))
                     }
                 }
             )
@@ -142,6 +163,7 @@ private fun BookTagDetailContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)

@@ -2,22 +2,27 @@ package io.legado.app.ui.book.tag
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.menuAnchor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,20 +34,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.legado.app.R
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppFloatingActionButton
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.series.MediumPlainButton
+import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import kotlinx.coroutines.launch
 
 /**
- * 标签编辑底部面板：名称、颜色、分组，支持删除。
+ * 标签编辑底部面板：名称、颜色（颜色选择器）、分组（必选），支持删除。
  */
 @Composable
 fun BookTagEditSheet(
@@ -57,13 +65,17 @@ fun BookTagEditSheet(
     val scope = rememberCoroutineScope()
     val isNew = tag == null || tag.id == 0L
     val initialGroup = remember(tag, groups) {
-        if (tag != null && tag.groupId != 0L) groups.find { it.id == tag.groupId }?.name ?: "" else ""
+        if (tag != null && tag.groupId != 0L) groups.find { it.id == tag.groupId }?.name ?: ""
+        else groups.firstOrNull()?.name ?: ""
     }
     var name by remember(show, tag) { mutableStateOf(tag?.name ?: "") }
-    var groupName by remember(show, tag) { mutableStateOf(initialGroup) }
+    var selectedGroup by remember(show, tag, groups) { mutableStateOf(initialGroup) }
     var color by remember(show, tag) {
-        mutableStateOf(if (tag != null && tag.color != 0) tag.color else TAG_PALETTE.first())
+        mutableStateOf(if (tag != null && tag.color != 0) tag.color else 0xFF2196F3.toInt())
     }
+    var expandedGroup by remember { mutableStateOf(false) }
+    var groupError by remember { mutableStateOf(false) }
+    var showColorPicker by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
 
     fun buildTag(groupId: Long): BookTag {
@@ -77,22 +89,27 @@ fun BookTagEditSheet(
     }
 
     fun save() {
+        val g = selectedGroup.trim()
+        if (g.isBlank()) {
+            groupError = true
+            return
+        }
+        groupError = false
         scope.launch {
-            val gId = if (groupName.isBlank()) 0L
-            else groups.find { it.name == groupName.trim() }?.id ?: onCreateGroup(groupName.trim())
+            val gId = groups.find { it.name == g }?.id ?: onCreateGroup(g)
             onSave(buildTag(gId))
         }
     }
 
     AppModalBottomSheet(
-        title = if (isNew) "新建标签" else "编辑标签",
+        title = if (isNew) stringResource(R.string.new_tag) else stringResource(R.string.edit_tag),
         show = show,
         onDismissRequest = onDismissRequest,
         startAction = {
             MediumPlainButton(
                 onClick = onDismissRequest,
                 icon = Icons.Default.Close,
-                contentDescription = "关闭"
+                contentDescription = stringResource(R.string.cancel)
             )
         },
         endAction = {
@@ -101,11 +118,11 @@ fun BookTagEditSheet(
                     MediumPlainButton(
                         onClick = { showMenu = true },
                         icon = Icons.Default.MoreVert,
-                        contentDescription = "更多"
+                        contentDescription = stringResource(R.string.more)
                     )
                     RoundDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         RoundDropdownMenuItem(
-                            text = "删除标签",
+                            text = stringResource(R.string.delete_tag),
                             leadingIcon = { Icon(Icons.Default.Delete, null) },
                             onClick = {
                                 tag?.let { onDelete(it) }
@@ -121,33 +138,72 @@ fun BookTagEditSheet(
             AppTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = "标签名称",
+                label = stringResource(R.string.tag_name),
                 singleLine = true,
                 backgroundColor = LegadoTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
             )
-            AppTextField(
-                value = groupName,
-                onValueChange = { groupName = it },
-                label = "分组（可留空或输入新分组名）",
-                singleLine = true,
-                backgroundColor = LegadoTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            )
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+            ExposedDropdownMenuBox(
+                expanded = expandedGroup,
+                onExpandedChange = { expandedGroup = it }
             ) {
-                items(TAG_PALETTE) { c ->
-                    val selected = c == color
-                    Box(
-                        modifier = Modifier
-                            .size(if (selected) 36.dp else 28.dp)
-                            .clip(CircleShape)
-                            .background(Color(c))
-                            .clickable { color = c }
-                    )
+                AppTextField(
+                    value = selectedGroup,
+                    onValueChange = {
+                        selectedGroup = it
+                        groupError = false
+                    },
+                    label = stringResource(R.string.tag_group_required),
+                    singleLine = true,
+                    readOnly = false,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGroup) },
+                    backgroundColor = LegadoTheme.colorScheme.surface,
+                    modifier = Modifier.menuAnchor().fillMaxWidth().padding(bottom = 8.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = expandedGroup,
+                    onDismissRequest = { expandedGroup = false }
+                ) {
+                    groups.forEach { g ->
+                        DropdownMenuItem(
+                            text = { Text(g.name) },
+                            onClick = {
+                                selectedGroup = g.name
+                                groupError = false
+                                expandedGroup = false
+                            }
+                        )
+                    }
                 }
+            }
+            if (groupError) {
+                Text(
+                    stringResource(R.string.tag_group_required_hint),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showColorPicker = true }
+                    .padding(bottom = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(color))
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.tag_color),
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
         AppFloatingActionButton(
@@ -158,4 +214,11 @@ fun BookTagEditSheet(
             icon = Icons.Default.Check
         )
     }
+
+    ColorPickerSheet(
+        show = showColorPicker,
+        initialColor = color,
+        onDismissRequest = { showColorPicker = false },
+        onColorSelected = { color = it; showColorPicker = false }
+    )
 }
