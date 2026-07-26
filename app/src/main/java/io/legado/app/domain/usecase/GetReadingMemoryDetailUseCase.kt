@@ -103,7 +103,7 @@ class GetReadingMemoryDetailUseCase(
             durChapterPos = book.durChapterPos,
             rating = memory?.rating ?: 0f,
             review = memory?.review,
-            abandoned = memory?.abandoned == 1,
+            abandoned = memory?.abandoned ?: false,
             firstReadTime = memory?.firstReadTime ?: 0L,
             finishReadTime = if (book.lastCheckTime > 0) book.lastCheckTime else (memory?.finishReadTime ?: 0L),
             lastReadTime = book.lastCheckTime.takeIf { it > 0 } ?: (memory?.lastReadTime ?: 0L),
@@ -135,6 +135,7 @@ class GetReadingMemoryDetailUseCase(
             ?: emptyList()
         val protagonists = protagonistNames.map { name ->
             BookCharacterProfile(
+                id = java.util.UUID.randomUUID().toString(),
                 bookUrl = memory.bookUrl,
                 name = name,
                 isProtagonist = true,
@@ -158,7 +159,7 @@ class GetReadingMemoryDetailUseCase(
             durChapterPos = memory.durChapterPos,
             rating = memory.rating,
             review = memory.review,
-            abandoned = memory.abandoned == 1,
+            abandoned = memory.abandoned,
             firstReadTime = memory.firstReadTime,
             finishReadTime = memory.finishReadTime,
             lastReadTime = memory.lastReadTime,

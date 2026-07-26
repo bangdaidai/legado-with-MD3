@@ -1,8 +1,6 @@
 package io.legado.app.ui.book.readingmemory.detail
 
-import io.legado.app.base.UiEvent
-import io.legado.app.base.UiState
-import io.legado.app.data.repository.ReadingMemoryRepository.ReadingStatistics
+import io.legado.app.data.repository.ReadingStatistics
 
 /** 阅读记忆详情页状态 */
 data class ReadingMemoryDetailUiState(
@@ -28,7 +26,7 @@ data class ReadingMemoryDetailUiState(
     val reviewDraft: String = "",
     val showAbandonedDialog: Boolean = false,
     val showRatingEditor: Boolean = false,
-) : UiState
+)
 
 sealed interface ReadingMemoryDetailIntent {
     data class Load(val bookUrl: String) : ReadingMemoryDetailIntent

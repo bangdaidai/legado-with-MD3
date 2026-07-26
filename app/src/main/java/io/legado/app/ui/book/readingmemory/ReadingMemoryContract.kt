@@ -1,8 +1,5 @@
 package io.legado.app.ui.book.readingmemory
 
-import io.legado.app.base.UiEvent
-import io.legado.app.base.UiState
-
 /** 阅读记忆列表页状态 */
 data class ReadingMemoryUiState(
     val memories: List<ReadingMemoryItem> = emptyList(),
@@ -11,7 +8,7 @@ data class ReadingMemoryUiState(
     val searchQuery: String = "",
     val sortBy: ReadingMemorySortBy = ReadingMemorySortBy.Recent,
     val loading: Boolean = true,
-) : UiState
+)
 
 /** 列表项展示数据 */
 data class ReadingMemoryItem(

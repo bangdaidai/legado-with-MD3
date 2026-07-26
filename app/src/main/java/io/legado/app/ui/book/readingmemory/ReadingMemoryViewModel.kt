@@ -69,6 +69,7 @@ class ReadingMemoryViewModel(
                 when (intent) {
                     is ReadingMemoryIntent.Load -> load()
                     is ReadingMemoryIntent.Filter -> _statusFilter.value = intent.filter
+                    is ReadingMemoryIntent.Search -> { /* 搜索在 UI 层处理 */ }
                     is ReadingMemoryIntent.Sort -> _sortBy.value = intent.sortBy
                     is ReadingMemoryIntent.Refresh -> load()
                     is ReadingMemoryIntent.ClickBook -> {

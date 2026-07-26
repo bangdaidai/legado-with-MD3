@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.legado.app.data.repository.ReadingMemoryRepository.ReadingStatistics
+import io.legado.app.data.repository.ReadingStatistics
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -49,7 +49,13 @@ class ReadingMemoryDetailViewModel(
                     kind = memory?.kind ?: "",
                     wordCount = memory?.statTotalWords ?: 0,
                     rating = (memory?.rating ?: 0f).toInt(),
-                    status = memory?.status ?: 0,
+                    status = when {
+                        memory == null -> 0
+                        memory.abandoned -> 3
+                        memory.progress >= 1f -> 2
+                        memory.progress > 0f -> 1
+                        else -> 0
+                    },
                     abandoned = memory?.abandoned ?: false,
                     isStillOnShelf = true,
                     review = memory?.review ?: "",

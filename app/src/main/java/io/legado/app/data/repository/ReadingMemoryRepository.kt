@@ -264,44 +264,6 @@ class ReadingMemoryRepository(
 
     // endregion
 
-    // region 批量操作
-
-    /**
-     * 为所有书架书籍确保存在阅读记忆记录。
-     * 用于列表页初始化。
-     */
-    suspend fun ensureAllMemories() {
-        val books = bookDao.all
-        books.forEach { book ->
-            ensureMemory(book.bookUrl)
-        }
-    }
-
-    /**
-     * 从 Book 同步基础信息到阅读记忆（按 bookUrl）。
-     */
-    suspend fun syncFromBook(bookUrl: String) {
-        val book = bookDao.getBook(bookUrl) ?: return
-        syncFromBook(book)
-    }
-
-    /**
-     * 计算指定书籍的阅读统计（按 bookUrl，不需要 Book 对象）。
-     */
-    suspend fun computeStatistics(bookUrl: String): ReadingStatistics {
-        val book = bookDao.getBook(bookUrl) ?: return ReadingStatistics(0L, 0, 0L, null, 0L)
-        return computeStatistics(book)
-    }
-
-    /**
-     * 更新用户修改的简介。
-     */
-    suspend fun updateIntro(bookUrl: String, intro: String?) {
-        dao.updateIntro(bookUrl, intro)
-    }
-
-    // endregion
-
     // region 删除操作
 
     /**
