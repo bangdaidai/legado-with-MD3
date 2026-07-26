@@ -280,6 +280,13 @@ class ReadingMemoryRepository(
         dao.deleteByBookUrl(bookUrl)
     }
 
+    /**
+     * 清空全部阅读记忆。
+     */
+    suspend fun clearAll() {
+        dao.deleteAll()
+    }
+
     // endregion
 }
 

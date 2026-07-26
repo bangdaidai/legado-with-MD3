@@ -198,6 +198,8 @@ fun BookshelfScreen(
     onIntent: (BookshelfIntent) -> Unit,
     effects: kotlinx.coroutines.flow.Flow<BookshelfEffect>,
     allGroups: List<io.legado.app.data.entities.BookGroup>,
+    tagColorMap: Map<String, Long> = emptyMap(),
+    excludedTags: List<io.legado.app.data.entities.ExcludedTag> = emptyList(),
     scrollToTopRequest: Long = 0L,
     onScrollToTopRequestHandled: (Long) -> Unit = {},
     onBookClick: (BookShelfItem) -> Unit,
@@ -1471,6 +1473,8 @@ fun BookshelfPage(
                         } else {
                             persistentListOf()
                         },
+                        tagColorMap = tagColorMap,
+                        excludedTags = excludedTags,
                         bookUi = bookUi,
                         modifier = Modifier
                             .reorderAccessibility(

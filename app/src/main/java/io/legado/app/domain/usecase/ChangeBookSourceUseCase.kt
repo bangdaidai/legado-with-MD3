@@ -13,6 +13,7 @@ import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.TagManager
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.removeType
 import io.legado.app.model.ReadBook
@@ -31,6 +32,7 @@ data class ChangeSourceMigrationOptions(
     val migrateRemark: Boolean = true,
     val migrateReadConfig: Boolean = true,
     val deleteDownloadedChapters: Boolean = false,
+    val keepOfficialMeta: Boolean = true,
 )
 
 data class ChangeBookSourceResult(
@@ -77,7 +79,7 @@ class ChangeBookSourceUseCase(
     private val readSettingsGateway: ReadSettingsGateway,
 ) {
 
-    fun applyMigration(
+    suspend fun applyMigration(
         oldBook: Book,
         newBook: Book,
         chapters: List<BookChapter>,
@@ -89,6 +91,7 @@ class ChangeBookSourceUseCase(
             options,
             otherSettingsGateway.currentSettings.replaceEnableDefault,
             readSettingsGateway.currentSettings.chineseConverterType,
+            keepOfficialMeta = options.keepOfficialMeta,
         )
         newBook.removeType(BookType.updateError)
         return newBook
@@ -245,12 +248,13 @@ class ChangeBookSourceUseCase(
         return chapters
     }
 
-    private fun Book.applyMigrationTo(
+    private suspend fun Book.applyMigrationTo(
         newBook: Book,
         chapters: List<BookChapter>,
         options: ChangeSourceMigrationOptions,
         defaultReplaceEnabled: Boolean,
         chineseConverterType: Int,
+        keepOfficialMeta: Boolean,
     ) {
         newBook.totalChapterNum = chapters.size
         if (options.migrateReadingProgress && chapters.isNotEmpty()) {
@@ -297,6 +301,19 @@ class ChangeBookSourceUseCase(
         }
         if (newBook.wordCount.isNullOrBlank()) {
             newBook.wordCount = wordCount
+        }
+        // 保持正版基础信息：切换到非正版书源时，保留旧书基础元信息不被新源覆盖
+        if (keepOfficialMeta) {
+            val newSource = database.bookSourceDao.getBookSource(newBook.origin)
+            if (!TagManager.isOfficialSource(newSource)) {
+                newBook.name = name
+                newBook.author = author
+                newBook.customCoverUrl = customCoverUrl
+                newBook.coverUrl = coverUrl
+                newBook.customIntro = customIntro
+                newBook.intro = intro
+                newBook.bookSourceGroup = bookSourceGroup
+            }
         }
     }
 }

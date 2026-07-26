@@ -147,8 +147,10 @@ fun MainScreen(
     onNavigateToRssFavorites: () -> Unit,
     onNavigateToRuleSub: () -> Unit,
     onNavigateToReadRecord: () -> Unit,
+    onNavigateToReadingMemoryList: () -> Unit,
     onNavigateToReadRecordOverview: () -> Unit,
     onNavigateToHighlightTagRule: () -> Unit,
+    onNavigateToTagManagement: () -> Unit,
     onNavigateToAbout: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -584,6 +586,8 @@ fun MainScreen(
                                     when (event) {
                                         PrefClickEvent.OpenBookCacheManage -> onNavigateToBookCacheManage()
                                         PrefClickEvent.OpenReadRecord -> onNavigateToReadRecord()
+                                        PrefClickEvent.OpenReadingMemoryList -> onNavigateToReadingMemoryList()
+                                        PrefClickEvent.OpenTagManagement -> onNavigateToTagManagement()
                                         else -> onIntent(MainUiIntent.HandlePreferenceClick(event))
                                     }
                                 }

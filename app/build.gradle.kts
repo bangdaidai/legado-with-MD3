@@ -31,6 +31,16 @@ val enableAbiSplits = providers.gradleProperty("enableAbiSplits")
     .map(String::toBoolean)
     .getOrElse(true)
 
+val abiSplitsList = providers.gradleProperty("abiSplits")
+    .getOrElse("armeabi-v7a,arm64-v8a")
+    .split(",")
+    .map { it.trim() }
+    .toTypedArray()
+
+val universalApk = providers.gradleProperty("universalApk")
+    .map(String::toBoolean)
+    .getOrElse(true)
+
 android {
     compileSdk = 37
     namespace = "io.legado.app"
@@ -123,8 +133,8 @@ android {
         abi {
             isEnable = enableAbiSplits
             reset()
-            include("armeabi-v7a", "arm64-v8a")
-            isUniversalApk = true
+            include(*abiSplitsList)
+            isUniversalApk = universalApk
         }
     }
 

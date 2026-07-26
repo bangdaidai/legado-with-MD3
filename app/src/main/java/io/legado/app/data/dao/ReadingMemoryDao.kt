@@ -146,6 +146,10 @@ interface ReadingMemoryDao {
     @Query("DELETE FROM readingMemory WHERE bookUrl = :bookUrl")
     suspend fun deleteByBookUrl(bookUrl: String)
 
+    /** 清空全部阅读记忆 */
+    @Query("DELETE FROM readingMemory")
+    suspend fun deleteAll()
+
     /** 确保存在（空操作；外部调用 upsert 即可） */
     @Query("SELECT COUNT(*) FROM readingMemory WHERE bookUrl = :bookUrl")
     suspend fun exists(bookUrl: String): Int

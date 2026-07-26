@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import io.legado.app.data.appDb
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
@@ -163,6 +164,16 @@ class BookshelfViewModel(
 
     val allGroupsFlow: StateFlow<List<BookGroup>> = bookGroupRepository.flowAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 标签管理中设置的标签名 -> 颜色（Long），供书架标签按标签系统配色。 */
+    val tagColorMapFlow: StateFlow<Map<String, Long>> = appDb.bookTagDao.observeAll()
+        .map { list -> list.associate { it.name to it.color } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** 排除标签规则（普通关键字 / 正则），供书架标签过滤。 */
+    val excludedTagsFlow: StateFlow<List<io.legado.app.data.entities.ExcludedTag>> =
+        appDb.excludedTagDao.observeAll()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val hideEmptyGroupsFlow: StateFlow<Boolean> = bookshelfSettings
         .map { it.hideEmptyGroups }

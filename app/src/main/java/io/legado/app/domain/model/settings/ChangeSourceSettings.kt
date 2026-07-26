@@ -8,6 +8,7 @@ data class ChangeSourceSettings(
     val loadInfo: Boolean = false,
     val loadToc: Boolean = false,
     val loadWordCount: Boolean = false,
+    val keepOfficialMeta: Boolean = true,
     val migrateChapters: Boolean = true,
     val migrateReadingProgress: Boolean = true,
     val migrateGroup: Boolean = true,
@@ -26,5 +27,6 @@ data class ChangeSourceSettings(
         migrateRemark = migrateRemark,
         migrateReadConfig = migrateReadConfig,
         deleteDownloadedChapters = deleteDownloadedChapters,
+        keepOfficialMeta = keepOfficialMeta,
     )
 }

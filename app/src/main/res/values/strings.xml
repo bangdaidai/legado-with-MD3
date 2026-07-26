@@ -965,6 +965,28 @@
     <string name="donate_summary">Your donation makes this app better</string>
     <string name="about_summary">WeChat official account [Open Source Reading]</string>
     <string name="read_record">Read Record</string>
+    <string name="reading_memory">Reading Memory</string>
+    <string name="reading_memory_clear_all">Clear reading memories</string>
+    <string name="reading_memory_clear_all_confirm">Clear all reading memories? This cannot be undone.</string>
+    <string name="reading_memory_only_with_review">Only with review</string>
+    <string name="reading_memory_filter_rating">Rating</string>
+    <string name="reading_memory_filter_type">Read type</string>
+    <string name="reading_memory_group_by">Group by</string>
+    <string name="reading_memory_group_none">None</string>
+    <string name="reading_memory_group_year">Year</string>
+    <string name="reading_memory_group_rating">Rating</string>
+    <string name="reading_memory_group_status">Status</string>
+    <string name="reading_memory_mark_abandoned">Mark as abandoned</string>
+    <string name="reading_memory_unmark_abandoned">Unmark abandoned</string>
+    <string name="reading_memory_delete">Delete memory</string>
+    <string name="reading_memory_show_intro">Show intro</string>
+    <string name="reading_memory_show_review">Show review</string>
+    <string name="reading_memory_show_card">Show card</string>
+    <string name="reading_memory_type_text">Text</string>
+    <string name="reading_memory_type_audio">Audio</string>
+    <string name="reading_memory_type_video">Video</string>
+    <string name="reading_memory_search_hint">Search by title / author / category</string>
+    <string name="reading_memory_empty">No reading memories</string>
     <string name="del_read_record">Delete Read record</string>
     <string name="read_record_summary">Read record summary</string>
     <string name="local_tts">Local TTS</string>
@@ -2289,6 +2311,7 @@
     <string name="tag_group_rules">Tag Group Rules</string>
     <string name="tag_group_sync_complete">Group sync complete</string>
     <string name="import_tag_group_rule">Import Tag Group Rules</string>
+    <string name="tag_management">Tag Management</string>
 
     <!-- Compose UI extracted strings -->
     <string name="edit_replace_rule">Edit Replace Rule</string>

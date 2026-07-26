@@ -105,7 +105,7 @@ jobs:
       - name: Build Release APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleAppRelease --no-daemon -x lint 2>&1 | tee build.log
+          ./gradlew assembleAppRelease assembleAppNoR8 -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log
 
       - name: Check Build Log for Signing Info
         run: |
@@ -131,7 +131,7 @@ jobs:
           
           find app/build/outputs -name "*.apk" -type f
           echo ""
-          ls -la app/build/outputs/apk/app/release/ || echo "Release 目录不存在"
+          ls -la app/build/outputs/apk/app/*/ || echo "Release 目录不存在"
 
       - name: Verify APK Signature
         run: |
@@ -175,7 +175,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: legado_release_signed_apk
-          path: app/build/outputs/apk/app/release/*.apk
+          path: app/build/outputs/apk/app/**/*.apk
           retention-days: 30
 
   release:

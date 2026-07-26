@@ -184,6 +184,11 @@ fun MyScreen(
                     imageVector = Icons.Default.Sell,
                     onClick = { onNavigate(PrefClickEvent.OpenHighlightTagRule) }
                 )
+                ClickableSettingItem(
+                    title = stringResource(R.string.tag_management),
+                    imageVector = Icons.Default.Label,
+                    onClick = { onNavigate(PrefClickEvent.OpenTagManagement) }
+                )
             }
 
             SplicedColumnGroup(
@@ -213,6 +218,13 @@ fun MyScreen(
                     imageVector = Icons.Default.History,
                     onClick = {
                         onNavigate(PrefClickEvent.OpenReadRecord)
+                    }
+                )
+                ClickableSettingItem(
+                    title = stringResource(R.string.reading_memory),
+                    imageVector = Icons.Default.Book,
+                    onClick = {
+                        onNavigate(PrefClickEvent.OpenReadingMemoryList)
                     }
                 )
                 ClickableSettingItem(

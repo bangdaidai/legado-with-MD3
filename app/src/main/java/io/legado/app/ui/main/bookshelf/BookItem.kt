@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.constant.BookType
 import io.legado.app.domain.model.settings.BookshelfSettings
+import io.legado.app.data.entities.ExcludedTag
+import io.legado.app.help.book.TagManager
 import io.legado.app.ui.config.themeConfig.TagColorPair
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -664,6 +666,8 @@ fun BookGroupItemHorizontalCovers(
 fun BookItem(
     settings: BookshelfSettings,
     customTagColors: ImmutableList<TagColorPair>,
+    tagColorMap: Map<String, Long> = emptyMap(),
+    excludedTags: List<ExcludedTag> = emptyList(),
     bookUi: BookUiItem,
     layoutMode: Int,
     modifier: Modifier = Modifier,
@@ -757,6 +761,7 @@ fun BookItem(
         columnContent = if (layoutMode == 0 && !isCompact && settings.showBookIntro) {
             {
                 val kindList = bookUi.displayTags
+                    .filter { !TagManager.isExcluded(it, excludedTags) }
                 val intro = remember(book.intro) {
                     HtmlFormatter.formatDisplayText(book.intro).takeIf { it.isNotBlank() }
                 }
@@ -770,15 +775,26 @@ fun BookItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         kindList.forEachIndexed { index, label ->
-                            val colorPair = if (customTagColors.isNotEmpty()) {
+                            val tagColor = tagColorMap[label]
+                            val colorPair = if (tagColor == null && customTagColors.isNotEmpty()) {
                                 customTagColors[index % customTagColors.size]
                             } else {
                                 null
                             }
+                            val backgroundColor = when {
+                                tagColor != null -> Color(tagColor).copy(alpha = 0.16f)
+                                colorPair != null && colorPair.bgColor != 0 -> Color(colorPair.bgColor)
+                                else -> LegadoTheme.colorScheme.surfaceContainerHigh
+                            }
+                            val contentColor = when {
+                                tagColor != null -> Color(tagColor)
+                                colorPair != null && colorPair.textColor != 0 -> Color(colorPair.textColor)
+                                else -> LegadoTheme.colorScheme.primary.copy(alpha = 0.8f)
+                            }
                             TextCard(
                                 text = label,
-                                backgroundColor = if (colorPair != null && colorPair.bgColor != 0) Color(colorPair.bgColor) else LegadoTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = if (colorPair != null && colorPair.textColor != 0) Color(colorPair.textColor) else LegadoTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                backgroundColor = backgroundColor,
+                                contentColor = contentColor,
                                 cornerRadius = 4.dp,
                                 horizontalPadding = 4.dp,
                                 verticalPadding = 2.dp,

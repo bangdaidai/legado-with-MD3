@@ -451,6 +451,10 @@ val appModule = module {
     viewModelOf(::DictRuleViewModel)
     viewModelOf(::HighlightTagRuleViewModel)
     viewModelOf(::TagGroupRuleViewModel)
+    viewModelOf(::TagManagementViewModel)
+    viewModel { (tagId: Long) ->
+        TagDetailViewModel(tagId)
+    }
     viewModelOf(::DictViewModel)
     viewModelOf(::RssSourceViewModel)
     viewModelOf(::RssSortViewModel)
