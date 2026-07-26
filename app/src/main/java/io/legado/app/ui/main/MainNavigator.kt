@@ -253,6 +253,27 @@ object MainNavigator {
                     backStack.add(route)
                 }
             }
+
+            MainRouteTagManagement -> {
+                if (currentRoute == MainRouteHome) {
+                    backStack.add(route)
+                } else {
+                    backStack.clear()
+                    backStack.add(MainRouteHome)
+                    backStack.add(route)
+                }
+            }
+
+            is MainRouteTagDetail -> {
+                if (currentRoute == MainRouteTagManagement || currentRoute == MainRouteHome) {
+                    backStack.add(route)
+                } else {
+                    backStack.clear()
+                    backStack.add(MainRouteHome)
+                    backStack.add(MainRouteTagManagement)
+                    backStack.add(route)
+                }
+            }
         }
     }
 

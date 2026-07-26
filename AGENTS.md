@@ -54,9 +54,6 @@ Transform tasks into verifiable goals:
 # Assemble all variants
 ./gradlew assembleAppRelease
 
-# Assemble without R8 (for crash debugging — no minification/shrinking)
-./gradlew assembleAppNoR8
-
 # Debug build
 ./gradlew assembleAppDebug
 
@@ -379,7 +376,7 @@ Book sources, RSS sources, and HTTP TTS use JavaScript rules. `initRhino()` in `
 - **Do not update hutool** beyond 5.8.22 — pinned in `libs.versions.toml:42`
 - Package name discrepancy: code namespace is `io.legado.app` but `applicationId` is `io.legato.kazusa`
 - Min SDK 26, target SDK 37, compile SDK 37
-- Release builds enable R8 minification + resource shrinking; `noR8` variant disables both for crash debugging
+- Release builds enable R8 minification + resource shrinking
 - APK is split by ABI (`armeabi-v7a`, `arm64-v8a`, plus universal)
 - Firebase Analytics and Performance are included; `google-services` plugin applied
 
