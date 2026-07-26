@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.repository.ReadingStatistics
+import io.legado.app.constant.AppLog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +25,7 @@ fun ReadingMemoryDetailScreen(
     onIntent: (ReadingMemoryDetailIntent) -> Unit,
 ) {
     val scrollState = rememberScrollState()
+    AppLog.put("[阅读记忆] DetailScreen 渲染 loading=${state.loading} bookName=${state.bookName} 进度=${state.progressInfo}")
 
     Scaffold(
         topBar = {

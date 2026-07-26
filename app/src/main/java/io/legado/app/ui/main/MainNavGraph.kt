@@ -29,6 +29,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.model.Download
 import io.legado.app.ui.about.AboutEffect
@@ -768,6 +769,7 @@ fun MainActivity.mainEntryProvider(
                 onNavigateToRoute(MainRouteBookEventList(bookUrl))
             },
             onNavigateToReadingMemory = { bookUrl ->
+                AppLog.put("[阅读记忆] 导航: BookInfo -> ReadingMemoryDetail bookUrl=$bookUrl")
                 onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl))
             },
             sharedTransitionScope = sharedTransitionScope,
@@ -1064,6 +1066,7 @@ fun MainActivity.mainEntryProvider(
     }
 
     entry<MainRouteReadingMemoryDetail> { route ->
+        AppLog.put("[阅读记忆] 进入 ReadingMemoryDetail route bookUrl='${route.bookUrl}'")
         val viewModel = koinViewModel<ReadingMemoryDetailViewModel>(
             key = "ReadingMemoryDetail:${route.bookUrl}",
             parameters = { parametersOf(route.bookUrl) }

@@ -1,6 +1,8 @@
 package io.legado.app.ui.book.readingmemory.detail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import io.legado.app.constant.AppLog
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.repository.ReadingMemoryRepository
 import kotlinx.coroutines.Dispatchers
@@ -9,12 +11,15 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+private const val TAG = "ReadingMemDetailVM"
 
 class ReadingMemoryDetailViewModel(
     val bookUrl: String,
@@ -32,7 +37,19 @@ class ReadingMemoryDetailViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val detailState: StateFlow<ReadingMemoryDetailUiState> = repository.observeByBookUrl(bookUrl)
         .flatMapLatest { memory ->
-            val stats = repository.computeStatistics(bookUrl)
+            AppLog.put("[阅读记忆] observeByBookUrl emit: memory=${memory?.bookName} url=$bookUrl")
+            val stats = try {
+                repository.computeStatistics(bookUrl)
+            } catch (e: Exception) {
+                AppLog.put("[阅读记忆] computeStatistics 失败 url=$bookUrl", e)
+                ReadingStatistics(
+                    totalReadTime = 0L,
+                    readingDays = 0,
+                    maxDayReadTime = 0L,
+                    maxDayReadDate = null,
+                    totalWords = 0L,
+                )
+            }
             val protagonists = memory?.protagonistsJson
                 ?.split("|")
                 ?.filter { it.isNotBlank() }
@@ -72,10 +89,20 @@ class ReadingMemoryDetailViewModel(
                 )
             }
         }
+        .catch { e ->
+            AppLog.put("[阅读记忆] detailState flow 崩溃 url=$bookUrl", e)
+            emit(ReadingMemoryDetailUiState(
+                bookUrl = bookUrl,
+                bookName = "加载失败",
+                author = e.message ?: "未知错误",
+                loading = false,
+            ))
+        }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), ReadingMemoryDetailUiState())
 
     init {
+        AppLog.put("[阅读记忆] DetailVM init bookUrl='$bookUrl'")
         viewModelScope.launch {
             _intent.collectLatest { intent ->
                 handleIntent(intent)

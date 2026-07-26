@@ -11,7 +11,9 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.help.book.ProtagonistExtractor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onEach
 import java.util.UUID
+import io.legado.app.constant.AppLog
 
 class ReadingMemoryRepository(
     private val dao: ReadingMemoryDao,
@@ -29,7 +31,10 @@ class ReadingMemoryRepository(
 
     fun observeAll(): Flow<List<ReadingMemory>> = dao.getAll()
 
-    fun observeByBookUrl(bookUrl: String): Flow<ReadingMemory?> = dao.getByBookUrl(bookUrl)
+    fun observeByBookUrl(bookUrl: String): Flow<ReadingMemory?> =
+        dao.getByBookUrl(bookUrl).onEach {
+            AppLog.put("[阅读记忆] observeByBookUrl bookUrl=$bookUrl result=${it?.bookName ?: "null(无记忆行)"}")
+        }
 
     suspend fun getByBookUrl(bookUrl: String): ReadingMemory? = dao.getByBookUrlSync(bookUrl)
 
@@ -176,7 +181,9 @@ class ReadingMemoryRepository(
     }
 
     suspend fun computeStatistics(bookUrl: String): ReadingStatistics {
-        val book = bookDao.getBook(bookUrl) ?: return ReadingStatistics(0L, 0, 0L, null, 0L)
+        val book = bookDao.getBook(bookUrl)
+        AppLog.put("[阅读记忆] computeStatistics bookUrl=$bookUrl book=${book?.name ?: "null(书籍不在库)"}")
+        if (book == null) return ReadingStatistics(0L, 0, 0L, null, 0L)
         return computeStatistics(book)
     }
 
