@@ -48,7 +48,7 @@ dependencies {
 
 androidComponents {
     beforeVariants { v ->
-        if (v.buildType == "noR8" || v.buildType == "debug") {
+        if (v.buildType == "debug") {
             v.enable = false
         }
     }
