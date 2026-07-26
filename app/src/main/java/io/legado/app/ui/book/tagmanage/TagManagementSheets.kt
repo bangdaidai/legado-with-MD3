@@ -117,7 +117,8 @@ fun TagEditSheet(
                 MediumTonalButton(
                     onClick = onChooseColor,
                     modifier = Modifier.padding(start = 12.dp),
-                ) { Text("选择颜色") }
+                    text = "选择颜色",
+                )
             }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -139,12 +140,13 @@ fun TagEditSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 if (d.id != 0L) {
-                    MediumTonalButton(onClick = { onDelete(d) }) { Text("删除") }
+                    MediumTonalButton(onClick = { onDelete(d) }, text = "删除")
                 }
                 MediumTonalButton(
                     onClick = { onSave(d.copy(name = name, groupId = groupId, color = d.color)) },
                     modifier = Modifier.padding(start = 12.dp),
-                ) { Text("保存") }
+                    text = "保存",
+                )
             }
         }
     }
@@ -177,12 +179,13 @@ fun GroupEditSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 if (d.id != 0L) {
-                    MediumTonalButton(onClick = { onDelete(d) }) { Text("删除") }
+                    MediumTonalButton(onClick = { onDelete(d) }, text = "删除")
                 }
                 MediumTonalButton(
                     onClick = { onSave(d.copy(name = name)) },
                     modifier = Modifier.padding(start = 12.dp),
-                ) { Text("保存") }
+                    text = "保存",
+                )
             }
         }
     }
@@ -223,12 +226,13 @@ fun ExcludedEditSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 if (d.id != 0L) {
-                    MediumTonalButton(onClick = { onDelete(d) }) { Text("删除") }
+                    MediumTonalButton(onClick = { onDelete(d) }, text = "删除")
                 }
                 MediumTonalButton(
                     onClick = { onSave(d.copy(name = name, isRegex = isRegex)) },
                     modifier = Modifier.padding(start = 12.dp),
-                ) { Text("保存") }
+                    text = "保存",
+                )
             }
         }
     }
@@ -283,12 +287,13 @@ fun MappingEditSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 if (d.id != 0L) {
-                    MediumTonalButton(onClick = { onDelete(d) }) { Text("删除") }
+                    MediumTonalButton(onClick = { onDelete(d) }, text = "删除")
                 }
                 MediumTonalButton(
                     onClick = { onSave(d.copy(oldTagName = oldTagName, newTagId = newTagId)) },
                     modifier = Modifier.padding(start = 12.dp),
-                ) { Text("保存") }
+                    text = "保存",
+                )
             }
         }
     }
