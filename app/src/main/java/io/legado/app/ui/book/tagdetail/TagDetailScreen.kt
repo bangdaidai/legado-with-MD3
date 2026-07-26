@@ -1,8 +1,6 @@
 package io.legado.app.ui.book.tagdetail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,33 +11,31 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.Book
 import io.legado.app.ui.book.tagmanage.TagEditData
 import io.legado.app.ui.book.tagmanage.TagEditSheet
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveContentPadding
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
-import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
+import io.legado.app.ui.widget.components.GlassCard
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
+import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,20 +43,22 @@ fun TagDetailScreen(
     state: TagDetailUiState,
     onIntent: (TagDetailIntent) -> Unit,
     onBack: () -> Unit,
+    onOpenBook: (String) -> Unit,
 ) {
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     var tagEdit by remember { mutableStateOf<TagEditData?>(null) }
     var showColorPicker by remember { mutableStateOf(false) }
 
     val tag = state.tag
 
     AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text(tag?.name ?: "标签详情") },
+            GlassMediumFlexibleTopAppBar(
+                title = tag?.name ?: "标签详情",
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    TopBarNavigationButton(onClick = onBack)
                 },
                 actions = {
                     MediumTonalButton(onClick = {
@@ -69,36 +67,54 @@ fun TagDetailScreen(
                         }
                     }, text = "编辑")
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = LegadoTheme.colorScheme.surface),
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            tag?.let {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) {
-                    Box(
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .adaptiveHorizontalPadding(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = adaptiveContentPadding()),
+        ) {
+            if (tag != null) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(if (it.color == 0L) LegadoTheme.colorScheme.primary else Color(it.color)),
-                    )
-                    Text(
-                        "分组：${state.groupName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(if (tag.color == 0L) LegadoTheme.colorScheme.primary else Color(tag.color)),
+                        )
+                        Text(
+                            "分组：${state.groupName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
                 }
             }
-            Text(
-                "关联书籍（${state.books.size}）",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                items(state.books) { book -> BookRow(book) }
+            item {
+                Text(
+                    "关联书籍（${state.books.size}）",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+            items(state.books) { book ->
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    onClick = { onOpenBook(book.bookUrl) },
+                ) {
+                    BookRow(book)
+                }
             }
         }
     }
@@ -106,7 +122,7 @@ fun TagDetailScreen(
     tag?.let {
         TagEditSheet(
             data = tagEdit,
-            groups = emptyList(),
+            groups = state.groups,
             onValueChange = { tagEdit = it },
             onSave = {
                 onIntent(TagDetailIntent.Save(it.name, it.groupId, it.color))
@@ -137,7 +153,7 @@ private fun BookRow(book: Book) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {

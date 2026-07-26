@@ -800,6 +800,7 @@ fun MainActivity.mainEntryProvider(
         TagDetailRouteScreen(
             tagId = route.tagId,
             onBack = { onNavigateBack() },
+            onOpenBook = { onNavigateToRoute(MainRouteReadBook(bookUrl = it)) },
         )
     }
 

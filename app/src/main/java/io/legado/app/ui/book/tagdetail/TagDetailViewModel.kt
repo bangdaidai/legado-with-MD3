@@ -31,6 +31,8 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
             is TagDetailIntent.Save -> viewModelScope.launch { save(intent) }
             TagDetailIntent.Delete -> viewModelScope.launch { delete() }
             TagDetailIntent.Refresh -> load()
+            is TagDetailIntent.OpenBook ->
+                viewModelScope.launch { _effect.emit(TagDetailEffect.NavigateToBook(it.bookUrl)) }
         }
     }
 
@@ -43,13 +45,19 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
                 null
             }
             val groupName = group?.name ?: "未分组"
+            val groups = appDb.bookTagGroupDao.all().toImmutableList()
             val books = if (tag != null) {
                 val relations = appDb.bookTagRelationDao.getByTagId(tagId)
                 relations.mapNotNull { appDb.bookDao.getBook(it.bookUrl) }.toImmutableList()
             } else {
                 kotlinx.collections.immutable.persistentListOf()
             }
-            _uiState.value = _uiState.value.copy(tag = tag, groupName = groupName, books = books)
+            _uiState.value = _uiState.value.copy(
+                tag = tag,
+                groupName = groupName,
+                groups = groups,
+                books = books,
+            )
         }
     }
 

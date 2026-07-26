@@ -11,21 +11,42 @@ data class ReadingMemoryDetailUiState(
     val intro: String = "",
     val kind: String = "",
     val wordCount: Long = 0,
+    val wordCountText: String = "",
     val rating: Int = 0,
     val status: Int = 0,
+    val statusText: String = "",
     val abandoned: Boolean = false,
     val isStillOnShelf: Boolean = true,
     val review: String = "",
     val userModifiedIntro: String? = null,
+    val progress: Float = 0f,
     val progressInfo: String = "",
+    val annotationCount: Int = 0,
+    val lastReadTime: Long = 0L,
     val statistics: ReadingStatistics? = null,
     val protagonistNames: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
+    val excerpts: List<ReadingMemoryExcerpt> = emptyList(),
+    val sessions: List<ReadingSessionItem> = emptyList(),
     val loading: Boolean = true,
     val showReviewEditor: Boolean = false,
     val reviewDraft: String = "",
     val showAbandonedDialog: Boolean = false,
     val showRatingEditor: Boolean = false,
+)
+
+/** 书摘条目（含笔记的书签） */
+data class ReadingMemoryExcerpt(
+    val chapterName: String = "",
+    val note: String = "",
+    val originText: String? = null,
+)
+
+/** 阅读会话条目（按天的阅读记录） */
+data class ReadingSessionItem(
+    val date: String = "",
+    val readTime: Long = 0L,
+    val readWords: Long = 0L,
 )
 
 sealed interface ReadingMemoryDetailIntent {

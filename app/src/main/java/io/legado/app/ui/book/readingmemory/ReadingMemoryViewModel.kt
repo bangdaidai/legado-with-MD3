@@ -206,7 +206,7 @@ class ReadingMemoryViewModel(
         }
 
         val sorted = when (c.sortBy) {
-            ReadingMemorySortBy.Recent -> list.sortedByDescending { it.updateTime }
+            ReadingMemorySortBy.Recent -> list.sortedByDescending { if (it.lastReadTime > 0) it.lastReadTime else it.createTime }
             ReadingMemorySortBy.Rating -> list.sortedByDescending { it.rating }
             ReadingMemorySortBy.ReadDuration -> list.sortedByDescending { it.statTotalReadTime }
             ReadingMemorySortBy.Name -> list.sortedBy { it.bookName.lowercase() }

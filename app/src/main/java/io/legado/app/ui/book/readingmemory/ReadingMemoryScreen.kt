@@ -66,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.widget.components.image.cover.BookCoverImage
+import io.legado.app.ui.widget.components.AppLinearProgressIndicator
 import io.legado.app.ui.book.readingmemory.ReadingMemoryListItem.BookItem
 import io.legado.app.ui.book.readingmemory.ReadingMemoryListItem.GroupHeader
 
@@ -593,6 +594,26 @@ private fun MemoryBookCard(
                     }
                 }
 
+                // 进度条
+                Spacer(Modifier.padding(top = 6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AppLinearProgressIndicator(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp),
+                        progress = memory.progress.coerceIn(0f, 1f),
+                    )
+                    Text(
+                        "${(memory.progress.coerceIn(0f, 1f) * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
                 Spacer(Modifier.padding(top = 6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -613,6 +634,19 @@ private fun MemoryBookCard(
                             statusInfo.first,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    if (memory.wordCount?.isNotBlank() == true) {
+                        Text(
+                            memory.wordCount!!,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (memory.statTotalWords > 0) {
+                        Text(
+                            formatWordCount(memory.statTotalWords) + "字",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (memory.statTotalReadTime > 0) {
@@ -648,4 +682,13 @@ private fun formatReadTime(ms: Long): String {
         if (hours > 0L) append("${hours}时")
         if (minutes > 0L || (days == 0L && hours == 0L)) append("${minutes}分")
     }.let { if (it.isEmpty()) "0分" else it }
+}
+
+private fun formatWordCount(words: Long): String {
+    if (words <= 0) return "0"
+    return when {
+        words >= 10000 -> "${words / 10000}万"
+        words >= 1000 -> "${words / 1000}千"
+        else -> "$words"
+    }
 }

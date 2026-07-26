@@ -14,6 +14,7 @@ import org.koin.core.parameter.parametersOf
 fun TagDetailRouteScreen(
     tagId: Long,
     onBack: () -> Unit,
+    onOpenBook: (String) -> Unit,
 ) {
     val viewModel = koinViewModel<TagDetailViewModel>(parameters = { parametersOf(tagId) })
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -25,6 +26,7 @@ fun TagDetailRouteScreen(
                 TagDetailEffect.Back -> onBack()
                 is TagDetailEffect.ShowMessage ->
                     Toast.makeText(context, it.msg, Toast.LENGTH_SHORT).show()
+                is TagDetailEffect.NavigateToBook -> onOpenBook(it.bookUrl)
             }
         }
     }
@@ -33,5 +35,6 @@ fun TagDetailRouteScreen(
         state = state,
         onIntent = viewModel::sendEvent,
         onBack = onBack,
+        onOpenBook = onOpenBook,
     )
 }

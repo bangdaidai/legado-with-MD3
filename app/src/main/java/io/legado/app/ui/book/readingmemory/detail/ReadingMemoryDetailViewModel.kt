@@ -55,6 +55,48 @@ class ReadingMemoryDetailViewModel(
                 ?.split("|")
                 ?.filter { it.isNotBlank() }
                 ?: emptyList()
+            val tags = memory?.kind
+                ?.split(Regex("[|,，、]"))
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+            val excerpts = try {
+                repository.getExcerpts(bookUrl).map {
+                    ReadingMemoryExcerpt(
+                        chapterName = it.chapterName ?: "",
+                        note = it.content ?: "",
+                        originText = it.bookText,
+                    )
+                }
+            } catch (e: Exception) {
+                AppLog.put("[阅读记忆] getExcerpts 失败 url=$bookUrl", e)
+                emptyList()
+            }
+            val sessions = try {
+                repository.getReadSessions(bookUrl).map {
+                    ReadingSessionItem(
+                        date = it.date,
+                        readTime = it.readTime,
+                        readWords = it.readWords,
+                    )
+                }
+            } catch (e: Exception) {
+                AppLog.put("[阅读记忆] getReadSessions 失败 url=$bookUrl", e)
+                emptyList()
+            }
+            val status = when {
+                memory == null -> 0
+                memory.abandoned -> 3
+                memory.progress >= 1f -> 2
+                memory.progress > 0f -> 1
+                else -> 0
+            }
+            val statusText = when (status) {
+                3 -> "弃文"
+                2 -> "已读"
+                1 -> "在读"
+                else -> "待看"
+            }
 
             _showReviewEditor.map { showEditor ->
                 ReadingMemoryDetailUiState(
@@ -66,22 +108,21 @@ class ReadingMemoryDetailViewModel(
                         ?: memory?.intro ?: "",
                     kind = memory?.kind ?: "",
                     wordCount = memory?.statTotalWords ?: 0,
+                    wordCountText = memory?.wordCount ?: "",
                     rating = (memory?.rating ?: 0f).toInt(),
-                    status = when {
-                        memory == null -> 0
-                        memory.abandoned -> 3
-                        memory.progress >= 1f -> 2
-                        memory.progress > 0f -> 1
-                        else -> 0
-                    },
+                    status = status,
+                    statusText = statusText,
                     abandoned = memory?.abandoned ?: false,
                     isStillOnShelf = true,
                     review = memory?.review ?: "",
                     userModifiedIntro = if (memory?.userModifiedIntro == true) memory.intro else null,
+                    progress = memory?.progress ?: 0f,
                     progressInfo = formatProgress(memory),
+                    annotationCount = memory?.annotationCount ?: 0,
+                    lastReadTime = memory?.lastReadTime ?: 0L,
                     statistics = stats,
                     protagonistNames = protagonists,
-                    tags = emptyList(),
+                    tags = tags,
                     loading = false,
                     showReviewEditor = showEditor,
                     reviewDraft = _reviewDraft.value,
@@ -117,7 +158,10 @@ class ReadingMemoryDetailViewModel(
 
     private suspend fun handleIntent(intent: ReadingMemoryDetailIntent) {
         when (intent) {
-            is ReadingMemoryDetailIntent.Load -> {}
+            is ReadingMemoryDetailIntent.Load -> {
+                // 打开即自动汇总生成该书的阅读记忆（数据来自 Book/ReadRecord/含笔记书签）
+                repository.ensureMemory(bookUrl)
+            }
             is ReadingMemoryDetailIntent.SetRating -> setRating(intent.rating)
             is ReadingMemoryDetailIntent.OpenReviewEditor -> {
                 _reviewDraft.value = intent.initial
