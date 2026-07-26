@@ -490,11 +490,11 @@ private fun MemoryBookCard(
         CoilBookCover(
             name = memory.bookName.takeIf { it.isNotBlank() },
             author = memory.bookAuthor.takeIf { it.isNotBlank() },
-            path = memory.coverUrl.takeIf { it.isNotBlank() },
+            path = memory.coverUrl?.takeIf { it.isNotBlank() },
             radius = 8.dp,
             modifier = Modifier
                 .size(64.dp)
-                .clip(LegadoTheme.shapes.medium),
+                .clip(MaterialTheme.shapes.medium),
         )
         Spacer(Modifier.width(12.dp))
         Column(
@@ -539,7 +539,7 @@ private fun MemoryBookCard(
                 else -> "待看"
             }
             Surface(
-                shape = LegadoTheme.shapes.small,
+                shape = MaterialTheme.shapes.small,
                 color = when {
                     memory.abandoned -> LegadoTheme.colorScheme.errorContainer
                     memory.progress >= 1f -> LegadoTheme.colorScheme.tertiaryContainer
@@ -559,9 +559,9 @@ private fun MemoryBookCard(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
-            if (uiState.showIntro && memory.intro.isNotBlank()) {
+            if (uiState.showIntro && memory.intro?.isNotBlank() == true) {
                 AppText(
-                    text = memory.intro,
+                    text = memory.intro ?: "",
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -586,7 +586,7 @@ private fun MemoryBookCard(
                     memory.kind.split("|").map { it.trim() }.filter { it.isNotBlank() }
                         .forEach { tag ->
                         Surface(
-                            shape = LegadoTheme.shapes.small,
+                            shape = MaterialTheme.shapes.small,
                             color = LegadoTheme.colorScheme.secondaryContainer,
                         ) {
                             AppText(
