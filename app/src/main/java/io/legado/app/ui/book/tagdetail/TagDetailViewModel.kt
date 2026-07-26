@@ -35,7 +35,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
             TagDetailIntent.Delete -> viewModelScope.launch { delete() }
             TagDetailIntent.Refresh -> load()
             is TagDetailIntent.OpenBook ->
-                viewModelScope.launch { _effect.emit(TagDetailEffect.NavigateToBook(it.bookUrl)) }
+                viewModelScope.launch { _effect.emit(TagDetailEffect.NavigateToBook(intent.bookUrl)) }
         }
     }
 
@@ -48,7 +48,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
                 null
             }
             val groupName = group?.name ?: "未分组"
-            val groups = appDb.bookTagGroupDao.all().toImmutableList()
+            val groups = appDb.bookTagGroupDao.getAllSorted().toImmutableList()
             val books = if (tag != null) {
                 val relations = appDb.bookTagRelationDao.getByTagId(tagId)
                 relations.mapNotNull { appDb.bookDao.getBook(it.bookUrl) }.toImmutableList()

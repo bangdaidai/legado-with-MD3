@@ -45,6 +45,7 @@ import io.legado.app.ui.book.import.remote.RemoteBookRouteScreen
 import io.legado.app.ui.book.info.BookInfoRouteScreen
 import io.legado.app.ui.book.tagdetail.TagDetailRouteScreen
 import io.legado.app.ui.book.tagmanage.TagManagementRouteScreen
+import io.legado.app.ui.book.tagmanage.ExcludedTagRouteScreen
 import io.legado.app.ui.book.info.BookInfoViewModel
 import io.legado.app.ui.book.knowledge.BookCharacterDetailScreen
 import io.legado.app.ui.book.knowledge.BookCharacterDetailViewModel

@@ -7,7 +7,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -55,6 +58,7 @@ fun SearchBar(
     scrollState: LazyListState? = null,
     scope: CoroutineScope = rememberCoroutineScope(),
     trailingIcon: @Composable (() -> Unit)? = null,
+    onClose: (() -> Unit)? = null,
     autoFocus: Boolean = true,
     dropdownMenu: (@Composable (onDismiss: () -> Unit) -> Unit)? = null
 ) {
@@ -62,6 +66,14 @@ fun SearchBar(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var hasFocused by rememberSaveable { mutableStateOf(false) }
+
+    val resolvedTrailingIcon = trailingIcon ?: onClose?.let {
+        {
+            IconButton(onClick = it) {
+                Icon(Icons.Filled.Clear, contentDescription = null)
+            }
+        }
+    }
 
     LaunchedEffect(autoFocus) {
         if (autoFocus && !hasFocused) {
@@ -106,7 +118,7 @@ fun SearchBar(
                 .focusRequester(focusRequester),
             placeholder = { AppText(resolvedPlaceholder) },
             leadingIcon = leadingIcon,
-            trailingIcon = trailingIcon,
+            trailingIcon = resolvedTrailingIcon,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             onKeyboardAction = {
                 onSearch(textFieldState.text.toString())
@@ -132,7 +144,7 @@ fun SearchBar(
                     .focusRequester(focusRequester),
                 placeholder = { AppText(resolvedPlaceholder) },
                 leadingIcon = leadingIcon,
-                trailingIcon = trailingIcon,
+                trailingIcon = resolvedTrailingIcon,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 onKeyboardAction = {
                     onSearch(textFieldState.text.toString())

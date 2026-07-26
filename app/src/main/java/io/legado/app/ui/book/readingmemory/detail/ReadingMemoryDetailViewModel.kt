@@ -1,29 +1,26 @@
 package io.legado.app.ui.book.readingmemory.detail
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class ReadingMemoryDetailViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+class ReadingMemoryDetailViewModel(
+    private val bookUrl: String,
     private val repository: ReadingMemoryRepository,
 ) : ViewModel() {
-
-    private val bookUrl: String = savedStateHandle.get<String>("bookUrl")
-        ?: error("ReadingMemoryDetailViewModel 缺少 bookUrl 参数")
 
     // 主角实时源变化触发器：增删主角后强制重算
     private val protagonistRefresh = MutableStateFlow(Unit)
@@ -106,8 +103,8 @@ class ReadingMemoryDetailViewModel @Inject constructor(
                     excerpts = excerpts.map {
                         ReadingMemoryExcerpt(
                             chapterName = it.chapterName ?: "",
-                            note = it.note ?: "",
-                            originText = it.originText,
+                            note = it.content ?: "",
+                            originText = it.bookText,
                         )
                     },
                     sessions = sessions.map {
@@ -160,10 +157,11 @@ class ReadingMemoryDetailViewModel @Inject constructor(
                             _showReviewEditor.value = false
                         }
                         is ReadingMemoryDetailIntent.ToggleAbandoned -> {
-                            repository.markAbandoned(bookUrl, intent.abandoned)
+                            if (intent.abandoned) repository.markAbandoned(bookUrl)
+                            else repository.unmarkAbandoned(bookUrl)
                         }
                         is ReadingMemoryDetailIntent.ConfirmAbandoned -> {
-                            repository.markAbandoned(bookUrl, true)
+                            repository.markAbandoned(bookUrl)
                             _showAbandonedDialog.value = false
                         }
                         is ReadingMemoryDetailIntent.DismissAbandonedDialog -> {
@@ -187,5 +185,9 @@ class ReadingMemoryDetailViewModel @Inject constructor(
                 }
                 .launchIn(viewModelScope)
         }
+    }
+
+    fun onIntent(intent: ReadingMemoryDetailIntent) {
+        intentFlow.tryEmit(intent)
     }
 }

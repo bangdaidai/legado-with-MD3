@@ -18,12 +18,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.AppLinearProgressIndicator
+import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -156,7 +157,7 @@ fun ReadingMemoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    placeholder = { AppText(stringResource(R.string.search_book)) },
+                    placeholder = { AppText(stringResource(R.string.reading_memory_search_hint)) },
                     singleLine = true,
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -250,6 +251,7 @@ fun ReadingMemoryScreen(
     // 筛选 Sheet
     if (showFilterSheet) {
         AppModalBottomSheet(
+            show = showFilterSheet,
             onDismissRequest = { showFilterSheet = false },
             title = stringResource(R.string.reading_memory_filter_rating),
         ) {
@@ -319,6 +321,7 @@ fun ReadingMemoryScreen(
     // 分组 Sheet
     if (showGroupSheet) {
         AppModalBottomSheet(
+            show = showGroupSheet,
             onDismissRequest = { showGroupSheet = false },
             title = stringResource(R.string.reading_memory_group_by),
         ) {
@@ -351,6 +354,7 @@ fun ReadingMemoryScreen(
         val mem = (uiState.items.filterIsInstance<ReadingMemoryListItem.BookItem>()
             .firstOrNull { it.memory.bookUrl == bookUrl })?.memory
         AppModalBottomSheet(
+            show = longPressBookUrl != null,
             onDismissRequest = { longPressBookUrl = null },
             title = mem?.bookName,
         ) {
@@ -419,16 +423,28 @@ fun ReadingMemoryScreen(
 
 private fun groupKeyFor(uiState: ReadingMemoryUiState, memory: ReadingMemory): String {
     return when (uiState.groupBy) {
-        ReadingMemoryGroupBy.Year -> memory.year.toString()
-        ReadingMemoryGroupBy.Rating -> "★ ${memory.rating}"
+        ReadingMemoryGroupBy.Year -> yearOf(memory)
+        ReadingMemoryGroupBy.Rating -> (memory.rating + 0.5f).toInt().coerceIn(0, 5).toString()
         ReadingMemoryGroupBy.Status -> when {
-            memory.abandoned -> "弃文"
-            memory.finishRead -> "已读"
-            memory.startRead -> "在读"
-            else -> "待看"
+            memory.abandoned -> "abandoned"
+            memory.progress >= 1f -> "finished"
+            memory.progress > 0f -> "reading"
+            else -> "toread"
         }
         ReadingMemoryGroupBy.None -> ""
     }
+}
+
+private fun yearOf(memory: ReadingMemory): String {
+    val cal = java.util.Calendar.getInstance()
+    cal.timeInMillis = if (memory.firstReadTime > 0) memory.firstReadTime else memory.createTime
+    return cal.get(java.util.Calendar.YEAR).toString()
+}
+
+private fun formatReadDate(time: Long): String {
+    if (time <= 0) return ""
+    return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        .format(java.util.Date(time))
 }
 
 @Composable
@@ -473,7 +489,7 @@ private fun MemoryBookCard(
     val rowContent: @Composable RowScope.() -> Unit = {
         CoilBookCover(
             name = memory.bookName.takeIf { it.isNotBlank() },
-            author = memory.author.takeIf { it.isNotBlank() },
+            author = memory.bookAuthor.takeIf { it.isNotBlank() },
             path = memory.coverUrl.takeIf { it.isNotBlank() },
             radius = 8.dp,
             modifier = Modifier
@@ -493,7 +509,7 @@ private fun MemoryBookCard(
                 overflow = TextOverflow.Ellipsis,
             )
             AppText(
-                text = memory.author,
+                text = memory.bookAuthor,
                 style = LegadoTheme.typography.bodySmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -518,16 +534,16 @@ private fun MemoryBookCard(
             }
             val statusText = when {
                 memory.abandoned -> "弃文"
-                memory.finishRead -> "已读"
-                memory.startRead -> "在读"
+                memory.progress >= 1f -> "已读"
+                memory.progress > 0f -> "在读"
                 else -> "待看"
             }
             Surface(
                 shape = LegadoTheme.shapes.small,
                 color = when {
                     memory.abandoned -> LegadoTheme.colorScheme.errorContainer
-                    memory.finishRead -> LegadoTheme.colorScheme.tertiaryContainer
-                    memory.startRead -> LegadoTheme.colorScheme.primaryContainer
+                    memory.progress >= 1f -> LegadoTheme.colorScheme.tertiaryContainer
+                    memory.progress > 0f -> LegadoTheme.colorScheme.primaryContainer
                     else -> LegadoTheme.colorScheme.surfaceVariant
                 },
             ) {
@@ -536,8 +552,8 @@ private fun MemoryBookCard(
                     style = LegadoTheme.typography.labelSmall,
                     color = when {
                         memory.abandoned -> LegadoTheme.colorScheme.onErrorContainer
-                        memory.finishRead -> LegadoTheme.colorScheme.onTertiaryContainer
-                        memory.startRead -> LegadoTheme.colorScheme.onPrimaryContainer
+                        memory.progress >= 1f -> LegadoTheme.colorScheme.onTertiaryContainer
+                        memory.progress > 0f -> LegadoTheme.colorScheme.onPrimaryContainer
                         else -> LegadoTheme.colorScheme.onSurfaceVariant
                     },
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -561,13 +577,14 @@ private fun MemoryBookCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (memory.kind.isNotEmpty()) {
+            if (!memory.kind.isNullOrBlank()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
-                    memory.kind.forEach { tag ->
+                    memory.kind.split("|").map { it.trim() }.filter { it.isNotBlank() }
+                        .forEach { tag ->
                         Surface(
                             shape = LegadoTheme.shapes.small,
                             color = LegadoTheme.colorScheme.secondaryContainer,
@@ -587,15 +604,20 @@ private fun MemoryBookCard(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (memory.progressText.isNotBlank()) {
+            val progressText = if (memory.totalChapterNum > 0) {
+                "第 ${memory.durChapterIndex + 1} 章 / 共 ${memory.totalChapterNum} 章"
+            } else {
+                "第 ${memory.durChapterIndex + 1} 章"
+            }
+            if (progressText.isNotBlank()) {
                 AppText(
-                    text = memory.progressText,
+                    text = progressText,
                     style = LegadoTheme.typography.labelSmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
             }
             AppText(
-                text = memory.recentReadLabel,
+                text = formatReadDate(memory.lastReadTime),
                 style = LegadoTheme.typography.labelSmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )

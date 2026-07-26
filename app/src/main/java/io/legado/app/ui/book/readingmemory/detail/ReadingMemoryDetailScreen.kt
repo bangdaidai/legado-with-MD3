@@ -24,7 +24,7 @@ import io.legado.app.data.repository.ReadingStatistics
 import io.legado.app.constant.AppLog
 import io.legado.app.ui.book.info.HighlightedTag
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.AppLinearProgressIndicator
+import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -112,7 +112,7 @@ fun ReadingMemoryDetailScreen(
                             }
                             ReadingMemoryRatingBar(
                                 rating = state.rating.toFloat(),
-                                onRatingChanged = { onIntent(ReadingMemoryDetailIntent.SetRating(it.toInt())) },
+                                onRatingChanged = { onIntent(ReadingMemoryDetailIntent.SetRating(it)) },
                                 enabled = state.isStillOnShelf,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
@@ -205,6 +205,7 @@ fun ReadingMemoryDetailScreen(
     // 评价编辑弹层
     if (state.showReviewEditor) {
         AppModalBottomSheet(
+            show = state.showReviewEditor,
             onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
             title = "编辑书评"
         ) {

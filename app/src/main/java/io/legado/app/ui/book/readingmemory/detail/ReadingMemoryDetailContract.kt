@@ -12,13 +12,13 @@ data class ReadingMemoryDetailUiState(
     val kind: String = "",
     val wordCount: Long = 0,
     val wordCountText: String = "",
-    val rating: Int = 0,
+    val rating: Float = 0f,
     val status: Int = 0,
     val statusText: String = "",
     val abandoned: Boolean = false,
     val isStillOnShelf: Boolean = true,
     val review: String = "",
-    val userModifiedIntro: String? = null,
+    val userModifiedIntro: Boolean = false,
     val progress: Float = 0f,
     val progressInfo: String = "",
     val annotationCount: Int = 0,
@@ -51,7 +51,7 @@ data class ReadingSessionItem(
 
 sealed interface ReadingMemoryDetailIntent {
     data class Load(val bookUrl: String) : ReadingMemoryDetailIntent
-    data class SetRating(val rating: Int) : ReadingMemoryDetailIntent
+    data class SetRating(val rating: Float) : ReadingMemoryDetailIntent
     data class OpenReviewEditor(val initial: String) : ReadingMemoryDetailIntent
     data class UpdateReviewDraft(val text: String) : ReadingMemoryDetailIntent
     data object SaveReview : ReadingMemoryDetailIntent
