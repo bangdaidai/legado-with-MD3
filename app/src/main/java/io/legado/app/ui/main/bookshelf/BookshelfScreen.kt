@@ -931,6 +931,8 @@ fun BookshelfScreen(
                             sharedCoverGroupId = currentGroupId,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
+                            tagColorMap = tagColorMap,
+                            excludedTags = excludedTags,
                         )
                     } else {
                         HorizontalPager(
@@ -991,6 +993,8 @@ fun BookshelfScreen(
                                     sharedCoverGroupId = group.groupId,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = animatedVisibilityScope,
+                                    tagColorMap = tagColorMap,
+                                    excludedTags = excludedTags,
                                 )
                             }
                         }
@@ -1349,6 +1353,8 @@ fun BookshelfPage(
     sharedCoverGroupId: Long,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    tagColorMap: Map<String, Long> = emptyMap(),
+    excludedTags: List<io.legado.app.data.entities.ExcludedTag> = emptyList(),
 ) {
     if (books.isEmpty()) {
         if (!isCurrentPage) return
