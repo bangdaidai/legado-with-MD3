@@ -568,9 +568,9 @@ private fun MemoryBookCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (uiState.showReview && memory.review.isNotBlank()) {
+            if (uiState.showReview && memory.review?.isNotBlank() == true) {
                 AppText(
-                    text = memory.review,
+                    text = memory.review ?: "",
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurface,
                     maxLines = 2,

@@ -162,8 +162,10 @@ fun ExcludedTagRouteScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.effect.collectLatest {
-            is ExcludedTagEffect.ShowMessage ->
-                Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show()
+            when (it) {
+                is ExcludedTagEffect.ShowMessage ->
+                    Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show()
+            }
         }
     }
     ExcludedTagScreen(state = state, onIntent = viewModel::sendEvent, onBack = onBack)

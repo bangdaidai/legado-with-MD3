@@ -99,7 +99,7 @@ fun ReadingMemoryDetailScreen(
                                 )
                             }
                             Surface(
-                                shape = LegadoTheme.shapes.small,
+                                shape = MaterialTheme.shapes.small,
                                 color = statusBadgeColor(state.status),
                                 modifier = Modifier.padding(top = 4.dp)
                             ) {
@@ -410,7 +410,7 @@ private fun ProtagonistsSection(
                 ) {
                     names.forEach { name ->
                         Surface(
-                            shape = LegadoTheme.shapes.small,
+                            shape = MaterialTheme.shapes.small,
                             color = LegadoTheme.colorScheme.secondaryContainer
                         ) {
                             Row(

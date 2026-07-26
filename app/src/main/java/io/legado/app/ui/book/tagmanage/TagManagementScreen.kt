@@ -149,7 +149,7 @@ fun TagManagementScreen(
     ColorPickerSheet(
         show = showColorPicker && tagEdit != null,
         initialColor = (tagEdit?.color ?: 0xFF6200EE).toInt(),
-        onColorSelected = { c -> tagEdit = tagEdit?.copy(color = c) },
+        onColorSelected = { c -> tagEdit = tagEdit?.copy(color = c.toLong()) },
         onDismissRequest = { showColorPicker = false },
     )
 
