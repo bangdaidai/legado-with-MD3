@@ -22,6 +22,7 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83,
             migration_98_99,
+            migration_99_100,
         )
     }
 
@@ -540,6 +541,89 @@ object DatabaseMigrations {
             )
             database.execSQL(
                 "ALTER TABLE book_character_profiles ADD COLUMN isProtagonist INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+
+    // endregion
+
+    // region 99→100: 标签管理体系（BookTag / 分组 / 关联 / 排除 / 映射 / 关联书籍 / 已移除自动标签）
+
+    private val migration_99_100 = object : Migration(99, 100) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS bookTags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    color INTEGER NOT NULL DEFAULT 0,
+                    groupId INTEGER NOT NULL DEFAULT 0,
+                    createTime INTEGER NOT NULL DEFAULT 0,
+                    updateTime INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS bookTagGroups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    sortOrder INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS bookTagRelations (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    bookUrl TEXT NOT NULL DEFAULT '',
+                    tagId INTEGER NOT NULL DEFAULT 0,
+                    createTime INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS excludedTags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    isRegex INTEGER NOT NULL DEFAULT 0,
+                    createTime INTEGER NOT NULL DEFAULT 0,
+                    updateTime INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS tagMappings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    oldTagName TEXT NOT NULL DEFAULT '',
+                    newTagId INTEGER NOT NULL DEFAULT 0,
+                    createTime INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS bookTagBooks (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    bookUrl TEXT NOT NULL DEFAULT '',
+                    tagName TEXT NOT NULL DEFAULT '',
+                    bookName TEXT NOT NULL DEFAULT '',
+                    author TEXT NOT NULL DEFAULT '',
+                    coverUrl TEXT NOT NULL DEFAULT '',
+                    createTime INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS removedAutoTags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    tagName TEXT NOT NULL DEFAULT '',
+                    createTime INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
             )
         }
     }

@@ -45,6 +45,13 @@ import io.legado.app.data.dao.SearchContentHistoryDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.TagGroupRuleDao
+import io.legado.app.data.dao.BookTagBookDao
+import io.legado.app.data.dao.BookTagDao
+import io.legado.app.data.dao.BookTagGroupDao
+import io.legado.app.data.dao.BookTagRelationDao
+import io.legado.app.data.dao.ExcludedTagDao
+import io.legado.app.data.dao.RemovedAutoTagDao
+import io.legado.app.data.dao.TagMappingDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.entities.AiArtifact
 import io.legado.app.data.entities.AiChatConversation
@@ -92,7 +99,14 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchContentHistory
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.data.entities.Server
+import io.legado.app.data.entities.BookTag
+import io.legado.app.data.entities.BookTagBook
+import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.BookTagRelation
+import io.legado.app.data.entities.ExcludedTag
+import io.legado.app.data.entities.RemovedAutoTag
 import io.legado.app.data.entities.TagGroupRule
+import io.legado.app.data.entities.TagMapping
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
@@ -112,7 +126,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 99,
+    version = 100,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -129,7 +143,9 @@ val appDb by lazy {
         BookOutlineNode::class, ReadAloudVoiceEntity::class, BookVoiceBindingEntity::class,
         ChapterSpeechAnalysisEntity::class, ChapterSpeechSegmentEntity::class,
         CloudTtsEngineEntity::class, ReadingMemory::class,
-        ExactChapterPageCountEntity::class],
+        ExactChapterPageCountEntity::class, BookTag::class, BookTagGroup::class,
+        BookTagRelation::class, ExcludedTag::class, TagMapping::class,
+        BookTagBook::class, RemovedAutoTag::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -230,6 +246,13 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val aiChatDao: AiChatDao
     abstract val aiMemoryDao: AiMemoryDao
     abstract val aiPromptPresetDao: AiPromptPresetDao
+    abstract val bookTagDao: BookTagDao
+    abstract val bookTagGroupDao: BookTagGroupDao
+    abstract val bookTagRelationDao: BookTagRelationDao
+    abstract val excludedTagDao: ExcludedTagDao
+    abstract val tagMappingDao: TagMappingDao
+    abstract val bookTagBookDao: BookTagBookDao
+    abstract val removedAutoTagDao: RemovedAutoTagDao
 
     companion object {
 

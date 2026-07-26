@@ -26,6 +26,7 @@ object EventBus {
     const val CHECK_SOURCE_DONE = "checkSourceDone"
     const val TIP_COLOR = "tipColor"
     const val SOURCE_CHANGED = "sourceChanged"
+    const val TAGS_UPDATED = "tagsUpdated"
     const val SEARCH_RESULT = "searchResult"
     const val UPDATE_READ_ACTION_BAR = "updateReadActionBar"
     const val UP_SEEK_BAR = "upSeekBar"
