@@ -274,6 +274,16 @@ object MainNavigator {
                     backStack.add(route)
                 }
             }
+
+            MainRouteExcludedTag -> {
+                if (currentRoute == MainRouteTagManagement || currentRoute == MainRouteHome) {
+                    backStack.add(route)
+                } else {
+                    backStack.clear()
+                    backStack.add(MainRouteHome)
+                    backStack.add(route)
+                }
+            }
         }
     }
 
