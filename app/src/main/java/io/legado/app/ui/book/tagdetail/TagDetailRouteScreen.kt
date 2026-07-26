@@ -8,7 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
-import org.koin.androidx.compose.parametersOf
+import org.koin.core.parameter.parametersOf
 
 @Composable
 fun TagDetailRouteScreen(

@@ -312,7 +312,6 @@ class ChangeBookSourceUseCase(
                 newBook.coverUrl = coverUrl
                 newBook.customIntro = customIntro
                 newBook.intro = intro
-                newBook.bookSourceGroup = bookSourceGroup
             }
         }
     }

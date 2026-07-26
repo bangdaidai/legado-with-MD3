@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -226,9 +227,9 @@ class ReadingMemoryViewModel(
                 ReadingMemoryGroupBy.Status -> groupAndOrder(
                     sorted, ::statusKey,
                 ) { a, b -> statusOrder.indexOf(a).compareTo(statusOrder.indexOf(b)) }
-                else -> sorted.map { ReadingMemoryListItem.BookItem(it) }
+                else -> linkedMapOf<String, List<ReadingMemory>>()
             }
-            buildList {
+            buildList<ReadingMemoryListItem> {
                 grouped.forEach { (key, mems) ->
                     val display = groupDisplay(key, c.groupBy)
                     val collapsed = c.collapsed.contains(key)

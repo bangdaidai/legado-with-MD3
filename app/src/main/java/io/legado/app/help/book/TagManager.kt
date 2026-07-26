@@ -46,7 +46,7 @@ object TagManager {
         for (excluded in excludedTags) {
             if (excluded.isRegex) {
                 try {
-                    if (Regex(excluded.name, RegexOption.IGNORECASE).matches(tagName)) {
+                    if (Pattern.compile(excluded.name, Pattern.CASE_INSENSITIVE).matcher(tagName).matches()) {
                         return true
                     }
                 } catch (_: PatternSyntaxException) {
@@ -82,7 +82,7 @@ object TagManager {
 
             val mapping = mappingByOldName[normalized] ?: mappingByOldName[candidate]
             val targetTag = if (mapping != null) {
-                appDb.bookTagDao.getTagsByIds(listOf(mapping.newTagId)).firstOrNull()
+                appDb.bookTagDao.getByIds(listOf(mapping.newTagId)).firstOrNull()
                     ?: createNewTag(candidate)
             } else {
                 createNewTag(candidate)

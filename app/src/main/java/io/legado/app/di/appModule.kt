@@ -225,6 +225,8 @@ import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerCoordinator
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.book.search.SearchViewModel
 import io.legado.app.ui.book.searchContent.SearchContentViewModel
+import io.legado.app.ui.book.tagdetail.TagDetailViewModel
+import io.legado.app.ui.book.tagmanage.TagManagementViewModel
 import io.legado.app.ui.book.toc.TocViewModel
 import io.legado.app.ui.book.toc.rule.TxtTocRuleViewModel
 import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewViewModel

@@ -67,7 +67,7 @@ fun TagDetailScreen(
                         tag?.let {
                             tagEdit = TagEditData(id = it.id, name = it.name, groupId = it.groupId, color = it.color)
                         }
-                    }) { Text("编辑") }
+                    }, text = "编辑")
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = LegadoTheme.colorScheme.surface),
             )

@@ -169,11 +169,15 @@ fun BookshelfRouteScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val allGroups by viewModel.allGroupsFlow.collectAsStateWithLifecycle()
+    val tagColorMap by viewModel.tagColorMapFlow.collectAsStateWithLifecycle()
+    val excludedTags by viewModel.excludedTagsFlow.collectAsStateWithLifecycle()
     BookshelfScreen(
         uiState = state,
         onIntent = viewModel::onIntent,
         effects = viewModel.effects,
         allGroups = allGroups,
+        tagColorMap = tagColorMap,
+        excludedTags = excludedTags,
         scrollToTopRequest = scrollToTopRequest,
         onScrollToTopRequestHandled = onScrollToTopRequestHandled,
         onBookClick = onBookClick,

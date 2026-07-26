@@ -144,9 +144,9 @@ fun TagManagementScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             AppTabRow(
-                tabs = tabs,
+                tabTitles = tabs,
                 selectedTabIndex = state.selectedTab,
-                onClick = { index -> onIntent(TagManagementIntent.SelectTab(index)) },
+                onTabSelected = { index -> onIntent(TagManagementIntent.SelectTab(index)) },
             )
             when (state.selectedTab) {
                 0 -> TagListTab(state, onIntent)

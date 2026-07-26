@@ -1,5 +1,7 @@
 package io.legado.app.ui.book.readingmemory
 
+import io.legado.app.R
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -489,7 +491,7 @@ private fun MemoryBookCard(
     Surface(
         shape = MaterialTheme.shapes.medium,
         tonalElevation = if (uiState.showCard) 1.dp else 0.dp,
-        color = if (uiState.showCard) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.transparent,
+        color = if (uiState.showCard) MaterialTheme.colorScheme.surface else Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -642,8 +644,8 @@ private fun formatReadTime(ms: Long): String {
     val hours = (totalMinutes % (60 * 24)) / 60
     val minutes = totalMinutes % 60
     return buildString {
-        if (days > 0) append("${days}天")
-        if (hours > 0) append("${hours}时")
-        if (minutes > 0 || (days == 0L && hours == 0)) append("${minutes}分")
+        if (days > 0L) append("${days}天")
+        if (hours > 0L) append("${hours}时")
+        if (minutes > 0L || (days == 0L && hours == 0L)) append("${minutes}分")
     }.let { if (it.isEmpty()) "0分" else it }
 }
