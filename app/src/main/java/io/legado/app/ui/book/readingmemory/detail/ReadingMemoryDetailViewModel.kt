@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import io.legado.app.constant.AppLog
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.data.repository.ReadingStatistics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
