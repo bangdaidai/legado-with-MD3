@@ -1,8 +1,11 @@
 package io.legado.app.ui.book.tagdetail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,17 +28,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.Book
 import io.legado.app.ui.book.tagmanage.TagEditData
 import io.legado.app.ui.book.tagmanage.TagEditSheet
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.theme.adaptiveContentPadding
-import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
-import io.legado.app.ui.widget.components.GlassCard
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
@@ -48,8 +54,13 @@ fun TagDetailScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     var tagEdit by remember { mutableStateOf<TagEditData?>(null) }
     var showColorPicker by remember { mutableStateOf(false) }
-
     val tag = state.tag
+
+    val tagColor = if (tag != null && tag.color != 0L) {
+        Color(tag.color)
+    } else {
+        LegadoTheme.colorScheme.primary
+    }
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -71,49 +82,43 @@ fun TagDetailScreen(
         },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .adaptiveHorizontalPadding(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = adaptiveContentPadding()),
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (tag != null) {
                 item {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(if (tag.color == 0L) LegadoTheme.colorScheme.primary else Color(tag.color)),
-                        )
-                        Text(
-                            "分组：${state.groupName}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
+                    TagDetailHeader(
+                        name = tag.name,
+                        color = tagColor,
+                        groupName = state.groupName,
+                        bookCount = state.books.size,
+                    )
                 }
             }
             item {
                 Text(
                     "关联书籍（${state.books.size}）",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
             }
-            items(state.books) { book ->
-                GlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    onClick = { onOpenBook(book.bookUrl) },
-                ) {
-                    BookRow(book)
+            if (state.books.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "暂无关联书籍",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                items(state.books, key = { it.bookUrl }) { book ->
+                    BookRow(book = book, color = tagColor, onClick = { onOpenBook(book.bookUrl) })
                 }
             }
         }
@@ -123,8 +128,8 @@ fun TagDetailScreen(
         TagEditSheet(
             data = tagEdit,
             groups = state.groups,
-            onValueChange = { tagEdit = it },
-            onSave = {
+            onChange = { tagEdit = it },
+            onConfirm = {
                 onIntent(TagDetailIntent.Save(it.name, it.groupId, it.color))
                 tagEdit = null
             },
@@ -133,7 +138,7 @@ fun TagDetailScreen(
                 tagEdit = null
             },
             onDismiss = { tagEdit = null },
-            onChooseColor = { showColorPicker = true },
+            onPickColor = { showColorPicker = true },
         )
     }
 
@@ -149,19 +154,87 @@ fun TagDetailScreen(
 }
 
 @Composable
-private fun BookRow(book: Book) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun TagDetailHeader(
+    name: String,
+    color: Color,
+    groupName: String,
+    bookCount: Int,
+) {
+    NormalCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 16.dp,
+        containerColor = color.copy(alpha = 0.12f),
+        contentColor = LegadoTheme.colorScheme.onSurface,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(book.name, style = MaterialTheme.typography.bodyLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "分组：$groupName",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Text(
-                book.author,
-                style = MaterialTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                "$bookCount 本",
+                style = MaterialTheme.typography.titleMedium,
+                color = color,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookRow(book: Book, color: Color, onClick: () -> Unit) {
+    NormalCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 12.dp,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    book.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+                Text(
+                    book.author,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            AppIcon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

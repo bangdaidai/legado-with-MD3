@@ -6,7 +6,6 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
-import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
@@ -30,7 +29,6 @@ class TagManagementViewModel : ViewModel() {
 
     init {
         loadData()
-        // 标签变化（生成/删除）后刷新
         viewModelScope.launch {
             FlowEventBus.with<Any>(EventBus.TAGS_UPDATED).collect {
                 loadData()
@@ -43,9 +41,6 @@ class TagManagementViewModel : ViewModel() {
             is TagManagementIntent.Search ->
                 _uiState.value = _uiState.value.copy(searchQuery = intent.q)
 
-            is TagManagementIntent.SelectTab ->
-                _uiState.value = _uiState.value.copy(selectedTab = intent.index)
-
             TagManagementIntent.Refresh -> loadData()
 
             is TagManagementIntent.OpenTagDetail ->
@@ -57,27 +52,42 @@ class TagManagementViewModel : ViewModel() {
             is TagManagementIntent.DeleteTag -> viewModelScope.launch { deleteTag(intent.tag) }
             is TagManagementIntent.SaveGroup -> viewModelScope.launch { saveGroup(intent) }
             is TagManagementIntent.DeleteGroup -> viewModelScope.launch { deleteGroup(intent.group) }
-            is TagManagementIntent.SaveExcluded -> viewModelScope.launch { saveExcluded(intent) }
-            is TagManagementIntent.DeleteExcluded -> viewModelScope.launch { deleteExcluded(intent.excluded) }
             is TagManagementIntent.SaveMapping -> viewModelScope.launch { saveMapping(intent) }
             is TagManagementIntent.DeleteMapping -> viewModelScope.launch { deleteMapping(intent.mapping) }
         }
     }
 
+    // 标签来自书籍分类(kind)：首次打开标签管理页时，自动从书架书籍的 kind 生成标签，
+    // 与 readdai 在书架渲染时调用 TagManager.generateTagsFromKind 的行为对齐。
+    private var tagsSynced = false
+
+    private suspend fun syncTagsFromBooks() {
+        try {
+            val books = appDb.bookDao.all
+            for (book in books) {
+                TagManager.generateTagsFromKind(book, postEvent = false)
+            }
+        } catch (_: Exception) {
+            // 自动从书籍分类生成标签失败不影响标签读取
+        }
+    }
+
     private fun loadData() {
         viewModelScope.launch(Dispatchers.IO) {
+            if (!tagsSynced) {
+                tagsSynced = true
+                syncTagsFromBooks()
+            }
             val tags = appDb.bookTagDao.observeAll().first()
             val tagCounts = TagManager.getTagBookCounts()
             val groupTagCounts = tags.groupingBy { it.groupId }.eachCount()
             val groups = appDb.bookTagGroupDao.getAllSorted()
-            val excluded = appDb.excludedTagDao.getAllSync()
             val mappings = appDb.tagMappingDao.getAll()
             _uiState.value = _uiState.value.copy(
                 tags = tags.toImmutableList(),
                 tagCounts = tagCounts,
                 groupTagCounts = groupTagCounts,
                 groups = groups.toImmutableList(),
-                excludedTags = excluded.toImmutableList(),
                 mappings = mappings.toImmutableList(),
             )
         }
@@ -129,31 +139,6 @@ class TagManagementViewModel : ViewModel() {
 
     private suspend fun deleteGroup(group: BookTagGroup) {
         appDb.bookTagGroupDao.deleteById(group.id)
-        loadData()
-    }
-
-    private suspend fun saveExcluded(intent: TagManagementIntent.SaveExcluded) {
-        if (intent.name.isBlank()) {
-            _effect.emit(TagManagementEffect.ShowMessage("排除项不能为空"))
-            return
-        }
-        if (intent.isRegex && !TagManager.isValidRegex(intent.name)) {
-            _effect.emit(TagManagementEffect.ShowMessage("正则格式不正确"))
-            return
-        }
-        if (intent.id == 0L) {
-            appDb.excludedTagDao.insert(
-                ExcludedTag(name = intent.name, isRegex = intent.isRegex),
-            )
-        } else {
-            val old = appDb.excludedTagDao.getById(intent.id) ?: return
-            appDb.excludedTagDao.update(old.copy(name = intent.name, isRegex = intent.isRegex))
-        }
-        loadData()
-    }
-
-    private suspend fun deleteExcluded(excluded: ExcludedTag) {
-        appDb.excludedTagDao.deleteById(excluded.id)
         loadData()
     }
 

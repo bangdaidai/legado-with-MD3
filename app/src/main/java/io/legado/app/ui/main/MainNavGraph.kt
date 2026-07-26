@@ -793,6 +793,7 @@ fun MainActivity.mainEntryProvider(
         TagManagementRouteScreen(
             onBack = { onNavigateBack() },
             onOpenTagDetail = { tagId -> onNavigateToRoute(MainRouteTagDetail(tagId)) },
+            onNavigateToExcludedTag = { onNavigateToRoute(MainRouteExcludedTag) },
         )
     }
 
@@ -802,6 +803,10 @@ fun MainActivity.mainEntryProvider(
             onBack = { onNavigateBack() },
             onOpenBook = { onNavigateToRoute(MainRouteReadBook(bookUrl = it)) },
         )
+    }
+
+    entry<MainRouteExcludedTag> {
+        ExcludedTagRouteScreen(onBack = { onNavigateBack() })
     }
 
     entry<MainRouteBookCharacterDetail> { route ->

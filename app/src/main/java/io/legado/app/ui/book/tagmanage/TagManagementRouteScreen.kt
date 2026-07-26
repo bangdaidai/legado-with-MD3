@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.legado.app.ui.book.tagmanage.TagManagementEffect
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
@@ -13,11 +14,11 @@ import org.koin.androidx.compose.koinViewModel
 fun TagManagementRouteScreen(
     onBack: () -> Unit,
     onOpenTagDetail: (Long) -> Unit,
+    onNavigateToExcludedTag: () -> Unit,
 ) {
     val viewModel = koinViewModel<TagManagementViewModel>()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
     LaunchedEffect(Unit) {
         viewModel.effect.collectLatest {
             when (it) {
@@ -27,10 +28,10 @@ fun TagManagementRouteScreen(
             }
         }
     }
-
     TagManagementScreen(
         state = state,
         onIntent = viewModel::sendEvent,
         onBack = onBack,
+        onNavigateToExcludedTag = onNavigateToExcludedTag,
     )
 }

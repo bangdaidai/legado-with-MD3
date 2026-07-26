@@ -2,9 +2,12 @@ package io.legado.app.ui.book.tagdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -71,12 +74,15 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
                 updateTime = System.currentTimeMillis(),
             ),
         )
+        // 通知后台的标签管理页立即刷新（无需退出重进）
+        postEvent(EventBus.TAGS_UPDATED, old.id)
         load()
     }
 
     private suspend fun delete() {
         appDb.bookTagRelationDao.deleteByTagId(tagId)
         appDb.bookTagDao.deleteById(tagId)
+        postEvent(EventBus.TAGS_UPDATED, tagId)
         _effect.emit(TagDetailEffect.Back)
     }
 }

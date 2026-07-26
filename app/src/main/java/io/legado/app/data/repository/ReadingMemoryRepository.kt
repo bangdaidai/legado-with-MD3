@@ -43,6 +43,8 @@ class ReadingMemoryRepository(
 
     suspend fun getByBookUrl(bookUrl: String): ReadingMemory? = dao.getByBookUrlSync(bookUrl)
 
+    suspend fun getBook(bookUrl: String): Book? = bookDao.getBook(bookUrl)
+
     // endregion
 
     // region 确保记忆存在 / 同步
@@ -384,6 +386,39 @@ class ReadingMemoryRepository(
             }
         }
         return names
+    }
+
+    /**
+     * 打开书籍时自动从简介提取主角（仅在架书籍才提取）。
+     */
+    suspend fun autoExtractProtagonists(bookUrl: String) {
+        val book = bookDao.getBook(bookUrl) ?: return
+        val intro = book.getDisplayIntro()
+        if (!intro.isNullOrBlank()) {
+            extractProtagonists(bookUrl, intro)
+        }
+    }
+
+    /**
+     * 主角名列表：在架书籍取 [BookCharacterProfile] 实时表，已删除书籍回落 memory 快照。
+     */
+    suspend fun getProtagonistNames(bookUrl: String): List<String> {
+        return if (bookDao.getBook(bookUrl) != null) {
+            bookKnowledgeDao.getProtagonists(bookUrl).map { it.name }
+        } else {
+            getByBookUrl(bookUrl)?.protagonistsJson
+                ?.split("|")
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+        }
+    }
+
+    /**
+     * 设置/取消某角色的主角标记。
+     */
+    suspend fun setProtagonist(bookUrl: String, name: String, isProtagonist: Boolean) {
+        bookKnowledgeDao.setProtagonist(name, bookUrl, isProtagonist, System.currentTimeMillis())
     }
 
     // endregion

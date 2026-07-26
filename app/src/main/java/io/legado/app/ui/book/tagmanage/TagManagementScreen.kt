@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.tagmanage
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,10 +9,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
@@ -34,23 +32,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.BookTag
-import io.legado.app.data.entities.BookTagGroup
-import io.legado.app.data.entities.ExcludedTag
-import io.legado.app.data.entities.TagMapping
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.theme.adaptiveContentPadding
-import io.legado.app.ui.theme.adaptiveHorizontalPadding
-import io.legado.app.ui.theme.adaptiveHorizontalPaddingTab
 import io.legado.app.ui.widget.components.AppScaffold
-import io.legado.app.ui.widget.components.GlassCard
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.MenuItemIcon
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
-import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
@@ -62,19 +51,19 @@ fun TagManagementScreen(
     state: TagManagementUiState,
     onIntent: (TagManagementIntent) -> Unit,
     onBack: () -> Unit,
+    onNavigateToExcludedTag: () -> Unit,
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
-
-    var showSearchSheet by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
 
+    // 编辑/弹窗状态
     var tagEdit by remember { mutableStateOf<TagEditData?>(null) }
     var showColorPicker by remember { mutableStateOf(false) }
     var groupEdit by remember { mutableStateOf<BookTagGroup?>(null) }
-    var excludedEdit by remember { mutableStateOf<ExcludedTag?>(null) }
     var mappingEdit by remember { mutableStateOf<TagMapping?>(null) }
-
-    val tabs = listOf("标签", "分组", "排除", "映射")
+    var showGroupManage by remember { mutableStateOf(false) }
+    var showMappingManage by remember { mutableStateOf(false) }
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -82,12 +71,13 @@ fun TagManagementScreen(
             GlassMediumFlexibleTopAppBar(
                 title = "标签管理",
                 scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    TopBarNavigationButton(onClick = onBack)
-                },
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
                     TopBarActionButton(
-                        onClick = { showSearchSheet = true },
+                        onClick = {
+                            showSearch = !showSearch
+                            if (!showSearch) onIntent(TagManagementIntent.Search(""))
+                        },
                         imageVector = AppIcons.Search,
                         contentDescription = "搜索",
                     )
@@ -106,100 +96,73 @@ fun TagManagementScreen(
                             onClick = { dismiss(); tagEdit = TagEditData() },
                         )
                         RoundDropdownMenuItem(
-                            text = "新增分组",
+                            text = "分组管理",
                             leadingIcon = { MenuItemIcon(Icons.Filled.Folder) },
-                            onClick = { dismiss(); groupEdit = BookTagGroup() },
+                            onClick = { dismiss(); showGroupManage = true },
                         )
                         RoundDropdownMenuItem(
-                            text = "新增排除项",
-                            leadingIcon = { MenuItemIcon(Icons.Filled.Block) },
-                            onClick = { dismiss(); excludedEdit = ExcludedTag() },
-                        )
-                        RoundDropdownMenuItem(
-                            text = "新增映射",
+                            text = "标签映射",
                             leadingIcon = { MenuItemIcon(Icons.Filled.SwapHoriz) },
-                            onClick = { dismiss(); mappingEdit = TagMapping() },
+                            onClick = { dismiss(); showMappingManage = true },
                         )
-                    }
-                },
-                bottomContent = {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .adaptiveHorizontalPaddingTab(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        AppTabRow(
-                            tabTitles = tabs,
-                            selectedTabIndex = state.selectedTab,
-                            onTabSelected = { index -> onIntent(TagManagementIntent.SelectTab(index)) },
-                            modifier = Modifier.fillMaxWidth(),
+                        RoundDropdownMenuItem(
+                            text = "排除标签",
+                            leadingIcon = { MenuItemIcon(Icons.Filled.Block) },
+                            onClick = { dismiss(); onNavigateToExcludedTag() },
                         )
                     }
                 },
             )
         },
     ) { padding ->
-        when (state.selectedTab) {
-            0 -> TagListTab(state, onIntent, padding)
-            1 -> GroupListTab(state, padding) { groupEdit = it }
-            2 -> ExcludedListTab(state, padding) { excludedEdit = it }
-            3 -> MappingListTab(state, padding) { mappingEdit = it }
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (showSearch) {
+                SearchBar(
+                    query = state.searchQuery,
+                    onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
+                    onClose = { showSearch = false; onIntent(TagManagementIntent.Search("")) },
+                    placeholder = "搜索标签",
+                )
+            }
+            // 主页面只展示标签（与 readdai 书籍标签管理一致）
+            TagListTab(state = state, onIntent = onIntent)
         }
     }
 
-    AppModalBottomSheet(
-        show = showSearchSheet,
-        onDismissRequest = {
-            showSearchSheet = false
-            onIntent(TagManagementIntent.Search(""))
-        },
-        modifier = Modifier.navigationBarsPadding(),
-    ) {
-        SearchBar(
-            query = state.searchQuery,
-            onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
-            onSearch = {
-                onIntent(TagManagementIntent.Search(it))
-                showSearchSheet = false
-            },
-            placeholder = "搜索标签",
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp, 24.dp),
-        )
-    }
-
+    // 标签编辑
     TagEditSheet(
         data = tagEdit,
         groups = state.groups,
-        onValueChange = { tagEdit = it },
-        onSave = {
+        onChange = { tagEdit = it },
+        onConfirm = {
             onIntent(TagManagementIntent.SaveTag(it.id, it.name, it.groupId, it.color))
             tagEdit = null
         },
         onDelete = {
-            onIntent(
-                TagManagementIntent.DeleteTag(
-                    BookTag(id = it.id, name = it.name, groupId = it.groupId, color = it.color),
-                ),
-            )
+            onIntent(TagManagementIntent.DeleteTag(BookTag(id = it.id, name = it.name, groupId = it.groupId, color = it.color)))
             tagEdit = null
         },
+        onPickColor = { showColorPicker = true },
         onDismiss = { tagEdit = null },
-        onChooseColor = { showColorPicker = true },
     )
 
     ColorPickerSheet(
-        show = showColorPicker,
-        initialColor = (tagEdit?.color ?: 0xFF6750A4).toInt(),
+        show = showColorPicker && tagEdit != null,
+        initialColor = tagEdit?.color ?: 0xFF6200EE,
+        onColorSelected = { c -> tagEdit = tagEdit?.copy(color = c) },
         onDismissRequest = { showColorPicker = false },
-        onColorSelected = { argb ->
-            tagEdit = tagEdit?.copy(color = argb.toLong())
-            showColorPicker = false
-        },
     )
 
+    // 分组管理弹窗（溢出菜单打开）
+    GroupManageSheet(
+        show = showGroupManage,
+        groups = state.groups,
+        tagCounts = state.groupTagCounts,
+        onDismissRequest = { showGroupManage = false },
+        onAdd = { groupEdit = BookTagGroup(name = ""); showGroupManage = false },
+        onEdit = { groupEdit = it; showGroupManage = false },
+        onDelete = { onIntent(TagManagementIntent.DeleteGroup(it)); showGroupManage = false },
+    )
     GroupEditSheet(
         data = groupEdit,
         onSave = { onIntent(TagManagementIntent.SaveGroup(it.id, it.name)); groupEdit = null },
@@ -207,13 +170,16 @@ fun TagManagementScreen(
         onDismiss = { groupEdit = null },
     )
 
-    ExcludedEditSheet(
-        data = excludedEdit,
-        onSave = { onIntent(TagManagementIntent.SaveExcluded(it.id, it.name, it.isRegex)); excludedEdit = null },
-        onDelete = { onIntent(TagManagementIntent.DeleteExcluded(it)); excludedEdit = null },
-        onDismiss = { excludedEdit = null },
+    // 标签映射弹窗（溢出菜单打开）
+    MappingManageSheet(
+        show = showMappingManage,
+        mappings = state.mappings,
+        tags = state.tags,
+        onDismissRequest = { showMappingManage = false },
+        onAdd = { mappingEdit = TagMapping(oldTagName = "", newTagId = 0L); showMappingManage = false },
+        onEdit = { mappingEdit = it; showMappingManage = false },
+        onDelete = { onIntent(TagManagementIntent.DeleteMapping(it)); showMappingManage = false },
     )
-
     MappingEditSheet(
         data = mappingEdit,
         tags = state.tags,
@@ -223,41 +189,46 @@ fun TagManagementScreen(
     )
 }
 
+/* ---------------- 标签列表（流式，按分组分区） ---------------- */
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TagListTab(
     state: TagManagementUiState,
     onIntent: (TagManagementIntent) -> Unit,
-    padding: androidx.compose.foundation.layout.PaddingValues,
 ) {
     val query = state.searchQuery
-    val filtered = if (query.isBlank()) state.tags else state.tags.filter { it.name.contains(query, true) }
-    val groupIds = state.groups.map { it.id }.toSet()
-    val ungrouped = filtered.filter { it.groupId !in groupIds }
-    val sections = state.groups.mapNotNull { g ->
-        val ts = filtered.filter { it.groupId == g.id }
-        if (ts.isEmpty()) null else g.name to ts
-    } + ("未分组" to ungrouped)
+    val filtered = if (query.isBlank()) {
+        state.tags
+    } else {
+        state.tags.filter { it.name.contains(query, ignoreCase = true) }
+    }
+
+    val groups = state.groups
+    val grouped = filtered.filter { it.groupId != 0L }.groupBy { it.groupId }
+    val ungrouped = filtered.filter { it.groupId == 0L }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .adaptiveHorizontalPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = adaptiveContentPadding()),
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
     ) {
-        sections.forEach { (title, tags) ->
-            item { Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp)) }
-            item {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                ) {
-                    tags.forEach { tag ->
-                        TagChip(tag = tag, count = state.tagCounts[tag.id] ?: 0) {
-                            onIntent(TagManagementIntent.OpenTagDetail(tag.id))
-                        }
-                    }
+        if (ungrouped.isNotEmpty()) {
+            item(key = "section_ungrouped") {
+                Text("未分组", style = MaterialTheme.typography.titleMedium)
+            }
+            item(key = "ungrouped") {
+                TagChipRow(ungrouped, state, onIntent)
+            }
+        }
+        groups.forEach { group ->
+            val items = grouped[group.id].orEmpty()
+            if (items.isNotEmpty()) {
+                item(key = "section_${group.id}") {
+                    Text(group.name, style = MaterialTheme.typography.titleMedium)
+                }
+                item(key = "group_${group.id}") {
+                    TagChipRow(items, state, onIntent)
                 }
             }
         }
@@ -266,131 +237,46 @@ private fun TagListTab(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TagChip(tag: BookTag, count: Int, onClick: () -> Unit) {
-    val color = if (tag.color == 0L) LegadoTheme.colorScheme.primary else Color(tag.color)
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(color.copy(alpha = 0.16f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text("${tag.name} ($count)", color = color, style = MaterialTheme.typography.labelLarge)
-    }
-}
-
-@Composable
-private fun GroupListTab(
+private fun TagChipRow(
+    tags: List<BookTag>,
     state: TagManagementUiState,
-    padding: androidx.compose.foundation.layout.PaddingValues,
-    onEdit: (BookTagGroup) -> Unit,
+    onIntent: (TagManagementIntent) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .adaptiveHorizontalPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = adaptiveContentPadding()),
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        items(state.groups) { group ->
-            GlassCard(
+        tags.forEach { tag ->
+            val color = if (tag.color != 0L) Color(tag.color) else LegadoTheme.colorScheme.primary
+            val count = state.tagCounts[tag.id] ?: 0
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                onClick = { onEdit(group) },
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(color.copy(alpha = 0.14f))
+                    .clickable { onIntent(TagManagementIntent.OpenTagDetail(tag.id)) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Row(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(group.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "标签数：${state.groupTagCounts[group.id] ?: 0}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExcludedListTab(
-    state: TagManagementUiState,
-    padding: androidx.compose.foundation.layout.PaddingValues,
-    onEdit: (ExcludedTag) -> Unit,
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .adaptiveHorizontalPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = adaptiveContentPadding()),
-    ) {
-        items(state.excludedTags) { excluded ->
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                onClick = { onEdit(excluded) },
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(excluded.name, style = MaterialTheme.typography.bodyLarge)
-                    }
+                        .size(7.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(color),
+                )
+                Text(
+                    tag.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurface,
+                )
+                if (count > 0) {
                     Text(
-                        if (excluded.isRegex) "正则" else "关键字",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = LegadoTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(LegadoTheme.colorScheme.primary.copy(alpha = 0.12f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        "$count",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MappingListTab(
-    state: TagManagementUiState,
-    padding: androidx.compose.foundation.layout.PaddingValues,
-    onEdit: (TagMapping) -> Unit,
-) {
-    val tagNameById = state.tags.associate { it.id to it.name }
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .adaptiveHorizontalPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = adaptiveContentPadding()),
-    ) {
-        items(state.mappings) { mapping ->
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                onClick = { onEdit(mapping) },
-            ) {
-                Text(
-                    "${mapping.oldTagName}  →  ${tagNameById[mapping.newTagId] ?: "（未找到）"}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                )
             }
         }
     }

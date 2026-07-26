@@ -61,8 +61,9 @@ object TagManager {
         return false
     }
 
-    /** 将书籍 kind（逗号/换行分隔的分类）解析为标签，并写入 bookTagRelations（含标签映射异名归一）。 */
-    suspend fun generateTagsFromKind(book: Book): List<BookTag> {
+    /** 将书籍 kind（逗号/换行分隔的分类）解析为标签，并写入 bookTagRelations（含标签映射异名归一）。
+     * @param postEvent 是否发出 TAGS_UPDATED 事件，批量同步时传 false 避免重入循环 */
+    suspend fun generateTagsFromKind(book: Book, postEvent: Boolean = true): List<BookTag> {
         val kind = book.kind ?: return emptyList()
         val candidates = kind.split(",", "\n", "，", "、", "|")
             .map { it.trim() }
@@ -118,7 +119,7 @@ object TagManager {
         if (relationsToInsert.isNotEmpty()) {
             appDb.bookTagRelationDao.insertAll(relationsToInsert)
         }
-        postEvent(EventBus.TAGS_UPDATED, book.bookUrl)
+        if (postEvent) postEvent(EventBus.TAGS_UPDATED, book.bookUrl)
         return finalTags
     }
 

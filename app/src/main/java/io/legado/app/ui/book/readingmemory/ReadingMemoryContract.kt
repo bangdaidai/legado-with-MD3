@@ -49,6 +49,7 @@ data class ReadingMemoryUiState(
     val showIntro: Boolean = true,
     val showReview: Boolean = false,
     val searchQuery: String = "",
+    val loading: Boolean = false,
 )
 
 sealed interface ReadingMemoryIntent {

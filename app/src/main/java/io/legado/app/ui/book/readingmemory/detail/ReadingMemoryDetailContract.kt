@@ -62,6 +62,8 @@ sealed interface ReadingMemoryDetailIntent {
     data class EditIntro(val intro: String) : ReadingMemoryDetailIntent
     data object Refresh : ReadingMemoryDetailIntent
     data object NavigateBack : ReadingMemoryDetailIntent
+    data class AddProtagonist(val name: String) : ReadingMemoryDetailIntent
+    data class RemoveProtagonist(val name: String) : ReadingMemoryDetailIntent
 }
 
 sealed interface ReadingMemoryDetailEffect {

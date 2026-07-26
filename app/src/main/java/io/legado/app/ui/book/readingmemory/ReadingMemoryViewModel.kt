@@ -40,6 +40,7 @@ class ReadingMemoryViewModel(
     private val _showReview = MutableStateFlow(false)
     private val _searchQuery = MutableStateFlow("")
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
+    private val _loading = MutableStateFlow(false)
 
     val statusFilter = _statusFilter.asStateFlow()
     val ratingFilter = _ratingFilter.asStateFlow()
@@ -97,6 +98,7 @@ class ReadingMemoryViewModel(
     val uiState: StateFlow<ReadingMemoryUiState> = repository.observeAll()
         .flatMapLatest { memories -> controls.map { buildUiState(memories, it) } }
         .flowOn(Dispatchers.IO)
+        .combine(_loading) { state, loading -> state.copy(loading = loading) }
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
@@ -144,7 +146,14 @@ class ReadingMemoryViewModel(
     }
 
     private fun load() {
-        viewModelScope.launch(Dispatchers.IO) { repository.ensureAllMemories() }
+        viewModelScope.launch(Dispatchers.IO) {
+            _loading.value = true
+            try {
+                repository.ensureAllMemories()
+            } finally {
+                _loading.value = false
+            }
+        }
     }
 
     private fun runEdit(block: suspend () -> Unit) {

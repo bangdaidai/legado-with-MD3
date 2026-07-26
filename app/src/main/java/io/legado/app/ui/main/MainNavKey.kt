@@ -200,6 +200,9 @@ data object MainRouteTagManagement : MainRoute
 @Serializable
 data class MainRouteTagDetail(val tagId: Long) : MainRoute
 
+@Serializable
+data object MainRouteExcludedTag : MainRoute
+
 object MainRouteConst {
     const val ROUTE_MAIN = "main"
     const val ROUTE_SETTINGS = "settings"

@@ -1,94 +1,64 @@
 package io.legado.app.ui.book.readingmemory
 
-import io.legado.app.R
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.ReadingMemory
-import io.legado.app.ui.widget.components.image.cover.BookCoverImage
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
+import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppLinearProgressIndicator
-import io.legado.app.ui.book.readingmemory.ReadingMemoryListItem.BookItem
-import io.legado.app.ui.book.readingmemory.ReadingMemoryListItem.GroupHeader
+import io.legado.app.ui.widget.components.AppPullToRefresh
+import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.image.cover.CoilBookCover
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
+import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ReadingMemoryScreen(
     uiState: ReadingMemoryUiState,
-    onBack: () -> Unit,
     onIntent: (ReadingMemoryIntent) -> Unit,
+    onBack: () -> Unit,
 ) {
+    AppLog.put("[阅读记忆] MemoryScreen 渲染 items=${uiState.items.size} sortBy=${uiState.sortBy.label} groupBy=${uiState.groupBy.label}")
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     var showSearch by remember { mutableStateOf(false) }
-    var showFilterSheet by remember { mutableStateOf(false) }
-    var showGroupSheet by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf(uiState.searchQuery) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    var showGroupSheet by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var longPressBookUrl by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.reading_memory)) },
+            GlassMediumFlexibleTopAppBar(
+                title = stringResource(R.string.reading_memory),
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -108,21 +78,17 @@ fun ReadingMemoryScreen(
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(Icons.Filled.Sort, contentDescription = "排序")
                         }
-                        DropdownMenu(
+                        RoundDropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
-                        ) {
+                        ) { dismiss ->
                             ReadingMemorySortBy.entries.forEach { s ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            s.label,
-                                            fontWeight = if (s == uiState.sortBy) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                    },
+                                RoundDropdownMenuItem(
+                                    text = s.label,
+                                    isSelected = s == uiState.sortBy,
                                     onClick = {
                                         onIntent(ReadingMemoryIntent.SetSortBy(s))
-                                        showSortMenu = false
+                                        dismiss()
                                     },
                                 )
                             }
@@ -132,56 +98,40 @@ fun ReadingMemoryScreen(
                         IconButton(onClick = { showMoreMenu = true }) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "更多")
                         }
-                        DropdownMenu(
+                        RoundDropdownMenu(
                             expanded = showMoreMenu,
                             onDismissRequest = { showMoreMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(
-                                            checked = uiState.showCard,
-                                            onCheckedChange = { },
-                                        )
-                                        Text(stringResource(R.string.reading_memory_show_card))
-                                    }
+                        ) { dismiss ->
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.reading_memory_show_card),
+                                isSelected = uiState.showCard,
+                                onClick = {
+                                    onIntent(ReadingMemoryIntent.ToggleShowCard(!uiState.showCard))
+                                    dismiss()
                                 },
-                                onClick = { onIntent(ReadingMemoryIntent.ToggleShowCard(!uiState.showCard)) },
                             )
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(
-                                            checked = uiState.showIntro,
-                                            onCheckedChange = { },
-                                        )
-                                        Text(stringResource(R.string.reading_memory_show_intro))
-                                    }
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.reading_memory_show_intro),
+                                isSelected = uiState.showIntro,
+                                onClick = {
+                                    onIntent(ReadingMemoryIntent.ToggleShowIntro(!uiState.showIntro))
+                                    dismiss()
                                 },
-                                onClick = { onIntent(ReadingMemoryIntent.ToggleShowIntro(!uiState.showIntro)) },
                             )
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(
-                                            checked = uiState.showReview,
-                                            onCheckedChange = { },
-                                        )
-                                        Text(stringResource(R.string.reading_memory_show_review))
-                                    }
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.reading_memory_show_review),
+                                isSelected = uiState.showReview,
+                                onClick = {
+                                    onIntent(ReadingMemoryIntent.ToggleShowReview(!uiState.showReview))
+                                    dismiss()
                                 },
-                                onClick = { onIntent(ReadingMemoryIntent.ToggleShowReview(!uiState.showReview)) },
                             )
                             HorizontalDivider()
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(R.string.reading_memory_clear_all),
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                },
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.reading_memory_clear_all),
+                                color = LegadoTheme.colorScheme.error,
                                 onClick = {
-                                    showMoreMenu = false
+                                    dismiss()
                                     showClearDialog = true
                                 },
                             )
@@ -189,46 +139,60 @@ fun ReadingMemoryScreen(
                     }
                 },
             )
-        },
+        }
     ) { padding ->
-        Column(Modifier.padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             if (showSearch) {
                 OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { onIntent(ReadingMemoryIntent.Search(it)) },
+                    value = searchQuery,
+                    onValueChange = {
+                        searchQuery = it
+                        onIntent(ReadingMemoryIntent.Search(it))
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
-                    placeholder = { Text(stringResource(R.string.reading_memory_search_hint)) },
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    placeholder = { AppText(stringResource(R.string.search_book)) },
                     singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     trailingIcon = {
-                        if (uiState.searchQuery.isNotEmpty()) {
+                        if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = {
+                                searchQuery = ""
                                 onIntent(ReadingMemoryIntent.Search(""))
-                            }) { Icon(Icons.Filled.Clear, contentDescription = null) }
+                            }) {
+                                Icon(Icons.Filled.Clear, contentDescription = "清除")
+                            }
                         }
                     },
                 )
             }
 
             ScrollableTabRow(
-                selectedTabIndex = ReadingMemoryStatusFilter.entries
-                    .indexOf(uiState.statusFilter)
-                    .coerceAtLeast(0),
-                edgePadding = 16.dp,
+                selectedTabIndex = uiState.statusFilter.ordinal,
+                edgePadding = 12.dp,
+                divider = {},
             ) {
-                ReadingMemoryStatusFilter.entries.forEach { f ->
+                ReadingMemoryStatusFilter.entries.forEachIndexed { index, status ->
                     Tab(
-                        selected = uiState.statusFilter == f,
-                        onClick = { onIntent(ReadingMemoryIntent.FilterStatus(f)) },
-                        text = {
-                            Text(
-                                f.label,
-                                fontWeight = if (uiState.statusFilter == f) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        },
-                    )
+                        selected = uiState.statusFilter == status,
+                        onClick = { onIntent(ReadingMemoryIntent.FilterStatus(status)) },
+                    ) {
+                        AppText(
+                            text = status.label,
+                            style = LegadoTheme.typography.labelLarge,
+                            fontWeight = if (uiState.statusFilter == status) FontWeight.Bold else FontWeight.Normal,
+                            color = if (uiState.statusFilter == status) {
+                                LegadoTheme.colorScheme.primary
+                            } else {
+                                LegadoTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
 
@@ -237,41 +201,45 @@ fun ReadingMemoryScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        stringResource(R.string.reading_memory_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    EmptyMessage(stringResource(R.string.reading_memory_empty))
                 }
             } else {
-                LazyColumn(
+                AppPullToRefresh(
+                    isRefreshing = uiState.loading,
+                    onRefresh = { onIntent(ReadingMemoryIntent.Refresh) },
+                    scrollBehavior = scrollBehavior,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = 12.dp,
-                        vertical = 8.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(
-                        items = uiState.items,
-                        key = { item ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(uiState.items) { item ->
                             when (item) {
-                                is GroupHeader -> "h_${item.key}"
-                                is BookItem -> item.memory.bookUrl
+                                is ReadingMemoryListItem.GroupHeader -> {
+                                    GroupHeaderRow(
+                                        header = item,
+                                        onToggle = {
+                                            onIntent(ReadingMemoryIntent.ToggleGroupCollapse(item.key))
+                                        },
+                                    )
+                                }
+
+                                is ReadingMemoryListItem.BookItem -> {
+                                    val collapsed = uiState.groupBy != ReadingMemoryGroupBy.None &&
+                                        uiState.items.filterIsInstance<ReadingMemoryListItem.GroupHeader>()
+                                            .any { it.key == groupKeyFor(uiState, item.memory) && it.collapsed }
+                                    if (!collapsed) {
+                                        MemoryBookCard(
+                                            memory = item.memory,
+                                            uiState = uiState,
+                                            onIntent = onIntent,
+                                            onLongPress = { longPressBookUrl = it },
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        contentType = { it::class },
-                    ) { item ->
-                        when (item) {
-                            is GroupHeader -> GroupHeaderRow(item) {
-                                onIntent(ReadingMemoryIntent.ToggleGroupCollapse(item.key))
-                            }
-                            is BookItem -> MemoryBookCard(
-                                memory = item.memory,
-                                uiState = uiState,
-                                onIntent = onIntent,
-                                onLongPress = { longPressBookUrl = it },
-                            )
                         }
                     }
                 }
@@ -279,17 +247,21 @@ fun ReadingMemoryScreen(
         }
     }
 
+    // 筛选 Sheet
     if (showFilterSheet) {
-        ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
+        AppModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+            title = stringResource(R.string.reading_memory_filter_rating),
+        ) {
             Column(
-                Modifier
+                modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
             ) {
-                Text(
+                AppText(
                     stringResource(R.string.reading_memory_filter_rating),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = LegadoTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 ReadingMemoryRatingFilter.entries.forEach { r ->
@@ -304,13 +276,13 @@ fun ReadingMemoryScreen(
                             selected = uiState.ratingFilter == r,
                             onClick = { onIntent(ReadingMemoryIntent.SetRatingFilter(r)) },
                         )
-                        Text(r.label)
+                        AppText(r.label, style = LegadoTheme.typography.bodyMedium)
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(
+                AppText(
                     stringResource(R.string.reading_memory_filter_type),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = LegadoTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 ReadingMemoryReadTypeFilter.entries.forEach { t ->
@@ -325,7 +297,7 @@ fun ReadingMemoryScreen(
                             selected = uiState.readTypeFilter == t,
                             onClick = { onIntent(ReadingMemoryIntent.SetReadTypeFilter(t)) },
                         )
-                        Text(t.label)
+                        AppText(t.label, style = LegadoTheme.typography.bodyMedium)
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -338,69 +310,57 @@ fun ReadingMemoryScreen(
                         onCheckedChange = { onIntent(ReadingMemoryIntent.ToggleOnlyWithReview(it)) },
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.reading_memory_only_with_review))
+                    AppText(stringResource(R.string.reading_memory_only_with_review))
                 }
             }
         }
     }
 
+    // 分组 Sheet
     if (showGroupSheet) {
-        ModalBottomSheet(onDismissRequest = { showGroupSheet = false }) {
+        AppModalBottomSheet(
+            onDismissRequest = { showGroupSheet = false },
+            title = stringResource(R.string.reading_memory_group_by),
+        ) {
             Column(
-                Modifier
+                modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
                     .padding(16.dp),
             ) {
-                Text(
-                    stringResource(R.string.reading_memory_group_by),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
                 ReadingMemoryGroupBy.entries.forEach { g ->
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                onIntent(ReadingMemoryIntent.SetGroupBy(g))
-                                showGroupSheet = false
-                            }
-                            .padding(vertical = 4.dp),
+                            .clickable { onIntent(ReadingMemoryIntent.SetGroupBy(g)) }
+                            .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
                             selected = uiState.groupBy == g,
-                            onClick = {
-                                onIntent(ReadingMemoryIntent.SetGroupBy(g))
-                                showGroupSheet = false
-                            },
+                            onClick = { onIntent(ReadingMemoryIntent.SetGroupBy(g)) },
                         )
-                        Text(g.label)
+                        AppText(g.label, style = LegadoTheme.typography.bodyMedium)
                     }
                 }
             }
         }
     }
 
+    // 长按菜单 Sheet
     longPressBookUrl?.let { bookUrl ->
-        val mem = uiState.items
-            .filterIsInstance<BookItem>()
-            .firstOrNull { it.memory.bookUrl == bookUrl }
-            ?.memory
-        ModalBottomSheet(onDismissRequest = { longPressBookUrl = null }) {
+        val mem = (uiState.items.filterIsInstance<ReadingMemoryListItem.BookItem>()
+            .firstOrNull { it.memory.bookUrl == bookUrl })?.memory
+        AppModalBottomSheet(
+            onDismissRequest = { longPressBookUrl = null },
+            title = mem?.bookName,
+        ) {
             Column(
-                Modifier
+                modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
             ) {
                 mem?.let {
-                    Text(
-                        it.bookName,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.padding(4.dp))
+                    AppText(it.bookName, style = LegadoTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
                 if (mem?.abandoned == true) {
                     TextButton(
@@ -409,7 +369,9 @@ fun ReadingMemoryScreen(
                             longPressBookUrl = null
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.reading_memory_unmark_abandoned)) }
+                    ) {
+                        AppText(stringResource(R.string.reading_memory_unmark_abandoned))
+                    }
                 } else {
                     TextButton(
                         onClick = {
@@ -417,7 +379,9 @@ fun ReadingMemoryScreen(
                             longPressBookUrl = null
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.reading_memory_mark_abandoned)) }
+                    ) {
+                        AppText(stringResource(R.string.reading_memory_mark_abandoned))
+                    }
                 }
                 TextButton(
                     onClick = {
@@ -426,58 +390,75 @@ fun ReadingMemoryScreen(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
+                    AppText(
                         stringResource(R.string.reading_memory_delete),
-                        color = MaterialTheme.colorScheme.error,
+                        color = LegadoTheme.colorScheme.error,
                     )
                 }
             }
         }
     }
 
+    // 清空确认
     if (showClearDialog) {
-        AlertDialog(
+        AppAlertDialog(
+            show = true,
             onDismissRequest = { showClearDialog = false },
-            title = { Text(stringResource(R.string.reading_memory_clear_all)) },
-            text = { Text(stringResource(R.string.reading_memory_clear_all_confirm)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onIntent(ReadingMemoryIntent.ClearAll)
-                    showClearDialog = false
-                }) { Text(stringResource(R.string.ok)) }
+            title = stringResource(R.string.reading_memory_clear_all),
+            text = stringResource(R.string.reading_memory_clear_all_confirm),
+            confirmText = stringResource(R.string.ok),
+            onConfirm = {
+                onIntent(ReadingMemoryIntent.ClearAll)
+                showClearDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) { Text(stringResource(R.string.cancel)) }
-            },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { showClearDialog = false },
         )
     }
 }
 
+private fun groupKeyFor(uiState: ReadingMemoryUiState, memory: ReadingMemory): String {
+    return when (uiState.groupBy) {
+        ReadingMemoryGroupBy.Year -> memory.year.toString()
+        ReadingMemoryGroupBy.Rating -> "★ ${memory.rating}"
+        ReadingMemoryGroupBy.Status -> when {
+            memory.abandoned -> "弃文"
+            memory.finishRead -> "已读"
+            memory.startRead -> "在读"
+            else -> "待看"
+        }
+        ReadingMemoryGroupBy.None -> ""
+    }
+}
+
 @Composable
-private fun GroupHeaderRow(header: GroupHeader, onClick: () -> Unit) {
+private fun GroupHeaderRow(
+    header: ReadingMemoryListItem.GroupHeader,
+    onToggle: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .clickable { onToggle() }
+            .padding(horizontal = 4.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            if (header.collapsed) Icons.Filled.ChevronRight else Icons.Filled.ExpandMore,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            header.display,
-            style = MaterialTheme.typography.titleSmall,
+        AppText(
+            text = header.display,
+            style = LegadoTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "(${header.count})",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        AppText(
+            text = "${header.count}",
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = if (header.collapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+            contentDescription = null,
+            tint = LegadoTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -489,11 +470,156 @@ private fun MemoryBookCard(
     onIntent: (ReadingMemoryIntent) -> Unit,
     onLongPress: (String) -> Unit,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = if (uiState.showCard) 1.dp else 0.dp,
-        color = if (uiState.showCard) MaterialTheme.colorScheme.surface else Color.Transparent,
-    ) {
+    val rowContent: @Composable RowScope.() -> Unit = {
+        CoilBookCover(
+            name = memory.bookName.takeIf { it.isNotBlank() },
+            author = memory.author.takeIf { it.isNotBlank() },
+            path = memory.coverUrl.takeIf { it.isNotBlank() },
+            radius = 8.dp,
+            modifier = Modifier
+                .size(64.dp)
+                .clip(LegadoTheme.shapes.medium),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            AppText(
+                text = memory.bookName,
+                style = LegadoTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            AppText(
+                text = memory.author,
+                style = LegadoTheme.typography.bodySmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ReadingMemoryRatingBar(
+                    rating = memory.rating.toFloat(),
+                    onRatingChanged = {},
+                    enabled = false,
+                )
+                if (memory.rating > 0) {
+                    AppText(
+                        text = memory.rating.toString(),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            val statusText = when {
+                memory.abandoned -> "弃文"
+                memory.finishRead -> "已读"
+                memory.startRead -> "在读"
+                else -> "待看"
+            }
+            Surface(
+                shape = LegadoTheme.shapes.small,
+                color = when {
+                    memory.abandoned -> LegadoTheme.colorScheme.errorContainer
+                    memory.finishRead -> LegadoTheme.colorScheme.tertiaryContainer
+                    memory.startRead -> LegadoTheme.colorScheme.primaryContainer
+                    else -> LegadoTheme.colorScheme.surfaceVariant
+                },
+            ) {
+                AppText(
+                    text = statusText,
+                    style = LegadoTheme.typography.labelSmall,
+                    color = when {
+                        memory.abandoned -> LegadoTheme.colorScheme.onErrorContainer
+                        memory.finishRead -> LegadoTheme.colorScheme.onTertiaryContainer
+                        memory.startRead -> LegadoTheme.colorScheme.onPrimaryContainer
+                        else -> LegadoTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+            if (uiState.showIntro && memory.intro.isNotBlank()) {
+                AppText(
+                    text = memory.intro,
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (uiState.showReview && memory.review.isNotBlank()) {
+                AppText(
+                    text = memory.review,
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (memory.kind.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    memory.kind.forEach { tag ->
+                        Surface(
+                            shape = LegadoTheme.shapes.small,
+                            color = LegadoTheme.colorScheme.secondaryContainer,
+                        ) {
+                            AppText(
+                                text = tag,
+                                style = LegadoTheme.typography.labelSmall,
+                                color = LegadoTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (memory.progressText.isNotBlank()) {
+                AppText(
+                    text = memory.progressText,
+                    style = LegadoTheme.typography.labelSmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            AppText(
+                text = memory.recentReadLabel,
+                style = LegadoTheme.typography.labelSmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    if (uiState.showCard) {
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
+                        onLongClick = { onLongPress(memory.bookUrl) },
+                    )
+                    .padding(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                rowContent()
+            }
+        }
+    } else {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -502,193 +628,9 @@ private fun MemoryBookCard(
                     onLongClick = { onLongPress(memory.bookUrl) },
                 )
                 .padding(12.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            BookCoverImage(
-                name = memory.bookName,
-                author = memory.bookAuthor,
-                path = memory.coverUrl,
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(MaterialTheme.shapes.medium),
-                contentScale = ContentScale.Crop,
-            )
-            Spacer(Modifier.width(12.dp))
-
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        memory.bookName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (memory.rating > 0f) {
-                        Spacer(Modifier.width(8.dp))
-                        StarsRow(memory.rating.toInt())
-                    }
-                }
-
-                Text(
-                    memory.bookAuthor,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                if (uiState.showIntro && !memory.intro.isNullOrBlank()) {
-                    Spacer(Modifier.padding(top = 4.dp))
-                    Text(
-                        memory.intro!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                if (uiState.showReview && !memory.review.isNullOrBlank()) {
-                    Spacer(Modifier.padding(top = 4.dp))
-                    Text(
-                        memory.review!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                val protagonists = remember(memory.protagonistsJson) {
-                    memory.protagonistsJson
-                        ?.split("|")
-                        ?.filter { it.isNotBlank() }
-                        ?.take(4) ?: emptyList()
-                }
-                val tags = buildList {
-                    memory.kind?.takeIf { it.isNotBlank() }?.let { add(it) }
-                    addAll(protagonists)
-                }
-                if (tags.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(top = 6.dp),
-                    ) {
-                        tags.forEach { t ->
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                            ) {
-                                Text(
-                                    t,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 进度条
-                Spacer(Modifier.padding(top = 6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    AppLinearProgressIndicator(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(6.dp),
-                        progress = memory.progress.coerceIn(0f, 1f),
-                    )
-                    Text(
-                        "${(memory.progress.coerceIn(0f, 1f) * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-
-                Spacer(Modifier.padding(top = 6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val statusInfo = when {
-                        memory.abandoned -> "弃文" to MaterialTheme.colorScheme.errorContainer
-                        memory.progress >= 1f -> "已读" to MaterialTheme.colorScheme.tertiaryContainer
-                        memory.progress > 0f -> "在读" to MaterialTheme.colorScheme.primaryContainer
-                        else -> "未读" to MaterialTheme.colorScheme.surfaceVariant
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = statusInfo.second,
-                    ) {
-                        Text(
-                            statusInfo.first,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                    if (memory.wordCount?.isNotBlank() == true) {
-                        Text(
-                            memory.wordCount!!,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else if (memory.statTotalWords > 0) {
-                        Text(
-                            formatWordCount(memory.statTotalWords) + "字",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (memory.statTotalReadTime > 0) {
-                        Text(
-                            formatReadTime(memory.statTotalReadTime),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+            rowContent()
         }
-    }
-}
-
-@Composable
-private fun StarsRow(rating: Int) {
-    val v = rating.coerceIn(0, 5)
-    Text(
-        "★".repeat(v) + "☆".repeat(5 - v),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.tertiary,
-    )
-}
-
-private fun formatReadTime(ms: Long): String {
-    val totalMinutes = ms / 60000
-    val days = totalMinutes / (60 * 24)
-    val hours = (totalMinutes % (60 * 24)) / 60
-    val minutes = totalMinutes % 60
-    return buildString {
-        if (days > 0L) append("${days}天")
-        if (hours > 0L) append("${hours}时")
-        if (minutes > 0L || (days == 0L && hours == 0L)) append("${minutes}分")
-    }.let { if (it.isEmpty()) "0分" else it }
-}
-
-private fun formatWordCount(words: Long): String {
-    if (words <= 0) return "0"
-    return when {
-        words >= 10000 -> "${words / 10000}万"
-        words >= 1000 -> "${words / 1000}千"
-        else -> "$words"
     }
 }
