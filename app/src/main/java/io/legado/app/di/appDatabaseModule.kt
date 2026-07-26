@@ -53,4 +53,5 @@ val appDatabaseModule = module {
     factory<HighlightRuleDao> { get<AppDatabase>().highlightRuleDao }
     factory<HighlightTagRuleDao> { get<AppDatabase>().highlightTagRuleDao }
     factory<TagGroupRuleDao> { get<AppDatabase>().tagGroupRuleDao }
+    factory<ExcludedTagDao> { get<AppDatabase>().excludedTagDao }
 }

@@ -227,6 +227,7 @@ import io.legado.app.ui.book.search.SearchViewModel
 import io.legado.app.ui.book.searchContent.SearchContentViewModel
 import io.legado.app.ui.book.tagdetail.TagDetailViewModel
 import io.legado.app.ui.book.tagmanage.TagManagementViewModel
+import io.legado.app.ui.book.tagmanage.ExcludedTagViewModel
 import io.legado.app.ui.book.toc.TocViewModel
 import io.legado.app.ui.book.toc.rule.TxtTocRuleViewModel
 import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewViewModel
@@ -454,6 +455,7 @@ val appModule = module {
     viewModelOf(::HighlightTagRuleViewModel)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)
+    viewModelOf(::ExcludedTagViewModel)
     viewModel { (tagId: Long) ->
         TagDetailViewModel(tagId)
     }
