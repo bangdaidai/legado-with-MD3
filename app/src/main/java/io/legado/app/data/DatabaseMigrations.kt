@@ -21,7 +21,7 @@ object DatabaseMigrations {
             migration_35_36, migration_36_37, migration_37_38, migration_38_39,
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83,
-            migration_97_98, migration_98_99,
+            migration_98_99,
         )
     }
 
@@ -498,9 +498,9 @@ object DatabaseMigrations {
     )
     class Migration_64_65 : AutoMigrationSpec
 
-    // region 阅读记忆 — 新建 readingMemory 表
+    // region 98→99: 阅读记忆表 + BookCharacterProfile.isProtagonist 列
 
-    private val migration_97_98 = object : Migration(97, 98) {
+    private val migration_98_99 = object : Migration(98, 99) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL(
                 """
@@ -538,15 +538,6 @@ object DatabaseMigrations {
                 )
                 """.trimIndent()
             )
-        }
-    }
-
-    // endregion
-
-    // region BookCharacterProfile 增加 isProtagonist 列
-
-    private val migration_98_99 = object : Migration(98, 99) {
-        override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL(
                 "ALTER TABLE book_character_profiles ADD COLUMN isProtagonist INTEGER NOT NULL DEFAULT 0"
             )

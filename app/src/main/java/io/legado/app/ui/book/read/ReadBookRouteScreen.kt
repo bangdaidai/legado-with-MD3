@@ -48,6 +48,7 @@ import io.legado.app.constant.BookType
 import io.legado.app.constant.ReadMenuBlurMode
 import io.legado.app.help.IntentHelp
 import io.legado.app.model.ReadBook
+import io.legado.app.model.translation.TranslationChapterStatus
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.read.page.ContentTextView
@@ -124,7 +125,7 @@ fun ReadBookRouteScreen(
     host: ReadBookRouteHost,
     controller: ReadBookController,
     onEffectsReady: () -> Unit = {},
-    onOpenSearch: (word: String?, bookUrl: String) -> Unit = { _, _ -> },
+    onOpenSearch: (word: String?, bookUrl: String, autoFocus: Boolean) -> Unit = { _, _, _ -> },
     onOpenVoiceCasting: (bookUrl: String) -> Unit = {},
     onOpenTtsEnginesAndVoices: () -> Unit = {},
     onOpenTtsCache: () -> Unit = {},
@@ -135,6 +136,14 @@ fun ReadBookRouteScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val isDarkTheme = LocalAppUiConfiguration.current.isDarkTheme
+    val eyeProtectionActive = rememberEyeProtectionActive(
+        enabled = state.eyeProtection.enabled,
+        autoNight = state.eyeProtection.autoNight,
+        isDark = isDarkTheme,
+        schedule = state.eyeProtection.schedule,
+        startTime = state.eyeProtection.startTime,
+        endTime = state.eyeProtection.endTime,
+    )
     val effectsReady = remember(viewModel) { CompletableDeferred<Unit>() }
     val menuBackdrop = rememberLayerBackdrop()
     val menuHazeState = remember { HazeState() }
@@ -153,10 +162,6 @@ fun ReadBookRouteScreen(
 
     LaunchedEffect(state.menuVisible) {
         controller.onMenuVisibilityChanged(state.menuVisible)
-    }
-
-    LaunchedEffect(isDarkTheme, readPreferences.eyeProtectionAutoNight) {
-        viewModel.onIntent(ReadBookIntent.SyncEyeProtectionForTheme(isDarkTheme))
     }
 
     LaunchedEffect(viewModel, controller, lifecycleOwner) {
@@ -370,7 +375,7 @@ fun ReadBookRouteScreen(
                                 }
                             }
                             is ReadBookEffect.OpenSearchActivity -> {
-                                onOpenSearch(effect.word, effect.bookUrl)
+                                onOpenSearch(effect.word, effect.bookUrl, effect.autoFocus)
                             }
                             is ReadBookEffect.OpenBookVoiceCasting -> {
                                 onOpenVoiceCasting(effect.bookUrl)
@@ -546,12 +551,20 @@ fun ReadBookRouteScreen(
             ReadBookMenuBar(
                 state = state,
                 preferences = readPreferences,
+                eyeProtectionActive = eyeProtectionActive,
                 onIntent = viewModel::onIntent,
                 onBrightnessPreview = host::previewBrightness,
                 backdrop = menuBackdrop,
                 hazeState = if (useMenuHazeSource) menuHazeState else null,
             )
             ReadBookSearchBar(state = state, onIntent = viewModel::onIntent)
+            AnimatedVisibility(
+                visible = state.translationStatus == TranslationChapterStatus.Thinking,
+                enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.88f),
+                exit = fadeOut(tween(140)) + scaleOut(tween(180), targetScale = 0.88f),
+            ) {
+                TranslationThinkingCapsule()
+            }
             AnimatedVisibility(
                 visible = state.isReadAloudRunning &&
                     state.showReadAloudCapsule &&

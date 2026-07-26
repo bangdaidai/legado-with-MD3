@@ -1648,7 +1648,7 @@
     <string name="compact_list">紧凑列表</string>
     <string name="author_read">%1$s • %2$d章未读</string>
     <string name="menu_alpha_sum">当前 %d%%</string>
-    <string name="menu_alpha">菜单透明度</string>
+    <string name="menu_alpha">菜单不透明度</string>
     <string name="change_source_option_title">请选择操作</string>
     <string name="replace_current_book">替换本书</string>
     <string name="add_as_new_book">新增书籍</string>
@@ -2210,6 +2210,11 @@
     <string name="lab_eink_display_title">墨水屏显示</string>
     <string name="lab_eink_display_summary">在平板界面显示墨水屏选项</string>
     <string name="lab_eink_display_hint">可在 主题 → 显示 中调整墨水屏设置</string>
+    <string name="lab_diagnostics">诊断</string>
+    <string name="lab_page_estimate_diagnostics_title">导出全文页码诊断</string>
+    <string name="lab_page_estimate_diagnostics_summary">分享本机最近的估算与校正记录，不会自动上传。</string>
+    <string name="lab_page_estimate_diagnostics_count">%1$d 条</string>
+    <string name="lab_page_estimate_diagnostics_share_title">分享全文页码诊断</string>
 
     <!-- 护眼模式 -->
     <string name="eye_protection">护眼模式</string>
@@ -2291,7 +2296,7 @@
     <string name="show_tags">显示标签</string>
     <string name="custom_tag_colors">自定义标签颜色</string>
     <string name="manage_tag_colors">管理标签颜色</string>
-    <string name="search_filter_first">搜索按钮优先打开筛选栏</string>
+    <string name="search_filter_first">搜索按钮优先打开搜索页面</string>
     <string name="import_from_network">网络导入</string>
     <string name="input_url_or_json_hint">请输入 URL 或 JSON</string>
     <string name="history_label">历史记录:</string>
@@ -2381,7 +2386,11 @@
     <string name="placeholder_chapter_size">章节总数</string>
     <string name="placeholder_page_index">当前页码</string>
     <string name="placeholder_page_size">本章页数</string>
+    <string name="placeholder_page_remaining">本章剩余页数</string>
     <string name="placeholder_read_progress">阅读进度</string>
+    <string name="placeholder_full_page_index">全文页码</string>
+    <string name="placeholder_full_page_size">全文页数</string>
+    <string name="full_book_pagination">全文分页</string>
     <!-- Missing zh-rTW/HK translations (683 keys) -->
 
     <!-- 日夜间/深浅色主题切换提醒 -->
@@ -2871,4 +2880,8 @@
     <string name="ai_prompt_task_identify_characters">人物识别</string>
     <string name="ai_prompt_task_identify_characters_desc">读取已下载章节并建议稳定的人物档案</string>
     <string name="ai_prompt_default_identify_characters">使用只读工具查看已下载的本地章节和既有人物。只返回 JSON：{"characters":[{"name":string,"aliases":[string],"voiceGender":"male|female|unknown","voiceAgeBand":"child|teen|young_adult|adult|elderly|unknown","role":"male_lead|female_lead|male_supporting|female_supporting|","personality":string,"summary":string,"evidence":string,"confidence":number}]}。不要把代词、泛称谓或一次性路人识别为人物；不确定时使用 unknown；不要与已有姓名或别名重复。</string>
+    <string name="whole_book_page_format">全文 %1$d / %2$d</string>
+    <string name="whole_book_page_estimated_format">全文 %1$s / %2$s</string>
+    <string name="whole_book_page_unavailable">全文 - / -</string>
+    <string name="translation_model_thinking">模型思考中</string>
 </resources>

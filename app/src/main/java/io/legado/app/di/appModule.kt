@@ -614,6 +614,7 @@ val appModule = module {
             otherSettingsGateway = get(),
             downloadCacheSettingsGateway = get(),
             backupSettingsGateway = get(),
+            themeSettingsGateway = get(),
         )
     }
     viewModelOf(::ChangeCoverViewModel)

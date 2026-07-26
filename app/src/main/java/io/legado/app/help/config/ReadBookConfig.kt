@@ -68,6 +68,8 @@ object ReadBookConfig {
     const val tipTimeBatteryClassic = 16
     const val tipChapterTitleArrowClassic = 17
     const val tipCustom = 18
+    const val tipWholeBookPage = 19
+    const val tipWholeBookPageAndProgress = 20
     // endregion
 
     const val configFileName = "readConfig.json"
@@ -454,7 +456,8 @@ object ReadBookConfig {
         }
 
     var titleSegScaling: Float
-        get() = config.titleSegScaling
+        //旧版本可能存入负值，负值非法，回落到默认比例
+        get() = config.titleSegScaling.let { if (it < 0f) 1f else it.coerceAtMost(2f) }
         set(value) {
             config.titleSegScaling = value
         }
@@ -779,7 +782,8 @@ object ReadBookConfig {
         tipNone, tipBookName, tipChapterTitle, tipChapterTitleArrow, tipChapterTitleArrowClassic,
         tipTime, tipBattery, tipBatteryClassic, tipBatteryInside, tipBatteryIcon, tipBatteryPercentage,
         tipPage, tipTotalProgress, tipTotalProgress1, tipPageAndTotal, tipTimeBattery,
-        tipTimeBatteryClassic, tipTimeBatteryPercentage, tipCustom
+        tipTimeBatteryClassic, tipTimeBatteryPercentage, tipWholeBookPage,
+        tipWholeBookPageAndProgress, tipCustom
     )
     val tipNames get() = appCtx.resources.getStringArray(R.array.read_tip).toList()
     val tipColorNames get() = appCtx.resources.getStringArray(R.array.tip_color).toList()

@@ -16,6 +16,7 @@ import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.model.settings.ReadStyleItem
+import io.legado.app.model.translation.TranslationChapterStatus
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.entities.TextPos
@@ -267,6 +268,7 @@ data class ReadBookUiState(
     val chineseConverterActive: Boolean = false,
     // Translation
     val translationMode: Boolean = false,
+    val translationStatus: TranslationChapterStatus = TranslationChapterStatus.Idle,
     // Chapter info
     val curTextChapter: TextChapter? = null,
     // Time / battery (from EventBus)
@@ -330,9 +332,24 @@ data class ReadBookUiState(
     val aiTextClean: AiTextCleanUiState = AiTextCleanUiState(),
     val aiTextRewrite: AiTextRewriteUiState = AiTextRewriteUiState(),
     val aiRewritePresetConfig: AiRewritePresetConfigUiState = AiRewritePresetConfigUiState(),
+    val eyeProtection: EyeProtectionUiState = EyeProtectionUiState(),
 ) {
     val menuVisible: Boolean
         get() = menuState.visible
+}
+
+/** 护眼模式设置，来源是 ThemeSettings，与外观设置共用同一份值。 */
+@Stable
+data class EyeProtectionUiState(
+    val enabled: Boolean = false,
+    val intensity: Int = 50,
+    val autoNight: Boolean = false,
+    val schedule: Boolean = false,
+    val startTime: String = "22:00",
+    val endTime: String = "07:00",
+) {
+    val configured: Boolean
+        get() = enabled || autoNight
 }
 
 @Stable
@@ -461,7 +478,10 @@ sealed interface ReadBookIntent {
     data object ReadMenuBack : ReadBookIntent
 
     // Search
-    data class OpenSearch(val word: String?) : ReadBookIntent
+    data class OpenSearch(
+        val word: String?,
+        val autoFocus: Boolean = true,
+    ) : ReadBookIntent
     data object ExitSearch : ReadBookIntent
     data object ShowSearchMenu : ReadBookIntent
     data object HideSearchMenu : ReadBookIntent
@@ -665,7 +685,9 @@ sealed interface ReadBookIntent {
     data class EyeProtectionEnabledChanged(val value: Boolean) : ReadBookIntent
     data class EyeProtectionIntensityChanged(val value: Int) : ReadBookIntent
     data class EyeProtectionAutoNightChanged(val value: Boolean) : ReadBookIntent
-    data class SyncEyeProtectionForTheme(val isNight: Boolean) : ReadBookIntent
+    data class EyeProtectionScheduleChanged(val value: Boolean) : ReadBookIntent
+    data class EyeProtectionStartTimeChanged(val value: String) : ReadBookIntent
+    data class EyeProtectionEndTimeChanged(val value: String) : ReadBookIntent
 
     // Default font picker (needs Activity for AlertDialog)
     // Text action menu (moved from Activity)
@@ -846,7 +868,11 @@ sealed interface ReadBookEffect {
     data object StopAutoPage : ReadBookEffect
 
     // Search
-    data class OpenSearchActivity(val word: String?, val bookUrl: String) : ReadBookEffect
+    data class OpenSearchActivity(
+        val word: String?,
+        val bookUrl: String,
+        val autoFocus: Boolean = true,
+    ) : ReadBookEffect
     data class NavigateToSearchResult(
         val result: SearchResult,
         val chapterIndex: Int,
@@ -1023,6 +1049,7 @@ sealed interface ConfigUpdateAction {
     data object UpdateChapterStyle : ConfigUpdateAction
     data object InvalidateTextPage : ConfigUpdateAction
     data object UpdateLayout : ConfigUpdateAction
+    data object RebuildWholeBookPageIndex : ConfigUpdateAction
     data object SubmitRenderTask : ConfigUpdateAction
     data object UpdatePageAnim : ConfigUpdateAction
 }
@@ -1066,7 +1093,10 @@ sealed interface ConfigUpdate {
 
     // --- Title style ---
     data class TitleMode(val value: Int) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(
+            ConfigUpdateAction.RebuildWholeBookPageIndex,
+            ConfigUpdateAction.ReloadContent,
+        )
     }
     data class TitleBold(val value: Int) : ConfigUpdate {
         override val actions = setOf(ConfigUpdateAction.UpdateChapterStyle, ConfigUpdateAction.InvalidateTextPage, ConfigUpdateAction.UpdateContent)
@@ -1178,6 +1208,7 @@ sealed interface ConfigUpdate {
         override val actions = setOf(
             ConfigUpdateAction.UpdateBackground,
             ConfigUpdateAction.UpdateStyle,
+            ConfigUpdateAction.RebuildWholeBookPageIndex,
             ConfigUpdateAction.ReloadContent,
             ConfigUpdateAction.UpdateSystemUi,
             ConfigUpdateAction.UpdatePageAnim
@@ -1187,6 +1218,7 @@ sealed interface ConfigUpdate {
         override val actions = setOf(
             ConfigUpdateAction.UpdateBackground,
             ConfigUpdateAction.UpdateStyle,
+            ConfigUpdateAction.RebuildWholeBookPageIndex,
             ConfigUpdateAction.ReloadContent,
             ConfigUpdateAction.UpdatePageAnim
         )
@@ -1195,6 +1227,7 @@ sealed interface ConfigUpdate {
         override val actions = setOf(
             ConfigUpdateAction.UpdateBackground,
             ConfigUpdateAction.UpdatePageAnim,
+            ConfigUpdateAction.RebuildWholeBookPageIndex,
             ConfigUpdateAction.ReloadContent
         )
     }
@@ -1282,7 +1315,7 @@ sealed interface ConfigUpdate {
         override val actions = setOf(ConfigUpdateAction.UpdateContent, ConfigUpdateAction.UpdateChapterStyle, ConfigUpdateAction.UpdateLayout)
     }
     data class UnderlineColor(val color: Int) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.UpdateStyle)
+        override val actions = setOf(ConfigUpdateAction.UpdateContent, ConfigUpdateAction.InvalidateTextPage, ConfigUpdateAction.SubmitRenderTask)
     }
 
     // --- Body padding ---
@@ -1356,7 +1389,7 @@ sealed interface ConfigUpdate {
         override val actions = setOf(ConfigUpdateAction.UpdateBackgroundAlpha)
     }
     data class StatusIconDark(val value: Boolean) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.UpdateSystemUi)
     }
     data class StyleName(val value: String) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
@@ -1461,22 +1494,22 @@ sealed interface ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }
     data class ReadBodyToLh(val value: Boolean) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.RebuildWholeBookPageIndex, ConfigUpdateAction.ReloadContent)
     }
     data class DefaultSourceChangeAll(val value: Boolean) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }
     data class TextFullJustify(val value: Boolean) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.RebuildWholeBookPageIndex, ConfigUpdateAction.ReloadContent)
     }
     data class TextBottomJustify(val value: Boolean) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.RebuildWholeBookPageIndex, ConfigUpdateAction.ReloadContent)
     }
     data class AdaptSpecialStyle(val value: Boolean) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.RebuildWholeBookPageIndex, ConfigUpdateAction.ReloadContent)
     }
     data class UseZhLayout(val value: Boolean) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.RebuildWholeBookPageIndex, ConfigUpdateAction.ReloadContent)
     }
     data class ShowBrightnessView(val value: String) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
@@ -1564,6 +1597,6 @@ sealed interface ConfigUpdate {
 
     // --- Chinese converter ---
     data class ChineseConverterType(val value: Int) : ConfigUpdate {
-        override val actions = setOf(ConfigUpdateAction.ReloadContent)
+        override val actions = setOf(ConfigUpdateAction.RebuildWholeBookPageIndex, ConfigUpdateAction.ReloadContent)
     }
 }

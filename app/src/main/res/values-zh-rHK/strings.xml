@@ -1665,6 +1665,7 @@
     <string name="placeholder_chapter_size">章節總數</string>
     <string name="placeholder_page_index">當前頁碼</string>
     <string name="placeholder_page_size">本章頁數</string>
+    <string name="placeholder_page_remaining">本章剩餘頁數</string>
     <string name="placeholder_read_progress">閱讀進度</string>
     <string name="custom_regex_rule">自訂正則規則</string>
     <string name="custom_tag_colors">自訂標籤顏色</string>
@@ -1867,7 +1868,7 @@
     <string name="manual_input">手動輸入</string>
     <string name="match_pattern">匹配模式</string>
     <string name="material_version">顏色規格</string>
-    <string name="menu_alpha">選單透明度</string>
+    <string name="menu_alpha">選單不透明度</string>
     <string name="menu_alpha_sum">目前 %d%%</string>
     <string name="minify_json">壓縮</string>
     <string name="month_format">%1$d</string>
@@ -2053,7 +2054,7 @@
     <string name="search_empty">暫無內容</string>
     <string name="search_empty_scope_disable_precision">%1$s 分組搜索無結果。是否關閉精準搜索？</string>
     <string name="search_empty_scope_switch_all">%1$s 分組搜索無結果。是否切換到全部分組？</string>
-    <string name="search_filter_first">搜索按鈕優先打開篩選</string>
+    <string name="search_filter_first">搜索按鈕優先打開搜索頁面</string>
     <string name="search_has_more">上拉或點擊按鈕載入更多</string>
     <string name="search_layout_list">列表佈局</string>
     <string name="search_layout_source_grouped">按源分組</string>
@@ -2659,4 +2660,13 @@
     <string name="character_delete_relations">同時刪除關聯關係</string>
     <string name="character_delete_events">同時刪除人物事件</string>
     <string name="character_deleted">已刪除人物</string>
+    <string name="whole_book_page_format">全書 %1$d / %2$d</string>
+    <string name="whole_book_page_estimated_format">全書 %1$s / %2$s</string>
+    <string name="lab_diagnostics">診斷</string>
+    <string name="lab_page_estimate_diagnostics_title">匯出全文頁碼診斷</string>
+    <string name="lab_page_estimate_diagnostics_summary">分享本機最近的估算與校正記錄，不會自動上傳。</string>
+    <string name="lab_page_estimate_diagnostics_count">%1$d 條</string>
+    <string name="lab_page_estimate_diagnostics_share_title">分享全文頁碼診斷</string>
+    <string name="whole_book_page_unavailable">全書 - / -</string>
+    <string name="translation_model_thinking">模型思考中</string>
 </resources>
