@@ -154,6 +154,21 @@ object MainNavigator {
                 }
             }
 
+            MainRouteReadingMemory,
+            is MainRouteReadingMemoryDetail -> {
+                if (
+                    currentRoute is MainRouteBookInfo ||
+                    currentRoute is MainRouteReadingMemory ||
+                    currentRoute is MainRouteReadBook
+                ) {
+                    backStack.add(route)
+                } else {
+                    backStack.clear()
+                    backStack.add(MainRouteHome)
+                    backStack.add(route)
+                }
+            }
+
             is MainRouteExploreShow -> {
                 if (
                     currentRoute == MainRouteHome ||
