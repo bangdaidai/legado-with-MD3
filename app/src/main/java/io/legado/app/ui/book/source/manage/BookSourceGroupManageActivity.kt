@@ -20,7 +20,7 @@ class BookSourceGroupManageActivity : BaseComposeActivity(transparent = true, im
     @Composable
     override fun Content() {
         val groups by remember { appDb.bookSourceDao.flowGroups() }
-            .collectAsStateWithLifecycle(initial = emptyList())
+            .collectAsStateWithLifecycle(initialValue = emptyList())
 
         GroupManageBottomSheet(
             show = true,

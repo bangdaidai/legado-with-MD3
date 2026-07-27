@@ -1,7 +1,7 @@
 package io.legado.app.ui.book.tagmanage
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border.border
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,7 +53,9 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.R
 import io.legado.app.ui.widget.components.settingItem.SettingItem
+import androidx.compose.foundation.layout.weight
 
 /* ---------------- 标签编辑（受控组件） ---------------- */
 
@@ -71,6 +74,10 @@ fun TagEditSheet(
     onConfirm: (TagEditData) -> Unit,
     onPickColor: () -> Unit,
     onExclude: (String) -> Unit = {},
+    aliases: List<TagMapping> = emptyList(),
+    onMapToStandard: (String) -> Unit = {},
+    onRemoveAlias: (TagMapping) -> Unit = {},
+    onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     // Miuix WindowBottomSheet 会在首次 show 时快照 endAction/startAction，
@@ -78,27 +85,42 @@ fun TagEditSheet(
     // 用本地可变状态始终镜像最新 data，闭包读状态当前值，规避快照问题。
     var latest by remember { mutableStateOf(data) }
     latest = data
+    val current = latest
+    val localOnDelete = onDelete
     AppModalBottomSheet(
         show = data != null,
         onDismissRequest = onDismiss,
-        title = if (latest?.id == 0L) "新增标签" else "编辑标签",
-        startAction = if (latest != null && latest.id != 0L) {
+        title = if (current?.id == 0L) "新增标签" else "编辑标签",
+        startAction = if (current != null && current.id != 0L) {
+            val c = current
             {
-                SmallPlainButton(
-                    text = "排除",
-                    icon = Icons.Default.Block,
-                    onClick = { onExclude(latest.name.trim()) },
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SmallPlainButton(
+                        text = "排除",
+                        icon = Icons.Default.Block,
+                        onClick = { onExclude(c.name.trim()) },
+                    )
+                    localOnDelete?.let { del ->
+                        SmallPlainButton(
+                            text = "删除",
+                            icon = Icons.Default.Delete,
+                            onClick = del,
+                        )
+                    }
+                }
             }
         } else {
             null
         },
         endAction = {
-            SmallPlainButton(text = "保存", onClick = { latest?.let { onConfirm(it) } })
+            SmallPlainButton(text = "保存", onClick = { current?.let { onConfirm(it) } })
         },
     ) {
-        if (latest != null) {
-            val d = latest!!
+        if (current != null) {
+            val d = current
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // 第一行：颜色色块（无文字）+ 标签名
                 Row(
@@ -127,6 +149,37 @@ fun TagEditSheet(
                     selectedId = d.groupId,
                     onSelect = { onChange(d.copy(groupId = it)) },
                 )
+                // 别名映射（标签详情页使用）
+                if (aliases.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "别名（合并到标准标签）",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                        aliases.forEach { mapping ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    mapping.oldTagName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                SmallPlainButton(
+                                    text = "设为标准",
+                                    onClick = { onMapToStandard(mapping.oldTagName) },
+                                )
+                                SmallPlainButton(
+                                    text = "移除",
+                                    icon = Icons.Default.Delete,
+                                    onClick = { onRemoveAlias(mapping) },
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
