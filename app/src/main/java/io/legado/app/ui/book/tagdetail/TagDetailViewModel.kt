@@ -8,7 +8,6 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.TagMapping
-import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.utils.postEvent
