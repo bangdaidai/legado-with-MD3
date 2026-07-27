@@ -666,7 +666,8 @@ val appModule = module {
             initialSearchWord = route.searchWord,
             searchResultIndex = route.searchResultIndex,
             bookRepository = get(),
-            searchContentRepository = get()
+            searchContentRepository = get(),
+            themeSettingsGateway = get(),
         )
     }
 }
