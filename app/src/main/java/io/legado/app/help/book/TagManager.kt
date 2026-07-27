@@ -9,9 +9,9 @@ import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.BookTagRelation
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
+import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.Dispatchers
-import splitties.init.appCtx
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -68,7 +68,7 @@ object TagManager {
      *  \d+ —— 含任意数字的标签（如「玄幻123」「完结2023」）一律排除。 */
     suspend fun seedPresetExcludedTags() {
         val key = "excludedTagPresetSeeded"
-        if (appCtx.getPrefBoolean(key, false)) return
+        if (AppConfigStore.getBoolean(key) == true) return
         val presets = listOf(
             ExcludedTag(name = "\\d+", isRegex = true),
         )
@@ -78,7 +78,7 @@ object TagManager {
                 appDb.excludedTagDao.insert(preset)
             }
         }
-        appCtx.putPrefBoolean(key, true)
+        AppConfigStore.putBoolean(key, true)
     }
 
     /** 回溯应用排除规则：扫描当前所有已存在标签，凡名称命中排除规则者，
