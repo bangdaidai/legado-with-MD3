@@ -2907,4 +2907,31 @@
     <string name="whole_book_page_estimated_format">全文 %1$s / %2$s</string>
     <string name="whole_book_page_unavailable">全文 - / -</string>
     <string name="translation_model_thinking">模型思考中</string>
+
+    <!-- Tag management -->
+    <string name="tag_management">标签管理</string>
+    <string name="tag_mapping">标签映射</string>
+    <string name="excluded_tags">排除标签</string>
+    <string name="search_tag">搜索标签</string>
+    <string name="tag_detail">标签详情</string>
+    <string name="add_tag">新增标签</string>
+    <string name="edit_tag">编辑标签</string>
+    <string name="exclude">排除</string>
+    <string name="tag_name">标签名</string>
+    <string name="alias_merge_standard">别名（合并到标准标签）</string>
+    <string name="set_as_standard">设为标准</string>
+    <string name="new_group">新增分组</string>
+    <string name="edit_group">编辑分组</string>
+    <string name="group_name">分组名</string>
+    <string name="tag_count_format">标签数：%1$d</string>
+    <string name="new_excluded">新增排除项</string>
+    <string name="edit_excluded">编辑排除项</string>
+    <string name="name_or_regex">名称/正则</string>
+    <string name="as_regex_match">作为正则匹配</string>
+    <string name="not_found">（未找到）</string>
+    <string name="related_books_format">关联书籍（%1$d）</string>
+    <string name="no_related_books">暂无关联书籍</string>
+    <string name="group_colon_format">分组：%1$s</string>
+    <string name="books_count_format">%1$d 本</string>
+    <string name="more">更多</string>
 </resources>

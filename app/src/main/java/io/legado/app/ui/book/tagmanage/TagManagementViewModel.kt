@@ -75,7 +75,10 @@ class TagManagementViewModel : ViewModel() {
     }
 
     private fun loadData() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch { loadDataBody() }
+    }
+
+    private suspend fun loadDataBody() = withContext(Dispatchers.IO) {
             if (!tagsSynced) {
                 tagsSynced = true
                 syncTagsFromBooks()

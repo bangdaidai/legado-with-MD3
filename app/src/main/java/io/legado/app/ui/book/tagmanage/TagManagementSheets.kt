@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,50 +78,33 @@ fun TagEditSheet(
     aliases: List<TagMapping> = emptyList(),
     onMapToStandard: (String) -> Unit = {},
     onRemoveAlias: (TagMapping) -> Unit = {},
-    onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
-    // Miuix WindowBottomSheet 会在首次 show 时快照 endAction/startAction，
-    // 若直接闭包外部 data 取值，保存/删除会拿到打开弹窗时的旧值（分组、颜色修改丢失）。
-    // 用本地可变状态始终镜像最新 data，闭包读状态当前值，规避快照问题。
-    var latest by remember { mutableStateOf(data) }
-    latest = data
-    val current = latest
-    val localOnDelete = onDelete
     AppModalBottomSheet(
         show = data != null,
         onDismissRequest = onDismiss,
-        title = if (current?.id == 0L) "新增标签" else "编辑标签",
-        startAction = if (current != null && current.id != 0L) {
-            val c = current
+        title = if (data?.id == 0L) "新增标签" else "编辑标签",
+        startAction = if (data != null && data.id != 0L) {
             {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                TextButton(
+                    onClick = { data?.name?.trim()?.let { onExclude(it) } },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
                 ) {
-                    SmallPlainButton(
-                        text = "排除",
-                        icon = Icons.Default.Block,
-                        onClick = { onExclude(c.name.trim()) },
-                    )
-                    localOnDelete?.let { del ->
-                        SmallPlainButton(
-                            text = "删除",
-                            icon = Icons.Default.Delete,
-                            onClick = del,
-                        )
-                    }
+                    Text("排除")
                 }
             }
         } else {
             null
         },
         endAction = {
-            SmallPlainButton(text = "保存", onClick = { current?.let { onConfirm(it) } })
+            TextButton(onClick = { data?.let { onConfirm(it) } }) {
+                Text("保存")
+            }
         },
     ) {
-        if (current != null) {
-            val d = current
+        data?.let { d ->
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // 第一行：颜色色块（无文字）+ 标签名
                 Row(

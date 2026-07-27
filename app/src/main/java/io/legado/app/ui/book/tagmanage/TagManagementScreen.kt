@@ -1,5 +1,10 @@
 package io.legado.app.ui.book.tagmanage
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +29,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -105,7 +110,7 @@ fun TagManagementScreen(
                             onClick = { dismiss(); showGroupManage = true },
                         )
                         RoundDropdownMenuItem(
-                            text = "标签映射",
+                            text = stringResource(R.string.tag_mapping),
                             leadingIcon = { MenuItemIcon(Icons.Filled.SwapHoriz) },
                             onClick = { dismiss(); showMappingManage = true },
                         )
@@ -120,12 +125,17 @@ fun TagManagementScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (showSearch) {
+            AnimatedVisibility(
+                visible = showSearch,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
                 SearchBar(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     query = state.searchQuery,
                     onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
                     onClose = { showSearch = false; onIntent(TagManagementIntent.Search("")) },
-                    placeholder = "搜索标签",
+                    placeholder = stringResource(R.string.search_tag),
                 )
             }
             // 主页面只展示标签（与 readdai 书籍标签管理一致）
@@ -265,7 +275,7 @@ private fun TagChipRow(
                 Text(
                     tag.name,
                     style = MaterialTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurface,
+                    color = color,
                 )
                 if (count > 0) {
                     Text(
