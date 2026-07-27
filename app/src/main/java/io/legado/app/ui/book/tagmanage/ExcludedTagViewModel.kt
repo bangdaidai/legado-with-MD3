@@ -61,10 +61,26 @@ class ExcludedTagViewModel : ViewModel() {
             appDb.excludedTagDao.update(old.copy(name = intent.name, isRegex = intent.isRegex))
         }
         loadData()
+        val (removed, restored) = TagManager.reconcileTagsWithExclusion()
+        _effect.emit(
+            ExcludedTagEffect.ShowMessage(
+                buildString {
+                    append("已保存排除项")
+                    if (removed > 0) append("，移除 $removed 个标签")
+                    if (restored > 0) append("，恢复 $restored 个标签")
+                },
+            ),
+        )
     }
 
     private suspend fun deleteExcluded(excluded: ExcludedTag) {
         appDb.excludedTagDao.deleteById(excluded.id)
         loadData()
+        val (_, restored) = TagManager.reconcileTagsWithExclusion()
+        _effect.emit(
+            ExcludedTagEffect.ShowMessage(
+                if (restored > 0) "已删除排除项，已自动恢复 $restored 个被排除的标签" else "已删除排除项",
+            ),
+        )
     }
 }

@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +35,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
-import io.legado.app.data.entities.TagMapping
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
@@ -66,7 +64,6 @@ fun TagManagementScreen(
     var tagEdit by remember { mutableStateOf<TagEditData?>(null) }
     var showColorPicker by remember { mutableStateOf(false) }
     var groupEdit by remember { mutableStateOf<BookTagGroup?>(null) }
-    var mappingEdit by remember { mutableStateOf<TagMapping?>(null) }
     var showGroupManage by remember { mutableStateOf(false) }
     var showMappingManage by remember { mutableStateOf(false) }
 
@@ -143,11 +140,11 @@ fun TagManagementScreen(
             onIntent(TagManagementIntent.SaveTag(it.id, it.name, it.groupId, it.color))
             tagEdit = null
         },
-        onDelete = {
-            onIntent(TagManagementIntent.DeleteTag(BookTag(id = it.id, name = it.name, groupId = it.groupId, color = it.color)))
+        onPickColor = { showColorPicker = true },
+        onExclude = { name ->
+            onIntent(TagManagementIntent.ExcludeTag(name))
             tagEdit = null
         },
-        onPickColor = { showColorPicker = true },
         onDismiss = { tagEdit = null },
     )
 
@@ -165,8 +162,10 @@ fun TagManagementScreen(
         tagCounts = state.groupTagCounts,
         onDismissRequest = { showGroupManage = false },
         onAdd = { groupEdit = BookTagGroup(name = ""); showGroupManage = false },
-        onEdit = { groupEdit = it; showGroupManage = false },
-        onDelete = { onIntent(TagManagementIntent.DeleteGroup(it)); showGroupManage = false },
+        onUpdateGroup = { group, newName ->
+            onIntent(TagManagementIntent.SaveGroup(group.id, newName.trim()))
+        },
+        onDelete = { onIntent(TagManagementIntent.DeleteGroup(it)) },
     )
     GroupEditSheet(
         data = groupEdit,
@@ -175,22 +174,13 @@ fun TagManagementScreen(
         onDismiss = { groupEdit = null },
     )
 
-    // 标签映射弹窗（溢出菜单打开）
+    // 标签映射弹窗（溢出菜单打开，仅查看/删除；新增映射请在标签编辑对话框中添加）
     MappingManageSheet(
         show = showMappingManage,
         mappings = state.mappings,
         tags = state.tags,
         onDismissRequest = { showMappingManage = false },
-        onAdd = { mappingEdit = TagMapping(oldTagName = "", newTagId = 0L); showMappingManage = false },
-        onEdit = { mappingEdit = it; showMappingManage = false },
         onDelete = { onIntent(TagManagementIntent.DeleteMapping(it)); showMappingManage = false },
-    )
-    MappingEditSheet(
-        data = mappingEdit,
-        tags = state.tags,
-        onSave = { onIntent(TagManagementIntent.SaveMapping(it.id, it.oldTagName, it.newTagId)); mappingEdit = null },
-        onDelete = { onIntent(TagManagementIntent.DeleteMapping(it)); mappingEdit = null },
-        onDismiss = { mappingEdit = null },
     )
 }
 

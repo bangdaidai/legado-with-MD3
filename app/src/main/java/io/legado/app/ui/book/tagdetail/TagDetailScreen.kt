@@ -126,10 +126,16 @@ fun TagDetailScreen(
         }
     }
 
-    tag?.let {
+    tag?.let { currentTag ->
+        val tagAliases = remember(state.mappings, currentTag) {
+            state.mappings.filter { it.newTagId == currentTag.id }
+        }
         TagEditSheet(
             data = tagEdit,
             groups = state.groups,
+            aliases = tagAliases,
+            onMapToStandard = { name -> onIntent(TagDetailIntent.SetStandard(name)) },
+            onRemoveAlias = { mapping -> onIntent(TagDetailIntent.RemoveAlias(mapping.oldTagName)) },
             onChange = { tagEdit = it },
             onConfirm = {
                 onIntent(TagDetailIntent.Save(it.name, it.groupId, it.color))

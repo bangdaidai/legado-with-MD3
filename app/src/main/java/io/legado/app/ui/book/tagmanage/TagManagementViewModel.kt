@@ -6,9 +6,11 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
+import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,8 +54,8 @@ class TagManagementViewModel : ViewModel() {
             is TagManagementIntent.DeleteTag -> viewModelScope.launch { deleteTag(intent.tag) }
             is TagManagementIntent.SaveGroup -> viewModelScope.launch { saveGroup(intent) }
             is TagManagementIntent.DeleteGroup -> viewModelScope.launch { deleteGroup(intent.group) }
-            is TagManagementIntent.SaveMapping -> viewModelScope.launch { saveMapping(intent) }
             is TagManagementIntent.DeleteMapping -> viewModelScope.launch { deleteMapping(intent.mapping) }
+            is TagManagementIntent.ExcludeTag -> viewModelScope.launch { excludeTag(intent) }
         }
     }
 
@@ -94,30 +96,45 @@ class TagManagementViewModel : ViewModel() {
     }
 
     private suspend fun saveTag(intent: TagManagementIntent.SaveTag) {
-        if (intent.name.isBlank()) {
+        val name = intent.name.trim()
+        if (name.isBlank()) {
             _effect.emit(TagManagementEffect.ShowMessage("标签名不能为空"))
             return
         }
+        // 改名后若与已有标签重名，则归并到该标签（合并书籍关联、删除本标签），
+        // 等价于原来的「异名归一」，但无需单独的界面，直接改名保存即可。
+        val existing = appDb.bookTagDao.getByName(name)
         if (intent.id == 0L) {
+            if (existing != null) {
+                _effect.emit(TagManagementEffect.ShowMessage("标签「$name」已存在"))
+                return
+            }
             appDb.bookTagDao.insert(
-                BookTag(name = intent.name, groupId = intent.groupId, color = intent.color),
+                BookTag(name = name, groupId = intent.groupId, color = intent.color),
             )
         } else {
             val old = appDb.bookTagDao.getById(intent.id) ?: return
-            appDb.bookTagDao.update(
-                old.copy(
-                    name = intent.name,
-                    groupId = intent.groupId,
-                    color = intent.color,
-                    updateTime = System.currentTimeMillis(),
-                ),
-            )
+            if (existing != null && existing.id != old.id) {
+                TagManager.mergeAliasTagInto(old.name, existing.id)
+                _effect.emit(TagManagementEffect.ShowMessage("已归并到「$name」"))
+            } else {
+                appDb.bookTagDao.update(
+                    old.copy(
+                        name = name,
+                        groupId = intent.groupId,
+                        color = intent.color,
+                        updateTime = System.currentTimeMillis(),
+                    ),
+                )
+            }
         }
         loadData()
+        postEvent(EventBus.TAGS_UPDATED, intent.id)
     }
 
     private suspend fun deleteTag(tag: BookTag) {
         appDb.bookTagRelationDao.deleteByTagId(tag.id)
+        appDb.tagMappingDao.deleteByNewTagId(tag.id)
         appDb.bookTagDao.deleteById(tag.id)
         loadData()
     }
@@ -142,24 +159,18 @@ class TagManagementViewModel : ViewModel() {
         loadData()
     }
 
-    private suspend fun saveMapping(intent: TagManagementIntent.SaveMapping) {
-        if (intent.oldTagName.isBlank() || intent.newTagId == 0L) {
-            _effect.emit(TagManagementEffect.ShowMessage("请填写异名并选择标准标签"))
-            return
-        }
-        if (intent.id == 0L) {
-            appDb.tagMappingDao.insert(
-                TagMapping(oldTagName = intent.oldTagName, newTagId = intent.newTagId),
-            )
-        } else {
-            val old = appDb.tagMappingDao.getByOldTagName(intent.oldTagName) ?: return
-            appDb.tagMappingDao.update(old.copy(newTagId = intent.newTagId))
-        }
-        loadData()
-    }
-
     private suspend fun deleteMapping(mapping: TagMapping) {
         appDb.tagMappingDao.deleteById(mapping.id)
         loadData()
+    }
+
+    private suspend fun excludeTag(intent: TagManagementIntent.ExcludeTag) {
+        val name = intent.name.trim()
+        if (name.isBlank()) {
+            _effect.emit(TagManagementEffect.ShowMessage("标签名不能为空"))
+            return
+        }
+        appDb.excludedTagDao.insert(ExcludedTag(name = name, isRegex = false))
+        _effect.emit(TagManagementEffect.ShowMessage("已添加到排除列表"))
     }
 }

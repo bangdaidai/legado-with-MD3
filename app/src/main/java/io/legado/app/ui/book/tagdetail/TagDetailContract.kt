@@ -3,6 +3,7 @@ package io.legado.app.ui.book.tagdetail
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.TagMapping
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -11,6 +12,7 @@ data class TagDetailUiState(
     val groupName: String = "",
     val groups: ImmutableList<BookTagGroup> = persistentListOf(),
     val books: ImmutableList<Book> = persistentListOf(),
+    val mappings: ImmutableList<TagMapping> = persistentListOf(),
 )
 
 sealed interface TagDetailIntent {
@@ -18,6 +20,8 @@ sealed interface TagDetailIntent {
     data object Delete : TagDetailIntent
     data object Refresh : TagDetailIntent
     data class OpenBook(val bookUrl: String) : TagDetailIntent
+    data class SetStandard(val standardName: String) : TagDetailIntent
+    data class RemoveAlias(val oldName: String) : TagDetailIntent
 }
 
 sealed interface TagDetailEffect {

@@ -39,6 +39,9 @@ interface BookTagDao {
     @Query("SELECT * FROM bookTags WHERE name IN (:names)")
     suspend fun getByNames(names: List<String>): List<BookTag>
 
+    @Query("SELECT * FROM bookTags")
+    suspend fun getAllSync(): List<BookTag>
+
     @Query("SELECT * FROM bookTags ORDER BY name COLLATE NOCASE")
     fun observeAll(): Flow<List<BookTag>>
 }

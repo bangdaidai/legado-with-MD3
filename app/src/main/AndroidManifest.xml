@@ -271,6 +271,14 @@
             android:configChanges="locale|layoutDirection|uiMode|screenLayout"
             android:enableOnBackInvokedCallback="false"
             android:launchMode="singleTop" />
+
+        <!-- 书源分组管理，复用通用 GroupManageBottomSheet -->
+        <activity
+            android:name=".ui.book.source.manage.BookSourceGroupManageActivity"
+            android:configChanges="locale|layoutDirection|uiMode|screenLayout"
+            android:enableOnBackInvokedCallback="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.Transparent" />
         <!-- 订阅源管理 -->
         <activity
             android:name=".ui.rss.source.manage.RssSourceActivity"

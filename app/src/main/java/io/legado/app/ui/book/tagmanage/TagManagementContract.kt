@@ -2,6 +2,7 @@ package io.legado.app.ui.book.tagmanage
 
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -34,13 +35,9 @@ sealed interface TagManagementIntent {
     data class SaveGroup(val id: Long, val name: String) : TagManagementIntent
     data class DeleteGroup(val group: BookTagGroup) : TagManagementIntent
 
-    data class SaveMapping(
-        val id: Long,
-        val oldTagName: String,
-        val newTagId: Long,
-    ) : TagManagementIntent
-
     data class DeleteMapping(val mapping: TagMapping) : TagManagementIntent
+
+    data class ExcludeTag(val name: String) : TagManagementIntent
 }
 
 sealed interface TagManagementEffect {

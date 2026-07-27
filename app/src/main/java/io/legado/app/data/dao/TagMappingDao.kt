@@ -30,6 +30,9 @@ interface TagMappingDao {
     @Query("SELECT * FROM tagMappings WHERE newTagId = :newTagId")
     suspend fun getByNewTagId(newTagId: Long): List<TagMapping>
 
+    @Query("DELETE FROM tagMappings WHERE newTagId = :newTagId")
+    suspend fun deleteByNewTagId(newTagId: Long)
+
     @Query("SELECT * FROM tagMappings ORDER BY oldTagName COLLATE NOCASE")
     fun observeAll(): Flow<List<TagMapping>>
 
