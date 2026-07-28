@@ -97,7 +97,6 @@ class TagManagementViewModel : ViewModel() {
                 mappings = mappings.toImmutableList(),
             )
         }
-    }
 
     private suspend fun saveTag(intent: TagManagementIntent.SaveTag) {
         val name = intent.name.trim()
