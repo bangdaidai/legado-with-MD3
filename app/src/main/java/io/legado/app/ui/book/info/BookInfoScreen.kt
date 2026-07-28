@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
@@ -285,7 +286,7 @@ private fun BookInfoScreenContent(
                             BookInfoHeader(
                                 book = book,
                                 highlightedTags = state.highlightedTags,
-                                kindLabels = state.kindLabels,
+                                coloredTags = state.coloredTags,
                                 groupNames = state.groupNames,
                                 onCoverClick = { onIntent(BookInfoIntent.CoverClick) },
                                 onCoverLongClick = { onIntent(BookInfoIntent.CoverLongClick) },
@@ -876,7 +877,7 @@ private fun BookInfoOverflowMenu(
 private fun BookInfoHeader(
     book: BookInfoBookUi,
     highlightedTags: List<HighlightedTag>,
-    kindLabels: List<String>,
+    coloredTags: List<BookTagUi>,
     groupNames: String?,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
@@ -1004,7 +1005,7 @@ private fun BookInfoHeader(
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
-            if (kindLabels.isNotEmpty() || !groupNames.isNullOrBlank()) {
+            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
                     state = kindListState,
@@ -1023,16 +1024,35 @@ private fun BookInfoHeader(
                             )
                         }
                     }
-                    itemsIndexed(
-                        items = kindLabels,
-                        key = { index, label -> "kind-$index-$label" }
-                    ) { _, label ->
-                        TextCard(
-                            text = label,
-                            textStyle = LegadoTheme.typography.labelLargeEmphasized,
-                            backgroundColor = LegadoTheme.colorScheme.surfaceContainer,
-                            contentColor = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
+                    items(
+                        items = coloredTags,
+                        key = { tag -> "colored-${tag.id}-${tag.name}" }
+                    ) { tag ->
+                        val color = if (tag.color != 0L) {
+                            Color(tag.color)
+                        } else {
+                            LegadoTheme.colorScheme.primary
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(color.copy(alpha = 0.14f))
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(color)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = tag.name,
+                                style = LegadoTheme.typography.labelMedium,
+                                color = color,
+                            )
+                        }
                     }
                 }
             }

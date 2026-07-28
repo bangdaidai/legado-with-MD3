@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -26,6 +28,8 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +55,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.ui.theme.LegadoTheme
+import androidx.compose.foundation.background
+import io.legado.app.data.entities.Bookmark
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import io.legado.app.utils.formatReadDuration
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -75,6 +83,7 @@ fun ReadingMemoryDetailScreen(
     onIntent: (ReadingMemoryDetailIntent) -> Unit,
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    var editingBookmark by remember { mutableStateOf<Bookmark?>(null) }
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -108,7 +117,7 @@ fun ReadingMemoryDetailScreen(
                 item { ReviewSection(state = state, onIntent = onIntent) }
                 item { IntroSection(state = state, onIntent = onIntent) }
                 item { ReadSessionSection(state = state) }
-                item { ExcerptSection(state = state) }
+                item { ExcerptSection(state = state, onEditBookmark = { editingBookmark = it }) }
                 item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
@@ -130,6 +139,23 @@ fun ReadingMemoryDetailScreen(
             onDraftChange = { onIntent(ReadingMemoryDetailIntent.UpdateReviewDraft(it)) },
             onSave = { onIntent(ReadingMemoryDetailIntent.SaveReview) },
             onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
+            onDelete = { onIntent(ReadingMemoryDetailIntent.DeleteReview) },
+        )
+    }
+
+    if (editingBookmark != null) {
+        BookmarkEditSheet(
+            show = true,
+            bookmark = editingBookmark!!,
+            onDismiss = { editingBookmark = null },
+            onSave = {
+                onIntent(ReadingMemoryDetailIntent.EditBookmark(it))
+                editingBookmark = null
+            },
+            onDelete = {
+                onIntent(ReadingMemoryDetailIntent.DeleteBookmark(it))
+                editingBookmark = null
+            },
         )
     }
 }
@@ -172,7 +198,7 @@ private fun BookInfoSection(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    StatusDropdown(
+                    StatusText(
                         statusText = state.statusText,
                         abandoned = state.abandoned,
                         onSetAbandoned = { onIntent(ReadingMemoryDetailIntent.SetStatus(it)) },
@@ -192,14 +218,25 @@ private fun BookInfoSection(
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppLinearProgressIndicator(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppText(
+                            text = state.progressInfo,
+                            fontSize = 12.sp,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        AppText(
+                            text = String.format(Locale.getDefault(), "%.0f%%", state.progress * 100),
+                            fontSize = 12.sp,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    PlainProgressIndicator(
                         progress = if (state.progress > 0f) state.progress else null,
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    AppText(
-                        text = "${state.progressInfo} · ${String.format(Locale.getDefault(), "%.0f%%", state.progress * 100)}",
-                        fontSize = 12.sp,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -208,23 +245,30 @@ private fun BookInfoSection(
 }
 
 @Composable
-private fun StatusDropdown(
+private fun StatusText(
     statusText: String,
     abandoned: Boolean,
     onSetAbandoned: (Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        FilledTonalButton(
-            onClick = { expanded = true },
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        Row(
+            modifier = Modifier
+                .clickable { expanded = true }
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppText(text = statusText.ifBlank { "未开始" }, fontSize = 13.sp)
+            AppText(
+                text = statusText.ifBlank { "未开始" },
+                fontSize = 14.sp,
+                color = LegadoTheme.colorScheme.primary,
+            )
             Spacer(modifier = Modifier.width(2.dp))
             Icon(
                 imageVector = Icons.Filled.ArrowDropDown,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
+                tint = LegadoTheme.colorScheme.primary,
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -307,15 +351,14 @@ private fun StatBlock(
             fontSize = 12.sp,
             color = LegadoTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AppText(
-                text = primary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
+        Spacer(modifier = Modifier.height(4.dp))
+        AppText(
+            text = primary,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Box(modifier = Modifier.height(15.dp)) {
             if (secondary != null) {
-                Spacer(modifier = Modifier.width(6.dp))
                 AppText(
                     text = secondary,
                     fontSize = 11.sp,
@@ -332,7 +375,20 @@ private fun TagsSection(
     state: ReadingMemoryDetailUiState,
     onIntent: (ReadingMemoryDetailIntent) -> Unit,
 ) {
-    SectionCard(title = "标签") {
+    var pendingRemoveTag by remember { mutableStateOf<String?>(null) }
+    SectionCard(
+        title = "标签",
+        trailing = {
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = "编辑标签",
+                tint = LegadoTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenTagPicker) },
+            )
+        },
+    ) {
         if (state.tags.isEmpty()) {
             AppText(
                 text = "暂无标签",
@@ -346,22 +402,22 @@ private fun TagsSection(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 state.tags.forEach { tag ->
-                    TagChip(
-                        tag = tag,
-                        onRemove = { onIntent(ReadingMemoryDetailIntent.RemoveTag(tag)) },
-                    )
+                    TagChip(tag = tag, onClick = { pendingRemoveTag = tag })
                 }
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        FilledTonalButton(
-            onClick = { onIntent(ReadingMemoryDetailIntent.OpenTagPicker) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(imageVector = Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            AppText("添加标签")
-        }
+    }
+    if (pendingRemoveTag != null) {
+        AppAlertDialog(
+            show = true,
+            title = "移除标签",
+            text = "确定要移除标签「${pendingRemoveTag}」吗？",
+            onConfirm = {
+                onIntent(ReadingMemoryDetailIntent.RemoveTag(pendingRemoveTag!!))
+                pendingRemoveTag = null
+            },
+            onDismiss = { pendingRemoveTag = null },
+        )
     }
 }
 
@@ -374,7 +430,22 @@ private fun ProtagonistsSection(
     var adding by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
 
-    SectionCard(title = "主要人物") {
+    SectionCard(
+        title = "主要人物",
+        trailing = {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "添加人物",
+                tint = LegadoTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable {
+                        name = ""
+                        adding = true
+                    },
+            )
+        },
+    ) {
         if (state.protagonistNames.isEmpty()) {
             AppText(
                 text = "暂无人物",
@@ -394,18 +465,6 @@ private fun ProtagonistsSection(
                     )
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        FilledTonalButton(
-            onClick = {
-                name = ""
-                adding = true
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(imageVector = Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            AppText("添加人物")
         }
     }
 
@@ -443,7 +502,19 @@ private fun ReviewSection(
     state: ReadingMemoryDetailUiState,
     onIntent: (ReadingMemoryDetailIntent) -> Unit,
 ) {
-    SectionCard(title = "我的书评") {
+    SectionCard(
+        title = "我的书评",
+        trailing = {
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = "编辑书评",
+                tint = LegadoTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenReviewEditor(state.review)) },
+            )
+        },
+    ) {
         if (state.review.isBlank()) {
             AppText(
                 text = "还没有写书评",
@@ -457,15 +528,6 @@ private fun ReviewSection(
                 lineHeight = 22.sp,
             )
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        FilledTonalButton(
-            onClick = { onIntent(ReadingMemoryDetailIntent.OpenReviewEditor(state.review)) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(imageVector = Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            AppText(if (state.review.isBlank()) "写书评" else "编辑书评")
-        }
     }
 }
 
@@ -477,7 +539,19 @@ private fun IntroSection(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var canExpand by remember { mutableStateOf(false) }
-    SectionCard(title = "作品简介") {
+    SectionCard(
+        title = "作品简介",
+        trailing = {
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = "编辑简介",
+                tint = LegadoTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenBookInfo) },
+            )
+        },
+    ) {
         if (state.intro.isBlank()) {
             AppText(
                 text = "暂无简介",
@@ -491,7 +565,13 @@ private fun IntroSection(
                 lineHeight = 22.sp,
                 maxLines = if (expanded) Int.MAX_VALUE else 5,
                 overflow = TextOverflow.Ellipsis,
-                onTextLayout = { canExpand = it.lineCount > 5 },
+                onTextLayout = { result ->
+                    if (!expanded) {
+                        val lastLine = (result.lineCount - 1).coerceAtLeast(0)
+                        val end = result.getLineEnd(lastLine, visibleEnd = true)
+                        canExpand = end < state.intro.length
+                    }
+                },
                 modifier = Modifier.clickable { if (canExpand) expanded = !expanded },
             )
             if (canExpand) {
@@ -504,48 +584,44 @@ private fun IntroSection(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        FilledTonalButton(
-            onClick = { onIntent(ReadingMemoryDetailIntent.OpenBookInfo) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(imageVector = Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            AppText("编辑简介")
-        }
     }
 }
 
 @Composable
-private fun ExcerptSection(state: ReadingMemoryDetailUiState) {
+private fun ExcerptSection(
+    state: ReadingMemoryDetailUiState,
+    onEditBookmark: (Bookmark) -> Unit,
+) {
     if (state.excerpts.isEmpty()) return
     SectionCard(title = "阅读摘录") {
         state.excerpts.forEachIndexed { index, excerpt ->
-            if (index > 0) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 10.dp),
-                    color = LegadoTheme.colorScheme.outlineVariant,
-                )
-            }
-            AppText(
-                text = excerpt.chapterName,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-            if (excerpt.note.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                AppText(text = excerpt.note, fontSize = 14.sp, lineHeight = 22.sp)
-            }
-            if (!excerpt.originText.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
+            Column(modifier = Modifier.clickable { onEditBookmark(excerpt) }) {
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        color = LegadoTheme.colorScheme.outlineVariant,
+                    )
+                }
                 AppText(
-                    text = excerpt.originText,
+                    text = excerpt.chapterName,
                     fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
                 )
+                if (excerpt.note.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AppText(text = excerpt.note, fontSize = 14.sp, lineHeight = 22.sp)
+                }
+                if (!excerpt.originText.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AppText(
+                        text = excerpt.originText,
+                        fontSize = 13.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -563,51 +639,78 @@ private fun TagPickerSheet(
     onRemoveTag: (String) -> Unit,
 ) {
     var customTag by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
 
     AppModalBottomSheet(
         show = true,
         onDismissRequest = onDismiss,
         title = "选择标签",
     ) {
-        if (selectedTags.isNotEmpty()) {
-            AppText(
-                text = "已选标签",
-                fontSize = 13.sp,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                selectedTags.forEach { tag ->
-                    TagChip(tag = tag, onRemove = { onRemoveTag(tag) })
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("搜索标签") },
+            singleLine = true,
+            leadingIcon = {
+                Icon(imageVector = Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 320.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (selectedTags.isNotEmpty()) {
+                item {
+                    AppText(
+                        text = "已选标签",
+                        fontSize = 13.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                item {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        selectedTags.forEach { tag ->
+                            TagChip(tag = tag, onRemove = { onRemoveTag(tag) })
+                        }
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-        }
 
-        val candidates = availableTags.filter { it !in selectedTags }
-        if (candidates.isNotEmpty()) {
-            AppText(
-                text = "推荐标签",
-                fontSize = 13.sp,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                candidates.forEach { tag ->
-                    TagChip(tag = tag, onAdd = { onAddTag(tag) })
+            val candidates = availableTags
+                .filter { it !in selectedTags }
+                .filter { it.contains(query, ignoreCase = true) }
+            if (candidates.isNotEmpty()) {
+                item {
+                    AppText(
+                        text = "可选标签",
+                        fontSize = 13.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                items(candidates) { tag ->
+                    TagChip(tag = tag, onClick = { onAddTag(tag) })
+                }
+            } else if (selectedTags.isEmpty()) {
+                item {
+                    AppText(
+                        text = "暂无可选标签，可在下方添加",
+                        fontSize = 13.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = customTag,
             onValueChange = { customTag = it },
@@ -616,16 +719,24 @@ private fun TagPickerSheet(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(12.dp))
-        FilledTonalButton(
-            onClick = {
-                if (customTag.isNotBlank()) {
-                    onAddTag(customTag.trim())
-                    customTag = ""
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            AppText("添加")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilledTonalButton(
+                onClick = {
+                    if (customTag.isNotBlank()) {
+                        onAddTag(customTag.trim())
+                        customTag = ""
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                AppText("添加")
+            }
+            FilledTonalButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+            ) {
+                AppText("完成")
+            }
         }
     }
 }
@@ -637,6 +748,7 @@ private fun ReviewEditorSheet(
     onDraftChange: (String) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     AppModalBottomSheet(
         show = true,
@@ -651,6 +763,17 @@ private fun ReviewEditorSheet(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(12.dp))
+        if (onDelete != null && draft.isNotBlank()) {
+            FilledTonalButton(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(imageVector = Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                AppText("删除书评")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         FilledTonalButton(
             onClick = onSave,
             modifier = Modifier.fillMaxWidth(),
@@ -665,19 +788,28 @@ private fun ReviewEditorSheet(
 @Composable
 private fun SectionCard(
     title: String,
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     GlassCard(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            AppText(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                trailing()
+            }
             Spacer(modifier = Modifier.height(12.dp))
             content()
         }
@@ -687,11 +819,11 @@ private fun SectionCard(
 @Composable
 private fun TagChip(
     tag: String,
+    onClick: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
-    onAdd: (() -> Unit)? = null,
 ) {
     NormalCard(
-        onClick = onAdd ?: onRemove,
+        onClick = onClick ?: onRemove,
         cornerRadius = 16.dp,
         containerColor = tagColor(tag),
     ) {
@@ -705,14 +837,6 @@ private fun TagChip(
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "移除",
-                    modifier = Modifier.size(14.dp),
-                    tint = Color.White,
-                )
-            } else if (onAdd != null) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "添加",
                     modifier = Modifier.size(14.dp),
                     tint = Color.White,
                 )
@@ -786,4 +910,29 @@ private fun formatReadDate(input: Any): String {
         else -> null
     } ?: return ""
     return SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(date)
+}
+
+@Composable
+private fun PlainProgressIndicator(
+    progress: Float?,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = LegadoTheme.colorScheme
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(scheme.surfaceVariant),
+    ) {
+        if (progress != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth(progress.coerceIn(0f, 1f))
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(scheme.primary),
+            )
+        }
+    }
 }

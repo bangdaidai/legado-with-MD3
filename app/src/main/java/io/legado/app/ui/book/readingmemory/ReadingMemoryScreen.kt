@@ -199,7 +199,7 @@ fun ReadingMemoryScreen(
 
             if (uiState.items.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
                     EmptyMessage(stringResource(R.string.reading_memory_empty))
@@ -209,7 +209,7 @@ fun ReadingMemoryScreen(
                     isRefreshing = uiState.loading,
                     onRefresh = { onIntent(ReadingMemoryIntent.Refresh) },
                     scrollBehavior = scrollBehavior,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -583,7 +583,7 @@ private fun MemoryBookCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
-                    memory.kind.split("|").map { it.trim() }.filter { it.isNotBlank() }
+                    memory.kind.split(",", "|").map { it.trim() }.filter { it.isNotBlank() }
                         .forEach { tag ->
                         Surface(
                             shape = MaterialTheme.shapes.small,

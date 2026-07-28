@@ -118,7 +118,8 @@ object MainNavigator {
                     currentRoute == MainRouteHome ||
                     currentRoute is MainRouteSearch ||
                     currentRoute is MainRouteExploreShow ||
-                    currentRoute is MainRouteBookInfo
+                    currentRoute is MainRouteBookInfo ||
+                    currentRoute is MainRouteReadingMemoryDetail
                 ) {
                     backStack.add(route)
                 } else {

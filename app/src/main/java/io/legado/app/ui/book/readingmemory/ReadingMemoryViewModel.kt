@@ -1,8 +1,11 @@
 package io.legado.app.ui.book.readingmemory
 
+import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.constant.BookType
+import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import kotlinx.coroutines.Dispatchers
@@ -13,12 +16,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.awaitClose
 import java.util.Calendar
 
 class ReadingMemoryViewModel(
@@ -138,7 +144,19 @@ class ReadingMemoryViewModel(
                 }
             }
         }
+        // 与书籍信息页一致：外部标签改名（TAGS_UPDATED）时即时刷新阅读记忆
+        viewModelScope.launch {
+            eventFlow<String>(EventBus.TAGS_UPDATED).collect { load() }
+        }
         load()
+    }
+
+    private inline fun <reified T> eventFlow(tag: String): Flow<T> = callbackFlow {
+        val observer = Observer<T> { trySend(it) }
+        LiveEventBus.get<T>(tag).observeForever(observer)
+        awaitClose {
+            LiveEventBus.get<T>(tag).removeObserver(observer)
+        }
     }
 
     fun onIntent(intent: ReadingMemoryIntent) {

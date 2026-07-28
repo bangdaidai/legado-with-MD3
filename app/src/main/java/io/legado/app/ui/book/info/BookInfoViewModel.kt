@@ -154,6 +154,16 @@ class BookInfoViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            // 标签在别处（标签管理/阅读记忆页）变更后，刷新本书标签展示，保持三处同步
+            eventFlow<String>(EventBus.TAGS_UPDATED).collect { bookUrl ->
+                val current = currentBook ?: return@collect
+                if (bookUrl.isBlank() || bookUrl == current.bookUrl) {
+                    val dbBook = appDb.bookDao.getBook(current.bookUrl) ?: current
+                    refreshMeta(dbBook)
+                }
+            }
+        }
     }
 
     private inline fun <reified T> eventFlow(tag: String): Flow<T> = callbackFlow {
@@ -176,6 +186,7 @@ class BookInfoViewModel(
     private var currentCharacters: List<BookInfoCharacterUi> = emptyList()
     private var currentHighlightedTags: List<HighlightedTag> = emptyList()
     private var currentKindLabels: List<String> = emptyList()
+    private var currentColoredTags: List<BookTagUi> = emptyList()
     private var currentGroupNames: String? = null
     private var currentHasCustomGroup = false
     private var currentReadRecordTotalTime = 0L
@@ -865,6 +876,7 @@ class BookInfoViewModel(
             currentGroupNames = null
             currentHasCustomGroup = false
             currentKindLabels = emptyList()
+            currentColoredTags = emptyList()
             syncUiState(isTocLoading = false)
             refreshMeta(it)
             postEvent(EventBus.SOURCE_CHANGED, book.bookUrl)
@@ -879,6 +891,7 @@ class BookInfoViewModel(
         currentRelatedBooks = emptyList()
         currentCharacters = emptyList()
         currentKindLabels = emptyList()
+        currentColoredTags = emptyList()
         currentGroupNames = null
         currentHasCustomGroup = false
         bookSource = source
@@ -939,10 +952,21 @@ class BookInfoViewModel(
             val finalKinds = book.getDisplayTagList()
             val enabledRules = appDb.highlightTagRuleDao.getEnabled()
             val (highlighted, regular) = parseHighlightedTags(finalKinds, enabledRules)
-            HighlightMeta(highlighted, regular, normalizedGroupNames, hasCustomGroup)
+            // 直接读关系表，作为信息页彩色标签的 SSOT，与标签管理页保持一致
+            val highlightedLabels = highlighted.flatMap { it.matchedLabels }.toSet()
+            val relationTagIds = appDb.bookTagRelationDao.getTagIdsByBookUrl(book.bookUrl)
+            val coloredTags = if (relationTagIds.isEmpty()) {
+                emptyList()
+            } else {
+                appDb.bookTagDao.getByIds(relationTagIds)
+                    .map { BookTagUi(it.id, it.name, it.color) }
+                    .filter { it.name !in highlightedLabels }
+            }
+            HighlightMeta(highlighted, regular, normalizedGroupNames, hasCustomGroup, coloredTags)
         }.onSuccess {
             currentHighlightedTags = it.highlighted
             currentKindLabels = it.regular
+            currentColoredTags = it.coloredTags
             currentGroupNames = it.groupNames
             currentHasCustomGroup = it.hasCustomGroup
             syncUiState()
@@ -954,6 +978,7 @@ class BookInfoViewModel(
         val regular: List<String>,
         val groupNames: String?,
         val hasCustomGroup: Boolean,
+        val coloredTags: List<BookTagUi>,
     )
 
     private fun loadChapter(
@@ -1439,6 +1464,7 @@ class BookInfoViewModel(
                 characters = currentCharacters.toImmutableList(),
                 highlightedTags = currentHighlightedTags,
                 kindLabels = currentKindLabels,
+                coloredTags = currentColoredTags,
                 groupNames = currentGroupNames,
                 hasCustomGroup = currentHasCustomGroup,
                 readRecordTotalTime = currentReadRecordTotalTime,

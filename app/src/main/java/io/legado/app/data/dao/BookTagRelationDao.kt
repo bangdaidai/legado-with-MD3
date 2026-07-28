@@ -49,5 +49,8 @@ interface BookTagRelationDao {
     @Query("SELECT tagId, COUNT(DISTINCT bookUrl) AS cnt FROM bookTagRelations GROUP BY tagId")
     suspend fun countAllByTag(): List<TagCount>
 
+    @Query("SELECT * FROM bookTagRelations")
+    suspend fun getAllSync(): List<BookTagRelation>
+
     data class TagCount(val tagId: Long, val cnt: Int)
 }

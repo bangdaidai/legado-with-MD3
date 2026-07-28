@@ -29,6 +29,12 @@ import io.legado.app.data.entities.RuleSub
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.data.entities.Server
 import io.legado.app.data.entities.TagGroupRule
+import io.legado.app.data.entities.BookTag
+import io.legado.app.data.entities.BookTagGroup
+import io.legado.app.data.entities.BookTagRelation
+import io.legado.app.data.entities.ExcludedTag
+import io.legado.app.data.entities.TagMapping
+import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
@@ -262,6 +268,36 @@ object Restore : KoinComponent {
         if (BackupConfig.dbIsNotIgnored("tagGroupRule")) {
             fileToListT<TagGroupRule>(path, "tagGroupRule.json")?.let {
                 appDb.tagGroupRuleDao.replaceAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTag")) {
+            fileToListT<BookTag>(path, "bookTag.json")?.let {
+                appDb.bookTagDao.insertAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagGroup")) {
+            fileToListT<BookTagGroup>(path, "bookTagGroup.json")?.let {
+                appDb.bookTagGroupDao.insertAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagRelation")) {
+            fileToListT<BookTagRelation>(path, "bookTagRelation.json")?.let {
+                appDb.bookTagRelationDao.insertAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("excludedTag")) {
+            fileToListT<ExcludedTag>(path, "excludedTag.json")?.let {
+                appDb.excludedTagDao.insertAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("tagMapping")) {
+            fileToListT<TagMapping>(path, "tagMapping.json")?.let {
+                appDb.tagMappingDao.insertAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("readingMemory")) {
+            fileToListT<ReadingMemory>(path, "readingMemory.json")?.let {
+                appDb.readingMemoryDao.insertAll(it)
             }
         }
         if (BackupConfig.dbIsNotIgnored("readRecord")) {

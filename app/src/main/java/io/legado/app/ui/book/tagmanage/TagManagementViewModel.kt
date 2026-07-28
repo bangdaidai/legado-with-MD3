@@ -106,6 +106,8 @@ class TagManagementViewModel : ViewModel() {
         }
         // 改名后若与已有标签重名，则归并到该标签（合并书籍关联、删除本标签），
         // 等价于原来的「异名归一」，但无需单独的界面，直接改名保存即可。
+        // 无论改名还是归并，都要写入「旧名 -> 标准标签」的映射，否则退出标签管理后
+        // 重新从书籍 kind 同步时会把旧名当成新标签重建出来（改名不生效）。
         val existing = appDb.bookTagDao.getByName(name)
         if (intent.id == 0L) {
             if (existing != null) {
@@ -119,6 +121,9 @@ class TagManagementViewModel : ViewModel() {
             val old = appDb.bookTagDao.getById(intent.id) ?: return
             if (existing != null && existing.id != old.id) {
                 TagManager.mergeAliasTagInto(old.name, existing.id)
+                upsertMapping(old.name, existing.id)
+                // 归并后把旧名写进书籍 kind/customTag，使书架、阅读记忆同步
+                TagManager.rewriteTagInBooks(old.name, name)
                 _effect.emit(TagManagementEffect.ShowMessage("已归并到「$name」"))
             } else {
                 appDb.bookTagDao.update(
@@ -129,10 +134,24 @@ class TagManagementViewModel : ViewModel() {
                         updateTime = System.currentTimeMillis(),
                     ),
                 )
+                if (old.name != name) {
+                    upsertMapping(old.name, old.id)
+                    // 改名后把旧名写进书籍 kind/customTag，使书架、阅读记忆同步
+                    TagManager.rewriteTagInBooks(old.name, name)
+                }
             }
         }
         loadData()
         postEvent(EventBus.TAGS_UPDATED, intent.id)
+    }
+
+    /** 写入「旧标签名 -> 标准标签」映射：若旧名已有映射则先删除，保证唯一有效。 */
+    private suspend fun upsertMapping(oldTagName: String, newTagId: Long) {
+        if (oldTagName.isBlank()) return
+        appDb.tagMappingDao.getByOldTagName(oldTagName)?.let {
+            appDb.tagMappingDao.deleteById(it.id)
+        }
+        appDb.tagMappingDao.insert(TagMapping(oldTagName = oldTagName, newTagId = newTagId))
     }
 
     private suspend fun deleteTag(tag: BookTag) {

@@ -78,14 +78,25 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
 
     private suspend fun save(intent: TagDetailIntent.Save) {
         val old = appDb.bookTagDao.getById(tagId) ?: return
+        val newName = intent.name.trim()
         appDb.bookTagDao.update(
             old.copy(
-                name = intent.name,
+                name = newName,
                 groupId = intent.groupId,
                 color = intent.color,
                 updateTime = System.currentTimeMillis(),
             ),
         )
+        // 改名需写入「旧名 -> 本标签」映射，否则退出标签管理后重新从书籍 kind
+        // 同步时会把旧名当成新标签重建出来，导致改名不生效。
+        if (old.name != newName) {
+            appDb.tagMappingDao.getByOldTagName(old.name)?.let {
+                appDb.tagMappingDao.deleteById(it.id)
+            }
+            appDb.tagMappingDao.insert(TagMapping(oldTagName = old.name, newTagId = tagId))
+            // 同时把旧名写进书籍 kind/customTag，使书架、阅读记忆同步显示新名
+            TagManager.rewriteTagInBooks(old.name, newName)
+        }
         // 通知后台的标签管理页立即刷新（无需退出重进）
         postEvent(EventBus.TAGS_UPDATED, old.id)
         load()
@@ -123,6 +134,8 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         appDb.tagMappingDao.insert(
             TagMapping(oldTagName = currentTag.name, newTagId = standardTag.id),
         )
+        // 把别名写进书籍 kind/customTag 改为标准名，使书架、阅读记忆同步
+        TagManager.rewriteTagInBooks(currentTag.name, standardName)
         postEvent(EventBus.TAGS_UPDATED, standardTag.id)
         _effect.emit(TagDetailEffect.Back)
     }

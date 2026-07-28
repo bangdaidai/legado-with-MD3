@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.readingmemory.detail
 
+import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadingStatistics
 
@@ -74,6 +75,9 @@ sealed interface ReadingMemoryDetailIntent {
     data class AddProtagonist(val name: String) : ReadingMemoryDetailIntent
     data class RemoveProtagonist(val name: String) : ReadingMemoryDetailIntent
     data object OpenBookInfo : ReadingMemoryDetailIntent
+    data object DeleteReview : ReadingMemoryDetailIntent
+    data class EditBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
+    data class DeleteBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
 }
 
 /**

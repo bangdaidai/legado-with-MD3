@@ -83,6 +83,12 @@ object Backup {
             "highlightRule.json",
             "highlightTagRule.json",
             "tagGroupRule.json",
+            "bookTag.json",
+            "bookTagGroup.json",
+            "bookTagRelation.json",
+            "excludedTag.json",
+            "tagMapping.json",
+            "readingMemory.json",
             "servers.json",
             DirectLinkUpload.ruleFileName,
             ReadBookConfig.configFileName,
@@ -205,6 +211,60 @@ object Backup {
         }
         if (BackupConfig.dbIsNotIgnored("tagGroupRule", true)) {
             writeListToJson(appDb.tagGroupRuleDao.getAll(), "tagGroupRule.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTag", true)) {
+            writeListToJson(appDb.bookTagDao.getAllSync(), "bookTag.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagGroup", true)) {
+            writeListToJson(appDb.bookTagGroupDao.getAllSorted(), "bookTagGroup.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagRelation", true)) {
+            writeListToJson(appDb.bookTagRelationDao.getAllSync(), "bookTagRelation.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("excludedTag", true)) {
+            writeListToJson(appDb.excludedTagDao.getAllSync(), "excludedTag.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("tagMapping", true)) {
+            writeListToJson(appDb.tagMappingDao.getAll(), "tagMapping.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("readingMemory", true)) {
+            writeListToJson(appDb.readingMemoryDao.getAllSync(), "readingMemory.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTag", true)) {
+            writeListToJson(appDb.bookTagDao.getAllSync(), "bookTag.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagGroup", true)) {
+            writeListToJson(appDb.bookTagGroupDao.getAllSorted(), "bookTagGroup.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagRelation", true)) {
+            writeListToJson(appDb.bookTagRelationDao.getAllSync(), "bookTagRelation.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("excludedTag", true)) {
+            writeListToJson(appDb.excludedTagDao.getAllSync(), "excludedTag.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("tagMapping", true)) {
+            writeListToJson(appDb.tagMappingDao.getAll(), "tagMapping.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("readingMemory", true)) {
+            writeListToJson(appDb.readingMemoryDao.getAllSync(), "readingMemory.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTag", true)) {
+            writeListToJson(appDb.bookTagDao.getAllSync(), "bookTag.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagGroup", true)) {
+            writeListToJson(appDb.bookTagGroupDao.getAllSorted(), "bookTagGroup.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookTagRelation", true)) {
+            writeListToJson(appDb.bookTagRelationDao.getAllSync(), "bookTagRelation.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("excludedTag", true)) {
+            writeListToJson(appDb.excludedTagDao.getAllSync(), "excludedTag.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("tagMapping", true)) {
+            writeListToJson(appDb.tagMappingDao.getAll(), "tagMapping.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("readingMemory", true)) {
+            writeListToJson(appDb.readingMemoryDao.getAllSync(), "readingMemory.json", backupPath)
         }
         if (BackupConfig.dbIsNotIgnored("server", true)) {
             GSON.toJson(appDb.serverDao.all).let { json ->

@@ -15,6 +15,9 @@ interface ExcludedTagDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(excludedTag: ExcludedTag): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<ExcludedTag>)
+
     @Update
     suspend fun update(excludedTag: ExcludedTag)
 

@@ -118,6 +118,11 @@ class ChangeBookSourceUseCase(
                 bookChapterDao.insert(*chapters.toTypedArray())
             }
         }
+        // 换源后重建新书的标签关联，并清理旧 bookUrl 上的孤儿关联，避免标签丢失
+        if (oldBookUrl != newBook.bookUrl) {
+            database.bookTagRelationDao.deleteByBookUrl(oldBookUrl)
+        }
+        TagManager.generateTagsFromKind(newBook)
         if (options.migrateChapters) {
             ReadBook.onChapterListUpdated(newBook)
         }
@@ -287,6 +292,7 @@ class ChangeBookSourceUseCase(
         }
         if (options.migrateCategory) {
             newBook.customTag = customTag
+            newBook.kind = kind
         }
         if (options.migrateRemark) {
             newBook.customIntro = customIntro

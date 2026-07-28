@@ -23,6 +23,7 @@ object DatabaseMigrations {
             migration_82_83,
             migration_98_99,
             migration_99_100,
+            migration_100_101,
         )
     }
 
@@ -625,6 +626,14 @@ object DatabaseMigrations {
                 )
                 """.trimIndent()
             )
+        }
+    }
+
+    // region 100→101: 删除孤儿冗余表 bookTagBooks（标签关联书籍快照从未被读写，与关系表 bookTagRelations 永久不同步）
+
+    private val migration_100_101 = object : Migration(100, 101) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("DROP TABLE IF EXISTS bookTagBooks")
         }
     }
 

@@ -15,6 +15,9 @@ interface BookTagGroupDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(group: BookTagGroup): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(groups: List<BookTagGroup>)
+
     @Update
     suspend fun update(group: BookTagGroup)
 

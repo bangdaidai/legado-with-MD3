@@ -2909,6 +2909,7 @@
     <string name="translation_model_thinking">模型思考中</string>
 
     <!-- Tag management -->
+    <string name="tag_management">标签管理</string>
     <string name="tag_mapping">标签映射</string>
     <string name="excluded_tags">排除标签</string>
     <string name="search_tag">搜索标签</string>

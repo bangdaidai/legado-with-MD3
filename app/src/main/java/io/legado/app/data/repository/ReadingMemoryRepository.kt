@@ -15,6 +15,7 @@ import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.help.book.ProtagonistExtractor
+import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
@@ -110,6 +111,11 @@ class ReadingMemoryRepository(
 
     suspend fun updateReview(bookUrl: String, review: String?) {
         dao.updateReview(bookUrl, review)
+    }
+
+    /** 删除书评（将书评置空）。 */
+    suspend fun deleteReview(bookUrl: String) {
+        dao.updateReview(bookUrl, null)
     }
 
     suspend fun updateProgress(
@@ -347,6 +353,16 @@ class ReadingMemoryRepository(
             .sortedBy { it.chapterIndex }
     }
 
+    /** 保存（新增或更新）书签，供阅读摘录编辑复用「书签对话框」。 */
+    suspend fun saveBookmark(bookmark: Bookmark) {
+        bookmarkDao.insert(bookmark)
+    }
+
+    /** 删除书签。 */
+    suspend fun deleteBookmark(bookmark: Bookmark) {
+        bookmarkDao.delete(bookmark)
+    }
+
     // region 阅读记录（时间线 / 复用「阅读记录对话框」内容）
 
     /**
@@ -376,13 +392,16 @@ class ReadingMemoryRepository(
         database.bookTagDao.getAllSync().map { it.name }.filter { it.isNotBlank() }
 
     private fun tagsFromKind(kind: String): MutableSet<String> =
-        kind.split("|").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
+        kind.split(",", "|").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
 
     private suspend fun applyTags(bookUrl: String, book: Book?, set: MutableSet<String>) {
         val kind = set.joinToString("|")
         if (book != null) {
             book.kind = kind
             bookDao.update(book)
+            // 同步关系表：以 kind 为 SSOT 重建该书标签关联，保证标签管理页计数一致
+            database.bookTagRelationDao.deleteByBookUrl(bookUrl)
+            TagManager.generateTagsFromKind(book)
         } else {
             val memory = dao.getByBookUrlSync(bookUrl) ?: return
             dao.updateKind(bookUrl, kind)

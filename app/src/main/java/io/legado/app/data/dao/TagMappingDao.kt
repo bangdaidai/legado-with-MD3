@@ -15,6 +15,9 @@ interface TagMappingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(mapping: TagMapping): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<TagMapping>)
+
     @Update
     suspend fun update(mapping: TagMapping)
 

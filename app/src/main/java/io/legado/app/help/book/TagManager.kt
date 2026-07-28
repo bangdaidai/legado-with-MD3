@@ -12,6 +12,7 @@ import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -96,6 +97,50 @@ object TagManager {
         }
         postEvent(EventBus.TAGS_UPDATED, "exclusion_backfill")
         return toRemove.size
+    }
+
+    /**
+     * 标签改名 / 归并后，把书籍（含阅读记忆快照）的 kind、customTag 中出现的旧名整体替换为新名，
+     * 使书架、阅读记忆页与标签管理保持一致。
+     * 本地 kind 不会被刷新覆盖，因此改名后「重刷不会变回去」。
+     */
+    suspend fun rewriteTagInBooks(oldName: String, newName: String) {
+        if (oldName.isBlank()) return
+        val old = oldName.trim()
+        val new = newName.trim()
+        if (old == new) return
+        val books = appDb.bookDao.getAll()
+        val memMap = appDb.readingMemoryDao.getAll().first().associateBy { it.bookUrl }
+        for (book in books) {
+            val newKind = replaceTagToken(book.kind, old, new)
+            val newCustom = replaceTagToken(book.customTag, old, new)
+            if (newKind != book.kind || newCustom != book.customTag) {
+                appDb.bookDao.update(book.copy(kind = newKind, customTag = newCustom))
+            }
+            memMap[book.bookUrl]?.let { mem ->
+                val newMemKind = replaceTagToken(mem.kind, old, new)
+                if (newMemKind != mem.kind) {
+                    appDb.readingMemoryDao.updateKind(book.bookUrl, newMemKind)
+                }
+            }
+        }
+    }
+
+    /**
+     * 将字符串中以分隔符（, ，、| 或换行）隔开的某个整标签名替换为新名，保留原有分隔符。
+     * 仅整词匹配（被分隔符或首尾包围），避免误伤其它标签或名称中包含该串的情况。
+     */
+    private fun replaceTagToken(
+        value: String?,
+        oldName: String,
+        newName: String,
+    ): String? {
+        if (value.isNullOrBlank()) return value
+        val pattern = Regex(
+            "(?<=[,，、|\\n]|^)" + Pattern.quote(oldName) + "(?=[,，、|\\n]|$)",
+            RegexOption.IGNORE_CASE,
+        )
+        return pattern.replace(value) { newName }
     }
 
     /** 排除规则变更后的统一对账：先按当前规则移除命中的现有标签，

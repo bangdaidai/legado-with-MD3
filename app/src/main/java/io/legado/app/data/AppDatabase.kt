@@ -45,7 +45,6 @@ import io.legado.app.data.dao.SearchContentHistoryDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.TagGroupRuleDao
-import io.legado.app.data.dao.BookTagBookDao
 import io.legado.app.data.dao.BookTagDao
 import io.legado.app.data.dao.BookTagGroupDao
 import io.legado.app.data.dao.BookTagRelationDao
@@ -100,7 +99,6 @@ import io.legado.app.data.entities.SearchContentHistory
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.data.entities.Server
 import io.legado.app.data.entities.BookTag
-import io.legado.app.data.entities.BookTagBook
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.BookTagRelation
 import io.legado.app.data.entities.ExcludedTag
@@ -126,7 +124,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 100,
+    version = 101,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -145,7 +143,7 @@ val appDb by lazy {
         CloudTtsEngineEntity::class, ReadingMemory::class,
         ExactChapterPageCountEntity::class, BookTag::class, BookTagGroup::class,
         BookTagRelation::class, ExcludedTag::class, TagMapping::class,
-        BookTagBook::class, RemovedAutoTag::class],
+        RemovedAutoTag::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -251,7 +249,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val bookTagRelationDao: BookTagRelationDao
     abstract val excludedTagDao: ExcludedTagDao
     abstract val tagMappingDao: TagMappingDao
-    abstract val bookTagBookDao: BookTagBookDao
     abstract val removedAutoTagDao: RemovedAutoTagDao
 
     companion object {

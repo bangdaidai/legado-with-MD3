@@ -11,6 +11,7 @@ import io.legado.app.help.book.applyTagGroupRulesForBook
 import io.legado.app.help.book.isUpError
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.sync
+import io.legado.app.help.book.TagManager
 import io.legado.app.model.ReadBook
 import io.legado.app.model.webBook.WebBook
 import kotlinx.coroutines.ensureActive
@@ -43,6 +44,8 @@ class RefreshTocUseCase(
         book.sync(oldBook)
         book.removeType(BookType.updateError)
         applyTagGroupRulesForBook(book)
+        // 刷新目录后书源分类可能更新，按最新 kind 生成标签关联（幂等）
+        TagManager.generateTagsFromKind(book)
         if (book.bookUrl == bookUrl) {
             bookRepository.update(book)
         } else {

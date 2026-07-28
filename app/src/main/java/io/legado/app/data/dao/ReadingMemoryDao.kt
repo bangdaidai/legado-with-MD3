@@ -26,6 +26,10 @@ interface ReadingMemoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(memory: ReadingMemory)
 
+    /** 批量插入或替换（供备份恢复使用） */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<ReadingMemory>)
+
     /** 插入（冲突时忽略，不覆盖已有记录） */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(memory: ReadingMemory)
@@ -169,4 +173,8 @@ interface ReadingMemoryDao {
         kind: String,
         updateTime: Long = System.currentTimeMillis(),
     )
+
+    /** 全量查询（供备份使用，非 Flow） */
+    @Query("SELECT * FROM readingMemory")
+    suspend fun getAllSync(): List<ReadingMemory>
 }

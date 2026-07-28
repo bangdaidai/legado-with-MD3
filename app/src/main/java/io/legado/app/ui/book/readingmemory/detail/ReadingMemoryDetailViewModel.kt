@@ -47,7 +47,12 @@ class ReadingMemoryDetailViewModel(
             val protagonists = repository.getProtagonistNames(bookUrl)
             val readRecordTimelineDays = repository.getReadRecordTimelineDays(bookUrl)
             val readRecordTotalTime = repository.getReadRecordTotalTime(bookUrl)
-            val availableTags = repository.getAvailableTags()
+            val bookKindTags = book?.kind
+                ?.split(",", "|")
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                .orEmpty()
+            val availableTags = (repository.getAvailableTags() + bookKindTags).distinct()
             _showReviewEditor.combine(_reviewDraft) { showReview, draft ->
                 val safeMemory = memory ?: ReadingMemory.defaultStub(bookUrl)
                 val abandoned = memory?.abandoned ?: false
@@ -66,7 +71,7 @@ class ReadingMemoryDetailViewModel(
                 }
                 val kindSource = if (book != null) book.kind else memory?.kind
                 val tags = kindSource
-                    ?.split("|")
+                    ?.split(",", "|")
                     ?.map { it.trim() }
                     ?.filter { it.isNotBlank() }
                     .orEmpty()
@@ -195,6 +200,18 @@ class ReadingMemoryDetailViewModel(
                         is ReadingMemoryDetailIntent.RemoveProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, false)
                             protagonistRefresh.value = Unit
+                        }
+                        is ReadingMemoryDetailIntent.DeleteReview -> {
+                            repository.deleteReview(bookUrl)
+                            _showReviewEditor.value = false
+                        }
+                        is ReadingMemoryDetailIntent.EditBookmark -> {
+                            repository.saveBookmark(intent.bookmark)
+                            bookmarkRefresh.value = Unit
+                        }
+                        is ReadingMemoryDetailIntent.DeleteBookmark -> {
+                            repository.deleteBookmark(intent.bookmark)
+                            bookmarkRefresh.value = Unit
                         }
                     }
                 }

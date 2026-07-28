@@ -16,6 +16,7 @@ import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.removeType
+import io.legado.app.help.book.TagManager
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.MD5Utils
@@ -148,6 +149,9 @@ class BookInfoEditViewModel(application: Application) : BaseViewModel(applicatio
                     ReadBook.book = book
                 }
                 appDb.bookDao.update(book)
+                // 编辑用户标签后同步关系表：以 kind+customTag 为 SSOT 重建该书标签关联
+                appDb.bookTagRelationDao.deleteByBookUrl(book.bookUrl)
+                TagManager.generateTagsFromKind(book)
             }
         }.onSuccess {
             onSuccess.invoke()
