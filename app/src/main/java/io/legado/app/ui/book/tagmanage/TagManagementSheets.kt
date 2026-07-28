@@ -74,10 +74,11 @@ fun TagEditSheet(
     onChange: (TagEditData) -> Unit,
     onConfirm: (TagEditData) -> Unit,
     onPickColor: () -> Unit,
-    onExclude: (String) -> Unit = {},
+    onExclude: ((String) -> Unit)? = null,
     aliases: List<TagMapping> = emptyList(),
     onMapToStandard: (String) -> Unit = {},
     onRemoveAlias: (TagMapping) -> Unit = {},
+    onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     AppModalBottomSheet(
@@ -86,13 +87,27 @@ fun TagEditSheet(
         title = if (data?.id == 0L) "新增标签" else "编辑标签",
         startAction = if (data != null && data.id != 0L) {
             {
-                TextButton(
-                    onClick = { data?.name?.trim()?.let { onExclude(it) } },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                ) {
-                    Text("排除")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    onExclude?.let { ex ->
+                        TextButton(
+                            onClick = { data?.name?.trim()?.let(ex) },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                        ) {
+                            Text("排除")
+                        }
+                    }
+                    onDelete?.let { del ->
+                        TextButton(
+                            onClick = del,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                        ) {
+                            Text("删除")
+                        }
+                    }
                 }
             }
         } else {
