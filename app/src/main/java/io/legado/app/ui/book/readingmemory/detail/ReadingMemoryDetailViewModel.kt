@@ -27,7 +27,7 @@ class ReadingMemoryDetailViewModel(
 
     private val _showReviewEditor = MutableStateFlow(false)
     private val _reviewDraft = MutableStateFlow("")
-    private val _showAbandonedDialog = MutableStateFlow(false)
+    private val _showTagPicker = MutableStateFlow(false)
 
     private val _effectFlow = MutableSharedFlow<ReadingMemoryDetailEffect>(extraBufferCapacity = 1)
     val effectFlow: SharedFlow<ReadingMemoryDetailEffect> = _effectFlow.asSharedFlow()
@@ -38,14 +38,16 @@ class ReadingMemoryDetailViewModel(
     val detailState = combine(
         repository.observeByBookUrl(bookUrl),
         protagonistRefresh,
-        _showAbandonedDialog,
-    ) { memory, _, abandonedDialog -> memory to abandonedDialog }
+        _showTagPicker,
+    ) { memory, _, tagPicker -> memory to tagPicker }
         .flatMapLatest { (memory, abandonedDialog) ->
             val book = repository.getBook(bookUrl)
             val statistics = repository.computeStatistics(bookUrl)
             val excerpts = repository.getExcerpts(bookUrl)
-            val sessions = repository.getReadSessions(bookUrl)
             val protagonists = repository.getProtagonistNames(bookUrl)
+            val readRecordTimelineDays = repository.getReadRecordTimelineDays(bookUrl)
+            val readRecordTotalTime = repository.getReadRecordTotalTime(bookUrl)
+            val availableTags = repository.getAvailableTags()
             _showReviewEditor.combine(_reviewDraft) { showReview, draft ->
                 val safeMemory = memory ?: ReadingMemory.defaultStub(bookUrl)
                 val abandoned = memory?.abandoned ?: false
@@ -107,17 +109,13 @@ class ReadingMemoryDetailViewModel(
                             originText = it.bookText,
                         )
                     },
-                    sessions = sessions.map {
-                        ReadingSessionItem(
-                            date = it.date ?: "",
-                            readTime = it.readTime ?: 0L,
-                            readWords = it.readWords ?: 0L,
-                        )
-                    },
+                    readRecordTimelineDays = readRecordTimelineDays,
+                    readRecordTotalTime = readRecordTotalTime,
+                    availableTags = availableTags,
                     loading = memory == null,
                     showReviewEditor = showReview,
                     reviewDraft = draft,
-                    showAbandonedDialog = abandonedDialog,
+                    showTagPicker = tagPicker,
                     showRatingEditor = false,
                 )
             }
@@ -156,22 +154,39 @@ class ReadingMemoryDetailViewModel(
                         is ReadingMemoryDetailIntent.DismissReviewEditor -> {
                             _showReviewEditor.value = false
                         }
-                        is ReadingMemoryDetailIntent.ToggleAbandoned -> {
+                        is ReadingMemoryDetailIntent.SetStatus -> {
                             if (intent.abandoned) repository.markAbandoned(bookUrl)
                             else repository.unmarkAbandoned(bookUrl)
+                            protagonistRefresh.value = Unit
                         }
-                        is ReadingMemoryDetailIntent.ConfirmAbandoned -> {
-                            repository.markAbandoned(bookUrl)
-                            _showAbandonedDialog.value = false
+                        is ReadingMemoryDetailIntent.OpenTagPicker -> {
+                            _showTagPicker.value = true
                         }
-                        is ReadingMemoryDetailIntent.DismissAbandonedDialog -> {
-                            _showAbandonedDialog.value = false
+                        is ReadingMemoryDetailIntent.DismissTagPicker -> {
+                            _showTagPicker.value = false
+                        }
+                        is ReadingMemoryDetailIntent.AddTag -> {
+                            repository.addTag(bookUrl, intent.tag)
+                            protagonistRefresh.value = Unit
+                        }
+                        is ReadingMemoryDetailIntent.RemoveTag -> {
+                            repository.removeTag(bookUrl, intent.tag)
+                            protagonistRefresh.value = Unit
                         }
                         is ReadingMemoryDetailIntent.EditIntro -> {
                             repository.updateIntro(bookUrl, intent.intro)
                         }
                         is ReadingMemoryDetailIntent.NavigateBack -> {
                             _effectFlow.tryEmit(ReadingMemoryDetailEffect.Back)
+                        }
+                        is ReadingMemoryDetailIntent.OpenBookInfo -> {
+                            _effectFlow.tryEmit(
+                                ReadingMemoryDetailEffect.NavigateToBookInfo(
+                                    name = detailState.value.bookName,
+                                    author = detailState.value.author,
+                                    bookUrl = bookUrl,
+                                ),
+                            )
                         }
                         is ReadingMemoryDetailIntent.AddProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, true)

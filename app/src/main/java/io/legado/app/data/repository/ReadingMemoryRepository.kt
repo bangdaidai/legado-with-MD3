@@ -12,6 +12,8 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
+import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
+import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.help.book.ProtagonistExtractor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
@@ -26,6 +28,7 @@ class ReadingMemoryRepository(
     private val bookmarkDao: BookmarkDao,
     private val readRecordDao: ReadRecordDao,
     private val database: AppDatabase,
+    private val readRecordRepository: ReadRecordRepository,
 ) {
 
     companion object {
@@ -343,13 +346,64 @@ class ReadingMemoryRepository(
             .sortedBy { it.chapterIndex }
     }
 
+    // region 阅读记录（时间线 / 复用「阅读记录对话框」内容）
+
     /**
-     * 阅读会话 = 按天的阅读记录（ReadRecordDetail），按日期倒序。
+     * 阅读记录时间线（按天的会话分组），复用于「阅读记录对话框 / 阅读会话卡片」。
      */
-    suspend fun getReadSessions(bookUrl: String): List<ReadRecordDetail> {
+    suspend fun getReadRecordTimelineDays(bookUrl: String): List<ReadRecordTimelineDay> {
         val book = bookDao.getBook(bookUrl) ?: return emptyList()
-        return readRecordDao.getDetailsByBook(DEVICE_ID, book.name, book.author)
-            .sortedByDescending { it.date }
+        return readRecordRepository.getBookTimelineDays(book.name, book.author).first()
+    }
+
+    /**
+     * 本书累计阅读时长（毫秒），复用于「阅读记录对话框 / 阅读会话卡片」。
+     */
+    suspend fun getReadRecordTotalTime(bookUrl: String): Long {
+        val book = bookDao.getBook(bookUrl) ?: return 0L
+        return readRecordRepository.getBookReadTime(book.name, book.author).first()
+    }
+
+    // endregion
+
+    // region 标签（复用于书架彩色标签选择对话框）
+
+    /**
+     * 书架上已有的全部标签名，供阅读记忆「标签选择」对话框复用（参考书架标签）。
+     */
+    suspend fun getAvailableTags(): List<String> =
+        database.bookTagDao.getAllSync().map { it.name }.filter { it.isNotBlank() }
+
+    private fun tagsFromKind(kind: String): MutableSet<String> =
+        kind.split("|").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
+
+    private suspend fun applyTags(bookUrl: String, book: Book?, set: MutableSet<String>) {
+        val kind = set.joinToString("|")
+        if (book != null) {
+            book.kind = kind
+            bookDao.update(book)
+        } else {
+            val memory = dao.getByBookUrlSync(bookUrl) ?: return
+            dao.updateKind(bookUrl, kind)
+        }
+    }
+
+    /** 新增标签：写入书籍的 kind 字段（在架时）或记忆快照的 kind（已删除时）。 */
+    suspend fun addTag(bookUrl: String, tag: String) {
+        val t = tag.trim()
+        if (t.isBlank()) return
+        val book = bookDao.getBook(bookUrl)
+        val set = tagsFromKind(book?.kind ?: dao.getByBookUrlSync(bookUrl)?.kind.orEmpty())
+        if (set.add(t)) applyTags(bookUrl, book, set)
+    }
+
+    /** 移除标签。 */
+    suspend fun removeTag(bookUrl: String, tag: String) {
+        val t = tag.trim()
+        if (t.isBlank()) return
+        val book = bookDao.getBook(bookUrl)
+        val set = tagsFromKind(book?.kind ?: dao.getByBookUrlSync(bookUrl)?.kind.orEmpty())
+        if (set.remove(t)) applyTags(bookUrl, book, set)
     }
 
     // endregion

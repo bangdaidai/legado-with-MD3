@@ -1107,6 +1107,14 @@ fun MainActivity.mainEntryProvider(
                 when (effect) {
                     is ReadingMemoryDetailEffect.Back -> onNavigateBack()
                     is ReadingMemoryDetailEffect.ShowToast -> context.toastOnUi(effect.message)
+                    is ReadingMemoryDetailEffect.NavigateToBookInfo -> onNavigateToRoute(
+                        MainRouteBookInfo(
+                            name = effect.name,
+                            author = effect.author,
+                            bookUrl = effect.bookUrl,
+                            origin = null,
+                        ),
+                    )
                 }
             }
         }

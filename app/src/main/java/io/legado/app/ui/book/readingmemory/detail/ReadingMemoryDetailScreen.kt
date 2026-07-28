@@ -1,756 +1,790 @@
 package io.legado.app.ui.book.readingmemory.detail
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.legado.app.data.repository.ReadingStatistics
-import io.legado.app.constant.AppLog
-import io.legado.app.ui.book.info.HighlightedTag
+import androidx.compose.ui.unit.sp
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
-import io.legado.app.ui.widget.components.AppPullToRefresh
-import io.legado.app.ui.widget.components.EmptyMessage
-import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.card.GlassCard
-import io.legado.app.ui.widget.components.card.HighlightTagRow
+import io.legado.app.ui.widget.components.AppModalBottomSheet
+import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.AppText
+import io.legado.app.ui.widget.components.GlassCard
+import io.legado.app.ui.widget.components.card.NormalCard
+import io.legado.app.ui.widget.components.ReadingSessionTimeline
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
-import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextLayoutResult
+import io.legado.app.ui.utils.formatReadDuration
+import io.legado.app.ui.widget.components.AppLinearProgressIndicator
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingMemoryDetailScreen(
     state: ReadingMemoryDetailUiState,
     onBack: () -> Unit,
     onIntent: (ReadingMemoryDetailIntent) -> Unit,
 ) {
-    val scrollState = rememberScrollState()
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
-    AppLog.put("[阅读记忆] DetailScreen 渲染 loading=${state.loading} bookName=${state.bookName} 进度=${state.progressInfo}")
 
-    Scaffold(
+    AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = state.bookName.ifBlank { "阅读记忆" },
-                subtitle = state.author.ifBlank { null },
+                subtitle = state.author.takeIf { it.isNotBlank() },
                 scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { onIntent(ReadingMemoryDetailIntent.Refresh) }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "同步")
-                    }
-                },
-                bottomContent = {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        CoilBookCover(
-                            name = state.bookName.ifBlank { null },
-                            author = state.author.ifBlank { null },
-                            path = state.coverUrl?.takeIf { it.isNotBlank() },
-                            radius = 8.dp,
-                            modifier = Modifier
-                                .width(92.dp)
-                                .height(130.dp)
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            AppText(
-                                state.bookName.ifBlank { "未知书名" },
-                                style = LegadoTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (state.author.isNotBlank()) {
-                                AppText(
-                                    state.author,
-                                    style = LegadoTheme.typography.bodyMedium,
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = statusBadgeColor(state.status),
-                                modifier = Modifier.padding(top = 4.dp)
-                            ) {
-                                AppText(
-                                    state.statusText,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                                    style = LegadoTheme.typography.labelMedium,
-                                    color = statusBadgeTextColor(state.status)
-                                )
-                            }
-                            ReadingMemoryRatingBar(
-                                rating = state.rating.toFloat(),
-                                onRatingChanged = { onIntent(ReadingMemoryDetailIntent.SetRating(it)) },
-                                enabled = state.isStillOnShelf,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-                }
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
             )
-        }
-    ) { padding ->
-        AppPullToRefresh(
-            isRefreshing = state.loading,
-            onRefresh = { onIntent(ReadingMemoryDetailIntent.Refresh) },
-            scrollBehavior = scrollBehavior,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            if (state.bookName.isBlank()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection)
-                        .verticalScroll(scrollState)
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // 字数 + 进度条
-                    BasicInfoSection(state = state)
-
-                    // 简介
-                    IntroSection(
-                        intro = state.intro,
-                        onEdit = { onIntent(ReadingMemoryDetailIntent.EditIntro(it)) }
-                    )
-
-                    // 书籍标签
-                    if (state.tags.isNotEmpty()) {
-                        TagsSection(state.tags)
-                    }
-
-                    // 主角（可增删）
-                    ProtagonistsSection(
-                        names = state.protagonistNames,
-                        onAdd = { onIntent(ReadingMemoryDetailIntent.AddProtagonist(it)) },
-                        onRemove = { onIntent(ReadingMemoryDetailIntent.RemoveProtagonist(it)) }
-                    )
-
-                    // 阅读数据（主 + 次）
-                    state.statistics?.let { stats ->
-                        StatsSection(
-                            stats = stats,
-                            progress = state.progress,
-                            progressInfo = state.progressInfo,
-                            annotationCount = state.annotationCount,
-                            lastReadTime = state.lastReadTime,
-                        )
-                    }
-
-                    // 书摘（含笔记的书签）
-                    ExcerptsSection(state.excerpts)
-
-                    // 书评
-                    ReviewSection(
-                        review = state.review,
-                        onEdit = { onIntent(ReadingMemoryDetailIntent.OpenReviewEditor(state.review)) }
-                    )
-
-                    // 阅读会话（按天）
-                    ReadingSessionSection(state.sessions)
-
-                    // 阅读状态（弃文切换）
-                    AbandonedSection(
-                        abandoned = state.abandoned,
-                        onToggle = { onIntent(ReadingMemoryDetailIntent.ToggleAbandoned(it)) }
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-                }
-            }
-        }
-    }
-
-    // 评价编辑弹层
-    if (state.showReviewEditor) {
-        AppModalBottomSheet(
-            show = state.showReviewEditor,
-            onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
-            title = "编辑书评"
-        ) {
-            OutlinedTextField(
-                value = state.reviewDraft,
-                onValueChange = { onIntent(ReadingMemoryDetailIntent.UpdateReviewDraft(it)) },
+        },
+    ) { paddingValues ->
+        if (state.loading) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 120.dp),
-                maxLines = 10,
-                placeholder = { AppText("写写你对这本书的感受...") }
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppText("加载中…", color = LegadoTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            LazyColumn(
+                contentPadding = paddingValues,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                item { BookInfoSection(state = state, onIntent = onIntent) }
+                item { StatsSection(state = state) }
+                item { TagsSection(state = state, onIntent = onIntent) }
+                item { ProtagonistsSection(state = state, onIntent = onIntent) }
+                item { ReviewSection(state = state, onIntent = onIntent) }
+                item { IntroSection(state = state, onIntent = onIntent) }
+                item { ReadSessionSection(state = state) }
+                item { ExcerptSection(state = state) }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
+            }
+        }
+    }
+
+    if (state.showTagPicker) {
+        TagPickerSheet(
+            availableTags = state.availableTags,
+            selectedTags = state.tags,
+            onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissTagPicker) },
+            onAddTag = { onIntent(ReadingMemoryDetailIntent.AddTag(it)) },
+            onRemoveTag = { onIntent(ReadingMemoryDetailIntent.RemoveTag(it)) },
+        )
+    }
+
+    if (state.showReviewEditor) {
+        ReviewEditorSheet(
+            draft = state.reviewDraft,
+            onDraftChange = { onIntent(ReadingMemoryDetailIntent.UpdateReviewDraft(it)) },
+            onSave = { onIntent(ReadingMemoryDetailIntent.SaveReview) },
+            onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
+        )
+    }
+}
+
+/* ===================== 各区块 ===================== */
+
+@Composable
+private fun BookInfoSection(
+    state: ReadingMemoryDetailUiState,
+    onIntent: (ReadingMemoryDetailIntent) -> Unit,
+) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CoilBookCover(
+                name = state.bookName,
+                author = state.author,
+                path = state.coverUrl,
+                modifier = Modifier
+                    .width(64.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(6.dp)),
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(
-                    onClick = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    AppText("取消")
-                }
-                TextButton(
-                    onClick = { onIntent(ReadingMemoryDetailIntent.SaveReview) },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    AppText("保存")
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-
-    // 弃文确认弹窗
-    AppAlertDialog(
-        show = state.showAbandonedDialog,
-        onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissAbandonedDialog) },
-        title = "确认弃文",
-        text = "确定要将这本书标记为弃文吗？阅读记录仍会保留。",
-        confirmText = "确认弃文",
-        onConfirm = { onIntent(ReadingMemoryDetailIntent.ConfirmAbandoned) },
-        dismissText = "取消",
-        onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissAbandonedDialog) }
-    )
-}
-
-@Composable
-private fun BasicInfoSection(state: ReadingMemoryDetailUiState) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (state.wordCountText.isNotBlank()) {
-                AppText(
-                    state.wordCountText,
-                    style = LegadoTheme.typography.bodyMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant
-                )
-            } else if (state.wordCount > 0) {
-                AppText(
-                    formatWordCount(state.wordCount) + "字",
-                    style = LegadoTheme.typography.bodyMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AppLinearProgressIndicator(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(8.dp),
-                    progress = state.progress.coerceIn(0f, 1f)
-                )
-                AppText(
-                    text = "${(state.progress.coerceIn(0f, 1f) * 100).toInt()}%",
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.primary
-                )
-            }
-            if (state.progressInfo.isNotBlank()) {
-                AppText(
-                    text = state.progressInfo,
-                    style = LegadoTheme.typography.labelSmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun IntroSection(intro: String, onEdit: (String) -> Unit) {
-    if (intro.isNotBlank()) {
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AppText(
-                        text = "内容简介",
-                        style = LegadoTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+                    StatusDropdown(
+                        statusText = state.statusText,
+                        abandoned = state.abandoned,
+                        onSetAbandoned = { onIntent(ReadingMemoryDetailIntent.SetStatus(it)) },
                     )
-                    IconButton(
-                        onClick = { onEdit(intro) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.Edit,
-                            contentDescription = "编辑",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    ReadingMemoryRatingBar(
+                        rating = state.rating,
+                        onRatingChanged = { onIntent(ReadingMemoryDetailIntent.SetRating(it)) },
+                        modifier = Modifier.scale(0.75f),
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                AppText(
-                    text = intro,
-                    style = LegadoTheme.typography.bodyMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant
-                )
+                if (state.wordCountText.isNotBlank()) {
+                    AppText(
+                        text = "字数：${state.wordCountText}",
+                        fontSize = 13.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AppLinearProgressIndicator(
+                        progress = if (state.progress > 0f) state.progress else null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AppText(
+                        text = "${state.progressInfo} · ${String.format(Locale.getDefault(), "%.0f%%", state.progress * 100)}",
+                        fontSize = 12.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TagsSection(tags: List<String>) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            AppText(
-                text = "书籍标签",
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            HighlightTagRow(
-                tags = listOf(HighlightedTag(title = null, matchedLabels = tags))
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProtagonistsSection(
-    names: List<String>,
-    onAdd: (String) -> Unit,
-    onRemove: (String) -> Unit,
+private fun StatusDropdown(
+    statusText: String,
+    abandoned: Boolean,
+    onSetAbandoned: (Boolean) -> Unit,
 ) {
-    var input by remember { mutableStateOf("") }
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            AppText(
-                text = "主角",
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        FilledTonalButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            AppText(text = statusText.ifBlank { "未开始" }, fontSize = 13.sp)
+            Spacer(modifier = Modifier.width(2.dp))
+            Icon(
+                imageVector = Icons.Filled.ArrowDropDown,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            // 添加主角
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { AppText("输入主角名") },
-                    singleLine = true
-                )
-                IconButton(
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (!abandoned) {
+                DropdownMenuItem(
+                    text = { AppText("标记为弃文", fontSize = 14.sp) },
                     onClick = {
-                        val name = input.trim()
-                        if (name.isNotBlank()) {
-                            onAdd(name)
-                            input = ""
-                        }
-                    }
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = "添加主角")
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            if (names.isEmpty()) {
-                AppText(
-                    text = "暂无主角，可手动添加，或在阅读页长按文字标记。",
-                    style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        onSetAbandoned(true)
+                        expanded = false
+                    },
                 )
             } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    names.forEach { name ->
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = LegadoTheme.colorScheme.secondaryContainer
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 12.dp, end = 4.dp)
-                            ) {
-                                AppText(
-                                    text = name,
-                                    style = LegadoTheme.typography.labelLarge,
-                                    color = LegadoTheme.colorScheme.onSecondaryContainer
-                                )
-                                IconButton(
-                                    onClick = { onRemove(name) },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Close,
-                                        contentDescription = "删除主角",
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                DropdownMenuItem(
+                    text = { AppText("取消弃文", fontSize = 14.sp) },
+                    onClick = {
+                        onSetAbandoned(false)
+                        expanded = false
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StatsSection(
-    stats: ReadingStatistics,
-    progress: Float,
-    progressInfo: String,
-    annotationCount: Int,
-    lastReadTime: Long,
-) {
-    val days = if (stats.readingDays > 0) stats.readingDays else 1
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            AppText(
-                text = "阅读数据",
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+private fun StatsSection(state: ReadingMemoryDetailUiState) {
+    SectionCard(title = "阅读数据") {
+        val firstDateText = state.readRecordTimelineDays
+            .minByOrNull { it.date }
+            ?.date
+            ?.let { formatReadDate(it) }
+            ?.let { "始于 $it" }
+        val lastDateText = if (state.lastReadTime > 0) {
+            "上次 ${formatReadDate(state.lastReadTime)}"
+        } else null
+        Row(modifier = Modifier.fillMaxWidth()) {
+            StatBlock(
+                title = "累计时长",
+                primary = formatReadDuration(state.readRecordTotalTime),
+                secondary = firstDateText,
+                modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                StatItem2(
-                    primary = formatReadTime(stats.totalReadTime),
-                    secondary = "最近 " + formatDate(lastReadTime),
-                    label = "累计时长",
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                )
-                StatItem2(
-                    primary = "${stats.readingDays} 天",
-                    secondary = "共读书",
-                    label = "阅读天数",
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                )
-                StatItem2(
-                    primary = "${(progress.coerceIn(0f, 1f) * 100).toInt()}%",
-                    secondary = progressInfo.ifBlank { "第 0 章" },
-                    label = "阅读进度",
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                )
-                StatItem2(
-                    primary = "$annotationCount 条",
-                    secondary = "含笔记书签",
-                    label = "笔记",
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                )
-                StatItem2(
-                    primary = formatReadTime(stats.maxDayReadTime),
-                    secondary = stats.maxDayReadDate ?: "—",
-                    label = "单日最久",
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                )
-                StatItem2(
-                    primary = formatWordCount(stats.totalWords),
-                    secondary = "日均 " + formatWordCount(stats.totalWords / days),
-                    label = "阅读总字数",
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                )
-            }
+            Spacer(modifier = Modifier.width(12.dp))
+            StatBlock(
+                title = "阅读天数",
+                primary = "${state.statistics?.readingDays ?: 0}天",
+                secondary = lastDateText,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            StatBlock(
+                title = "全书字数",
+                primary = state.wordCountText.ifBlank { "—" },
+                secondary = null,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            StatBlock(
+                title = "笔记数",
+                primary = state.annotationCount.toString(),
+                secondary = null,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
 @Composable
-private fun StatItem2(
+private fun StatBlock(
+    title: String,
     primary: String,
-    secondary: String,
-    label: String,
+    secondary: String?,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.padding(end = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
         AppText(
-            text = primary,
-            style = LegadoTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = LegadoTheme.colorScheme.primary
+            text = title,
+            fontSize = 12.sp,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
         )
-        AppText(
-            text = secondary,
-            style = LegadoTheme.typography.labelSmall,
-            color = LegadoTheme.colorScheme.onSurfaceVariant
-        )
-        AppText(
-            text = label,
-            style = LegadoTheme.typography.labelSmall,
-            color = LegadoTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun ExcerptsSection(excerpts: List<ReadingMemoryExcerpt>) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Spacer(modifier = Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
             AppText(
-                text = "书摘（含笔记）",
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                text = primary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (excerpts.isEmpty()) {
-                EmptyMessage("暂无含笔记的书签。在正文长按添加带笔记的书签后，这里会自动汇总。")
-            } else {
-                excerpts.forEachIndexed { index, excerpt ->
-                    if (index > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = LegadoTheme.colorScheme.outlineVariant
-                        )
-                    }
-                    if (excerpt.chapterName.isNotBlank()) {
-                        AppText(
-                            text = excerpt.chapterName,
-                            style = LegadoTheme.typography.labelMedium,
-                            color = LegadoTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (excerpt.note.isNotBlank()) {
-                        AppText(
-                            text = excerpt.note,
-                            style = LegadoTheme.typography.bodyMedium,
-                            color = LegadoTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                    if (!excerpt.originText.isNullOrBlank()) {
-                        AppText(
-                            text = excerpt.originText,
-                            style = LegadoTheme.typography.bodySmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
+            if (secondary != null) {
+                Spacer(modifier = Modifier.width(6.dp))
+                AppText(
+                    text = secondary,
+                    fontSize = 11.sp,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReviewSection(review: String, onEdit: () -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
+private fun TagsSection(
+    state: ReadingMemoryDetailUiState,
+    onIntent: (ReadingMemoryDetailIntent) -> Unit,
+) {
+    SectionCard(title = "标签") {
+        if (state.tags.isEmpty()) {
+            AppText(
+                text = "暂无标签",
+                fontSize = 13.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                AppText(
-                    text = "书评",
-                    style = LegadoTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = onEdit) {
-                    AppText(if (review.isBlank()) "写书评" else "编辑")
-                }
-            }
-            if (review.isNotBlank()) {
-                AppText(
-                    text = review,
-                    style = LegadoTheme.typography.bodyMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                AppText(
-                    text = "暂无书评，点击上方按钮添加",
-                    style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReadingSessionSection(sessions: List<ReadingSessionItem>) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            AppText(
-                text = "阅读会话",
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (sessions.isEmpty()) {
-                EmptyMessage("暂无阅读会话记录。开始阅读后，按天的阅读时长会自动汇总到这里。")
-            } else {
-                sessions.forEachIndexed { index, session ->
-                    if (index > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = LegadoTheme.colorScheme.outlineVariant
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppText(
-                            text = session.date.ifBlank { "未知日期" },
-                            style = LegadoTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            AppText(
-                                text = formatReadTime(session.readTime),
-                                style = LegadoTheme.typography.bodyMedium,
-                                color = LegadoTheme.colorScheme.primary
-                            )
-                            if (session.readWords > 0) {
-                                AppText(
-                                    text = formatWordCount(session.readWords) + "字",
-                                    style = LegadoTheme.typography.bodySmall,
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AbandonedSection(abandoned: Boolean, onToggle: (Boolean) -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            AppText(
-                text = "阅读状态",
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            AppText(
-                text = "阅读状态由阅读进度自动判定（在读/已读/待看），仅「弃文」可手动覆盖。",
-                style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (abandoned) {
-                Button(
-                    onClick = { onToggle(false) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = LegadoTheme.colorScheme.tertiary
+                state.tags.forEach { tag ->
+                    TagChip(
+                        tag = tag,
+                        onRemove = { onIntent(ReadingMemoryDetailIntent.RemoveTag(tag)) },
                     )
-                ) {
-                    AppText("取消弃文标记")
                 }
-            } else {
-                OutlinedButton(
-                    onClick = { onToggle(true) },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = LegadoTheme.colorScheme.error
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = { onIntent(ReadingMemoryDetailIntent.OpenTagPicker) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(imageVector = Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            AppText("添加标签")
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun ProtagonistsSection(
+    state: ReadingMemoryDetailUiState,
+    onIntent: (ReadingMemoryDetailIntent) -> Unit,
+) {
+    var adding by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+
+    SectionCard(title = "主要人物") {
+        if (state.protagonistNames.isEmpty()) {
+            AppText(
+                text = "暂无人物",
+                fontSize = 13.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                state.protagonistNames.forEach { p ->
+                    TagChip(
+                        tag = p,
+                        onRemove = { onIntent(ReadingMemoryDetailIntent.RemoveProtagonist(p)) },
                     )
-                ) {
-                    AppText("标记为弃文")
                 }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = {
+                name = ""
+                adding = true
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(imageVector = Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            AppText("添加人物")
+        }
+    }
+
+    if (adding) {
+        AppModalBottomSheet(
+            show = true,
+            onDismissRequest = { adding = false },
+            title = "添加人物",
+        ) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("人物名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            FilledTonalButton(
+                onClick = {
+                    if (name.isNotBlank()) {
+                        onIntent(ReadingMemoryDetailIntent.AddProtagonist(name.trim()))
+                        adding = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                AppText("确定")
             }
         }
     }
 }
 
-// 状态徽章配色
 @Composable
-private fun statusBadgeColor(status: Int) = when (status) {
-    3 -> LegadoTheme.colorScheme.errorContainer
-    2 -> LegadoTheme.colorScheme.tertiaryContainer
-    1 -> LegadoTheme.colorScheme.primaryContainer
-    else -> LegadoTheme.colorScheme.surfaceVariant
-}
-
-@Composable
-private fun statusBadgeTextColor(status: Int) = when (status) {
-    3 -> LegadoTheme.colorScheme.onErrorContainer
-    2 -> LegadoTheme.colorScheme.onTertiaryContainer
-    1 -> LegadoTheme.colorScheme.onPrimaryContainer
-    else -> LegadoTheme.colorScheme.onSurfaceVariant
-}
-
-private fun formatReadTime(millis: Long): String {
-    if (millis <= 0) return "0 分钟"
-    val hours = millis / 3600000
-    val minutes = (millis % 3600000) / 60000
-    return when {
-        hours > 0 -> "$hours 小时 ${minutes} 分钟"
-        minutes > 0 -> "$minutes 分钟"
-        else -> "不到 1 分钟"
+private fun ReviewSection(
+    state: ReadingMemoryDetailUiState,
+    onIntent: (ReadingMemoryDetailIntent) -> Unit,
+) {
+    SectionCard(title = "我的书评") {
+        if (state.review.isBlank()) {
+            AppText(
+                text = "还没有写书评",
+                fontSize = 13.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            AppText(
+                text = state.review,
+                fontSize = 14.sp,
+                lineHeight = 22.sp,
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = { onIntent(ReadingMemoryDetailIntent.OpenReviewEditor(state.review)) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(imageVector = Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            AppText(if (state.review.isBlank()) "写书评" else "编辑书评")
+        }
     }
 }
 
-private fun formatWordCount(words: Long): String {
-    if (words <= 0) return "0"
-    return when {
-        words >= 10000 -> "${words / 10000}万"
-        words >= 1000 -> "${words / 1000}千"
-        else -> "$words"
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun IntroSection(
+    state: ReadingMemoryDetailUiState,
+    onIntent: (ReadingMemoryDetailIntent) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var canExpand by remember { mutableStateOf(false) }
+    SectionCard(title = "作品简介") {
+        if (state.intro.isBlank()) {
+            AppText(
+                text = "暂无简介",
+                fontSize = 13.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            AppText(
+                text = state.intro,
+                fontSize = 14.sp,
+                lineHeight = 22.sp,
+                maxLines = if (expanded) Int.MAX_VALUE else 5,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { canExpand = it.lineCount > 5 },
+                modifier = Modifier.clickable { if (canExpand) expanded = !expanded },
+            )
+            if (canExpand) {
+                Spacer(modifier = Modifier.height(4.dp))
+                AppText(
+                    text = if (expanded) "收起 ▴" else "展开全文 ▾",
+                    fontSize = 12.sp,
+                    color = LegadoTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { expanded = !expanded },
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = { onIntent(ReadingMemoryDetailIntent.OpenBookInfo) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(imageVector = Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            AppText("编辑简介")
+        }
     }
 }
 
-private fun formatDate(millis: Long): String {
-    if (millis <= 0) return "—"
-    val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-    val y = cal.get(java.util.Calendar.YEAR)
-    val m = cal.get(java.util.Calendar.MONTH) + 1
-    val d = cal.get(java.util.Calendar.DAY_OF_MONTH)
-    return "$y-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}"
+@Composable
+private fun ExcerptSection(state: ReadingMemoryDetailUiState) {
+    if (state.excerpts.isEmpty()) return
+    SectionCard(title = "阅读摘录") {
+        state.excerpts.forEachIndexed { index, excerpt ->
+            if (index > 0) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = LegadoTheme.colorScheme.outlineVariant,
+                )
+            }
+            AppText(
+                text = excerpt.chapterName,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+            if (excerpt.note.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                AppText(text = excerpt.note, fontSize = 14.sp, lineHeight = 22.sp)
+            }
+            if (!excerpt.originText.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                AppText(
+                    text = excerpt.originText,
+                    fontSize = 13.sp,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/* ===================== 弹窗 ===================== */
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun TagPickerSheet(
+    availableTags: List<String>,
+    selectedTags: List<String>,
+    onDismiss: () -> Unit,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (String) -> Unit,
+) {
+    var customTag by remember { mutableStateOf("") }
+
+    AppModalBottomSheet(
+        show = true,
+        onDismissRequest = onDismiss,
+        title = "选择标签",
+    ) {
+        if (selectedTags.isNotEmpty()) {
+            AppText(
+                text = "已选标签",
+                fontSize = 13.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                selectedTags.forEach { tag ->
+                    TagChip(tag = tag, onRemove = { onRemoveTag(tag) })
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        val candidates = availableTags.filter { it !in selectedTags }
+        if (candidates.isNotEmpty()) {
+            AppText(
+                text = "推荐标签",
+                fontSize = 13.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                candidates.forEach { tag ->
+                    TagChip(tag = tag, onAdd = { onAddTag(tag) })
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        OutlinedTextField(
+            value = customTag,
+            onValueChange = { customTag = it },
+            label = { Text("自定义标签") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = {
+                if (customTag.isNotBlank()) {
+                    onAddTag(customTag.trim())
+                    customTag = ""
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            AppText("添加")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReviewEditorSheet(
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AppModalBottomSheet(
+        show = true,
+        onDismissRequest = onDismiss,
+        title = "编辑书评",
+    ) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = onDraftChange,
+            label = { Text("书评内容") },
+            minLines = 4,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = onSave,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            AppText("保存")
+        }
+    }
+}
+
+/* ===================== 通用组件 ===================== */
+
+@Composable
+private fun SectionCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            AppText(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+
+
+@Composable
+private fun TagChip(
+    tag: String,
+    onRemove: (() -> Unit)? = null,
+    onAdd: (() -> Unit)? = null,
+) {
+    NormalCard(
+        onClick = onAdd ?: onRemove,
+        cornerRadius = 16.dp,
+        containerColor = tagColor(tag),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppText(text = tag, fontSize = 13.sp, color = Color.White)
+            if (onRemove != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "移除",
+                    modifier = Modifier.size(14.dp),
+                    tint = Color.White,
+                )
+            } else if (onAdd != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "添加",
+                    modifier = Modifier.size(14.dp),
+                    tint = Color.White,
+                )
+            }
+        }
+    }
+}
+
+private fun tagColor(tag: String): Color {
+    val palette = listOf(
+        Color(0xFFE57373), Color(0xFFBA68C8), Color(0xFF64B5F6), Color(0xFF4DB6AC),
+        Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFA1887F), Color(0xFF90A4AE),
+        Color(0xFFF06292), Color(0xFF7986CB),
+    )
+    val h = if (tag.hashCode() == Int.MIN_VALUE) 0 else kotlin.math.abs(tag.hashCode())
+    return palette[h % palette.size].copy(alpha = 0.85f)
+}
+
+@Composable
+private fun ReadSessionSection(state: ReadingMemoryDetailUiState) {
+    if (state.readRecordTimelineDays.isEmpty()) return
+    SectionCard(title = "阅读会话") {
+        GlassCard(
+            containerColor = LegadoTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            cornerRadius = 8.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Schedule,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = LegadoTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                AppText(
+                    text = "总阅读时长",
+                    fontSize = 12.sp,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                AppText(
+                    text = formatReadDuration(state.readRecordTotalTime),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        ReadingSessionTimeline(
+            timelineDays = state.readRecordTimelineDays,
+            showChapterInfo = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+private fun formatReadDate(input: Any): String {
+    val date = when (input) {
+        is Long -> Date(input)
+        is String -> try {
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(input)
+        } catch (_: Exception) {
+            null
+        }
+        else -> null
+    } ?: return ""
+    return SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(date)
 }

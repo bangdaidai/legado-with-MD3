@@ -161,4 +161,12 @@ interface ReadingMemoryDao {
         intro: String?,
         updateTime: Long = System.currentTimeMillis(),
     )
+
+    /** 更新标签（kind，以 "|" 分隔） */
+    @Query("UPDATE readingMemory SET kind = :kind, updateTime = :updateTime WHERE bookUrl = :bookUrl")
+    suspend fun updateKind(
+        bookUrl: String,
+        kind: String,
+        updateTime: Long = System.currentTimeMillis(),
+    )
 }
