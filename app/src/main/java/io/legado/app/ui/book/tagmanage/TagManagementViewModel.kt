@@ -76,7 +76,7 @@ class TagManagementViewModel : ViewModel() {
     }
 
     private fun loadData() {
-        viewModelScope.launch { loadDataBody() }
+        viewModelScope.launch(Dispatchers.IO) { loadDataBody() }
     }
 
     private suspend fun loadDataBody() = withContext(Dispatchers.IO) {
@@ -141,7 +141,7 @@ class TagManagementViewModel : ViewModel() {
                 }
             }
         }
-        loadData()
+        loadDataBody()
         postEvent(EventBus.TAGS_UPDATED, intent.id)
     }
 
@@ -158,7 +158,8 @@ class TagManagementViewModel : ViewModel() {
         appDb.bookTagRelationDao.deleteByTagId(tag.id)
         appDb.tagMappingDao.deleteByNewTagId(tag.id)
         appDb.bookTagDao.deleteById(tag.id)
-        loadData()
+        loadDataBody()
+        postEvent(EventBus.TAGS_UPDATED, tag.id)
     }
 
     private suspend fun saveGroup(intent: TagManagementIntent.SaveGroup) {
@@ -173,17 +174,20 @@ class TagManagementViewModel : ViewModel() {
             val old = appDb.bookTagGroupDao.getById(intent.id) ?: return
             appDb.bookTagGroupDao.update(old.copy(name = intent.name))
         }
-        loadData()
+        loadDataBody()
+        postEvent(EventBus.TAGS_UPDATED, intent.id)
     }
 
     private suspend fun deleteGroup(group: BookTagGroup) {
         appDb.bookTagGroupDao.deleteById(group.id)
-        loadData()
+        loadDataBody()
+        postEvent(EventBus.TAGS_UPDATED, group.id)
     }
 
     private suspend fun deleteMapping(mapping: TagMapping) {
         appDb.tagMappingDao.deleteById(mapping.id)
-        loadData()
+        loadDataBody()
+        postEvent(EventBus.TAGS_UPDATED, mapping.id)
     }
 
     private suspend fun excludeTag(intent: TagManagementIntent.ExcludeTag) {
@@ -193,6 +197,8 @@ class TagManagementViewModel : ViewModel() {
             return
         }
         appDb.excludedTagDao.insert(ExcludedTag(name = name, isRegex = false))
+        loadDataBody()
+        postEvent(EventBus.TAGS_UPDATED, name)
         _effect.emit(TagManagementEffect.ShowMessage("已添加到排除列表"))
     }
 }

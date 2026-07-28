@@ -85,18 +85,102 @@ fun TagEditSheet(
         show = data != null,
         onDismissRequest = onDismiss,
         title = if (data?.id == 0L) "新增标签" else "编辑标签",
-        startAction = if (data != null && data.id != 0L) {
-            {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    onExclude?.let { ex ->
-                        TextButton(
-                            onClick = { data?.name?.trim()?.let(ex) },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            ),
-                        ) {
-                            Text("排除")
+    ) {
+        data?.let { d ->
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(d.color))
+                            .clickable { onPickColor() },
+                    )
+                    OutlinedTextField(
+                        value = d.name,
+                        onValueChange = { onChange(d.copy(name = it)) },
+                        label = { Text("标签名") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                GroupField(
+                    groups = groups,
+                    selectedId = d.groupId,
+                    onSelect = { onChange(d.copy(groupId = it)) },
+                )
+                if (aliases.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "别名（合并到标准标签）",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                        aliases.forEach { mapping ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    mapping.oldTagName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                SmallPlainButton(
+                                    text = "设为标准",
+                                    onClick = { onMapToStandard(mapping.oldTagName) },
+                                )
+                                SmallPlainButton(
+                                    text = "移除",
+                                    icon = Icons.Default.Delete,
+                                    onClick = { onRemoveAlias(mapping) },
+                                )
+                            }
                         }
+                    }
+                }
+                val hasActions = (d.id != 0L && (onExclude != null || onDelete != null))
+                if (hasActions) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        onExclude?.let { ex ->
+                            TextButton(
+                                onClick = { d.name.trim().let(ex) },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                            ) { Text("排除") }
+                        }
+                        onDelete?.let { del ->
+                            TextButton(
+                                onClick = del,
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                            ) { Text("删除") }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { onConfirm(d) }) { Text("保存") }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { onConfirm(d) }) { Text("保存") }
+                    }
+                }
+            }
+        }
+    }
+}
                     }
                     onDelete?.let { del ->
                         TextButton(
@@ -361,25 +445,34 @@ fun GroupEditSheet(
         show = data != null,
         onDismissRequest = onDismiss,
         title = if (data?.id == 0L) "新增分组" else "编辑分组",
-        startAction = if (data != null && data.id != 0L) {
-            { SmallPlainButton(text = "删除", icon = Icons.Default.Delete, onClick = { onDelete(data) }) }
-        } else {
-            null
-        },
-        endAction = {
-            SmallPlainButton(text = "保存", onClick = {
-                data?.let { d -> onSave(d.copy(name = name.trim())) }
-            })
-        },
     ) {
         if (data != null) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("分组名") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("分组名") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (data.id != 0L) {
+                        SmallPlainButton(
+                            text = "删除",
+                            icon = Icons.Default.Delete,
+                            onClick = { onDelete(data) },
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    SmallPlainButton(text = "保存", onClick = {
+                        data?.let { d -> onSave(d.copy(name = name.trim())) }
+                    })
+                }
+            }
         }
     }
 }
@@ -442,16 +535,6 @@ fun ExcludedEditSheet(
         show = data != null,
         onDismissRequest = onDismiss,
         title = if (data?.id == 0L) "新增排除项" else "编辑排除项",
-        startAction = if (data != null && data.id != 0L) {
-            { SmallPlainButton(text = "删除", icon = Icons.Default.Delete, onClick = { onDelete(data) }) }
-        } else {
-            null
-        },
-        endAction = {
-            SmallPlainButton(text = "保存", onClick = {
-                data?.let { d -> onSave(d.copy(name = name.trim(), isRegex = isRegex)) }
-            })
-        },
     ) {
         if (data != null) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -465,6 +548,28 @@ fun ExcludedEditSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isRegex, onCheckedChange = { isRegex = it })
                     Text("作为正则匹配", style = MaterialTheme.typography.bodyMedium)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (data.id != 0L) {
+                        SmallPlainButton(
+                            text = "删除",
+                            icon = Icons.Default.Delete,
+                            onClick = { onDelete(data) },
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    SmallPlainButton(
+                        text = "保存",
+                        onClick = {
+                            data?.let { d ->
+                                onSave(d.copy(name = name.trim(), isRegex = isRegex))
+                            }
+                        },
+                    )
                 }
             }
         }

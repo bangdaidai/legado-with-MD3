@@ -22,6 +22,7 @@ sealed interface TagDetailIntent {
     data class OpenBook(val bookUrl: String) : TagDetailIntent
     data class SetStandard(val standardName: String) : TagDetailIntent
     data class RemoveAlias(val oldName: String) : TagDetailIntent
+    data class Exclude(val name: String) : TagDetailIntent
 }
 
 sealed interface TagDetailEffect {

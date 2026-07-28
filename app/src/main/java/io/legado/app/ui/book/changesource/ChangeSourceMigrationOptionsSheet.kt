@@ -40,9 +40,6 @@ fun ChangeSourceMigrationOptionsSheet(
     var migrateCover by rememberSaveable(show) {
         mutableStateOf(initialOptions.migrateCover)
     }
-    var migrateCategory by rememberSaveable(show) {
-        mutableStateOf(initialOptions.migrateCategory)
-    }
     var migrateRemark by rememberSaveable(show) {
         mutableStateOf(initialOptions.migrateRemark)
     }
@@ -86,7 +83,6 @@ fun ChangeSourceMigrationOptionsSheet(
             }
             CheckboxItem("分组和排序", checked = migrateGroup) { migrateGroup = it }
             CheckboxItem("自定义封面", checked = migrateCover) { migrateCover = it }
-            CheckboxItem("分类与标签", checked = migrateCategory) { migrateCategory = it }
             CheckboxItem("备注和自定义简介", checked = migrateRemark) { migrateRemark = it }
             CheckboxItem("阅读设置", checked = migrateReadConfig) { migrateReadConfig = it }
                         CheckboxItem(
@@ -106,7 +102,7 @@ fun ChangeSourceMigrationOptionsSheet(
                             migrateReadingProgress = migrateReadingProgress,
                             migrateGroup = migrateGroup,
                             migrateCover = migrateCover,
-                            migrateCategory = migrateCategory,
+                            migrateCategory = keepOfficialMeta,
                             migrateRemark = migrateRemark,
                             migrateReadConfig = migrateReadConfig,
                             deleteDownloadedChapters = deleteDownloadedChapters,

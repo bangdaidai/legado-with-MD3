@@ -1103,6 +1103,7 @@ fun MainActivity.mainEntryProvider(
         val state by viewModel.detailState.collectAsStateWithLifecycle()
 
         LaunchedEffect(viewModel) {
+            viewModel.onIntent(ReadingMemoryDetailIntent.Load(route.bookUrl))
             viewModel.effect.collectLatest { effect ->
                 when (effect) {
                     is ReadingMemoryDetailEffect.Back -> onNavigateBack()

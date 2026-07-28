@@ -15,14 +15,15 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.calculateBottomPadding
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Block
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,9 +47,6 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.icon.AppIcons
-import io.legado.app.ui.widget.components.menuItem.MenuItemIcon
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
@@ -65,7 +63,6 @@ fun ExcludedTagScreen(
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     var showSearch by remember { mutableStateOf(false) }
-    var menuExpanded by remember { mutableStateOf(false) }
     var edit by remember { mutableStateOf<ExcludedTag?>(null) }
 
     AppScaffold(
@@ -85,20 +82,10 @@ fun ExcludedTagScreen(
                         contentDescription = "搜索",
                     )
                     TopBarActionButton(
-                        onClick = { menuExpanded = true },
-                        imageVector = AppIcons.MoreVert,
-                        contentDescription = "更多",
+                        onClick = { edit = ExcludedTag(name = "", isRegex = false) },
+                        imageVector = AppIcons.Add,
+                        contentDescription = "新增排除项",
                     )
-                    RoundDropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                    ) { dismiss ->
-                        RoundDropdownMenuItem(
-                            text = "新增排除项",
-                            leadingIcon = { MenuItemIcon(Icons.Filled.Add) },
-                            onClick = { dismiss(); edit = ExcludedTag(name = "", isRegex = false) },
-                        )
-                    }
                 },
             )
         },
@@ -106,21 +93,24 @@ fun ExcludedTagScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(bottom = padding.calculateBottomPadding())
                 .verticalScroll(rememberScrollState()),
         ) {
+            Spacer(modifier = Modifier.height(padding.calculateTopPadding()))
             AnimatedVisibility(
                 visible = showSearch,
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut(),
             ) {
-                SearchBar(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    query = state.searchQuery,
-                    onQueryChange = { onIntent(ExcludedTagIntent.Search(it)) },
-                    onClose = { showSearch = false; onIntent(ExcludedTagIntent.Search("")) },
-                    placeholder = "搜索排除项",
-                )
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SearchBar(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        query = state.searchQuery,
+                        onQueryChange = { onIntent(ExcludedTagIntent.Search(it)) },
+                        onClose = { showSearch = false; onIntent(ExcludedTagIntent.Search("")) },
+                        placeholder = "搜索排除项",
+                    )
+                }
             }
             val query = state.searchQuery
             val filtered = if (query.isBlank()) {

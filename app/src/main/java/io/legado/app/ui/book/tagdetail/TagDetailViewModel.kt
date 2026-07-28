@@ -46,6 +46,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
                 viewModelScope.launch { _effect.emit(TagDetailEffect.NavigateToBook(intent.bookUrl)) }
             is TagDetailIntent.SetStandard -> viewModelScope.launch { setStandard(intent) }
             is TagDetailIntent.RemoveAlias -> viewModelScope.launch { removeAlias(intent) }
+            is TagDetailIntent.Exclude -> viewModelScope.launch { exclude(intent) }
         }
     }
 
@@ -145,5 +146,18 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         appDb.tagMappingDao.deleteById(mapping.id)
         postEvent(EventBus.TAGS_UPDATED, tagId)
         load()
+    }
+
+    private suspend fun exclude(intent: TagDetailIntent.Exclude) {
+        val name = intent.name.trim()
+        if (name.isBlank()) return
+        appDb.excludedTagDao.insert(
+            io.legado.app.data.entities.ExcludedTag(name = name, isRegex = false)
+        )
+        appDb.bookTagRelationDao.deleteByTagId(tagId)
+        appDb.tagMappingDao.deleteByNewTagId(tagId)
+        appDb.bookTagDao.deleteById(tagId)
+        postEvent(EventBus.TAGS_UPDATED, tagId)
+        _effect.emit(TagDetailEffect.Back)
     }
 }

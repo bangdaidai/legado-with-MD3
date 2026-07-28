@@ -177,4 +177,31 @@ interface ReadingMemoryDao {
     /** 全量查询（供备份使用，非 Flow） */
     @Query("SELECT * FROM readingMemory")
     suspend fun getAllSync(): List<ReadingMemory>
+
+    /** 换源：将阅读记忆从旧 bookUrl 迁移到新 bookUrl，保留全部用户编辑数据 */
+    @Query(
+        """
+        INSERT OR REPLACE INTO readingMemory(bookUrl, bookName, bookAuthor, coverUrl, intro, userModifiedIntro,
+            kind, wordCount, type, progress, totalChapterNum, durChapterIndex, durChapterPos,
+            rating, review, abandoned, firstReadTime, finishReadTime, lastReadTime,
+            createTime, updateTime, annotationCount,
+            protagonistsJson, excerptsJson,
+            statTotalReadTime, statReadingDays, statMaxDayReadTime, statMaxDayReadDate, statTotalWords)
+        SELECT
+            :newBookUrl,
+            bookName, bookAuthor, coverUrl, intro, userModifiedIntro,
+            kind, wordCount, type, progress, totalChapterNum, durChapterIndex, durChapterPos,
+            rating, review, abandoned, firstReadTime, finishReadTime, lastReadTime,
+            createTime, :now,
+            annotationCount,
+            protagonistsJson, excerptsJson,
+            statTotalReadTime, statReadingDays, statMaxDayReadTime, statMaxDayReadDate, statTotalWords
+        FROM readingMemory WHERE bookUrl = :oldBookUrl
+        """
+    )
+    suspend fun migrateToNewBookUrl(oldBookUrl: String, newBookUrl: String, now: Long = System.currentTimeMillis())
+
+    /** 清理换源后的旧记录 */
+    @Query("DELETE FROM readingMemory WHERE bookUrl = :bookUrl")
+    suspend fun deleteMigrated(bookUrl: String)
 }

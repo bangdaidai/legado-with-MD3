@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateBottomPadding
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
@@ -125,22 +128,21 @@ fun TagManagementScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            AnimatedVisibility(
-                visible = showSearch,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
-            ) {
-                SearchBar(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    query = state.searchQuery,
-                    onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
-                    onClose = { showSearch = false; onIntent(TagManagementIntent.Search("")) },
-                    placeholder = stringResource(R.string.search_tag),
-                )
-            }
-            // 主页面只展示标签（与 readdai 书籍标签管理一致）
-            TagListTab(state = state, onIntent = onIntent)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = padding.calculateBottomPadding())
+        ) {
+            TagListTab(
+                state = state,
+                onIntent = onIntent,
+                showSearch = showSearch,
+                topContentPadding = padding.calculateTopPadding(),
+                onCloseSearch = {
+                    showSearch = false
+                    onIntent(TagManagementIntent.Search(""))
+                },
+            )
         }
     }
 
@@ -204,6 +206,9 @@ fun TagManagementScreen(
 private fun TagListTab(
     state: TagManagementUiState,
     onIntent: (TagManagementIntent) -> Unit,
+    showSearch: Boolean = false,
+    topContentPadding: Dp = 0.dp,
+    onCloseSearch: () -> Unit = {},
 ) {
     val query = state.searchQuery
     val filtered = if (query.isBlank()) {
@@ -219,8 +224,28 @@ private fun TagListTab(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp, end = 16.dp,
+            top = topContentPadding + 16.dp, bottom = 16.dp
+        ),
     ) {
+        item(key = "search") {
+            AnimatedVisibility(
+                visible = showSearch,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SearchBar(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        query = query,
+                        onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
+                        onClose = onCloseSearch,
+                        placeholder = stringResource(R.string.search_tag),
+                    )
+                }
+            }
+        }
         if (ungrouped.isNotEmpty()) {
             item(key = "section_ungrouped") {
                 Text("未分组", style = MaterialTheme.typography.titleMedium)

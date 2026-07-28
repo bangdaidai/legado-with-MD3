@@ -258,7 +258,6 @@ object TagManager {
             }
             appDb.bookTagRelationDao.deleteByTagId(aliasTag.id)
             appDb.bookTagDao.deleteById(aliasTag.id)
-            postEvent(EventBus.TAGS_UPDATED, standardTagId)
         }
 
     private suspend fun createNewTag(name: String): BookTag {

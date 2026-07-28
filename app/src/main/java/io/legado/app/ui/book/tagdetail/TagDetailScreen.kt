@@ -141,8 +141,8 @@ fun TagDetailScreen(
                 onIntent(TagDetailIntent.Save(it.name, it.groupId, it.color))
                 tagEdit = null
             },
-            onDelete = {
-                onIntent(TagDetailIntent.Delete)
+            onExclude = { name ->
+                onIntent(TagDetailIntent.Exclude(name))
                 tagEdit = null
             },
             onDismiss = { tagEdit = null },

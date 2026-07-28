@@ -507,6 +507,17 @@ class ReadingMemoryRepository(
     }
 
     /**
+     * 换源时保留全部阅读记忆：将旧 bookUrl 的记录完整迁移到新 bookUrl。
+     * 用户评分/书评/弃文标记/主角/书摘/阅读统计等全部字段均保留。
+     * 调用前应确保新 bookUrl 已有 stub 或已调用 ensureMemory。
+     */
+    suspend fun migrateMemory(oldBookUrl: String, newBookUrl: String) {
+        if (oldBookUrl == newBookUrl) return
+        dao.migrateToNewBookUrl(oldBookUrl, newBookUrl)
+        dao.deleteMigrated(oldBookUrl)
+    }
+
+    /**
      * 清空全部阅读记忆。
      */
     suspend fun clearAll() {
