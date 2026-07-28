@@ -2921,20 +2921,16 @@
     <string name="translation_model_thinking">Model is thinking</string>
 
     <!-- Tag management -->
-    <string name="tag_management">Tag Management</string>
     <string name="tag_mapping">Tag Mapping</string>
     <string name="excluded_tags">Excluded Tags</string>
     <string name="search_tag">Search tags</string>
     <string name="tag_detail">Tag Detail</string>
-    <string name="add_tag">Add Tag</string>
-    <string name="edit_tag">Edit Tag</string>
     <string name="exclude">Exclude</string>
     <string name="tag_name">Tag name</string>
     <string name="alias_merge_standard">Alias (merge into standard tag)</string>
     <string name="set_as_standard">Set as standard</string>
     <string name="new_group">New Group</string>
     <string name="edit_group">Edit Group</string>
-    <string name="group_name">Group name</string>
     <string name="tag_count_format">Tags: %1$d</string>
     <string name="new_excluded">New Exclusion</string>
     <string name="edit_excluded">Edit Exclusion</string>

@@ -2909,20 +2909,16 @@
     <string name="translation_model_thinking">模型思考中</string>
 
     <!-- Tag management -->
-    <string name="tag_management">标签管理</string>
     <string name="tag_mapping">标签映射</string>
     <string name="excluded_tags">排除标签</string>
     <string name="search_tag">搜索标签</string>
     <string name="tag_detail">标签详情</string>
-    <string name="add_tag">新增标签</string>
-    <string name="edit_tag">编辑标签</string>
     <string name="exclude">排除</string>
     <string name="tag_name">标签名</string>
     <string name="alias_merge_standard">别名（合并到标准标签）</string>
     <string name="set_as_standard">设为标准</string>
     <string name="new_group">新增分组</string>
     <string name="edit_group">编辑分组</string>
-    <string name="group_name">分组名</string>
     <string name="tag_count_format">标签数：%1$d</string>
     <string name="new_excluded">新增排除项</string>
     <string name="edit_excluded">编辑排除项</string>
