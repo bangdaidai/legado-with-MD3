@@ -25,6 +25,9 @@ class ReadingMemoryDetailViewModel(
     // 主角实时源变化触发器：增删主角后强制重算
     private val protagonistRefresh = MutableStateFlow(Unit)
 
+    // 书签/摘录变化触发器：编辑或删除书签后强制重算
+    private val bookmarkRefresh = MutableStateFlow(Unit)
+
     private val _showReviewEditor = MutableStateFlow(false)
     private val _reviewDraft = MutableStateFlow("")
     private val _showTagPicker = MutableStateFlow(false)
@@ -39,7 +42,8 @@ class ReadingMemoryDetailViewModel(
         repository.observeByBookUrl(bookUrl),
         protagonistRefresh,
         _showTagPicker,
-    ) { memory, _, tagPicker -> memory to tagPicker }
+        bookmarkRefresh,
+    ) { memory, _, tagPicker, _ -> memory to tagPicker }
         .flatMapLatest { (memory, abandonedDialog) ->
             val book = repository.getBook(bookUrl)
             val statistics = repository.computeStatistics(bookUrl)
@@ -107,13 +111,7 @@ class ReadingMemoryDetailViewModel(
                     statistics = statistics,
                     protagonistNames = protagonists,
                     tags = tags,
-                    excerpts = excerpts.map {
-                        ReadingMemoryExcerpt(
-                            chapterName = it.chapterName ?: "",
-                            note = it.content ?: "",
-                            originText = it.bookText,
-                        )
-                    },
+                    excerpts = excerpts,
                     readRecordTimelineDays = readRecordTimelineDays,
                     readRecordTotalTime = readRecordTotalTime,
                     availableTags = availableTags,

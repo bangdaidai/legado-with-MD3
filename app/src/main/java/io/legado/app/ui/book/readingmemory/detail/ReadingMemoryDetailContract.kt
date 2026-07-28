@@ -33,7 +33,7 @@ data class ReadingMemoryDetailUiState(
     val statistics: ReadingStatistics? = null,
     val protagonistNames: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
-    val excerpts: List<ReadingMemoryExcerpt> = emptyList(),
+    val excerpts: List<Bookmark> = emptyList(),
     val readRecordTimelineDays: List<ReadRecordTimelineDay> = emptyList(),
     val readRecordTotalTime: Long = 0L,
     val availableTags: List<String> = emptyList(),
@@ -44,14 +44,6 @@ data class ReadingMemoryDetailUiState(
     val showRatingEditor: Boolean = false,
 )
 
-/**
- * 阅读摘录/笔记的展示模型。
- */
-data class ReadingMemoryExcerpt(
-    val chapterName: String = "",
-    val note: String = "",
-    val originText: String? = null,
-)
 
 /**
  * 用户意图。与 ViewModel 的 [io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailViewModel.handleIntent]

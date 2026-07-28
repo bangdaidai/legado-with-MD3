@@ -416,7 +416,7 @@ private fun TagsSection(
                 onIntent(ReadingMemoryDetailIntent.RemoveTag(pendingRemoveTag!!))
                 pendingRemoveTag = null
             },
-            onDismiss = { pendingRemoveTag = null },
+            onDismissRequest = { pendingRemoveTag = null },
         )
     }
 }
@@ -608,14 +608,14 @@ private fun ExcerptSection(
                     fontWeight = FontWeight.Bold,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
-                if (excerpt.note.isNotBlank()) {
+                if (excerpt.content.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(text = excerpt.note, fontSize = 14.sp, lineHeight = 22.sp)
+                    AppText(text = excerpt.content, fontSize = 14.sp, lineHeight = 22.sp)
                 }
-                if (!excerpt.originText.isNullOrBlank()) {
+                if (!excerpt.bookText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
-                        text = excerpt.originText,
+                        text = excerpt.bookText,
                         fontSize = 13.sp,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,

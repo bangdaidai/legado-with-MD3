@@ -120,7 +120,7 @@ object TagManager {
             memMap[book.bookUrl]?.let { mem ->
                 val newMemKind = replaceTagToken(mem.kind, old, new)
                 if (newMemKind != mem.kind) {
-                    appDb.readingMemoryDao.updateKind(book.bookUrl, newMemKind)
+                    appDb.readingMemoryDao.updateKind(book.bookUrl, newMemKind ?: "")
                 }
             }
         }
