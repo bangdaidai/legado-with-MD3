@@ -115,7 +115,7 @@ class ReadingMemoryDetailViewModel(
                     loading = memory == null,
                     showReviewEditor = showReview,
                     reviewDraft = draft,
-                    showTagPicker = tagPicker,
+                    showTagPicker = _showTagPicker.value,
                     showRatingEditor = false,
                 )
             }

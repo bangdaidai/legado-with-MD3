@@ -16,6 +16,7 @@ import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.help.book.ProtagonistExtractor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import java.util.Calendar
 import java.util.UUID
