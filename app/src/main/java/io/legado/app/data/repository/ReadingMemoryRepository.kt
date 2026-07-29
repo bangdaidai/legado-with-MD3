@@ -51,6 +51,10 @@ class ReadingMemoryRepository(
 
     suspend fun getBook(bookUrl: String): Book? = bookDao.getBook(bookUrl)
 
+    /** 批量获取所有在架书籍的 bookUrl -> customTag 映射，供阅读记忆页与书架/信息页保持标签一致。 */
+    suspend fun getCustomTagMap(): Map<String, String?> =
+        bookDao.getAll().associate { it.bookUrl to it.customTag }
+
     // endregion
 
     // region 确保记忆存在 / 同步

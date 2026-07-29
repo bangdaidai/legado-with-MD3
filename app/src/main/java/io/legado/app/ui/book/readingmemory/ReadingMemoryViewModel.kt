@@ -240,8 +240,10 @@ class ReadingMemoryViewModel(
             ReadingMemorySortBy.Name -> list.sortedBy { it.bookName.lowercase() }
         }
 
+        val customTagMap = repository.getCustomTagMap()
+
         val items = if (c.groupBy == ReadingMemoryGroupBy.None) {
-            sorted.map { ReadingMemoryListItem.BookItem(it, TagManager.bookDisplayTags(it.kind, null)) }
+            sorted.map { ReadingMemoryListItem.BookItem(it, TagManager.bookDisplayTags(it.kind, customTagMap[it.bookUrl])) }
         } else {
             val grouped = when (c.groupBy) {
                 ReadingMemoryGroupBy.Year -> groupAndOrder(
@@ -262,7 +264,7 @@ class ReadingMemoryViewModel(
                     val display = groupDisplay(key, c.groupBy)
                     val collapsed = c.collapsed.contains(key)
                     add(ReadingMemoryListItem.GroupHeader(key, display, mems.size, collapsed))
-                    if (!collapsed) mems.forEach { add(ReadingMemoryListItem.BookItem(it, TagManager.bookDisplayTags(it.kind, null))) }
+                    if (!collapsed) mems.forEach { add(ReadingMemoryListItem.BookItem(it, TagManager.bookDisplayTags(it.kind, customTagMap[it.bookUrl]))) }
                 }
             }
         }
