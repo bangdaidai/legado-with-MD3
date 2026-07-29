@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
@@ -239,7 +238,7 @@ private fun TagListTab(
     ) {
         if (ungrouped.isNotEmpty()) {
             item(key = "section_ungrouped") {
-                Text("未分组", style = MaterialTheme.typography.titleMedium, color = LegadoTheme.colorScheme.onSurface)
+                Text("未分组", style = LegadoTheme.typography.titleMedium, color = LegadoTheme.colorScheme.onSurface)
             }
             item(key = "ungrouped") {
                 TagChipRow(ungrouped, state, onIntent)
@@ -249,7 +248,7 @@ private fun TagListTab(
             val items = grouped[group.id].orEmpty()
             if (items.isNotEmpty()) {
                 item(key = "section_${group.id}") {
-                    Text(group.name, style = MaterialTheme.typography.titleMedium, color = LegadoTheme.colorScheme.onSurface)
+                    Text(group.name, style = LegadoTheme.typography.titleMedium, color = LegadoTheme.colorScheme.onSurface)
                 }
                 item(key = "group_${group.id}") {
                     TagChipRow(items, state, onIntent)
@@ -291,13 +290,13 @@ private fun TagChipRow(
                 )
                 Text(
                     tag.name,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = LegadoTheme.typography.labelMedium,
                     color = color,
                 )
                 if (count > 0) {
                     Text(
                         "$count",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = LegadoTheme.typography.labelSmall,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }

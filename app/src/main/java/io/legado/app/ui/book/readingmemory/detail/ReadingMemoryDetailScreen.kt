@@ -48,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -212,7 +211,7 @@ private fun BookInfoSection(
                 if (state.wordCountText.isNotBlank()) {
                     AppText(
                         text = "字数：${formatWordCount(state.wordCountText)}",
-                        fontSize = 13.sp,
+                        style = LegadoTheme.typography.labelMedium,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -223,13 +222,13 @@ private fun BookInfoSection(
                     ) {
                         AppText(
                             text = state.progressInfo,
-                            fontSize = 12.sp,
+                            style = LegadoTheme.typography.bodySmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
                         )
                         AppText(
                             text = String.format(Locale.getDefault(), "%.0f%%", state.progress * 100),
-                            fontSize = 12.sp,
+                            style = LegadoTheme.typography.bodySmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -259,7 +258,7 @@ private fun StatusText(
         ) {
             AppText(
                 text = statusText.ifBlank { "未开始" },
-                fontSize = 14.sp,
+                style = LegadoTheme.typography.labelLarge,
                 color = LegadoTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.width(2.dp))
@@ -273,7 +272,7 @@ private fun StatusText(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (!abandoned) {
                 DropdownMenuItem(
-                    text = { AppText("标记为弃文", fontSize = 14.sp) },
+                    text = { AppText("标记为弃文", style = LegadoTheme.typography.labelLarge) },
                     onClick = {
                         onSetAbandoned(true)
                         expanded = false
@@ -281,7 +280,7 @@ private fun StatusText(
                 )
             } else {
                 DropdownMenuItem(
-                    text = { AppText("取消弃文", fontSize = 14.sp) },
+                    text = { AppText("取消弃文", style = LegadoTheme.typography.labelLarge) },
                     onClick = {
                         onSetAbandoned(false)
                         expanded = false
@@ -335,22 +334,20 @@ private fun StatItem(
     Column(modifier = modifier) {
         Text(
             text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
+            style = LegadoTheme.typography.labelMediumEmphasized,
             color = LegadoTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = primary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
+            style = LegadoTheme.typography.headlineSmall,
             color = primaryColor,
         )
         if (!secondary.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = secondary,
-                fontSize = 12.sp,
+                style = LegadoTheme.typography.bodySmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -380,7 +377,7 @@ private fun TagsSection(
         if (state.tags.isEmpty()) {
             AppText(
                 text = "暂无标签",
-                fontSize = 13.sp,
+                style = LegadoTheme.typography.labelMedium,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -438,7 +435,7 @@ private fun ProtagonistsSection(
         if (state.protagonistNames.isEmpty()) {
             AppText(
                 text = "暂无人物",
-                fontSize = 13.sp,
+                style = LegadoTheme.typography.labelMedium,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -521,13 +518,13 @@ private fun ReviewSection(
         if (state.review.isBlank()) {
             AppText(
                 text = "还没有写书评",
-                fontSize = 13.sp,
+                style = LegadoTheme.typography.labelMedium,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             AppText(
                 text = state.review,
-                fontSize = 14.sp,
+                style = LegadoTheme.typography.labelLarge,
                 lineHeight = 22.sp,
             )
         }
@@ -558,13 +555,13 @@ private fun IntroSection(
         if (state.intro.isBlank()) {
             AppText(
                 text = "暂无简介",
-                fontSize = 13.sp,
+                style = LegadoTheme.typography.labelMedium,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             AppText(
                 text = state.intro,
-                fontSize = 14.sp,
+                style = LegadoTheme.typography.labelLarge,
                 lineHeight = 22.sp,
                 maxLines = if (expanded) Int.MAX_VALUE else 5,
                 overflow = TextOverflow.Ellipsis,
@@ -581,7 +578,7 @@ private fun IntroSection(
                 Spacer(modifier = Modifier.height(4.dp))
                 AppText(
                     text = if (expanded) "收起 ▴" else "展开全文 ▾",
-                    fontSize = 12.sp,
+                    style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.primary,
                     modifier = Modifier.clickable { expanded = !expanded },
                 )
@@ -607,19 +604,18 @@ private fun ExcerptSection(
                 }
                 AppText(
                     text = excerpt.chapterName,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = LegadoTheme.typography.labelMediumEmphasized,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
                 if (excerpt.content.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(text = excerpt.content, fontSize = 14.sp, lineHeight = 22.sp)
+                    AppText(text = excerpt.content, style = LegadoTheme.typography.labelLarge, lineHeight = 22.sp)
                 }
                 if (!excerpt.bookText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
                         text = excerpt.bookText,
-                        fontSize = 13.sp,
+                        style = LegadoTheme.typography.labelMedium,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
@@ -672,7 +668,7 @@ private fun TagPickerSheet(
                 item {
                     AppText(
                         text = "已选标签",
-                        fontSize = 13.sp,
+                        style = LegadoTheme.typography.labelMedium,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -696,7 +692,7 @@ private fun TagPickerSheet(
                 item {
                     AppText(
                         text = "可选标签",
-                        fontSize = 13.sp,
+                        style = LegadoTheme.typography.labelMedium,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -707,7 +703,7 @@ private fun TagPickerSheet(
                 item {
                     AppText(
                         text = "暂无可选标签，可在下方添加",
-                        fontSize = 13.sp,
+                        style = LegadoTheme.typography.labelMedium,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -808,8 +804,7 @@ private fun SectionCard(
             ) {
                 AppText(
                     text = title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = LegadoTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
                 trailing()

@@ -161,7 +161,7 @@ fun TagEditSheet(
                             ) {
                                 Text(
                                     mapping.oldTagName,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = LegadoTheme.typography.bodyMedium,
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Box(
@@ -433,7 +433,7 @@ fun MappingManageSheet(
         if (mappings.isEmpty()) {
             Text(
                 "暂无标签映射",
-                style = MaterialTheme.typography.bodyMedium,
+                style = LegadoTheme.typography.bodyMedium,
                 color = LegadoTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 modifier = Modifier.padding(vertical = 32.dp),
             )
@@ -502,7 +502,7 @@ fun ExcludedEditSheet(
                     )
                     Text(
                         "作为正则匹配",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = LegadoTheme.typography.bodyMedium,
                         color = cs.onSurface,
                     )
                 }
