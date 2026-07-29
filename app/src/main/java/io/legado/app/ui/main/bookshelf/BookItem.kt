@@ -55,7 +55,6 @@ import io.legado.app.constant.BookType
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.help.book.TagManager
-import io.legado.app.ui.config.themeConfig.TagColorPair
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TextCard
@@ -65,7 +64,6 @@ import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.HtmlFormatter
 import io.legado.app.utils.toTimeAgo
-import kotlinx.collections.immutable.ImmutableList
 
 /**
  * 通用的书架条目布局组件
@@ -665,7 +663,6 @@ fun BookGroupItemHorizontalCovers(
 @Composable
 fun BookItem(
     settings: BookshelfSettings,
-    customTagColors: ImmutableList<TagColorPair>,
     tagColorMap: Map<String, Long> = emptyMap(),
     excludedTags: List<ExcludedTag> = emptyList(),
     bookUi: BookUiItem,
@@ -774,21 +771,14 @@ fun BookItem(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        kindList.forEachIndexed { index, label ->
+                        kindList.forEach { label ->
                             val tagColor = tagColorMap[label]
-                            val colorPair = if (tagColor == null && customTagColors.isNotEmpty()) {
-                                customTagColors[index % customTagColors.size]
-                            } else {
-                                null
-                            }
                             val backgroundColor = when {
                                 tagColor != null -> Color(tagColor).copy(alpha = 0.16f)
-                                colorPair != null && colorPair.bgColor != 0 -> Color(colorPair.bgColor)
                                 else -> LegadoTheme.colorScheme.surfaceContainerHigh
                             }
                             val contentColor = when {
                                 tagColor != null -> Color(tagColor)
-                                colorPair != null && colorPair.textColor != 0 -> Color(colorPair.textColor)
                                 else -> LegadoTheme.colorScheme.primary.copy(alpha = 0.8f)
                             }
                             TextCard(
@@ -900,7 +890,8 @@ private fun bookAccessibilityLabel(
 private fun formatShelfWordCount(raw: String): String {
     if (raw.isBlank()) return ""
     if (raw.contains("万")) return raw
-    val count = raw.toLongOrNull() ?: return raw
+    val digits = raw.filter { it.isDigit() }
+    val count = digits.toLongOrNull() ?: return raw
     return when {
         count >= 10000 -> {
             val wan = count.toFloat() / 10000

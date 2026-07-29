@@ -44,8 +44,10 @@ class ReadingMemoryDetailViewModel(
         protagonistRefresh,
         _showTagPicker,
         bookmarkRefresh,
-    ) { memory, _, tagPicker, _ -> memory to tagPicker }
-        .flatMapLatest { (memory, abandonedDialog) ->
+        repository.observeTagColorMap(),
+    ) { memory, _, tagPicker, _, tagColorMap -> memory to tagPicker to tagColorMap }
+        .flatMapLatest { (memoryAbandoned, tagColorMap) ->
+            val (memory, _) = memoryAbandoned
             val book = repository.getBook(bookUrl)
             val statistics = repository.computeStatistics(bookUrl)
             val excerpts = repository.getExcerpts(bookUrl)
@@ -127,6 +129,7 @@ class ReadingMemoryDetailViewModel(
                     readRecordTimelineDays = readRecordTimelineDays,
                     readRecordTotalTime = readRecordTotalTime,
                     availableTags = availableTags,
+                    tagColorMap = tagColorMap,
                     loading = memory == null,
                     showReviewEditor = showReview,
                     reviewDraft = draft,

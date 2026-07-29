@@ -406,7 +406,6 @@ internal fun Preferences.toThemeSettings(): ThemeSettings = ThemeSettings(
         io.legado.app.data.local.preferences.LocalPreferencesKeys.SHOW_THEME_REFACTOR_TIP.name
     ) ?: true,
     enableCustomTagColors = compatDsBoolean(PreferKey.enableCustomTagColors) ?: false,
-    customTagColorsJson = compatDsString(PreferKey.customTagColors),
 )
 
 /**
@@ -481,7 +480,6 @@ internal fun ThemeSettings.toGatewayPrefMap(): Map<String, Any?> = mapOf(
     io.legado.app.data.local.preferences.LocalPreferencesKeys.SHOW_THEME_REFACTOR_TIP.name to
         showRefactorTip,
     PreferKey.enableCustomTagColors to enableCustomTagColors,
-    PreferKey.customTagColors to customTagColorsJson,
 )
 
 internal fun Preferences.toOtherSettings(): OtherSettings {

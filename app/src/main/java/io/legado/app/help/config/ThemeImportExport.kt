@@ -291,7 +291,6 @@ object ThemeImportExport {
             topBarOpacity = root.int("H", 100),
             bottomBarOpacity = root.int("I", 100),
             enableCustomTagColors = root.boolean("J"),
-            customTagColorsJson = root.nullableString("K"),
             showHome = root.boolean("L", true),
             showDiscovery = root.boolean("M", true),
             showRss = root.boolean("N", true),

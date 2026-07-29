@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import io.legado.app.ui.theme.LegadoTheme
 import androidx.compose.foundation.background
 import io.legado.app.data.entities.Bookmark
@@ -126,6 +127,7 @@ fun ReadingMemoryDetailScreen(
         TagPickerSheet(
             availableTags = state.availableTags,
             selectedTags = state.tags,
+            tagColorMap = state.tagColorMap,
             onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissTagPicker) },
             onAddTag = { onIntent(ReadingMemoryDetailIntent.AddTag(it)) },
             onRemoveTag = { onIntent(ReadingMemoryDetailIntent.RemoveTag(it)) },
@@ -424,7 +426,7 @@ private fun TagsSection(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 state.tags.forEach { tag ->
-                    TagChip(tag = tag, onClick = { pendingRemoveTag = tag })
+                    TagChip(tag = tag, tagColorMap = state.tagColorMap, onClick = { pendingRemoveTag = tag })
                 }
             }
         }
@@ -484,6 +486,7 @@ private fun ProtagonistsSection(
                 state.protagonistNames.forEach { p ->
                     TagChip(
                         tag = p,
+                        tagColorMap = state.tagColorMap,
                         onClick = { pendingRemoveProtagonist = p },
                     )
                 }
@@ -670,6 +673,7 @@ private fun ExcerptSection(
 private fun TagPickerSheet(
     availableTags: List<String>,
     selectedTags: List<String>,
+    tagColorMap: Map<String, Long> = emptyMap(),
     onDismiss: () -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
@@ -715,7 +719,7 @@ private fun TagPickerSheet(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         selectedTags.forEach { tag ->
-                            TagChip(tag = tag, onRemove = { onRemoveTag(tag) })
+                            TagChip(tag = tag, tagColorMap = tagColorMap, onRemove = { onRemoveTag(tag) })
                         }
                     }
                 }
@@ -733,7 +737,7 @@ private fun TagPickerSheet(
                     )
                 }
                 items(candidates) { tag ->
-                    TagChip(tag = tag, onClick = { onAddTag(tag) })
+                    TagChip(tag = tag, tagColorMap = tagColorMap, onClick = { onAddTag(tag) })
                 }
             } else if (selectedTags.isEmpty()) {
                 item {
@@ -855,6 +859,7 @@ private fun SectionCard(
 @Composable
 private fun TagChip(
     tag: String,
+    tagColorMap: Map<String, Long> = emptyMap(),
     onClick: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
 ) {
@@ -862,18 +867,30 @@ private fun TagChip(
         Modifier.clickable { (onClick ?: onRemove)?.invoke() }
     } else Modifier
 
+    val tagColor = tagColorMap[tag]
+    val backgroundColor = if (tagColor != null) {
+        Color(tagColor).copy(alpha = 0.14f)
+    } else {
+        LegadoTheme.colorScheme.surfaceContainer
+    }
+    val contentColor = if (tagColor != null) {
+        Color(tagColor)
+    } else {
+        LegadoTheme.colorScheme.onSurfaceVariant
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(LegadoTheme.colorScheme.surfaceContainer)
+            .background(backgroundColor)
             .padding(horizontal = 10.dp, vertical = 5.dp)
             .then(clickModifier),
     ) {
         Text(
             text = tag,
             style = LegadoTheme.typography.labelMedium,
-            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            color = contentColor,
         )
         if (onRemove != null) {
             Spacer(modifier = Modifier.width(4.dp))
@@ -883,7 +900,7 @@ private fun TagChip(
                 modifier = Modifier
                     .size(14.dp)
                     .clickable { onRemove.invoke() },
-                tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                tint = contentColor,
             )
         }
     }
@@ -892,7 +909,8 @@ private fun TagChip(
 private fun formatWordCount(raw: String): String {
     if (raw.isBlank()) return ""
     if (raw.contains("万")) return raw
-    val count = raw.toLongOrNull() ?: return raw
+    val digits = raw.filter { it.isDigit() }
+    val count = digits.toLongOrNull() ?: return raw
     return when {
         count >= 10000 -> {
             val wan = count.toFloat() / 10000

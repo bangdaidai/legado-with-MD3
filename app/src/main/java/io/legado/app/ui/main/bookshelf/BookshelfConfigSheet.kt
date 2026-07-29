@@ -32,17 +32,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.domain.model.settings.BookshelfSettings
-import io.legado.app.ui.config.themeConfig.LabelColorManageSheet
-import io.legado.app.ui.config.themeConfig.TagColorPair
-import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
-import io.legado.app.ui.widget.components.divider.PillDivider
-import io.legado.app.ui.widget.components.divider.PillHeaderDivider
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
-import io.legado.app.ui.widget.components.settingItem.CompactClickableSettingItem
-import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
-import io.legado.app.ui.widget.components.settingItem.CompactSliderSettingItem
-import io.legado.app.ui.widget.components.settingItem.CompactSwitchSettingItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,15 +40,12 @@ fun BookshelfConfigSheet(
     settings: BookshelfSettings,
     onUpdate: ((BookshelfSettings) -> BookshelfSettings) -> Unit,
     enableCustomTagColors: Boolean,
-    customTagColors: List<TagColorPair>,
     themeColor: Int,
     onCustomTagColorsEnabledChange: (Boolean) -> Unit,
-    onCustomTagColorsChange: (List<TagColorPair>) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    var showLabelColorManage by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     var showColorPickerDark by remember { mutableStateOf(false) }
 
@@ -482,13 +468,6 @@ fun BookshelfConfigSheet(
                                         color = LegadoTheme.colorScheme.surface,
                                         onCheckedChange = onCustomTagColorsEnabledChange
                                     )
-                                    AnimatedVisibility(visible = enableCustomTagColors) {
-                                        CompactClickableSettingItem(
-                                            title = stringResource(R.string.manage_tag_colors),
-                                            color = LegadoTheme.colorScheme.surface,
-                                            onClick = { showLabelColorManage = true }
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -616,14 +595,6 @@ fun BookshelfConfigSheet(
             Spacer(modifier = Modifier.height(32.dp))
 
         }
-
-        LabelColorManageSheet(
-            show = showLabelColorManage,
-            themeColor = themeColor,
-            colors = customTagColors,
-            onColorsChange = onCustomTagColorsChange,
-            onDismissRequest = { showLabelColorManage = false }
-        )
 
         ColorPickerSheet(
             show = showColorPicker,

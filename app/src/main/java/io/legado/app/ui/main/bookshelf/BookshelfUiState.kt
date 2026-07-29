@@ -4,7 +4,6 @@ import androidx.compose.runtime.Stable
 import android.net.Uri
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.domain.model.settings.BookshelfSettings
-import io.legado.app.ui.config.themeConfig.TagColorPair
 import io.legado.app.ui.widget.components.list.ListUiState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -64,7 +63,6 @@ sealed interface BookshelfIntent {
         val transform: (BookshelfSettings) -> BookshelfSettings,
     ) : BookshelfIntent
     data class SetCustomTagColorsEnabled(val enabled: Boolean) : BookshelfIntent
-    data class SetCustomTagColors(val colors: List<TagColorPair>) : BookshelfIntent
     data object UploadResultConsumed : BookshelfIntent
 }
 
@@ -112,7 +110,6 @@ data class BookshelfUiState(
     val settings: BookshelfSettings = BookshelfSettings(),
     val useRaisedBottomInset: Boolean = false,
     val enableCustomTagColors: Boolean = false,
-    val customTagColors: ImmutableList<TagColorPair> = persistentListOf(),
     val themeColor: Int = 0,
     val pendingUploadUrl: String? = null,
 ) : ListUiState<BookUiItem>

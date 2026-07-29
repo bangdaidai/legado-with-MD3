@@ -287,7 +287,6 @@ private fun BookInfoScreenContent(
                                 book = book,
                                 highlightedTags = state.highlightedTags,
                                 coloredTags = state.coloredTags,
-                                kindLabels = state.kindLabels,
                                 groupNames = state.groupNames,
                                 onCoverClick = { onIntent(BookInfoIntent.CoverClick) },
                                 onCoverLongClick = { onIntent(BookInfoIntent.CoverLongClick) },
@@ -362,9 +361,23 @@ private fun BookInfoScreenContent(
                                     tocLoadFailed = state.tocLoadFailed,
                                     onRemarkClick = { onIntent(BookInfoIntent.RemarkClick) },
                                 )
-                            }
-                        }
-                    }
+        }
+    }
+}
+
+private fun formatWanWordCount(raw: String): String {
+    if (raw.isBlank()) return ""
+    if (raw.contains("万")) return raw
+    val digits = raw.filter { it.isDigit() }
+    val count = digits.toLongOrNull() ?: return raw
+    return when {
+        count >= 10000 -> {
+            val wan = count.toFloat() / 10000
+            if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
+        }
+        else -> "${count}字"
+    }
+}
                 }
             }
         }
@@ -879,7 +892,6 @@ private fun BookInfoHeader(
     book: BookInfoBookUi,
     highlightedTags: List<HighlightedTag>,
     coloredTags: List<BookTagUi>,
-    kindLabels: List<String>,
     groupNames: String?,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
@@ -1004,10 +1016,17 @@ private fun BookInfoHeader(
                     )
                 }
             }
+            if (book.wordCount?.isNotBlank() == true) {
+                AnimatedTextLine(
+                    text = formatWanWordCount(book.wordCount!!),
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
-            if (coloredTags.isNotEmpty() || kindLabels.isNotEmpty() || !groupNames.isNullOrBlank()) {
+            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
                     state = kindListState,
@@ -1048,17 +1067,6 @@ private fun BookInfoHeader(
                                 color = color,
                             )
                         }
-                    }
-                    items(
-                        items = kindLabels,
-                        key = { label -> "kind-$label" }
-                    ) { label ->
-                        TextCard(
-                            text = label,
-                            textStyle = LegadoTheme.typography.labelMedium,
-                            backgroundColor = LegadoTheme.colorScheme.surfaceContainer,
-                            contentColor = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                 }
             }

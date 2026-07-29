@@ -32,7 +32,6 @@ data class BookInfoUiState(
     val tocLoadFailed: Boolean = false,
     val webFiles: List<BookInfoWebFile> = emptyList(),
     val highlightedTags: List<HighlightedTag> = emptyList(),
-    val kindLabels: List<String> = emptyList(),
     val coloredTags: List<BookTagUi> = emptyList(),
     val groupNames: String? = null,
     val hasCustomGroup: Boolean = false,
@@ -81,6 +80,7 @@ data class BookInfoBookUi(
     val durChapterPos: Int,
     val remark: String?,
     val displayIntro: String?,
+    val wordCount: String?,
 )
 
 @Stable

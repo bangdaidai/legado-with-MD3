@@ -388,7 +388,6 @@ object PreferKey {
     const val audioPreDownloadNum = "audioPreDownloadNum"
     const val ttsPreSynthesisConcurrency = "ttsPreSynthesisConcurrency"
     const val ttsParagraphInterval = "ttsParagraphInterval"
-    const val customTagColors = "customTagColors"
     const val enableCustomTagColors = "enableCustomTagColors"
     const val navIconBookshelf = "navIconBookshelf"
     const val navIconExplore = "navIconExplore"

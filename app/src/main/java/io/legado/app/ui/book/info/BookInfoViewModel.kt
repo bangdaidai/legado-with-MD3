@@ -186,7 +186,6 @@ class BookInfoViewModel(
     private var currentRelatedBooks: List<RelatedBooksUi> = emptyList()
     private var currentCharacters: List<BookInfoCharacterUi> = emptyList()
     private var currentHighlightedTags: List<HighlightedTag> = emptyList()
-    private var currentKindLabels: List<String> = emptyList()
     private var currentColoredTags: List<BookTagUi> = emptyList()
     private var currentGroupNames: String? = null
     private var currentHasCustomGroup = false
@@ -877,7 +876,6 @@ class BookInfoViewModel(
             currentCharacters = emptyList()
             currentGroupNames = null
             currentHasCustomGroup = false
-            currentKindLabels = emptyList()
             currentColoredTags = emptyList()
             syncUiState(isTocLoading = false)
             refreshMeta(it)
@@ -892,7 +890,6 @@ class BookInfoViewModel(
         currentWebFiles = emptyList()
         currentRelatedBooks = emptyList()
         currentCharacters = emptyList()
-        currentKindLabels = emptyList()
         currentColoredTags = emptyList()
         currentGroupNames = null
         currentHasCustomGroup = false
@@ -951,12 +948,8 @@ class BookInfoViewModel(
             val groupNames = appDb.bookGroupDao.getGroupNames(book.group).joinToString(",")
             val normalizedGroupNames = groupNames.ifBlank { null }
             appDb.bookDao.update(book)
-            val finalKinds = book.getDisplayTagList()
             val enabledRules = appDb.highlightTagRuleDao.getEnabled()
-            val (highlighted, regular) = parseHighlightedTags(finalKinds, enabledRules)
-            // 与书架、阅读记忆统一：以 Book.kind + Book.customTag 为 SSOT 归一化（排除 + 映射），
-            // 与标签管理页保持一致，且避免旧书未生成关系表时标签为空。
-            val highlightedLabels = highlighted.flatMap { it.matchedLabels }.toSet()
+            // SSOT：书架/信息页/阅读记忆统一入口（排除规则 + 标签映射）
             val displayTagNames = TagManager.bookDisplayTags(book.kind, book.customTag)
             val tagEntities = appDb.bookTagDao.getByNames(displayTagNames).associateBy { it.name }
             val coloredTags = displayTagNames.map { name ->
@@ -966,11 +959,12 @@ class BookInfoViewModel(
                     name = name,
                     color = t?.color ?: TagManager.generateTagColor(name),
                 )
-            }.filter { it.name !in highlightedLabels }
-            HighlightMeta(highlighted, regular, normalizedGroupNames, hasCustomGroup, coloredTags)
+            }
+            // 高亮规则也作用在 SSOT 标签上（而非原始 kind 拆分）
+            val (highlighted, _) = parseHighlightedTags(displayTagNames, enabledRules)
+            HighlightMeta(highlighted, normalizedGroupNames, hasCustomGroup, coloredTags)
         }.onSuccess {
             currentHighlightedTags = it.highlighted
-            currentKindLabels = it.regular
             currentColoredTags = it.coloredTags
             currentGroupNames = it.groupNames
             currentHasCustomGroup = it.hasCustomGroup
@@ -980,7 +974,6 @@ class BookInfoViewModel(
 
     private data class HighlightMeta(
         val highlighted: List<HighlightedTag>,
-        val regular: List<String>,
         val groupNames: String?,
         val hasCustomGroup: Boolean,
         val coloredTags: List<BookTagUi>,
@@ -1468,7 +1461,6 @@ class BookInfoViewModel(
                 relatedBooks = currentRelatedBooks.toImmutableList(),
                 characters = currentCharacters.toImmutableList(),
                 highlightedTags = currentHighlightedTags,
-                kindLabels = currentKindLabels,
                 coloredTags = currentColoredTags,
                 groupNames = currentGroupNames,
                 hasCustomGroup = currentHasCustomGroup,
@@ -1759,6 +1751,7 @@ class BookInfoViewModel(
             durChapterPos = durChapterPos,
             remark = remark,
             displayIntro = HtmlFormatter.formatDisplayText(getDisplayIntro()),
+            wordCount = wordCount,
         )
     }
 

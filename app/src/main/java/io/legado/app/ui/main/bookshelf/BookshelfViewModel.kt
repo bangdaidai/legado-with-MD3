@@ -31,7 +31,6 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.CacheBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.service.CacheBookService
-import io.legado.app.ui.config.themeConfig.TagColorPair
 import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.utils.move
 import io.legado.app.utils.onEachParallel
@@ -613,7 +612,6 @@ class BookshelfViewModel(
             settings = settings,
             useRaisedBottomInset = appShellSettings.useFloatingBottomBar || themeSettings.enableBlur,
             enableCustomTagColors = themeSettings.enableCustomTagColors,
-            customTagColors = parseTagColors(themeSettings.customTagColorsJson),
             themeColor = themeSettings.themeColor,
             pendingUploadUrl = pendingUploadUrl,
         )
@@ -627,17 +625,9 @@ class BookshelfViewModel(
             bookGroupStyle = initialSettings.bookGroupStyle,
             useRaisedBottomInset = initialAppShellSettings.useFloatingBottomBar || initialThemeSettings.enableBlur,
             enableCustomTagColors = initialThemeSettings.enableCustomTagColors,
-            customTagColors = parseTagColors(initialThemeSettings.customTagColorsJson),
             themeColor = initialThemeSettings.themeColor,
         ),
     )
-
-    private fun parseTagColors(json: String?): ImmutableList<TagColorPair> = try {
-        if (json.isNullOrBlank()) persistentListOf()
-        else GSON.fromJson(json, Array<TagColorPair>::class.java).toImmutableList()
-    } catch (_: Exception) {
-        persistentListOf()
-    }
 
     init {
         viewModelScope.launch {
@@ -714,11 +704,6 @@ class BookshelfViewModel(
             is BookshelfIntent.SetCustomTagColorsEnabled -> viewModelScope.launch {
                 themeSettingsGateway.update {
                     it.copy(enableCustomTagColors = intent.enabled)
-                }
-            }
-            is BookshelfIntent.SetCustomTagColors -> viewModelScope.launch {
-                themeSettingsGateway.update {
-                    it.copy(customTagColorsJson = GSON.toJson(intent.colors))
                 }
             }
             BookshelfIntent.UploadResultConsumed -> pendingUploadUrlFlow.value = null

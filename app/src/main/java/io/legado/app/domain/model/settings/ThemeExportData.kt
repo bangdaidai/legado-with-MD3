@@ -57,7 +57,6 @@ data class ThemeExportData(
     val topBarOpacity: Int = 100,
     val bottomBarOpacity: Int = 100,
     val enableCustomTagColors: Boolean = false,
-    val customTagColorsJson: String? = null,
     val bookshelfCardColor: Int = 0,
     val bookshelfCardColorDark: Int = 0,
     val showHome: Boolean = true,

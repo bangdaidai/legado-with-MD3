@@ -19,6 +19,7 @@ import io.legado.app.help.book.ProtagonistExtractor
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import java.util.Calendar
 import java.util.UUID
@@ -395,6 +396,12 @@ class ReadingMemoryRepository(
      */
     suspend fun getAvailableTags(): List<String> =
         database.bookTagDao.getAllSync().map { it.name }.filter { it.isNotBlank() }
+
+    fun observeTagColorMap(): Flow<Map<String, Long>> =
+        database.bookTagDao.observeAll().map { tags ->
+            tags.filter { !it.name.isNullOrBlank() && it.color != 0L }
+                .associate { it.name to it.color }
+        }
 
     /** 当前排除规则列表，供按排除规则过滤书籍标签。 */
     suspend fun getExcludedTags(): List<ExcludedTag> =

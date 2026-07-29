@@ -37,6 +37,7 @@ data class ReadingMemoryDetailUiState(
     val readRecordTimelineDays: List<ReadRecordTimelineDay> = emptyList(),
     val readRecordTotalTime: Long = 0L,
     val availableTags: List<String> = emptyList(),
+    val tagColorMap: Map<String, Long> = emptyMap(),
     val loading: Boolean = true,
     val showReviewEditor: Boolean = false,
     val reviewDraft: String = "",

@@ -1201,13 +1201,9 @@ private fun BookshelfOverlays(
         settings = uiState.settings,
         onUpdate = { onIntent(BookshelfIntent.UpdateSetting(it)) },
         enableCustomTagColors = uiState.enableCustomTagColors,
-        customTagColors = uiState.customTagColors,
         themeColor = uiState.themeColor,
         onCustomTagColorsEnabledChange = {
             onIntent(BookshelfIntent.SetCustomTagColorsEnabled(it))
-        },
-        onCustomTagColorsChange = {
-            onIntent(BookshelfIntent.SetCustomTagColors(it))
         },
         onDismissRequest = { onIntent(BookshelfIntent.DismissOverlay) }
     )
@@ -1478,12 +1474,7 @@ fun BookshelfPage(
                 ) { isDragging ->
                     BookItem(
                         settings = uiState.settings,
-                        customTagColors = if (uiState.enableCustomTagColors) {
-                            uiState.customTagColors
-                        } else {
-                            persistentListOf()
-                        },
-                        tagColorMap = tagColorMap,
+                        tagColorMap = if (uiState.enableCustomTagColors) tagColorMap else emptyMap(),
                         excludedTags = excludedTags,
                         bookUi = bookUi,
                         modifier = Modifier
