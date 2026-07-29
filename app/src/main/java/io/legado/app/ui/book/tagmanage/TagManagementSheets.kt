@@ -187,7 +187,7 @@ fun TagEditSheet(
                 // 底部操作栏
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     onExclude?.let { ex ->
@@ -196,8 +196,8 @@ fun TagEditSheet(
                             shape = RoundedCornerShape(22.dp),
                             modifier = Modifier.height(44.dp),
                         ) { Text("排除") }
+                        Spacer(Modifier.width(12.dp))
                     }
-                    Spacer(Modifier.weight(1f))
                     Button(
                         onClick = { onConfirm(d) },
                         shape = RoundedCornerShape(22.dp),

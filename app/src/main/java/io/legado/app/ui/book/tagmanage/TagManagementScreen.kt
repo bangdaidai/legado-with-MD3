@@ -218,10 +218,11 @@ private fun TagListTab(
     bottomContentPadding: Dp = 0.dp,
 ) {
     val query = state.searchQuery
+    val nonEmpty = state.tags.filter { (state.tagCounts[it.id] ?: 0) > 0 }
     val filtered = if (query.isBlank()) {
-        state.tags
+        nonEmpty
     } else {
-        state.tags.filter { it.name.contains(query, ignoreCase = true) }
+        nonEmpty.filter { it.name.contains(query, ignoreCase = true) }
     }
 
     val groups = state.groups
@@ -238,7 +239,7 @@ private fun TagListTab(
     ) {
         if (ungrouped.isNotEmpty()) {
             item(key = "section_ungrouped") {
-                Text("未分组", style = MaterialTheme.typography.titleMedium)
+                Text("未分组", style = MaterialTheme.typography.titleMedium, color = LegadoTheme.colorScheme.onSurface)
             }
             item(key = "ungrouped") {
                 TagChipRow(ungrouped, state, onIntent)
@@ -248,7 +249,7 @@ private fun TagListTab(
             val items = grouped[group.id].orEmpty()
             if (items.isNotEmpty()) {
                 item(key = "section_${group.id}") {
-                    Text(group.name, style = MaterialTheme.typography.titleMedium)
+                    Text(group.name, style = MaterialTheme.typography.titleMedium, color = LegadoTheme.colorScheme.onSurface)
                 }
                 item(key = "group_${group.id}") {
                     TagChipRow(items, state, onIntent)
