@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.tagmanage
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -27,7 +25,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.menuAnchor
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -181,96 +183,11 @@ fun TagEditSheet(
         }
     }
 }
-                    }
-                    onDelete?.let { del ->
-                        TextButton(
-                            onClick = del,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            ),
-                        ) {
-                            Text("删除")
-                        }
-                    }
-                }
-            }
-        } else {
-            null
-        },
-        endAction = {
-            TextButton(onClick = { data?.let { onConfirm(it) } }) {
-                Text("保存")
-            }
-        },
-    ) {
-        data?.let { d ->
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // 第一行：颜色色块（无文字）+ 标签名
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(d.color))
-                            .clickable { onPickColor() },
-                    )
-                    OutlinedTextField(
-                        value = d.name,
-                        onValueChange = { onChange(d.copy(name = it)) },
-                        label = { Text("标签名") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                // 第二行：分组（带边框的下拉框）
-                GroupField(
-                    groups = groups,
-                    selectedId = d.groupId,
-                    onSelect = { onChange(d.copy(groupId = it)) },
-                )
-                // 别名映射（标签详情页使用）
-                if (aliases.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "别名（合并到标准标签）",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                        aliases.forEach { mapping ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    mapping.oldTagName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                SmallPlainButton(
-                                    text = "设为标准",
-                                    onClick = { onMapToStandard(mapping.oldTagName) },
-                                )
-                                SmallPlainButton(
-                                    text = "移除",
-                                    icon = Icons.Default.Delete,
-                                    onClick = { onRemoveAlias(mapping) },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
- * 分组选择：带边框的框，点框弹出分组列表，与标签名输入框风格一致。
+ * 分组选择：标准纵向下拉菜单（ExposedDropdownMenuBox + AppTextField）。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GroupField(
     groups: List<BookTagGroup>,
@@ -279,27 +196,22 @@ private fun GroupField(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedName = groups.find { it.id == selectedId }?.name ?: "未分组"
-    Box {
-        Row(
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        AppTextField(
+            value = selectedName,
+            onValueChange = {},
+            readOnly = true,
+            label = "分组",
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { expanded = true }
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                selectedName,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                Icons.Default.ArrowDropDown,
-                contentDescription = null,
-                tint = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+        )
         RoundDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },

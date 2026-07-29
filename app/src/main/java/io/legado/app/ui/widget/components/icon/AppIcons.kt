@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.RssFeed
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Explore
@@ -115,6 +116,10 @@ object AppIcons {
     val Check: ImageVector
         @Composable
         get() = Icons.Default.Check
+
+    val Add: ImageVector
+        @Composable
+        get() = Icons.Default.Add
 
 
     @Composable

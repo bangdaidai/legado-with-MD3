@@ -78,6 +78,7 @@ import io.legado.app.ui.book.readingmemory.ReadingMemoryEffect
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailScreen
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailViewModel
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailEffect
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailIntent
 import io.legado.app.ui.book.readaloud.cache.TtsCacheRouteScreen
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingScreen
 import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingViewModel
