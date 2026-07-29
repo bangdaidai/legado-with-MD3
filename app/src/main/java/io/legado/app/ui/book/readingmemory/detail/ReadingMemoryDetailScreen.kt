@@ -26,9 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,7 +59,6 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import java.util.Locale
-import io.legado.app.utils.formatReadDuration
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
@@ -73,6 +71,7 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,13 +110,13 @@ fun ReadingMemoryDetailScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 item { BookInfoSection(state = state, onIntent = onIntent) }
-                item { StatsSection(state = state) }
-                item { TagsSection(state = state, onIntent = onIntent) }
                 item { ProtagonistsSection(state = state, onIntent = onIntent) }
-                item { ReviewSection(state = state, onIntent = onIntent) }
                 item { IntroSection(state = state, onIntent = onIntent) }
-                item { ReadSessionSection(state = state) }
+                item { TagsSection(state = state, onIntent = onIntent) }
+                item { StatsSection(state = state) }
                 item { ExcerptSection(state = state, onEditBookmark = { editingBookmark = it }) }
+                item { ReviewSection(state = state, onIntent = onIntent) }
+                item { ReadSessionSection(state = state) }
                 item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
@@ -296,91 +295,56 @@ private fun StatusText(
 @Composable
 private fun StatsSection(state: ReadingMemoryDetailUiState) {
     val stats = state.statistics
-    val firstDateText = state.readRecordTimelineDays
-        .minByOrNull { it.date }
-        ?.date
-        ?.let { formatReadDate(it) }
-        ?.let { "始于 $it" }
-    val lastDateText = if (state.lastReadTime > 0) {
-        "上次 ${formatReadDate(state.lastReadTime)}"
-    } else null
+    val scheme = LegadoTheme.colorScheme
+
+    val firstDateText = state.firstReadDate?.let { formatReadDate(it) }?.let { "始于$it" }
+        ?: state.readRecordTimelineDays.minByOrNull { it.date }?.date?.let { formatReadDate(it) }?.let { "始于$it" }
+    val lastReadText = formatLastReadRelative(state.lastReadTime)
+
+    val totalDuration = formatDurationNoSeconds(stats?.totalReadTime ?: state.readRecordTotalTime)
+    val readingDays = "${stats?.readingDays ?: 0}天"
+    val maxDayDuration = if (stats != null && stats.maxDayReadTime > 0) {
+        formatDurationNoSeconds(stats.maxDayReadTime)
+    } else "—"
+    val maxDayDate = stats?.maxDayReadDate?.let { formatReadDate(it) }
+    val totalWords = formatWordCountLong(state.totalReadWords).ifBlank { "—" }
+    val remainingText = if (state.remainingWords > 0) "剩余${formatWordCountLong(state.remainingWords)}" else null
 
     SectionCard(title = "阅读数据") {
-        // Row 1: 累计时长 / 阅读天数
-        StatsRow(
-            leftPrimary = formatReadDuration(stats?.totalReadTime ?: state.readRecordTotalTime),
-            leftSecondary = firstDateText,
-            rightPrimary = "${stats?.readingDays ?: 0}天",
-            rightSecondary = lastDateText,
-        )
-        // Row 2: 阅读进度 / 想法笔记
-        val chapterText = if (state.totalChapterCount > 0) {
-            "已读${state.durChapterIndex + 1}章 / 共${state.totalChapterCount}章"
-        } else if (state.durChapterIndex >= 0) {
-            "已读${state.durChapterIndex + 1}章"
-        } else null
-        StatsRow(
-            leftPrimary = String.format(Locale.getDefault(), "%.1f%%", state.progress * 100),
-            leftSecondary = chapterText,
-            rightPrimary = "想法${state.annotationCount}",
-            rightSecondary = "书摘${state.excerptCount}",
-        )
-        // Row 3: 单日最久 / 阅读字数
-        val maxDayText = if (stats != null && stats.maxDayReadTime > 0) {
-            formatReadDuration(stats.maxDayReadTime)
-        } else "—"
-        val maxDayDateText = stats?.maxDayReadDate?.let { formatReadDate(it) }
-        val readWordsText = formatWordCountLong(state.totalReadWords).ifBlank { "—" }
-        val remainingText = formatWordCountLong(state.remainingWords).ifBlank { "—" }
-        StatsRow(
-            leftPrimary = maxDayText,
-            leftSecondary = if (maxDayDateText != null) "前 ${maxDayDateText}" else null,
-            rightPrimary = readWordsText,
-            rightSecondary = if (state.remainingWords > 0) "剩余${remainingText}" else null,
-        )
-    }
-}
-
-@Composable
-private fun StatsRow(
-    leftPrimary: String,
-    leftSecondary: String?,
-    rightPrimary: String,
-    rightSecondary: String?,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-        ) {
-            StatCell(
-                primary = leftPrimary,
-                secondary = leftSecondary,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            StatCell(
-                primary = rightPrimary,
-                secondary = rightSecondary,
-                modifier = Modifier.weight(1f),
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatItem(title = "累计时长", primary = totalDuration, secondary = firstDateText, primaryColor = scheme.primary, modifier = Modifier.weight(1f))
+                StatItem(title = "阅读天数", primary = readingDays, secondary = lastReadText, primaryColor = scheme.primary, modifier = Modifier.weight(1f))
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatItem(title = "单日阅读最久", primary = maxDayDuration, secondary = maxDayDate, primaryColor = scheme.primary, modifier = Modifier.weight(1f))
+                StatItem(title = "阅读总字数", primary = totalWords, secondary = remainingText, primaryColor = scheme.primary, modifier = Modifier.weight(1f))
+            }
         }
     }
 }
 
 @Composable
-private fun StatCell(
+private fun StatItem(
+    title: String,
     primary: String,
     secondary: String?,
+    primaryColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
         Text(
-            text = primary,
-            fontSize = 18.sp,
+            text = title,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            color = LegadoTheme.colorScheme.onSurface,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = primary,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = primaryColor,
         )
         if (!secondary.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(2.dp))
@@ -935,38 +899,6 @@ private fun formatWordCountLong(count: Long): String {
 private fun ReadSessionSection(state: ReadingMemoryDetailUiState) {
     if (state.readRecordTimelineDays.isEmpty()) return
     SectionCard(title = "阅读会话") {
-        GlassCard(
-            containerColor = LegadoTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
-            cornerRadius = 8.dp,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Schedule,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = LegadoTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                AppText(
-                    text = "总阅读时长",
-                    fontSize = 12.sp,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                AppText(
-                    text = formatReadDuration(state.readRecordTotalTime),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
         ReadingSessionTimeline(
             timelineDays = state.readRecordTimelineDays,
             showChapterInfo = true,
@@ -986,6 +918,36 @@ private fun formatReadDate(input: Any): String {
         else -> null
     } ?: return ""
     return SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(date)
+}
+
+private fun formatDurationNoSeconds(millis: Long): String {
+    if (millis <= 0) return "—"
+    val hours = millis / (1000 * 60 * 60)
+    val minutes = millis % (1000 * 60 * 60) / (1000 * 60)
+    return when {
+        hours > 0 && minutes > 0 -> "${hours}小时${minutes}分钟"
+        hours > 0 -> "${hours}小时"
+        minutes > 0 -> "${minutes}分钟"
+        else -> "0分钟"
+    }
+}
+
+private fun formatLastReadRelative(millis: Long): String {
+    if (millis <= 0) return ""
+    val today = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }
+    val yesterday = today.clone() as Calendar
+    yesterday.add(Calendar.DAY_OF_YEAR, -1)
+    val readDay = Calendar.getInstance().apply {
+        timeInMillis = millis
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }
+    return when {
+        readDay == today -> "上次阅读是今天"
+        readDay == yesterday -> "上次阅读是昨天"
+        else -> "上次 ${formatReadDate(millis)}"
+    }
 }
 
 @Composable
