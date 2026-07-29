@@ -234,6 +234,7 @@ fun ReadingMemoryScreen(
                                     if (!collapsed) {
                                         MemoryBookCard(
                                             memory = item.memory,
+                                            tags = item.tags,
                                             uiState = uiState,
                                             onIntent = onIntent,
                                             onLongPress = { longPressBookUrl = it },
@@ -482,6 +483,7 @@ private fun GroupHeaderRow(
 @Composable
 private fun MemoryBookCard(
     memory: ReadingMemory,
+    tags: List<String> = emptyList(),
     uiState: ReadingMemoryUiState,
     onIntent: (ReadingMemoryIntent) -> Unit,
     onLongPress: (String) -> Unit,
@@ -577,13 +579,13 @@ private fun MemoryBookCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (item.tags.isNotEmpty()) {
+            if (tags.isNotEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
-                    item.tags.forEach { tag ->
+                    tags.forEach { tag ->
                         Surface(
                             shape = MaterialTheme.shapes.small,
                             color = LegadoTheme.colorScheme.secondaryContainer,

@@ -67,6 +67,7 @@ import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.R
 import io.legado.app.ui.widget.components.card.SelectionItemCard
+import io.legado.app.ui.widget.components.settingItem.SettingItem
 
 /* ---------------- 标签编辑（受控组件） ---------------- */
 
@@ -98,8 +99,8 @@ fun TagEditSheet(
     ) {
         data?.let { d ->
             val selectedColor = Color(d.color)
+            val cs = LegadoTheme.colorScheme
             val themePresetColors = remember {
-                val cs = LegadoTheme.colorScheme
                 listOf(
                     cs.primary,
                     cs.secondary,

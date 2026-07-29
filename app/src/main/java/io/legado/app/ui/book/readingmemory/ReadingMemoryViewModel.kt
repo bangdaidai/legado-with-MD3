@@ -179,7 +179,7 @@ class ReadingMemoryViewModel(
         viewModelScope.launch(Dispatchers.IO) { block() }
     }
 
-    private fun buildUiState(memories: List<ReadingMemory>, c: Controls): ReadingMemoryUiState {
+    private suspend fun buildUiState(memories: List<ReadingMemory>, c: Controls): ReadingMemoryUiState {
         val keyword = c.search.trim().lowercase()
 
         val statusOk: (ReadingMemory) -> Boolean = { mem ->

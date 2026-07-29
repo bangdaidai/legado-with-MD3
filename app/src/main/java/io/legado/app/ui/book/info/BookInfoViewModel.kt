@@ -187,6 +187,7 @@ class BookInfoViewModel(
     private var currentCharacters: List<BookInfoCharacterUi> = emptyList()
     private var currentHighlightedTags: List<HighlightedTag> = emptyList()
     private var currentKindLabels: List<String> = emptyList()
+    private var currentColoredTags: List<BookTagUi> = emptyList()
     private var currentGroupNames: String? = null
     private var currentHasCustomGroup = false
     private var currentReadRecordTotalTime = 0L

@@ -52,7 +52,7 @@ data class BookShelfItem(
     /**
      * 将 DTO 转换为专为 Compose 设计的 UI 状态
      */
-    fun toUiItem(): BookUiItem {
+    suspend fun toUiItem(): BookUiItem {
         // 统一数据源：与书籍信息页、阅读记忆页一致（排除 + 映射异名归一）
         val tagList = TagManager.bookDisplayTags(kind, customTag)
         return BookUiItem(

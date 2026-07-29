@@ -12,6 +12,7 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -82,7 +83,7 @@ object TagManager {
     @Volatile
     private var configCache: TagConfig? = null
 
-    private fun getTagConfig(): TagConfig {
+    private suspend fun getTagConfig(): TagConfig {
         configCache?.let { return it }
         val excluded = appDb.excludedTagDao.getAllSync()
         val mappings = appDb.tagMappingDao.getAll()
@@ -115,12 +116,12 @@ object TagManager {
      * 拆分 customTag 与 kind，按排除规则过滤，按标签映射异名归一为规范名后去重。
      * 书架 / 书籍信息 / 阅读记忆三处统一调用此函数，保证标签集合一致。
      */
-    fun bookDisplayTags(kind: String?, customTag: String?): List<String> {
+    suspend fun bookDisplayTags(kind: String?, customTag: String?): List<String> {
         return bookDisplayTagsWithColor(kind, customTag).map { it.name }
     }
 
     /** 同上，但返回带颜色的 [BookTag]，供信息页/书架展示彩色标签。 */
-    fun bookDisplayTagsWithColor(kind: String?, customTag: String?): List<BookTag> {
+    suspend fun bookDisplayTagsWithColor(kind: String?, customTag: String?): List<BookTag> {
         val cfg = getTagConfig()
         val raw = mutableListOf<String>()
         customTag?.splitNotBlank(",", "|", "\n", "，", "、")
