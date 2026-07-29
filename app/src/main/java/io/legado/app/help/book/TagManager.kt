@@ -285,12 +285,18 @@ object TagManager {
             if (targetTag.id == 0L) newTagNames.add(targetTag.name)
         }
 
-        // 批量持久化新标签，建立 名称→带 id 的标签 映射
+        // 批量持久化新标签，先查已有名称避免 UNIQUE 冲突
         val nameToTag = mutableMapOf<String, BookTag>()
         if (newTagNames.isNotEmpty()) {
-            val toCreate = newTagNames.map { BookTag(name = it, color = generateTagColor(it)) }
-            val ids = appDb.bookTagDao.insertAll(toCreate)
-            toCreate.forEachIndexed { index, t -> nameToTag[t.name] = t.copy(id = ids[index]) }
+            val existing = appDb.bookTagDao.getByNames(newTagNames.toList())
+            existing.forEach { nameToTag[it.name] = it }
+            val existingNames = existing.map { it.name }.toSet()
+            val trulyNew = newTagNames.filter { it !in existingNames }
+            if (trulyNew.isNotEmpty()) {
+                val toCreate = trulyNew.map { BookTag(name = it, color = generateTagColor(it)) }
+                val ids = appDb.bookTagDao.insertAll(toCreate)
+                toCreate.forEachIndexed { index, t -> nameToTag[t.name] = t.copy(id = ids[index]) }
+            }
         }
 
         // 解析出带真实 id 的最终标签（去重）
