@@ -59,7 +59,7 @@ fun TagDetailScreen(
     val tag = state.tag
 
     val tagColor = if (tag != null && tag.color != 0L) {
-        Color(tag.color)
+        Color(tag.color.toInt())
     } else {
         LegadoTheme.colorScheme.primary
     }
@@ -155,7 +155,7 @@ fun TagDetailScreen(
         initialColor = (tagEdit?.color ?: tag?.color ?: 0xFF6750A4).toInt(),
         onDismissRequest = { showColorPicker = false },
         onColorSelected = { argb ->
-            tagEdit = tagEdit?.copy(color = argb.toLong())
+            tagEdit = tagEdit?.copy(color = argb.toUInt().toLong())
             showColorPicker = false
         },
     )

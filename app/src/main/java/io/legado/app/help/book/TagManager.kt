@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import android.database.sqlite.SQLiteConstraintException
 import kotlin.random.Random
 
 /**
@@ -294,8 +295,13 @@ object TagManager {
             val trulyNew = newTagNames.filter { it !in existingNames }
             if (trulyNew.isNotEmpty()) {
                 val toCreate = trulyNew.map { BookTag(name = it, color = generateTagColor(it)) }
-                val ids = appDb.bookTagDao.insertAll(toCreate)
-                toCreate.forEachIndexed { index, t -> nameToTag[t.name] = t.copy(id = ids[index]) }
+                try {
+                    val ids = appDb.bookTagDao.insertAll(toCreate)
+                    toCreate.forEachIndexed { index, t -> nameToTag[t.name] = t.copy(id = ids[index]) }
+                } catch (e: SQLiteConstraintException) {
+                    val afterExisting = appDb.bookTagDao.getByNames(trulyNew.toList())
+                    afterExisting.forEach { nameToTag[it.name] = it }
+                }
             }
         }
 

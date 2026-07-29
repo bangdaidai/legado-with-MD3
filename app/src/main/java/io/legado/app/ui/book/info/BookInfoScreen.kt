@@ -1031,7 +1031,7 @@ private fun BookInfoHeader(
                         key = { tag -> "colored-${tag.id}-${tag.name}" }
                     ) { tag ->
                         val color = if (tag.color != 0L) {
-                            Color(tag.color)
+                            Color(tag.color.toInt())
                         } else {
                             LegadoTheme.colorScheme.primary
                         }

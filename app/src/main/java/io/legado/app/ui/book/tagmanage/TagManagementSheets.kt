@@ -98,7 +98,7 @@ fun TagEditSheet(
         title = if (data?.id == 0L) "新增标签" else "编辑标签",
     ) {
         data?.let { d ->
-            val selectedColor = Color(d.color)
+            val selectedColor = Color(d.color.toInt())
             val cs = LegadoTheme.colorScheme
             val themePresetColors = remember {
                 listOf(
@@ -117,8 +117,8 @@ fun TagEditSheet(
                     items(themePresetColors) { preset ->
                         ColorChip(
                             color = preset,
-                            selected = d.color == preset.value.toLong(),
-                            onClick = { onChange(d.copy(color = preset.value.toLong())) },
+                            selected = d.color == preset.toArgb().toUInt().toLong(),
+                            onClick = { onChange(d.copy(color = preset.toArgb().toUInt().toLong())) },
                         )
                     }
                 }

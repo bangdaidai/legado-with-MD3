@@ -174,7 +174,7 @@ fun TagManagementScreen(
     ColorPickerSheet(
         show = showColorPicker && tagEdit != null,
         initialColor = (tagEdit?.color ?: 0xFF6200EE).toInt(),
-        onColorSelected = { c -> tagEdit = tagEdit?.copy(color = c.toLong()) },
+        onColorSelected = { c -> tagEdit = tagEdit?.copy(color = c.toUInt().toLong()) },
         onDismissRequest = { showColorPicker = false },
     )
 
@@ -271,7 +271,7 @@ private fun TagChipRow(
         modifier = Modifier.fillMaxWidth(),
     ) {
         tags.forEach { tag ->
-            val color = if (tag.color != 0L) Color(tag.color) else LegadoTheme.colorScheme.primary
+            val color = if (tag.color != 0L) Color(tag.color.toInt()) else LegadoTheme.colorScheme.primary
             val count = state.tagCounts[tag.id] ?: 0
             Row(
                 modifier = Modifier

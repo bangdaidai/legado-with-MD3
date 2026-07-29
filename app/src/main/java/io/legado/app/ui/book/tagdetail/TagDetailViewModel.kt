@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.tagdetail
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.constant.EventBus
@@ -122,9 +123,13 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         }
         // 标准标签不存在则创建（继承当前标签的分组与颜色）
         val standardTag = appDb.bookTagDao.getByName(standardName) ?: run {
-            val newId = appDb.bookTagDao.insert(
-                BookTag(name = standardName, groupId = currentTag.groupId, color = currentTag.color),
-            )
+            val newId = try {
+                appDb.bookTagDao.insert(
+                    BookTag(name = standardName, groupId = currentTag.groupId, color = currentTag.color),
+                )
+            } catch (e: SQLiteConstraintException) {
+                appDb.bookTagDao.getByName(standardName)?.id ?: return
+            }
             appDb.bookTagDao.getById(newId) ?: return
         }
         // 若该标签已作为异名映射到其它标准标签，先解除旧映射
@@ -133,9 +138,18 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         }
         // 将本标签（别名）的书籍关联合并进标准标签，并删除本标签本身
         TagManager.mergeAliasTagInto(currentTag.name, standardTag.id)
-        appDb.tagMappingDao.insert(
-            TagMapping(oldTagName = currentTag.name, newTagId = standardTag.id),
-        )
+        try {
+            appDb.tagMappingDao.insert(
+                TagMapping(oldTagName = currentTag.name, newTagId = standardTag.id),
+            )
+        } catch (e: SQLiteConstraintException) {
+            appDb.tagMappingDao.getByOldTagName(currentTag.name)?.let {
+                appDb.tagMappingDao.deleteById(it.id)
+            }
+            appDb.tagMappingDao.insert(
+                TagMapping(oldTagName = currentTag.name, newTagId = standardTag.id),
+            )
+        }
         // 把别名写进书籍 kind/customTag 改为标准名，使书架、阅读记忆同步
         TagManager.rewriteTagInBooks(currentTag.name, standardName)
         postEvent(EventBus.TAGS_UPDATED, standardTag.id)

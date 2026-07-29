@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.tagmanage
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.constant.EventBus
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -84,7 +84,7 @@ class TagManagementViewModel : ViewModel() {
                 tagsSynced = true
                 syncTagsFromBooks()
             }
-            val tags = appDb.bookTagDao.observeAll().first()
+            val tags = appDb.bookTagDao.getAllSync()
             val tagCounts = TagManager.getTagBookCounts()
             val groupTagCounts = tags.groupingBy { it.groupId }.eachCount()
             val groups = appDb.bookTagGroupDao.getAllSorted()
@@ -115,9 +115,14 @@ class TagManagementViewModel : ViewModel() {
                 _effect.emit(TagManagementEffect.ShowMessage("标签「$name」已存在"))
                 return
             }
-            appDb.bookTagDao.insert(
-                BookTag(name = name, groupId = intent.groupId, color = intent.color),
-            )
+            try {
+                appDb.bookTagDao.insert(
+                    BookTag(name = name, groupId = intent.groupId, color = intent.color),
+                )
+            } catch (e: SQLiteConstraintException) {
+                _effect.emit(TagManagementEffect.ShowMessage("标签「$name」已存在"))
+                return
+            }
         } else {
             val old = appDb.bookTagDao.getById(intent.id) ?: return
             if (existing != null && existing.id != old.id) {
@@ -127,18 +132,31 @@ class TagManagementViewModel : ViewModel() {
                 TagManager.rewriteTagInBooks(old.name, name)
                 _effect.emit(TagManagementEffect.ShowMessage("已归并到「$name」"))
             } else {
-                appDb.bookTagDao.update(
-                    old.copy(
-                        name = name,
-                        groupId = intent.groupId,
-                        color = intent.color,
-                        updateTime = System.currentTimeMillis(),
-                    ),
-                )
-                if (old.name != name) {
-                    upsertMapping(old.name, old.id)
-                    // 改名后把旧名写进书籍 kind/customTag，使书架、阅读记忆同步
-                    TagManager.rewriteTagInBooks(old.name, name)
+                try {
+                    appDb.bookTagDao.update(
+                        old.copy(
+                            name = name,
+                            groupId = intent.groupId,
+                            color = intent.color,
+                            updateTime = System.currentTimeMillis(),
+                        ),
+                    )
+                    if (old.name != name) {
+                        upsertMapping(old.name, old.id)
+                        // 改名后把旧名写进书籍 kind/customTag，使书架、阅读记忆同步
+                        TagManager.rewriteTagInBooks(old.name, name)
+                    }
+                } catch (e: SQLiteConstraintException) {
+                    val conflict = appDb.bookTagDao.getByName(name)
+                    if (conflict != null && conflict.id != old.id) {
+                        TagManager.mergeAliasTagInto(old.name, conflict.id)
+                        upsertMapping(old.name, conflict.id)
+                        // 归并后把旧名写进书籍 kind/customTag，使书架、阅读记忆同步
+                        TagManager.rewriteTagInBooks(old.name, name)
+                        _effect.emit(TagManagementEffect.ShowMessage("已归并到「$name」"))
+                    } else {
+                        throw e
+                    }
                 }
             }
         }
@@ -146,13 +164,17 @@ class TagManagementViewModel : ViewModel() {
         postEvent(EventBus.TAGS_UPDATED, intent.id)
     }
 
-    /** 写入「旧标签名 -> 标准标签」映射：若旧名已有映射则先删除，保证唯一有效。 */
+    /** 写入「旧标签名 -> 标准标签」映射：使用 REPLACE 直接插入，DA0 已有 OnConflictStrategy.REPLACE */
     private suspend fun upsertMapping(oldTagName: String, newTagId: Long) {
         if (oldTagName.isBlank()) return
-        appDb.tagMappingDao.getByOldTagName(oldTagName)?.let {
-            appDb.tagMappingDao.deleteById(it.id)
+        try {
+            appDb.tagMappingDao.insert(TagMapping(oldTagName = oldTagName, newTagId = newTagId))
+        } catch (e: SQLiteConstraintException) {
+            appDb.tagMappingDao.getByOldTagName(oldTagName)?.let {
+                appDb.tagMappingDao.deleteById(it.id)
+            }
+            appDb.tagMappingDao.insert(TagMapping(oldTagName = oldTagName, newTagId = newTagId))
         }
-        appDb.tagMappingDao.insert(TagMapping(oldTagName = oldTagName, newTagId = newTagId))
     }
 
     private suspend fun deleteTag(tag: BookTag) {
