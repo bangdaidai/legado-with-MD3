@@ -401,7 +401,7 @@ val appModule = module {
     single<WebDavBackupGateway> { WebDavBackupRepository() }
     single<ReadingProgressGateway> { WebDavReadingProgressRepository() }
     single<HomepageModulesGateway> { HomepageModulesRepository(get(), get()) }
-    single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get()) }
+    single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get(), get()) }
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
     singleOf(::ReadingMemoryRepository)

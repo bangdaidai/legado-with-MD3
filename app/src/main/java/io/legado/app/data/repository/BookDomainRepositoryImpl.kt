@@ -2,6 +2,7 @@ package io.legado.app.data.repository
 
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
+import io.legado.app.data.dao.BookTagRelationDao
 import io.legado.app.data.entities.Book
 import io.legado.app.domain.model.BookGroupAssignment
 import io.legado.app.domain.model.CacheableBook
@@ -11,7 +12,8 @@ import io.legado.app.help.book.isLocal
 
 class BookDomainRepositoryImpl(
     private val bookDao: BookDao,
-    private val bookChapterDao: BookChapterDao
+    private val bookChapterDao: BookChapterDao,
+    private val bookTagRelationDao: BookTagRelationDao,
 ) : BookDomainRepository {
 
     private suspend fun getBooks(bookUrls: Set<String>): List<Book> {
@@ -63,6 +65,9 @@ class BookDomainRepositoryImpl(
     override suspend fun deleteBooks(bookUrls: Set<String>) {
         val books = getBooks(bookUrls)
         if (books.isNotEmpty()) {
+            for (book in books) {
+                bookTagRelationDao.deleteByBookUrl(book.bookUrl)
+            }
             bookDao.delete(*books.toTypedArray())
         }
     }

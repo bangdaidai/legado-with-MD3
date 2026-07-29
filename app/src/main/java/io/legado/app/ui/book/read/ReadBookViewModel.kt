@@ -3077,6 +3077,7 @@ class ReadBookViewModel(
     fun removeFromBookshelf(success: (() -> Unit)? = null) {
         val book = ReadBook.book
         Coroutine.async {
+            book?.let { appDb.bookTagRelationDao.deleteByBookUrl(it.bookUrl) }
             book?.delete()
         }.onSuccess {
             success?.invoke()

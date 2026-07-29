@@ -43,10 +43,10 @@ interface BookTagRelationDao {
     @Query("SELECT DISTINCT tagId FROM bookTagRelations WHERE bookUrl = :bookUrl")
     suspend fun getTagIdsByBookUrl(bookUrl: String): List<Long>
 
-    @Query("SELECT COUNT(DISTINCT bookUrl) FROM bookTagRelations WHERE tagId = :tagId")
+    @Query("SELECT COUNT(DISTINCT r.bookUrl) FROM bookTagRelations r INNER JOIN books b ON r.bookUrl = b.bookUrl WHERE r.tagId = :tagId")
     suspend fun countBooksByTagId(tagId: Long): Int
 
-    @Query("SELECT tagId, COUNT(DISTINCT bookUrl) AS cnt FROM bookTagRelations GROUP BY tagId")
+    @Query("SELECT r.tagId, COUNT(DISTINCT r.bookUrl) AS cnt FROM bookTagRelations r INNER JOIN books b ON r.bookUrl = b.bookUrl GROUP BY r.tagId")
     suspend fun countAllByTag(): List<TagCount>
 
     @Query("SELECT * FROM bookTagRelations")

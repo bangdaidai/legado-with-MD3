@@ -766,6 +766,7 @@ class BookInfoViewModel(
             if (book.isLocal) {
                 LocalBook.deleteBook(book, deleteOriginal)
             }
+            appDb.bookTagRelationDao.deleteByBookUrl(book.bookUrl)
             book.delete()
         }.onSuccess {
             success?.invoke()
