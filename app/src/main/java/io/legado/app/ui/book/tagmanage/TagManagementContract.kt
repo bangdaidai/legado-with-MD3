@@ -8,6 +8,7 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
 data class TagManagementUiState(
+    val version: Long = 0L, // 每次加载数据递增，绕过 BookTag.equals 只比 id 导致的重组丢失
     val searchQuery: String = "",
     // 主页面只展示标签（与 readdai 一致，分组/映射走弹窗，排除走独立页面）
     val tags: ImmutableList<BookTag> = persistentListOf(),

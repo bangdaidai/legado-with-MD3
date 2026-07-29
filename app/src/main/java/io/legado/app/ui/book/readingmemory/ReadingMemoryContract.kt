@@ -33,7 +33,10 @@ sealed interface ReadingMemoryListItem {
         val collapsed: Boolean,
     ) : ReadingMemoryListItem
 
-    data class BookItem(val memory: ReadingMemory) : ReadingMemoryListItem
+    data class BookItem(
+        val memory: ReadingMemory,
+        val tags: List<String> = emptyList(),
+    ) : ReadingMemoryListItem
 }
 
 @Stable

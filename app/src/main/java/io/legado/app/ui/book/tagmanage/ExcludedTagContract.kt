@@ -5,6 +5,7 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
 data class ExcludedTagUiState(
+    val version: Long = 0L,
     val searchQuery: String = "",
     val excludedTags: ImmutableList<ExcludedTag> = persistentListOf(),
 )

@@ -8,6 +8,7 @@ import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -240,7 +241,7 @@ class ReadingMemoryViewModel(
         }
 
         val items = if (c.groupBy == ReadingMemoryGroupBy.None) {
-            sorted.map { ReadingMemoryListItem.BookItem(it) }
+            sorted.map { ReadingMemoryListItem.BookItem(it, TagManager.bookDisplayTags(it.kind, null)) }
         } else {
             val grouped = when (c.groupBy) {
                 ReadingMemoryGroupBy.Year -> groupAndOrder(
@@ -261,7 +262,7 @@ class ReadingMemoryViewModel(
                     val display = groupDisplay(key, c.groupBy)
                     val collapsed = c.collapsed.contains(key)
                     add(ReadingMemoryListItem.GroupHeader(key, display, mems.size, collapsed))
-                    if (!collapsed) mems.forEach { add(ReadingMemoryListItem.BookItem(it)) }
+                    if (!collapsed) mems.forEach { add(ReadingMemoryListItem.BookItem(it, TagManager.bookDisplayTags(it.kind, null))) }
                 }
             }
         }

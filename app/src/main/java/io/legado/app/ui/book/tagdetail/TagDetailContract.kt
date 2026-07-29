@@ -8,6 +8,7 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
 data class TagDetailUiState(
+    val version: Long = 0L,
     val tag: BookTag? = null,
     val groupName: String = "",
     val groups: ImmutableList<BookTagGroup> = persistentListOf(),

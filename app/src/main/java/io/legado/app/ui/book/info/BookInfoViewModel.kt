@@ -18,6 +18,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.help.book.TagManager
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
@@ -186,7 +187,6 @@ class BookInfoViewModel(
     private var currentCharacters: List<BookInfoCharacterUi> = emptyList()
     private var currentHighlightedTags: List<HighlightedTag> = emptyList()
     private var currentKindLabels: List<String> = emptyList()
-    private var currentColoredTags: List<BookTagUi> = emptyList()
     private var currentGroupNames: String? = null
     private var currentHasCustomGroup = false
     private var currentReadRecordTotalTime = 0L
@@ -952,16 +952,19 @@ class BookInfoViewModel(
             val finalKinds = book.getDisplayTagList()
             val enabledRules = appDb.highlightTagRuleDao.getEnabled()
             val (highlighted, regular) = parseHighlightedTags(finalKinds, enabledRules)
-            // 直接读关系表，作为信息页彩色标签的 SSOT，与标签管理页保持一致
+            // 与书架、阅读记忆统一：以 Book.kind + Book.customTag 为 SSOT 归一化（排除 + 映射），
+            // 与标签管理页保持一致，且避免旧书未生成关系表时标签为空。
             val highlightedLabels = highlighted.flatMap { it.matchedLabels }.toSet()
-            val relationTagIds = appDb.bookTagRelationDao.getTagIdsByBookUrl(book.bookUrl)
-            val coloredTags = if (relationTagIds.isEmpty()) {
-                emptyList()
-            } else {
-                appDb.bookTagDao.getByIds(relationTagIds)
-                    .map { BookTagUi(it.id, it.name, it.color) }
-                    .filter { it.name !in highlightedLabels }
-            }
+            val displayTagNames = TagManager.bookDisplayTags(book.kind, book.customTag)
+            val tagEntities = appDb.bookTagDao.getByNames(displayTagNames).associateBy { it.name }
+            val coloredTags = displayTagNames.map { name ->
+                val t = tagEntities[name]
+                BookTagUi(
+                    id = t?.id ?: 0,
+                    name = name,
+                    color = t?.color ?: TagManager.generateTagColor(name),
+                )
+            }.filter { it.name !in highlightedLabels }
             HighlightMeta(highlighted, regular, normalizedGroupNames, hasCustomGroup, coloredTags)
         }.onSuccess {
             currentHighlightedTags = it.highlighted

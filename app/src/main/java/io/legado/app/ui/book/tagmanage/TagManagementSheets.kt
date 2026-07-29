@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.tagmanage
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,17 +12,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,7 +35,8 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -46,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -58,7 +66,7 @@ import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.R
-import io.legado.app.ui.widget.components.settingItem.SettingItem
+import io.legado.app.ui.widget.components.card.SelectionItemCard
 
 /* ---------------- 标签编辑（受控组件） ---------------- */
 
@@ -89,95 +97,111 @@ fun TagEditSheet(
         title = if (data?.id == 0L) "新增标签" else "编辑标签",
     ) {
         data?.let { d ->
+            val selectedColor = Color(d.color)
+            val themePresetColors = remember {
+                val cs = LegadoTheme.colorScheme
+                listOf(
+                    cs.primary,
+                    cs.secondary,
+                    cs.tertiary,
+                    cs.error,
+                    cs.primaryContainer,
+                    cs.secondaryContainer,
+                    cs.tertiaryContainer,
+                )
+            }
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(d.color))
-                            .clickable { onPickColor() },
-                    )
-                    OutlinedTextField(
-                        value = d.name,
-                        onValueChange = { onChange(d.copy(name = it)) },
-                        label = { Text("标签名") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    item { CustomColorChip(onClick = onPickColor) }
+                    items(themePresetColors) { preset ->
+                        ColorChip(
+                            color = preset,
+                            selected = d.color == preset.value.toLong(),
+                            onClick = { onChange(d.copy(color = preset.value.toLong())) },
+                        )
+                    }
                 }
+
+                // 标签名称
+                OutlinedTextField(
+                    value = d.name,
+                    onValueChange = { onChange(d.copy(name = it)) },
+                    label = { Text("标签名") },
+                    placeholder = { Text("例如：工作计划") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = selectedColor,
+                        focusedLabelColor = selectedColor,
+                    ),
+                )
+
+                // 分组
                 GroupField(
                     groups = groups,
                     selectedId = d.groupId,
                     onSelect = { onChange(d.copy(groupId = it)) },
                 )
+
+                // 别名
                 if (aliases.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "别名（合并到标准标签）",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         aliases.forEach { mapping ->
                             Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(LegadoTheme.colorScheme.surfaceVariant)
+                                    .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
                                     mapping.oldTagName,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f),
                                 )
-                                SmallPlainButton(
-                                    text = "设为标准",
-                                    onClick = { onMapToStandard(mapping.oldTagName) },
-                                )
-                                SmallPlainButton(
-                                    text = "移除",
-                                    icon = Icons.Default.Delete,
-                                    onClick = { onRemoveAlias(mapping) },
-                                )
+                                Spacer(Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(LegadoTheme.colorScheme.surface)
+                                        .clickable { onRemoveAlias(mapping) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "移除",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
                 }
-                val hasActions = (d.id != 0L && (onExclude != null || onDelete != null))
-                if (hasActions) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        onExclude?.let { ex ->
-                            TextButton(
-                                onClick = { d.name.trim().let(ex) },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                ),
-                            ) { Text("排除") }
-                        }
-                        onDelete?.let { del ->
-                            TextButton(
-                                onClick = del,
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                ),
-                            ) { Text("删除") }
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { onConfirm(d) }) { Text("保存") }
+
+                // 底部操作栏
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    onExclude?.let { ex ->
+                        OutlinedButton(
+                            onClick = { d.name.trim().let(ex) },
+                            shape = RoundedCornerShape(22.dp),
+                            modifier = Modifier.height(44.dp),
+                        ) { Text("排除") }
                     }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = { onConfirm(d) }) { Text("保存") }
-                    }
+                    Spacer(Modifier.weight(1f))
+                    Button(
+                        onClick = { onConfirm(d) },
+                        shape = RoundedCornerShape(22.dp),
+                        modifier = Modifier.height(44.dp),
+                    ) { Text("保存") }
                 }
             }
         }
@@ -405,25 +429,32 @@ fun MappingManageSheet(
         onDismissRequest = onDismissRequest,
         title = "标签映射",
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            items(mappings, key = { it.id }) { mapping ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "${mapping.oldTagName}  →  ${tagNameById[mapping.newTagId] ?: "（未找到）"}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
+        if (mappings.isEmpty()) {
+            Text(
+                "暂无标签映射",
+                style = MaterialTheme.typography.bodyMedium,
+                color = LegadoTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.padding(vertical = 32.dp),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(mappings, key = { it.id }) { mapping ->
+                    val standardName = tagNameById[mapping.newTagId] ?: "（未找到）"
+                    SelectionItemCard(
+                        title = mapping.oldTagName,
+                        subtitle = "映射到：$standardName",
+                        containerColor = LegadoTheme.colorScheme.onSheetContent,
+                        trailingAction = {
+                            SmallPlainButton(
+                                onClick = { onDelete(mapping) },
+                                icon = Icons.Default.Delete,
+                                contentDescription = "删除",
+                            )
+                        },
                     )
-                    IconButton(onClick = { onDelete(mapping) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "删除")
-                    }
                 }
             }
         }
@@ -449,6 +480,7 @@ fun ExcludedEditSheet(
         title = if (data?.id == 0L) "新增排除项" else "编辑排除项",
     ) {
         if (data != null) {
+            val cs = LegadoTheme.colorScheme
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
                     value = name,
@@ -456,33 +488,122 @@ fun ExcludedEditSheet(
                     label = { Text("名称/正则") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
+                    ),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isRegex, onCheckedChange = { isRegex = it })
-                    Text("作为正则匹配", style = MaterialTheme.typography.bodyMedium)
+                    Checkbox(
+                        checked = isRegex,
+                        onCheckedChange = { isRegex = it },
+                    )
+                    Text(
+                        "作为正则匹配",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurface,
+                    )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (data.id != 0L) {
-                        SmallPlainButton(
-                            text = "删除",
-                            icon = Icons.Default.Delete,
+                        OutlinedButton(
                             onClick = { onDelete(data) },
-                        )
+                            shape = RoundedCornerShape(22.dp),
+                            modifier = Modifier.height(44.dp),
+                        ) {
+                            Text("删除")
+                        }
                     }
                     Spacer(Modifier.weight(1f))
-                    SmallPlainButton(
-                        text = "保存",
+                    Button(
                         onClick = {
                             data?.let { d ->
                                 onSave(d.copy(name = name.trim(), isRegex = isRegex))
                             }
                         },
-                    )
+                        shape = RoundedCornerShape(22.dp),
+                        modifier = Modifier.height(44.dp),
+                    ) {
+                        Text("保存")
+                    }
                 }
+            }
+        }
+    }
+}
+
+/* ---------------- 颜色辅助组件 ---------------- */
+
+@Composable
+private fun ColorChip(color: Color, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(if (selected) color.copy(alpha = 0.15f) else Color.Transparent)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(color),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomColorChip(onClick: () -> Unit) {
+    val cs = LegadoTheme.colorScheme
+    val rainbowBrush = Brush.sweepGradient(
+        listOf(cs.primary, cs.secondary, cs.tertiary, cs.error, cs.primary),
+    )
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .border(1.5.dp, cs.outlineVariant, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(rainbowBrush),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(modifier = Modifier.size(14.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .align(Alignment.Center)
+                        .background(Color.White),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(2.dp)
+                        .align(Alignment.Center)
+                        .background(Color.White),
+                )
             }
         }
     }

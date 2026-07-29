@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readingmemory.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Book
+import io.legado.app.help.book.TagManager
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,12 +52,15 @@ class ReadingMemoryDetailViewModel(
             val protagonists = repository.getProtagonistNames(bookUrl)
             val readRecordTimelineDays = repository.getReadRecordTimelineDays(bookUrl)
             val readRecordTotalTime = repository.getReadRecordTotalTime(bookUrl)
+            val excludedTags = repository.getExcludedTags()
             val bookKindTags = book?.kind
-                ?.split(",", "|")
+                ?.split(",", "|", "\n", "，", "、")
                 ?.map { it.trim() }
                 ?.filter { it.isNotBlank() }
                 .orEmpty()
-            val availableTags = (repository.getAvailableTags() + bookKindTags).distinct()
+            val availableTags = (repository.getAvailableTags() + bookKindTags)
+                .filter { !TagManager.isExcluded(it, excludedTags) }
+                .distinct()
             _showReviewEditor.combine(_reviewDraft) { showReview, draft ->
                 val safeMemory = memory ?: ReadingMemory.defaultStub(bookUrl)
                 val abandoned = memory?.abandoned ?: false
@@ -74,16 +78,23 @@ class ReadingMemoryDetailViewModel(
                     else -> "弃文"
                 }
                 val kindSource = if (book != null) book.kind else memory?.kind
-                val tags = kindSource
-                    ?.split(",", "|")
-                    ?.map { it.trim() }
-                    ?.filter { it.isNotBlank() }
-                    .orEmpty()
+                val tags = TagManager.bookDisplayTags(
+                    kind = kindSource,
+                    customTag = book?.customTag,
+                )
                 val intro = if (book != null && memory?.userModifiedIntro != true) {
                     book.intro ?: memory?.intro ?: ""
                 } else {
                     memory?.intro ?: book?.intro ?: ""
                 }
+                val firstReadDate = readRecordTimelineDays.firstOrNull()?.date
+                val totalBookWords = (book?.wordCount ?: memory?.wordCount ?: "0")
+                    .toLongOrNull() ?: 0L
+                val totalReadWords = statistics?.totalWords ?: 0L
+                val remainingWords = (totalBookWords - totalReadWords).coerceAtLeast(0L)
+                val excerptCount = excerpts.size
+                val totalChapterCount = safeMemory.totalChapterNum
+                val durChapterIdx = safeMemory.durChapterIndex
                 ReadingMemoryDetailUiState(
                     bookUrl = bookUrl,
                     bookName = book?.name ?: memory?.bookName ?: "",
@@ -120,6 +131,12 @@ class ReadingMemoryDetailViewModel(
                     reviewDraft = draft,
                     showTagPicker = _showTagPicker.value,
                     showRatingEditor = false,
+                    firstReadDate = firstReadDate,
+                    totalReadWords = totalReadWords,
+                    remainingWords = remainingWords,
+                    excerptCount = excerptCount,
+                    totalChapterCount = totalChapterCount,
+                    durChapterIndex = durChapterIdx,
                 )
             }
         }

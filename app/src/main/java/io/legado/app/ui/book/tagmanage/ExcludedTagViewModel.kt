@@ -41,7 +41,10 @@ class ExcludedTagViewModel : ViewModel() {
     private fun loadData() {
         viewModelScope.launch(Dispatchers.IO) {
             val list = appDb.excludedTagDao.getAllSync()
-            _uiState.value = _uiState.value.copy(excludedTags = list.toImmutableList())
+            _uiState.value = _uiState.value.copy(
+                version = System.currentTimeMillis(),
+                excludedTags = list.toImmutableList(),
+            )
         }
     }
 

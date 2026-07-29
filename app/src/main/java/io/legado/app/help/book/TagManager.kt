@@ -2,6 +2,7 @@ package io.legado.app.help.book
 
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
+import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookTag
@@ -14,6 +15,8 @@ import io.legado.app.utils.postEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.random.Random
@@ -63,6 +66,85 @@ object TagManager {
             }
         }
         return false
+    }
+
+    // —— 展示标签统一数据源（SSOT = Book.kind + Book.customTag）——
+    // 书架 / 书籍信息 / 阅读记忆三处统一调用，保证集合一致（排除 + 标签映射异名归一）。
+    // 全局只读配置（排除规则、映射、标签名→实体）做缓存，避免逐书读库；
+    // 任何标签/映射/排除变更都会广播 TAGS_UPDATED，订阅后失效重读。
+    private data class TagConfig(
+        val excluded: List<ExcludedTag>,
+        val mappings: List<TagMapping>,
+        val idToTag: Map<Long, BookTag>,
+        val nameToTag: Map<String, BookTag>,
+    )
+
+    @Volatile
+    private var configCache: TagConfig? = null
+
+    private fun getTagConfig(): TagConfig {
+        configCache?.let { return it }
+        val excluded = appDb.excludedTagDao.getAllSync()
+        val mappings = appDb.tagMappingDao.getAll()
+        val tags = appDb.bookTagDao.getAllSync()
+        val cfg = TagConfig(
+            excluded = excluded,
+            mappings = mappings,
+            idToTag = tags.associateBy { it.id },
+            nameToTag = tags.associateBy { it.name },
+        )
+        configCache = cfg
+        return cfg
+    }
+
+    /** 标签/映射/排除规则变更后调用，使下一次展示重新读取最新配置。 */
+    fun invalidateTagConfig() {
+        configCache = null
+    }
+
+    init {
+        CoroutineScope(Dispatchers.IO).launch {
+            FlowEventBus.with<Any>(EventBus.TAGS_UPDATED).collect {
+                configCache = null
+            }
+        }
+    }
+
+    /**
+     * 一本书「最终展示标签」的统一数据源（SSOT = [Book.kind] + [Book.customTag]）。
+     * 拆分 customTag 与 kind，按排除规则过滤，按标签映射异名归一为规范名后去重。
+     * 书架 / 书籍信息 / 阅读记忆三处统一调用此函数，保证标签集合一致。
+     */
+    fun bookDisplayTags(kind: String?, customTag: String?): List<String> {
+        return bookDisplayTagsWithColor(kind, customTag).map { it.name }
+    }
+
+    /** 同上，但返回带颜色的 [BookTag]，供信息页/书架展示彩色标签。 */
+    fun bookDisplayTagsWithColor(kind: String?, customTag: String?): List<BookTag> {
+        val cfg = getTagConfig()
+        val raw = mutableListOf<String>()
+        customTag?.splitNotBlank(",", "|", "\n", "，", "、")
+            ?.filter { it.isNotBlank() }
+            ?.let { raw.addAll(it) }
+        kind?.splitNotBlank(",", "|", "\n", "，", "、")
+            ?.filter { it.isNotBlank() }
+            ?.let { raw.addAll(it) }
+        val result = mutableListOf<BookTag>()
+        for (candidate in raw.distinct()) {
+            if (isExcluded(candidate, cfg.excluded)) continue
+            val mapping = cfg.mappings.firstOrNull { it.oldTagName.equals(candidate, ignoreCase = true) }
+                ?: cfg.mappings.firstOrNull { it.oldTagName.equals(candidate.lowercase().trim(), ignoreCase = true) }
+            val target = if (mapping != null) {
+                cfg.idToTag[mapping.newTagId]
+                    ?: cfg.nameToTag[candidate]
+                    ?: BookTag(name = candidate, color = generateTagColor(candidate))
+            } else {
+                cfg.nameToTag[candidate]
+                    ?: BookTag(name = candidate, color = generateTagColor(candidate))
+            }
+            result.add(target)
+        }
+        return result.distinctBy { it.name }
     }
 
     /** 预置排除规则（仅首次启动播种一次，用户可自由编辑/删除）：

@@ -43,6 +43,7 @@ import android.widget.Toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -86,6 +87,25 @@ fun ExcludedTagScreen(
                         contentDescription = "新增排除项",
                     )
                 },
+                bottomContent = {
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = showSearch,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SearchBar(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            query = state.searchQuery,
+                            onQueryChange = { onIntent(ExcludedTagIntent.Search(it)) },
+                            onClose = {
+                                showSearch = false
+                                onIntent(ExcludedTagIntent.Search(""))
+                            },
+                            placeholder = "搜索排除项",
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
@@ -96,21 +116,6 @@ fun ExcludedTagScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Spacer(modifier = Modifier.height(padding.calculateTopPadding()))
-            AnimatedVisibility(
-                visible = showSearch,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
-            ) {
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SearchBar(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        query = state.searchQuery,
-                        onQueryChange = { onIntent(ExcludedTagIntent.Search(it)) },
-                        onClose = { showSearch = false; onIntent(ExcludedTagIntent.Search("")) },
-                        placeholder = "搜索排除项",
-                    )
-                }
-            }
             val query = state.searchQuery
             val filtered = if (query.isBlank()) {
                 state.excludedTags

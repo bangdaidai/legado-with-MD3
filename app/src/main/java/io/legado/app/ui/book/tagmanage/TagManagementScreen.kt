@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -46,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
@@ -124,25 +124,34 @@ fun TagManagementScreen(
                         )
                     }
                 },
+                bottomContent = {
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = showSearch,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SearchBar(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            query = state.searchQuery,
+                            onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
+                            onClose = {
+                                showSearch = false
+                                onIntent(TagManagementIntent.Search(""))
+                            },
+                            placeholder = stringResource(R.string.search_tag),
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = padding.calculateBottomPadding())
-        ) {
-            TagListTab(
-                state = state,
-                onIntent = onIntent,
-                showSearch = showSearch,
-                topContentPadding = padding.calculateTopPadding(),
-                onCloseSearch = {
-                    showSearch = false
-                    onIntent(TagManagementIntent.Search(""))
-                },
-            )
-        }
+        TagListTab(
+            state = state,
+            onIntent = onIntent,
+            topContentPadding = padding.calculateTopPadding(),
+            bottomContentPadding = padding.calculateBottomPadding(),
+        )
     }
 
     // 标签编辑
@@ -205,9 +214,8 @@ fun TagManagementScreen(
 private fun TagListTab(
     state: TagManagementUiState,
     onIntent: (TagManagementIntent) -> Unit,
-    showSearch: Boolean = false,
     topContentPadding: Dp = 0.dp,
-    onCloseSearch: () -> Unit = {},
+    bottomContentPadding: Dp = 0.dp,
 ) {
     val query = state.searchQuery
     val filtered = if (query.isBlank()) {
@@ -225,26 +233,9 @@ private fun TagListTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(
             start = 16.dp, end = 16.dp,
-            top = topContentPadding + 16.dp, bottom = 16.dp
+            top = topContentPadding + 16.dp, bottom = bottomContentPadding + 16.dp
         ),
     ) {
-        item(key = "search") {
-            AnimatedVisibility(
-                visible = showSearch,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
-            ) {
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SearchBar(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        query = query,
-                        onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
-                        onClose = onCloseSearch,
-                        placeholder = stringResource(R.string.search_tag),
-                    )
-                }
-            }
-        }
         if (ungrouped.isNotEmpty()) {
             item(key = "section_ungrouped") {
                 Text("未分组", style = MaterialTheme.typography.titleMedium)

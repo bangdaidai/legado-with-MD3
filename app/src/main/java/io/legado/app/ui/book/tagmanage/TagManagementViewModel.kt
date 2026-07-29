@@ -90,6 +90,7 @@ class TagManagementViewModel : ViewModel() {
             val groups = appDb.bookTagGroupDao.getAllSorted()
             val mappings = appDb.tagMappingDao.getAll()
             _uiState.value = _uiState.value.copy(
+                version = System.currentTimeMillis(),
                 tags = tags.toImmutableList(),
                 tagCounts = tagCounts,
                 groupTagCounts = groupTagCounts,

@@ -68,6 +68,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
             }
             val mappings = appDb.tagMappingDao.getByNewTagId(tagId).toImmutableList()
             _uiState.value = _uiState.value.copy(
+                version = System.currentTimeMillis(),
                 tag = tag,
                 groupName = groupName,
                 groups = groups,

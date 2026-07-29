@@ -42,6 +42,12 @@ data class ReadingMemoryDetailUiState(
     val reviewDraft: String = "",
     val showTagPicker: Boolean = false,
     val showRatingEditor: Boolean = false,
+    val firstReadDate: String? = null,
+    val totalReadWords: Long = 0L,
+    val remainingWords: Long = 0L,
+    val excerptCount: Int = 0,
+    val totalChapterCount: Int = 0,
+    val durChapterIndex: Int = 0,
 )
 
 

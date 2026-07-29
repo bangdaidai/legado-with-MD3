@@ -801,6 +801,18 @@ fun BookItem(
                                 textStyle = LegadoTheme.typography.labelSmallEmphasized
                             )
                         }
+                        val wc = bookUi.book.wordCount
+                        if (!wc.isNullOrBlank()) {
+                            TextCard(
+                                text = formatShelfWordCount(wc),
+                                backgroundColor = LegadoTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                contentColor = LegadoTheme.colorScheme.primary,
+                                cornerRadius = 4.dp,
+                                horizontalPadding = 4.dp,
+                                verticalPadding = 2.dp,
+                                textStyle = LegadoTheme.typography.labelSmallEmphasized
+                            )
+                        }
                     }
                 }
                 if (settings.bookshelfShowIntro && intro != null) {
@@ -883,4 +895,17 @@ private fun bookAccessibilityLabel(
             detail?.takeIf { it.isNotBlank() }?.let(::add)
         }
     }.distinct().joinToString(separator = ", ")
+}
+
+private fun formatShelfWordCount(raw: String): String {
+    if (raw.isBlank()) return ""
+    if (raw.contains("万")) return raw
+    val count = raw.toLongOrNull() ?: return raw
+    return when {
+        count >= 10000 -> {
+            val wan = count.toFloat() / 10000
+            if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
+        }
+        else -> "${count}字"
+    }
 }

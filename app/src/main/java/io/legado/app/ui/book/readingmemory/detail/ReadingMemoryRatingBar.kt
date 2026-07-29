@@ -10,17 +10,13 @@ import androidx.compose.material.icons.automirrored.filled.StarHalf
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-
-private val StarColorActive = Color(0xFFFFB300)
-private val StarColorInactive = Color(0xFF9AA0A6)
+import io.legado.app.ui.theme.LegadoTheme
 
 /**
  * 阅读记忆专用的可点击五星评分组件，带轻微的选中缩放动效。
@@ -56,9 +52,12 @@ fun ReadingMemoryRatingBar(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFilled || isHalf) StarColorActive else StarColorInactive,
+                tint = if (isFilled || isHalf)
+                    LegadoTheme.colorScheme.primary
+                else
+                    LegadoTheme.colorScheme.outlineVariant,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(16.dp)
                     .scale(scale)
                     .then(
                         if (enabled) {
@@ -75,5 +74,3 @@ fun ReadingMemoryRatingBar(
     }
 }
 
-@Composable
-private fun ratingTint(isFilled: Boolean) = if (isFilled) StarColorActive else MaterialTheme.colorScheme.outline

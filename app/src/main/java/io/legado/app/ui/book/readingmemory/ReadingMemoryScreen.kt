@@ -577,14 +577,13 @@ private fun MemoryBookCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (!memory.kind.isNullOrBlank()) {
+            if (item.tags.isNotEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
-                    memory.kind.split(",", "|").map { it.trim() }.filter { it.isNotBlank() }
-                        .forEach { tag ->
+                    item.tags.forEach { tag ->
                         Surface(
                             shape = MaterialTheme.shapes.small,
                             color = LegadoTheme.colorScheme.secondaryContainer,

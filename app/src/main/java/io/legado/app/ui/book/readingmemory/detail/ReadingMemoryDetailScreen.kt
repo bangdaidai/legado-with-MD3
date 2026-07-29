@@ -47,7 +47,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +58,7 @@ import androidx.compose.foundation.background
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
+import java.util.Locale
 import io.legado.app.utils.formatReadDuration
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -207,12 +207,11 @@ private fun BookInfoSection(
                     ReadingMemoryRatingBar(
                         rating = state.rating,
                         onRatingChanged = { onIntent(ReadingMemoryDetailIntent.SetRating(it)) },
-                        modifier = Modifier.scale(0.75f),
                     )
                 }
                 if (state.wordCountText.isNotBlank()) {
                     AppText(
-                        text = "字数：${state.wordCountText}",
+                        text = "字数：${formatWordCount(state.wordCountText)}",
                         fontSize = 13.sp,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
@@ -295,43 +294,74 @@ private fun StatusText(
 
 @Composable
 private fun StatsSection(state: ReadingMemoryDetailUiState) {
+    val stats = state.statistics
+    val firstDateText = state.readRecordTimelineDays
+        .minByOrNull { it.date }
+        ?.date
+        ?.let { formatReadDate(it) }
+        ?.let { "始于 $it" }
+    val lastDateText = if (state.lastReadTime > 0) {
+        "上次 ${formatReadDate(state.lastReadTime)}"
+    } else null
+
     SectionCard(title = "阅读数据") {
-        val firstDateText = state.readRecordTimelineDays
-            .minByOrNull { it.date }
-            ?.date
-            ?.let { formatReadDate(it) }
-            ?.let { "始于 $it" }
-        val lastDateText = if (state.lastReadTime > 0) {
-            "上次 ${formatReadDate(state.lastReadTime)}"
+        // Row 1: 累计时长 / 阅读天数
+        StatsRow(
+            leftPrimary = formatReadDuration(stats?.totalReadTime ?: state.readRecordTotalTime),
+            leftSecondary = firstDateText,
+            rightPrimary = "${stats?.readingDays ?: 0}天",
+            rightSecondary = lastDateText,
+        )
+        // Row 2: 阅读进度 / 想法笔记
+        val chapterText = if (state.totalChapterCount > 0) {
+            "已读${state.durChapterIndex + 1}章 / 共${state.totalChapterCount}章"
+        } else if (state.durChapterIndex >= 0) {
+            "已读${state.durChapterIndex + 1}章"
         } else null
-        Row(modifier = Modifier.fillMaxWidth()) {
-            StatBlock(
-                title = "累计时长",
-                primary = formatReadDuration(state.readRecordTotalTime),
-                secondary = firstDateText,
+        StatsRow(
+            leftPrimary = String.format(Locale.getDefault(), "%.1f%%", state.progress * 100),
+            leftSecondary = chapterText,
+            rightPrimary = "想法${state.annotationCount}",
+            rightSecondary = "书摘${state.excerptCount}",
+        )
+        // Row 3: 单日最久 / 阅读字数
+        val maxDayText = if (stats != null && stats.maxDayReadTime > 0) {
+            formatReadDuration(stats.maxDayReadTime)
+        } else "—"
+        val maxDayDateText = stats?.maxDayReadDate?.let { formatReadDate(it) }
+        val readWordsText = formatWordCountLong(state.totalReadWords).ifBlank { "—" }
+        val remainingText = formatWordCountLong(state.remainingWords).ifBlank { "—" }
+        StatsRow(
+            leftPrimary = maxDayText,
+            leftSecondary = if (maxDayDateText != null) "前 ${maxDayDateText}" else null,
+            rightPrimary = readWordsText,
+            rightSecondary = if (state.remainingWords > 0) "剩余${remainingText}" else null,
+        )
+    }
+}
+
+@Composable
+private fun StatsRow(
+    leftPrimary: String,
+    leftSecondary: String?,
+    rightPrimary: String,
+    rightSecondary: String?,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+        ) {
+            StatCell(
+                primary = leftPrimary,
+                secondary = leftSecondary,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            StatBlock(
-                title = "阅读天数",
-                primary = "${state.statistics?.readingDays ?: 0}天",
-                secondary = lastDateText,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            StatBlock(
-                title = "全书字数",
-                primary = state.wordCountText.ifBlank { "—" },
-                secondary = null,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            StatBlock(
-                title = "笔记数",
-                primary = state.annotationCount.toString(),
-                secondary = null,
+            Spacer(modifier = Modifier.width(16.dp))
+            StatCell(
+                primary = rightPrimary,
+                secondary = rightSecondary,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -339,32 +369,25 @@ private fun StatsSection(state: ReadingMemoryDetailUiState) {
 }
 
 @Composable
-private fun StatBlock(
-    title: String,
+private fun StatCell(
     primary: String,
     secondary: String?,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        AppText(
-            text = title,
-            fontSize = 12.sp,
-            color = LegadoTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        AppText(
+    Column(modifier = modifier) {
+        Text(
             text = primary,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
+            color = LegadoTheme.colorScheme.onSurface,
         )
-        Box(modifier = Modifier.height(15.dp)) {
-            if (secondary != null) {
-                AppText(
-                    text = secondary,
-                    fontSize = 11.sp,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        if (!secondary.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = secondary,
+                fontSize = 12.sp,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -429,6 +452,7 @@ private fun ProtagonistsSection(
 ) {
     var adding by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
+    var pendingRemoveProtagonist by remember { mutableStateOf<String?>(null) }
 
     SectionCard(
         title = "主要人物",
@@ -461,7 +485,7 @@ private fun ProtagonistsSection(
                 state.protagonistNames.forEach { p ->
                     TagChip(
                         tag = p,
-                        onRemove = { onIntent(ReadingMemoryDetailIntent.RemoveProtagonist(p)) },
+                        onClick = { pendingRemoveProtagonist = p },
                     )
                 }
             }
@@ -494,6 +518,19 @@ private fun ProtagonistsSection(
                 AppText("确定")
             }
         }
+    }
+
+    if (pendingRemoveProtagonist != null) {
+        AppAlertDialog(
+            show = true,
+            title = "移除主角",
+            text = "是否移除主角「${pendingRemoveProtagonist}」呀？",
+            onConfirm = {
+                onIntent(ReadingMemoryDetailIntent.RemoveProtagonist(pendingRemoveProtagonist!!))
+                pendingRemoveProtagonist = null
+            },
+            onDismissRequest = { pendingRemoveProtagonist = null },
+        )
     }
 }
 
@@ -822,37 +859,59 @@ private fun TagChip(
     onClick: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
 ) {
-    NormalCard(
-        onClick = onClick ?: onRemove,
-        cornerRadius = 16.dp,
-        containerColor = tagColor(tag),
+    val clickModifier = if (onClick != null || onRemove != null) {
+        Modifier.clickable { (onClick ?: onRemove)?.invoke() }
+    } else Modifier
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(LegadoTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .then(clickModifier),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppText(text = tag, fontSize = 13.sp, color = Color.White)
-            if (onRemove != null) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "移除",
-                    modifier = Modifier.size(14.dp),
-                    tint = Color.White,
-                )
-            }
+        Text(
+            text = tag,
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+        )
+        if (onRemove != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "移除",
+                modifier = Modifier
+                    .size(14.dp)
+                    .clickable { onRemove.invoke() },
+                tint = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
-private fun tagColor(tag: String): Color {
-    val palette = listOf(
-        Color(0xFFE57373), Color(0xFFBA68C8), Color(0xFF64B5F6), Color(0xFF4DB6AC),
-        Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFA1887F), Color(0xFF90A4AE),
-        Color(0xFFF06292), Color(0xFF7986CB),
-    )
-    val h = if (tag.hashCode() == Int.MIN_VALUE) 0 else kotlin.math.abs(tag.hashCode())
-    return palette[h % palette.size].copy(alpha = 0.85f)
+private fun formatWordCount(raw: String): String {
+    if (raw.isBlank()) return ""
+    if (raw.contains("万")) return raw
+    val count = raw.toLongOrNull() ?: return raw
+    return when {
+        count >= 10000 -> {
+            val wan = count.toFloat() / 10000
+            if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
+        }
+        else -> "${count}字"
+    }
+}
+
+private fun formatWordCountLong(count: Long): String {
+    return when {
+        count >= 10000 -> {
+            val wan = count.toFloat() / 10000
+            if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
+        }
+        count > 0 -> "${count}字"
+        else -> ""
+    }
 }
 
 @Composable

@@ -287,6 +287,7 @@ private fun BookInfoScreenContent(
                                 book = book,
                                 highlightedTags = state.highlightedTags,
                                 coloredTags = state.coloredTags,
+                                kindLabels = state.kindLabels,
                                 groupNames = state.groupNames,
                                 onCoverClick = { onIntent(BookInfoIntent.CoverClick) },
                                 onCoverLongClick = { onIntent(BookInfoIntent.CoverLongClick) },
@@ -878,6 +879,7 @@ private fun BookInfoHeader(
     book: BookInfoBookUi,
     highlightedTags: List<HighlightedTag>,
     coloredTags: List<BookTagUi>,
+    kindLabels: List<String>,
     groupNames: String?,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
@@ -1005,7 +1007,7 @@ private fun BookInfoHeader(
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
-            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank()) {
+            if (coloredTags.isNotEmpty() || kindLabels.isNotEmpty() || !groupNames.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
                     state = kindListState,
@@ -1040,19 +1042,23 @@ private fun BookInfoHeader(
                                 .background(color.copy(alpha = 0.14f))
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(color)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = tag.name,
                                 style = LegadoTheme.typography.labelMedium,
                                 color = color,
                             )
                         }
+                    }
+                    items(
+                        items = kindLabels,
+                        key = { label -> "kind-$label" }
+                    ) { label ->
+                        TextCard(
+                            text = label,
+                            textStyle = LegadoTheme.typography.labelMedium,
+                            backgroundColor = LegadoTheme.colorScheme.surfaceContainer,
+                            contentColor = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

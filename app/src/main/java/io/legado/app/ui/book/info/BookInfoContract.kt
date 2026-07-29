@@ -19,17 +19,6 @@ data class HighlightedTag(
     val title: String?,
 )
 
-/**
- * 书籍信息页展示用的彩色标签，直接读关系表 [io.legado.app.data.entities.BookTagRelation]，
- * 与标签管理页统一：颜色取自 [io.legado.app.data.entities.BookTag.color]。
- */
-@Stable
-data class BookTagUi(
-    val id: Long,
-    val name: String,
-    val color: Long,
-)
-
 data class BookInfoUiState(
     val book: BookInfoBookUi? = null,
     val hasChapters: Boolean = false,
@@ -37,7 +26,6 @@ data class BookInfoUiState(
     val webFiles: List<BookInfoWebFile> = emptyList(),
     val highlightedTags: List<HighlightedTag> = emptyList(),
     val kindLabels: List<String> = emptyList(),
-    val coloredTags: List<BookTagUi> = emptyList(),
     val groupNames: String? = null,
     val hasCustomGroup: Boolean = false,
     val readRecordTotalTime: Long = 0L,
