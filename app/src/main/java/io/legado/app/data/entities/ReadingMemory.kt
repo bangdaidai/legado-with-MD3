@@ -25,6 +25,8 @@ data class ReadingMemory(
     val userModifiedIntro: Boolean = false,
     /** 书源分类字段，用于生成标签 */
     val kind: String? = null,
+    /** 用户自定义标签，删除书架后仍保留 */
+    val customTag: String? = null,
     /** 字数字符串展示 */
     val wordCount: String? = null,
     /** Book.type */

@@ -78,9 +78,10 @@ class ReadingMemoryDetailViewModel(
                     else -> "弃文"
                 }
                 val kindSource = if (book != null) book.kind else memory?.kind
+                val customTagSource = book?.customTag ?: memory?.customTag
                 val tags = TagManager.bookDisplayTags(
                     kind = kindSource,
-                    customTag = book?.customTag,
+                    customTag = customTagSource,
                 )
                 val intro = if (book != null && memory?.userModifiedIntro != true) {
                     book.intro ?: memory?.intro ?: ""

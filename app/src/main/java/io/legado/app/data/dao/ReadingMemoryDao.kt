@@ -46,6 +46,8 @@ interface ReadingMemoryDao {
     @Query(
         """
         UPDATE readingMemory SET
+            kind = :kind,
+            customTag = :customTag,
             protagonistsJson = :protagonistsJson,
             excerptsJson = :excerptsJson,
             statTotalReadTime = :statTotalReadTime,
@@ -65,6 +67,8 @@ interface ReadingMemoryDao {
     )
     suspend fun snapshotOnDelete(
         bookUrl: String,
+        kind: String?,
+        customTag: String?,
         protagonistsJson: String?,
         excerptsJson: String?,
         statTotalReadTime: Long,
@@ -90,6 +94,7 @@ interface ReadingMemoryDao {
             coverUrl = :coverUrl,
             intro = CASE WHEN userModifiedIntro = 0 THEN :intro ELSE intro END,
             kind = :kind,
+            customTag = :customTag,
             wordCount = :wordCount,
             type = :type,
             progress = :progress,
@@ -108,6 +113,7 @@ interface ReadingMemoryDao {
         coverUrl: String?,
         intro: String?,
         kind: String?,
+        customTag: String?,
         wordCount: String?,
         type: Int,
         progress: Float,
@@ -182,7 +188,7 @@ interface ReadingMemoryDao {
     @Query(
         """
         INSERT OR REPLACE INTO readingMemory(bookUrl, bookName, bookAuthor, coverUrl, intro, userModifiedIntro,
-            kind, wordCount, type, progress, totalChapterNum, durChapterIndex, durChapterPos,
+            kind, customTag, wordCount, type, progress, totalChapterNum, durChapterIndex, durChapterPos,
             rating, review, abandoned, firstReadTime, finishReadTime, lastReadTime,
             createTime, updateTime, annotationCount,
             protagonistsJson, excerptsJson,
@@ -190,7 +196,7 @@ interface ReadingMemoryDao {
         SELECT
             :newBookUrl,
             bookName, bookAuthor, coverUrl, intro, userModifiedIntro,
-            kind, wordCount, type, progress, totalChapterNum, durChapterIndex, durChapterPos,
+            kind, customTag, wordCount, type, progress, totalChapterNum, durChapterIndex, durChapterPos,
             rating, review, abandoned, firstReadTime, finishReadTime, lastReadTime,
             createTime, :now,
             annotationCount,
