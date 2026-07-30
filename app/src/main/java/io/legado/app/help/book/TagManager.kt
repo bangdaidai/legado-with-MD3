@@ -11,7 +11,7 @@ import io.legado.app.data.entities.BookTagRelation
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.config.AppConfigStore
-import io.legado.app.utils.postEvent
+import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -179,7 +179,7 @@ object TagManager {
             appDb.bookTagRelationDao.deleteByTagId(tag.id)
             appDb.bookTagDao.deleteById(tag.id)
         }
-        postEvent(EventBus.TAGS_UPDATED, "exclusion_backfill")
+        FlowEventBus.post(EventBus.TAGS_UPDATED, "exclusion_backfill")
         return toRemove.size
     }
 
@@ -249,7 +249,7 @@ object TagManager {
         }
         val afterNames = appDb.bookTagDao.getAllSync().map { it.name }.toSet()
         val restored = toRemove.count { it.name in afterNames }
-        postEvent(EventBus.TAGS_UPDATED, "exclusion_reconcile")
+        FlowEventBus.post(EventBus.TAGS_UPDATED, "exclusion_reconcile")
         return ReconcileResult(removed = toRemove.size, restored = restored)
     }
 
@@ -324,7 +324,7 @@ object TagManager {
         if (relationsToInsert.isNotEmpty()) {
             appDb.bookTagRelationDao.insertAll(relationsToInsert)
         }
-        if (postEvent) postEvent(EventBus.TAGS_UPDATED, book.bookUrl)
+        if (postEvent) FlowEventBus.post(EventBus.TAGS_UPDATED, book.bookUrl)
         return finalTags
     }
 

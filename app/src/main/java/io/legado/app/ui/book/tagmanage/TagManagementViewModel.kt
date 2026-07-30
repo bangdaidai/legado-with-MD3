@@ -197,19 +197,19 @@ class TagManagementViewModel : ViewModel() {
             appDb.bookTagGroupDao.update(old.copy(name = intent.name))
         }
         loadDataBody()
-        postEvent(EventBus.TAGS_UPDATED, intent.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, intent.id)
     }
 
     private suspend fun deleteGroup(group: BookTagGroup) {
         appDb.bookTagGroupDao.deleteById(group.id)
         loadDataBody()
-        postEvent(EventBus.TAGS_UPDATED, group.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, group.id)
     }
 
     private suspend fun deleteMapping(mapping: TagMapping) {
         appDb.tagMappingDao.deleteById(mapping.id)
         loadDataBody()
-        postEvent(EventBus.TAGS_UPDATED, mapping.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, mapping.id)
     }
 
     private suspend fun excludeTag(intent: TagManagementIntent.ExcludeTag) {
@@ -220,7 +220,7 @@ class TagManagementViewModel : ViewModel() {
         }
         appDb.excludedTagDao.insert(ExcludedTag(name = name, isRegex = false))
         loadDataBody()
-        postEvent(EventBus.TAGS_UPDATED, name)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, name)
         _effect.emit(TagManagementEffect.ShowMessage("已添加到排除列表"))
     }
 }
