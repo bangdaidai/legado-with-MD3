@@ -32,6 +32,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.domain.model.settings.BookshelfSettings
+import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
+import io.legado.app.ui.widget.components.divider.PillDivider
+import io.legado.app.ui.widget.components.divider.PillHeaderDivider
+import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.settingItem.CompactClickableSettingItem
+import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
+import io.legado.app.ui.widget.components.settingItem.CompactSliderSettingItem
+import io.legado.app.ui.widget.components.settingItem.CompactSwitchSettingItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
