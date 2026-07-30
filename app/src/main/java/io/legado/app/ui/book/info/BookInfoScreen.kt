@@ -1715,3 +1715,21 @@ private fun EventInfoCard(
         }
     }
 }
+
+/** 格式化字数标签：将原始数字转换为万字单位，与书架保持一致 */
+private fun formatWordCount(name: String): String {
+    if (name.isBlank()) return name
+    if (name.contains("万")) return name
+    val digits = name.filter { it.isDigit() }
+    if (digits.isEmpty()) return name
+    val count = digits.toLongOrNull() ?: return name
+    val suffix = name.substringAfterLast(digits)
+    val unit = suffix.ifBlank { "字" }
+    return when {
+        count >= 10000 -> {
+            val wan = count.toFloat() / 10000
+            if (wan % 1 == 0f) "${wan.toLong()}万$unit" else String.format("%.1f万$unit", wan)
+        }
+        else -> "${count}$unit"
+    }
+}
