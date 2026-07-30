@@ -293,6 +293,13 @@ val appModule = module {
     single { get<AppDatabase>().searchContentHistoryDao }
     single { get<AppDatabase>().rssStarDao }
     single { get<AppDatabase>().ruleSubDao }
+    single { get<AppDatabase>().bookTagRelationDao }
+    single { get<AppDatabase>().bookTagDao }
+    single { get<AppDatabase>().bookTagGroupDao }
+    single { get<AppDatabase>().excludedTagDao }
+    single { get<AppDatabase>().tagMappingDao }
+    single { get<AppDatabase>().removedAutoTagDao }
+
 
     singleOf(::ReadRecordRepository)
     single<HomeDashboardGateway> { HomeDashboardRepository(get(), get()) }
