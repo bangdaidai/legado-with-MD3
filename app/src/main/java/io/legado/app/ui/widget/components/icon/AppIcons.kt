@@ -27,13 +27,13 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.RssFeed
+import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.legado.app.ui.main.MainDestination
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.basic.Search
 import top.yukonga.miuix.kmp.icon.extended.Album
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
@@ -47,6 +47,7 @@ import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Unpin
 import top.yukonga.miuix.kmp.icon.extended.WorldClock
@@ -59,7 +60,7 @@ object AppIcons {
 
     val Search: ImageVector
         @Composable
-        get() = if (isMiuix) MiuixIcons.Basic.Search else Icons.Default.Search
+        get() = if (isMiuix) MiuixIcons.Search else Icons.Default.Search
 
     val MoreVert: ImageVector
         @Composable
@@ -120,6 +121,10 @@ object AppIcons {
     val Add: ImageVector
         @Composable
         get() = Icons.Default.Add
+
+    val Group: ImageVector
+        @Composable
+        get() = if (isMiuix) MiuixIcons.Filter else Icons.Outlined.Sell
 
 
     @Composable

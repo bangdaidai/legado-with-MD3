@@ -667,25 +667,40 @@ class ReadBookViewModel(
             is ReadBookIntent.OpenBookInfo -> {
                 if (ReadBook.book != null) {
                     closeReadMenu()
-                    _uiState.update {
-                        it.copy(
-                            activeSheet = ReadBookSheet.BookNavigation(
-                                io.legado.app.ui.book.read.sheet.ReaderBookSheetTab.Information
+                    if (readSettingsRepository.currentSettings.useNewTocSheet) {
+                        _uiState.update {
+                            it.copy(
+                                activeSheet = ReadBookSheet.BookNavigation(
+                                    io.legado.app.ui.book.read.sheet.ReaderBookSheetTab.Information
+                                )
                             )
-                        )
+                        }
+                    } else{
+                        ReadBook.book?.let { book ->
+                            _effects.tryEmit(ReadBookEffect.OpenBookInfo(book.name, book.author, book.bookUrl))
+                        }
                     }
+
                 }
             }
             is ReadBookIntent.OpenChapterList -> {
                 if (ReadBook.book != null) {
                     closeReadMenu()
-                    _uiState.update { state ->
-                        state.copy(
-                            activeSheet = ReadBookSheet.BookNavigation(
-                                io.legado.app.ui.book.read.sheet.ReaderBookSheetTab.Toc
+                    if (readSettingsRepository.currentSettings.useNewTocSheet)
+                    {
+                        _uiState.update { state ->
+                            state.copy(
+                                activeSheet = ReadBookSheet.BookNavigation(
+                                    io.legado.app.ui.book.read.sheet.ReaderBookSheetTab.Toc
+                                )
                             )
-                        )
+                        }
+                    }else{
+                        ReadBook.book?.bookUrl?.let { bookUrl ->
+                            _effects.tryEmit(ReadBookEffect.OpenChapterList(bookUrl))
+                        }
                     }
+
                 }
             }
             is ReadBookIntent.OpenChapterUrl -> openChapterUrl()
@@ -2501,6 +2516,18 @@ class ReadBookViewModel(
         footerPaddingBottom = ReadBookConfig.footerPaddingBottom,
         footerPaddingLeft = ReadBookConfig.footerPaddingLeft,
         footerPaddingRight = ReadBookConfig.footerPaddingRight,
+        headerFont = ReadBookConfig.headerFont,
+        footerFont = ReadBookConfig.footerFont,
+        headerFontSize = ReadBookConfig.headerFontSize,
+        footerFontSize = ReadBookConfig.footerFontSize,
+        applyHeaderStyle = ReadBookConfig.applyHeaderStyle,
+        tipDividerColor = ReadBookConfig.tipDividerColor,
+        tipHeaderColor = ReadBookConfig.tipHeaderColor,
+        tipHeaderColorNight = ReadBookConfig.tipHeaderColorNight,
+        tipFooterColor = ReadBookConfig.tipFooterColor,
+        tipFooterColorNight = ReadBookConfig.tipFooterColorNight,
+        textFullJustify = readSettingsRepository.currentSettings.textFullJustify,
+        textBottomJustify = readSettingsRepository.currentSettings.textBottomJustify,
         configNames = readBookStyleConfigRepository.currentState.items.map { it.name }
             .filter { it.isNotBlank() }
             .toImmutableList(),
@@ -4982,6 +5009,9 @@ class ReadBookViewModel(
             is ConfigUpdate.CustomTipFooterRight,
             is ConfigUpdate.HeaderFont,
             is ConfigUpdate.HeaderFontSize,
+            is ConfigUpdate.FooterFont,
+            is ConfigUpdate.FooterFontSize,
+            is ConfigUpdate.ApplyHeaderStyle,
             is ConfigUpdate.TipHeaderColor,
             is ConfigUpdate.TipHeaderColorNight,
             is ConfigUpdate.TipFooterColor,
@@ -5640,6 +5670,7 @@ class ReadBookViewModel(
         is ConfigUpdate.TipFooterMiddle -> intMutation(ReadStyleIntKey.TipFooterMiddle, value)
         is ConfigUpdate.TipFooterRight -> intMutation(ReadStyleIntKey.TipFooterRight, value)
         is ConfigUpdate.HeaderFont -> stringMutation(ReadStyleStringKey.HeaderFont, path)
+        is ConfigUpdate.FooterFont -> stringMutation(ReadStyleStringKey.FooterFont, path)
         is ConfigUpdate.CustomTipHeaderLeft ->
             stringMutation(ReadStyleStringKey.CustomTipHeaderLeft, value)
         is ConfigUpdate.CustomTipHeaderMiddle ->
@@ -5653,6 +5684,8 @@ class ReadBookViewModel(
         is ConfigUpdate.CustomTipFooterRight ->
             stringMutation(ReadStyleStringKey.CustomTipFooterRight, value)
         is ConfigUpdate.HeaderFontSize -> intMutation(ReadStyleIntKey.HeaderFontSize, value)
+        is ConfigUpdate.FooterFontSize -> intMutation(ReadStyleIntKey.FooterFontSize, value)
+        is ConfigUpdate.ApplyHeaderStyle -> booleanMutation(ReadStyleBooleanKey.ApplyHeaderStyle, value)
         is ConfigUpdate.TipHeaderColor -> colorMutation(ReadStyleColorKey.TipHeader, color)
         is ConfigUpdate.TipHeaderColorNight ->
             colorMutation(ReadStyleColorKey.TipHeaderNight, color)

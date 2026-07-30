@@ -225,9 +225,14 @@ import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerCoordinator
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.book.search.SearchViewModel
 import io.legado.app.ui.book.searchContent.SearchContentViewModel
+import io.legado.app.ui.book.source.edit.BookSourceEditViewModel
+import io.legado.app.ui.book.source.debug.BookSourceDebugViewModel
+import io.legado.app.ui.book.source.manage.BookSourceViewModel
 import io.legado.app.ui.book.tagdetail.TagDetailViewModel
 import io.legado.app.ui.book.tagmanage.TagManagementViewModel
 import io.legado.app.ui.book.tagmanage.ExcludedTagViewModel
+import io.legado.app.ui.rss.source.edit.RssSourceEditViewModel
+import io.legado.app.ui.rss.source.debug.RssSourceDebugViewModel
 import io.legado.app.ui.book.toc.TocViewModel
 import io.legado.app.ui.book.toc.rule.TxtTocRuleViewModel
 import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewViewModel
@@ -461,6 +466,11 @@ val appModule = module {
     }
     viewModelOf(::DictViewModel)
     viewModelOf(::RssSourceViewModel)
+    viewModelOf(::BookSourceViewModel)
+    viewModelOf(::BookSourceEditViewModel)
+    viewModelOf(::BookSourceDebugViewModel)
+    viewModelOf(::RssSourceEditViewModel)
+    viewModelOf(::RssSourceDebugViewModel)
     viewModelOf(::RssSortViewModel)
     viewModelOf(::RssArticlesViewModel)
     viewModelOf(::ReadRssViewModel)

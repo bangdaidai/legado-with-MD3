@@ -500,10 +500,43 @@ object DatabaseMigrations {
     )
     class Migration_64_65 : AutoMigrationSpec
 
-    // region 98→99: 阅读记忆表 + BookCharacterProfile.isProtagonist 列
+    // region 98→99: 合并上游 txtTocRules 重构 / highlightRules 扩展列 + 本地 readingMemory 表 / BookCharacterProfile.isProtagonist 列
 
     private val migration_98_99 = object : Migration(98, 99) {
         override fun migrate(database: SupportSQLiteDatabase) {
+            // --- 上游: txtTocRules 重构（rule → chapterRule + volumeRule）---
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `txtTocRules_new` (
+                    `id` INTEGER NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `chapterRule` TEXT NOT NULL,
+                    `volumeRule` TEXT NOT NULL DEFAULT '',
+                    `example` TEXT,
+                    `serialNumber` INTEGER NOT NULL,
+                    `enable` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO txtTocRules_new (id, name, chapterRule, volumeRule, example, serialNumber, enable)
+                SELECT id, name, rule, '', example, serialNumber, enable FROM txtTocRules
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE txtTocRules")
+            database.execSQL("ALTER TABLE txtTocRules_new RENAME TO txtTocRules")
+
+            // --- 上游: highlightRules 扩展（字重、斜体、九宫格背景）---
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN fontWeight INTEGER NOT NULL DEFAULT 400")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN isItalic INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN npLeft REAL NOT NULL DEFAULT 0.1")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN npRight REAL NOT NULL DEFAULT 0.1")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN npTop REAL NOT NULL DEFAULT 0.1")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN npBottom REAL NOT NULL DEFAULT 0.1")
+
+            // --- 本地: readingMemory 阅读记忆表 ---
             database.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS readingMemory (
@@ -540,6 +573,8 @@ object DatabaseMigrations {
                 )
                 """.trimIndent()
             )
+
+            // --- 本地: BookCharacterProfile 新增 isProtagonist 列 ---
             database.execSQL(
                 "ALTER TABLE book_character_profiles ADD COLUMN isProtagonist INTEGER NOT NULL DEFAULT 0"
             )

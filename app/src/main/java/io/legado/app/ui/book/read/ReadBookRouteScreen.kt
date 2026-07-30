@@ -58,6 +58,7 @@ import io.legado.app.ui.book.read.sheet.ReaderBookSheetRoute
 import io.legado.app.ui.book.read.sheet.TextSelectMenuConfigSheet
 import io.legado.app.ui.book.searchContent.SearchContentResult
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
+import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.replace.ReplaceEditRoute
@@ -179,6 +180,11 @@ fun ReadBookRouteScreen(
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             viewModel.onIntent(ReadBookIntent.SourceEditResult)
+        }
+    }
+    val tocLauncher = rememberLauncherForActivityResult(TocActivityResult()) { result ->
+        result?.let { (index, chapterPos, _) ->
+            viewModel.onIntent(ReadBookIntent.OpenChapterResult(index, chapterPos))
         }
     }
 
@@ -319,6 +325,16 @@ fun ReadBookRouteScreen(
                             is ReadBookEffect.OpenSourceEdit -> {
                                 sourceEditLauncher.launch { putExtra("sourceUrl", effect.sourceUrl) }
                             }
+                            is ReadBookEffect.OpenChapterList -> {
+                                tocLauncher.launch(effect.bookUrl)
+                            }
+                            is ReadBookEffect.OpenBookInfo -> {
+                                bookInfoLauncher.launch {
+                                    putExtra("name", effect.name)
+                                    putExtra("author", effect.author)
+                                    putExtra("bookUrl", effect.bookUrl)
+                                }
+                            }
                             is ReadBookEffect.ShowLogin -> {
                                 context.startActivity(
                                     Intent(context, SourceLoginActivity::class.java).apply {
@@ -367,7 +383,12 @@ fun ReadBookRouteScreen(
                             ReadBookEffect.OpenTtsEnginesAndVoices -> onOpenTtsEnginesAndVoices()
                             ReadBookEffect.OpenTtsCache -> onOpenTtsCache()
                             is ReadBookEffect.MenuSettingReplace -> {
-                                replaceLauncher.launch(Intent(context, ReplaceRuleActivity::class.java))
+                                replaceLauncher.launch(
+                                    ReplaceRuleActivity.startIntent(
+                                        context = context,
+                                        bookUrl = ReadBook.book?.bookUrl
+                                    )
+                                )
                             }
                             is ReadBookEffect.TextActionReplace -> {
                                 val scopes = arrayListOf<String>()
