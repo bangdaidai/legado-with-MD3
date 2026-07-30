@@ -1041,7 +1041,7 @@ private fun BookInfoHeader(
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
                             Text(
-                                text = tag.name,
+                                text = formatWordCount(tag.name),
                                 style = LegadoTheme.typography.labelMedium,
                                 color = color,
                             )
