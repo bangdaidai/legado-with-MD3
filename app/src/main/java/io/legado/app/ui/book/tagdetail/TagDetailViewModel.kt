@@ -11,7 +11,6 @@ import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
-import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -82,6 +81,34 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
     private suspend fun save(intent: TagDetailIntent.Save) {
         val old = appDb.bookTagDao.getById(tagId) ?: return
         val newName = intent.name.trim()
+        // 如果改名且新名称已存在于其他标签，执行合并（映射到已有标签）
+        val existingTag = if (old.name != newName) {
+            appDb.bookTagDao.getByName(newName)
+        } else {
+            null
+        }
+        if (existingTag != null && existingTag.id != tagId) {
+            appDb.tagMappingDao.getByOldTagName(old.name)?.let {
+                appDb.tagMappingDao.deleteById(it.id)
+            }
+            TagManager.mergeAliasTagInto(old.name, existingTag.id)
+            try {
+                appDb.tagMappingDao.insert(
+                    TagMapping(oldTagName = old.name, newTagId = existingTag.id),
+                )
+            } catch (e: SQLiteConstraintException) {
+                appDb.tagMappingDao.getByOldTagName(old.name)?.let {
+                    appDb.tagMappingDao.deleteById(it.id)
+                }
+                appDb.tagMappingDao.insert(
+                    TagMapping(oldTagName = old.name, newTagId = existingTag.id),
+                )
+            }
+            TagManager.rewriteTagInBooks(old.name, newName)
+            FlowEventBus.post(EventBus.TAGS_UPDATED, existingTag.id)
+            _effect.emit(TagDetailEffect.Back)
+            return
+        }
         appDb.bookTagDao.update(
             old.copy(
                 name = newName,
@@ -101,7 +128,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
             TagManager.rewriteTagInBooks(old.name, newName)
         }
         // 通知后台的标签管理页立即刷新（无需退出重进）
-        postEvent(EventBus.TAGS_UPDATED, old.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, old.id)
         load()
     }
 
@@ -109,7 +136,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         appDb.bookTagRelationDao.deleteByTagId(tagId)
         appDb.tagMappingDao.deleteByNewTagId(tagId)
         appDb.bookTagDao.deleteById(tagId)
-        postEvent(EventBus.TAGS_UPDATED, tagId)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, tagId)
         _effect.emit(TagDetailEffect.Back)
     }
 
@@ -152,14 +179,14 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         }
         // 把别名写进书籍 kind/customTag 改为标准名，使书架、阅读记忆同步
         TagManager.rewriteTagInBooks(currentTag.name, standardName)
-        postEvent(EventBus.TAGS_UPDATED, standardTag.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, standardTag.id)
         _effect.emit(TagDetailEffect.Back)
     }
 
     private suspend fun removeAlias(intent: TagDetailIntent.RemoveAlias) {
         val mapping = appDb.tagMappingDao.getByOldTagName(intent.oldName) ?: return
         appDb.tagMappingDao.deleteById(mapping.id)
-        postEvent(EventBus.TAGS_UPDATED, tagId)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, tagId)
         load()
     }
 
@@ -172,7 +199,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
         appDb.bookTagRelationDao.deleteByTagId(tagId)
         appDb.tagMappingDao.deleteByNewTagId(tagId)
         appDb.bookTagDao.deleteById(tagId)
-        postEvent(EventBus.TAGS_UPDATED, tagId)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, tagId)
         _effect.emit(TagDetailEffect.Back)
     }
 }

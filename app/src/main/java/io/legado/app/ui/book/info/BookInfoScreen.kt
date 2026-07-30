@@ -456,20 +456,6 @@ private fun BookInfoScreenContent(
     BookInfoDialogs(state = state, onIntent = onIntent)
 }
 
-private fun formatWanWordCount(raw: String): String {
-    if (raw.isBlank()) return ""
-    if (raw.contains("万")) return raw
-    val digits = raw.filter { it.isDigit() }
-    val count = digits.toLongOrNull() ?: return raw
-    return when {
-        count >= 10000 -> {
-            val wan = count.toFloat() / 10000
-            if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
-        }
-        else -> "${count}字"
-    }
-}
-
 @Composable
 private fun BookInfoColorTheme(
     theme: ThemeOverrideState?,
@@ -1015,13 +1001,6 @@ private fun BookInfoHeader(
                         modifier = Modifier.clickable(onClick = onOriginClick)
                     )
                 }
-            }
-            if (book.wordCount?.isNotBlank() == true) {
-                AnimatedTextLine(
-                    text = formatWanWordCount(book.wordCount!!),
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
             }
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)

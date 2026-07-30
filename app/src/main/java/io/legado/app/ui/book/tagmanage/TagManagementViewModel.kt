@@ -11,7 +11,6 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
-import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -161,7 +160,7 @@ class TagManagementViewModel : ViewModel() {
             }
         }
         loadDataBody()
-        postEvent(EventBus.TAGS_UPDATED, intent.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, intent.id)
     }
 
     /** 写入「旧标签名 -> 标准标签」映射：使用 REPLACE 直接插入，DA0 已有 OnConflictStrategy.REPLACE */
@@ -182,7 +181,7 @@ class TagManagementViewModel : ViewModel() {
         appDb.tagMappingDao.deleteByNewTagId(tag.id)
         appDb.bookTagDao.deleteById(tag.id)
         loadDataBody()
-        postEvent(EventBus.TAGS_UPDATED, tag.id)
+        FlowEventBus.post(EventBus.TAGS_UPDATED, tag.id)
     }
 
     private suspend fun saveGroup(intent: TagManagementIntent.SaveGroup) {
