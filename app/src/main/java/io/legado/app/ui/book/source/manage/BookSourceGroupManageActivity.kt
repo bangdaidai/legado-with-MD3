@@ -26,8 +26,8 @@ class BookSourceGroupManageActivity : BaseComposeActivity(transparent = true, im
             show = true,
             groups = groups,
             onDismissRequest = { finish() },
-            onUpdateGroup = { old, new -> viewModel.upGroup(old, new) },
-            onDeleteGroup = { viewModel.delGroup(it) },
+            onUpdateGroup = { old, new -> viewModel.onIntent(BookSourceIntent.UpdateGroup(old, new)) },
+            onDeleteGroup = { viewModel.onIntent(BookSourceIntent.DeleteGroup(it)) },
         )
     }
 }
