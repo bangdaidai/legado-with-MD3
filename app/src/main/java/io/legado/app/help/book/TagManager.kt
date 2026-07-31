@@ -11,7 +11,6 @@ import io.legado.app.data.entities.BookTagRelation
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.config.AppConfigStore
-import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
