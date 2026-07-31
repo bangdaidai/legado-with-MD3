@@ -2,7 +2,6 @@ package io.legado.app.ui.book.readingmemory.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
@@ -56,6 +55,7 @@ class ReadingMemoryDetailViewModel(
             val readRecordTimelineDays = repository.getReadRecordTimelineDays(bookUrl)
             val readRecordTotalTime = repository.getReadRecordTotalTime(bookUrl)
             val excludedTags = repository.getExcludedTags()
+            val tagGroups = repository.getTagGroups()
             val bookKindTags = book?.kind
                 ?.split(",", "|", "\n", "，", "、")
                 ?.map { it.trim() }
@@ -131,7 +131,7 @@ class ReadingMemoryDetailViewModel(
                     readRecordTotalTime = readRecordTotalTime,
                     availableTags = availableTags,
                     tagColorMap = tagColorMap,
-                    tagGroups = appDb.bookTagGroupDao.getAllSorted(),
+                    tagGroups = tagGroups,
                     loading = memory == null,
                     showReviewEditor = showReview,
                     reviewDraft = draft,

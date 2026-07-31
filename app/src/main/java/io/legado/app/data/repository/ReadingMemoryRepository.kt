@@ -9,6 +9,7 @@ import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.dao.ReadingMemoryDao
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookCharacterProfile
+import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.ReadingMemory
@@ -402,6 +403,10 @@ class ReadingMemoryRepository(
             tags.filter { !it.name.isNullOrBlank() && it.color != 0L }
                 .associate { it.name to it.color }
         }
+
+    /** 书架标签分组列表，供阅读记忆「标签选择」对话框按分组展示。 */
+    suspend fun getTagGroups(): List<BookTagGroup> =
+        database.bookTagGroupDao.getAllSorted()
 
     /** 当前排除规则列表，供按排除规则过滤书籍标签。 */
     suspend fun getExcludedTags(): List<ExcludedTag> =
