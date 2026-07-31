@@ -562,6 +562,9 @@ fun HighlightRuleEditSheet(
                 pattern = pattern,
                 textColor = if (hasTextColor) textColor else null,
                 bgColor = if (hasBgColor) bgColor else null,
+                bgImage = if (hasBgImage) bgImage else "",
+                bgImageFit = bgImageFit,
+                bgImageScale = bgImageScale,
                 underlineMode = if (hasUnderline) underlineMode else 0,
                 underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
                 underlineWidth = underlineWidth,
@@ -666,6 +669,9 @@ private fun HighlightRulePreview(
     pattern: String,
     textColor: Int?,
     bgColor: Int?,
+    bgImage: String,
+    bgImageFit: Int,
+    bgImageScale: Float,
     underlineMode: Int,
     underlineColor: Int?,
     underlineWidth: Float,
@@ -676,6 +682,14 @@ private fun HighlightRulePreview(
     val defaultTextColor = LegadoTheme.colorScheme.onSurface
     val resolvedTextColor = textColor?.let { Color(it) } ?: defaultTextColor
     val resolvedUnderlineColor = underlineColor?.let { Color(it) } ?: resolvedTextColor
+
+    // 加载背景图 Bitmap
+    val bgBitmap = remember(bgImage) {
+        if (bgImage.isBlank()) null
+        else runCatching {
+            BitmapFactory.decodeFile(bgImage)?.asImageBitmap()
+        }.getOrNull()
+    }
 
     // 真正跑一遍正则，只有命中的片段才应用样式
     val matchRanges = remember(pattern, sampleText) {
@@ -698,7 +712,7 @@ private fun HighlightRulePreview(
                 addStyle(
                     SpanStyle(
                         color = resolvedTextColor,
-                        background = bgColor?.let { Color(it) } ?: Color.Unspecified,
+                        background = if (bgColor != null && bgBitmap == null) Color(bgColor) else Color.Unspecified,
                     ),
                     range.first,
                     (range.last + 1).coerceAtMost(sampleText.length),
@@ -736,6 +750,38 @@ private fun HighlightRulePreview(
                         maxWidth = size.width.toInt()
                     ),
                 )
+
+                // 在匹配区域画背景图
+                if (bgBitmap != null && matchRanges.isNotEmpty()) {
+                    matchRanges.forEach { range ->
+                        val start = range.first
+                        val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                        if (start >= endExclusive) return@forEach
+                        var offset = start
+                        while (offset < endExclusive) {
+                            val line = textResult.getLineForOffset(offset)
+                            val lineEnd = textResult.getLineEnd(line, visibleEnd = true)
+                            val segEnd = minOf(endExclusive, lineEnd)
+                            if (segEnd <= offset) break
+                            val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
+                            val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
+                            val top = textResult.getLineTop(line)
+                            val bottom = textResult.getLineBottom(line)
+                            val rectLeft = minOf(left, right)
+                            val rectRight = maxOf(left, right)
+                            drawImage(
+                                image = bgBitmap,
+                                dstOffset = androidx.compose.ui.unit.IntOffset(rectLeft.toInt(), top.toInt()),
+                                dstSize = androidx.compose.ui.unit.IntSize(
+                                    (rectRight - rectLeft).toInt().coerceAtLeast(1),
+                                    (bottom - top).toInt().coerceAtLeast(1)
+                                ),
+                            )
+                            offset = segEnd
+                        }
+                    }
+                }
+
                 drawText(textResult)
 
                 if (underlineMode > 0) {
@@ -744,7 +790,6 @@ private fun HighlightRulePreview(
                         val start = range.first
                         val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
                         if (start >= endExclusive) return@forEach
-                        // 命中片段可能跨行，按行分段画下划线
                         var offset = start
                         while (offset < endExclusive) {
                             val line = textResult.getLineForOffset(offset)
