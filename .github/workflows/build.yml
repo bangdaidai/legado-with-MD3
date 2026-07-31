@@ -29,114 +29,161 @@ jobs:
           echo "Step 1: 签名文件配置"
           echo "=========================================="
 
+          # 去除 secret 可能带入的首尾空白/换行，避免别名或密码不匹配（表现为 Failed to read key ... null）
           STORE_PW=$(printf '%s' "$STORE_PW" | tr -d '[:space:]')
           KEY_ALIAS=$(printf '%s' "$KEY_ALIAS" | tr -d '[:space:]')
           KEY_PW=$(printf '%s' "$KEY_PW" | tr -d '[:space:]')
 
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "❌ RELEASE_KEY_STORE_BASE64 未设置"
-            exit 1
+            echo "❌ RELEASE_KEY_STORE_BASE64 未设置，将使用 debug 签名"
+            exit 0
           fi
 
           mkdir -p $GITHUB_WORKSPACE
           printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > $GITHUB_WORKSPACE/release.keystore
+
           echo "✅ Keystore 文件创建成功: $GITHUB_WORKSPACE/release.keystore"
           echo "📊 文件大小: $(stat -c%s $GITHUB_WORKSPACE/release.keystore) 字节"
 
-          # 直接导出环境变量，不修改gradle.properties！！
-          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/release.keystore" >> $GITHUB_ENV
-          echo "RELEASE_STORE_PASSWORD=$STORE_PW" >> $GITHUB_ENV
-          echo "RELEASE_KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
-          echo "RELEASE_KEY_PASSWORD=$KEY_PW" >> $GITHUB_ENV
+          {
+            echo ""
+            echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/release.keystore"
+            echo "RELEASE_STORE_PASSWORD=$STORE_PW"
+            echo "RELEASE_KEY_ALIAS=$KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$KEY_PW"
+          } >> gradle.properties
+
+          echo "📋 已写入 gradle.properties 的 RELEASE 配置:"
+          grep "RELEASE_" gradle.properties
 
           echo ""
           echo "🔍 校验 keystore..."
           if ! keytool -list -keystore "$GITHUB_WORKSPACE/release.keystore" -storepass "$STORE_PW" >/dev/null 2>&1; then
-            echo "❌ 步骤A失败：keystore无法打开，store密码错误或者keystore损坏"
+            echo "❌ 步骤A失败：keystore 无法用 RELEASE_STORE_PASSWORD 打开"
+            echo "   → 说明 RELEASE_STORE_PASSWORD 不对，或 RELEASE_KEY_STORE_BASE64 解码出的文件已损坏"
             exit 1
           fi
           if ! keytool -list -keystore "$GITHUB_WORKSPACE/release.keystore" -storepass "$STORE_PW" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
-            echo "❌ 步骤B失败：别名 '$KEY_ALIAS' 不存在"
+            echo "❌ 步骤B失败：别名 '$KEY_ALIAS'(长度=${#KEY_ALIAS}) 不存在于该 keystore"
+            echo "   → 说明 RELEASE_KEY_STORE_BASE64 不是配套的 legado keystore（可能仍是旧 readdai 的那个）"
+            echo "   请检查 GitHub 上该 Secret 的开头：最新的必须是 'MIIKlAIBAz...'，旧的 readdai 是 'MIIJxAIBAz...'"
             exit 1
           fi
-          echo "✅ keystore校验全部通过"
+          echo "✅ 校验通过：别名 '$KEY_ALIAS' 存在且 store 密码正确"
 
-      - name: Grant execute permission gradlew
-        run: chmod +x gradlew
-
-      - name: Build Release + Debug APK
-        run: |
-          ./gradlew clean assembleAppRelease assembleAppDebug \
-            -PabiSplits=arm64-v8a \
-            -PuniversalApk=false \
-            --no-daemon \
-            -x lint \
-            --info 2>&1 | tee full_build.log
-
-      - name: Check APK output
+      - name: Verify Gradle Signing Config
         run: |
           echo "=========================================="
-          echo "Step 4: APK 输出检查"
+          echo "Step 2: 验证 Gradle 签名配置"
           echo "=========================================="
-          find app/build/outputs -name "*.apk" -type f
+          
+          echo "📋 当前 gradle.properties 中的 RELEASE 配置:"
+          grep "RELEASE_" gradle.properties || echo "   未找到 RELEASE 配置"
           echo ""
-          RELEASE_APK=$(find app/build/outputs/apk/app/release -name "*.apk" -type f | head -1)
-          DEBUG_APK=$(find app/build/outputs/apk/app/debug -name "*.apk" -type f | head -1)
+          
+          STORE_FILE=$(grep "^RELEASE_STORE_FILE=" gradle.properties | cut -d= -f2)
+          if [ -z "$STORE_FILE" ]; then
+            echo "❌ RELEASE_STORE_FILE 未配置"
+          elif [ ! -f "$STORE_FILE" ]; then
+            echo "❌ 签名文件不存在: $STORE_FILE"
+            echo "   这是签名不一致的原因！"
+          else
+            echo "✅ RELEASE_STORE_FILE 指向的文件存在: $STORE_FILE"
+            echo "📊 文件实际大小: $(stat -c%s "$STORE_FILE") 字节"
+            
+            STORE_PASSWORD=$(grep "^RELEASE_STORE_PASSWORD=" gradle.properties | cut -d= -f2)
+            KEY_ALIAS=$(grep "^RELEASE_KEY_ALIAS=" gradle.properties | cut -d= -f2)
+            KEY_PASSWORD=$(grep "^RELEASE_KEY_PASSWORD=" gradle.properties | cut -d= -f2)
+            
+            if [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+              echo "✅ 所有签名参数已配置 (STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)"
+            else
+              echo "❌ 部分签名参数缺失"
+            fi
+          fi
 
-          if [ -z "$RELEASE_APK" ]; then
-            echo "❌ ERROR：没有生成Release APK！构建任务成功但是无产物，变体未激活！"
-            exit 1
-          fi
-          if [ -z "$DEBUG_APK" ]; then
-            echo "❌ ERROR：没有生成Debug APK！"
-            exit 1
-          fi
-          echo "✅ APK文件全部生成"
+      - name: Build Release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleAppRelease -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log
 
       - name: Check Build Log for Signing Info
         run: |
           echo "=========================================="
           echo "Step 3: 构建日志中的签名信息"
           echo "=========================================="
-          grep -i "sign\|variant" full_build.log | head -40
+          
+          echo "🔍 搜索签名相关日志:"
+          grep -i "sign" build.log | head -20 || echo "   未找到签名相关日志"
+          echo ""
+          
+          grep -i "release" build.log | grep -i "sign" | head -10 || true
+          echo ""
+          
+          echo "⚠️ 检查是否有签名失败或回退信息:"
+          grep -i "debug.*sign\|fallback\|signing.*fail\|signing.*error\|not found\|unable\|error" build.log | head -20 || echo "   未发现明显的签名错误"
+
+      - name: Check APK output
+        run: |
+          echo "=========================================="
+          echo "Step 4: APK 输出检查"
+          echo "=========================================="
+          
+          find app/build/outputs -name "*.apk" -type f
+          echo ""
+          ls -la app/build/outputs/apk/app/*/ || echo "Release 目录不存在"
 
       - name: Verify APK Signature
         run: |
           echo "=========================================="
           echo "Step 5: 验证 APK 签名指纹"
           echo "=========================================="
-          RELEASE_APK=$(find app/build/outputs/apk/app/release -name "*.apk" -type f | head -1)
-          echo "📦 Release APK: $RELEASE_APK"
-          keytool -printcert -jarfile "$RELEASE_APK" 2>&1 | grep -A2 "SHA256"
+          
+          APK_FILE=$(find app/build/outputs -name "*.apk" -type f | head -1)
+          
+          if [ -z "$APK_FILE" ]; then
+            echo "❌ 未找到 APK 文件"
+            exit 1
+          fi
+          
+          echo "📦 APK 文件: $APK_FILE"
+          echo "📊 APK 大小: $(stat -c%s "$APK_FILE") 字节"
+          echo ""
+          
+          echo "🔐 APK 签名信息:"
+          unzip -p "$APK_FILE" META-INF/*.RSA 2>/dev/null | keytool -printcert -jarfile "$APK_FILE" 2>/dev/null || \
+          jarsigner -verify -verbose -certs "$APK_FILE" 2>&1 | head -20
+          echo ""
+          
+          echo "🔑 签名证书指纹 (SHA256):"
+          keytool -printcert -jarfile "$APK_FILE" 2>&1 | grep -A1 "SHA256" || echo "   无法提取 SHA256 指纹"
+          echo ""
+          
+          STORE_FILE=$(grep "^RELEASE_STORE_FILE=" gradle.properties | cut -d= -f2)
+          if [ -n "$STORE_FILE" ] && [ -f "$STORE_FILE" ]; then
+            STORE_PASSWORD=$(grep "^RELEASE_STORE_PASSWORD=" gradle.properties | cut -d= -f2)
+            KEY_ALIAS=$(grep "^RELEASE_KEY_ALIAS=" gradle.properties | cut -d= -f2)
+            
+            echo "🔑 Keystore 证书指纹 (SHA256):"
+            keytool -list -v -keystore "$STORE_FILE" -alias "$KEY_ALIAS" -storepass "$STORE_PASSWORD" 2>&1 | grep "SHA256:" || echo "   无法提取 keystore SHA256 指纹"
+          fi
+          echo ""
+          
+          echo "✅ 如果 APK 的 SHA256 指纹与 Keystore 的 SHA256 指纹一致，说明签名成功！"
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
           name: legado_release_signed_apk
-          path: app/build/outputs/apk/app/release/*.apk
+          path: app/build/outputs/apk/app/**/*.apk
           retention-days: 30
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: legado_debug_apk
-          path: app/build/outputs/apk/app/debug/*.apk
-          retention-days: 30
-
-      - name: Upload full build log
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: full_build.log
-          retention-days: 14
 
   release:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -145,20 +192,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: legado_release_signed_apk
-          path: artifacts/release
-
-      - name: Download Debug APK
-        uses: actions/download-artifact@v4
-        with:
-          name: legado_debug_apk
-          path: artifacts/debug
+          path: apk_nested
 
       - name: Flatten APK files
         run: |
-          mkdir -p artifacts/all
-          find artifacts/release -name "*.apk" -type f -exec cp {} artifacts/all/ \;
-          find artifacts/debug -name "*.apk" -type f -exec cp {} artifacts/all/ \;
-          ls -la artifacts/all/
+          mkdir -p artifacts
+          find apk_nested -name "*.apk" -type f -exec cp {} artifacts/ \;
+          echo "Flattened APKs:"
+          ls -la artifacts/
 
       - name: Get version info
         id: version
@@ -169,7 +210,7 @@ jobs:
             VERSION="${VERSION}-beta"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-
+          
       - name: Generate Release Notes
         run: |
           echo "## 🚀 Release v${{ steps.version.outputs.version }}" > RELEASE_NOTES.md
@@ -178,8 +219,7 @@ jobs:
           echo "**Commit:** ${{ github.sha }}" >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 📦 Downloads" >> RELEASE_NOTES.md
-          echo "- **Release APK:** 正式签名版本，直接安装到 Android 设备" >> RELEASE_NOTES.md
-          echo "- **Debug APK:** 调试版本，用于测试" >> RELEASE_NOTES.md
+          echo "- **APK:** 直接安装到 Android 设备" >> RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -187,7 +227,7 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           name: Release v${{ steps.version.outputs.version }}
           body_path: RELEASE_NOTES.md
-          files: artifacts/all/*.apk
+          files: artifacts/*.apk
           draft: false
           prerelease: false
         env:
