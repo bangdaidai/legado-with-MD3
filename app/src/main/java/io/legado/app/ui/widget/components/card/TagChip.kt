@@ -60,7 +60,7 @@ fun TagChip(
     val contentColor = if (tagColor != null) {
         tagColor
     } else {
-        LegadoTheme.colorScheme.onSurfaceVariant
+        LegadoTheme.colorScheme.primary
     }
 
     val clickModifier = if (onClick != null || onRemove != null) {

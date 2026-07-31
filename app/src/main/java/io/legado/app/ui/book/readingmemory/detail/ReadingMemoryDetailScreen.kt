@@ -35,6 +35,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -548,7 +549,7 @@ private fun IntroSection(
                 tint = LegadoTheme.colorScheme.primary,
                 modifier = Modifier
                     .size(20.dp)
-                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenBookInfo) },
+                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenBookInfoEdit) },
             )
         },
     ) {
@@ -638,104 +639,52 @@ private fun TagPickerSheet(
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
 ) {
-    var customTag by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
+    var tagText by remember { mutableStateOf("") }
+    val cs = LegadoTheme.colorScheme
+    val selectedColor = remember { cs.primary }
 
     AppModalBottomSheet(
         show = true,
         onDismissRequest = onDismiss,
-        title = "选择标签",
+        title = "新建标签",
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("搜索标签") },
-            singleLine = true,
-            leadingIcon = {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 320.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (selectedTags.isNotEmpty()) {
-                item {
-                    AppText(
-                        text = "已选标签",
-                        style = LegadoTheme.typography.labelMedium,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = tagText,
+                onValueChange = { tagText = it },
+                label = { Text("标签名") },
+                placeholder = { Text("输入标签名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = selectedColor,
+                    focusedLabelColor = selectedColor,
+                ),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                FilledTonalButton(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(22.dp),
+                ) {
+                    AppText("取消")
                 }
-                item {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        selectedTags.forEach { tag ->
-                            TagChip(tag = tag, color = tagColorMap[tag], onRemove = { onRemoveTag(tag) })
+                Spacer(modifier = Modifier.width(12.dp))
+                FilledTonalButton(
+                    onClick = {
+                        val trimmed = tagText.trim()
+                        if (trimmed.isNotBlank()) {
+                            onAddTag(trimmed)
                         }
-                    }
+                        onDismiss()
+                    },
+                    shape = RoundedCornerShape(22.dp),
+                ) {
+                    AppText("保存")
                 }
-            }
-
-            val candidates = availableTags
-                .filter { it !in selectedTags }
-                .filter { it.contains(query, ignoreCase = true) }
-            if (candidates.isNotEmpty()) {
-                item {
-                    AppText(
-                        text = "可选标签",
-                        style = LegadoTheme.typography.labelMedium,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                items(candidates) { tag ->
-                    TagChip(tag = tag, color = tagColorMap[tag], onClick = { onAddTag(tag) })
-                }
-            } else if (selectedTags.isEmpty()) {
-                item {
-                    AppText(
-                        text = "暂无可选标签，可在下方添加",
-                        style = LegadoTheme.typography.labelMedium,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = customTag,
-            onValueChange = { customTag = it },
-            label = { Text("自定义标签") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FilledTonalButton(
-                onClick = {
-                    if (customTag.isNotBlank()) {
-                        onAddTag(customTag.trim())
-                        customTag = ""
-                    }
-                },
-                modifier = Modifier.weight(1f),
-            ) {
-                AppText("添加")
-            }
-            FilledTonalButton(
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f),
-            ) {
-                AppText("完成")
             }
         }
     }
@@ -848,6 +797,7 @@ private fun ReadSessionSection(state: ReadingMemoryDetailUiState) {
             timelineDays = state.readRecordTimelineDays,
             showChapterInfo = true,
             modifier = Modifier.fillMaxWidth(),
+            parentIsScrollable = true,
         )
     }
 }

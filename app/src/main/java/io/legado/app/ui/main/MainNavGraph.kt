@@ -43,6 +43,7 @@ import io.legado.app.ui.book.explore.ExploreShowViewModel
 import io.legado.app.ui.book.import.local.ImportBookRouteScreen
 import io.legado.app.ui.book.import.remote.RemoteBookRouteScreen
 import io.legado.app.ui.book.info.BookInfoRouteScreen
+import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.tagdetail.TagDetailRouteScreen
 import io.legado.app.ui.book.tagmanage.TagManagementRouteScreen
 import io.legado.app.ui.book.tagmanage.ExcludedTagRouteScreen
@@ -1119,6 +1120,11 @@ fun MainActivity.mainEntryProvider(
                             origin = null,
                         ),
                     )
+                    is ReadingMemoryDetailEffect.OpenBookInfoEdit -> {
+                        context.startActivity(BookInfoEditActivity::class.java) {
+                            putExtra("bookUrl", effect.bookUrl)
+                        }
+                    }
                 }
             }
         }

@@ -23,19 +23,20 @@ import java.util.Date
 /**
  * 共用阅读时段时间轴组件。
  * 在 BookInfo 阅读记录 sheet 和 ReadingMemory 详情页中共用。
+ *
+ * @param parentIsScrollable 如果调用方已将此组件嵌套在外层可滚动容器中(如 LazyColumn/LazyListScope.item)，
+ *                           应设为 true，此时内部不再使用 LazyColumn 避免嵌套滚动崩溃。
  */
 @Composable
 fun ReadingSessionTimeline(
     timelineDays: List<ReadRecordTimelineDay>,
     showChapterInfo: Boolean = true,
     modifier: Modifier = Modifier,
+    parentIsScrollable: Boolean = false,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        timelineDays.forEach { day ->
-            item(key = "header_${day.date}") {
+    if (parentIsScrollable) {
+        Column(modifier = modifier.fillMaxWidth()) {
+            timelineDays.forEach { day ->
                 AppText(
                     text = day.date,
                     style = LegadoTheme.typography.titleSmall,
@@ -43,12 +44,35 @@ fun ReadingSessionTimeline(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                 )
+                day.sessions.forEach { session ->
+                    TimelineSessionRow(
+                        session = session,
+                        showChapterInfo = showChapterInfo,
+                    )
+                }
             }
-            items(day.sessions, key = { it.id }) { session ->
-                TimelineSessionRow(
-                    session = session,
-                    showChapterInfo = showChapterInfo,
-                )
+        }
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            timelineDays.forEach { day ->
+                item(key = "header_${day.date}") {
+                    AppText(
+                        text = day.date,
+                        style = LegadoTheme.typography.titleSmall,
+                        color = LegadoTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                }
+                items(day.sessions, key = { it.id }) { session ->
+                    TimelineSessionRow(
+                        session = session,
+                        showChapterInfo = showChapterInfo,
+                    )
+                }
             }
         }
     }

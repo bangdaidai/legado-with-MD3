@@ -212,6 +212,11 @@ class ReadingMemoryDetailViewModel(
                                 ),
                             )
                         }
+                        is ReadingMemoryDetailIntent.OpenBookInfoEdit -> {
+                            _effectFlow.tryEmit(
+                                ReadingMemoryDetailEffect.OpenBookInfoEdit(bookUrl),
+                            )
+                        }
                         is ReadingMemoryDetailIntent.AddProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, true)
                             protagonistRefresh.value = Unit

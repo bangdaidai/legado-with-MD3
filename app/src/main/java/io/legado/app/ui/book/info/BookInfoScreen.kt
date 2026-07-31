@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -625,17 +624,10 @@ private fun BookInfoTopBarActions(
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
 ) {
-    if (state.inBookshelf) {
-        TopBarActionButton(
-            onClick = { onMenuAction(BookInfoMenuAction.Edit) },
-            imageVector = Icons.Default.Edit,
-            contentDescription = stringResource(R.string.edit)
-        )
-    }
     TopBarActionButton(
-        onClick = { onMenuAction(BookInfoMenuAction.Share) },
-        imageVector = Icons.Default.Share,
-        contentDescription = stringResource(R.string.share)
+        onClick = { onMenuAction(BookInfoMenuAction.ReadingMemory) },
+        imageVector = Icons.Default.Timeline,
+        contentDescription = "阅读记忆"
     )
     BookInfoOverflowAction(
         state = state,
@@ -789,20 +781,6 @@ private fun BookInfoOverflowMenu(
                 onClick = { onMenuAction(BookInfoMenuAction.CustomButton) }
             )
         }
-        if (state.inBookshelf) {
-            RoundDropdownMenuItem(
-                text = stringResource(R.string.edit),
-                onClick = { onMenuAction(BookInfoMenuAction.Edit) }
-            )
-        }
-        RoundDropdownMenuItem(
-            text = stringResource(R.string.refresh),
-            onClick = { onMenuAction(BookInfoMenuAction.Refresh) }
-        )
-        RoundDropdownMenuItem(
-            text = stringResource(R.string.read_record),
-            onClick = { onMenuAction(BookInfoMenuAction.ReadRecord) }
-        )
         if (book?.isLocal == true) {
             RoundDropdownMenuItem(
                 text = stringResource(R.string.re_sync_webdav),
@@ -867,10 +845,6 @@ private fun BookInfoOverflowMenu(
         RoundDropdownMenuItem(
             text = stringResource(R.string.log),
             onClick = { onMenuAction(BookInfoMenuAction.ShowLog) }
-        )
-        RoundDropdownMenuItem(
-            text = "阅读记忆",
-            onClick = { onMenuAction(BookInfoMenuAction.ReadingMemory) }
         )
     }
 }

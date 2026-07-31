@@ -33,7 +33,9 @@ data class BookShelfItem(
     val intro: String? = null,
     val kind: String? = null,
     val customTag: String? = null,
-    val wordCount: String? = null
+    val wordCount: String? = null,
+    /** 用户评分 (0..5)，来自 readingMemory 表 */
+    val rating: Float = 0f
 ) {
     fun getDisplayCover() = if (customCoverUrl.isNullOrEmpty()) coverUrl else customCoverUrl
 
