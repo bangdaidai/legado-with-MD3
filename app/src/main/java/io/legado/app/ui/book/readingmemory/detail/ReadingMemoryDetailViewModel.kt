@@ -24,10 +24,10 @@ class ReadingMemoryDetailViewModel(
 ) : ViewModel() {
 
     // 主角实时源变化触发器：增删主角后强制重算
-    private val protagonistRefresh = MutableStateFlow(Unit)
+    private val protagonistRefresh = MutableStateFlow(0)
 
     // 书签/摘录变化触发器：编辑或删除书签后强制重算
-    private val bookmarkRefresh = MutableStateFlow(Unit)
+    private val bookmarkRefresh = MutableStateFlow(0)
 
     private val _showReviewEditor = MutableStateFlow(false)
     private val _reviewDraft = MutableStateFlow("")
@@ -156,12 +156,12 @@ class ReadingMemoryDetailViewModel(
                         is ReadingMemoryDetailIntent.Load -> {
                             repository.ensureMemory(bookUrl)
                             repository.autoExtractProtagonists(bookUrl)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.Refresh -> {
                             repository.ensureMemory(bookUrl)
                             repository.autoExtractProtagonists(bookUrl)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.SetRating -> {
                             repository.updateRating(bookUrl, intent.rating)
@@ -183,7 +183,7 @@ class ReadingMemoryDetailViewModel(
                         is ReadingMemoryDetailIntent.SetStatus -> {
                             if (intent.abandoned) repository.markAbandoned(bookUrl)
                             else repository.unmarkAbandoned(bookUrl)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.OpenTagEdit -> {
                             _showTagPicker.value = true
@@ -196,11 +196,11 @@ class ReadingMemoryDetailViewModel(
                         }
                         is ReadingMemoryDetailIntent.AddTag -> {
                             repository.addTag(bookUrl, intent.tag)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.RemoveTag -> {
                             repository.removeTag(bookUrl, intent.tag)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.EditIntro -> {
                             repository.updateIntro(bookUrl, intent.intro)
@@ -224,11 +224,11 @@ class ReadingMemoryDetailViewModel(
                         }
                         is ReadingMemoryDetailIntent.AddProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, true)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.RemoveProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, false)
-                            protagonistRefresh.value = Unit
+                            protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.DeleteReview -> {
                             repository.deleteReview(bookUrl)
@@ -236,11 +236,11 @@ class ReadingMemoryDetailViewModel(
                         }
                         is ReadingMemoryDetailIntent.EditBookmark -> {
                             repository.saveBookmark(intent.bookmark)
-                            bookmarkRefresh.value = Unit
+                            bookmarkRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.DeleteBookmark -> {
                             repository.deleteBookmark(intent.bookmark)
-                            bookmarkRefresh.value = Unit
+                            bookmarkRefresh.value++
                         }
                     }
                 }

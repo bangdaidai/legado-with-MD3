@@ -232,7 +232,7 @@ fun BookshelfItem(
                     ) {
                         Box(
                             modifier = Modifier
-                                .padding(4.dp)
+                                .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
                                 .fillMaxWidth()
                                 .aspectRatio(5f / 7f)
                                 .then(

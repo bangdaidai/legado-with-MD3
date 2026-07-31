@@ -1273,7 +1273,8 @@
     <string name="sys_tts_config">System tts Settings</string>
     <string name="sys_tts_config_summary">Open the system tts settings interface</string>
     <string name="cannot_timed_non_playback">When the non-playback state is not legal</string>
-    <string name="all_bookmark">All bookmarks</string>
+    <string name="all_bookmark">Bookmark Notes</string>
+    <string name="filter_only_notes">Notes only</string>
     <string name="change_source_batch">Batch source switching</string>
     <string name="book_type_different">Different types of books</string>
     <string name="soure_change_source">Whether to confirm the source change</string>
