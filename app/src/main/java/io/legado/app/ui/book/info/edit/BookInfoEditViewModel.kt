@@ -9,6 +9,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.repository.BookRepository
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.applyTagGroupRulesForBook
@@ -49,14 +50,17 @@ data class BookInfoEditUiState(
     val book: Book? = null,
 )
 
-class BookInfoEditViewModel(application: Application) : BaseViewModel(application) {
+class BookInfoEditViewModel(
+    application: Application,
+    private val bookRepository: BookRepository,
+) : BaseViewModel(application) {
     var book: Book? = null
     private val _uiState = MutableStateFlow(BookInfoEditUiState())
     val uiState: StateFlow<BookInfoEditUiState> = _uiState.asStateFlow()
 
     fun loadBook(bookUrl: String) {
         execute {
-            book = appDb.bookDao.getBook(bookUrl)
+            book = bookRepository.getBook(bookUrl)
             book?.let {
                 val selectedType = when {
                     it.isImage -> BookInfoEditType.IMAGE
@@ -148,7 +152,7 @@ class BookInfoEditViewModel(application: Application) : BaseViewModel(applicatio
                 if (ReadBook.book?.bookUrl == book.bookUrl) {
                     ReadBook.book = book
                 }
-                appDb.bookDao.update(book)
+                bookRepository.update(book)
                 // 编辑用户标签后同步关系表：以 kind+customTag 为 SSOT 重建该书标签关联
                 appDb.bookTagRelationDao.deleteByBookUrl(book.bookUrl)
                 TagManager.generateTagsFromKind(book)

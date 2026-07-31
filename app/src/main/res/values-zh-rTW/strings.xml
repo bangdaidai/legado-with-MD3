@@ -895,7 +895,7 @@
     <string name="show_unread">顯示未讀標誌</string>
     <string name="use_default_cover">總是使用預設封面</string>
     <string name="use_default_cover_s">總是顯示預設封面，不顯示網路封面</string>
-    <string name="title_font_size">字號</string>
+    <string name="font_size">字號</string>
     <string name="title_margin_top">上邊距</string>
     <string name="title_margin_bottom">下邊距</string>
     <string name="show">顯示</string>
@@ -1131,6 +1131,7 @@
     <string name="clear_webview_data">清除 WebView 数据</string>
     <string name="clear_webview_data_summary">清除内置浏览器所有数据</string>
     <string name="source_tab_list">列表</string>
+    <string name="source_tab_web_view">網頁</string>
     <string name="layout_type">布局</string>
     <string name="dict_rule">字典规则</string>
     <string name="config_dict_rule">配置字典规则</string>
@@ -1556,7 +1557,7 @@
     <string name="image_style_full">全螢幕</string>
     <string name="image_style_text">文字吸附</string>
     <string name="image_style_single">單頁</string>
-    <string name="title_color">標題顏色</string>
+    <string name="color">顏色</string>
     <string name="reset_to_body_color">重置為正文顏色</string>
     <string name="export_file_name_template_hint">{name} - {author}</string>
     <string name="export_file_name_template_help">可用變數：{name} 書名、{author} 作者、{group} 分組、{source} 來源、{remark} 備註。
@@ -1597,7 +1598,6 @@
     <string name="placeholder_page_index">當前頁碼</string>
     <string name="placeholder_page_size">本章頁數</string>
     <string name="placeholder_page_remaining">本章剩餘頁數</string>
-    <string name="chapter_complete">本章完</string>
     <string name="placeholder_read_progress">閱讀進度</string>
     <string name="cover_selected_images_count">已選擇 %1$d 張圖片</string>
     <string name="confirm_skip_to_chapter">是否跳轉到此章節？</string>
@@ -2169,6 +2169,12 @@
     <string name="eye_protection_intensity_summary">目前強度：%1$d</string>
     <string name="eye_protection_auto_night">深色閱讀模式時自動開啟</string>
     <string name="eye_protection_auto_night_summary">跟隨閱讀介面的深色/淺色模式自動切換</string>
+    <string name="color_temperature">色溫</string>
+    <string name="color_temperature_summary">目前色溫：%1$d</string>
+    <string name="eye_protection_schedule">定時開啟</string>
+    <string name="eye_protection_schedule_summary">僅在設定的時間範圍內生效</string>
+    <string name="eye_protection_start_time">開始時間</string>
+    <string name="eye_protection_end_time">結束時間</string>
     <string name="highlight_tag_config">標籤規則</string>
     <string name="import_highlight_tag_rule">匯入標籤規則</string>
     <string name="highlight_tag_title">標題</string>

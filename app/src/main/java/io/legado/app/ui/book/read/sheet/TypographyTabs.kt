@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.sheet
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,12 +15,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AlignHorizontalCenter
+import androidx.compose.material.icons.filled.AlignHorizontalLeft
+import androidx.compose.material.icons.filled.AlignHorizontalRight
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.CleanHands
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.CopyAll
+import androidx.compose.material.icons.filled.FormatAlignJustify
+import androidx.compose.material.icons.filled.FormatColorText
+import androidx.compose.material.icons.filled.FormatIndentIncrease
 import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatLineSpacing
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.LineWeight
+import androidx.compose.material.icons.filled.Minimize
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Segment
+import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.ViewHeadline
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -29,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -38,7 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.repository.ReadSettingsRepository
-import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.constant.ReadTipType
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.ConfigUpdate
 import io.legado.app.ui.book.read.ReadBookIntent
@@ -113,6 +140,7 @@ private fun FontWeightSetting(
                     selectedValue = value.toString(),
                     displayEntries = arrayOf(weightEntries[2], weightEntries[0], weightEntries[1]),
                     entryValues = arrayOf("2", "0", "1"),
+                    imageVector = Icons.Default.LineWeight,
                     onValueChange = { onValueChange(it.toInt()) },
                 )
             }
@@ -173,6 +201,7 @@ private fun TipPositionDropdown(
     value: Int,
     tipNames: List<String>,
     tipValues: Array<Int>,
+    imageVector: ImageVector? = null,
     onValueChange: (Int) -> Unit,
 ) {
     TinyDropdownSettingItem(
@@ -180,6 +209,7 @@ private fun TipPositionDropdown(
         selectedValue = value.toString(),
         displayEntries = tipNames.toTypedArray(),
         entryValues = tipValues.map { it.toString() }.toTypedArray(),
+        imageVector = imageVector,
         onValueChange = { onValueChange(it.toInt()) },
     )
 }
@@ -199,24 +229,28 @@ private fun PaddingSliders(
         title = stringResource(R.string.padding_top),
         value = top,
         valueRange = 0f..200f,
+        imageVector = Icons.Default.VerticalAlignTop,
         onValueChange = onTopChange,
     )
     TinySliderSettingItem(
         title = stringResource(R.string.padding_bottom),
         value = bottom,
         valueRange = 0f..200f,
+        imageVector = Icons.Default.VerticalAlignBottom,
         onValueChange = onBottomChange,
     )
     TinySliderSettingItem(
         title = stringResource(R.string.padding_left),
         value = left,
         valueRange = 0f..200f,
+        imageVector = Icons.Default.AlignHorizontalLeft,
         onValueChange = onLeftChange,
     )
     TinySliderSettingItem(
         title = stringResource(R.string.padding_right),
         value = right,
         valueRange = 0f..200f,
+        imageVector = Icons.Default.AlignHorizontalRight,
         onValueChange = onRightChange,
     )
 }
@@ -278,6 +312,7 @@ internal fun TypographyBodyTab(
             selectedValue = config.chineseConverterType.toString(),
             displayEntries = chineseConvertEntries,
             entryValues = chineseConvertValues,
+            imageVector = Icons.Default.Translate,
             onValueChange = {
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ChineseConverterType(it.toInt())))
             },
@@ -288,11 +323,13 @@ internal fun TypographyBodyTab(
         TinyColorSettingItem(
             title = stringResource(R.string.text_color),
             colorValue = config.textColor,
+            imageVector = Icons.Default.FormatColorText,
             onClick = { onOpenColorPicker(TypographyColorTarget.Text) },
         )
         TinyColorSettingItem(
             title = stringResource(R.string.text_accent_color),
             colorValue = config.textAccentColor,
+            imageVector = Icons.Default.Palette,
             onClick = { onOpenColorPicker(TypographyColorTarget.TextAccent) },
         )
 
@@ -324,6 +361,7 @@ internal fun TypographyBodyTab(
             value = indentCount.toFloat(),
             valueRange = 0f..4f,
             steps = 3,
+            imageVector = Icons.Default.FormatIndentIncrease,
             onValueChange = { value ->
                 indentCount = value.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ParagraphIndent("　".repeat(indentCount))))
@@ -334,6 +372,7 @@ internal fun TypographyBodyTab(
             value = (letterSpacing * 100) + 50,
             valueRange = 0f..100f,
             steps = 99,
+            imageVector = Icons.Default.SpaceBar,
             valueFormat = { ((it - 50) / 100f).toString() },
             onValueChange = { value ->
                 letterSpacing = (value - 50) / 100f
@@ -345,6 +384,7 @@ internal fun TypographyBodyTab(
             value = lineSpacing,
             valueRange = 0f..20f,
             steps = 19,
+            imageVector = Icons.Default.FormatLineSpacing,
             valueFormat = { ((it - 10) / 10f).toString() },
             onValueChange = { value ->
                 lineSpacing = value
@@ -356,6 +396,7 @@ internal fun TypographyBodyTab(
             value = paragraphSpacing,
             valueRange = 0f..20f,
             steps = 19,
+            imageVector = Icons.Default.Segment,
             valueFormat = { (it / 10f).toString() },
             onValueChange = { value ->
                 paragraphSpacing = value
@@ -368,6 +409,7 @@ internal fun TypographyBodyTab(
         TinySwitchSettingItem(
             title = stringResource(R.string.text_full_justify),
             checked = config.textFullJustify,
+            imageVector = Icons.Default.FormatAlignJustify,
             onCheckedChange = {
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TextFullJustify(it)))
             },
@@ -375,6 +417,7 @@ internal fun TypographyBodyTab(
         TinySwitchSettingItem(
             title = stringResource(R.string.text_bottom_justify),
             checked = config.textBottomJustify,
+            imageVector = Icons.Default.VerticalAlignBottom,
             onCheckedChange = {
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TextBottomJustify(it)))
             },
@@ -399,6 +442,7 @@ internal fun TypographyBodyTab(
             selectedValue = ReadBook.book?.getImageStyle() ?: Book.imgStyleDefault,
             displayEntries = imgStyleEntries,
             entryValues = imgStyleValues,
+            imageVector = Icons.Default.Image,
             onValueChange = { style ->
                 onIntent(ReadBookIntent.MenuImageStyle(style))
             },
@@ -429,7 +473,7 @@ internal fun TypographyTitleTab(
     // Title font size: <8 means relative offset (textSize + titleSize), >=8 means absolute
     var titleSize by remember(config.titleSize) {
         val initial = if (config.titleSize < 8) {
-            (ReadBookConfig.textSize + config.titleSize).coerceIn(8, 60)
+            (config.textSize + config.titleSize).coerceIn(8, 60)
         } else {
             config.titleSize
         }
@@ -455,6 +499,7 @@ internal fun TypographyTitleTab(
                 stringResource(R.string.title_hide),
             ),
             entryValues = arrayOf("0", "1", "2"),
+            imageVector = Icons.Default.Title,
             onValueChange = {
                 titleMode = it.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleMode(titleMode)))
@@ -476,9 +521,10 @@ internal fun TypographyTitleTab(
             },
         )
         TinyColorModeSettingItem(
-            title = stringResource(R.string.title_color),
+            title = stringResource(R.string.color),
             dayColor = if (config.titleColor != 0) config.titleColor else config.textColorDay,
             nightColor = if (config.titleColorNight != 0) config.titleColorNight else config.textColorNight,
+            imageVector = Icons.Default.Palette,
             onClickColor = { isNight ->
                 if (isNight) {
                     onOpenColorPicker(TypographyColorTarget.TitleNight)
@@ -488,10 +534,11 @@ internal fun TypographyTitleTab(
             },
         )
         TinySliderSettingItem(
-            title = stringResource(R.string.title_font_size),
+            title = stringResource(R.string.font_size),
             value = titleSize.toFloat(),
             valueRange = 8f..60f,
             steps = 51,
+            imageVector = Icons.Default.FormatSize,
             valueFormat = { "${it.toInt()}sp" },
             onValueChange = { value ->
                 titleSize = value.toInt()
@@ -511,6 +558,7 @@ internal fun TypographyTitleTab(
                 stringResource(R.string.split_title_by_regex),
             ),
             entryValues = arrayOf("0", "1", "2", "3"),
+            imageVector = Icons.Default.CallSplit,
             onValueChange = {
                 titleSegType = it.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleSegType(titleSegType)))
@@ -522,6 +570,7 @@ internal fun TypographyTitleTab(
                 value = titleSegDistance.toFloat(),
                 valueRange = 1f..20f,
                 steps = 18,
+                imageVector = Icons.Default.SpaceBar,
                 onValueChange = { value ->
                     titleSegDistance = value.toInt()
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleSegDistance(titleSegDistance)))
@@ -532,6 +581,7 @@ internal fun TypographyTitleTab(
             TinyClickableSettingItem(
                 title = stringResource(R.string.rule_segment),
                 description = titleSegFlag.ifBlank { stringResource(R.string.split_title_mode) },
+                imageVector = Icons.Default.Code,
                 onClick = { showFlagDialog = true },
             )
         }
@@ -541,6 +591,7 @@ internal fun TypographyTitleTab(
             valueRange = 0f..2f,
             steps = 19,
             stepSize = 0.1f,
+            imageVector = Icons.Default.AspectRatio,
             valueFormat = { "%.1f".format(it) },
             onValueChange = { value ->
                 titleSegScaling = (value * 10).roundToInt() / 10f
@@ -554,6 +605,7 @@ internal fun TypographyTitleTab(
             title = stringResource(R.string.heading_spacing),
             value = titleLineSpacingExtra.toFloat(),
             valueRange = 0f..20f,
+            imageVector = Icons.Default.LineWeight,
             onValueChange = { value ->
                 titleLineSpacingExtra = value.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleLineSpacingExtra(titleLineSpacingExtra)))
@@ -563,6 +615,7 @@ internal fun TypographyTitleTab(
             title = stringResource(R.string.subtitle_margin),
             value = titleLineSpacingSub.toFloat(),
             valueRange = -30f..30f,
+            imageVector = Icons.Default.Height,
             onValueChange = { value ->
                 titleLineSpacingSub = value.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleLineSpacingSub(titleLineSpacingSub)))
@@ -625,8 +678,8 @@ internal fun TypographyHeaderTab(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val tipNames = remember { ReadBookConfig.tipNames }
-    val tipValues = remember { ReadBookConfig.tipValues }
+    val tipNames = stringArrayResource(R.array.read_tip).toList()
+    val tipValues = tipTypeValues
 
     Column(
         modifier = modifier
@@ -635,12 +688,13 @@ internal fun TypographyHeaderTab(
     ) {
         // 内容组
         SectionTitle(title = stringResource(R.string.content))
-        val headerModes = ReadBookConfig.getHeaderModes(context)
+        val headerModes = headerModes(context)
         TinyDropdownSettingItem(
             title = stringResource(R.string.header),
             selectedValue = headerMode.toString(),
             displayEntries = headerModes.values.toTypedArray(),
             entryValues = headerModes.keys.map { it.toString() }.toTypedArray(),
+            imageVector = Icons.Default.ViewHeadline,
             onValueChange = { onHeaderModeChange(it.toInt()) },
         )
         TipPositionDropdown(
@@ -648,6 +702,7 @@ internal fun TypographyHeaderTab(
             value = headerLeft,
             tipNames = tipNames,
             tipValues = tipValues,
+            imageVector = Icons.Default.AlignHorizontalLeft,
             onValueChange = { onTipChange(CustomTipTarget.HEADER_LEFT, it) },
         )
         TipPositionDropdown(
@@ -655,6 +710,7 @@ internal fun TypographyHeaderTab(
             value = headerMiddle,
             tipNames = tipNames,
             tipValues = tipValues,
+            imageVector = Icons.Default.AlignHorizontalCenter,
             onValueChange = { onTipChange(CustomTipTarget.HEADER_MIDDLE, it) },
         )
         TipPositionDropdown(
@@ -662,6 +718,7 @@ internal fun TypographyHeaderTab(
             value = headerRight,
             tipNames = tipNames,
             tipValues = tipValues,
+            imageVector = Icons.Default.AlignHorizontalRight,
             onValueChange = { onTipChange(CustomTipTarget.HEADER_RIGHT, it) },
         )
 
@@ -670,15 +727,17 @@ internal fun TypographyHeaderTab(
         TinySwitchSettingItem(
             title = stringResource(R.string.showLine),
             checked = showHeaderLine,
+            imageVector = Icons.Default.Minimize,
             onCheckedChange = { onShowHeaderLineChange(it) },
         )
         TinyColorSettingItem(
             title = stringResource(R.string.tip_divider_color),
             colorValue = when (config.tipDividerColor) {
                 -1 -> context.getCompatColor(R.color.divider)
-                0 -> ReadBookConfig.textColor
+                0 -> config.textColorDay
                 else -> config.tipDividerColor
             },
+            imageVector = Icons.Default.Palette,
             onClick = { onOpenColorPicker(TypographyColorTarget.Divider) },
         )
 
@@ -690,18 +749,20 @@ internal fun TypographyHeaderTab(
             onClick = onOpenHeaderFontSelect,
         )
         TinySliderSettingItem(
-            title = stringResource(R.string.title_font_size),
+            title = stringResource(R.string.font_size),
             value = config.headerFontSize.toFloat(),
             valueRange = 0f..100f,
+            imageVector = Icons.Default.FormatSize,
             onValueChange = { value ->
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.HeaderFontSize(value.toInt())))
                 onIntent(ReadBookIntent.SaveReadStyleConfig)
             },
         )
         TinyColorModeSettingItem(
-            title = stringResource(R.string.title_color),
+            title = stringResource(R.string.color),
             dayColor = if (config.tipHeaderColor != 0) config.tipHeaderColor else config.textColorDay,
             nightColor = if (config.tipHeaderColorNight != 0) config.tipHeaderColorNight else config.textColorNight,
+            imageVector = Icons.Default.FormatColorText,
             onClickColor = { isNight ->
                 if (isNight) {
                     onOpenColorPicker(TypographyColorTarget.HeaderNight)
@@ -733,8 +794,8 @@ internal fun TypographyFooterTab(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val tipNames = remember { ReadBookConfig.tipNames }
-    val tipValues = remember { ReadBookConfig.tipValues }
+    val tipNames = stringArrayResource(R.array.read_tip).toList()
+    val tipValues = tipTypeValues
 
     Column(
         modifier = modifier
@@ -743,12 +804,13 @@ internal fun TypographyFooterTab(
     ) {
         // 内容组
         SectionTitle(title = stringResource(R.string.content))
-        val footerModes = ReadBookConfig.getFooterModes(context)
+        val footerModes = footerModes(context)
         TinyDropdownSettingItem(
             title = stringResource(R.string.footer),
             selectedValue = footerMode.toString(),
             displayEntries = footerModes.values.toTypedArray(),
             entryValues = footerModes.keys.map { it.toString() }.toTypedArray(),
+            imageVector = Icons.Default.ViewAgenda,
             onValueChange = { onFooterModeChange(it.toInt()) },
         )
         TipPositionDropdown(
@@ -756,6 +818,7 @@ internal fun TypographyFooterTab(
             value = footerLeft,
             tipNames = tipNames,
             tipValues = tipValues,
+            imageVector = Icons.Default.AlignHorizontalLeft,
             onValueChange = { onTipChange(CustomTipTarget.FOOTER_LEFT, it) },
         )
         TipPositionDropdown(
@@ -763,6 +826,7 @@ internal fun TypographyFooterTab(
             value = footerMiddle,
             tipNames = tipNames,
             tipValues = tipValues,
+            imageVector = Icons.Default.AlignHorizontalCenter,
             onValueChange = { onTipChange(CustomTipTarget.FOOTER_MIDDLE, it) },
         )
         TipPositionDropdown(
@@ -770,6 +834,7 @@ internal fun TypographyFooterTab(
             value = footerRight,
             tipNames = tipNames,
             tipValues = tipValues,
+            imageVector = Icons.Default.AlignHorizontalRight,
             onValueChange = { onTipChange(CustomTipTarget.FOOTER_RIGHT, it) },
         )
 
@@ -778,6 +843,7 @@ internal fun TypographyFooterTab(
         TinySwitchSettingItem(
             title = stringResource(R.string.showLine),
             checked = showFooterLine,
+            imageVector = Icons.Default.Minimize,
             onCheckedChange = { onShowFooterLineChange(it) },
         )
 
@@ -786,6 +852,7 @@ internal fun TypographyFooterTab(
         TinySwitchSettingItem(
             title = stringResource(R.string.apply_header_style),
             checked = config.applyHeaderStyle,
+            imageVector = Icons.Default.CopyAll,
             onCheckedChange = {
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ApplyHeaderStyle(it)))
             },
@@ -797,18 +864,20 @@ internal fun TypographyFooterTab(
                 onClick = onOpenFooterFontSelect,
             )
             TinySliderSettingItem(
-                title = stringResource(R.string.title_font_size),
+                title = stringResource(R.string.font_size),
                 value = config.footerFontSize.toFloat(),
                 valueRange = 0f..100f,
+                imageVector = Icons.Default.FormatSize,
                 onValueChange = { value ->
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.FooterFontSize(value.toInt())))
                     onIntent(ReadBookIntent.SaveReadStyleConfig)
                 },
             )
             TinyColorModeSettingItem(
-                title = stringResource(R.string.title_color),
+                title = stringResource(R.string.color),
                 dayColor = if (config.tipFooterColor != 0) config.tipFooterColor else config.textColorDay,
                 nightColor = if (config.tipFooterColorNight != 0) config.tipFooterColorNight else config.textColorNight,
+                imageVector = Icons.Default.FormatColorText,
                 onClickColor = { isNight ->
                     if (isNight) {
                         onOpenColorPicker(TypographyColorTarget.FooterNight)
@@ -885,6 +954,7 @@ internal fun TypographyMarginTab(
             title = stringResource(R.string.title_margin_top),
             value = titleTopSpacing.toFloat(),
             valueRange = 0f..200f,
+            imageVector = Icons.Default.VerticalAlignTop,
             onValueChange = { value ->
                 titleTopSpacing = value.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleTopSpacing(titleTopSpacing)))
@@ -894,6 +964,7 @@ internal fun TypographyMarginTab(
             title = stringResource(R.string.title_margin_bottom),
             value = titleBottomSpacing.toFloat(),
             valueRange = 0f..200f,
+            imageVector = Icons.Default.VerticalAlignBottom,
             onValueChange = { value ->
                 titleBottomSpacing = value.toInt()
                 onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.TitleBottomSpacing(titleBottomSpacing)))
@@ -1027,7 +1098,7 @@ internal fun TypographyHeaderFontSelectSheet(
     onIntent: (ReadBookIntent) -> Unit,
 ) {
     TypographyFontSelectSheet(
-        selectedFontPath = ReadBookConfig.headerFont,
+        selectedFontPath = config.headerFont,
         onSelectFont = { fileDoc ->
             onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.HeaderFont(fileDoc.uri.toString())))
             onIntent(ReadBookIntent.SaveReadStyleConfig)
@@ -1049,7 +1120,7 @@ internal fun TypographyFooterFontSelectSheet(
     onIntent: (ReadBookIntent) -> Unit,
 ) {
     TypographyFontSelectSheet(
-        selectedFontPath = ReadBookConfig.footerFont,
+        selectedFontPath = config.footerFont,
         onSelectFont = { fileDoc ->
             onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.FooterFont(fileDoc.uri.toString())))
             onIntent(ReadBookIntent.SaveReadStyleConfig)
@@ -1067,16 +1138,17 @@ internal fun TypographyFooterFontSelectSheet(
 @Composable
 internal fun TypographyCustomTipDialog(
     target: CustomTipTarget,
+    config: ReadSheetConfigUiState,
     onDismiss: () -> Unit,
     onIntent: (ReadBookIntent) -> Unit,
 ) {
-    val initialTemplate = remember(target) { target.customTemplate }
+    val initialTemplate = target.customTemplateOf(config)
 
     CustomTipDialog(
         show = true,
         initialTemplate = initialTemplate,
         onConfirm = { template ->
-            applyTipValue(target, ReadBookConfig.tipCustom, onIntent)
+            applyTipValue(target, ReadTipType.tipCustom, onIntent)
             target.applyTemplate(template, onIntent)
             onDismiss()
         },
@@ -1139,3 +1211,31 @@ private fun applyTipValue(
 }
 
 // endregion
+
+/**
+ * 页眉页脚每个位置的可选项取值。**顺序必须与 `R.array.read_tip` 一致**——
+ * 下拉项的显示名从那个数组取、取值从这里取，两者按下标配对。
+ *
+ * 放在唯一消费方旁边而不是 `ReadBookConfig` 里：它是静态选项表，不是配置状态，
+ * 留在那个全局 object 上会让「弹层不得直读 ReadBookConfig」的护栏被迫开白名单。
+ */
+private val tipTypeValues = with(ReadTipType) {
+    arrayOf(
+        tipNone, tipBookName, tipChapterTitle, tipChapterTitleArrow, tipChapterTitleArrowClassic,
+        tipTime, tipBattery, tipBatteryClassic, tipBatteryInside, tipBatteryIcon,
+        tipBatteryPercentage, tipPage, tipTotalProgress, tipTotalProgress1, tipPageAndTotal,
+        tipTimeBattery, tipTimeBatteryClassic, tipTimeBatteryPercentage, tipWholeBookPage,
+        tipWholeBookPageAndProgress, tipCustom
+    )
+}
+
+private fun headerModes(context: Context): LinkedHashMap<Int, String> = linkedMapOf(
+    Pair(0, context.getString(R.string.hide_when_status_bar_show)),
+    Pair(1, context.getString(R.string.show)),
+    Pair(2, context.getString(R.string.hide))
+)
+
+private fun footerModes(context: Context): LinkedHashMap<Int, String> = linkedMapOf(
+    Pair(0, context.getString(R.string.show)),
+    Pair(1, context.getString(R.string.hide))
+)

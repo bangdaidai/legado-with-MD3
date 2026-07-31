@@ -24,8 +24,12 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.data.repository.BookGroupRepository
+import io.legado.app.data.repository.BookRepository
+import io.legado.app.data.repository.BookSourceRepository
+import io.legado.app.data.repository.HighlightTagRuleRepository
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.data.repository.RemoteBookRepository
+import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.CoverSettingsGateway
@@ -103,6 +107,10 @@ class BookInfoViewModel(
     private val changeBookSourceUseCase: ChangeBookSourceUseCase,
     private val clearBookCacheUseCase: ClearBookCacheUseCase,
     private val bookGroupRepository: BookGroupRepository,
+    private val bookRepository: BookRepository,
+    private val bookSourceRepository: BookSourceRepository,
+    private val searchRepository: SearchRepository,
+    private val highlightTagRuleRepository: HighlightTagRuleRepository,
     private val imageLoader: ImageLoader,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
     private val themeSettingsGateway: ThemeSettingsGateway,
@@ -243,12 +251,12 @@ class BookInfoViewModel(
         characterLoadJob?.cancel()
         syncUiState()
         execute {
-            val dbBook = appDb.bookDao.getBook(bookUrl)
+            val dbBook = bookRepository.getBook(bookUrl)
             if (dbBook != null) {
                 inBookshelf = !dbBook.isNotShelf
                 dbBook
             } else {
-                val searchBook = appDb.searchBookDao.getSearchBook(bookUrl)?.toBook()
+                val searchBook = searchRepository.getSearchBook(bookUrl)?.toBook()
                 if (searchBook != null) {
                     inBookshelf = false
                     searchBook
@@ -265,7 +273,7 @@ class BookInfoViewModel(
             val source = if (book.isLocal) {
                 null
             } else {
-                appDb.bookSourceDao.getBookSource(book.origin)
+                bookSourceRepository.getBookSource(book.origin)
             }
             upBook(book, source)
         }.onError {
@@ -397,7 +405,7 @@ class BookInfoViewModel(
 
     fun onSourceEdited() {
         currentBook?.let { book ->
-            bookSource = appDb.bookSourceDao.getBookSource(book.origin)
+            bookSource = bookSourceRepository.getBookSourceSync(book.origin)
             syncUiState()
             refreshBook(book)
         }
@@ -406,11 +414,11 @@ class BookInfoViewModel(
     fun onInfoEdited() {
         currentBook?.bookUrl?.let { bookUrl ->
             execute {
-                val book = appDb.bookDao.getBook(bookUrl) ?: return@execute null
+                val book = bookRepository.getBook(bookUrl) ?: return@execute null
                 val source = if (book.isLocal) {
                     null
                 } else {
-                    appDb.bookSourceDao.getBookSource(book.origin)
+                    bookSourceRepository.getBookSource(book.origin)
                 }
                 book to source
             }.onSuccess {
@@ -431,7 +439,7 @@ class BookInfoViewModel(
         execute {
             book.durChapterIndex = result.first
             book.durChapterPos = result.second
-            appDb.bookDao.update(book)
+            bookRepository.update(book)
             book
         }.onSuccess {
             currentBook = it
@@ -456,7 +464,7 @@ class BookInfoViewModel(
     fun refreshShelfState() {
         val bookUrl = currentBook?.bookUrl ?: return
         execute {
-            appDb.bookDao.getBook(bookUrl)
+            bookRepository.getBook(bookUrl)
         }.onSuccess { dbBook ->
             val nextInBookshelf = dbBook != null && !dbBook.isNotShelf
             if (nextInBookshelf) {
@@ -555,10 +563,10 @@ class BookInfoViewModel(
     fun topBook() {
         currentBook?.let { book ->
             execute {
-                val minOrder = appDb.bookDao.minOrder
+                val minOrder = bookRepository.getMinOrder()
                 book.order = minOrder - 1
                 book.durChapterTime = System.currentTimeMillis()
-                appDb.bookDao.update(book)
+                bookRepository.update(book)
                 book
             }.onSuccess {
                 currentBook = it
@@ -573,8 +581,8 @@ class BookInfoViewModel(
         execute {
             setBusy(true)
             val newBook = remoteBookRepository.syncBookFromRemote(book)
-            appDb.bookDao.delete(book)
-            appDb.bookDao.insert(newBook)
+            bookRepository.delete(book)
+            bookRepository.insert(newBook)
             newBook
         }.onSuccess { newBook ->
             currentBook = newBook
@@ -675,16 +683,16 @@ class BookInfoViewModel(
         book ?: return
         execute {
             if (book.order == 0) {
-                book.order = appDb.bookDao.minOrder - 1
+                book.order = bookRepository.getMinOrder() - 1
             }
-            appDb.bookDao.getBook(book.name, book.author)?.let {
+            bookRepository.getBook(book.name, book.author)?.let {
                 book.durChapterIndex = it.durChapterIndex
                 book.durChapterPos = it.durChapterPos
                 book.durChapterTitle = it.durChapterTitle
             }
             book.save()
-            if (ReadBook.book?.isSameNameAuthor(book) == true) {
-                ReadBook.book = book
+            if (ReadBook.isCurrentBook(book)) {
+                ReadBook.replaceCurrentBook(book)
             } else if (AudioPlay.book?.isSameNameAuthor(book) == true) {
                 AudioPlay.book = book
             }
@@ -700,7 +708,7 @@ class BookInfoViewModel(
 
     fun saveChapterList(success: (() -> Unit)? = null) {
         execute {
-            appDb.bookChapterDao.insert(*currentChapterList.toTypedArray())
+            bookRepository.insertChapters(*currentChapterList.toTypedArray())
         }.onSuccess {
             success?.invoke()
         }
@@ -711,21 +719,21 @@ class BookInfoViewModel(
         execute {
             book.removeType(BookType.notShelf)
             if (book.order == 0) {
-                book.order = appDb.bookDao.minOrder - 1
+                book.order = bookRepository.getMinOrder() - 1
             }
-            appDb.bookDao.getBook(book.name, book.author)?.let {
+            bookRepository.getBook(book.name, book.author)?.let {
                 book.durChapterIndex = it.durChapterIndex
                 book.durChapterPos = it.durChapterPos
                 book.durChapterTitle = it.durChapterTitle
             }
-            if (ReadBook.book?.isSameNameAuthor(book) == true) {
-                ReadBook.book = book
+            if (ReadBook.isCurrentBook(book)) {
+                ReadBook.replaceCurrentBook(book)
             } else if (AudioPlay.book?.isSameNameAuthor(book) == true) {
                 AudioPlay.book = book
             }
             book.save()
             SourceCallBack.callBackBook(SourceCallBack.ADD_BOOK_SHELF, bookSource, book)
-            appDb.bookChapterDao.insert(*currentChapterList.toTypedArray())
+            bookRepository.insertChapters(*currentChapterList.toTypedArray())
             book
         }.onSuccess {
             currentBook = it
@@ -739,10 +747,10 @@ class BookInfoViewModel(
         execute {
             book.removeType(BookType.notShelf)
             if (book.order == 0) {
-                book.order = appDb.bookDao.minOrder - 1
+                book.order = bookRepository.getMinOrder() - 1
             }
-            appDb.bookDao.insert(book)
-            appDb.bookChapterDao.insert(*toc.toTypedArray())
+            bookRepository.insert(book)
+            bookRepository.insertChapters(*toc.toTypedArray())
             book
         }.onSuccess {
             if (currentBook?.bookUrl == it.bookUrl) {
@@ -822,7 +830,7 @@ class BookInfoViewModel(
             }
             WebBook.getBookInfo(scope, source, book, canReName = canReName)
                 .onSuccess(IO) { loadedBook ->
-                    val dbBook = appDb.bookDao.getBook(loadedBook.name, loadedBook.author)
+                    val dbBook = bookRepository.getBook(loadedBook.name, loadedBook.author)
                     if (!inBookshelf && dbBook != null && !dbBook.isNotShelf && dbBook.origin == loadedBook.origin) {
                         dbBook.updateTo(loadedBook)
                         inBookshelf = true
@@ -904,7 +912,7 @@ class BookInfoViewModel(
             loadBookInfo(book, runPreUpdateJs = inBookshelf, showLoading = false)
         } else {
             execute {
-                appDb.bookChapterDao.getChapterList(book.bookUrl)
+                bookRepository.getChapters(book.bookUrl)
             }.onSuccess { chapters ->
                 if (chapters.isNotEmpty()) {
                     currentChapterList = chapters
@@ -942,15 +950,15 @@ class BookInfoViewModel(
     private fun refreshMeta(book: Book) {
         execute {
             book.upKind()
-            val userGroupIds = appDb.bookGroupDao.idsSum
+            val userGroupIds = bookGroupRepository.getIdsSum()
             val groupAnd = userGroupIds and book.group
             val hasCustomGroup = book.group > 0L && groupAnd != 0L
-            val groupNames = appDb.bookGroupDao.getGroupNames(book.group).joinToString(",")
+            val groupNames = bookGroupRepository.getGroupNames(book.group).joinToString(",")
             val normalizedGroupNames = groupNames.ifBlank { null }
-            appDb.bookDao.update(book)
-            val enabledRules = appDb.highlightTagRuleDao.getEnabled()
+            bookRepository.update(book)
             // SSOT：书架/信息页/阅读记忆统一入口（排除规则 + 标签映射）
             val displayTagNames = TagManager.bookDisplayTags(book.kind, book.customTag)
+            val enabledRules = highlightTagRuleRepository.getEnabled()
             val tagEntities = appDb.bookTagDao.getByNames(displayTagNames).associateBy { it.name }
             val coloredTags = displayTagNames.map { name ->
                 val t = tagEntities[name]
@@ -990,9 +998,9 @@ class BookInfoViewModel(
         if (book.isLocal) {
             execute(scope) {
                 LocalBook.getChapterList(book).also {
-                    appDb.bookDao.update(book)
-                    appDb.bookChapterDao.delByBook(book.bookUrl)
-                    appDb.bookChapterDao.insert(*it.toTypedArray())
+                    bookRepository.update(book)
+                    bookRepository.deleteChaptersByBook(book.bookUrl)
+                    bookRepository.insertChapters(*it.toTypedArray())
                     ReadBook.onChapterListUpdated(book)
                 }
             }.onSuccess {
@@ -1015,12 +1023,12 @@ class BookInfoViewModel(
             WebBook.getChapterList(scope, source, book, runPreUpdateJs)
                 .onSuccess(IO) { chapters ->
                     if (inBookshelf) {
-                        appDb.bookDao.replace(oldBook, book)
+                        bookRepository.replace(oldBook, book)
                         if (oldBook.bookUrl != book.bookUrl) {
                             BookHelp.updateCacheFolder(oldBook, book)
                         }
-                        appDb.bookChapterDao.delByBook(oldBook.bookUrl)
-                        appDb.bookChapterDao.insert(*chapters.toTypedArray())
+                        bookRepository.deleteChaptersByBook(oldBook.bookUrl)
+                        bookRepository.insertChapters(*chapters.toTypedArray())
                         ReadBook.onChapterListUpdated(book)
                     }
                     currentBook = book
@@ -1306,7 +1314,7 @@ class BookInfoViewModel(
     private fun onOriginClick() {
         val book = currentBook ?: return
         if (book.isLocal) return
-        if (!appDb.bookSourceDao.has(book.origin)) {
+        if (!bookSourceRepository.has(book.origin)) {
             showMessage(R.string.error_no_source)
             return
         }
