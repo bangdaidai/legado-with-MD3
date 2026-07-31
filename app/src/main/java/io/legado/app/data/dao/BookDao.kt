@@ -92,7 +92,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -136,7 +136,7 @@ interface BookDao {
     @Query(
         """
     SELECT 
-        bookUrl,
+        books.bookUrl,
         name,
         author,
         origin,
@@ -174,7 +174,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -212,7 +212,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -255,7 +255,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -277,8 +277,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         where type & ${BookType.audio} = 0 and type & ${BookType.local} = 0
         and ($PUBLIC_GROUP_MASK & `group`) = 0
         and $PUBLIC_BOOK_FILTER
@@ -297,7 +299,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -319,8 +321,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         where type & ${BookType.local} > 0
         and ($PUBLIC_GROUP_MASK & `group`) = 0
         and $PUBLIC_BOOK_FILTER
@@ -334,7 +338,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -356,8 +360,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE (`group` & :group) > 0
         AND ((SELECT isPrivate FROM book_groups WHERE groupId = :group) = 1 OR $PUBLIC_BOOK_FILTER)
         """
@@ -372,7 +378,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -394,8 +400,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE (name like '%'||:key||'%' or author like '%'||:key||'%' or originName like '%'||:key||'%'
             or kind like '%'||:key||'%' or customTag like '%'||:key||'%')
         AND $PUBLIC_BOOK_FILTER
@@ -409,7 +417,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -431,8 +439,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         where type & ${BookType.updateError} > 0 
         and $PUBLIC_BOOK_FILTER
         order by durChapterTime desc
@@ -446,7 +456,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -468,8 +478,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE durChapterIndex = 0 AND durChapterPos = 0
         AND $PUBLIC_BOOK_FILTER
         """
@@ -482,7 +494,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -504,8 +516,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1
         AND $PUBLIC_BOOK_FILTER
         """
@@ -520,7 +534,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -542,8 +556,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1
         AND $PUBLIC_BOOK_FILTER
         """
@@ -558,7 +574,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -580,8 +596,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0
         AND $PUBLIC_BOOK_FILTER
         """
@@ -594,7 +612,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -616,8 +634,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1
         AND $PUBLIC_BOOK_FILTER
         """
@@ -630,7 +650,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -652,8 +672,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.image} > 0
         AND $PUBLIC_BOOK_FILTER
         """
@@ -666,7 +688,7 @@ interface BookDao {
     @Query(
         """
         SELECT 
-            bookUrl,
+            books.bookUrl,
             name,
             author,
             origin,
@@ -688,8 +710,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.text} > 0
         AND $PUBLIC_BOOK_FILTER
         """
@@ -895,13 +919,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
@@ -911,13 +937,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.text} > 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
             AND $PUBLIC_BOOK_FILTER
@@ -930,13 +958,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.local} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -947,13 +977,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.audio} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -964,13 +996,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.audio} = 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
             AND $PUBLIC_BOOK_FILTER
@@ -982,13 +1016,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.local} > 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
             AND $PUBLIC_BOOK_FILTER
@@ -1000,13 +1036,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.image} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1017,13 +1055,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.text} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1034,13 +1074,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.updateError} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1051,13 +1093,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE durChapterIndex = 0 AND durChapterPos = 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1068,13 +1112,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1085,13 +1131,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1102,13 +1150,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1119,13 +1169,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1136,13 +1188,15 @@ interface BookDao {
 
     @Query(
         """
-        SELECT bookUrl, name, author, origin, originName,
+        SELECT books.bookUrl, name, author, origin, originName,
             coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount
+            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE (`group` & :groupId) > 0
             AND ((SELECT isPrivate FROM book_groups WHERE groupId = :groupId) = 1 OR $PUBLIC_BOOK_FILTER)
         ORDER BY durChapterTime DESC

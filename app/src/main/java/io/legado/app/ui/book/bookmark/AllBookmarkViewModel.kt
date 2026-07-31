@@ -60,7 +60,8 @@ data class BookmarkUiState(
     val bookmarks: ImmutableMap<BookmarkGroupHeader, ImmutableList<BookmarkItemUi>> = persistentMapOf(),
     val error: Throwable? = null,
     val searchQuery: String = "",
-    val collapsedGroups: ImmutableSet<String> = persistentSetOf()
+    val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
+    val onlyNotes: Boolean = false
 )
 
 sealed interface AllBookmarkIntent {
@@ -70,6 +71,7 @@ sealed interface AllBookmarkIntent {
     data class UpdateBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class DeleteBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
+    data object ToggleOnlyNotes : AllBookmarkIntent
 }
 
 sealed interface AllBookmarkEffect {
@@ -84,6 +86,7 @@ class AllBookmarkViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
+    private val _onlyNotes = MutableStateFlow(false)
     private val _effects = MutableSharedFlow<AllBookmarkEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
@@ -91,10 +94,11 @@ class AllBookmarkViewModel(
     val uiState: StateFlow<BookmarkUiState> = combine(
         _searchQuery,
         _collapsedGroups,
+        _onlyNotes,
         bookmarkRepository.flowAll()
-    ) { query, collapsed, allBookmarks ->
+    ) { query, collapsed, onlyNotes, allBookmarks ->
 
-        val filteredList = if (query.isBlank()) {
+        val queryFiltered = if (query.isBlank()) {
             allBookmarks
         } else {
             allBookmarks.filter {
@@ -102,6 +106,12 @@ class AllBookmarkViewModel(
                         it.content.contains(query, ignoreCase = true) ||
                         it.bookAuthor.contains(query, ignoreCase = true)
             }
+        }
+
+        val filteredList = if (onlyNotes) {
+            queryFiltered.filter { it.content.isNotBlank() }
+        } else {
+            queryFiltered
         }
 
         val grouped = filteredList.asSequence()
@@ -126,7 +136,8 @@ class AllBookmarkViewModel(
             isLoading = false,
             bookmarks = grouped,
             searchQuery = query,
-            collapsedGroups = collapsed.toImmutableSet()
+            collapsedGroups = collapsed.toImmutableSet(),
+            onlyNotes = onlyNotes
         )
     }.catch { e ->
         emit(BookmarkUiState(isLoading = false, error = e))
@@ -144,6 +155,7 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is AllBookmarkIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is AllBookmarkIntent.Export -> exportBookmark(intent.treeUri, intent.isMarkdown)
+            AllBookmarkIntent.ToggleOnlyNotes -> _onlyNotes.update { !it }
         }
     }
 

@@ -209,7 +209,7 @@ fun MyScreen(
                     }
                 )
                 ClickableSettingItem(
-                    title = stringResource(R.string.bookmark),
+                    title = stringResource(R.string.all_bookmark),
                     imageVector = Icons.Default.Bookmark,
                     onClick = {
                         onNavigate(PrefClickEvent.StartActivity(AllBookmarkActivity::class.java))
