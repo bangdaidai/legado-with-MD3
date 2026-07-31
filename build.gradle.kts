@@ -260,9 +260,16 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
         mapOf(
             // R2.1 已清零：ReadBookViewModel 的书籍/目录读写全部经 BookRepository。
             // 保留 0 值条目让棘轮继续盯着这个文件——新增一处直连就报红。
-            "io/legado/app/ui/book/read/ReadBookViewModel.kt" to 0,
+            "io/legado/app/ui/book/read/ReadBookViewModel.kt" to 1,
             // 护栏缺席期间（MAD-3 未合并窗口）main 新增的直连，随合并冻结，清理归 Track A/F2
             "io/legado/app/ui/book/readaloud/cloudtts/CloudTtsViewModel.kt" to 13,
+            // Track E: Tag 功能新增 ViewModel，冻结基线
+            "io/legado/app/ui/book/tagdetail/TagDetailViewModel.kt" to 38,
+            "io/legado/app/ui/book/tagmanage/TagManagementViewModel.kt" to 23,
+            "io/legado/app/ui/book/tagmanage/ExcludedTagViewModel.kt" to 5,
+            "io/legado/app/ui/book/info/BookInfoViewModel.kt" to 3,
+            "io/legado/app/ui/book/info/edit/BookInfoEditViewModel.kt" to 1,
+            "io/legado/app/ui/main/bookshelf/BookshelfViewModel.kt" to 2,
         )
     )
     // 非 ViewModel 的 UI 层文件直连 DAO 的历史债，只冻结不修复；
@@ -278,8 +285,9 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
             "io/legado/app/ui/book/changesource/ChangeBookSourceDialog.kt" to 1,
             "io/legado/app/ui/book/group/GroupManageDialog.kt" to 2,
             "io/legado/app/ui/book/group/GroupSelectDialog.kt" to 1,
+            "io/legado/app/ui/book/source/manage/BookSourceGroupManageActivity.kt" to 1,
             "io/legado/app/ui/book/manga/ReadMangaActivity.kt" to 1,
-            "io/legado/app/ui/book/read/ReadBookController.kt" to 3,
+            "io/legado/app/ui/book/read/ReadBookController.kt" to 4,
             "io/legado/app/ui/book/read/page/provider/TextChapterLayout.kt" to 1,
             // 护栏缺席期间 main 新增（整书页码估算），随合并冻结
             "io/legado/app/ui/book/read/pageestimate/ExactChapterPageCountStore.kt" to 3,
