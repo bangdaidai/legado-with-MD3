@@ -1,15 +1,17 @@
 package io.legado.app.ui.widget.components.card
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.BorderStroke
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.widget.components.text.AppText
 
 /** 标签大小变体 */
@@ -52,6 +55,29 @@ fun TagChip(
     }
 
     val tagColor = color?.let { Color(it) }
+
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val resolvedCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
+        themeSettings.baseCardCornerRadius.dp
+    } else {
+        8.dp
+    }
+    val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
+
+    val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+        val configuredColor = if (LegadoTheme.isDark) {
+            themeSettings.baseCardBorderColorNight
+        } else {
+            themeSettings.baseCardBorderColor
+        }
+        val borderColor = configuredColor.takeIf { it != 0 }?.let(::Color)
+            ?: LegadoTheme.colorScheme.outlineVariant
+        val borderWidth = themeSettings.baseCardBorderWidth.dp
+        Modifier.border(BorderStroke(borderWidth, borderColor), resolvedShape)
+    } else {
+        Modifier
+    }
+
     val backgroundColor = if (tagColor != null) {
         tagColor.copy(alpha = 0.14f)
     } else {
@@ -70,8 +96,9 @@ fun TagChip(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .clip(MaterialTheme.shapes.small)
+            .clip(resolvedShape)
             .background(backgroundColor)
+            .then(borderModifier)
             .padding(horizontal = horizontalPadding, vertical = verticalPadding)
             .then(clickModifier),
     ) {

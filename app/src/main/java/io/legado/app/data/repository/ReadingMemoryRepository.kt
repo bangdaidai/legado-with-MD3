@@ -12,6 +12,7 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.ExcludedTag
+import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
@@ -411,6 +412,10 @@ class ReadingMemoryRepository(
     /** 当前排除规则列表，供按排除规则过滤书籍标签。 */
     suspend fun getExcludedTags(): List<ExcludedTag> =
         database.excludedTagDao.getAllSync()
+
+    /** 标签分组列表，供新建标签对话框使用。 */
+    fun getTagGroups(): List<BookTagGroup> =
+        database.bookTagGroupDao.getAllSorted()
 
     private fun tagsFromKind(kind: String): MutableSet<String> =
         kind.split(",", "|").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()

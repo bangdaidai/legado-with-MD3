@@ -67,6 +67,7 @@ import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.R
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.settingItem.SettingItem
 
@@ -379,13 +380,17 @@ fun GroupEditSheet(
     onDismiss: () -> Unit,
 ) {
     var name by remember(data) { mutableStateOf(data?.name ?: "") }
-    AppModalBottomSheet(
+    AppAlertDialog(
         show = data != null,
         onDismissRequest = onDismiss,
         title = if (data?.id == 0L) "新增分组" else "编辑分组",
-    ) {
-        if (data != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        confirmText = "保存",
+        onConfirm = {
+            data?.let { d -> onSave(d.copy(name = name.trim())) }
+        },
+        onDismiss = onDismiss,
+        content = {
+            if (data != null) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -393,26 +398,19 @@ fun GroupEditSheet(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (data.id != 0L) {
-                        SmallPlainButton(
-                            text = "删除",
-                            icon = Icons.Default.Delete,
-                            onClick = { onDelete(data) },
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    SmallPlainButton(text = "保存", onClick = {
-                        data?.let { d -> onSave(d.copy(name = name.trim())) }
-                    })
+                if (data.id != 0L) {
+                    Text(
+                        text = "删除",
+                        color = LegadoTheme.colorScheme.error,
+                        style = LegadoTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .padding(top = 12.dp)
+                            .clickable { onDelete(data) },
+                    )
                 }
             }
-        }
-    }
+        },
+    )
 }
 
 /* ---------------- 标签映射管理（溢出菜单 -> 弹窗） ---------------- */
@@ -476,67 +474,48 @@ fun ExcludedEditSheet(
 ) {
     var name by remember(data) { mutableStateOf(data?.name ?: "") }
     var isRegex by remember(data) { mutableStateOf(data?.isRegex ?: false) }
-    AppModalBottomSheet(
+    AppAlertDialog(
         show = data != null,
         onDismissRequest = onDismiss,
         title = if (data?.id == 0L) "新增排除项" else "编辑排除项",
-    ) {
-        if (data != null) {
-            val cs = LegadoTheme.colorScheme
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("名称/正则") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = cs.primary,
-                        focusedLabelColor = cs.primary,
-                    ),
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = isRegex,
-                        onCheckedChange = { isRegex = it },
+        confirmText = "保存",
+        onConfirm = {
+            data?.let { d -> onSave(d.copy(name = name.trim(), isRegex = isRegex)) }
+        },
+        onDismiss = onDismiss,
+        content = {
+            if (data != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("名称/正则") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Text(
-                        "作为正则匹配",
-                        style = LegadoTheme.typography.bodyMedium,
-                        color = cs.onSurface,
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (data.id != 0L) {
-                        OutlinedButton(
-                            onClick = { onDelete(data) },
-                            shape = RoundedCornerShape(22.dp),
-                            modifier = Modifier.height(44.dp),
-                        ) {
-                            Text("删除")
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = isRegex,
+                            onCheckedChange = { isRegex = it },
+                        )
+                        Text(
+                            "作为正则匹配",
+                            style = LegadoTheme.typography.bodyMedium,
+                        )
                     }
-                    Spacer(Modifier.weight(1f))
-                    Button(
-                        onClick = {
-                            data?.let { d ->
-                                onSave(d.copy(name = name.trim(), isRegex = isRegex))
-                            }
-                        },
-                        shape = RoundedCornerShape(22.dp),
-                        modifier = Modifier.height(44.dp),
-                    ) {
-                        Text("保存")
+                    if (data.id != 0L) {
+                        Text(
+                            text = "删除",
+                            color = LegadoTheme.colorScheme.error,
+                            style = LegadoTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .clickable { onDelete(data) },
+                        )
                     }
                 }
             }
-        }
-    }
+        },
+    )
 }
 
 /* ---------------- 颜色辅助组件 ---------------- */
