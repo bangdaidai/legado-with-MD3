@@ -15,7 +15,7 @@ interface HighlightRuleDao {
     @Query("SELECT * FROM highlightRules ORDER BY position ASC")
     fun getAll(): List<HighlightRule>
 
-    @Query("SELECT * FROM highlightRules WHERE enabled = 1 AND pattern != '' ORDER BY position ASC")
+    @Query("SELECT * FROM highlightRules WHERE enabled = 1 AND (pattern != '' OR useProtagonist = 1) ORDER BY position ASC")
     fun getEnabled(): List<HighlightRule>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -42,6 +42,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -557,6 +559,7 @@ fun HighlightRuleEditSheet(
 
             HighlightRulePreview(
                 sampleText = sampleText,
+                pattern = pattern,
                 textColor = if (hasTextColor) textColor else null,
                 bgColor = if (hasBgColor) bgColor else null,
                 underlineMode = if (hasUnderline) underlineMode else 0,
@@ -565,7 +568,6 @@ fun HighlightRuleEditSheet(
                 underlineOffset = underlineOffset,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp)
                     .padding(top = 8.dp),
             )
         }
@@ -661,6 +663,7 @@ fun HighlightRuleEditSheet(
 @Composable
 private fun HighlightRulePreview(
     sampleText: String,
+    pattern: String,
     textColor: Int?,
     bgColor: Int?,
     underlineMode: Int,
@@ -674,88 +677,170 @@ private fun HighlightRulePreview(
     val resolvedTextColor = textColor?.let { Color(it) } ?: defaultTextColor
     val resolvedUnderlineColor = underlineColor?.let { Color(it) } ?: resolvedTextColor
 
-    val textStyle = TextStyle(
-        fontSize = 16.sp,
-        color = resolvedTextColor,
-    )
-
-    Canvas(modifier = modifier) {
-        val textResult = textMeasurer.measure(
-            text = sampleText,
-            style = textStyle,
-            maxLines = 3,
-        )
-        if (bgColor != null) {
-            drawRect(
-                color = Color(bgColor),
-                topLeft = Offset(0f, 0f),
-                size = size.copy(height = textResult.size.height.toFloat()),
-            )
+    // 真正跑一遍正则，只有命中的片段才应用样式
+    val matchRanges = remember(pattern, sampleText) {
+        if (pattern.isBlank() || sampleText.isEmpty()) {
+            emptyList()
+        } else {
+            runCatching {
+                Regex(pattern).findAll(sampleText)
+                    .filter { !it.range.isEmpty() }
+                    .map { it.range }
+                    .toList()
+            }.getOrDefault(emptyList())
         }
-        drawText(textResult)
+    }
 
-        if (underlineMode > 0) {
-            val strokeWidth = underlineWidth.dp.toPx()
-            val yBaseline = textResult.size.height.toFloat() - underlineOffset.dp.toPx()
+    val annotated = remember(sampleText, matchRanges, resolvedTextColor, bgColor) {
+        buildAnnotatedString {
+            append(sampleText)
+            matchRanges.forEach { range ->
+                addStyle(
+                    SpanStyle(
+                        color = resolvedTextColor,
+                        background = bgColor?.let { Color(it) } ?: Color.Unspecified,
+                    ),
+                    range.first,
+                    (range.last + 1).coerceAtMost(sampleText.length),
+                )
+            }
+        }
+    }
 
-            when (underlineMode) {
-                1 -> {
-                    drawLine(
-                        color = resolvedUnderlineColor,
-                        start = Offset(0f, yBaseline),
-                        end = Offset(textResult.size.width.toFloat(), yBaseline),
-                        strokeWidth = strokeWidth,
-                    )
-                }
-                2 -> {
-                    val dashLength = 8.dp.toPx()
-                    val gapLength = 4.dp.toPx()
-                    var x = 0f
-                    while (x < textResult.size.width) {
-                        val endX = minOf(x + dashLength, textResult.size.width.toFloat())
-                        drawLine(
-                            color = resolvedUnderlineColor,
-                            start = Offset(x, yBaseline),
-                            end = Offset(endX, yBaseline),
-                            strokeWidth = strokeWidth,
-                        )
-                        x += dashLength + gapLength
-                    }
-                }
-                3 -> {
-                    val amplitude = 2.dp.toPx()
-                    val period = 12.dp.toPx()
-                    val path = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(0f, yBaseline)
-                        var x = 0f
-                        while (x < textResult.size.width) {
-                            val nextX = minOf(x + period / 2, textResult.size.width.toFloat())
-                            val controlY = if ((x / period).toInt() % 2 == 0) {
-                                yBaseline - amplitude
-                            } else {
-                                yBaseline + amplitude
-                            }
-                            quadraticTo(x, controlY, nextX, yBaseline)
-                            x += period / 2
+    NormalCard(
+        modifier = modifier,
+        cornerRadius = 12.dp,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            if (pattern.isNotBlank() && matchRanges.isEmpty()) {
+                AppText(
+                    text = stringResource(R.string.highlight_preview_no_match),
+                    style = LegadoTheme.typography.labelSmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+            ) {
+                val textResult = textMeasurer.measure(
+                    text = annotated,
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        color = defaultTextColor,
+                    ),
+                    maxLines = 3,
+                    constraints = androidx.compose.ui.unit.Constraints(
+                        maxWidth = size.width.toInt()
+                    ),
+                )
+                drawText(textResult)
+
+                if (underlineMode > 0) {
+                    val strokeWidth = underlineWidth.dp.toPx()
+                    matchRanges.forEach { range ->
+                        val start = range.first
+                        val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                        if (start >= endExclusive) return@forEach
+                        // 命中片段可能跨行，按行分段画下划线
+                        var offset = start
+                        while (offset < endExclusive) {
+                            val line = textResult.getLineForOffset(offset)
+                            val lineEnd = textResult.getLineEnd(line, visibleEnd = true)
+                            val segEnd = minOf(endExclusive, lineEnd)
+                            if (segEnd <= offset) break
+                            val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
+                            val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
+                            val y = textResult.getLineBottom(line) - underlineOffset.dp.toPx()
+                            drawUnderlineSegment(
+                                mode = underlineMode,
+                                color = resolvedUnderlineColor,
+                                strokeWidth = strokeWidth,
+                                startX = minOf(left, right),
+                                endX = maxOf(left, right),
+                                y = y,
+                            )
+                            offset = segEnd
                         }
                     }
-                    drawPath(
-                        path = path,
-                        color = resolvedUnderlineColor,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-                    )
-                }
-                4 -> {
-                    val barHeight = 3.dp.toPx()
-                    drawLine(
-                        color = resolvedUnderlineColor,
-                        start = Offset(0f, yBaseline),
-                        end = Offset(textResult.size.width.toFloat(), yBaseline),
-                        strokeWidth = barHeight,
-                        cap = StrokeCap.Round,
-                    )
                 }
             }
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegment(
+    mode: Int,
+    color: Color,
+    strokeWidth: Float,
+    startX: Float,
+    endX: Float,
+    y: Float,
+) {
+    when (mode) {
+        1 -> drawLine(
+            color = color,
+            start = Offset(startX, y),
+            end = Offset(endX, y),
+            strokeWidth = strokeWidth,
+        )
+
+        2 -> {
+            val dashLength = 8.dp.toPx()
+            val gapLength = 4.dp.toPx()
+            var x = startX
+            while (x < endX) {
+                val segEndX = minOf(x + dashLength, endX)
+                drawLine(
+                    color = color,
+                    start = Offset(x, y),
+                    end = Offset(segEndX, y),
+                    strokeWidth = strokeWidth,
+                )
+                x += dashLength + gapLength
+            }
+        }
+
+        3 -> {
+            // 波浪：控制点需 2 倍振幅，二次贝塞尔在中点的实际高度是 (基线Y + 控制点Y)/2
+            val amplitude = 2.5.dp.toPx()
+            val halfPeriod = 8.dp.toPx()
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(startX, y)
+                var x = startX
+                var up = true
+                while (x < endX) {
+                    val nextX = minOf(x + halfPeriod, endX)
+                    val midX = (x + nextX) / 2f
+                    val controlY = if (up) y - 2f * amplitude else y + 2f * amplitude
+                    quadraticTo(midX, controlY, nextX, y)
+                    x = nextX
+                    up = !up
+                }
+            }
+            drawPath(
+                path = path,
+                color = color,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+            )
+        }
+
+        4 -> {
+            val gap = 2.dp.toPx()
+            drawLine(
+                color = color,
+                start = Offset(startX, y - gap),
+                end = Offset(endX, y - gap),
+                strokeWidth = strokeWidth,
+            )
+            drawLine(
+                color = color,
+                start = Offset(startX, y + gap),
+                end = Offset(endX, y + gap),
+                strokeWidth = strokeWidth,
+            )
         }
     }
 }

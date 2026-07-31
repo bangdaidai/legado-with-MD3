@@ -29,15 +29,34 @@ class HighlightRuleRepository(
     )
 
     fun load(configName: String): List<HighlightRule> {
+        ensureDefaultsSeeded()
         return clearUnreadableReferences(
             dao.getAll().filter { it.matchesConfig(configName) }
         )
     }
 
     fun loadEnabled(configName: String): List<HighlightRule> {
+        ensureDefaultsSeeded()
         return clearUnreadableReferences(
             dao.getEnabled().filter { it.matchesConfig(configName) }
         )
+    }
+
+    /**
+     * 首次使用时把内置默认规则种入数据库，使其在高亮规则管理页可见。
+     * 用 pref 标记只种一次，用户之后删光也不会重复种入。
+     */
+    private fun ensureDefaultsSeeded() {
+        if (context.getPrefBoolean(PreferKey.highlightRulesInitialized, false)) return
+        synchronized(this) {
+            if (context.getPrefBoolean(PreferKey.highlightRulesInitialized, false)) return
+            if (dao.count() == 0) {
+                dao.insertAll(createDefaultRules().mapIndexed { index, rule ->
+                    rule.copy(position = index)
+                })
+            }
+            context.putPrefBoolean(PreferKey.highlightRulesInitialized, true)
+        }
     }
 
     /**
@@ -180,6 +199,7 @@ class HighlightRuleRepository(
             npRight = runCatching { rule.npRight }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
             npTop = runCatching { rule.npTop }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
             npBottom = runCatching { rule.npBottom }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
+            useProtagonist = runCatching { rule.useProtagonist }.getOrDefault(false),
         )
     }
 
@@ -331,6 +351,20 @@ class HighlightRuleRepository(
                 position = 11,
                 enabled = false,
                 textColor = 0xFF20B2AA.toInt()
+            ),
+            HighlightRule(
+                id = "protagonist_default",
+                name = "主角高亮",
+                pattern = "",
+                sampleText = "张三轻轻推开门，李四紧随其后。",
+                position = 12,
+                enabled = true,
+                useProtagonist = true,
+                textColor = 0xFFE67E22.toInt(),
+                fontWeight = 700,
+                underlineMode = 3,
+                underlineWidth = 0.5f,
+                underlineColor = 0xFFE67E22.toInt()
             )
         )
     }

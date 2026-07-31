@@ -1928,6 +1928,7 @@
     <string name="predictive_back_summary">啟用系統預測性返回手勢</string>
     <string name="preferred_contrast">偏好對比度</string>
     <string name="preview_effect">預覽效果</string>
+    <string name="highlight_preview_no_match">目前正則未比對到範例文字中的內容</string>
     <string name="privacy">私隱</string>
     <string name="progress">進度</string>
     <string name="progress_exceeds_cloud">目前進度超過雲端，是否覆蓋？</string>

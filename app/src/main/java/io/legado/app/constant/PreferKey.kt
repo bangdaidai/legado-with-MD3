@@ -105,6 +105,7 @@ object PreferKey {
     const val highlightRuleDialog = "highlightRuleDialog"
     const val highlightRuleBookTitle = "highlightRuleBookTitle"
     const val highlightRuleBracketNote = "highlightRuleBracketNote"
+    const val highlightRulesInitialized = "highlightRulesInitialized"
     const val adaptSpecialStyle = "adaptSpecialStyle"
     const val autoClearExpired = "autoClearExpired"
     const val autoChangeSource = "autoChangeSource"

@@ -1,4 +1,4 @@
-﻿package io.legado.app.ui.book.read.page.provider
+package io.legado.app.ui.book.read.page.provider
 
 import android.graphics.BitmapFactory
 import android.graphics.Paint
@@ -101,14 +101,31 @@ class TextChapterLayout(
     private val compiledHighlightRules: List<CompiledHighlightRule>
         get() {
             val configName = ReadBookConfig.durConfig.name
+            val cacheKey = "$configName|${book.bookUrl}"
             cachedHighlightRules?.takeIf {
-                cachedHighlightRulesConfigName == configName
+                cachedHighlightRulesConfigName == cacheKey
             }?.let { return it }
+            val protagonistPattern = buildProtagonistPattern()
             return highlightRuleRepository.loadEnabled(configName).mapNotNull { rule ->
                 runCatching {
+                    val pattern = if (rule.useProtagonist) {
+                        protagonistPattern ?: return@mapNotNull null
+                    } else {
+                        rule.pattern
+                    }
                     CompiledHighlightRule(
                         rule = rule,
-                        regex = Regex(rule.pattern)
+                        regex = Regex(pattern)
+                    )
+                }.getOrNull()
+            }.also {
+                cachedHighlightRulesConfigName = cacheKey
+                cachedHighlightRules = it
+            }
+        }
+                    CompiledHighlightRule(
+                        rule = rule,
+                        regex = Regex(pattern)
                     )
                 }.getOrNull()
             }.also {
@@ -119,6 +136,15 @@ class TextChapterLayout(
 
     private val highlightRuleRepository: HighlightRuleRepository
         get() = GlobalContext.get().get()
+
+    private fun buildProtagonistPattern(): String? {
+        val bookKnowledgeDao: io.legado.app.data.dao.BookKnowledgeDao = GlobalContext.get().get()
+        val names = kotlinx.coroutines.runBlocking {
+            bookKnowledgeDao.getProtagonists(book.bookUrl).map { it.name }
+        }
+        if (names.isEmpty()) return null
+        return names.joinToString("|") { java.util.regex.Pattern.quote(it) }
+    }
 
     private var highlightStyleContext: HighlightStyleContext? = null
 

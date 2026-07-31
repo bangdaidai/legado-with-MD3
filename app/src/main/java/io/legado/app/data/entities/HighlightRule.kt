@@ -32,11 +32,15 @@ data class HighlightRule(
     var npRight: Float = 0.1f,
     var npTop: Float = 0.1f,
     var npBottom: Float = 0.1f,
+    var useProtagonist: Boolean = false,
 ) {
 
     fun styleSummary(): String {
         val parts = ArrayList<String>(4)
         parts.add(targetScopeLabel())
+        if (useProtagonist) {
+            parts.add("跟随主角")
+        }
         textColor?.let {
             parts.add("字色 ${it.toHexColor()}")
         }
@@ -83,6 +87,7 @@ data class HighlightRule(
     }
 
     fun displayPattern(): String {
+        if (useProtagonist) return "(跟随主角名称)"
         return pattern.ifBlank { ".*" }
     }
 

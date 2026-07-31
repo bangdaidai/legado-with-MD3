@@ -796,6 +796,7 @@
     <string name="nine_patch_split_top">上切分线</string>
     <string name="nine_patch_split_bottom">下切分线</string>
     <string name="preview_effect">预览效果</string>
+    <string name="highlight_preview_no_match">当前正则未匹配到示例文本中的内容</string>
     <string name="sample_text">示例文本</string>
     <string name="sure_delete">确定要删除吗？</string>
     <string name="save_to_source">保存到源文件，保存后重置功能将无效</string>
