@@ -102,6 +102,8 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.HighlightTagRow
+import io.legado.app.ui.widget.components.card.TagChip
+import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.changeSource.ChangeSourceSheet
 import io.legado.app.ui.widget.components.icon.AppIcon
@@ -1028,24 +1030,15 @@ private fun BookInfoHeader(
                         items = coloredTags,
                         key = { tag -> "colored-${tag.id}-${tag.name}" }
                     ) { tag ->
-                        val color = if (tag.color != 0L) {
-                            Color(tag.color.toInt())
+                        val tagColor = if (tag.color != 0L) {
+                            tag.color
                         } else {
-                            LegadoTheme.colorScheme.primary
+                            null
                         }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(color.copy(alpha = 0.14f))
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                        ) {
-                            Text(
-                                text = formatWordCount(tag.name),
-                                style = LegadoTheme.typography.labelMedium,
-                                color = color,
-                            )
-                        }
+                        TagChip(
+                            tag = formatWordCount(tag.name),
+                            color = tagColor,
+                        )
                     }
                 }
             }

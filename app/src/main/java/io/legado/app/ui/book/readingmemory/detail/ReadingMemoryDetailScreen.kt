@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
@@ -60,6 +59,8 @@ import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import java.util.Locale
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.card.NormalCard
+import io.legado.app.ui.widget.components.card.TagChip
+import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
@@ -387,7 +388,7 @@ private fun TagsSection(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 state.tags.forEach { tag ->
-                    TagChip(tag = tag, tagColorMap = state.tagColorMap, onClick = { pendingRemoveTag = tag })
+                    TagChip(tag = tag, color = state.tagColorMap[tag], onClick = { pendingRemoveTag = tag })
                 }
             }
         }
@@ -447,7 +448,6 @@ private fun ProtagonistsSection(
                 state.protagonistNames.forEach { p ->
                     TagChip(
                         tag = p,
-                        tagColorMap = state.tagColorMap,
                         onClick = { pendingRemoveProtagonist = p },
                     )
                 }
@@ -679,7 +679,7 @@ private fun TagPickerSheet(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         selectedTags.forEach { tag ->
-                            TagChip(tag = tag, tagColorMap = tagColorMap, onRemove = { onRemoveTag(tag) })
+                            TagChip(tag = tag, color = tagColorMap[tag], onRemove = { onRemoveTag(tag) })
                         }
                     }
                 }
@@ -697,7 +697,7 @@ private fun TagPickerSheet(
                     )
                 }
                 items(candidates) { tag ->
-                    TagChip(tag = tag, tagColorMap = tagColorMap, onClick = { onAddTag(tag) })
+                    TagChip(tag = tag, color = tagColorMap[tag], onClick = { onAddTag(tag) })
                 }
             } else if (selectedTags.isEmpty()) {
                 item {
@@ -811,56 +811,6 @@ private fun SectionCard(
             }
             Spacer(modifier = Modifier.height(12.dp))
             content()
-        }
-    }
-}
-
-@Composable
-private fun TagChip(
-    tag: String,
-    tagColorMap: Map<String, Long> = emptyMap(),
-    onClick: (() -> Unit)? = null,
-    onRemove: (() -> Unit)? = null,
-) {
-    val clickModifier = if (onClick != null || onRemove != null) {
-        Modifier.clickable { (onClick ?: onRemove)?.invoke() }
-    } else Modifier
-
-    val tagColor = tagColorMap[tag]
-    val backgroundColor = if (tagColor != null) {
-        Color(tagColor).copy(alpha = 0.14f)
-    } else {
-        LegadoTheme.colorScheme.surfaceContainer
-    }
-    val contentColor = if (tagColor != null) {
-        Color(tagColor)
-    } else {
-        LegadoTheme.colorScheme.onSurfaceVariant
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(backgroundColor)
-            .padding(horizontal = 10.dp, vertical = 5.dp)
-            .then(clickModifier),
-    ) {
-        Text(
-            text = tag,
-            style = LegadoTheme.typography.labelMedium,
-            color = contentColor,
-        )
-        if (onRemove != null) {
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "移除",
-                modifier = Modifier
-                    .size(14.dp)
-                    .clickable { onRemove.invoke() },
-                tint = contentColor,
-            )
         }
     }
 }

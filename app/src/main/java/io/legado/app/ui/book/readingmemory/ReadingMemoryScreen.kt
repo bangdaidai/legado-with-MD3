@@ -29,6 +29,8 @@ import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.card.TagChip
+import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
@@ -586,17 +588,10 @@ private fun MemoryBookCard(
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
                     tags.forEach { tag ->
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = LegadoTheme.colorScheme.secondaryContainer,
-                        ) {
-                            AppText(
-                                text = tag,
-                                style = LegadoTheme.typography.labelSmall,
-                                color = LegadoTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
+                        TagChip(
+                            tag = tag,
+                            size = TagChipSize.Small,
+                        )
                     }
                 }
             }

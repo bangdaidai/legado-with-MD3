@@ -57,6 +57,8 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.help.book.TagManager
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.card.NormalCard
+import io.legado.app.ui.widget.components.card.TagChip
+import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
@@ -773,22 +775,10 @@ fun BookItem(
                     ) {
                         kindList.forEach { label ->
                             val tagColor = tagColorMap[label]
-                            val backgroundColor = when {
-                                tagColor != null -> Color(tagColor).copy(alpha = 0.16f)
-                                else -> LegadoTheme.colorScheme.surfaceContainerHigh
-                            }
-                            val contentColor = when {
-                                tagColor != null -> Color(tagColor)
-                                else -> LegadoTheme.colorScheme.primary.copy(alpha = 0.8f)
-                            }
-                            TextCard(
-                                text = label,
-                                backgroundColor = backgroundColor,
-                                contentColor = contentColor,
-                                cornerRadius = 4.dp,
-                                horizontalPadding = 4.dp,
-                                verticalPadding = 2.dp,
-                                textStyle = LegadoTheme.typography.labelSmallEmphasized
+                            TagChip(
+                                tag = label,
+                                color = tagColor,
+                                size = TagChipSize.Small,
                             )
                         }
                         val wc = bookUi.book.wordCount
