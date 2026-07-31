@@ -20,11 +20,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -84,6 +87,7 @@ fun BookshelfItem(
     isSelected: Boolean = false,
     titleEnd: @Composable (() -> Unit)? = null,
     subTitle: String? = null,
+    subTitleEnd: @Composable (() -> Unit)? = null,
     desc: String? = null,
     descMaxLines: Int = 1,
     extra: @Composable (RowScope.() -> Unit)? = null,
@@ -269,12 +273,20 @@ fun BookshelfItem(
                         }
                     }
                         subTitle?.let {
-                            AppText(
-                                text = it,
-                                style = LegadoTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                AppText(
+                                    text = it,
+                                    style = LegadoTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                subTitleEnd?.invoke()
+                            }
                         }
                         if (!isCompact) {
                             if (descAnnotated != null) {
@@ -756,6 +768,11 @@ fun BookItem(
         } else {
             book.author
         },
+        subTitleEnd = if (book.rating > 0f) {
+            @Composable {
+                BookshelfRatingStars(rating = book.rating)
+            }
+        } else null,
         desc = book.durChapterTitle ?: "",
         columnContent = if (layoutMode == 0 && !isCompact && settings.showBookIntro) {
             {
@@ -888,5 +905,40 @@ private fun formatShelfWordCount(raw: String): String {
             if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
         }
         else -> "${count}字"
+    }
+}
+
+/**
+ * 书架星星评分组件，显示在作者行右侧
+ */
+@Composable
+fun BookshelfRatingStars(rating: Float) {
+    val primary = LegadoTheme.colorScheme.primary
+    val secondary = LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+    val filledIcon = Icons.Default.Star
+    val halfIcon = Icons.Default.StarBorder
+    val totalStars = 5
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 1..totalStars) {
+            val starValue = i.toFloat()
+            if (rating >= starValue) {
+                AppIcon(
+                    imageVector = filledIcon,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier.size(12.dp)
+                )
+            } else if (rating > starValue - 1f) {
+                AppIcon(
+                    imageVector = halfIcon,
+                    contentDescription = null,
+                    tint = secondary,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
     }
 }

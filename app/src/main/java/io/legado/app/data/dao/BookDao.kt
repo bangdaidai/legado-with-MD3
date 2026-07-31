@@ -114,8 +114,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         where type & ${BookType.text} > 0
         and type & ${BookType.local} = 0
         and ($PUBLIC_GROUP_MASK & `group`) = 0
@@ -156,8 +158,10 @@ interface BookDao {
         ifnull(customIntro, intro) as intro,
         kind,
         customTag,
-        wordCount
+        wordCount,
+        COALESCE(rm.rating, 0.0) as rating
     FROM books
+    LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
     WHERE $PUBLIC_BOOK_FILTER
     ORDER BY durChapterTime DESC
 """
@@ -192,8 +196,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
         FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.audio} > 0
         AND $PUBLIC_BOOK_FILTER
         """
@@ -228,8 +234,10 @@ interface BookDao {
             ifnull(customIntro, intro) as intro,
             kind,
             customTag,
-            wordCount
-        FROM books 
+            wordCount,
+            COALESCE(rm.rating, 0.0) as rating
+        FROM books
+        LEFT JOIN readingMemory rm ON books.bookUrl = rm.bookUrl
         WHERE type & ${BookType.local} > 0
         AND $PUBLIC_BOOK_FILTER
         """

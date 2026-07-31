@@ -2,10 +2,11 @@ package io.legado.app.ui.book.readingmemory.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
-import io.legado.app.help.book.TagManager
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -130,6 +131,7 @@ class ReadingMemoryDetailViewModel(
                     readRecordTotalTime = readRecordTotalTime,
                     availableTags = availableTags,
                     tagColorMap = tagColorMap,
+                    tagGroups = appDb.bookTagGroupDao.getAllSorted(),
                     loading = memory == null,
                     showReviewEditor = showReview,
                     reviewDraft = draft,
@@ -182,6 +184,9 @@ class ReadingMemoryDetailViewModel(
                             if (intent.abandoned) repository.markAbandoned(bookUrl)
                             else repository.unmarkAbandoned(bookUrl)
                             protagonistRefresh.value = Unit
+                        }
+                        is ReadingMemoryDetailIntent.OpenTagEdit -> {
+                            _showTagPicker.value = true
                         }
                         is ReadingMemoryDetailIntent.OpenTagPicker -> {
                             _showTagPicker.value = true

@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.readingmemory.detail
 
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadingStatistics
 
@@ -38,6 +39,7 @@ data class ReadingMemoryDetailUiState(
     val readRecordTotalTime: Long = 0L,
     val availableTags: List<String> = emptyList(),
     val tagColorMap: Map<String, Long> = emptyMap(),
+    val tagGroups: List<BookTagGroup> = emptyList(),
     val loading: Boolean = true,
     val showReviewEditor: Boolean = false,
     val reviewDraft: String = "",
@@ -69,6 +71,7 @@ sealed interface ReadingMemoryDetailIntent {
     data object NavigateBack : ReadingMemoryDetailIntent
     data object OpenTagPicker : ReadingMemoryDetailIntent
     data object DismissTagPicker : ReadingMemoryDetailIntent
+    data object OpenTagEdit : ReadingMemoryDetailIntent
     data class AddTag(val tag: String) : ReadingMemoryDetailIntent
     data class RemoveTag(val tag: String) : ReadingMemoryDetailIntent
     data class AddProtagonist(val name: String) : ReadingMemoryDetailIntent

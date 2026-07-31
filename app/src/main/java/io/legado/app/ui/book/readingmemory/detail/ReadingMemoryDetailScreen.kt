@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.book.tagmanage.TagEditData
+import io.legado.app.ui.book.tagmanage.TagEditSheet
 import androidx.compose.foundation.background
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -123,14 +125,22 @@ fun ReadingMemoryDetailScreen(
         }
     }
 
-    if (state.showTagPicker) {
-        TagPickerSheet(
-            availableTags = state.availableTags,
-            selectedTags = state.tags,
-            tagColorMap = state.tagColorMap,
-            onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissTagPicker) },
-            onAddTag = { onIntent(ReadingMemoryDetailIntent.AddTag(it)) },
-            onRemoveTag = { onIntent(ReadingMemoryDetailIntent.RemoveTag(it)) },
+    var tagEditData by remember { mutableStateOf<TagEditData?>(null) }
+
+    if (tagEditData != null) {
+        TagEditSheet(
+            data = tagEditData,
+            groups = state.tagGroups,
+            onChange = { tagEditData = it },
+            onConfirm = {
+                val trimmed = it.name.trim()
+                if (trimmed.isNotBlank()) {
+                    onIntent(ReadingMemoryDetailIntent.AddTag(trimmed))
+                }
+                tagEditData = null
+            },
+            onPickColor = {},
+            onDismiss = { tagEditData = null },
         )
     }
 
@@ -372,7 +382,7 @@ private fun TagsSection(
                 tint = LegadoTheme.colorScheme.primary,
                 modifier = Modifier
                     .size(20.dp)
-                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenTagPicker) },
+                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenTagEdit) },
             )
         },
     ) {
@@ -628,67 +638,6 @@ private fun ExcerptSection(
 }
 
 /* ===================== 弹窗 ===================== */
-
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-@Composable
-private fun TagPickerSheet(
-    availableTags: List<String>,
-    selectedTags: List<String>,
-    tagColorMap: Map<String, Long> = emptyMap(),
-    onDismiss: () -> Unit,
-    onAddTag: (String) -> Unit,
-    onRemoveTag: (String) -> Unit,
-) {
-    var tagText by remember { mutableStateOf("") }
-    val cs = LegadoTheme.colorScheme
-    val selectedColor = remember { cs.primary }
-
-    AppModalBottomSheet(
-        show = true,
-        onDismissRequest = onDismiss,
-        title = "新建标签",
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(
-                value = tagText,
-                onValueChange = { tagText = it },
-                label = { Text("标签名") },
-                placeholder = { Text("输入标签名称") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = selectedColor,
-                    focusedLabelColor = selectedColor,
-                ),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                FilledTonalButton(
-                    onClick = onDismiss,
-                    shape = RoundedCornerShape(22.dp),
-                ) {
-                    AppText("取消")
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                FilledTonalButton(
-                    onClick = {
-                        val trimmed = tagText.trim()
-                        if (trimmed.isNotBlank()) {
-                            onAddTag(trimmed)
-                        }
-                        onDismiss()
-                    },
-                    shape = RoundedCornerShape(22.dp),
-                ) {
-                    AppText("保存")
-                }
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
