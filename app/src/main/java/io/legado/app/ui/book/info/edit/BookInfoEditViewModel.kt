@@ -150,7 +150,7 @@ class BookInfoEditViewModel(
                 BookHelp.updateCacheFolder(oldBook, book)
 
                 if (ReadBook.book?.bookUrl == book.bookUrl) {
-                    ReadBook.book = book
+                    ReadBook.replaceCurrentBook(book)
                 }
                 bookRepository.update(book)
                 // 编辑用户标签后同步关系表：以 kind+customTag 为 SSOT 重建该书标签关联

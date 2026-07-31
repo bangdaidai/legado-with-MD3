@@ -12,6 +12,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
@@ -1984,7 +1985,7 @@ class ReadBookViewModel(
 
     fun removeFromBookshelf(success: (() -> Unit)? = null) {
         val book = ReadBook.book
-        Coroutine.async {
+        Coroutine.async<Unit> {
             book?.let { appDb.bookTagRelationDao.deleteByBookUrl(it.bookUrl) }
             book?.delete()
         }.onSuccess {
