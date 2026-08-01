@@ -32,6 +32,7 @@ data class ReadRecordUiState(
     val groupedRecords: Map<String, List<ReadRecordDetail>> = emptyMap(),
     val timelineRecords: Map<String, List<ReadRecordSession>> = emptyMap(),
     val latestRecords: List<ReadRecord> = emptyList(),
+    val durationRecords: List<ReadRecord> = emptyList(),
     val selectedDate: LocalDate? = null,
     val searchKey: String? = null,
     val dailyReadCounts: Map<LocalDate, Int> = emptyMap(),
@@ -43,7 +44,8 @@ data class ReadRecordUiState(
 enum class DisplayMode {
     AGGREGATE,
     TIMELINE,
-    LATEST
+    LATEST,
+    DURATION
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -134,6 +136,7 @@ class ReadRecordViewModel(
             groupedRecords = filteredDetails.groupBy { it.date },
             timelineRecords = timelineMap,
             latestRecords = data.latestRecords,
+            durationRecords = data.latestRecords.sortedByDescending { it.readTime },
             selectedDate = selectedDate,
             searchKey = searchKey,
             dailyReadCounts = dailyCounts,

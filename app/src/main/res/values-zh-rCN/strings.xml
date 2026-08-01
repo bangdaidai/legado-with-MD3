@@ -2545,9 +2545,11 @@
     <string name="read_record_view_aggregate">汇总视图</string>
     <string name="read_record_view_timeline">时间线视图</string>
     <string name="read_record_view_latest">最后阅读视图</string>
+    <string name="read_record_view_duration">累计时长视图</string>
     <string name="a11y_switch_to_timeline_view">切换到时间线视图</string>
     <string name="a11y_switch_to_latest_view">切换到最后阅读视图</string>
     <string name="a11y_switch_to_aggregate_view">切换到汇总视图</string>
+    <string name="a11y_switch_to_duration_view">切换到累计时长视图</string>
     <string name="a11y_toggle_read_calendar">显示或隐藏阅读日历</string>
     <string name="no_read_record">没有阅读记录</string>
     <string name="read_record_options">阅读记录选项</string>

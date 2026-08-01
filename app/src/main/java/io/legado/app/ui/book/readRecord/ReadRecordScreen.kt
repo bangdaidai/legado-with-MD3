@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Merge
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Schedule
@@ -184,7 +185,7 @@ fun ReadRecordScreen(
     }
     val stickyDate by remember(displayMode, listState) {
         derivedStateOf {
-            if (displayMode == DisplayMode.LATEST) return@derivedStateOf null
+            if (displayMode == DisplayMode.LATEST || displayMode == DisplayMode.DURATION) return@derivedStateOf null
             val stickyKey = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { info ->
                     val key = info.key.toString()
@@ -205,7 +206,7 @@ fun ReadRecordScreen(
     }
     val floatingDate by remember(stickyDate, listState, displayMode) {
         derivedStateOf {
-            if (displayMode == DisplayMode.LATEST) return@derivedStateOf null
+            if (displayMode == DisplayMode.LATEST || displayMode == DisplayMode.DURATION) return@derivedStateOf null
             if (stickyDate == null) return@derivedStateOf null
             val shouldStick = listState.firstVisibleItemIndex > 1 ||
                 listState.firstVisibleItemScrollOffset > 24
@@ -240,6 +241,7 @@ fun ReadRecordScreen(
                             DisplayMode.AGGREGATE -> stringResource(R.string.read_record_view_aggregate)
                             DisplayMode.TIMELINE -> stringResource(R.string.read_record_view_timeline)
                             DisplayMode.LATEST -> stringResource(R.string.read_record_view_latest)
+                            DisplayMode.DURATION -> stringResource(R.string.read_record_view_duration)
                         }
                         subTitle
                     },
@@ -279,7 +281,8 @@ fun ReadRecordScreen(
                                 val newMode = when (displayMode) {
                                     DisplayMode.AGGREGATE -> DisplayMode.TIMELINE
                                     DisplayMode.TIMELINE -> DisplayMode.LATEST
-                                    DisplayMode.LATEST -> DisplayMode.AGGREGATE
+                                    DisplayMode.LATEST -> DisplayMode.DURATION
+                                    DisplayMode.DURATION -> DisplayMode.AGGREGATE
                                 }
                                 onIntent(ReadRecordIntent.SetDisplayMode(newMode))
                                 selectedItemKeys = emptySet()
@@ -287,12 +290,14 @@ fun ReadRecordScreen(
                                 val icon = when (displayMode) {
                                     DisplayMode.AGGREGATE -> Icons.Default.Timeline
                                     DisplayMode.TIMELINE -> Icons.Default.Schedule
-                                    DisplayMode.LATEST -> Icons.AutoMirrored.Filled.List
+                                    DisplayMode.LATEST -> Icons.Default.HourglassBottom
+                                    DisplayMode.DURATION -> Icons.AutoMirrored.Filled.List
                                 }
                                 val description = when (displayMode) {
                                     DisplayMode.AGGREGATE -> stringResource(R.string.a11y_switch_to_timeline_view)
                                     DisplayMode.TIMELINE -> stringResource(R.string.a11y_switch_to_latest_view)
-                                    DisplayMode.LATEST -> stringResource(R.string.a11y_switch_to_aggregate_view)
+                                    DisplayMode.LATEST -> stringResource(R.string.a11y_switch_to_duration_view)
+                                    DisplayMode.DURATION -> stringResource(R.string.a11y_switch_to_aggregate_view)
                                 }
                                 AppIcon(icon, description)
                             }
@@ -326,7 +331,8 @@ fun ReadRecordScreen(
             state.isLoading -> "LOADING"
             (displayMode == DisplayMode.AGGREGATE && state.groupedRecords.isEmpty()) ||
                 (displayMode == DisplayMode.TIMELINE && state.timelineRecords.isEmpty()) ||
-                (displayMode == DisplayMode.LATEST && state.latestRecords.isEmpty()) -> "EMPTY"
+                (displayMode == DisplayMode.LATEST && state.latestRecords.isEmpty()) ||
+                (displayMode == DisplayMode.DURATION && state.durationRecords.isEmpty()) -> "EMPTY"
             else -> "CONTENT"
         }
         AnimatedContent(
@@ -636,9 +642,7 @@ private fun ReadRecordActionsSheet(
             )
             CompactClickableSettingItem(
                 title = stringResource(R.string.clear_read_records),
-                description = stringResource(R.string.clear_read_records_summary),
                 imageVector = Icons.Default.Delete,
-                color = LegadoTheme.colorScheme.error,
                 onClick = onClearReadRecords
             )
         }
@@ -673,6 +677,9 @@ private fun deleteSelectedReadRecords(
         .filter { selectedItemKeys.contains(it.selectionKey()) }
         .forEach { onIntent(ReadRecordIntent.DeleteSession(it)) }
     state.latestRecords
+        .filter { selectedItemKeys.contains(it.selectionKey()) }
+        .forEach { onIntent(ReadRecordIntent.DeleteRecord(it)) }
+    state.durationRecords
         .filter { selectedItemKeys.contains(it.selectionKey()) }
         .forEach { onIntent(ReadRecordIntent.DeleteRecord(it)) }
 }
@@ -945,6 +952,59 @@ fun LazyListScope.renderListByMode(
 
         DisplayMode.LATEST -> {
             items(items = state.latestRecords, key = { "${it.deviceId}_${it.bookName}_${it.bookAuthor}" }) { record ->
+                val itemKey = record.selectionKey()
+                val isSelected = selectedItemKeys.contains(itemKey)
+                val itemContent: @Composable (Modifier) -> Unit = { modifier ->
+                    LatestReadItem(
+                        record = record,
+                        loadBookCover = loadBookCover,
+                        onClick = {
+                            if (inSelectionMode) {
+                                onToggleSelection(itemKey)
+                            } else {
+                                onBookClick(record.bookName, record.bookAuthor)
+                            }
+                        },
+                        onLongClick = { onEnterSelection(itemKey) },
+                        inSelectionMode = inSelectionMode,
+                        isSelected = isSelected,
+                        modifier = modifier
+                    )
+                }
+                val deleteActionDescription = stringResource(R.string.del_read_record)
+                val mergeActionDescription = stringResource(R.string.a11y_merge_same_name_read_records)
+                if (inSelectionMode) {
+                    itemContent(Modifier.animateItem())
+                } else {
+                    SwipeActionContainer(
+                        modifier = Modifier.animateItem(),
+                        startAction = SwipeAction(
+                            icon = Icons.Default.Delete,
+                            background = LegadoTheme.colorScheme.error,
+                            onSwipe = {
+                                onConfirmDelete(1) {
+                                    onIntent(ReadRecordIntent.DeleteRecord(record))
+                                }
+                            },
+                            contentDescription = deleteActionDescription
+                        ),
+                        endAction = SwipeAction(
+                            icon = Icons.Default.Merge,
+                            background = LegadoTheme.colorScheme.primary,
+                            onSwipe = {
+                                onMergeClick(record)
+                            },
+                            contentDescription = mergeActionDescription
+                        )
+                    ) {
+                        itemContent(Modifier)
+                    }
+                }
+            }
+        }
+
+        DisplayMode.DURATION -> {
+            items(items = state.durationRecords, key = { "dur_${it.deviceId}_${it.bookName}_${it.bookAuthor}" }) { record ->
                 val itemKey = record.selectionKey()
                 val isSelected = selectedItemKeys.contains(itemKey)
                 val itemContent: @Composable (Modifier) -> Unit = { modifier ->

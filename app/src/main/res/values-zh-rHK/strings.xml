@@ -2395,9 +2395,11 @@
     <string name="read_record_view_aggregate">彙總檢視</string>
     <string name="read_record_view_timeline">時間軸檢視</string>
     <string name="read_record_view_latest">最後閱讀檢視</string>
+    <string name="read_record_view_duration">累計時長檢視</string>
     <string name="a11y_switch_to_timeline_view">切換到時間軸檢視</string>
     <string name="a11y_switch_to_latest_view">切換到最後閱讀檢視</string>
     <string name="a11y_switch_to_aggregate_view">切換到彙總檢視</string>
+    <string name="a11y_switch_to_duration_view">切換到累計時長檢視</string>
     <string name="a11y_toggle_read_calendar">顯示或隱藏閱讀日曆</string>
     <string name="no_read_record">沒有閱讀記錄</string>
     <string name="read_record_options">閱讀記錄選項</string>

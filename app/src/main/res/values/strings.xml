@@ -2551,9 +2551,11 @@
     <string name="read_record_view_aggregate">Summary view</string>
     <string name="read_record_view_timeline">Timeline view</string>
     <string name="read_record_view_latest">Last read view</string>
+    <string name="read_record_view_duration">Total time view</string>
     <string name="a11y_switch_to_timeline_view">Switch to timeline view</string>
     <string name="a11y_switch_to_latest_view">Switch to last read view</string>
     <string name="a11y_switch_to_aggregate_view">Switch to summary view</string>
+    <string name="a11y_switch_to_duration_view">Switch to total time view</string>
     <string name="a11y_toggle_read_calendar">Show or hide reading calendar</string>
     <string name="no_read_record">No reading records</string>
     <string name="read_record_options">Reading record options</string>
