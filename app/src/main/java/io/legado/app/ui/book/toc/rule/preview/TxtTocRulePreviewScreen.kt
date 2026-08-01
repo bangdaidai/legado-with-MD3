@@ -538,11 +538,6 @@ private fun NetworkRuleChapterSheetContent(
         }
     }
 }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun RulePreviewCard(
