@@ -16,7 +16,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
-import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
@@ -60,7 +59,6 @@ import io.legado.app.help.book.isMobi
 import io.legado.app.help.book.removeType
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.http.text
 import io.legado.app.help.source.getSourceType
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadAloud
@@ -77,8 +75,8 @@ import io.legado.app.model.translation.TranslationChapterKey
 import io.legado.app.model.translation.TranslationChapterStatus
 import io.legado.app.model.translation.TranslationManager
 import io.legado.app.service.BaseReadAloudService
-import io.legado.app.ui.book.read.sheet.ReaderBookSheetTab
 import io.legado.app.ui.book.read.page.entities.TextChapter
+import io.legado.app.ui.book.read.sheet.ReaderBookSheetTab
 import io.legado.app.ui.book.searchContent.SearchResult
 import io.legado.app.utils.ImageSaveUtils
 import io.legado.app.utils.NetworkUtils
@@ -89,7 +87,6 @@ import io.legado.app.utils.toStringArray
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -99,13 +96,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.coroutines.coroutineContext
 
 /**
  * 阅读界面 ViewModel — MVI/UDF 架构
@@ -545,7 +539,29 @@ class ReadBookViewModel(
         collectEventBus()
         collectReaderSession()
         collectReadStyle()
+        collectReplaceRules()
         execute { readAloudDelegate.syncConfiguredTtsVoices() }
+    }
+
+    private fun collectReplaceRules() {
+        viewModelScope.launch {
+            replaceRuleRepository.flowAll().collect { rules ->
+                _uiState.update { state ->
+                    state.copy(
+                        allReplaceRules = rules.map { rule ->
+                            ReplaceRuleItemUi(
+                                id = rule.id,
+                                name = rule.name,
+                                group = rule.group,
+                                pattern = rule.pattern,
+                                replacement = rule.replacement,
+                                enabled = rule.isEnabled,
+                            )
+                        }.toImmutableList()
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -771,6 +787,19 @@ class ReadBookViewModel(
             is ReadBookIntent.RefreshAllChapters -> refreshAllChapters()
             is ReadBookIntent.RefreshContentAfter -> refreshContentAfter()
             is ReadBookIntent.ChangeReplaceRule -> changeReplaceRule(intent.enabled)
+            is ReadBookIntent.SetReplaceRuleEnabled -> viewModelScope.launch {
+                replaceRuleRepository.setEnabled(intent.id, intent.enabled)
+                replaceRuleChanged()
+            }
+
+            is ReadBookIntent.MoveReplaceRule -> viewModelScope.launch {
+                replaceRuleRepository.moveReplaceRule(
+                    intent.draggedId,
+                    intent.anchorId,
+                    intent.afterAnchor
+                )
+                replaceRuleChanged()
+            }
             is ReadBookIntent.DisableEffectiveReplace -> viewModelScope.launch {
                 replaceRuleRepository.insert(intent.rule.copy(isEnabled = false))
             }
@@ -871,7 +900,10 @@ class ReadBookViewModel(
                 if (intent.sheet is ReadBookSheet.HighlightRuleConfig) {
                     highlightRuleDelegate.load()
                     _uiState.update { it.copy(activeSheet = intent.sheet) }
-                } else if (intent.sheet is ReadBookSheet.ContentProcesses) {
+                } else if (
+                    intent.sheet is ReadBookSheet.ContentProcesses ||
+                    intent.sheet is ReadBookSheet.TextProcessing
+                ) {
                     _uiState.update { it.copy(activeSheet = intent.sheet) }
                     contentProcessDelegate.load()
                 } else if (intent.sheet is ReadBookSheet.AiRewritePresetConfig) {
@@ -885,7 +917,8 @@ class ReadBookViewModel(
                 when (_uiState.value.activeSheet) {
                     is ReadBookSheet.HighlightRuleConfig -> highlightRuleDelegate.onSheetDismissed()
                     is ReadBookSheet.ContentEdit -> contentEditDelegate.onSheetDismissed()
-                    is ReadBookSheet.ContentProcesses -> contentProcessDelegate.onSheetDismissed()
+                    is ReadBookSheet.ContentProcesses,
+                    is ReadBookSheet.TextProcessing -> contentProcessDelegate.onSheetDismissed()
                     else -> Unit
                 }
                 _uiState.update { it.copy(activeSheet = null) }
@@ -1141,6 +1174,22 @@ class ReadBookViewModel(
                 buttonConfigDelegate.saveMenuButtons(intent.items)
             is ReadBookIntent.SaveTitleBarButtonConfig ->
                 buttonConfigDelegate.saveTitleBarButtons(intent.items)
+            is ReadBookIntent.SaveMoreActionsConfig -> viewModelScope.launch {
+                val seen = mutableSetOf<String>()
+                val normalized = intent.items.mapNotNull { item ->
+                    item.takeIf { it.id in MoreActionIds && seen.add(it.id) }
+                }.toMutableList()
+                MoreActionIds.forEach { id ->
+                    if (seen.add(id)) normalized.add(ReadBookButtonConfigItem(id, true))
+                }
+                readSettingsRepository.update { settings ->
+                    settings.copy(
+                        moreActionsConfig = normalized.joinToString(";") {
+                            "${it.id},${it.enabled}"
+                        }
+                    )
+                }
+            }
 
             is ReadBookIntent.KeepLightChanged -> {
                 _readPreferences.update { it.copy(keepLight = intent.value) }
@@ -1887,6 +1936,9 @@ class ReadBookViewModel(
                 readMenuCustomIcons = ReadBookConfig.readMenuCustomIcons.toImmutableMap(),
                 titleBarButtons = current.menuConfig.titleBarButtons,
                 bottomBarButtons = current.menuConfig.bottomBarButtons,
+                moreActionItems = readSettingsRepository.currentSettings.moreActionsConfig
+                    .toMoreActionConfig()
+                    .toImmutableList(),
                 showBrightnessView = ReadBookConfig.showBrightnessView,
                 brightnessVwPos = ReadBookConfig.brightnessVwPos,
                 readBrightness = ReadBookConfig.readBrightness,
@@ -1895,6 +1947,21 @@ class ReadBookViewModel(
                 titleBarCompact = ReadBookConfig.titleBarCompact,
             ),
         )
+    }
+
+    private fun String.toMoreActionConfig(): List<ReadBookButtonConfigItem> {
+        if (isBlank()) return MoreActionIds.map { ReadBookButtonConfigItem(it, true) }
+        val seen = mutableSetOf<String>()
+        val items = split(";").mapNotNull { token ->
+            val parts = token.split(",")
+            val id = parts.getOrNull(0)?.takeIf { it in MoreActionIds && seen.add(it) }
+            val enabled = parts.getOrNull(1)?.toBooleanStrictOrNull()
+            if (id != null && enabled != null) ReadBookButtonConfigItem(id, enabled) else null
+        }.toMutableList()
+        MoreActionIds.forEach { id ->
+            if (seen.add(id)) items.add(ReadBookButtonConfigItem(id, true))
+        }
+        return items
     }
 
     private fun observeCurrentTranslation(
