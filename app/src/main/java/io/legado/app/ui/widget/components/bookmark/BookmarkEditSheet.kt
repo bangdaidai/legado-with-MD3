@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +35,8 @@ fun BookmarkEditSheet(
     bookmark: Bookmark,
     onDismiss: () -> Unit,
     onSave: (Bookmark) -> Unit,
-    onDelete: (Bookmark) -> Unit
+    onDelete: (Bookmark) -> Unit,
+    onGenerateBookplate: ((Bookmark) -> Unit)? = null,
 ) {
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var bookText by remember(bookmark) { mutableStateOf(bookmark.bookText) }
@@ -70,6 +74,23 @@ fun BookmarkEditSheet(
             content = content,
             onContentChange = { content = it },
         )
+        if (onGenerateBookplate != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = {
+                    val bm = bookmark.apply {
+                        this.bookText = bookText
+                        this.content = content
+                    }
+                    onGenerateBookplate(bm)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            ) {
+                Text("生成书摘票")
+            }
+        }
     }
 
     AppAlertDialog(

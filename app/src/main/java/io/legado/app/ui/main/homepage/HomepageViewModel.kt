@@ -433,21 +433,32 @@ class HomepageViewModel(
 
     private fun loadModule(module: ModuleItem) {
         loadJobs[module.id]?.cancel()
-        val rankingKindTitles = module.rankingKindTitles()
-        if (rankingKindTitles != null) {
+        val multiKinds = module.multiKindEntries()
+        if (multiKinds != null) {
             loadJobs[module.id] = viewModelScope.launch {
                 kotlin.runCatching {
                     val source = bookSourceRepository.getBookSource(module.sourceUrl)
                         ?: throw Exception("Source not found")
                     val allKinds = withContext(Dispatchers.IO) { source.exploreKinds() }
-                    val selectedKinds = rankingKindTitles.mapNotNull { title ->
-                        allKinds.find { it.title == title }
+                    // 用 url 精确定位真实分类；找不到时用 title 兜底；仍找不到就用 fallback
+                    val resolvedKinds = multiKinds.map { entry ->
+                        val real = entry.lookupUrl
+                            ?.let { url -> allKinds.find { it.url == url } }
+                            ?: allKinds.find { it.title == entry.fallbackTitle }
+                        // 用自定义 displayTitle 覆盖真实分类的 title
+                        real?.copy(title = entry.displayTitle)
+                            ?: io.legado.app.data.entities.rule.ExploreKind(
+                                title = entry.displayTitle,
+                                url = entry.lookupUrl,
+                            )
                     }
-                    if (selectedKinds.isEmpty()) throw Exception("Ranking kinds not found")
+                    if (resolvedKinds.all { it.url.isNullOrBlank() }) {
+                        throw Exception("Ranking kinds not found")
+                    }
 
                     val shelf = _bookshelf.value
                     coroutineScope {
-                        selectedKinds.map { kind ->
+                        resolvedKinds.map { kind ->
                             async {
                                 val state = kotlin.runCatching {
                                     exploreBooksUseCase.executeForRanking(
@@ -940,7 +951,8 @@ class HomepageViewModel(
                     GSON.toJson(
                         RankingKindsArgs(
                             isHomepageRankingGroup = true,
-                            kindTitles = selectedKinds.map { it.title }
+                            kindTitles = selectedKinds.map { it.title },
+                            kindUrls = selectedKinds.map { it.url }
                         )
                     )
                 } else {
@@ -1088,17 +1100,31 @@ private data class HomepageUiFlags(
 
 private data class RankingKindsArgs(
     val isHomepageRankingGroup: Boolean = false,
-    val kindTitles: List<String> = emptyList()
+    val kindTitles: List<String> = emptyList(),
+    val kindUrls: List<String?> = emptyList()
 )
 
-private fun ModuleItem.rankingKindTitles(): List<String>? {
-    val rankingArgs = args ?: return null
-    return runCatching {
-        GSON.fromJson(rankingArgs, RankingKindsArgs::class.java)
+/** 已解析的多分类信息：查找键(url)与显示名(title)分开 */
+private data class MultiKindEntry(
+    val displayTitle: String,
+    val lookupUrl: String?,
+    val fallbackTitle: String,
+)
+
+private fun ModuleItem.multiKindEntries(): List<MultiKindEntry>? {
+    val rawArgs = args ?: return null
+    val parsed = runCatching {
+        GSON.fromJson(rawArgs, RankingKindsArgs::class.java)
             ?.takeIf { it.isHomepageRankingGroup }
-            ?.kindTitles
-            ?.takeIf { it.size > 1 }
-    }.getOrNull()
+            ?.takeIf { it.kindTitles.size > 1 }
+    }.getOrNull() ?: return null
+    return parsed.kindTitles.mapIndexed { i, title ->
+        MultiKindEntry(
+            displayTitle = title,
+            lookupUrl = parsed.kindUrls.getOrNull(i),
+            fallbackTitle = title,
+        )
+    }
 }
 
 private fun ModuleLoadState.mapBooks(

@@ -201,6 +201,9 @@ data object MainRouteTagManagement : MainRoute
 data class MainRouteTagDetail(val tagId: Long) : MainRoute
 
 @Serializable
+data object MainRouteBookplateManage : MainRoute
+
+@Serializable
 data object MainRouteExcludedTag : MainRoute
 
 object MainRouteConst {

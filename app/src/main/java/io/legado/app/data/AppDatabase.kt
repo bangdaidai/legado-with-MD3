@@ -19,6 +19,7 @@ import io.legado.app.data.dao.BookGroupDao
 import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookSourceDao
 import io.legado.app.data.dao.BookmarkDao
+import io.legado.app.data.dao.BookplateTemplateDao
 import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.dao.ChapterSpeechDao
 import io.legado.app.data.dao.CloudTtsEngineDao
@@ -73,6 +74,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.BookVoiceBindingEntity
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.BookplateTemplate
 import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.ChapterSpeechAnalysisEntity
 import io.legado.app.data.entities.ChapterSpeechSegmentEntity
@@ -124,7 +126,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 106,
+    version = 107,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -143,7 +145,7 @@ val appDb by lazy {
         CloudTtsEngineEntity::class, ReadingMemory::class,
         ExactChapterPageCountEntity::class, BookTag::class, BookTagGroup::class,
         BookTagRelation::class, ExcludedTag::class, TagMapping::class,
-        RemovedAutoTag::class],
+        RemovedAutoTag::class, BookplateTemplate::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -219,6 +221,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val searchKeywordDao: SearchKeywordDao
     abstract val rssSourceDao: RssSourceDao
     abstract val bookmarkDao: BookmarkDao
+    abstract val bookplateTemplateDao: BookplateTemplateDao
     abstract val rssArticleDao: RssArticleDao
     abstract val rssStarDao: RssStarDao
     abstract val rssReadRecordDao: RssReadRecordDao

@@ -86,6 +86,9 @@ interface ReadRecordDao {
     @Query("SELECT * FROM readRecord WHERE deviceId = :deviceId AND bookName = :bookName AND bookAuthor = :bookAuthor")
     suspend fun getReadRecord(deviceId: String, bookName: String, bookAuthor: String): ReadRecord?
 
+    @Query("SELECT * FROM readRecord WHERE deviceId = :deviceId AND bookName = :bookName LIMIT 1")
+    suspend fun getByDeviceAndBook(deviceId: String, bookName: String): ReadRecord?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(vararg readRecord: ReadRecord)
 

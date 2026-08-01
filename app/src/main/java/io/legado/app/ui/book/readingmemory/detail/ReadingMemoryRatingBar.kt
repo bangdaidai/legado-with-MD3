@@ -12,6 +12,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LegadoTheme
 
@@ -30,6 +31,7 @@ fun ReadingMemoryRatingBar(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     maxStars: Int = 5,
+    starSize: Dp = 16.dp,
 ) {
     Row(modifier = modifier) {
         for (i in 1..maxStars) {
@@ -50,7 +52,7 @@ fun ReadingMemoryRatingBar(
                 else
                     LegadoTheme.colorScheme.outlineVariant,
                 modifier = Modifier
-                    .size(16.dp)
+                    .size(starSize)
                     .then(
                         if (enabled) {
                             Modifier.clickable(

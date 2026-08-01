@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -219,8 +220,7 @@ fun TxtTocRulePreviewScreen(
             GlassMediumFlexibleTopAppBar(
                 title = if (state.isTxt) stringResource(R.string.select_toc_rule)
                 else stringResource(R.string.toc_rule_preview),
-                subtitle = if (state.isTxt) stringResource(R.string.select_rule_to_preview_chapters)
-                else null,
+                subtitle = null,
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onBack) },
                 actions = {
@@ -244,6 +244,13 @@ fun TxtTocRulePreviewScreen(
                             ),
                         )
                         // Manage page button
+                        TopBarActionButton(
+                            onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
+                            imageVector = AppIcons.Settings,
+                            contentDescription = stringResource(R.string.manage),
+                        )
+                    } else {
+                        // 网络书：跳转替换规则管理页
                         TopBarActionButton(
                             onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
                             imageVector = AppIcons.Settings,
@@ -445,7 +452,8 @@ private fun ChainDemoCard(demo: ChainDemo) {
             )
             AppText(
                 text = "→ ${demo.finalTitle}",
-                style = LegadoTheme.typography.bodyLarge,
+                style = LegadoTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -794,7 +802,7 @@ private fun NetworkRulePreviewContent(
         ),
     ) {
         item(key = "network_header") {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
                 AppText(
                     text = stringResource(R.string.toc_preview_chapter_count, state.chapterTotal),
                     style = LegadoTheme.typography.titleSmall,

@@ -51,6 +51,10 @@ data class ReadingMemoryDetailUiState(
     val excerptCount: Int = 0,
     val totalChapterCount: Int = 0,
     val durChapterIndex: Int = 0,
+    val bookplateBitmap: android.graphics.Bitmap? = null,
+    val bookplateLoading: Boolean = false,
+    val showBookplate: Boolean = false,
+    val bookplateData: io.legado.app.data.entities.BookplateData? = null,
 )
 
 
@@ -81,6 +85,10 @@ sealed interface ReadingMemoryDetailIntent {
     data object DeleteReview : ReadingMemoryDetailIntent
     data class EditBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
     data class DeleteBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
+    data object GenerateBookplate : ReadingMemoryDetailIntent
+    data class GenerateBookplateFromBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
+    data object GenerateBookplateFromReview : ReadingMemoryDetailIntent
+    data object DismissBookplate : ReadingMemoryDetailIntent
 }
 
 /**

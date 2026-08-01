@@ -7,7 +7,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.OtherSettingsGateway
+import io.legado.app.help.book.BookplateDataBuilder
+import io.legado.app.help.book.BookplateGenerator
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -62,7 +65,11 @@ data class BookmarkUiState(
     val error: Throwable? = null,
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
-    val onlyNotes: Boolean = false
+    val onlyNotes: Boolean = false,
+    val bookplateBitmap: android.graphics.Bitmap? = null,
+    val bookplateLoading: Boolean = false,
+    val showBookplate: Boolean = false,
+    val bookplateData: io.legado.app.data.entities.BookplateData? = null,
 )
 
 sealed interface AllBookmarkIntent {
@@ -73,6 +80,8 @@ sealed interface AllBookmarkIntent {
     data class DeleteBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
     data object ToggleOnlyNotes : AllBookmarkIntent
+    data class GenerateBookplate(val bookmark: Bookmark) : AllBookmarkIntent
+    data object DismissBookplate : AllBookmarkIntent
 }
 
 sealed interface AllBookmarkEffect {
@@ -84,6 +93,7 @@ class AllBookmarkViewModel(
     application: Application,
     private val bookmarkRepository: BookmarkRepository,
     private val otherSettingsGateway: OtherSettingsGateway,
+    private val readingMemoryRepository: ReadingMemoryRepository,
 ) : AndroidViewModel(application) {
 
     private val _searchQuery = MutableStateFlow("")
@@ -92,8 +102,14 @@ class AllBookmarkViewModel(
     private val _effects = MutableSharedFlow<AllBookmarkEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
+    // 藏书票（书摘票）生成状态：由 GenerateBookplate / DismissBookplate 驱动
+    private val _bookplateBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
+    private val _bookplateLoading = MutableStateFlow(false)
+    private val _showBookplate = MutableStateFlow(false)
+    private val _bookplateData = MutableStateFlow<io.legado.app.data.entities.BookplateData?>(null)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<BookmarkUiState> = combine(
+    private val baseUiState: StateFlow<BookmarkUiState> = combine(
         _searchQuery,
         _collapsedGroups,
         _onlyNotes,
@@ -149,6 +165,26 @@ class AllBookmarkViewModel(
         initialValue = BookmarkUiState(isLoading = true)
     )
 
+    /** 在基础状态之上叠加书摘票预览状态，避免生成时重跑书签查询 */
+    val uiState: StateFlow<BookmarkUiState> = combine(
+        baseUiState,
+        _bookplateBitmap,
+        _bookplateLoading,
+        _showBookplate,
+        _bookplateData,
+    ) { base, bitmap, loading, show, bookplateData ->
+        base.copy(
+            bookplateBitmap = bitmap,
+            bookplateLoading = loading,
+            showBookplate = show,
+            bookplateData = bookplateData,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = BookmarkUiState(isLoading = true)
+    )
+
     fun onIntent(intent: AllBookmarkIntent) {
         when (intent) {
             is AllBookmarkIntent.SetSearchQuery -> _searchQuery.value = intent.query
@@ -163,6 +199,27 @@ class AllBookmarkViewModel(
                     otherSettingsGateway.update { it.copy(bookmarkOnlyNotes = _onlyNotes.value) }
                 }
             }
+            is AllBookmarkIntent.GenerateBookplate -> generateBookplate(intent.bookmark)
+            AllBookmarkIntent.DismissBookplate -> {
+                _showBookplate.value = false
+                _bookplateBitmap.value = null
+                _bookplateData.value = null
+            }
+        }
+    }
+
+    private fun generateBookplate(bookmark: Bookmark) {
+        _showBookplate.value = true
+        _bookplateLoading.value = true
+        _bookplateBitmap.value = null
+        _bookplateData.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            val memory = readingMemoryRepository.getByNameAuthor(bookmark.bookName, bookmark.bookAuthor)
+            val data = BookplateDataBuilder.buildFromBookmark(bookmark, memory)
+            _bookplateData.value = data
+            val bitmap = BookplateGenerator.generate(splitties.init.appCtx, data)
+            _bookplateLoading.value = false
+            _bookplateBitmap.value = bitmap
         }
     }
 

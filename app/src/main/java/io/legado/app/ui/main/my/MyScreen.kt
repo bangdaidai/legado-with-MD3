@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Book
@@ -227,6 +228,13 @@ fun MyScreen(
                     imageVector = Icons.Default.Book,
                     onClick = {
                         onNavigate(PrefClickEvent.OpenReadingMemoryList)
+                    }
+                )
+                ClickableSettingItem(
+                    title = "藏书票模板",
+                    imageVector = Icons.Default.Image,
+                    onClick = {
+                        onNavigate(PrefClickEvent.OpenBookplateManage)
                     }
                 )
                 ClickableSettingItem(

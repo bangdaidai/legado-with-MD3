@@ -6,18 +6,19 @@ import androidx.lifecycle.viewModelScope
 import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
+import io.legado.app.constant.PreferKey
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
-import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.help.book.TagManager
+import io.legado.app.help.config.AppConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -40,67 +41,60 @@ class ReadingMemoryViewModel(
     val effect = _effect.asSharedFlow()
 
     private val _statusFilter = MutableStateFlow(ReadingMemoryStatusFilter.All)
-    private val _ratingFilter = MutableStateFlow(ReadingMemoryRatingFilter.All)
     private val _readTypeFilter = MutableStateFlow(ReadingMemoryReadTypeFilter.All)
     private val _onlyWithReview = MutableStateFlow(false)
     private val _groupBy = MutableStateFlow(ReadingMemoryGroupBy.None)
     private val _sortBy = MutableStateFlow(ReadingMemorySortBy.Recent)
-    private val _showCard = MutableStateFlow(true)
     private val _showIntro = MutableStateFlow(true)
     private val _showReview = MutableStateFlow(false)
+    private val _coverWidth = MutableStateFlow(
+        AppConfigStore.getInt(PreferKey.readingMemoryCoverWidth) ?: 84
+    )
     private val _searchQuery = MutableStateFlow("")
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
     private val _loading = MutableStateFlow(false)
 
-    val statusFilter = _statusFilter.asStateFlow()
-    val ratingFilter = _ratingFilter.asStateFlow()
-    val readTypeFilter = _readTypeFilter.asStateFlow()
-    val onlyWithReview = _onlyWithReview.asStateFlow()
-    val groupBy = _groupBy.asStateFlow()
-    val sortBy = _sortBy.asStateFlow()
-    val showCard = _showCard.asStateFlow()
-    val showIntro = _showIntro.asStateFlow()
-    val showReview = _showReview.asStateFlow()
-    val searchQuery = _searchQuery.asStateFlow()
+    /** 标签管理中设置的标签名 -> 颜色（Long），与书架一致。 */
+    private val tagColorMapFlow: StateFlow<Map<String, Long>> = appDb.bookTagDao.observeAll()
+        .map { list -> list.associate { it.name to it.color } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private data class Controls(
         val status: ReadingMemoryStatusFilter,
-        val rating: ReadingMemoryRatingFilter,
         val type: ReadingMemoryReadTypeFilter,
         val onlyWithReview: Boolean,
         val groupBy: ReadingMemoryGroupBy,
         val sortBy: ReadingMemorySortBy,
-        val showCard: Boolean,
         val showIntro: Boolean,
         val showReview: Boolean,
+        val coverWidth: Int,
         val search: String,
         val collapsed: Set<String>,
     )
 
     private val controls: StateFlow<Controls> = combine(
-        _statusFilter, _ratingFilter, _readTypeFilter, _onlyWithReview,
-        _groupBy, _sortBy, _showCard, _showIntro, _showReview, _searchQuery, _collapsedGroups
+        _statusFilter, _readTypeFilter, _onlyWithReview, _groupBy, _sortBy,
+        _showIntro, _showReview, _coverWidth, _searchQuery, _collapsedGroups
     ) { a ->
         Controls(
             status = a[0] as ReadingMemoryStatusFilter,
-            rating = a[1] as ReadingMemoryRatingFilter,
-            type = a[2] as ReadingMemoryReadTypeFilter,
-            onlyWithReview = a[3] as Boolean,
-            groupBy = a[4] as ReadingMemoryGroupBy,
-            sortBy = a[5] as ReadingMemorySortBy,
-            showCard = a[6] as Boolean,
-            showIntro = a[7] as Boolean,
-            showReview = a[8] as Boolean,
-            search = a[9] as String,
-            collapsed = a[10] as Set<String>,
+            type = a[1] as ReadingMemoryReadTypeFilter,
+            onlyWithReview = a[2] as Boolean,
+            groupBy = a[3] as ReadingMemoryGroupBy,
+            sortBy = a[4] as ReadingMemorySortBy,
+            showIntro = a[5] as Boolean,
+            showReview = a[6] as Boolean,
+            coverWidth = a[7] as Int,
+            search = a[8] as String,
+            collapsed = a[9] as Set<String>,
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         Controls(
-            ReadingMemoryStatusFilter.All, ReadingMemoryRatingFilter.All, ReadingMemoryReadTypeFilter.All,
+            ReadingMemoryStatusFilter.All, ReadingMemoryReadTypeFilter.All,
             false, ReadingMemoryGroupBy.None, ReadingMemorySortBy.Recent,
-            true, true, false, "", emptySet(),
+            true, false, 84, "", emptySet(),
         ),
     )
 
@@ -110,6 +104,7 @@ class ReadingMemoryViewModel(
         .flowOn(Dispatchers.IO)
         .combine(_loading) { state, loading -> state.copy(loading = loading) }
         .combine(bookshelfSettingsGateway.settings) { state, settings -> state.copy(settings = settings) }
+        .combine(tagColorMapFlow) { state, colors -> state.copy(tagColorMap = colors) }
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
@@ -123,7 +118,6 @@ class ReadingMemoryViewModel(
                     is ReadingMemoryIntent.Load -> load()
                     is ReadingMemoryIntent.Refresh -> load()
                     is ReadingMemoryIntent.FilterStatus -> _statusFilter.value = intent.filter
-                    is ReadingMemoryIntent.SetRatingFilter -> _ratingFilter.value = intent.filter
                     is ReadingMemoryIntent.SetReadTypeFilter -> _readTypeFilter.value = intent.filter
                     is ReadingMemoryIntent.ToggleOnlyWithReview -> _onlyWithReview.value = intent.value
                     is ReadingMemoryIntent.SetGroupBy -> {
@@ -136,7 +130,11 @@ class ReadingMemoryViewModel(
                         }
                     }
                     is ReadingMemoryIntent.SetSortBy -> _sortBy.value = intent.sortBy
-                    is ReadingMemoryIntent.ToggleShowCard -> _showCard.value = intent.value
+                    is ReadingMemoryIntent.SetCoverWidth -> {
+                        val width = intent.width.coerceIn(0, 120)
+                        _coverWidth.value = width
+                        AppConfigStore.putInt(PreferKey.readingMemoryCoverWidth, width)
+                    }
                     is ReadingMemoryIntent.ToggleShowIntro -> _showIntro.value = intent.value
                     is ReadingMemoryIntent.ToggleShowReview -> _showReview.value = intent.value
                     is ReadingMemoryIntent.Search -> _searchQuery.value = intent.query
@@ -195,19 +193,8 @@ class ReadingMemoryViewModel(
             }
         }
 
-        // 先应用与状态无关的筛选，用于计算每个状态页签的数量
-        var base = when (c.rating) {
-            ReadingMemoryRatingFilter.All -> memories
-            ReadingMemoryRatingFilter.Unrated -> memories.filter { it.rating == 0f }
-            ReadingMemoryRatingFilter.R5 -> memories.filter { it.rating >= 5f }
-            ReadingMemoryRatingFilter.R4 -> memories.filter { it.rating >= 4f && it.rating < 5f }
-            ReadingMemoryRatingFilter.R3 -> memories.filter { it.rating >= 3f && it.rating < 4f }
-            ReadingMemoryRatingFilter.R2 -> memories.filter { it.rating >= 2f && it.rating < 3f }
-            ReadingMemoryRatingFilter.R1 -> memories.filter { it.rating >= 1f && it.rating < 2f }
-        }
-
-        base = when (c.type) {
-            ReadingMemoryReadTypeFilter.All -> base
+        var base: List<ReadingMemory> = when (c.type) {
+            ReadingMemoryReadTypeFilter.All -> memories
             else -> {
                 val mask = when (c.type) {
                     ReadingMemoryReadTypeFilter.Text -> BookType.text
@@ -215,7 +202,7 @@ class ReadingMemoryViewModel(
                     ReadingMemoryReadTypeFilter.Video -> BookType.video
                     else -> 0
                 }
-                base.filter { mem ->
+                memories.filter { mem ->
                     val t = if (mem.type == 0) BookType.text else mem.type
                     (t and mask) > 0
                 }
@@ -250,7 +237,6 @@ class ReadingMemoryViewModel(
             ReadingMemorySortBy.Recent -> list.sortedByDescending { if (it.lastReadTime > 0) it.lastReadTime else it.createTime }
             ReadingMemorySortBy.Rating -> list.sortedByDescending { it.rating }
             ReadingMemorySortBy.ReadDuration -> list.sortedByDescending { it.statTotalReadTime }
-            ReadingMemorySortBy.Name -> list.sortedBy { it.bookName.lowercase() }
         }
 
         val items = if (c.groupBy == ReadingMemoryGroupBy.None) {
@@ -265,9 +251,6 @@ class ReadingMemoryViewModel(
                 ReadingMemoryGroupBy.Rating -> groupAndOrder(
                     sorted, ::ratingKey,
                 ) { a, b -> ratingOrder.indexOf(a).compareTo(ratingOrder.indexOf(b)) }
-                ReadingMemoryGroupBy.Status -> groupAndOrder(
-                    sorted, ::statusKey,
-                ) { a, b -> statusOrder.indexOf(a).compareTo(statusOrder.indexOf(b)) }
                 else -> linkedMapOf<String, List<ReadingMemory>>()
             }
             buildList<ReadingMemoryListItem> {
@@ -283,13 +266,12 @@ class ReadingMemoryViewModel(
         return ReadingMemoryUiState(
             items = items,
             statusCounts = statusCounts,
+            coverWidth = c.coverWidth,
             statusFilter = c.status,
-            ratingFilter = c.rating,
             readTypeFilter = c.type,
             onlyWithReview = c.onlyWithReview,
             groupBy = c.groupBy,
             sortBy = c.sortBy,
-            showCard = c.showCard,
             showIntro = c.showIntro,
             showReview = c.showReview,
             searchQuery = c.search,
@@ -310,7 +292,6 @@ class ReadingMemoryViewModel(
     }
 
     private val ratingOrder = listOf("5", "4", "3", "2", "1", "0")
-    private val statusOrder = listOf("reading", "toread", "finished", "abandoned")
 
     private fun yearKey(m: ReadingMemory): String {
         val t = if (m.firstReadTime > 0) m.firstReadTime else m.createTime
@@ -328,23 +309,9 @@ class ReadingMemoryViewModel(
         else -> "0"
     }
 
-    private fun statusKey(m: ReadingMemory): String = when {
-        m.abandoned -> "abandoned"
-        m.progress >= 1f -> "finished"
-        m.progress > 0f -> "reading"
-        else -> "toread"
-    }
-
     private fun groupDisplay(key: String, groupBy: ReadingMemoryGroupBy): String = when (groupBy) {
         ReadingMemoryGroupBy.Year -> "${key}年"
         ReadingMemoryGroupBy.Rating -> "${stars(key.toIntOrNull() ?: 0)} ($key 星)"
-        ReadingMemoryGroupBy.Status -> when (key) {
-            "reading" -> "在读"
-            "toread" -> "未读"
-            "finished" -> "已读"
-            "abandoned" -> "弃文"
-            else -> key
-        }
         else -> key
     }
 

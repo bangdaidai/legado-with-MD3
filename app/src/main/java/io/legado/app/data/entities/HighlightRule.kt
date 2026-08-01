@@ -85,6 +85,18 @@ data class HighlightRule(
         if (!fontPath.isNullOrBlank()) {
             parts.add("自定义字体")
         }
+        if (fontWeight != 400) {
+            parts.add(
+                when {
+                    fontWeight >= 700 -> "加粗"
+                    fontWeight <= 300 -> "细体"
+                    else -> "字重 $fontWeight"
+                }
+            )
+        }
+        if (isItalic) {
+            parts.add("斜体")
+        }
         if (parts.isEmpty()) {
             parts.add("无样式")
         }

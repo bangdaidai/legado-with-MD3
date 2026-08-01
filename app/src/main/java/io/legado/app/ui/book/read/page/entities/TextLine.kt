@@ -596,16 +596,20 @@ data class TextLine(
                 val padEndPx = bgPadEnd.dpToPx()
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
+                // 默认（pad=0）矩形 = 整行高 × 命中列宽，保证九宫格背景稳定盖住整行文字。
+                // 内边距为正 → 背景四周向外扩；为负 → 背景四周向内收。
                 val drawLeft = startX - padStartPx
-                val drawTop = bgPaddingTop - padTopPx
+                val drawTop = 0f - padTopPx
                 val drawRight = endX + padEndPx
-                val drawBottom = height - bgPaddingBottom + padBottomPx
-                // np* 为「角块占图比例」；转成 helper 需要的绝对线位置：
-                //   leftX=npLeft, rightX=1-npRight, topY=npTop, bottomY=1-npBottom
-                NinePatchDrawHelper.draw(
-                    canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, paint,
-                    npLeft, 1f - npRight, npTop, 1f - npBottom,
-                )
+                val drawBottom = height + padBottomPx
+                if (drawRight > drawLeft && drawBottom > drawTop) {
+                    // np* 为「角块占图比例」；转成 helper 需要的绝对线位置：
+                    //   leftX=npLeft, rightX=1-npRight, topY=npTop, bottomY=1-npBottom
+                    NinePatchDrawHelper.draw(
+                        canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, paint,
+                        npLeft, 1f - npRight, npTop, 1f - npBottom,
+                    )
+                }
             }
             else -> {
                 val tileBitmap = if (scale != 1f) {

@@ -659,6 +659,18 @@ fun HighlightRuleEditSheet(
                     android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStr)
                 }.getOrDefault(0xFFEEEEEE.toInt()),
                 pageTextColor = ReadBookConfig.textColor,
+                npLeft = npLeft,
+                npRight = npRight,
+                npTop = npTop,
+                npBottom = npBottom,
+                bgPadStart = bgPaddingStart,
+                bgPadEnd = bgPaddingEnd,
+                bgPadTop = bgPaddingTop,
+                bgPadBottom = bgPaddingBottom,
+                bgMarginStart = bgMarginStart,
+                bgMarginEnd = bgMarginEnd,
+                bgMarginTop = bgMarginTop,
+                bgMarginBottom = bgMarginBottom,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -689,6 +701,18 @@ fun HighlightRuleEditSheet(
                         android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStrNight)
                     }.getOrDefault(0xFF000000.toInt()),
                     pageTextColor = ReadBookConfig.textColorNight,
+                    npLeft = npLeft,
+                    npRight = npRight,
+                    npTop = npTop,
+                    npBottom = npBottom,
+                    bgPadStart = bgPaddingStart,
+                    bgPadEnd = bgPaddingEnd,
+                    bgPadTop = bgPaddingTop,
+                    bgPadBottom = bgPaddingBottom,
+                    bgMarginStart = bgMarginStart,
+                    bgMarginEnd = bgMarginEnd,
+                    bgMarginTop = bgMarginTop,
+                    bgMarginBottom = bgMarginBottom,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -828,6 +852,18 @@ private fun HighlightRulePreview(
     underlineOffset: Float,
     pageBgColor: Int,
     pageTextColor: Int,
+    npLeft: Float = 0.5f,
+    npRight: Float = 0.5f,
+    npTop: Float = 0.5f,
+    npBottom: Float = 0.5f,
+    bgPadStart: Float = 0f,
+    bgPadEnd: Float = 0f,
+    bgPadTop: Float = 0f,
+    bgPadBottom: Float = 0f,
+    bgMarginStart: Float = 0f,
+    bgMarginEnd: Float = 0f,
+    bgMarginTop: Float = 0f,
+    bgMarginBottom: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -835,12 +871,21 @@ private fun HighlightRulePreview(
     val resolvedTextColor = textColor?.let { Color(it) } ?: defaultTextColor
     val resolvedUnderlineColor = underlineColor?.let { Color(it) } ?: resolvedTextColor
 
-    // 加载背景图 Bitmap
-    val bgBitmap = remember(bgImage) {
+    // 加载背景图 Bitmap，原始 Bitmap 供九宫格绘制使用
+    val bgRawBitmap = remember(bgImage) {
         if (bgImage.isBlank()) null
         else runCatching {
-            BitmapFactory.decodeFile(bgImage)?.asImageBitmap()
+            BitmapFactory.decodeFile(bgImage)
         }.getOrNull()
+    }
+    val bgBitmap = remember(bgRawBitmap) { bgRawBitmap?.asImageBitmap() }
+
+    // 九宫格绘制用的 Paint
+    val ninePatchPaint = remember {
+        android.graphics.Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+        }
     }
 
     // 真正跑一遍正则，只有命中的片段才应用样式
@@ -921,6 +966,7 @@ private fun HighlightRulePreview(
 
                 // 在匹配区域画背景图
                 if (bgBitmap != null && matchRanges.isNotEmpty()) {
+                    val density = this.density
                     matchRanges.forEach { range ->
                         val start = range.first
                         val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
@@ -935,16 +981,39 @@ private fun HighlightRulePreview(
                             val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
                             val top = textResult.getLineTop(line)
                             val bottom = textResult.getLineBottom(line)
-                            val rectLeft = minOf(left, right)
-                            val rectRight = maxOf(left, right)
-                            drawImage(
-                                image = bgBitmap,
-                                dstOffset = androidx.compose.ui.unit.IntOffset(rectLeft.toInt(), top.toInt()),
-                                dstSize = androidx.compose.ui.unit.IntSize(
-                                    (rectRight - rectLeft).toInt().coerceAtLeast(1),
-                                    (bottom - top).toInt().coerceAtLeast(1)
-                                ),
-                            )
+                            val rectL = minOf(left, right)
+                            val rectR = maxOf(left, right)
+                            val rectT = top
+                            val rectB = bottom
+                            if (bgImageFit == 3 && bgRawBitmap != null) {
+                                // 九宫格绘制：padding 向外扩展
+                                val drawLeft = rectL - bgPadStart * density
+                                val drawTop = rectT - bgPadTop * density
+                                val drawRight = rectR + bgPadEnd * density
+                                val drawBottom = rectB + bgPadBottom * density
+                                io.legado.app.help.highlight.NinePatchDrawHelper.draw(
+                                    drawContext.canvas.nativeCanvas,
+                                    bgRawBitmap,
+                                    drawLeft,
+                                    drawTop,
+                                    drawRight,
+                                    drawBottom,
+                                    ninePatchPaint,
+                                    npLeft,
+                                    1f - npRight,
+                                    npTop,
+                                    1f - npBottom,
+                                )
+                            } else {
+                                drawImage(
+                                    image = bgBitmap,
+                                    dstOffset = androidx.compose.ui.unit.IntOffset(rectL.toInt(), rectT.toInt()),
+                                    dstSize = androidx.compose.ui.unit.IntSize(
+                                        (rectR - rectL).toInt().coerceAtLeast(1),
+                                        (rectB - rectT).toInt().coerceAtLeast(1)
+                                    ),
+                                )
+                            }
                             offset = segEnd
                         }
                     }
@@ -1103,11 +1172,12 @@ private fun NinePatchEditorDialog(
             if (bitmap != null) {
                 val bmpAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
                 var imageRect by remember { mutableStateOf(Rect.Zero) }
+                val splitLineColor = MaterialTheme.colorScheme.primary
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxWidth(0.8f)
                         .aspectRatio(bmpAspect)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .align(Alignment.CenterHorizontally)
                         .background(MaterialTheme.colorScheme.surfaceContainerLow),
                 ) {
                     Canvas(
@@ -1150,7 +1220,7 @@ private fun NinePatchEditorDialog(
                             dstSize = androidx.compose.ui.unit.IntSize(canvasW.toInt(), canvasH.toInt()),
                         )
 
-                        val lineColor = Color.Red
+                        val lineColor = splitLineColor
                         val lineWidth = 2.dp.toPx()
                         val lx = canvasW * left
                         drawLine(lineColor, Offset(lx, 0f), Offset(lx, canvasH), lineWidth)
@@ -1163,7 +1233,7 @@ private fun NinePatchEditorDialog(
                     }
                 }
                 Text(
-                    text = "拖动红线调整切分位置",
+                    text = "拖动线条调整切分位置",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -1175,10 +1245,6 @@ private fun NinePatchEditorDialog(
                     npRight = right,
                     npTop = top,
                     npBottom = bottom,
-                    padStart = 0f,
-                    padEnd = 0f,
-                    padTop = 0f,
-                    padBottom = 0f,
                 )
             }
         }
@@ -1186,7 +1252,7 @@ private fun NinePatchEditorDialog(
 }
 
 /**
- * 九宫格预览：模拟文字行（宽矩形），实时用当前切分线 + 外扩渲染背景
+ * 九宫格预览：背景图铺占大部分区域，中央虚线框代表文字，直观表达"背景包住文字"
  */
 @Composable
 private fun NineSlicePreview(
@@ -1195,10 +1261,6 @@ private fun NineSlicePreview(
     npRight: Float,
     npTop: Float,
     npBottom: Float,
-    padStart: Float,
-    padEnd: Float,
-    padTop: Float,
-    padBottom: Float,
 ) {
     val bitmap = remember(imagePath) {
         runCatching {
@@ -1208,26 +1270,20 @@ private fun NineSlicePreview(
     }
     if (bitmap == null) return
 
-    val density = LocalContext.current.resources.displayMetrics.density
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(88.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         val canvasW = size.width
         val canvasH = size.height
-        // 模拟文字行：占 canvas 中间 70% 宽、60% 高
-        val textLeft = canvasW * 0.15f
-        val textRight = canvasW * 0.85f
-        val textTop = canvasH * 0.2f
-        val textBottom = canvasH * 0.8f
-        // 加上外扩
-        val drawLeft = textLeft - padStart * density
-        val drawRight = textRight + padEnd * density
-        val drawTop = textTop - padTop * density
-        val drawBottom = textBottom + padBottom * density
+        // 背景图铺占 canvas 大部分（四周各留 8%），直观表达"背景包住文字"
+        val bgLeft = canvasW * 0.08f
+        val bgRight = canvasW * 0.92f
+        val bgTop = canvasH * 0.08f
+        val bgBottom = canvasH * 0.92f
 
         val paint = android.graphics.Paint().apply {
             isAntiAlias = true
@@ -1235,12 +1291,16 @@ private fun NineSlicePreview(
         }
         io.legado.app.help.highlight.NinePatchDrawHelper.draw(
             drawContext.canvas.nativeCanvas, bitmap,
-            drawLeft, drawTop, drawRight, drawBottom,
+            bgLeft, bgTop, bgRight, bgBottom,
             paint, npLeft, 1f - npRight, npTop, 1f - npBottom,
         )
-        // 画一条虚线标识"文字行"范围
+        // 文字行虚线：缩到 canvas 中央一小块，明显被背景图包住
+        val textLeft = canvasW * 0.25f
+        val textRight = canvasW * 0.75f
+        val textTop = canvasH * 0.35f
+        val textBottom = canvasH * 0.65f
         drawRect(
-            color = Color(0x44000000),
+            color = Color(0x66000000),
             topLeft = Offset(textLeft, textTop),
             size = androidx.compose.ui.geometry.Size(textRight - textLeft, textBottom - textTop),
             style = Stroke(width = 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))),

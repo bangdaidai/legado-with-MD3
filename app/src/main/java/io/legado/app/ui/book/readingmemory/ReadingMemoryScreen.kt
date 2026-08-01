@@ -61,8 +61,9 @@ fun ReadingMemoryScreen(
     val scope = rememberCoroutineScope()
     var showSearch by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
-    var showFilterSheet by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
+    var showTypeSheet by remember { mutableStateOf(false) }
     var longPressBookUrl by remember { mutableStateOf<String?>(null) }
 
     val statusTabs = remember(uiState.statusCounts) {
@@ -125,10 +126,10 @@ fun ReadingMemoryScreen(
                             }
                             HorizontalDivider()
                             RoundDropdownMenuItem(
-                                text = stringResource(R.string.reading_memory_filter_rating),
+                                text = stringResource(R.string.reading_memory_filter_type),
                                 onClick = {
                                     dismiss()
-                                    showFilterSheet = true
+                                    showTypeSheet = true
                                 },
                             )
                             RoundDropdownMenuItem(
@@ -140,14 +141,6 @@ fun ReadingMemoryScreen(
                                 },
                             )
                             HorizontalDivider()
-                            RoundDropdownMenuItem(
-                                text = stringResource(R.string.reading_memory_show_card),
-                                isSelected = uiState.showCard,
-                                onClick = {
-                                    onIntent(ReadingMemoryIntent.ToggleShowCard(!uiState.showCard))
-                                    dismiss()
-                                },
-                            )
                             RoundDropdownMenuItem(
                                 text = stringResource(R.string.reading_memory_show_intro),
                                 isSelected = uiState.showIntro,
@@ -162,6 +155,13 @@ fun ReadingMemoryScreen(
                                 onClick = {
                                     onIntent(ReadingMemoryIntent.ToggleShowReview(!uiState.showReview))
                                     dismiss()
+                                },
+                            )
+                            RoundDropdownMenuItem(
+                                text = "布局设置",
+                                onClick = {
+                                    dismiss()
+                                    showSettingsSheet = true
                                 },
                             )
                             HorizontalDivider()
@@ -227,8 +227,8 @@ fun ReadingMemoryScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
                         items(uiState.items) { item ->
                             when (item) {
@@ -263,12 +263,12 @@ fun ReadingMemoryScreen(
         }
     }
 
-    // 筛选 Sheet
-    if (showFilterSheet) {
+    // 类型筛选 Sheet
+    if (showTypeSheet) {
         AppModalBottomSheet(
-            show = showFilterSheet,
-            onDismissRequest = { showFilterSheet = false },
-            title = stringResource(R.string.reading_memory_filter_rating),
+            show = showTypeSheet,
+            onDismissRequest = { showTypeSheet = false },
+            title = stringResource(R.string.reading_memory_filter_type),
         ) {
             Column(
                 modifier = Modifier
@@ -276,29 +276,6 @@ fun ReadingMemoryScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AppText(
-                    stringResource(R.string.reading_memory_filter_rating),
-                    style = LegadoTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    ReadingMemoryRatingFilter.entries.forEach { r ->
-                        ToggleChip(
-                            label = r.label,
-                            selected = uiState.ratingFilter == r,
-                            onToggle = { onIntent(ReadingMemoryIntent.SetRatingFilter(r)) },
-                        )
-                    }
-                }
-                HorizontalDivider()
-                AppText(
-                    stringResource(R.string.reading_memory_filter_type),
-                    style = LegadoTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -311,6 +288,33 @@ fun ReadingMemoryScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+
+    // 布局设置 Sheet
+    if (showSettingsSheet) {
+        AppModalBottomSheet(
+            show = showSettingsSheet,
+            onDismissRequest = { showSettingsSheet = false },
+            title = "布局设置",
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AppText(
+                    text = "封面宽度: ${uiState.coverWidth}dp",
+                    style = LegadoTheme.typography.labelLarge,
+                )
+                Slider(
+                    value = uiState.coverWidth.toFloat(),
+                    onValueChange = { onIntent(ReadingMemoryIntent.SetCoverWidth(it.toInt())) },
+                    valueRange = 0f..120f,
+                    steps = 120,
+                )
             }
         }
     }
@@ -465,10 +469,10 @@ private fun MemoryBookCard(
     }
 
     BookshelfItem(
-        settings = settings,
+        settings = settings.copy(bookshelfCoverAlignTop = true),
         isGrid = false,
         gridStyle = 0,
-        isCompact = settings.bookshelfLayoutCompact,
+        isCompact = false,
         cover = { m ->
             CoilBookCover(
                 name = memory.bookName.takeIf { it.isNotBlank() },
@@ -479,19 +483,7 @@ private fun MemoryBookCard(
             )
         },
         title = memory.bookName,
-        titleEnd = {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = statusContainer,
-            ) {
-                AppText(
-                    text = statusText,
-                    style = LegadoTheme.typography.labelSmall,
-                    color = statusContent,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                )
-            }
-        },
+        titleEnd = null,
         subTitle = memory.bookAuthor,
         subTitleEnd = if (memory.rating > 0f) {
             @Composable {
@@ -499,53 +491,60 @@ private fun MemoryBookCard(
                     rating = memory.rating,
                     onRatingChanged = {},
                     enabled = false,
+                    starSize = 12.dp,
                 )
             }
         } else null,
         desc = null,
-        columnContent = if (!settings.bookshelfLayoutCompact && settings.showBookIntro) {
-            {
-                if (settings.bookshelfShowTag && tags.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    ) {
-                        tags.forEach { TagChip(tag = it, size = TagChipSize.Small) }
-                    }
-                }
-                if (settings.bookshelfShowIntro && uiState.showIntro && !memory.intro.isNullOrBlank()) {
-                    val maxLines = if (settings.bookshelfIntroMaxLines == 0) {
-                        Int.MAX_VALUE
-                    } else {
-                        settings.bookshelfIntroMaxLines
-                    }
+        columnContent = {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            ) {
+                // 状态标签放最前面
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = statusContainer,
+                ) {
                     AppText(
-                        text = memory.intro.orEmpty(),
-                        style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        maxLines = maxLines,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        text = statusText,
+                        style = LegadoTheme.typography.labelSmall,
+                        color = statusContent,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
-                if (uiState.showReview && !memory.review.isNullOrBlank()) {
-                    AppText(
-                        text = memory.review.orEmpty(),
-                        style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurface,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    )
+                tags.forEach { tag ->
+                    val tagColor = uiState.tagColorMap[tag]
+                    TagChip(tag = tag, color = tagColor, size = TagChipSize.Small)
                 }
             }
-        } else null,
+            if (uiState.showIntro && !memory.intro.isNullOrBlank()) {
+                AppText(
+                    text = memory.intro.orEmpty(),
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                )
+            }
+            if (uiState.showReview && !memory.review.isNullOrBlank()) {
+                AppText(
+                    text = memory.review.orEmpty(),
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurface,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                )
+            }
+        },
         titleSmallFont = settings.bookshelfTitleSmallFont,
         titleCenter = settings.bookshelfTitleCenter,
         titleMaxLines = settings.bookshelfTitleMaxLines,
         coverShadow = settings.bookshelfCoverShadow,
-        coverWidth = settings.bookshelfListCoverWidth,
+        coverWidth = uiState.coverWidth,
         onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
         onLongClick = { onLongPress(memory.bookUrl) },
     )

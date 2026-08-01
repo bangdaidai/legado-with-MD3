@@ -59,7 +59,7 @@ private fun reconstructSelectedKinds(
     prefillTitle: String,
     prefillUrl: String,
 ): List<ExploreKind> {
-    // 尝试从 args JSON 解析多分类
+    // 尝试从 args JSON 解析多分类（isHomepageRankingGroup 或 isMultiKinds 标记）
     if (prefillArgs.isNotBlank()) {
         runCatching {
             val obj = com.google.gson.JsonParser.parseString(prefillArgs).asJsonObject
@@ -68,8 +68,10 @@ private fun reconstructSelectedKinds(
                 val urls = if (obj.has("kindUrls")) {
                     obj.getAsJsonArray("kindUrls").map { it.asString }
                 } else emptyList()
-                return titles.mapIndexed { i, t ->
-                    ExploreKind(title = t, url = urls.getOrNull(i))
+                if (titles.isNotEmpty()) {
+                    return titles.mapIndexed { i, t ->
+                        ExploreKind(title = t, url = urls.getOrNull(i))
+                    }
                 }
             }
         }
@@ -302,12 +304,17 @@ fun <T> AddCustomModuleDialog(
     )
 
     if (showKindSelect) {
+        // 重建的分类可能没有 url（RankingKindsArgs 只存标题），此时退回按标题匹配
+        val hasAllUrls = selectedKinds.isNotEmpty() && selectedKinds.all { !it.url.isNullOrBlank() }
         ExploreKindSelectSheet(
             show = true,
             onDismissRequest = { showKindSelect = false },
             sourceUrl = sourceUrl,
             multiple = true,
-            initialSelectedKeys = selectedKinds.map { exploreKindKey(it) }.toSet(),
+            initialSelectedTitles = selectedKinds.map { it.title },
+            initialSelectedKeys = if (hasAllUrls) {
+                selectedKinds.map { exploreKindKey(it) }.toSet()
+            } else null,
             onSelected = { kinds ->
                 selectedKinds = kinds
                 if (kinds.size >= 2) {

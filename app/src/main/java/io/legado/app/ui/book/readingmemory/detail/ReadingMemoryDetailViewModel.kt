@@ -1,11 +1,14 @@
 package io.legado.app.ui.book.readingmemory.detail
 
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.help.book.BookplateGenerator
 import io.legado.app.help.book.TagManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
+import splitties.init.appCtx
 
 class ReadingMemoryDetailViewModel(
     private val bookUrl: String,
@@ -33,13 +37,20 @@ class ReadingMemoryDetailViewModel(
     private val _reviewDraft = MutableStateFlow("")
     private val _showTagPicker = MutableStateFlow(false)
 
+    // 藏书票生成状态：由 GenerateBookplate / DismissBookplate 驱动
+    private val _bookplateBitmap = MutableStateFlow<Bitmap?>(null)
+    private val _bookplateLoading = MutableStateFlow(false)
+    private val _showBookplate = MutableStateFlow(false)
+    private val _bookplateData = MutableStateFlow<io.legado.app.data.entities.BookplateData?>(null)
+
+
     private val _effectFlow = MutableSharedFlow<ReadingMemoryDetailEffect>(extraBufferCapacity = 1)
     val effectFlow: SharedFlow<ReadingMemoryDetailEffect> = _effectFlow.asSharedFlow()
     val effect: SharedFlow<ReadingMemoryDetailEffect> = effectFlow
 
     val intentFlow = MutableSharedFlow<ReadingMemoryDetailIntent>(extraBufferCapacity = 1)
 
-    val detailState = combine(
+    private val baseDetailState = combine(
         repository.observeByBookUrl(bookUrl),
         protagonistRefresh,
         _showTagPicker,
@@ -148,6 +159,23 @@ class ReadingMemoryDetailViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingMemoryDetailUiState())
 
+    /** 在基础状态之上叠加藏书票预览状态，避免生成藏书票时重跑全部数据库查询 */
+    val detailState = combine(
+        baseDetailState,
+        _bookplateBitmap,
+        _bookplateLoading,
+        _showBookplate,
+        _bookplateData,
+    ) { base, bitmap, bookplateLoading, showBookplate, bookplateData ->
+        base.copy(
+            bookplateBitmap = bitmap,
+            bookplateLoading = bookplateLoading,
+            showBookplate = showBookplate,
+            bookplateData = bookplateData,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingMemoryDetailUiState())
+
+
     init {
         viewModelScope.launch {
             intentFlow
@@ -242,6 +270,21 @@ class ReadingMemoryDetailViewModel(
                             repository.deleteBookmark(intent.bookmark)
                             bookmarkRefresh.value++
                         }
+                        is ReadingMemoryDetailIntent.GenerateBookplate -> {
+                            generateBookplate()
+                        }
+                        is ReadingMemoryDetailIntent.GenerateBookplateFromBookmark -> {
+                            generateBookplateFromBookmark(intent.bookmark)
+                        }
+                        is ReadingMemoryDetailIntent.GenerateBookplateFromReview -> {
+                            _showReviewEditor.value = false
+                            generateBookplate()
+                        }
+                        is ReadingMemoryDetailIntent.DismissBookplate -> {
+                            _showBookplate.value = false
+                            _bookplateBitmap.value = null
+                            _bookplateData.value = null
+                        }
                     }
                 }
                 .launchIn(viewModelScope)
@@ -250,5 +293,37 @@ class ReadingMemoryDetailViewModel(
 
     fun onIntent(intent: ReadingMemoryDetailIntent) {
         intentFlow.tryEmit(intent)
+    }
+
+    /** 生成藏书票并就地展示在预览弹窗中 */
+    private fun generateBookplate() {
+        _showBookplate.value = true
+        _bookplateLoading.value = true
+        _bookplateBitmap.value = null
+        _bookplateData.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            val memory = repository.getByBookUrl(bookUrl)
+            val data = memory?.let { io.legado.app.help.book.BookplateDataBuilder.build(it) }
+            _bookplateData.value = data
+            val bitmap = memory?.let { BookplateGenerator.generate(appCtx, it) }
+            _bookplateLoading.value = false
+            _bookplateBitmap.value = bitmap
+        }
+    }
+
+    /** 从书签/书摘生成藏书票 */
+    private fun generateBookplateFromBookmark(bookmark: io.legado.app.data.entities.Bookmark) {
+        _showBookplate.value = true
+        _bookplateLoading.value = true
+        _bookplateBitmap.value = null
+        _bookplateData.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            val memory = repository.getByBookUrl(bookUrl)
+            val data = io.legado.app.help.book.BookplateDataBuilder.buildFromBookmark(bookmark, memory)
+            _bookplateData.value = data
+            val bitmap = BookplateGenerator.generate(appCtx, data)
+            _bookplateLoading.value = false
+            _bookplateBitmap.value = bitmap
+        }
     }
 }

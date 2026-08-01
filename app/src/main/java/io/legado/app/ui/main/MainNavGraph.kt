@@ -41,6 +41,8 @@ import io.legado.app.ui.book.explore.ExploreShowIntent
 import io.legado.app.ui.book.explore.ExploreShowRouteScreen
 import io.legado.app.ui.book.explore.ExploreShowViewModel
 import io.legado.app.ui.book.import.local.ImportBookRouteScreen
+import io.legado.app.ui.book.bookplate.BookplateManageScreen
+import io.legado.app.ui.book.bookplate.BookplateManageViewModel
 import io.legado.app.ui.book.import.remote.RemoteBookRouteScreen
 import io.legado.app.ui.book.info.BookInfoRouteScreen
 import io.legado.app.ui.book.info.edit.BookInfoEditActivity
@@ -237,6 +239,9 @@ fun MainActivity.mainEntryProvider(
             },
             onNavigateToReadingMemoryList = {
                 onNavigateToRoute(MainRouteReadingMemory)
+            },
+            onNavigateToBookplateManage = {
+                onNavigateToRoute(MainRouteBookplateManage)
             },
             onNavigateToReadRecordOverview = {
                 onNavigateToRoute(MainRouteReadRecordOverview)
@@ -1133,6 +1138,17 @@ fun MainActivity.mainEntryProvider(
             state = state,
             onBack = { onNavigateBack() },
             onIntent = viewModel::onIntent,
+        )
+    }
+
+    entry<MainRouteBookplateManage> {
+        val viewModel = koinViewModel<BookplateManageViewModel>()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        BookplateManageScreen(
+            state = state,
+            onIntent = viewModel::onIntent,
+            effects = viewModel.effects,
+            onBack = { onNavigateBack() },
         )
     }
 }

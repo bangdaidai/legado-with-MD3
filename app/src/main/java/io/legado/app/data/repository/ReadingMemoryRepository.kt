@@ -51,6 +51,9 @@ class ReadingMemoryRepository(
 
     suspend fun getByBookUrl(bookUrl: String): ReadingMemory? = dao.getByBookUrlSync(bookUrl)
 
+    suspend fun getByNameAuthor(bookName: String, bookAuthor: String): ReadingMemory? =
+        dao.getByNameAuthorSync(bookName, bookAuthor)
+
     suspend fun getBook(bookUrl: String): Book? = bookDao.getBook(bookUrl)
 
     // endregion

@@ -10,11 +10,7 @@ enum class ReadingMemoryStatusFilter(val label: String) {
 }
 
 enum class ReadingMemorySortBy(val label: String) {
-    Recent("最近更新"), Rating("评分最高"), ReadDuration("阅读时长"), Name("书名")
-}
-
-enum class ReadingMemoryRatingFilter(val label: String) {
-    All("全部"), R5("5星"), R4("4星"), R3("3星"), R2("2星"), R1("1星"), Unrated("未评分")
+    Recent("最近更新"), Rating("评分最高"), ReadDuration("阅读时长")
 }
 
 enum class ReadingMemoryReadTypeFilter(val label: String) {
@@ -22,7 +18,7 @@ enum class ReadingMemoryReadTypeFilter(val label: String) {
 }
 
 enum class ReadingMemoryGroupBy(val label: String) {
-    None("不分组"), Year("按年份"), Rating("按评分"), Status("按状态")
+    None("不分组"), Year("按年份"), Rating("按评分")
 }
 
 @Immutable
@@ -45,13 +41,13 @@ data class ReadingMemoryUiState(
     val items: List<ReadingMemoryListItem> = emptyList(),
     val statusCounts: Map<ReadingMemoryStatusFilter, Int> = emptyMap(),
     val settings: BookshelfSettings = BookshelfSettings(),
+    val tagColorMap: Map<String, Long> = emptyMap(),
+    val coverWidth: Int = 84,
     val statusFilter: ReadingMemoryStatusFilter = ReadingMemoryStatusFilter.All,
-    val ratingFilter: ReadingMemoryRatingFilter = ReadingMemoryRatingFilter.All,
     val readTypeFilter: ReadingMemoryReadTypeFilter = ReadingMemoryReadTypeFilter.All,
     val onlyWithReview: Boolean = false,
     val groupBy: ReadingMemoryGroupBy = ReadingMemoryGroupBy.None,
     val sortBy: ReadingMemorySortBy = ReadingMemorySortBy.Recent,
-    val showCard: Boolean = true,
     val showIntro: Boolean = true,
     val showReview: Boolean = false,
     val searchQuery: String = "",
@@ -62,13 +58,12 @@ sealed interface ReadingMemoryIntent {
     data object Load : ReadingMemoryIntent
     data object Refresh : ReadingMemoryIntent
     data class FilterStatus(val filter: ReadingMemoryStatusFilter) : ReadingMemoryIntent
-    data class SetRatingFilter(val filter: ReadingMemoryRatingFilter) : ReadingMemoryIntent
     data class SetReadTypeFilter(val filter: ReadingMemoryReadTypeFilter) : ReadingMemoryIntent
     data class ToggleOnlyWithReview(val value: Boolean) : ReadingMemoryIntent
     data class SetGroupBy(val groupBy: ReadingMemoryGroupBy) : ReadingMemoryIntent
     data class ToggleGroupCollapse(val key: String) : ReadingMemoryIntent
     data class SetSortBy(val sortBy: ReadingMemorySortBy) : ReadingMemoryIntent
-    data class ToggleShowCard(val value: Boolean) : ReadingMemoryIntent
+    data class SetCoverWidth(val width: Int) : ReadingMemoryIntent
     data class ToggleShowIntro(val value: Boolean) : ReadingMemoryIntent
     data class ToggleShowReview(val value: Boolean) : ReadingMemoryIntent
     data class Search(val query: String) : ReadingMemoryIntent

@@ -113,6 +113,7 @@ object PreferKey {
     const val importKeepName = "importKeepName"
     const val importKeepGroup = "importKeepGroup"
     const val bookmarkOnlyNotes = "bookmarkOnlyNotes"
+    const val readingMemoryCoverWidth = "readingMemoryCoverWidth"
     const val screenOrientation = "screenOrientation"
     const val syncBookProgress = "syncBookProgress"
     const val syncBookProgressPlus = "syncBookProgressPlus"

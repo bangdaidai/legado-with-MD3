@@ -471,7 +471,8 @@ fun <T> HomepageModuleManageSheet(
                         if (browseModuleType == HomepageModuleType.ButtonGroup.key) {
                             quickActionsLabel
                         } else {
-                            selectedKindTitles.firstOrNull()
+                            selectedKindTitles.takeIf { it.isNotEmpty() }
+                                ?.joinToString("·")
                                 ?: HomepageModuleType.fromKey(browseModuleType).title
                         }
                 }

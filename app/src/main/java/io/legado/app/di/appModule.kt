@@ -209,6 +209,7 @@ import io.legado.app.ui.association.ImportReplaceRuleViewModel
 import io.legado.app.ui.association.ImportRssSourceViewModel
 import io.legado.app.ui.association.ImportTxtTocRuleViewModel
 import io.legado.app.ui.book.bookmark.AllBookmarkViewModel
+import io.legado.app.ui.book.bookplate.BookplateManageViewModel
 import io.legado.app.ui.book.cache.manage.BookCacheManageViewModel
 import io.legado.app.ui.book.changecover.ChangeCoverViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceComposeViewModel
@@ -533,6 +534,7 @@ val appModule = module {
         )
     }
     viewModelOf(::ExploreShowViewModel)
+    viewModelOf(::BookplateManageViewModel)
     viewModelOf(::MyViewModel)
     viewModelOf(::BookshelfViewModel)
     viewModelOf(::MainViewModel)

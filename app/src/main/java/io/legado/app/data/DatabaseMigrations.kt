@@ -28,6 +28,7 @@ object DatabaseMigrations {
             migration_103_104,
             migration_104_105,
             migration_105_106,
+            migration_106_107,
         )
     }
 
@@ -726,6 +727,28 @@ object DatabaseMigrations {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginEnd REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginTop REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginBottom REAL NOT NULL DEFAULT 0")
+        }
+    }
+
+    // endregion
+
+    // region 106→107: 新增藏书票模板表
+
+    private val migration_106_107 = object : Migration(106, 107) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS bookplateTemplates (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    htmlContent TEXT NOT NULL,
+                    isBuiltin INTEGER NOT NULL DEFAULT 0,
+                    createTime INTEGER NOT NULL DEFAULT 0,
+                    updateTime INTEGER NOT NULL DEFAULT 0,
+                    groupName TEXT NOT NULL DEFAULT '书籍'
+                )
+                """.trimIndent()
+            )
         }
     }
 

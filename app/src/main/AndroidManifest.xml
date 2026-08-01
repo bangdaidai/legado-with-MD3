@@ -593,6 +593,20 @@
         <meta-data
             android:name="channel"
             android:value="${APP_CHANNEL_VALUE}" />
+
+        <!-- TV 观看记录 -->
+        <provider
+            android:name=".api.WatchRecordProvider"
+            android:authorities="${applicationId}.watchRecordProvider"
+            android:exported="true" />
+
+        <receiver
+            android:name=".receiver.WatchRecordReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.legado.app.action.ADD_WATCH_RECORD" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <queries>

@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import kotlin.math.min
 
 /**
  * 九宫格背景绘制。移植自 readdai `NinePatchHelper`。
@@ -15,7 +14,7 @@ import kotlin.math.min
  *  - topY / bottomY 为两条横线相对图高的位置
  *  - 允许两条线重合（借 1px 源图当拉伸中心带）
  *
- * 四角随整体等比缩放 s = min(rectW/bw, rectH/bh)（contain），绝不变形；
+ * 四角按目标框高度贴合缩放 s = rectH/bh，绝不变形；
  * 中段沿水平/垂直方向拉伸填满剩余空间。
  */
 object NinePatchDrawHelper {
@@ -51,8 +50,10 @@ object NinePatchDrawHelper {
         val tyN = ty0.coerceAtMost(by0)
         val byN = ty0.coerceAtLeast(by0)
 
-        // 整体等比缩放：先让整图等比缩放到目标框内（contain），再切九宫格。
-        val s = min(rectW / bw, rectH / bh)
+        // 四角按目标框高度贴合缩放：横向文字行以行高为基准，水平中段拉伸铺满宽度。
+        // 不用 min(rectW/bw, rectH/bh)（contain 整图），否则命中文字较短时四角会被缩成细线，
+        // 观感上"背景图很小盖不住文字"。
+        val s = rectH / bh
 
         val wLsrc = lxN * bw
         val wRsrc = (1f - rxN) * bw

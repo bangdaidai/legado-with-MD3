@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,6 +61,7 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import java.util.Locale
+import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TagChip
@@ -72,6 +74,7 @@ import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -95,6 +98,13 @@ fun ReadingMemoryDetailScreen(
                 subtitle = state.author.takeIf { it.isNotBlank() },
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
+                actions = {
+                    TopBarActionButton(
+                        onClick = { onIntent(ReadingMemoryDetailIntent.GenerateBookplate) },
+                        imageVector = Icons.Default.Image,
+                        contentDescription = "生成藏书票",
+                    )
+                },
             )
         },
     ) { paddingValues ->
@@ -151,6 +161,7 @@ fun ReadingMemoryDetailScreen(
             onSave = { onIntent(ReadingMemoryDetailIntent.SaveReview) },
             onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
             onDelete = { onIntent(ReadingMemoryDetailIntent.DeleteReview) },
+            onGenerateBookplate = { onIntent(ReadingMemoryDetailIntent.GenerateBookplateFromReview) },
         )
     }
 
@@ -167,8 +178,20 @@ fun ReadingMemoryDetailScreen(
                 onIntent(ReadingMemoryDetailIntent.DeleteBookmark(it))
                 editingBookmark = null
             },
+            onGenerateBookplate = { bookmark ->
+                editingBookmark = null
+                onIntent(ReadingMemoryDetailIntent.GenerateBookplateFromBookmark(bookmark))
+            },
         )
     }
+
+    BookplatePreviewSheet(
+        show = state.showBookplate,
+        data = state.bookplateData,
+        initialBitmap = state.bookplateBitmap,
+        loading = state.bookplateLoading,
+        onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissBookplate) },
+    )
 }
 
 /* ===================== 各区块 ===================== */
@@ -647,6 +670,7 @@ private fun ReviewEditorSheet(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)? = null,
+    onGenerateBookplate: (() -> Unit)? = null,
 ) {
     AppModalBottomSheet(
         show = true,
@@ -669,6 +693,15 @@ private fun ReviewEditorSheet(
                 Icon(imageVector = Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 AppText("删除书评")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        if (onGenerateBookplate != null) {
+            FilledTonalButton(
+                onClick = onGenerateBookplate,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                AppText("生成书评票")
             }
             Spacer(modifier = Modifier.height(8.dp))
         }

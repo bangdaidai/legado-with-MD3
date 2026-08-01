@@ -59,6 +59,7 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
+import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
@@ -393,9 +394,22 @@ fun AllBookmarkScreen(
             onDelete = { bookmarkToDelete ->
                 onIntent(AllBookmarkIntent.DeleteBookmark(bookmarkToDelete))
                 showBottomSheet = false
+            },
+            onGenerateBookplate = { bookmark ->
+                showBottomSheet = false
+                editingBookmark = null
+                onIntent(AllBookmarkIntent.GenerateBookplate(bookmark))
             }
         )
     }
+
+    BookplatePreviewSheet(
+        show = state.showBookplate,
+        data = state.bookplateData,
+        initialBitmap = state.bookplateBitmap,
+        loading = state.bookplateLoading,
+        onDismissRequest = { onIntent(AllBookmarkIntent.DismissBookplate) },
+    )
 }
 
 @Composable
