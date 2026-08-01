@@ -336,7 +336,6 @@ fun TxtTocRulePreviewScreen(
                                 }
                             },
                         )
-                    }
                 }
             }
         }
