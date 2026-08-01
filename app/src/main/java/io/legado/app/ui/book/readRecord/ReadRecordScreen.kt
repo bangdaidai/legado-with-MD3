@@ -185,28 +185,23 @@ fun ReadRecordScreen(
     }
     val stickyDate by remember(displayMode, listState) {
         derivedStateOf {
-            if (displayMode == DisplayMode.LATEST || displayMode == DisplayMode.DURATION) return@derivedStateOf null
+            if (displayMode != DisplayMode.AGGREGATE) return@derivedStateOf null
             val stickyKey = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { info ->
                     val key = info.key.toString()
-                    key.startsWith("header_") ||
-                        key.startsWith("timeline_header_") ||
-                        key.startsWith("agg_item_") ||
-                        key.startsWith("timeline_item_")
+                    key.startsWith("header_") || key.startsWith("agg_item_")
                 }?.key?.toString() ?: return@derivedStateOf null
 
             when {
                 stickyKey.startsWith("header_") -> stickyKey.removePrefix("header_")
-                stickyKey.startsWith("timeline_header_") -> stickyKey.removePrefix("timeline_header_")
                 stickyKey.startsWith("agg_item_") -> stickyKey.removePrefix("agg_item_").substringBefore("|")
-                stickyKey.startsWith("timeline_item_") -> stickyKey.removePrefix("timeline_item_").substringBefore("|")
                 else -> null
             }
         }
     }
     val floatingDate by remember(stickyDate, listState, displayMode) {
         derivedStateOf {
-            if (displayMode == DisplayMode.LATEST || displayMode == DisplayMode.DURATION) return@derivedStateOf null
+            if (displayMode != DisplayMode.AGGREGATE) return@derivedStateOf null
             if (stickyDate == null) return@derivedStateOf null
             val shouldStick = listState.firstVisibleItemIndex > 1 ||
                 listState.firstVisibleItemScrollOffset > 24
