@@ -130,13 +130,15 @@ class ReadRecordViewModel(
             }
             .toSortedMap(compareByDescending { it })
 
+        val latestRecords = fillMissingAuthors(data.latestRecords)
+
         ReadRecordUiState(
             isLoading = false,
             totalReadTime = data.totalReadTime,
             groupedRecords = filteredDetails.groupBy { it.date },
             timelineRecords = timelineMap,
-            latestRecords = data.latestRecords,
-            durationRecords = data.latestRecords.sortedByDescending { it.readTime },
+            latestRecords = latestRecords,
+            durationRecords = latestRecords.sortedByDescending { it.readTime },
             selectedDate = selectedDate,
             searchKey = searchKey,
             dailyReadCounts = dailyCounts,
@@ -221,6 +223,21 @@ class ReadRecordViewModel(
             }
         }
         return mergedList
+    }
+
+    /**
+     * 旧记录的 bookAuthor 可能为空(当年书源未返回作者), 展示时按书名从 books 表兜底补齐.
+     */
+    private suspend fun fillMissingAuthors(records: List<ReadRecord>): List<ReadRecord> {
+        if (records.none { it.bookAuthor.isBlank() }) return records
+        val resolved = mutableMapOf<String, String?>()
+        return records.map { record ->
+            if (record.bookAuthor.isNotBlank()) return@map record
+            val author = resolved.getOrPut(record.bookName) {
+                bookRepository.getBookAuthorByName(record.bookName)
+            }
+            if (author.isNullOrBlank()) record else record.copy(bookAuthor = author)
+        }
     }
 
     suspend fun getChapterTitle(bookName: String, bookAuthor: String, chapterIndexLong: Long): String? {

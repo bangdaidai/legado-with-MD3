@@ -607,7 +607,7 @@ fun HighlightRuleEditSheet(
                 pageBgColor = runCatching {
                     android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStr)
                 }.getOrDefault(0xFFEEEEEE.toInt()),
-                pageTextColor = ReadBookConfig.durConfig.textColor,
+                pageTextColor = ReadBookConfig.textColor,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -637,7 +637,7 @@ fun HighlightRuleEditSheet(
                     pageBgColor = runCatching {
                         android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStrNight)
                     }.getOrDefault(0xFF000000.toInt()),
-                    pageTextColor = ReadBookConfig.durConfig.textColorNight,
+                    pageTextColor = ReadBookConfig.textColorNight,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),

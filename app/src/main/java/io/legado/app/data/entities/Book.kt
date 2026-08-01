@@ -406,7 +406,8 @@ data class Book(
             ReadBook.clearCurrentBook()
         }
         appDb.bookChapterDao.delByBook(bookUrl)
-        appDb.bookDao.delete(this)
+        type = type or BookType.notShelf
+        appDb.bookDao.update(this)
     }
 
     @Suppress("ConstPropertyName")

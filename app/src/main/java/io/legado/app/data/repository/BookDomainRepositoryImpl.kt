@@ -4,6 +4,7 @@ import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookTagRelationDao
 import io.legado.app.data.entities.Book
+import io.legado.app.constant.BookType
 import io.legado.app.domain.model.BookGroupAssignment
 import io.legado.app.domain.model.CacheableBook
 import io.legado.app.domain.model.DeletableBook
@@ -68,7 +69,9 @@ class BookDomainRepositoryImpl(
             for (book in books) {
                 bookTagRelationDao.deleteByBookUrl(book.bookUrl)
             }
-            bookDao.delete(*books.toTypedArray())
+            // 不物理删除 books 行, 改为下架标记, 保留书名/作者/封面供阅读记录等模块读取
+            val archived = books.map { it.copy(type = it.type or BookType.notShelf) }
+            bookDao.update(*archived.toTypedArray())
         }
     }
 

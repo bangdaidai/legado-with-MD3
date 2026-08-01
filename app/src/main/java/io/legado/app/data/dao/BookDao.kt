@@ -751,6 +751,24 @@ FROM books
     @Query("SELECT * FROM books WHERE name = :name and author = :author")
     fun getBook(name: String, author: String): Book?
 
+    /**
+     * 阅读记录/阅读记忆等模块按书名+作者反查书籍元数据(封面/作者/书源).
+     * author 传空串时只按书名匹配, 用于旧记录未保存作者的情况.
+     * 排序: 在架书籍优先 -> 有封面的优先 -> 最近阅读的优先.
+     */
+    @Query(
+        """
+        SELECT * FROM books
+        WHERE name = :name AND (:author = '' OR author = :author)
+        ORDER BY
+            CASE WHEN type & ${BookType.notShelf} = 0 THEN 0 ELSE 1 END,
+            CASE WHEN COALESCE(NULLIF(customCoverUrl, ''), NULLIF(coverUrl, '')) IS NOT NULL THEN 0 ELSE 1 END,
+            durChapterTime DESC
+        LIMIT 1
+        """
+    )
+    fun getBookMeta(name: String, author: String): Book?
+
     @Query(
         """
         SELECT * FROM books
@@ -847,7 +865,21 @@ FROM books
     @Query("update books set `group` = `group` - :group where `group` & :group > 0")
     fun removeGroup(group: Long)
 
-    @Query("delete from books where type & ${BookType.notShelf} > 0")
+    @Query(
+        """
+        delete from books
+        where type & ${BookType.notShelf} > 0
+          and not exists (
+              select 1 from readRecord
+              where readRecord.bookName = books.name
+                and readRecord.bookAuthor = books.author
+          )
+          and not exists (
+              select 1 from readingMemory
+              where readingMemory.bookUrl = books.bookUrl
+          )
+        """
+    )
     fun deleteNotShelfBook()
 
     // ── Group preview / count queries (DB-level, replaces in-memory buildGroupPreviewState) ──

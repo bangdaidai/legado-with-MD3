@@ -41,6 +41,7 @@ fun ReadingMemoryRatingBar(
                 isHalf -> Icons.AutoMirrored.Filled.StarHalf
                 else -> Icons.Filled.StarOutline
             }
+            val interactionSource = remember { MutableInteractionSource() }
             Icon(
                 imageVector = icon,
                 contentDescription = null,

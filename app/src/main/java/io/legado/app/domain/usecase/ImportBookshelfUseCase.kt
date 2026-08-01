@@ -77,7 +77,7 @@ class ImportBookshelfUseCase(
             books.forEach { bookInfo ->
                 val name = bookInfo["name"] ?: ""
                 val author = bookInfo["author"] ?: ""
-                if (name.isEmpty() || bookRepository.getBook(name, author) != null) {
+                if (name.isEmpty() || bookRepository.getShelfBookConflict(name, author) != null) {
                     return@forEach
                 }
                 semaphore.withPermit {

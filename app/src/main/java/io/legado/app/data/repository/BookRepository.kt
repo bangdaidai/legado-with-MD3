@@ -30,13 +30,22 @@ class BookRepository(
 
     suspend fun getBookCoverByNameAndAuthor(bookName: String, bookAuthor: String): String? {
         return withContext(Dispatchers.IO) {
-            bookDao.getBook(bookName, bookAuthor)?.getDisplayCover()
+            bookDao.getBookMeta(bookName, bookAuthor)?.getDisplayCover()
+        }
+    }
+
+    /**
+     * 阅读记录中 bookAuthor 为空的兜底: 按书名从 books 表查当前作者名.
+     */
+    suspend fun getBookAuthorByName(bookName: String): String? {
+        return withContext(Dispatchers.IO) {
+            bookDao.getBookMeta(bookName, "")?.author?.takeIf { it.isNotBlank() }
         }
     }
 
     suspend fun getChapterTitle(bookName: String, bookAuthor: String, chapterIndex: Int): String? {
         return withContext(Dispatchers.IO) {
-            val book = bookDao.getBook(bookName, bookAuthor)
+            val book = bookDao.getBookMeta(bookName, bookAuthor)
             val bookUrl = book?.bookUrl
             if (bookUrl.isNullOrEmpty()) return@withContext null
 

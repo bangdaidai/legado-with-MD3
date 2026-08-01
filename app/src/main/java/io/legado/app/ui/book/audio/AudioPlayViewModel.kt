@@ -122,9 +122,7 @@ class AudioPlayViewModel(
 
     fun removeFromBookshelf(success: (() -> Unit)?) {
         execute {
-            AudioPlay.book?.let {
-                bookRepository.delete(it)
-            }
+            AudioPlay.book?.delete()
         }.onSuccess {
             success?.invoke()
         }
