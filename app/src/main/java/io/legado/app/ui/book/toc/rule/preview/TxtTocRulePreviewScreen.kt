@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -312,6 +313,33 @@ fun TxtTocRulePreviewScreen(
                                 }
                             },
                         )
+                    }
+                }
+            } else {
+                val displayRules = state.filteredRules
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = adaptiveContentPadding(
+                        top = contentPadding.calculateTopPadding(),
+                        bottom = contentPadding.calculateBottomPadding() + 80.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    itemsIndexed(displayRules, key = { _, item -> item.rule.id }) { _, item ->
+                        RulePreviewListItem(
+                            item = item,
+                            isSelected = item.rule.chapterRule == state.selectedRule,
+                            onClick = {
+                                onIntent(TxtTocRulePreviewIntent.SelectRule(item.rule.chapterRule))
+                                if (item.totalCount > 0) {
+                                    onIntent(TxtTocRulePreviewIntent.ShowChapterList(item))
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -508,31 +536,9 @@ private fun NetworkRuleChapterSheetContent(
                 }
             }
         }
-        }
     }
 }
-            } else {
-                val displayRules = state.filteredRules
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = adaptiveContentPadding(
-                        top = contentPadding.calculateTopPadding(),
-                        bottom = contentPadding.calculateBottomPadding() + 80.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    itemsIndexed(displayRules, key = { _, item -> item.rule.id }) { _, item ->
-                        RulePreviewListItem(
-                            item = item,
-                            isSelected = item.rule.chapterRule == state.selectedRule,
-                            onClick = {
-                                onIntent(TxtTocRulePreviewIntent.SelectRule(item.rule.chapterRule))
-                                if (item.totalCount > 0) {
-                                    onIntent(TxtTocRulePreviewIntent.ShowChapterList(item))
-                                }
-                            },
-                        )
-                    }
+                }
             }
         }
     }
