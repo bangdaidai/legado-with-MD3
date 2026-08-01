@@ -223,34 +223,50 @@ fun BookshelfItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = if (settings.bookshelfCoverAlignTop) {
+                        Alignment.Top
+                    } else {
+                        Alignment.CenterVertically
+                    }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterVertically)
-                            .width(coverWidth.dp)
-                    ) {
+                    if (coverWidth > 0) {
                         Box(
                             modifier = Modifier
-                                .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
-                                .fillMaxWidth()
-                                .aspectRatio(5f / 7f)
                                 .then(
-                                    if (coverShadow) Modifier.shadow(
-                                        4.dp,
-                                        RoundedCornerShape(4.dp)
-                                    ) else Modifier
+                                    if (settings.bookshelfCoverAlignTop) {
+                                        Modifier.align(Alignment.Top)
+                                    } else {
+                                        Modifier.align(Alignment.CenterVertically)
+                                    }
                                 )
-                                .clip(RoundedCornerShape(4.dp))
+                                .width(coverWidth.dp)
                         ) {
-                            cover(Modifier.fillMaxSize())
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
+                                    .fillMaxWidth()
+                                    .aspectRatio(5f / 7f)
+                                    .then(
+                                        if (coverShadow) Modifier.shadow(
+                                            4.dp,
+                                            RoundedCornerShape(4.dp)
+                                        ) else Modifier
+                                    )
+                                    .clip(RoundedCornerShape(4.dp))
+                            ) {
+                                cover(Modifier.fillMaxSize())
+                            }
                         }
                     }
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .padding(top = 4.dp, bottom = 4.dp, end = 8.dp, start = 4.dp),
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = if (settings.bookshelfCoverAlignTop) {
+                            Arrangement.Top
+                        } else {
+                            Arrangement.Center
+                        }
                     ) {
                     Row(
                         verticalAlignment = Alignment.Top

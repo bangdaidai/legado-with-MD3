@@ -8,8 +8,8 @@ import org.junit.Test
 class BookshelfSettingsMappingTest {
 
     @Test
-    fun `Bookshelf 46 键写读映射逐字段对应`() {
-        assertEquals(46, BookshelfSettings().toPrefMap().size)
+    fun `Bookshelf 47 键写读映射逐字段对应`() {
+        assertEquals(47, BookshelfSettings().toPrefMap().size)
         bookshelfMappingSamples().forEach { expected ->
             assertEquals(expected.expectedPrefMap(), expected.toPrefMap())
             assertEquals(
@@ -71,6 +71,7 @@ private fun bookshelfMappingSamples(): List<BookshelfSettings> {
         bookshelfTitleCenter = false,
         bookshelfTitleMaxLines = 119,
         bookshelfCoverShadow = false,
+        bookshelfCoverAlignTop = false,
         bookshelfCardColor = 120,
         bookshelfCardColorDark = 121,
         bookshelfGroupListStyle = 122,
@@ -101,6 +102,7 @@ private fun bookshelfMappingSamples(): List<BookshelfSettings> {
         base.copy(bookshelfTitleSmallFont = true),
         base.copy(bookshelfTitleCenter = true),
         base.copy(bookshelfCoverShadow = true),
+        base.copy(bookshelfCoverAlignTop = true),
         base.copy(bookshelfSearchActionDirectToSearch = true),
         base.copy(autoRefreshBook = true),
     )
@@ -144,6 +146,7 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfTitleCenter to bookshelfTitleCenter,
     PreferKey.bookshelfTitleMaxLines to bookshelfTitleMaxLines,
     PreferKey.bookshelfCoverShadow to bookshelfCoverShadow,
+    PreferKey.bookshelfCoverAlignTop to bookshelfCoverAlignTop,
     PreferKey.bookshelfCardColor to bookshelfCardColor,
     PreferKey.bookshelfCardColorDark to bookshelfCardColorDark,
     PreferKey.bookshelfGroupListStyle to bookshelfGroupListStyle,

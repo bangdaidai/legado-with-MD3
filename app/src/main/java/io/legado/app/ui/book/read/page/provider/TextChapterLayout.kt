@@ -30,6 +30,7 @@ import io.legado.app.help.book.BookContent
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.getBookSource
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.paramPattern
@@ -48,6 +49,7 @@ import io.legado.app.ui.book.read.page.provider.ChapterProvider.srcReplaceCharC
 import io.legado.app.ui.book.read.page.provider.ChapterProvider.srcReplaceCharD
 import io.legado.app.ui.config.readConfig.ReadConfig
 import io.legado.app.utils.GSON
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fastSum
@@ -101,7 +103,8 @@ class TextChapterLayout(
     private val compiledHighlightRules: List<CompiledHighlightRule>
         get() {
             val configName = ReadBookConfig.durConfig.name
-            val cacheKey = "$configName|${book.bookUrl}"
+            val isNight = ReadStyleResolver.isNightTheme()
+            val cacheKey = "$configName|${book.bookUrl}|${if (isNight) 1 else 0}"
             cachedHighlightRules?.takeIf {
                 cachedHighlightRulesConfigName == cacheKey
             }?.let { return it }
@@ -1708,11 +1711,18 @@ class TextChapterLayout(
     }
 
     private fun HighlightRule.toCharStyle(): CharStyle {
+        val isNight = ReadStyleResolver.isNightTheme()
+        // 有背景图时高亮区域底色恒定，不做夜间派生
+        val derive = isNight && bgImage.isNullOrBlank()
+        val resolvedTextColor = resolveModeColor(textColor, textColorNight, isNight, derive)
+        val resolvedBgColor = resolveModeColor(bgColor, bgColorNight, isNight, derive)
+        val resolvedUnderlineColor =
+            resolveModeColor(underlineColor, underlineColorNight, isNight, derive)
         return CharStyle(
-            textColor = textColor,
-            bgColor = bgColor,
+            textColor = resolvedTextColor,
+            bgColor = resolvedBgColor,
             underlineMode = underlineMode,
-            underlineColor = underlineColor ?: textColor ?: 0xFF63C37D.toInt(),
+            underlineColor = resolvedUnderlineColor ?: resolvedTextColor ?: 0xFF63C37D.toInt(),
             underlineWidth = underlineWidth,
             underlineOffset = underlineOffset,
             underlineSvgPath = underlineSvgPath.orEmpty(),
@@ -1727,6 +1737,23 @@ class TextChapterLayout(
             npTop = npTop,
             npBottom = npBottom,
         )
+    }
+
+    /**
+     * 解析当前模式下应使用的颜色。
+     * 日间直接用 [dayColor]；夜间优先用显式设置的 [nightColor]，
+     * 未设置时（[derive] 为真）由日间色明度反相自动派生。
+     */
+    private fun resolveModeColor(
+        dayColor: Int?,
+        nightColor: Int?,
+        isNight: Boolean,
+        derive: Boolean,
+    ): Int? {
+        if (!isNight) return dayColor
+        nightColor?.let { return it }
+        if (!derive) return dayColor
+        return dayColor?.let { ColorUtils.flipLightness(it) }
     }
 
     private data class HighlightStyleContext(

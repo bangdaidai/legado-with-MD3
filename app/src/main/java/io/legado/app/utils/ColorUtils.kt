@@ -116,4 +116,17 @@ object ColorUtils {
                 .pow(2.0)
         )
     }
+
+    /**
+     * HSL 明度反相：保留色相和饱和度，将 L 翻转为 1-L，alpha 不变。
+     * 用于为夜间模式自动生成对应的可见颜色。
+     */
+    @ColorInt
+    fun flipLightness(@ColorInt color: Int): Int {
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(color, hsl)
+        hsl[2] = 1f - hsl[2]
+        val rgb = ColorUtils.HSLToColor(hsl)
+        return (color and 0xFF000000.toInt()) or (rgb and 0x00FFFFFF)
+    }
 }

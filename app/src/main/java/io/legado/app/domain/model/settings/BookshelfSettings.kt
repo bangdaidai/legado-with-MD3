@@ -40,6 +40,7 @@ data class BookshelfSettings(
     val bookshelfTitleCenter: Boolean = true,
     val bookshelfTitleMaxLines: Int = 2,
     val bookshelfCoverShadow: Boolean = false,
+    val bookshelfCoverAlignTop: Boolean = false,
     val bookshelfCardColor: Int = 0,
     val bookshelfCardColorDark: Int = 0,
     val bookshelfGroupListStyle: Int = 0,

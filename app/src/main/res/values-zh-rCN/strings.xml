@@ -2358,6 +2358,7 @@
     <string name="show_all_synopsis">显示全部简介</string>
     <string name="show_lines_synopsis">显示 %1$d 行简介</string>
     <string name="show_tags">显示标签</string>
+    <string name="cover_align_top">封面靠上对齐</string>
     <string name="custom_tag_colors">自定义标签颜色</string>
     <string name="manage_tag_colors">管理标签颜色</string>
     <string name="search_filter_first">搜索按钮优先打开搜索页面</string>

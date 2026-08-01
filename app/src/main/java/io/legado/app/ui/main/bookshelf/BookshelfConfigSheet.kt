@@ -190,15 +190,15 @@ fun BookshelfConfigSheet(
                                 }
                             )
 
-                            CompactSliderSettingItem(
-                                title = stringResource(R.string.list_cover_width),
-                                value = settings.bookshelfListCoverWidth.toFloat(),
-                                valueRange = 40f..120f,
-                                steps = 80,
-                                onValueChange = { value ->
-                                    onUpdate { it.copy(bookshelfListCoverWidth = value.toInt()) }
-                                }
-                            )
+                    CompactSliderSettingItem(
+                        title = stringResource(R.string.list_cover_width),
+                        value = settings.bookshelfListCoverWidth.toFloat(),
+                        valueRange = 0f..120f,
+                        steps = 120,
+                        onValueChange = { value ->
+                            onUpdate { it.copy(bookshelfListCoverWidth = value.toInt()) }
+                        }
+                    )
                         }
                     }
 
@@ -419,6 +419,15 @@ fun BookshelfConfigSheet(
                         color = LegadoTheme.colorScheme.surface,
                         onCheckedChange = { value ->
                             onUpdate { it.copy(showBookIntro = value) }
+                        }
+                    )
+
+                    CompactSwitchSettingItem(
+                        title = stringResource(R.string.cover_align_top),
+                        checked = settings.bookshelfCoverAlignTop,
+                        color = LegadoTheme.colorScheme.surface,
+                        onCheckedChange = { value ->
+                            onUpdate { it.copy(bookshelfCoverAlignTop = value) }
                         }
                     )
 

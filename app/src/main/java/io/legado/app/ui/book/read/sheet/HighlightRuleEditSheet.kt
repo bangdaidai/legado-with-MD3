@@ -56,6 +56,7 @@ import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FontFolderState
@@ -66,10 +67,11 @@ import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
-import io.legado.app.ui.widget.components.settingItem.TinyColorSettingItem
+import io.legado.app.ui.widget.components.settingItem.TinyClearColorModeSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
+import io.legado.app.utils.ColorUtils
 import io.legado.app.ui.widget.components.text.AppText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -107,8 +109,11 @@ fun HighlightRuleEditSheet(
         )
     }
     var hasTextColor by remember(show, rule) { mutableStateOf(initial.textColor != null) }
+    // 夜间色：null 表示自动派生（跟随日间色明度反相）
+    var textColorNight by remember(show, rule) { mutableStateOf(initial.textColorNight) }
     var bgColor by remember(show, rule) { mutableIntStateOf(initial.bgColor ?: 0x20FFEB3B) }
     var hasBgColor by remember(show, rule) { mutableStateOf(initial.bgColor != null) }
+    var bgColorNight by remember(show, rule) { mutableStateOf(initial.bgColorNight) }
     var hasUnderline by remember(show, rule) { mutableStateOf(initial.underlineMode > 0) }
     var underlineMode by remember(
         show,
@@ -120,6 +125,7 @@ fun HighlightRuleEditSheet(
         )
     }
     var hasUnderlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor != null) }
+    var underlineColorNight by remember(show, rule) { mutableStateOf(initial.underlineColorNight) }
     var underlineWidth by remember(show, rule) { mutableFloatStateOf(initial.underlineWidth) }
     var underlineOffset by remember(show, rule) { mutableFloatStateOf(initial.underlineOffset) }
     var underlineSvgPath by remember(
@@ -153,8 +159,11 @@ fun HighlightRuleEditSheet(
 
     // Color picker state
     var showTextColorPicker by remember(show, rule) { mutableStateOf(false) }
+    var showTextColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showBgColorPicker by remember(show, rule) { mutableStateOf(false) }
+    var showBgColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showUnderlineColorPicker by remember(show, rule) { mutableStateOf(false) }
+    var showUnderlineColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showFontSelect by remember(show, rule) { mutableStateOf(false) }
 
     // Validation
@@ -235,9 +244,12 @@ fun HighlightRuleEditSheet(
                             enabled = enabled,
                             position = initial.position,
                             textColor = if (hasTextColor) textColor else null,
+                            textColorNight = if (hasTextColor) textColorNight else null,
                             bgColor = if (hasBgColor) bgColor else null,
+                            bgColorNight = if (hasBgColor) bgColorNight else null,
                             underlineMode = if (hasUnderline) underlineMode else 0,
                             underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
+                            underlineColorNight = if (hasUnderlineColor && hasUnderline) underlineColorNight else null,
                             underlineWidth = underlineWidth,
                             underlineOffset = underlineOffset,
                             underlineSvgPath = underlineSvgPath.ifBlank { null },
@@ -330,10 +342,17 @@ fun HighlightRuleEditSheet(
                 onCheckedChange = { hasTextColor = it },
             )
             AnimatedVisibility(visible = hasTextColor) {
-                TinyColorSettingItem(
+                TinyClearColorModeSettingItem(
                     title = stringResource(R.string.select_color),
-                    colorValue = textColor,
-                    onClick = { showTextColorPicker = true },
+                    dayColor = textColor,
+                    nightColor = textColorNight ?: ColorUtils.flipLightness(textColor),
+                    onClickColor = { isNight ->
+                        if (isNight) showTextColorNightPicker = true
+                        else showTextColorPicker = true
+                    },
+                    onClearColor = { isNight ->
+                        if (isNight) textColorNight = null
+                    },
                 )
             }
 
@@ -384,10 +403,18 @@ fun HighlightRuleEditSheet(
                         onCheckedChange = { hasUnderlineColor = it },
                     )
                     AnimatedVisibility(visible = hasUnderlineColor) {
-                        TinyColorSettingItem(
+                        TinyClearColorModeSettingItem(
                             title = stringResource(R.string.select_color),
-                            colorValue = underlineColor,
-                            onClick = { showUnderlineColorPicker = true },
+                            dayColor = underlineColor,
+                            nightColor = underlineColorNight
+                                ?: ColorUtils.flipLightness(underlineColor),
+                            onClickColor = { isNight ->
+                                if (isNight) showUnderlineColorNightPicker = true
+                                else showUnderlineColorPicker = true
+                            },
+                            onClearColor = { isNight ->
+                                if (isNight) underlineColorNight = null
+                            },
                         )
                     }
 
@@ -425,10 +452,17 @@ fun HighlightRuleEditSheet(
                 onCheckedChange = { hasBgColor = it },
             )
             AnimatedVisibility(visible = hasBgColor) {
-                TinyColorSettingItem(
+                TinyClearColorModeSettingItem(
                     title = stringResource(R.string.select_color),
-                    colorValue = bgColor,
-                    onClick = { showBgColorPicker = true },
+                    dayColor = bgColor,
+                    nightColor = bgColorNight ?: ColorUtils.flipLightness(bgColor),
+                    onClickColor = { isNight ->
+                        if (isNight) showBgColorNightPicker = true
+                        else showBgColorPicker = true
+                    },
+                    onClearColor = { isNight ->
+                        if (isNight) bgColorNight = null
+                    },
                 )
             }
 
@@ -558,6 +592,7 @@ fun HighlightRuleEditSheet(
             )
 
             HighlightRulePreview(
+                label = stringResource(R.string.day),
                 sampleText = sampleText,
                 pattern = pattern,
                 textColor = if (hasTextColor) textColor else null,
@@ -569,10 +604,45 @@ fun HighlightRuleEditSheet(
                 underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
                 underlineWidth = underlineWidth,
                 underlineOffset = underlineOffset,
+                pageBgColor = runCatching {
+                    android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStr)
+                }.getOrDefault(0xFFEEEEEE.toInt()),
+                pageTextColor = ReadBookConfig.durConfig.textColor,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
             )
+
+            // Night preview — hidden when bgImage is active
+            if (!hasBgImage || bgImage.isBlank()) {
+                val nightTextColor = if (hasTextColor)
+                    (textColorNight ?: ColorUtils.flipLightness(textColor)) else null
+                val nightBgColor = if (hasBgColor)
+                    (bgColorNight ?: ColorUtils.flipLightness(bgColor)) else null
+                val nightUnderlineColor = if (hasUnderlineColor && hasUnderline)
+                    (underlineColorNight ?: ColorUtils.flipLightness(underlineColor)) else null
+                HighlightRulePreview(
+                    label = stringResource(R.string.night),
+                    sampleText = sampleText,
+                    pattern = pattern,
+                    textColor = nightTextColor,
+                    bgColor = nightBgColor,
+                    bgImage = "",
+                    bgImageFit = bgImageFit,
+                    bgImageScale = bgImageScale,
+                    underlineMode = if (hasUnderline) underlineMode else 0,
+                    underlineColor = nightUnderlineColor,
+                    underlineWidth = underlineWidth,
+                    underlineOffset = underlineOffset,
+                    pageBgColor = runCatching {
+                        android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStrNight)
+                    }.getOrDefault(0xFF000000.toInt()),
+                    pageTextColor = ReadBookConfig.durConfig.textColorNight,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                )
+            }
         }
     }
 
@@ -602,6 +672,34 @@ fun HighlightRuleEditSheet(
         onColorSelected = { color ->
             underlineColor = color
             showUnderlineColorPicker = false
+        },
+    )
+    // Night color pickers
+    ColorPickerSheet(
+        show = showTextColorNightPicker,
+        initialColor = textColorNight ?: ColorUtils.flipLightness(textColor),
+        onDismissRequest = { showTextColorNightPicker = false },
+        onColorSelected = { color ->
+            textColorNight = color
+            showTextColorNightPicker = false
+        },
+    )
+    ColorPickerSheet(
+        show = showBgColorNightPicker,
+        initialColor = bgColorNight ?: ColorUtils.flipLightness(bgColor),
+        onDismissRequest = { showBgColorNightPicker = false },
+        onColorSelected = { color ->
+            bgColorNight = color
+            showBgColorNightPicker = false
+        },
+    )
+    ColorPickerSheet(
+        show = showUnderlineColorNightPicker,
+        initialColor = underlineColorNight ?: ColorUtils.flipLightness(underlineColor),
+        onDismissRequest = { showUnderlineColorNightPicker = false },
+        onColorSelected = { color ->
+            underlineColorNight = color
+            showUnderlineColorNightPicker = false
         },
     )
 
@@ -665,6 +763,7 @@ fun HighlightRuleEditSheet(
 
 @Composable
 private fun HighlightRulePreview(
+    label: String,
     sampleText: String,
     pattern: String,
     textColor: Int?,
@@ -676,10 +775,12 @@ private fun HighlightRulePreview(
     underlineColor: Int?,
     underlineWidth: Float,
     underlineOffset: Float,
+    pageBgColor: Int,
+    pageTextColor: Int,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val defaultTextColor = LegadoTheme.colorScheme.onSurface
+    val defaultTextColor = Color(pageTextColor)
     val resolvedTextColor = textColor?.let { Color(it) } ?: defaultTextColor
     val resolvedUnderlineColor = underlineColor?.let { Color(it) } ?: resolvedTextColor
 
@@ -721,21 +822,32 @@ private fun HighlightRulePreview(
         }
     }
 
+    val labelColor = if (ColorUtils.isColorLight(pageBgColor)) {
+        Color(0x99000000)
+    } else {
+        Color(0x99FFFFFF)
+    }
     NormalCard(
         modifier = modifier,
         cornerRadius = 12.dp,
-        containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+        containerColor = Color(pageBgColor),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            AppText(
+                text = label,
+                style = LegadoTheme.typography.labelSmall,
+                color = labelColor,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
             if (pattern.isNotBlank() && matchRanges.isEmpty()) {
                 AppText(
                     text = stringResource(R.string.highlight_preview_no_match),
                     style = LegadoTheme.typography.labelSmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    color = labelColor,
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
             }

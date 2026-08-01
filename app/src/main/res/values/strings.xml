@@ -2383,6 +2383,7 @@
     <string name="show_all_synopsis">Show all synopsis</string>
     <string name="show_lines_synopsis">Show %1$d lines of synopsis</string>
     <string name="show_tags">Show Tags</string>
+    <string name="cover_align_top">Cover Align Top</string>
     <string name="custom_tag_colors">Custom Tag Colors</string>
     <string name="manage_tag_colors">Manage Tag Colors</string>
     <string name="search_filter_first">Search button opens the search page directly</string>
