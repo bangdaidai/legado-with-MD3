@@ -1121,7 +1121,7 @@ fun MainActivity.mainEntryProvider(
                         ),
                     )
                     is ReadingMemoryDetailEffect.OpenBookInfoEdit -> {
-                        context.startActivity(BookInfoEditActivity::class.java) {
+                        context.startActivity<BookInfoEditActivity> {
                             putExtra("bookUrl", effect.bookUrl)
                         }
                     }

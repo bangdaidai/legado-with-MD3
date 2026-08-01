@@ -123,16 +123,6 @@ class TextChapterLayout(
                 cachedHighlightRules = it
             }
         }
-                    CompiledHighlightRule(
-                        rule = rule,
-                        regex = Regex(pattern)
-                    )
-                }.getOrNull()
-            }.also {
-                cachedHighlightRulesConfigName = configName
-                cachedHighlightRules = it
-            }
-        }
 
     private val highlightRuleRepository: HighlightRuleRepository
         get() = GlobalContext.get().get()
