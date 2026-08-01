@@ -1699,6 +1699,17 @@
     <string name="select_rule_to_preview_chapters">Select rule to preview chapter list</string>
     <string name="chapter_count_format">%d chapters</string>
     <string name="chapter_list_preview_limit">Only showing first 500 chapters</string>
+    <string name="toc_rule_preview">Title Replace Preview</string>
+    <string name="toc_preview_no_cached_chapters">No cached chapters yet. Please load the table of contents first.</string>
+    <string name="toc_preview_chapter_count">%d chapters in cache</string>
+    <string name="toc_preview_rule_count">%d title replace rules applied</string>
+    <string name="toc_preview_network_tip">Preview how title replace rules affect chapter names in this book.</string>
+    <string name="toc_preview_no_title_rule">No title replace rules configured for this book.</string>
+    <string name="toc_preview_matched">Matched %d</string>
+    <string name="toc_preview_no_match">No match</string>
+    <string name="toc_preview_chain_title">Replace Chain Demo</string>
+    <string name="toc_preview_chain_summary">%1$d rules, %2$d changed</string>
+    <string name="toc_preview_no_change">no change</string>
     <string name="split_long_chapters">Split Long Chapters</string>
     <string name="export_bookmarks_json">Export Bookmarks as JSON</string>
     <string name="export_bookmarks_markdown">Export Bookmarks as Markdown</string>

@@ -90,6 +90,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isLocalTxt
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.replace.ReplaceEditRoute
 import io.legado.app.ui.theme.LegadoTheme
@@ -120,6 +121,8 @@ import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.DynamicTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
+import io.legado.app.ui.widget.components.icon.AppIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -156,6 +159,9 @@ fun TocRouteScreen(
             )
         }
     }
+    val tocRulePreviewLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { /* 网络书预览不回传结果 */ }
     LaunchedEffect(bookUrl) {
         bookUrl?.let { viewModel.onIntent(TocIntent.LoadBook(it)) }
     }
@@ -179,6 +185,16 @@ fun TocRouteScreen(
                 Intent(context, TxtTocRuleActivity::class.java).putExtra("tocRegex", regex)
             )
         },
+        onOpenTocRulePreview = { isLocal, bookUrl, tocRegex ->
+            val intent = Intent(
+                context,
+                io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewActivity::class.java
+            ).apply {
+                putExtra("bookUrl", bookUrl)
+                tocRegex?.let { putExtra("tocRegex", it) }
+            }
+            if (isLocal) tocRegexLauncher.launch(intent) else tocRulePreviewLauncher.launch(intent)
+        },
         onExportBookmarks = { isMarkdown, fileName ->
             pendingExportMarkdown = isMarkdown
             exportLauncher.launch(fileName)
@@ -197,6 +213,7 @@ fun TocScreen(
     onOpenReplaceRule: (ReplaceEditRoute?) -> Unit,
     onBookmarkClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
     onEditLocalTocRule: (String?) -> Unit,
+    onOpenTocRulePreview: (isLocal: Boolean, bookUrl: String, tocRegex: String?) -> Unit,
     onExportBookmarks: (isMarkdown: Boolean, fileName: String) -> Unit,
     initialPage: Int = 0,
 ) {
@@ -418,6 +435,21 @@ fun TocScreen(
                 onSearchQueryChange = { onIntent(TocIntent.SetSearchQuery(it)) },
                 searchPlaceholder = stringResource(R.string.search_chapters),
                 onClearSelection = { onIntent(TocIntent.ClearSelection) },
+                topBarActions = {
+                    if (pagerState.currentPage == 0 && book != null) {
+                        TopBarActionButton(
+                            onClick = {
+                                onOpenTocRulePreview(
+                                    book.isLocal,
+                                    book.bookUrl,
+                                    if (book.isLocalTxt) book.tocUrl else null,
+                                )
+                            },
+                            imageVector = AppIcons.Filter,
+                            contentDescription = stringResource(R.string.toc_rule_preview),
+                        )
+                    }
+                },
                 dropDownMenuContent = { dismiss ->
                     when (pagerState.currentPage) {
                         0 -> {

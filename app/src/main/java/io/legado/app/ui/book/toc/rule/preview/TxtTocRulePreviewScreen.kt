@@ -1,5 +1,9 @@
 package io.legado.app.ui.book.toc.rule.preview
 
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -7,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +33,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -37,6 +45,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.TxtTocRule
+import io.legado.app.ui.replace.ReplaceEditRoute
+import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.utils.toastOnUi
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
@@ -82,6 +95,15 @@ fun TxtTocRulePreviewRouteScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // 编辑替换规则返回后刷新（网络书预览用）
+    val editReplaceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.onIntent(TxtTocRulePreviewIntent.Refresh)
+        }
+    }
+
     LaunchedEffect(bookUrl) {
         viewModel.init(bookUrl, currentTocRegex)
     }
@@ -92,6 +114,14 @@ fun TxtTocRulePreviewRouteScreen(
                 is TxtTocRulePreviewEffect.ShowToast -> context.toastOnUi(effect.message)
                 is TxtTocRulePreviewEffect.OpenManagePage -> onOpenManagePage()
                 is TxtTocRulePreviewEffect.ApplyRule -> onApplyRule(effect.rule)
+                is TxtTocRulePreviewEffect.OpenReplaceRuleEditor -> {
+                    editReplaceLauncher.launch(
+                        ReplaceRuleActivity.startIntent(
+                            context,
+                            ReplaceEditRoute(id = effect.ruleId),
+                        )
+                    )
+                }
             }
         }
     }
@@ -122,6 +152,18 @@ fun TxtTocRulePreviewScreen(
                     onEditRule = { rule ->
                         onIntent(TxtTocRulePreviewIntent.EditRule(rule))
                     },
+                )
+            }
+        }
+
+        is TxtTocRulePreviewSheet.NetworkRuleChapters -> {
+            AppModalBottomSheet(
+                data = sheet.item,
+                onDismissRequest = { onIntent(TxtTocRulePreviewIntent.DismissSheet) },
+            ) {
+                NetworkRuleChapterSheetContent(
+                    item = sheet.item,
+                    onEditRule = { onIntent(TxtTocRulePreviewIntent.EditNetworkRule(sheet.item.rule.id)) },
                 )
             }
         }
@@ -174,8 +216,10 @@ fun TxtTocRulePreviewScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = { _ ->
             GlassMediumFlexibleTopAppBar(
-                title = stringResource(R.string.select_toc_rule),
-                subtitle = stringResource(R.string.select_rule_to_preview_chapters),
+                title = if (state.isTxt) stringResource(R.string.select_toc_rule)
+                else stringResource(R.string.toc_rule_preview),
+                subtitle = if (state.isTxt) stringResource(R.string.select_rule_to_preview_chapters)
+                else null,
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onBack) },
                 actions = {
@@ -185,24 +229,26 @@ fun TxtTocRulePreviewScreen(
                         imageVector = AppIcons.Search,
                         contentDescription = stringResource(R.string.search),
                     )
-                    // Layout toggle button
-                    TopBarActionButton(
-                        onClick = { onIntent(TxtTocRulePreviewIntent.ToggleLayout) },
-                        imageVector = if (state.isGridLayout) {
-                            Icons.AutoMirrored.Outlined.FormatListBulleted
-                        } else {
-                            Icons.Default.GridView
-                        },
-                        contentDescription = stringResource(
-                            if (state.isGridLayout) R.string.layout_mode_list else R.string.layout_mode_grid
-                        ),
-                    )
-                    // Manage page button
-                    TopBarActionButton(
-                        onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
-                        imageVector = AppIcons.Settings,
-                        contentDescription = stringResource(R.string.manage),
-                    )
+                    if (state.isTxt) {
+                        // Layout toggle button
+                        TopBarActionButton(
+                            onClick = { onIntent(TxtTocRulePreviewIntent.ToggleLayout) },
+                            imageVector = if (state.isGridLayout) {
+                                Icons.AutoMirrored.Outlined.FormatListBulleted
+                            } else {
+                                Icons.Default.GridView
+                            },
+                            contentDescription = stringResource(
+                                if (state.isGridLayout) R.string.layout_mode_list else R.string.layout_mode_grid
+                            ),
+                        )
+                        // Manage page button
+                        TopBarActionButton(
+                            onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
+                            imageVector = AppIcons.Settings,
+                            contentDescription = stringResource(R.string.manage),
+                        )
+                    }
                 },
                 bottomContent = {
                     AnimatedVisibility(
@@ -222,7 +268,7 @@ fun TxtTocRulePreviewScreen(
             )
         },
         floatingActionButton = {
-            if (state.hasSelection) {
+            if (state.isTxt && state.hasSelection) {
                 AppFloatingActionButton(
                     onClick = { onIntent(TxtTocRulePreviewIntent.ApplyRule) },
                     icon = Icons.Default.Check,
@@ -240,6 +286,9 @@ fun TxtTocRulePreviewScreen(
             ) {
                 CircularProgressIndicator()
             }
+        } else if (!state.isTxt) {
+            // 网络书籍：标题替换规则预览
+            NetworkRulePreviewContent(state = state, onIntent = onIntent, contentPadding = contentPadding)
         } else if (state.isGridLayout) {
                 val displayRules = state.filteredRules
                 LazyVerticalGrid(
@@ -263,8 +312,205 @@ fun TxtTocRulePreviewScreen(
                                 }
                             },
                         )
+    }
+}
+
+@Composable
+private fun NetworkRuleCard(
+    item: NetworkRulePreviewItem,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+) {
+    GlassCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                AppText(
+                    text = if (item.order > 0) "${item.order}. ${item.rule.name}" else item.rule.name,
+                    style = LegadoTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                item.example?.let { example ->
+                    Spacer(Modifier.height(2.dp))
+                    AppText(
+                        text = example,
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            if (!item.computed) {
+                AppCircularProgressIndicator(modifier = Modifier.size(20.dp))
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (item.matchCount > 0)
+                        LegadoTheme.colorScheme.primaryContainer
+                    else
+                        LegadoTheme.colorScheme.surfaceVariant,
+                ) {
+                    AppText(
+                        text = if (item.matchCount > 0)
+                            stringResource(R.string.toc_preview_matched, item.matchCount)
+                        else
+                            stringResource(R.string.toc_preview_no_match),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = if (item.matchCount > 0)
+                            LegadoTheme.colorScheme.onPrimaryContainer
+                        else
+                            LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(4.dp))
+            TopBarActionButton(
+                onClick = onEdit,
+                imageVector = Icons.Default.Edit,
+                contentDescription = stringResource(R.string.edit),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChainDemoCard(demo: ChainDemo) {
+    var expanded by remember { mutableStateOf(false) }
+    GlassCard(
+        onClick = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    AppText(
+                        text = stringResource(R.string.toc_preview_chain_title),
+                        style = LegadoTheme.typography.titleSmall,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    AppText(
+                        text = stringResource(R.string.toc_preview_chain_summary, demo.steps.size, demo.changedStepCount),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TopBarActionButton(
+                    onClick = { expanded = !expanded },
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            AppText(
+                text = demo.originalTitle,
+                style = LegadoTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            AppText(
+                text = "→ ${demo.finalTitle}",
+                style = LegadoTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            AnimatedVisibility(visible = expanded) {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    demo.steps.forEachIndexed { index, step ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (step.changed) LegadoTheme.colorScheme.primaryContainer
+                                else LegadoTheme.colorScheme.surfaceVariant,
+                            ) {
+                                AppText(
+                                    text = "${index + 1}",
+                                    style = LegadoTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            AppText(
+                                text = step.ruleName,
+                                style = LegadoTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (step.changed) {
+                                AppText(
+                                    text = step.after,
+                                    style = LegadoTheme.typography.bodySmall,
+                                    color = LegadoTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetworkRuleChapterSheetContent(
+    item: NetworkRulePreviewItem,
+    onEditRule: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AppText(
+                text = item.rule.name,
+                style = LegadoTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.width(8.dp))
+            TopBarActionButton(
+                onClick = onEditRule,
+                imageVector = Icons.Default.Edit,
+                contentDescription = stringResource(R.string.edit),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        AppText(
+            text = stringResource(R.string.toc_preview_matched, item.matchCount),
+            style = LegadoTheme.typography.bodyMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        if (item.chapters.isEmpty()) {
+            AppText(
+                text = stringResource(R.string.toc_preview_no_match),
+                style = LegadoTheme.typography.bodyMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            FastScrollLazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+            ) {
+                itemsIndexed(item.chapters.toList()) { _, (origin, display) ->
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        AppText(text = display, style = LegadoTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        AppText(text = origin, style = LegadoTheme.typography.bodySmall, color = LegadoTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        }
+    }
+}
             } else {
                 val displayRules = state.filteredRules
                 LazyColumn(
@@ -509,6 +755,94 @@ private fun ChapterListSheetContent(
                         modifier = Modifier.padding(8.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+// ===================== 网络书籍：标题替换规则预览 =====================
+
+@Composable
+private fun NetworkRulePreviewContent(
+    state: TxtTocRulePreviewUiState,
+    onIntent: (TxtTocRulePreviewIntent) -> Unit,
+    contentPadding: PaddingValues,
+) {
+    if (state.emptyHint.isNotEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppText(
+                text = state.emptyHint,
+                style = LegadoTheme.typography.bodyMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+
+    val rules = state.filteredNetworkRules
+    FastScrollLazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = adaptiveContentPadding(
+            top = contentPadding.calculateTopPadding(),
+            bottom = contentPadding.calculateBottomPadding() + 16.dp,
+        ),
+    ) {
+        item(key = "network_header") {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                AppText(
+                    text = stringResource(R.string.toc_preview_chapter_count, state.chapterTotal),
+                    style = LegadoTheme.typography.titleSmall,
+                )
+                Spacer(Modifier.height(4.dp))
+                AppText(
+                    text = stringResource(
+                        R.string.toc_preview_rule_count,
+                        state.titleReplaceRuleCount
+                    ),
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                AppText(
+                    text = stringResource(R.string.toc_preview_network_tip),
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        state.chainDemo?.let { demo ->
+            item(key = "chain_demo") { ChainDemoCard(demo = demo) }
+        }
+
+        if (rules.isEmpty()) {
+            item(key = "network_empty") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppText(
+                        text = stringResource(R.string.toc_preview_no_title_rule),
+                        style = LegadoTheme.typography.bodyMedium,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            itemsIndexed(rules, key = { _, item -> item.rule.id }) { _, item ->
+                NetworkRuleCard(
+                    item = item,
+                    onClick = { onIntent(TxtTocRulePreviewIntent.ShowNetworkRuleChapters(item)) },
+                    onEdit = { onIntent(TxtTocRulePreviewIntent.EditNetworkRule(item.rule.id)) },
+                )
             }
         }
     }
