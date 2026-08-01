@@ -21,6 +21,10 @@ data class CharStyle(
     val npRight: Float = 0.1f,
     val npTop: Float = 0.1f,
     val npBottom: Float = 0.1f,
+    val bgPadStart: Float = 0f,
+    val bgPadEnd: Float = 0f,
+    val bgPadTop: Float = 0f,
+    val bgPadBottom: Float = 0f,
 ) {
     val hasStyle: Boolean
         get() = textColor != null || bgColor != null || underlineMode != 0 || bgImage.isNotEmpty() || fontPath.isNotEmpty() || fontWeight != 400 || isItalic

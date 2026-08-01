@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.ExploreKind
+import io.legado.app.R
 import io.legado.app.data.repository.ExploreRepository
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.BookShelfKey
@@ -36,8 +37,43 @@ private data class ExploreShowLoadState(
 
 private data class ExploreShowKindState(
     val kinds: List<ExploreKind> = emptyList(),
+    val groups: List<String> = emptyList(),
+    val selectedGroup: String? = null,
     val selectedKindTitle: String? = null,
 )
+
+/**
+ * 书源规则里没有显式的分组字段，约定：占满整行、既没有 url 也没有 action 的 kind 是大分类标题，
+ * 它后面的分类都归属于它，直到遇到下一个大分类标题。
+ */
+private fun isExploreGroupHeader(kind: ExploreKind): Boolean {
+    if (!kind.url.isNullOrBlank()) return false
+    if (!kind.action.isNullOrBlank()) return false
+    val style = kind.style()
+    return style.layout_flexBasisPercent >= 0.95f ||
+        (style.layout_flexGrow >= 1f && style.layout_flexBasisPercent < 0f)
+}
+
+/** 去掉分类标题两侧的装饰符号，例如「◆ 排行 ◆」→「排行」 */
+private fun resolveExploreGroupTitle(kind: ExploreKind): String {
+    val raw = kind.title.trim()
+    return raw.replace(Regex("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$"), "").ifBlank { raw }
+}
+
+private fun groupExploreKinds(kinds: List<ExploreKind>, ungroupedLabel: String): Map<String, List<ExploreKind>> {
+    val grouped = LinkedHashMap<String, MutableList<ExploreKind>>()
+    var currentGroup: String? = null
+    kinds.forEach { kind ->
+        if (isExploreGroupHeader(kind)) {
+            currentGroup = resolveExploreGroupTitle(kind).ifBlank { ungroupedLabel }
+            return@forEach
+        }
+        // 只有 url 类型的分类能直接切换，其余类型仍走 ExploreKindSelectSheet
+        if (kind.type != ExploreKind.Type.url || kind.url.isNullOrBlank()) return@forEach
+        grouped.getOrPut(currentGroup ?: ungroupedLabel) { mutableListOf() }.add(kind)
+    }
+    return grouped
+}
 
 private data class ExploreShowDisplayState(
     val sourceUrl: String? = null,
@@ -73,6 +109,7 @@ class ExploreShowViewModel(
     private var initialized = false
     private var page = 1
     private var autoPageCount = 0
+    private var groupedKinds: Map<String, List<ExploreKind>> = emptyMap()
 
     companion object {
         private const val MAX_AUTO_PAGES = 3
@@ -104,6 +141,7 @@ class ExploreShowViewModel(
             ExploreShowIntent.ForceLoadNext -> loadMore(forceLoad = true)
             ExploreShowIntent.Refresh -> loadMore(isRefresh = true)
             is ExploreShowIntent.SwitchKind -> switchKind(intent.kind)
+            is ExploreShowIntent.SwitchGroup -> switchGroup(intent.group)
             ExploreShowIntent.ToggleLayout -> toggleLayout()
             is ExploreShowIntent.SaveGridCount -> saveGridCount(intent.count)
             is ExploreShowIntent.ShowSheet -> _displayState.update { it.copy(sheet = intent.sheet) }
@@ -165,6 +203,8 @@ class ExploreShowViewModel(
                     sourceUrl = displayState.sourceUrl,
                     books = books.toImmutableList(),
                     kinds = kindState.kinds.toImmutableList(),
+                    kindGroups = kindState.groups.toImmutableList(),
+                    selectedGroup = kindState.selectedGroup,
                     selectedKindTitle = kindState.selectedKindTitle,
                     layoutState = displayState.layoutState,
                     gridCount = displayState.gridCount,
@@ -204,10 +244,17 @@ class ExploreShowViewModel(
         viewModelScope.launch {
             loadKinds(incomingSourceUrl)
             if (incomingExploreUrl != null) {
-                val kinds = _kindState.value.kinds
-                val matchedKind = kinds.firstOrNull { it.url == incomingExploreUrl }
-                if (matchedKind != null) {
-                    _kindState.update { it.copy(selectedKindTitle = matchedKind.title) }
+                val entry = groupedKinds.entries
+                    .firstOrNull { (_, tags) -> tags.any { it.url == incomingExploreUrl } }
+                if (entry != null) {
+                    val matchedKind = entry.value.first { it.url == incomingExploreUrl }
+                    _kindState.update {
+                        it.copy(
+                            selectedGroup = entry.key,
+                            kinds = entry.value,
+                            selectedKindTitle = matchedKind.title,
+                        )
+                    }
                 }
             }
         }
@@ -216,7 +263,25 @@ class ExploreShowViewModel(
     }
 
     private suspend fun loadKinds(sourceUrl: String) {
-        _kindState.update { it.copy(kinds = repository.getSourceExploreKinds(sourceUrl)) }
+        val raw = repository.getSourceExploreKinds(sourceUrl)
+        val grouped = groupExploreKinds(raw, appCtx.getString(R.string.all))
+        groupedKinds = grouped
+        // 只有存在多个大分类时才显示分组行，否则退化为单行标签条
+        val groups = if (grouped.size > 1) grouped.keys.toList() else emptyList()
+        val defaultGroup = grouped.keys.firstOrNull()
+        _kindState.update {
+            it.copy(
+                groups = groups,
+                selectedGroup = defaultGroup,
+                kinds = grouped[defaultGroup] ?: emptyList(),
+            )
+        }
+    }
+
+    private fun switchGroup(group: String) {
+        _kindState.update {
+            it.copy(selectedGroup = group, kinds = groupedKinds[group] ?: emptyList())
+        }
     }
 
     private fun switchKind(kind: ExploreKind) {

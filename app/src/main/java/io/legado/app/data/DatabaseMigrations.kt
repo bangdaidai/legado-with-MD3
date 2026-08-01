@@ -26,6 +26,7 @@ object DatabaseMigrations {
             migration_100_101,
             migration_102_103,
             migration_103_104,
+            migration_104_105,
         )
     }
 
@@ -693,6 +694,19 @@ object DatabaseMigrations {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN textColorNight INTEGER")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgColorNight INTEGER")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineColorNight INTEGER")
+        }
+    }
+
+    // endregion
+
+    // region 104→105: highlightRules 新增九宫格外扩边距字段
+
+    private val migration_104_105 = object : Migration(104, 105) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingStart REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingEnd REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingTop REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingBottom REAL NOT NULL DEFAULT 0")
         }
     }
 

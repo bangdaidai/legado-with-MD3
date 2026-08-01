@@ -320,7 +320,7 @@ fun SourceBrowseDetailPage(
                 val isButtonGroup = browseModuleType == "buttonGroup"
                 val isRanking = browseModuleType == HomepageModuleType.Ranking.key ||
                         browseModuleType == HomepageModuleType.GridRanking.key
-                val supportsMultipleKinds = isButtonGroup || isRanking
+                val supportsMultipleKinds = true
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -358,8 +358,6 @@ fun SourceBrowseDetailPage(
                             }
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
 
                     SelectionItemCard(
                         title = stringResource(R.string.homepage_select_from_kinds),

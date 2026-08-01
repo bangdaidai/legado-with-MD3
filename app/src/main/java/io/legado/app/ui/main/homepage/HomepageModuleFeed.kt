@@ -10,6 +10,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -541,7 +543,7 @@ private fun ModuleHeader(
             ModuleHeaderTab(
                 title = title,
                 selected = true,
-                highlightSelected = false,
+                highlightSelected = true,
                 onClick = {},
                 modifier = Modifier.weight(1f),
             )
@@ -564,13 +566,41 @@ private fun ModuleHeaderTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isPill = selected && highlightSelected
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val resolvedCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
+        themeSettings.baseCardCornerRadius.dp
+    } else {
+        16.dp
+    }
+    val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
+    val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+        val configuredColor = if (LegadoTheme.isDark) {
+            themeSettings.baseCardBorderColorNight
+        } else {
+            themeSettings.baseCardBorderColor
+        }
+        val borderColor = configuredColor.takeIf { it != 0 }?.let(::Color)
+            ?: LegadoTheme.colorScheme.outlineVariant
+        Modifier.border(
+            BorderStroke(themeSettings.baseCardBorderWidth.dp, borderColor),
+            resolvedShape
+        )
+    } else {
+        Modifier
+    }
+
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = if (isPill) LegadoTheme.colorScheme.primaryContainer else Color.Transparent,
-        contentColor = if (isPill) LegadoTheme.colorScheme.onPrimaryContainer
-        else LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+        shape = resolvedShape,
+        color = when {
+            selected && highlightSelected -> LegadoTheme.colorScheme.primaryContainer
+            else -> LegadoTheme.colorScheme.surfaceContainerHigh
+        },
+        contentColor = when {
+            selected && highlightSelected -> LegadoTheme.colorScheme.onPrimaryContainer
+            else -> LegadoTheme.colorScheme.onSurfaceVariant
+        },
         modifier = modifier
+            .then(borderModifier)
             .selectable(
                 selected = selected,
                 role = Role.Tab,

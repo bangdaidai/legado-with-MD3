@@ -36,6 +36,10 @@ data class HighlightRule(
     var npTop: Float = 0.1f,
     var npBottom: Float = 0.1f,
     var useProtagonist: Boolean = false,
+    var bgPaddingStart: Float = 0f,
+    var bgPaddingEnd: Float = 0f,
+    var bgPaddingTop: Float = 0f,
+    var bgPaddingBottom: Float = 0f,
 ) {
 
     fun styleSummary(): String {

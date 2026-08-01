@@ -513,7 +513,21 @@ class ReadingMemoryRepository(
      * 设置/取消某角色的主角标记。
      */
     suspend fun setProtagonist(bookUrl: String, name: String, isProtagonist: Boolean) {
-        bookKnowledgeDao.setProtagonist(name, bookUrl, isProtagonist, System.currentTimeMillis())
+        val existing = bookKnowledgeDao.getProtagonistByName(bookUrl, name)
+        if (existing == null) {
+            if (!isProtagonist) return
+            bookKnowledgeDao.upsertCharacterProfile(
+                BookCharacterProfile(
+                    id = java.util.UUID.randomUUID().toString(),
+                    bookUrl = bookUrl,
+                    name = name,
+                    isProtagonist = true,
+                    role = "主角",
+                )
+            )
+        } else {
+            bookKnowledgeDao.setProtagonist(name, bookUrl, isProtagonist, System.currentTimeMillis())
+        }
     }
 
     // endregion

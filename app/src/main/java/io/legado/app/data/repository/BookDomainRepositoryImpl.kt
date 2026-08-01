@@ -66,9 +66,6 @@ class BookDomainRepositoryImpl(
     override suspend fun deleteBooks(bookUrls: Set<String>) {
         val books = getBooks(bookUrls)
         if (books.isNotEmpty()) {
-            for (book in books) {
-                bookTagRelationDao.deleteByBookUrl(book.bookUrl)
-            }
             // 不物理删除 books 行, 改为下架标记, 保留书名/作者/封面供阅读记录等模块读取
             val archived = books.map { it.copy(type = it.type or BookType.notShelf) }
             bookDao.update(*archived.toTypedArray())

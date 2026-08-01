@@ -621,6 +621,7 @@ sealed interface ReadBookIntent {
     data object ExportHighlightRules : ReadBookIntent
     data object ExportHighlightRulesAsUrl : ReadBookIntent
     data class ExportHighlightRulesToFile(val uri: Uri) : ReadBookIntent
+    data object ResetHighlightRulesToDefault : ReadBookIntent
 
     // Icon picker — file IO handled by ViewModel
     data class SaveMenuCustomIcon(val id: String, val uri: Uri) : ReadBookIntent

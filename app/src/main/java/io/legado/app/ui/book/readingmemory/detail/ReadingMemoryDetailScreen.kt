@@ -125,24 +125,24 @@ fun ReadingMemoryDetailScreen(
         }
     }
 
-    var tagEditData by remember { mutableStateOf<TagEditData?>(null) }
-
-    if (tagEditData != null) {
-        TagEditSheet(
-            data = tagEditData,
-            groups = state.tagGroups,
-            onChange = { tagEditData = it },
-            onConfirm = {
-                val trimmed = it.name.trim()
-                if (trimmed.isNotBlank()) {
-                    onIntent(ReadingMemoryDetailIntent.AddTag(trimmed))
-                }
-                tagEditData = null
-            },
-            onPickColor = {},
-            onDismiss = { tagEditData = null },
-        )
+    val tagEditData = remember(state.showTagPicker) {
+        mutableStateOf<TagEditData?>(if (state.showTagPicker) TagEditData() else null)
     }
+
+    TagEditSheet(
+        data = tagEditData.value,
+        groups = state.tagGroups,
+        onChange = { tagEditData.value = it },
+        onConfirm = {
+            val trimmed = it.name.trim()
+            if (trimmed.isNotBlank()) {
+                onIntent(ReadingMemoryDetailIntent.AddTag(trimmed))
+            }
+            onIntent(ReadingMemoryDetailIntent.DismissTagPicker)
+        },
+        onPickColor = {},
+        onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissTagPicker) },
+    )
 
     if (state.showReviewEditor) {
         ReviewEditorSheet(
@@ -604,7 +604,7 @@ private fun ExcerptSection(
     onEditBookmark: (Bookmark) -> Unit,
 ) {
     if (state.excerpts.isEmpty()) return
-    SectionCard(title = "阅读摘录") {
+    SectionCard(title = "书摘笔记") {
         state.excerpts.forEachIndexed { index, excerpt ->
             Column(modifier = Modifier.clickable { onEditBookmark(excerpt) }) {
                 if (index > 0) {
@@ -620,13 +620,13 @@ private fun ExcerptSection(
                 )
                 if (excerpt.content.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(text = excerpt.content, style = LegadoTheme.typography.labelLarge, lineHeight = 22.sp)
+                    AppText(text = excerpt.content, style = LegadoTheme.typography.bodySmall, lineHeight = 22.sp)
                 }
                 if (!excerpt.bookText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
                         text = excerpt.bookText,
-                        style = LegadoTheme.typography.labelMedium,
+                        style = LegadoTheme.typography.bodySmall,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,

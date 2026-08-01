@@ -15,7 +15,7 @@ interface BookmarkDao {
     )
     val all: List<Bookmark>
 
-    @Query("select * from bookmarks order by bookName collate localized, bookAuthor collate localized, chapterIndex, chapterPos")
+    @Query("select * from bookmarks order by time desc")
     fun flowAll(): Flow<List<Bookmark>>
 
     @Query(

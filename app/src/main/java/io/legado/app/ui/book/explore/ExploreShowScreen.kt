@@ -74,7 +74,6 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import org.koin.androidx.compose.koinViewModel
-import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.explore.exploreKindKey
@@ -171,12 +170,15 @@ fun ExploreShowScreen(
     val isGridMode = state.layoutState == 1
     val hazeState = remember { HazeState() }
     // 只有 url 类型的分类能直接切换，其余类型（button/text/toggle/select）仍走 ExploreKindSelectSheet
-    val chipKinds = remember(state.kinds) {
-        state.kinds.filter { it.type == ExploreKind.Type.url && !it.url.isNullOrBlank() }
-    }
+    // ViewModel 已经按大分类分组并过滤好，state.kinds 只包含当前选中大分类下的 url 标签
+    val chipKinds = state.kinds
     val chipListState = rememberLazyListState()
     val selectedChipIndex = remember(chipKinds, state.selectedKindTitle) {
         chipKinds.indexOfFirst { it.title == state.selectedKindTitle }
+    }
+    val groupListState = rememberLazyListState()
+    val selectedGroupIndex = remember(state.kindGroups, state.selectedGroup) {
+        state.kindGroups.indexOfFirst { it == state.selectedGroup }
     }
     val showLoadMoreFooter = !state.isRefreshing &&
         (state.isLoading || state.errorMsg != null || state.isEnd)
@@ -236,6 +238,14 @@ fun ExploreShowScreen(
             chipListState.animateScrollToItem(selectedChipIndex)
         }
     }
+
+    // 切换大分类后把选中的大分类滚动到可见范围
+    LaunchedEffect(selectedGroupIndex) {
+        if (selectedGroupIndex >= 0) {
+            groupListState.animateScrollToItem(selectedGroupIndex)
+        }
+    }
+
 
 
     AppModalBottomSheet(
@@ -334,6 +344,28 @@ fun ExploreShowScreen(
                     },
                     scrollBehavior = scrollBehavior
                 )
+
+                if (state.kindGroups.isNotEmpty()) {
+                    LazyRow(
+                        state = groupListState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fadingEdge(groupListState, gradientWidth = 16.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            items = state.kindGroups,
+                            key = { it }
+                        ) { group ->
+                            ToggleChip(
+                                label = group,
+                                selected = group == state.selectedGroup,
+                                onToggle = { onIntent(ExploreShowIntent.SwitchGroup(group)) }
+                            )
+                        }
+                    }
+                }
 
                 if (chipKinds.isNotEmpty()) {
                     LazyRow(

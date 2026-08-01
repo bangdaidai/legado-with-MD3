@@ -913,13 +913,7 @@ class HomepageViewModel(
         type: String,
         kindTitles: List<String>
     ) {
-        if (
-            kindTitles.isEmpty() ||
-            (type != HomepageModuleType.Ranking.key &&
-                    type != HomepageModuleType.GridRanking.key)
-        ) {
-            return
-        }
+        if (kindTitles.isEmpty()) return
         viewModelScope.launch {
             val source = bookSourceRepository.getBookSource(sourceUrl) ?: return@launch
             val allKinds = withContext(Dispatchers.IO) { source.exploreKinds() }

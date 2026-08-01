@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readingmemory
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.ReadingMemory
+import io.legado.app.domain.model.settings.BookshelfSettings
 
 enum class ReadingMemoryStatusFilter(val label: String) {
     All("全部"), ToRead("未读"), Reading("在读"), Finished("已读"), Abandoned("弃文")
@@ -42,6 +43,8 @@ sealed interface ReadingMemoryListItem {
 @Stable
 data class ReadingMemoryUiState(
     val items: List<ReadingMemoryListItem> = emptyList(),
+    val statusCounts: Map<ReadingMemoryStatusFilter, Int> = emptyMap(),
+    val settings: BookshelfSettings = BookshelfSettings(),
     val statusFilter: ReadingMemoryStatusFilter = ReadingMemoryStatusFilter.All,
     val ratingFilter: ReadingMemoryRatingFilter = ReadingMemoryRatingFilter.All,
     val readTypeFilter: ReadingMemoryReadTypeFilter = ReadingMemoryReadTypeFilter.All,

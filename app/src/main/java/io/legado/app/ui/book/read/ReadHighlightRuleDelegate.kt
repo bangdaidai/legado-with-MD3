@@ -348,4 +348,21 @@ class ReadHighlightRuleDelegate(
             host.showToast(context.getString(R.string.copy_url))
         }
     }
+
+    fun resetToDefault() {
+        val configName = ReadBookConfig.durConfig.name
+        val currentRules = _uiState.value.rules
+        val existingNames = currentRules.map { it.name }.toSet()
+        val defaults = highlightRuleRepository.createDefaultRules()
+        val toImport = defaults.filter { it.name !in existingNames }
+        if (toImport.isEmpty()) {
+            host.showToast(context.getString(R.string.import_built_in_rules) + " — 0")
+            return
+        }
+        val merged = currentRules + toImport.mapIndexed { index, rule ->
+            rule.copy(position = currentRules.size + index)
+        }
+        saveRules(merged)
+        host.showToast(context.getString(R.string.import_built_in_rules) + " +${toImport.size}")
+    }
 }

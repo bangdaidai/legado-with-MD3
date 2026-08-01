@@ -67,7 +67,12 @@ fun ReadingMemoryScreen(
     var showClearDialog by remember { mutableStateOf(false) }
     var longPressBookUrl by remember { mutableStateOf<String?>(null) }
 
-    val statusTabs = remember { ReadingMemoryStatusFilter.entries.map { it.label } }
+    val statusTabs = remember(uiState.statusCounts) {
+        ReadingMemoryStatusFilter.entries.map { status ->
+            val count = uiState.statusCounts[status] ?: 0
+            "${status.label} $count"
+        }
+    }
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -128,6 +133,14 @@ fun ReadingMemoryScreen(
                                     showFilterSheet = true
                                 },
                             )
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.reading_memory_only_with_review),
+                                isSelected = uiState.onlyWithReview,
+                                onClick = {
+                                    onIntent(ReadingMemoryIntent.ToggleOnlyWithReview(!uiState.onlyWithReview))
+                                    dismiss()
+                                },
+                            )
                             HorizontalDivider()
                             RoundDropdownMenuItem(
                                 text = stringResource(R.string.reading_memory_show_card),
@@ -164,22 +177,32 @@ fun ReadingMemoryScreen(
                             )
                         }
                     },
+                    bottomContent = {
+                        AnimatedVisibility(
+                            modifier = Modifier.adaptiveHorizontalPadding(),
+                            visible = showSearch,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            SearchBar(
+                                query = uiState.searchQuery,
+                                onQueryChange = { onIntent(ReadingMemoryIntent.Search(it)) },
+                                placeholder = stringResource(R.string.reading_memory_search_hint),
+                                scrollState = listState,
+                                scope = scope,
+                            )
+                        }
+                        AppTabRow(
+                            tabTitles = statusTabs,
+                            selectedTabIndex = uiState.statusFilter.ordinal,
+                            onTabSelected = { index ->
+                                onIntent(
+                                    ReadingMemoryIntent.FilterStatus(ReadingMemoryStatusFilter.entries[index])
+                                )
+                            },
+                        )
+                    },
                 )
-
-                AnimatedVisibility(
-                    modifier = Modifier.adaptiveHorizontalPadding(),
-                    visible = showSearch,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
-                ) {
-                    SearchBar(
-                        query = uiState.searchQuery,
-                        onQueryChange = { onIntent(ReadingMemoryIntent.Search(it)) },
-                        placeholder = stringResource(R.string.reading_memory_search_hint),
-                        scrollState = listState,
-                        scope = scope,
-                    )
-                }
             }
         }
     ) { padding ->
@@ -188,15 +211,6 @@ fun ReadingMemoryScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            AppTabRow(
-                tabTitles = statusTabs,
-                selectedTabIndex = uiState.statusFilter.ordinal,
-                onTabSelected = { index ->
-                    onIntent(
-                        ReadingMemoryIntent.FilterStatus(ReadingMemoryStatusFilter.entries[index])
-                    )
-                },
-            )
 
             if (uiState.items.isEmpty()) {
                 Box(
@@ -299,12 +313,6 @@ fun ReadingMemoryScreen(
                         )
                     }
                 }
-                HorizontalDivider()
-                ToggleChip(
-                    label = stringResource(R.string.reading_memory_only_with_review),
-                    selected = uiState.onlyWithReview,
-                    onToggle = { onIntent(ReadingMemoryIntent.ToggleOnlyWithReview(!uiState.onlyWithReview)) },
-                )
             }
         }
     }

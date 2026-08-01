@@ -12,6 +12,8 @@ data class ExploreShowUiState(
     val sourceUrl: String? = null,
     val books: ImmutableList<ExploreBookItemUi> = persistentListOf(),
     val kinds: ImmutableList<ExploreKind> = persistentListOf(),
+    val kindGroups: ImmutableList<String> = persistentListOf(),
+    val selectedGroup: String? = null,
     val selectedKindTitle: String? = null,
     val layoutState: Int = 0,
     val gridCount: Int = 3,
@@ -45,6 +47,7 @@ sealed interface ExploreShowIntent {
     data object ForceLoadNext : ExploreShowIntent
     data object Refresh : ExploreShowIntent
     data class SwitchKind(val kind: ExploreKind) : ExploreShowIntent
+    data class SwitchGroup(val group: String) : ExploreShowIntent
     data object ToggleLayout : ExploreShowIntent
     data class SaveGridCount(val count: Int) : ExploreShowIntent
     data class ShowSheet(val sheet: ExploreShowSheet) : ExploreShowIntent

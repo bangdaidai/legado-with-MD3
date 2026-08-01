@@ -36,6 +36,10 @@ data class TextHtmlColumn(
     override val npRight: Float = 0.1f,
     override val npTop: Float = 0.1f,
     override val npBottom: Float = 0.1f,
+    override val bgPadStart: Float = 0f,
+    override val bgPadEnd: Float = 0f,
+    override val bgPadTop: Float = 0f,
+    override val bgPadBottom: Float = 0f,
 ) : TextBaseColumn {
 
     override val textColor: Int? get() = mTextColor

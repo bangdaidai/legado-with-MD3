@@ -12,6 +12,7 @@ import android.os.Build
 import androidx.annotation.Keep
 import io.legado.app.help.PaintPool
 import io.legado.app.help.book.isImage
+import io.legado.app.help.highlight.NinePatchDrawHelper
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.ResourceLoadFailureCache
@@ -62,7 +63,6 @@ data class TextLine(
     val chapterIndices: IntRange get() = chapterPosition..chapterPosition + charSize
     val height: Float inline get() = lineBottom - lineTop
     val canvasRecorder = CanvasRecorderFactory.create()
-    private var nineSliceFrames: List<NineSliceFrameData> = emptyList()
     var searchResultColumnCount = 0
     var isReadAloud: Boolean = false
         set(value) {
@@ -167,15 +167,10 @@ data class TextLine(
         } else {
             drawTextLine(view, canvas)
         }
-        // Draw nine-slice frames on the real canvas (not the line recorder)
-        // to avoid clipping by the recorder's height bounds
-        drawNineSliceFrames(canvas, nineSliceFrames)
     }
 
     private fun drawTextLine(view: ContentTextView, canvas: Canvas) {
-        val frames = mutableListOf<NineSliceFrameData>()
-        drawStyledBackgrounds(canvas, frames)
-        nineSliceFrames = frames
+        drawStyledBackgrounds(canvas)
         drawBgColors(canvas)
         if (checkFastDraw()) {
             fastDrawTextLine(view, canvas)
@@ -274,7 +269,7 @@ data class TextLine(
     /**
      * 绘制高亮规则匹配文本的背景图
      */
-    private fun drawStyledBackgrounds(canvas: Canvas, nineSliceFrames: MutableList<NineSliceFrameData>) {
+    private fun drawStyledBackgrounds(canvas: Canvas) {
         if (isImage || columns.isEmpty()) return
         if (columns.none { (it as? TextBaseColumn)?.bgImage?.isNotEmpty() == true }) return
         var rangeStart = 0f
@@ -286,6 +281,10 @@ data class TextLine(
         var currentNpRight = 0.1f
         var currentNpTop = 0.1f
         var currentNpBottom = 0.1f
+        var currentBgPadStart = 0f
+        var currentBgPadEnd = 0f
+        var currentBgPadTop = 0f
+        var currentBgPadBottom = 0f
         var active = false
         columns.forEachIndexed { index, column ->
             val textColumn = column as? TextBaseColumn
@@ -296,9 +295,13 @@ data class TextLine(
             val npRight = textColumn?.npRight ?: 0.1f
             val npTop = textColumn?.npTop ?: 0.1f
             val npBottom = textColumn?.npBottom ?: 0.1f
+            val bgPadStart = textColumn?.bgPadStart ?: 0f
+            val bgPadEnd = textColumn?.bgPadEnd ?: 0f
+            val bgPadTop = textColumn?.bgPadTop ?: 0f
+            val bgPadBottom = textColumn?.bgPadBottom ?: 0f
             when {
                 bgImage.isEmpty() && active -> {
-                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, nineSliceFrames, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom)
+                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom, currentBgPadStart, currentBgPadEnd, currentBgPadTop, currentBgPadBottom)
                     active = false
                 }
                 bgImage.isNotEmpty() && !active -> {
@@ -311,13 +314,17 @@ data class TextLine(
                     currentNpRight = npRight
                     currentNpTop = npTop
                     currentNpBottom = npBottom
+                    currentBgPadStart = bgPadStart
+                    currentBgPadEnd = bgPadEnd
+                    currentBgPadTop = bgPadTop
+                    currentBgPadBottom = bgPadBottom
                     active = true
                 }
                 bgImage.isNotEmpty() && bgImage == currentBgImage && bgImageFit == currentBgImageFit && bgImageScale == currentBgImageScale && npLeft == currentNpLeft && npRight == currentNpRight && npTop == currentNpTop && npBottom == currentNpBottom -> {
                     rangeEnd = textColumn!!.end
                 }
                 bgImage.isNotEmpty() -> {
-                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, nineSliceFrames, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom)
+                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom, currentBgPadStart, currentBgPadEnd, currentBgPadTop, currentBgPadBottom)
                     rangeStart = textColumn!!.start
                     rangeEnd = textColumn.end
                     currentBgImage = bgImage
@@ -327,10 +334,14 @@ data class TextLine(
                     currentNpRight = npRight
                     currentNpTop = npTop
                     currentNpBottom = npBottom
+                    currentBgPadStart = bgPadStart
+                    currentBgPadEnd = bgPadEnd
+                    currentBgPadTop = bgPadTop
+                    currentBgPadBottom = bgPadBottom
                 }
             }
             if (active && index == columns.lastIndex) {
-                drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, nineSliceFrames, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom)
+                drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom, currentBgPadStart, currentBgPadEnd, currentBgPadTop, currentBgPadBottom)
             }
         }
     }
@@ -534,11 +545,14 @@ data class TextLine(
         bgImage: String,
         bgImageFit: Int,
         bgImageScale: Float,
-        nineSliceFrames: MutableList<NineSliceFrameData> = mutableListOf(),
         npLeft: Float = 0.1f,
         npRight: Float = 0.1f,
         npTop: Float = 0.1f,
         npBottom: Float = 0.1f,
+        bgPadStart: Float = 0f,
+        bgPadEnd: Float = 0f,
+        bgPadTop: Float = 0f,
+        bgPadBottom: Float = 0f,
     ) {
         val bitmap = getBgBitmap(bgImage) ?: return
         val paint = PaintPool.obtain()
@@ -578,7 +592,15 @@ data class TextLine(
                 canvas.restore()
             }
             3 -> {
-                drawNineSliceCenter(canvas, bitmap, startX, endX, npLeft, npRight, npTop, npBottom, paint, nineSliceFrames)
+                val padStartPx = bgPadStart.dpToPx()
+                val padEndPx = bgPadEnd.dpToPx()
+                val padTopPx = bgPadTop.dpToPx()
+                val padBottomPx = bgPadBottom.dpToPx()
+                val drawLeft = startX - padStartPx
+                val drawTop = bgPaddingTop - padTopPx
+                val drawRight = endX + padEndPx
+                val drawBottom = height - bgPaddingBottom + padBottomPx
+                NinePatchDrawHelper.draw(canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, npLeft, npRight, npTop, npBottom, paint)
             }
             else -> {
                 val tileBitmap = if (scale != 1f) {
@@ -597,119 +619,6 @@ data class TextLine(
                 paint.shader = null
             }
         }
-        PaintPool.recycle(paint)
-    }
-
-    private fun drawNineSliceCenter(
-        canvas: Canvas,
-        bitmap: Bitmap,
-        startX: Float,
-        endX: Float,
-        npLeft: Float,
-        npRight: Float,
-        npTop: Float,
-        npBottom: Float,
-        paint: Paint,
-        nineSliceFrames: MutableList<NineSliceFrameData>,
-    ) {
-        val bw = bitmap.width.toFloat()
-        val bh = bitmap.height.toFloat()
-        val leftPx = (bw * npLeft).toInt().coerceAtLeast(0)
-        val rightPx = (bw * (1f - npRight)).toInt().coerceAtMost(bitmap.width)
-        val topPx = (bh * npTop).toInt().coerceAtLeast(0)
-        val bottomPx = (bh * (1f - npBottom)).toInt().coerceAtMost(bitmap.height)
-
-        // 中心(5)覆盖全部文字高度
-        canvas.drawBitmap(
-            bitmap,
-            android.graphics.Rect(leftPx, topPx, rightPx, bottomPx),
-            android.graphics.RectF(startX, 0f, endX, height),
-            paint,
-        )
-
-        nineSliceFrames.add(
-            NineSliceFrameData(
-                bitmap = bitmap,
-                startX = startX,
-                endX = endX,
-                frameStartX = startX - leftPx.toFloat(),
-                frameEndX = endX + (bw - rightPx.toFloat()),
-                leftPx = leftPx,
-                rightPx = rightPx,
-                topPx = topPx,
-                bottomPx = bottomPx,
-                lineH = height,
-            )
-        )
-    }
-
-    /**
-     * 绘制九宫格边框（1,2,3,4,6,7,8,9），在文字之上。
-     * 上下边框延伸到行外，但根据行间距自适应缩放避免多行重叠。
-     */
-    private fun drawNineSliceFrames(canvas: Canvas, frames: List<NineSliceFrameData>) {
-        if (frames.isEmpty()) return
-        val paint = PaintPool.obtain()
-        paint.style = Paint.Style.FILL
-        paint.isAntiAlias = true
-        paint.isFilterBitmap = true
-
-        // 行间距可用空间：每行上下各分得一半间距
-        val lineH = frames.first().lineH
-        val gap = (ChapterProvider.lineSpacingExtra - 1f).coerceAtLeast(0f) * lineH
-        val halfGap = gap * 0.5f
-
-        for (frame in frames) {
-            val bitmap = frame.bitmap
-            val startX = frame.startX
-            val endX = frame.endX
-            val frameStartX = frame.frameStartX
-            val frameEndX = frame.frameEndX
-            val leftPx = frame.leftPx
-            val rightPx = frame.rightPx
-            val topPx = frame.topPx
-            val bottomPx = frame.bottomPx
-
-            val rawTopH = topPx.toFloat()
-            val rawBotH = (bitmap.height - bottomPx).toFloat()
-
-            // 上下边框等比例缩放以适应行间距，避免多行高亮时重叠
-            val maxFrameH = maxOf(rawTopH, rawBotH).coerceAtLeast(0.1f)
-            val overflowScale = (halfGap / maxFrameH).coerceIn(0f, 1f)
-            val topH = rawTopH * overflowScale
-            val botH = rawBotH * overflowScale
-
-            // Row 1: 上方边框 (1, 2, 3) - 向上延伸到文字区域之上
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(0, 0, leftPx, topPx),
-                android.graphics.RectF(frameStartX, -topH, startX, 0f), paint)
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(leftPx, 0, rightPx, topPx),
-                android.graphics.RectF(startX, -topH, endX, 0f), paint)
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(rightPx, 0, bitmap.width, topPx),
-                android.graphics.RectF(endX, -topH, frameEndX, 0f), paint)
-
-            // Row 2: 同行边框 (4, 6) - 全高
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(0, topPx, leftPx, bottomPx),
-                android.graphics.RectF(frameStartX, 0f, startX, lineH), paint)
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(rightPx, topPx, bitmap.width, bottomPx),
-                android.graphics.RectF(endX, 0f, frameEndX, lineH), paint)
-
-            // Row 3: 下方边框 (7, 8, 9) - 向下延伸到文字区域之下
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(0, bottomPx, leftPx, bitmap.height),
-                android.graphics.RectF(frameStartX, lineH, startX, lineH + botH), paint)
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(leftPx, bottomPx, rightPx, bitmap.height),
-                android.graphics.RectF(startX, lineH, endX, lineH + botH), paint)
-            canvas.drawBitmap(bitmap,
-                android.graphics.Rect(rightPx, bottomPx, bitmap.width, bitmap.height),
-                android.graphics.RectF(endX, lineH, frameEndX, lineH + botH), paint)
-        }
-
         PaintPool.recycle(paint)
     }
 
@@ -854,22 +763,6 @@ data class TextLine(
         canvasRecorder.recycle()
     }
 
-    /**
-     * 九宫格边框数据，用于在文字之上绘制 1,2,3,4,6,7,8,9
-     */
-    private class NineSliceFrameData(
-        val bitmap: Bitmap,
-        val startX: Float,
-        val endX: Float,
-        val frameStartX: Float,
-        val frameEndX: Float,
-        val leftPx: Int,
-        val rightPx: Int,
-        val topPx: Int,
-        val bottomPx: Int,
-        val lineH: Float,
-    )
-
     @SuppressLint("NewApi")
     companion object {
         val emptyTextLine = TextLine()
@@ -881,8 +774,8 @@ data class TextLine(
         private val waveLength = 12.dpToPx().toFloat()
         private val doubleLineGap = 3.dpToPx().toFloat()
         private val bgBitmapCache = android.util.LruCache<String, Bitmap>(16 * 1024 * 1024)
-        private val bgScaledBitmapCache = android.util.LruCache<String, Bitmap>(8 * 1024 * 1024)
         private val failedBgBitmapLoads = ResourceLoadFailureCache<String>()
+        private const val MAX_CORNER_PX = 256
 
         /**
          * Trims bitmap caches to free memory under pressure.
@@ -892,15 +785,12 @@ data class TextLine(
             when {
                 level >= android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
                     bgBitmapCache.evictAll()
-                    bgScaledBitmapCache.evictAll()
                 }
                 level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE -> {
                     bgBitmapCache.trimToSize(4 * 1024 * 1024)
-                    bgScaledBitmapCache.trimToSize(2 * 1024 * 1024)
                 }
                 level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
                     bgBitmapCache.trimToSize(8 * 1024 * 1024)
-                    bgScaledBitmapCache.trimToSize(4 * 1024 * 1024)
                 }
             }
         }
@@ -939,11 +829,7 @@ data class TextLine(
 
         private fun getScaledBitmap(path: String, source: Bitmap, width: Int, height: Int): Bitmap {
             if (width <= 0 || height <= 0) return source
-            val key = "${path}_${width}_${height}"
-            bgScaledBitmapCache.get(key)?.let { return it }
-            val scaled = Bitmap.createScaledBitmap(source, width, height, true)
-            bgScaledBitmapCache.put(key, scaled)
-            return scaled
+            return Bitmap.createScaledBitmap(source, width, height, true)
         }
 
         private fun loadBgBitmap(path: String): Bitmap? {

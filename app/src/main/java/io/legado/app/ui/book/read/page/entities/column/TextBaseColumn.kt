@@ -24,6 +24,10 @@ interface TextBaseColumn : BaseColumn {
     val npRight: Float
     val npTop: Float
     val npBottom: Float
+    val bgPadStart: Float
+    val bgPadEnd: Float
+    val bgPadTop: Float
+    val bgPadBottom: Float
     var selected: Boolean
     var isSearchResult: Boolean
 }

@@ -1160,6 +1160,8 @@ class ReadBookViewModel(
             is ReadBookIntent.ExportHighlightRulesAsUrl -> highlightRuleDelegate.exportAsUrl()
             is ReadBookIntent.ExportHighlightRulesToFile ->
                 highlightRuleDelegate.exportToFile(intent.uri)
+            is ReadBookIntent.ResetHighlightRulesToDefault ->
+                highlightRuleDelegate.resetToDefault()
             is ReadBookIntent.SaveMenuCustomIcon ->
                 buttonConfigDelegate.saveMenuCustomIcon(intent.id, intent.uri)
             is ReadBookIntent.SaveTitleBarCustomIcon ->
@@ -2053,7 +2055,6 @@ class ReadBookViewModel(
     fun removeFromBookshelf(success: (() -> Unit)? = null) {
         val book = ReadBook.book
         Coroutine.async<Unit> {
-            book?.let { appDb.bookTagRelationDao.deleteByBookUrl(it.bookUrl) }
             book?.delete()
         }.onSuccess {
             success?.invoke()

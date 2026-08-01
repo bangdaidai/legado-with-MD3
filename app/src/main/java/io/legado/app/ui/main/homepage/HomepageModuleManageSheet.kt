@@ -73,9 +73,8 @@ fun <T> HomepageModuleManageSheet(
     var showAddKindGroupDialog by remember(data != null) { mutableStateOf(false) }
     val defaultQuickActionsTitle = stringResource(R.string.homepage_quick_actions)
     var tempKindGroupTitle by remember(data != null) { mutableStateOf(defaultQuickActionsTitle) }
-    val supportsMultipleKinds = browseModuleType == HomepageModuleType.ButtonGroup.key ||
-            browseModuleType == HomepageModuleType.Ranking.key ||
-            browseModuleType == HomepageModuleType.GridRanking.key
+    // 所有模块类型都支持多选分类
+    val supportsMultipleKinds = true
 
     val effectiveTargetSetId = remember(selectingSetUrl, browsingSourceUrl) {
         val url =
@@ -492,6 +491,7 @@ fun <T> HomepageModuleManageSheet(
                         selectedKindTitles.toList()
                     )
                 } else {
+                    // 所有非按钮组类型：合并为一个模块，args 存储多分类
                     actions.onAddRankingFromKinds(
                         browsingSourceUrl!!,
                         effectiveTargetSetId,

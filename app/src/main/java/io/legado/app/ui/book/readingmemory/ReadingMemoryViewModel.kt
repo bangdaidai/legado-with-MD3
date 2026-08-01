@@ -8,6 +8,8 @@ import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +32,7 @@ import java.util.Calendar
 
 class ReadingMemoryViewModel(
     private val repository: ReadingMemoryRepository,
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
 ) : ViewModel() {
 
     private val _intent = MutableSharedFlow<ReadingMemoryIntent>(extraBufferCapacity = 1)
@@ -106,6 +109,7 @@ class ReadingMemoryViewModel(
         .flatMapLatest { memories -> controls.map { buildUiState(memories, it) } }
         .flowOn(Dispatchers.IO)
         .combine(_loading) { state, loading -> state.copy(loading = loading) }
+        .combine(bookshelfSettingsGateway.settings) { state, settings -> state.copy(settings = settings) }
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
@@ -182,31 +186,28 @@ class ReadingMemoryViewModel(
     private suspend fun buildUiState(memories: List<ReadingMemory>, c: Controls): ReadingMemoryUiState {
         val keyword = c.search.trim().lowercase()
 
-        val statusOk: (ReadingMemory) -> Boolean = { mem ->
-            when (c.status) {
-                ReadingMemoryStatusFilter.All -> true
-                ReadingMemoryStatusFilter.Abandoned -> mem.abandoned
-                ReadingMemoryStatusFilter.ToRead -> !mem.abandoned && mem.progress == 0f
-                ReadingMemoryStatusFilter.Reading ->
-                    !mem.abandoned && mem.progress > 0f && mem.progress < 1f
-                ReadingMemoryStatusFilter.Finished -> !mem.abandoned && mem.progress >= 1f
+        val statusOf: (ReadingMemory) -> ReadingMemoryStatusFilter = { mem ->
+            when {
+                mem.abandoned -> ReadingMemoryStatusFilter.Abandoned
+                mem.progress >= 1f -> ReadingMemoryStatusFilter.Finished
+                mem.progress > 0f -> ReadingMemoryStatusFilter.Reading
+                else -> ReadingMemoryStatusFilter.ToRead
             }
         }
 
-        var list = memories.filter(statusOk)
-
-        list = when (c.rating) {
-            ReadingMemoryRatingFilter.All -> list
-            ReadingMemoryRatingFilter.Unrated -> list.filter { it.rating == 0f }
-            ReadingMemoryRatingFilter.R5 -> list.filter { it.rating >= 5f }
-            ReadingMemoryRatingFilter.R4 -> list.filter { it.rating >= 4f && it.rating < 5f }
-            ReadingMemoryRatingFilter.R3 -> list.filter { it.rating >= 3f && it.rating < 4f }
-            ReadingMemoryRatingFilter.R2 -> list.filter { it.rating >= 2f && it.rating < 3f }
-            ReadingMemoryRatingFilter.R1 -> list.filter { it.rating >= 1f && it.rating < 2f }
+        // 先应用与状态无关的筛选，用于计算每个状态页签的数量
+        var base = when (c.rating) {
+            ReadingMemoryRatingFilter.All -> memories
+            ReadingMemoryRatingFilter.Unrated -> memories.filter { it.rating == 0f }
+            ReadingMemoryRatingFilter.R5 -> memories.filter { it.rating >= 5f }
+            ReadingMemoryRatingFilter.R4 -> memories.filter { it.rating >= 4f && it.rating < 5f }
+            ReadingMemoryRatingFilter.R3 -> memories.filter { it.rating >= 3f && it.rating < 4f }
+            ReadingMemoryRatingFilter.R2 -> memories.filter { it.rating >= 2f && it.rating < 3f }
+            ReadingMemoryRatingFilter.R1 -> memories.filter { it.rating >= 1f && it.rating < 2f }
         }
 
-        list = when (c.type) {
-            ReadingMemoryReadTypeFilter.All -> list
+        base = when (c.type) {
+            ReadingMemoryReadTypeFilter.All -> base
             else -> {
                 val mask = when (c.type) {
                     ReadingMemoryReadTypeFilter.Text -> BookType.text
@@ -214,7 +215,7 @@ class ReadingMemoryViewModel(
                     ReadingMemoryReadTypeFilter.Video -> BookType.video
                     else -> 0
                 }
-                list.filter { mem ->
+                base.filter { mem ->
                     val t = if (mem.type == 0) BookType.text else mem.type
                     (t and mask) > 0
                 }
@@ -222,15 +223,27 @@ class ReadingMemoryViewModel(
         }
 
         if (c.onlyWithReview) {
-            list = list.filter { !it.review.isNullOrBlank() }
+            base = base.filter { !it.review.isNullOrBlank() }
         }
 
         if (keyword.isNotEmpty()) {
-            list = list.filter { mem ->
+            base = base.filter { mem ->
                 mem.bookName.lowercase().contains(keyword) ||
                     mem.bookAuthor.lowercase().contains(keyword) ||
                     (mem.kind?.lowercase()?.contains(keyword) ?: false)
             }
+        }
+
+        val statusCounts = buildMap {
+            put(ReadingMemoryStatusFilter.All, base.size)
+            base.groupingBy(statusOf).eachCount().forEach { (status, count) -> put(status, count) }
+            ReadingMemoryStatusFilter.entries.forEach { putIfAbsent(it, 0) }
+        }
+
+        val list = if (c.status == ReadingMemoryStatusFilter.All) {
+            base
+        } else {
+            base.filter { statusOf(it) == c.status }
         }
 
         val sorted = when (c.sortBy) {
@@ -269,6 +282,7 @@ class ReadingMemoryViewModel(
 
         return ReadingMemoryUiState(
             items = items,
+            statusCounts = statusCounts,
             statusFilter = c.status,
             ratingFilter = c.rating,
             readTypeFilter = c.type,

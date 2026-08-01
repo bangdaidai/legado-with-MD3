@@ -53,6 +53,34 @@ data class AddDialogPrefill(
     val type: String = "card"
 )
 
+/** 从 prefillArgs 或 prefillTitle/Url 重建已选分类列表（编辑时回显用） */
+private fun reconstructSelectedKinds(
+    prefillArgs: String,
+    prefillTitle: String,
+    prefillUrl: String,
+): List<ExploreKind> {
+    // 尝试从 args JSON 解析多分类
+    if (prefillArgs.isNotBlank()) {
+        runCatching {
+            val obj = com.google.gson.JsonParser.parseString(prefillArgs).asJsonObject
+            if (obj.has("kindTitles")) {
+                val titles = obj.getAsJsonArray("kindTitles").map { it.asString }
+                val urls = if (obj.has("kindUrls")) {
+                    obj.getAsJsonArray("kindUrls").map { it.asString }
+                } else emptyList()
+                return titles.mapIndexed { i, t ->
+                    ExploreKind(title = t, url = urls.getOrNull(i))
+                }
+            }
+        }
+    }
+    // 单分类：用标题+url 回显
+    if (prefillTitle.isNotBlank()) {
+        return listOf(ExploreKind(title = prefillTitle, url = prefillUrl.ifBlank { null }))
+    }
+    return emptyList()
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun <T> AddCustomModuleDialog(
@@ -74,8 +102,10 @@ fun <T> AddCustomModuleDialog(
     var args by remember(data) { mutableStateOf(prefillArgs) }
     var layoutConfig by remember(data) { mutableStateOf(prefillLayoutConfig) }
     var showRawLayoutConfig by remember(data) { mutableStateOf(false) }
-    // 保存完整的 ExploreKind，同名分类靠 url 区分
-    var selectedKinds by remember(data) { mutableStateOf<List<ExploreKind>>(emptyList()) }
+    // 保存完整的 ExploreKind，同名分类靠 url 区分；编辑时从 args/标题回显
+    var selectedKinds by remember(data) {
+        mutableStateOf(reconstructSelectedKinds(prefillArgs, prefillTitle, prefillUrl))
+    }
     var showKindSelect by remember(data) { mutableStateOf(false) }
 
     val hasVisualizableKeys = remember(layoutConfig) {
