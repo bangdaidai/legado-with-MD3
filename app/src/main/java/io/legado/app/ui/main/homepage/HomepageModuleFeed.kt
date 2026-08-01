@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
@@ -545,8 +546,8 @@ private fun ModuleHeader(
                 selected = true,
                 highlightSelected = true,
                 onClick = {},
-                modifier = Modifier.weight(1f),
             )
+            Spacer(modifier = Modifier.weight(1f))
         }
         if (onNavigate != null) {
             SmallTonalButton(

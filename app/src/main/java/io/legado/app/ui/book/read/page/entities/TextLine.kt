@@ -545,10 +545,10 @@ data class TextLine(
         bgImage: String,
         bgImageFit: Int,
         bgImageScale: Float,
-        npLeft: Float = 0.1f,
-        npRight: Float = 0.1f,
-        npTop: Float = 0.1f,
-        npBottom: Float = 0.1f,
+        npLeft: Float = 0.5f,
+        npRight: Float = 0.5f,
+        npTop: Float = 0.5f,
+        npBottom: Float = 0.5f,
         bgPadStart: Float = 0f,
         bgPadEnd: Float = 0f,
         bgPadTop: Float = 0f,
@@ -600,7 +600,12 @@ data class TextLine(
                 val drawTop = bgPaddingTop - padTopPx
                 val drawRight = endX + padEndPx
                 val drawBottom = height - bgPaddingBottom + padBottomPx
-                NinePatchDrawHelper.draw(canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, npLeft, npRight, npTop, npBottom, paint)
+                // np* 为「角块占图比例」；转成 helper 需要的绝对线位置：
+                //   leftX=npLeft, rightX=1-npRight, topY=npTop, bottomY=1-npBottom
+                NinePatchDrawHelper.draw(
+                    canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, paint,
+                    npLeft, 1f - npRight, npTop, 1f - npBottom,
+                )
             }
             else -> {
                 val tileBitmap = if (scale != 1f) {

@@ -27,6 +27,7 @@ object DatabaseMigrations {
             migration_102_103,
             migration_103_104,
             migration_104_105,
+            migration_105_106,
         )
     }
 
@@ -707,6 +708,24 @@ object DatabaseMigrations {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingEnd REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingTop REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingBottom REAL NOT NULL DEFAULT 0")
+            // 旧默认 0.1 会把中心区域过度拉伸导致图片变形，仅将仍停留在旧默认值的行重置为 0.5
+            database.execSQL("UPDATE highlightRules SET npLeft = 0.5 WHERE npLeft = 0.1")
+            database.execSQL("UPDATE highlightRules SET npRight = 0.5 WHERE npRight = 0.1")
+            database.execSQL("UPDATE highlightRules SET npTop = 0.5 WHERE npTop = 0.1")
+            database.execSQL("UPDATE highlightRules SET npBottom = 0.5 WHERE npBottom = 0.1")
+        }
+    }
+
+    // endregion
+
+    // region 105→106: highlightRules 新增外边距字段
+
+    private val migration_105_106 = object : Migration(105, 106) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginStart REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginEnd REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginTop REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginBottom REAL NOT NULL DEFAULT 0")
         }
     }
 

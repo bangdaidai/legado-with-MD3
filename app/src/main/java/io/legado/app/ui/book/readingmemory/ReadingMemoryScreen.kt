@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +16,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,11 +33,11 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.ToggleChip
-import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
+import io.legado.app.ui.main.bookshelf.BookshelfItem
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -437,6 +435,7 @@ private fun GroupHeaderRow(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun MemoryBookCard(
     memory: ReadingMemory,
@@ -445,165 +444,109 @@ private fun MemoryBookCard(
     onIntent: (ReadingMemoryIntent) -> Unit,
     onLongPress: (String) -> Unit,
 ) {
-    val rowContent: @Composable RowScope.() -> Unit = {
-        CoilBookCover(
-            name = memory.bookName.takeIf { it.isNotBlank() },
-            author = memory.bookAuthor.takeIf { it.isNotBlank() },
-            path = memory.coverUrl?.takeIf { it.isNotBlank() },
-            radius = 8.dp,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(MaterialTheme.shapes.medium),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            AppText(
-                text = memory.bookName,
-                style = LegadoTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+    val settings = uiState.settings
+    val statusText = when {
+        memory.abandoned -> "弃文"
+        memory.progress >= 1f -> "已读"
+        memory.progress > 0f -> "在读"
+        else -> "待看"
+    }
+    val statusContainer = when {
+        memory.abandoned -> LegadoTheme.colorScheme.errorContainer
+        memory.progress >= 1f -> LegadoTheme.colorScheme.tertiaryContainer
+        memory.progress > 0f -> LegadoTheme.colorScheme.primaryContainer
+        else -> LegadoTheme.colorScheme.surfaceVariant
+    }
+    val statusContent = when {
+        memory.abandoned -> LegadoTheme.colorScheme.onErrorContainer
+        memory.progress >= 1f -> LegadoTheme.colorScheme.onTertiaryContainer
+        memory.progress > 0f -> LegadoTheme.colorScheme.onPrimaryContainer
+        else -> LegadoTheme.colorScheme.onSurfaceVariant
+    }
+
+    BookshelfItem(
+        settings = settings,
+        isGrid = false,
+        gridStyle = 0,
+        isCompact = settings.bookshelfLayoutCompact,
+        cover = { m ->
+            CoilBookCover(
+                name = memory.bookName.takeIf { it.isNotBlank() },
+                author = memory.bookAuthor.takeIf { it.isNotBlank() },
+                path = memory.coverUrl?.takeIf { it.isNotBlank() },
+                radius = 8.dp,
+                modifier = m.fillMaxSize(),
             )
-            AppText(
-                text = memory.bookAuthor,
-                style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReadingMemoryRatingBar(
-                    rating = memory.rating.toFloat(),
-                    onRatingChanged = {},
-                    enabled = false,
-                )
-                if (memory.rating > 0) {
-                    AppText(
-                        text = memory.rating.toString(),
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            val statusText = when {
-                memory.abandoned -> "弃文"
-                memory.progress >= 1f -> "已读"
-                memory.progress > 0f -> "在读"
-                else -> "待看"
-            }
+        },
+        title = memory.bookName,
+        titleEnd = {
             Surface(
                 shape = MaterialTheme.shapes.small,
-                color = when {
-                    memory.abandoned -> LegadoTheme.colorScheme.errorContainer
-                    memory.progress >= 1f -> LegadoTheme.colorScheme.tertiaryContainer
-                    memory.progress > 0f -> LegadoTheme.colorScheme.primaryContainer
-                    else -> LegadoTheme.colorScheme.surfaceVariant
-                },
+                color = statusContainer,
             ) {
                 AppText(
                     text = statusText,
                     style = LegadoTheme.typography.labelSmall,
-                    color = when {
-                        memory.abandoned -> LegadoTheme.colorScheme.onErrorContainer
-                        memory.progress >= 1f -> LegadoTheme.colorScheme.onTertiaryContainer
-                        memory.progress > 0f -> LegadoTheme.colorScheme.onPrimaryContainer
-                        else -> LegadoTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = statusContent,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
-            if (uiState.showIntro && memory.intro?.isNotBlank() == true) {
-                AppText(
-                    text = memory.intro ?: "",
-                    style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+        },
+        subTitle = memory.bookAuthor,
+        subTitleEnd = if (memory.rating > 0f) {
+            @Composable {
+                ReadingMemoryRatingBar(
+                    rating = memory.rating,
+                    onRatingChanged = {},
+                    enabled = false,
                 )
             }
-            if (uiState.showReview && memory.review?.isNotBlank() == true) {
-                AppText(
-                    text = memory.review ?: "",
-                    style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (tags.isNotEmpty()) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 2.dp),
-                ) {
-                    tags.forEach { tag ->
-                        TagChip(
-                            tag = tag,
-                            size = TagChipSize.Small,
-                        )
+        } else null,
+        desc = null,
+        columnContent = if (!settings.bookshelfLayoutCompact && settings.showBookIntro) {
+            {
+                if (settings.bookshelfShowTag && tags.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    ) {
+                        tags.forEach { TagChip(tag = it, size = TagChipSize.Small) }
                     }
                 }
-            }
-        }
-        Column(
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            val progressText = if (memory.totalChapterNum > 0) {
-                "第 ${memory.durChapterIndex + 1} 章 / 共 ${memory.totalChapterNum} 章"
-            } else {
-                "第 ${memory.durChapterIndex + 1} 章"
-            }
-            if (progressText.isNotBlank()) {
-                AppText(
-                    text = progressText,
-                    style = LegadoTheme.typography.labelSmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            AppText(
-                text = formatReadDate(memory.lastReadTime),
-                style = LegadoTheme.typography.labelSmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-
-    if (uiState.showCard) {
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
-                        onLongClick = { onLongPress(memory.bookUrl) },
+                if (settings.bookshelfShowIntro && uiState.showIntro && !memory.intro.isNullOrBlank()) {
+                    val maxLines = if (settings.bookshelfIntroMaxLines == 0) {
+                        Int.MAX_VALUE
+                    } else {
+                        settings.bookshelfIntroMaxLines
+                    }
+                    AppText(
+                        text = memory.intro.orEmpty(),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        maxLines = maxLines,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     )
-                    .padding(12.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                rowContent()
+                }
+                if (uiState.showReview && !memory.review.isNullOrBlank()) {
+                    AppText(
+                        text = memory.review.orEmpty(),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurface,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    )
+                }
             }
-        }
-    } else {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
-                    onLongClick = { onLongPress(memory.bookUrl) },
-                )
-                .padding(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            rowContent()
-        }
-    }
+        } else null,
+        titleSmallFont = settings.bookshelfTitleSmallFont,
+        titleCenter = settings.bookshelfTitleCenter,
+        titleMaxLines = settings.bookshelfTitleMaxLines,
+        coverShadow = settings.bookshelfCoverShadow,
+        coverWidth = settings.bookshelfListCoverWidth,
+        onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
+        onLongClick = { onLongPress(memory.bookUrl) },
+    )
 }

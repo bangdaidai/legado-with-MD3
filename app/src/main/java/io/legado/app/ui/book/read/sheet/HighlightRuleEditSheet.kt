@@ -158,7 +158,13 @@ fun HighlightRuleEditSheet(
     var bgPaddingEnd by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingEnd) }
     var bgPaddingTop by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingTop) }
     var bgPaddingBottom by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingBottom) }
+    var bgMarginStart by remember(show, rule) { mutableFloatStateOf(initial.bgMarginStart) }
+    var bgMarginEnd by remember(show, rule) { mutableFloatStateOf(initial.bgMarginEnd) }
+    var bgMarginTop by remember(show, rule) { mutableFloatStateOf(initial.bgMarginTop) }
+    var bgMarginBottom by remember(show, rule) { mutableFloatStateOf(initial.bgMarginBottom) }
     var showNinePatchEditor by remember(show, rule) { mutableStateOf(false) }
+    var showInsetEditor by remember { mutableStateOf(false) }
+    var showMarginEditor by remember { mutableStateOf(false) }
 
     // Config binding state — empty set = global (applies to all configs)
     var configNames by remember(show, rule) {
@@ -280,6 +286,10 @@ fun HighlightRuleEditSheet(
                             bgPaddingEnd = bgPaddingEnd,
                             bgPaddingTop = bgPaddingTop,
                             bgPaddingBottom = bgPaddingBottom,
+                            bgMarginStart = bgMarginStart,
+                            bgMarginEnd = bgMarginEnd,
+                            bgMarginTop = bgMarginTop,
+                            bgMarginBottom = bgMarginBottom,
                         )
                     )
                 },
@@ -520,13 +530,36 @@ fun HighlightRuleEditSheet(
                         },
                     )
 
-                    TinySliderSettingItem(
-                        title = stringResource(R.string.highlight_bg_image_scale),
-                        value = bgImageScale,
-                        valueRange = 0.1f..5f,
-                        description = String.format("%.1fx", bgImageScale),
-                        onValueChange = { bgImageScale = (it * 10).toInt() / 10f },
-                    )
+                    AnimatedVisibility(visible = bgImageFit == 3) {
+                        Column {
+                            TinyClickableSettingItem(
+                                title = "内边距",
+                                description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom),
+                                onClick = { showInsetEditor = !showInsetEditor },
+                            )
+                            AnimatedVisibility(visible = showInsetEditor) {
+                                Column {
+                                    TinySliderSettingItem(title = "左", value = bgPaddingStart, valueRange = -8f..24f, description = "${bgPaddingStart.toInt()} dp", onValueChange = { bgPaddingStart = it.toInt().toFloat() })
+                                    TinySliderSettingItem(title = "右", value = bgPaddingEnd, valueRange = -8f..24f, description = "${bgPaddingEnd.toInt()} dp", onValueChange = { bgPaddingEnd = it.toInt().toFloat() })
+                                    TinySliderSettingItem(title = "上", value = bgPaddingTop, valueRange = -8f..24f, description = "${bgPaddingTop.toInt()} dp", onValueChange = { bgPaddingTop = it.toInt().toFloat() })
+                                    TinySliderSettingItem(title = "下", value = bgPaddingBottom, valueRange = -8f..24f, description = "${bgPaddingBottom.toInt()} dp", onValueChange = { bgPaddingBottom = it.toInt().toFloat() })
+                                }
+                            }
+                            TinyClickableSettingItem(
+                                title = "外边距",
+                                description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom),
+                                onClick = { showMarginEditor = !showMarginEditor },
+                            )
+                            AnimatedVisibility(visible = showMarginEditor) {
+                                Column {
+                                    TinySliderSettingItem(title = "左", value = bgMarginStart, valueRange = 0f..32f, description = "${bgMarginStart.toInt()} dp", onValueChange = { bgMarginStart = it.toInt().toFloat() })
+                                    TinySliderSettingItem(title = "右", value = bgMarginEnd, valueRange = 0f..32f, description = "${bgMarginEnd.toInt()} dp", onValueChange = { bgMarginEnd = it.toInt().toFloat() })
+                                    TinySliderSettingItem(title = "上", value = bgMarginTop, valueRange = 0f..32f, description = "${bgMarginTop.toInt()} dp", onValueChange = { bgMarginTop = it.toInt().toFloat() })
+                                    TinySliderSettingItem(title = "下", value = bgMarginBottom, valueRange = 0f..32f, description = "${bgMarginBottom.toInt()} dp", onValueChange = { bgMarginBottom = it.toInt().toFloat() })
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -727,14 +760,6 @@ fun HighlightRuleEditSheet(
         initialRight = npRight,
         initialTop = npTop,
         initialBottom = npBottom,
-        bgPaddingStart = bgPaddingStart,
-        bgPaddingEnd = bgPaddingEnd,
-        bgPaddingTop = bgPaddingTop,
-        bgPaddingBottom = bgPaddingBottom,
-        onBgPaddingStartChange = { bgPaddingStart = it },
-        onBgPaddingEndChange = { bgPaddingEnd = it },
-        onBgPaddingTopChange = { bgPaddingTop = it },
-        onBgPaddingBottomChange = { bgPaddingBottom = it },
         onDismissRequest = { showNinePatchEditor = false },
         onSave = { left, right, top, bottom ->
             npLeft = left
@@ -1039,14 +1064,6 @@ private fun NinePatchEditorDialog(
     initialRight: Float,
     initialTop: Float,
     initialBottom: Float,
-    bgPaddingStart: Float,
-    bgPaddingEnd: Float,
-    bgPaddingTop: Float,
-    bgPaddingBottom: Float,
-    onBgPaddingStartChange: (Float) -> Unit,
-    onBgPaddingEndChange: (Float) -> Unit,
-    onBgPaddingTopChange: (Float) -> Unit,
-    onBgPaddingBottomChange: (Float) -> Unit,
     onDismissRequest: () -> Unit,
     onSave: (left: Float, right: Float, top: Float, bottom: Float) -> Unit,
 ) {
@@ -1058,9 +1075,7 @@ private fun NinePatchEditorDialog(
     val bitmap = remember(imagePath) {
         runCatching {
             val file = File(imagePath)
-            if (file.exists()) {
-                BitmapFactory.decodeFile(imagePath)
-            } else null
+            if (file.exists()) BitmapFactory.decodeFile(imagePath) else null
         }.getOrNull()
     }
 
@@ -1082,16 +1097,17 @@ private fun NinePatchEditorDialog(
                 .padding(bottom = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // Image preview with split lines — draggable lines for direct manipulation
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(125.dp)
-                    .padding(8.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow),
-            ) {
-                if (bitmap != null) {
-                    var imageRect by remember { mutableStateOf(Rect.Zero) }
+            // 切分卡片：图片保持原始宽高比
+            if (bitmap != null) {
+                val bmpAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+                var imageRect by remember { mutableStateOf(Rect.Zero) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(bmpAspect)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                ) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1100,7 +1116,6 @@ private fun NinePatchEditorDialog(
                                     val pos = change.position
                                     val ir = imageRect
                                     if (ir.width <= 0f || ir.height <= 0f) return@detectDragGestures
-                                    // Determine which line is closest and drag it
                                     val relX = (pos.x - ir.left) / ir.width
                                     val relY = (pos.y - ir.top) / ir.height
                                     val lx = left
@@ -1112,135 +1127,124 @@ private fun NinePatchEditorDialog(
                                     val distT = kotlin.math.abs(relY - ty)
                                     val distB = kotlin.math.abs(relY - by2)
                                     val minDist = minOf(distL, distR, distT, distB)
-                                    val threshold = 0.15f
-                                    if (minDist > threshold) return@detectDragGestures
+                                    if (minDist > 0.15f) return@detectDragGestures
                                     when (minDist) {
-                                        distL -> left = relX.coerceIn(0.01f, 0.98f)
-                                        distR -> right = (1f - relX).coerceIn(0.01f, 0.98f)
-                                        distT -> top = relY.coerceIn(0.01f, 0.98f)
-                                        distB -> bottom = (1f - relY).coerceIn(0.01f, 0.98f)
+                                        distL -> left = relX.coerceIn(0.01f, 0.99f)
+                                        distR -> right = (1f - relX).coerceIn(0.01f, 0.99f)
+                                        distT -> top = relY.coerceIn(0.01f, 0.99f)
+                                        distB -> bottom = (1f - relY).coerceIn(0.01f, 0.99f)
                                     }
                                 }
                             }
                     ) {
-                        val canvasWidth = size.width
-                        val canvasHeight = size.height
-                        val bw = bitmap.width.toFloat()
-                        val bh = bitmap.height.toFloat()
-                        val imageAspect = bw / bh
-                        val canvasAspect = canvasWidth / canvasHeight
-                        val (imageW, imageH, offsetX, offsetY) = if (imageAspect > canvasAspect) {
-                            val w = canvasWidth
-                            val h = canvasWidth / imageAspect
-                            listOf(w, h, 0f, (canvasHeight - h) / 2f)
-                        } else {
-                            val h = canvasHeight
-                            val w = canvasHeight * imageAspect
-                            listOf(w, h, (canvasWidth - w) / 2f, 0f)
-                        }
-                        imageRect = Rect(offsetX, offsetY, offsetX + imageW, offsetY + imageH)
+                        // 图片填满 Canvas（已用 aspectRatio 保证比例）
+                        val canvasW = size.width
+                        val canvasH = size.height
+                        imageRect = Rect(0f, 0f, canvasW, canvasH)
 
-                        // Draw bitmap
                         drawImage(
                             image = bitmap.asImageBitmap(),
-                            dstOffset = androidx.compose.ui.unit.IntOffset(offsetX.toInt(), offsetY.toInt()),
-                            dstSize = androidx.compose.ui.unit.IntSize(imageW.toInt(), imageH.toInt()),
+                            dstOffset = androidx.compose.ui.unit.IntOffset(0, 0),
+                            dstSize = androidx.compose.ui.unit.IntSize(canvasW.toInt(), canvasH.toInt()),
                         )
 
                         val lineColor = Color.Red
                         val lineWidth = 2.dp.toPx()
-
-                        // Left line
-                        val lx = offsetX + imageW * left
-                        drawLine(lineColor, Offset(lx, offsetY), Offset(lx, offsetY + imageH), lineWidth)
-                        // Right line
-                        val rx = offsetX + imageW * (1f - right)
-                        drawLine(lineColor, Offset(rx, offsetY), Offset(rx, offsetY + imageH), lineWidth)
-                        // Top line
-                        val ty = offsetY + imageH * top
-                        drawLine(lineColor, Offset(offsetX, ty), Offset(offsetX + imageW, ty), lineWidth)
-                        // Bottom line
-                        val by = offsetY + imageH * (1f - bottom)
-                        drawLine(lineColor, Offset(offsetX, by), Offset(offsetX + imageW, by), lineWidth)
+                        val lx = canvasW * left
+                        drawLine(lineColor, Offset(lx, 0f), Offset(lx, canvasH), lineWidth)
+                        val rx = canvasW * (1f - right)
+                        drawLine(lineColor, Offset(rx, 0f), Offset(rx, canvasH), lineWidth)
+                        val ty = canvasH * top
+                        drawLine(lineColor, Offset(0f, ty), Offset(canvasW, ty), lineWidth)
+                        val by = canvasH * (1f - bottom)
+                        drawLine(lineColor, Offset(0f, by), Offset(canvasW, by), lineWidth)
                     }
                 }
-            }
-
-            // Split line readout — drag the red lines on the preview above to adjust
-            Text(
-                text = "拖动预览图上的红线调整切分位置",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
                 Text(
-                    text = String.format(
-                        "左 %.0f%%    右 %.0f%%    上 %.0f%%    下 %.0f%%",
-                        left * 100, right * 100, top * 100, bottom * 100,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "拖动红线调整切分位置",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                NineSlicePreview(
+                    imagePath = imagePath,
+                    npLeft = left,
+                    npRight = right,
+                    npTop = top,
+                    npBottom = bottom,
+                    padStart = 0f,
+                    padEnd = 0f,
+                    padTop = 0f,
+                    padBottom = 0f,
                 )
             }
+        }
+    }
+}
 
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "外扩边距",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            // bgPaddingStart
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("左", Modifier.width(24.dp))
-                Slider(
-                    value = bgPaddingStart,
-                    onValueChange = { onBgPaddingStartChange(it) },
-                    valueRange = -16f..32f,
-                    steps = 47,
-                    modifier = Modifier.weight(1f)
-                )
-                Text("${bgPaddingStart.toInt()}dp", Modifier.width(48.dp))
-            }
-            // bgPaddingEnd
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("右", Modifier.width(24.dp))
-                Slider(
-                    value = bgPaddingEnd,
-                    onValueChange = { onBgPaddingEndChange(it) },
-                    valueRange = -16f..32f,
-                    steps = 47,
-                    modifier = Modifier.weight(1f)
-                )
-                Text("${bgPaddingEnd.toInt()}dp", Modifier.width(48.dp))
-            }
-            // bgPaddingTop
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("上", Modifier.width(24.dp))
-                Slider(
-                    value = bgPaddingTop,
-                    onValueChange = { onBgPaddingTopChange(it) },
-                    valueRange = -16f..32f,
-                    steps = 47,
-                    modifier = Modifier.weight(1f)
-                )
-                Text("${bgPaddingTop.toInt()}dp", Modifier.width(48.dp))
-            }
-            // bgPaddingBottom
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("下", Modifier.width(24.dp))
-                Slider(
-                    value = bgPaddingBottom,
-                    onValueChange = { onBgPaddingBottomChange(it) },
-                    valueRange = -16f..32f,
-                    steps = 47,
-                    modifier = Modifier.weight(1f)
-                )
-                Text("${bgPaddingBottom.toInt()}dp", Modifier.width(48.dp))
-            }
+/**
+ * 九宫格预览：模拟文字行（宽矩形），实时用当前切分线 + 外扩渲染背景
+ */
+@Composable
+private fun NineSlicePreview(
+    imagePath: String,
+    npLeft: Float,
+    npRight: Float,
+    npTop: Float,
+    npBottom: Float,
+    padStart: Float,
+    padEnd: Float,
+    padTop: Float,
+    padBottom: Float,
+) {
+    val bitmap = remember(imagePath) {
+        runCatching {
+            val file = File(imagePath)
+            if (file.exists()) BitmapFactory.decodeFile(imagePath) else null
+        }.getOrNull()
+    }
+    if (bitmap == null) return
+
+    val density = LocalContext.current.resources.displayMetrics.density
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        val canvasW = size.width
+        val canvasH = size.height
+        // 模拟文字行：占 canvas 中间 70% 宽、60% 高
+        val textLeft = canvasW * 0.15f
+        val textRight = canvasW * 0.85f
+        val textTop = canvasH * 0.2f
+        val textBottom = canvasH * 0.8f
+        // 加上外扩
+        val drawLeft = textLeft - padStart * density
+        val drawRight = textRight + padEnd * density
+        val drawTop = textTop - padTop * density
+        val drawBottom = textBottom + padBottom * density
+
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+        }
+        io.legado.app.help.highlight.NinePatchDrawHelper.draw(
+            drawContext.canvas.nativeCanvas, bitmap,
+            drawLeft, drawTop, drawRight, drawBottom,
+            paint, npLeft, 1f - npRight, npTop, 1f - npBottom,
+        )
+        // 画一条虚线标识"文字行"范围
+        drawRect(
+            color = Color(0x44000000),
+            topLeft = Offset(textLeft, textTop),
+            size = androidx.compose.ui.geometry.Size(textRight - textLeft, textBottom - textTop),
+            style = Stroke(width = 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))),
+        )
+    }
+}
         }
     }
 }

@@ -1092,12 +1092,6 @@ private data class RankingKindsArgs(
 )
 
 private fun ModuleItem.rankingKindTitles(): List<String>? {
-    if (
-        type != HomepageModuleType.Ranking.key &&
-        type != HomepageModuleType.GridRanking.key
-    ) {
-        return null
-    }
     val rankingArgs = args ?: return null
     return runCatching {
         GSON.fromJson(rankingArgs, RankingKindsArgs::class.java)

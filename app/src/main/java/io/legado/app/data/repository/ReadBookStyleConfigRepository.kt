@@ -95,6 +95,16 @@ class ReadBookStyleConfigRepository(
         return true
     }
 
+    override fun adoptCurrentStyleAsShared() {
+        val current = ReadBookConfig.durConfig
+        configStore.replaceConfigAt(
+            index = ReadBookConfig.styleSelect,
+            config = current,
+            alsoShare = true,
+        )
+        save()
+    }
+
     override fun addStyle(): Int {
         val index = configStore.addConfig(ReadBookConfig.Config())
         save()

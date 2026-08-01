@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.read.page.provider
 
-import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.os.Build
 import android.text.Layout
@@ -94,11 +93,7 @@ class TextChapterLayout(
         fun invalidateRegexCache() {
             cachedHighlightRules = null
             cachedHighlightRulesConfigName = null
-            bitmapDimsCache.clear()
         }
-
-        /** 九宫格图片尺寸缓存 (width, height)，避免重复读取文件 */
-        private val bitmapDimsCache = mutableMapOf<String, Pair<Int, Int>?>()
     }
 
     private val compiledHighlightRules: List<CompiledHighlightRule>
@@ -1211,8 +1206,8 @@ class TextChapterLayout(
                     nsBgImage = prevStyle.bgImage
                     nsNpLeft = prevStyle.npLeft
                     nsNpRight = prevStyle.npRight
-                    nsBgPadStart = prevStyle.bgPadStart
-                    nsBgPadEnd = prevStyle.bgPadEnd
+                    nsBgPadStart = prevStyle.bgMarginStart
+                    nsBgPadEnd = prevStyle.bgMarginEnd
                     val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
@@ -1228,8 +1223,8 @@ class TextChapterLayout(
                     nsBgImage = style.bgImage
                     nsNpLeft = style.npLeft
                     nsNpRight = style.npRight
-                    nsBgPadStart = style.bgPadStart
-                    nsBgPadEnd = style.bgPadEnd
+                    nsBgPadStart = style.bgMarginStart
+                    nsBgPadEnd = style.bgMarginEnd
                     val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
@@ -1264,8 +1259,8 @@ class TextChapterLayout(
                     nsBgImage = prevStyle.bgImage
                     nsNpLeft = prevStyle.npLeft
                     nsNpRight = prevStyle.npRight
-                    nsBgPadStart = prevStyle.bgPadStart
-                    nsBgPadEnd = prevStyle.bgPadEnd
+                    nsBgPadStart = prevStyle.bgMarginStart
+                    nsBgPadEnd = prevStyle.bgMarginEnd
                     val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
@@ -1281,8 +1276,8 @@ class TextChapterLayout(
                     nsBgImage = style.bgImage
                     nsNpLeft = style.npLeft
                     nsNpRight = style.npRight
-                    nsBgPadStart = style.bgPadStart
-                    nsBgPadEnd = style.bgPadEnd
+                    nsBgPadStart = style.bgMarginStart
+                    nsBgPadEnd = style.bgMarginEnd
                     val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
@@ -1320,22 +1315,8 @@ class TextChapterLayout(
         padStartDp: Float = 0f,
         padEndDp: Float = 0f,
     ): Pair<Float, Float> {
-        val dims = bitmapDimsCache.getOrPut(bgImage) {
-            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(bgImage, opts)
-            if (opts.outWidth > 0 && opts.outHeight > 0) {
-                opts.outWidth to opts.outHeight
-            } else null
-        } ?: return 0f to 0f
-
-        val (bw, _) = dims
-        val leftPx = (bw * npLeft).toInt().coerceAtLeast(0)
-        val rightPx = (bw * (1f - npRight)).toInt().coerceAtMost(bw)
-
         val density = appCtx.resources.displayMetrics.density
-        val marginLeft = leftPx.toFloat() + padStartDp * density
-        val marginRight = (bw - rightPx).toFloat() + padEndDp * density
-        return marginLeft to marginRight
+        return (padStartDp * density) to (padEndDp * density)
     }
 
     /**
@@ -1376,8 +1357,8 @@ class TextChapterLayout(
                 nsBgImage = prevStyle.bgImage
                 nsNpLeft = prevStyle.npLeft
                 nsNpRight = prevStyle.npRight
-                nsBgPadStart = prevStyle.bgPadStart
-                nsBgPadEnd = prevStyle.bgPadEnd
+                nsBgPadStart = prevStyle.bgMarginStart
+                nsBgPadEnd = prevStyle.bgMarginEnd
                 val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
                 x += marginLeft
                 inNineSlice = true
@@ -1395,8 +1376,8 @@ class TextChapterLayout(
                 nsBgImage = style.bgImage
                 nsNpLeft = style.npLeft
                 nsNpRight = style.npRight
-                nsBgPadStart = style.bgPadStart
-                nsBgPadEnd = style.bgPadEnd
+                nsBgPadStart = style.bgMarginStart
+                nsBgPadEnd = style.bgMarginEnd
                 val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
                 x += marginLeft
                 inNineSlice = true
@@ -1475,14 +1456,18 @@ class TextChapterLayout(
                     fontPath = style?.fontPath ?: "",
                     fontWeight = style?.fontWeight ?: 400,
                     isItalic = style?.isItalic ?: false,
-                    npLeft = style?.npLeft ?: 0.1f,
-                    npRight = style?.npRight ?: 0.1f,
-                    npTop = style?.npTop ?: 0.1f,
-                    npBottom = style?.npBottom ?: 0.1f,
+                    npLeft = style?.npLeft ?: 0.5f,
+                    npRight = style?.npRight ?: 0.5f,
+                    npTop = style?.npTop ?: 0.5f,
+                    npBottom = style?.npBottom ?: 0.5f,
                     bgPadStart = style?.bgPadStart ?: 0f,
                     bgPadEnd = style?.bgPadEnd ?: 0f,
                     bgPadTop = style?.bgPadTop ?: 0f,
                     bgPadBottom = style?.bgPadBottom ?: 0f,
+                    bgMarginStart = style?.bgMarginStart ?: 0f,
+                    bgMarginEnd = style?.bgMarginEnd ?: 0f,
+                    bgMarginTop = style?.bgMarginTop ?: 0f,
+                    bgMarginBottom = style?.bgMarginBottom ?: 0f,
                 )
             }
         }
@@ -1603,9 +1588,10 @@ class TextChapterLayout(
         while (i < text.length) {
             val style = charStyles[i]
             val fontPath = style?.fontPath.orEmpty()
-            if (fontPath.isEmpty()) { i++; continue }
             val fontWeight = style?.fontWeight ?: 400
             val isItalic = style?.isItalic ?: false
+            // 只要字体/字重/斜体任一非默认就需要重新测量
+            if (fontPath.isEmpty() && fontWeight == 400 && !isItalic) { i++; continue }
             // 找连续使用同一字体且同一字重/斜体的区间
             val segStart = i
             i++
@@ -1764,6 +1750,10 @@ class TextChapterLayout(
             bgPadEnd = bgPaddingEnd,
             bgPadTop = bgPaddingTop,
             bgPadBottom = bgPaddingBottom,
+            bgMarginStart = bgMarginStart,
+            bgMarginEnd = bgMarginEnd,
+            bgMarginTop = bgMarginTop,
+            bgMarginBottom = bgMarginBottom,
         )
     }
 

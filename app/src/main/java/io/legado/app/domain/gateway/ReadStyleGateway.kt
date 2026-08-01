@@ -25,6 +25,12 @@ interface ReadStyleGateway {
      */
     fun clearMissingTextFont()
     fun applyPreset(index: Int): Boolean
+
+    /**
+     * 打开共用布局时调用：把当前选中样式的排版整份复制到共享排版，
+     * 让开启共用布局那一刻的观感等于当前样式，随后再落盘。
+     */
+    fun adoptCurrentStyleAsShared()
     fun addStyle(): Int
     fun deleteCurrentStyle(): Boolean
     fun importCurrentStyle(bytes: ByteArray)

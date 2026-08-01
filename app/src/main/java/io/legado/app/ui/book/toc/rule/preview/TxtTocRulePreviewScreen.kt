@@ -433,7 +433,7 @@ private fun ChainDemoCard(demo: ChainDemo) {
                 TopBarActionButton(
                     onClick = { expanded = !expanded },
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.toc_preview_chain_title),
                 )
             }
             Spacer(Modifier.height(4.dp))

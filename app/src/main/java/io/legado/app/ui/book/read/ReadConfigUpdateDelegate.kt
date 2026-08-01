@@ -116,6 +116,9 @@ class ReadConfigUpdateDelegate(
                 }
             }
             is ConfigUpdate.ShareLayout -> {
+                if (update.value) {
+                    readBookStyleConfigRepository.adoptCurrentStyleAsShared()
+                }
                 scope.launch {
                     readSettingsRepository.setShareLayout(update.value)
                 }

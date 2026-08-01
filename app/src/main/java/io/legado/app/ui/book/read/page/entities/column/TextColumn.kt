@@ -32,14 +32,18 @@ data class TextColumn(
     override val fontPath: String = "",
     override val fontWeight: Int = 400,
     override val isItalic: Boolean = false,
-    override val npLeft: Float = 0.1f,
-    override val npRight: Float = 0.1f,
-    override val npTop: Float = 0.1f,
-    override val npBottom: Float = 0.1f,
+    override val npLeft: Float = 0.5f,
+    override val npRight: Float = 0.5f,
+    override val npTop: Float = 0.5f,
+    override val npBottom: Float = 0.5f,
     override val bgPadStart: Float = 0f,
     override val bgPadEnd: Float = 0f,
     override val bgPadTop: Float = 0f,
     override val bgPadBottom: Float = 0f,
+    override val bgMarginStart: Float = 0f,
+    override val bgMarginEnd: Float = 0f,
+    override val bgMarginTop: Float = 0f,
+    override val bgMarginBottom: Float = 0f,
 ) : TextBaseColumn {
 
     override var textLine: TextLine = emptyTextLine
@@ -84,25 +88,33 @@ data class TextColumn(
         val needRestoreColor = textPaint.color != drawColor
         val customTypeface = getCustomTypeface()
         val needRestoreTypeface = customTypeface != null
+        // 合成加粗：字重 >= 700 时用 isFakeBoldText 保证任意字体都能变粗
+        val needFakeBold = fontWeight >= 700
         if (needRestoreSize) {
             val originalSize = textPaint.textSize
             val originalTypeface = if (needRestoreTypeface) textPaint.typeface else null
+            val originalFakeBold = textPaint.isFakeBoldText
             textPaint.textSize = textLine.titleTextSize!!
             if (needRestoreColor) textPaint.color = drawColor
             if (needRestoreTypeface) textPaint.typeface = customTypeface
+            if (needFakeBold) textPaint.isFakeBoldText = true
             val y = textLine.lineBase - textLine.lineTop
             drawText(canvas, y, textPaint)
             textPaint.textSize = originalSize
             if (needRestoreTypeface) textPaint.typeface = originalTypeface
-        } else if (needRestoreColor || needRestoreTypeface) {
+            if (needFakeBold) textPaint.isFakeBoldText = originalFakeBold
+        } else if (needRestoreColor || needRestoreTypeface || needFakeBold) {
             val originalColor = textPaint.color
             val originalTypeface = textPaint.typeface
+            val originalFakeBold = textPaint.isFakeBoldText
             if (needRestoreColor) textPaint.color = drawColor
             if (needRestoreTypeface) textPaint.typeface = customTypeface
+            if (needFakeBold) textPaint.isFakeBoldText = true
             val y = textLine.lineBase - textLine.lineTop
             drawText(canvas, y, textPaint)
             if (needRestoreColor) textPaint.color = originalColor
             if (needRestoreTypeface) textPaint.typeface = originalTypeface
+            if (needFakeBold) textPaint.isFakeBoldText = originalFakeBold
         } else {
             val y = textLine.lineBase - textLine.lineTop
             drawText(canvas, y, textPaint)

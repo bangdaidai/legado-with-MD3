@@ -8,22 +8,18 @@ import android.graphics.RectF
 import kotlin.math.min
 
 /**
- * 九宫格背景绘制。
+ * 九宫格背景绘制。移植自 readdai `NinePatchHelper`。
  *
- * 角块按 contain 系数（`min(rectW/bw, rectH/bh)`）统一等比缩放，中段用剩余空间拉伸，
- * 保证同一模板在不同分辨率原图下视觉一致；全部 9 块在同一 clipRect 内绘制，不会溢出目标矩形。
+ * 参数 [leftX] / [rightX] / [topY] / [bottomY] 均为**图片宽/高的归一化绝对位置** (0~1)：
+ *  - leftX / rightX 为两条竖线相对图宽的位置
+ *  - topY / bottomY 为两条横线相对图高的位置
+ *  - 允许两条线重合（借 1px 源图当拉伸中心带）
+ *
+ * 四角随整体等比缩放 s = min(rectW/bw, rectH/bh)（contain），绝不变形；
+ * 中段沿水平/垂直方向拉伸填满剩余空间。
  */
 object NinePatchDrawHelper {
 
-    private val srcRect = Rect()
-    private val dstRect = RectF()
-
-    /**
-     * @param leftFrac 左侧分割线占图宽比例
-     * @param rightFrac 右侧分割线占图宽比例（自右起算）
-     * @param topFrac 上侧分割线占图高比例
-     * @param bottomFrac 下侧分割线占图高比例（自下起算）
-     */
     fun draw(
         canvas: Canvas,
         bitmap: Bitmap,
@@ -31,11 +27,11 @@ object NinePatchDrawHelper {
         top: Float,
         right: Float,
         bottom: Float,
-        leftFrac: Float,
-        rightFrac: Float,
-        topFrac: Float,
-        bottomFrac: Float,
         paint: Paint,
+        leftX: Float,
+        rightX: Float,
+        topY: Float,
+        bottomY: Float,
     ) {
         val rectW = right - left
         val rectH = bottom - top
@@ -45,64 +41,83 @@ object NinePatchDrawHelper {
         val bh = bitmap.height.toFloat()
         if (bw <= 0f || bh <= 0f) return
 
-        // 源图上的分割位置（像素）。允许不对称切分，仅保证不越过对侧
-        val srcL = (bw * leftFrac.coerceIn(0f, 0.98f))
-        val srcR = (bw * rightFrac.coerceIn(0f, 0.98f))
-        val srcT = (bh * topFrac.coerceIn(0f, 0.98f))
-        val srcB = (bh * bottomFrac.coerceIn(0f, 0.98f))
+        // 归一化线位置，各自夹紧范围；并保证 leftX<=rightX、topY<=bottomY（允许重合）
+        val lx0 = leftX.coerceIn(0.02f, 0.98f)
+        val rx0 = rightX.coerceIn(0.02f, 0.98f)
+        val ty0 = topY.coerceIn(0.02f, 0.98f)
+        val by0 = bottomY.coerceIn(0.02f, 0.98f)
+        val lxN = lx0.coerceAtMost(rx0)
+        val rxN = lx0.coerceAtLeast(rx0)
+        val tyN = ty0.coerceAtMost(by0)
+        val byN = ty0.coerceAtLeast(by0)
 
-        // contain 缩放：四方向角块用同一系数，避免高分辨率原图角块过宽
-        val scale = min(rectW / bw, rectH / bh)
-        val dstL = srcL * scale
-        val dstR = srcR * scale
-        val dstT = srcT * scale
-        val dstB = srcB * scale
-        val dstM = (rectW - dstL - dstR).coerceAtLeast(0f)
-        val dstV = (rectH - dstT - dstB).coerceAtLeast(0f)
+        // 整体等比缩放：先让整图等比缩放到目标框内（contain），再切九宫格。
+        val s = min(rectW / bw, rectH / bh)
 
-        // 源图纵横分割坐标
-        val sx0 = 0
-        val sx1 = srcL.toInt().coerceIn(0, bitmap.width)
-        val sx2 = (bw - srcR).toInt().coerceIn(sx1, bitmap.width)
-        val sx3 = bitmap.width
-        val sy0 = 0
-        val sy1 = srcT.toInt().coerceIn(0, bitmap.height)
-        val sy2 = (bh - srcB).toInt().coerceIn(sy1, bitmap.height)
-        val sy3 = bitmap.height
+        val wLsrc = lxN * bw
+        val wRsrc = (1f - rxN) * bw
+        val hTsrc = tyN * bh
+        val hBsrc = (1f - byN) * bh
 
-        // 目标纵横分割坐标
-        val dx0 = left
-        val dx1 = left + dstL
-        val dx2 = dx1 + dstM
-        val dx3 = right
-        val dy0 = top
-        val dy1 = top + dstT
-        val dy2 = dy1 + dstV
-        val dy3 = bottom
+        val wL = wLsrc * s
+        val wR = wRsrc * s
+        val hT = hTsrc * s
+        val hB = hBsrc * s
+        val wM = (rectW - wL - wR).let { if (it > 0f) it else 0f }
+        val hM = (rectH - hT - hB).let { if (it > 0f) it else 0f }
 
-        val sxs = intArrayOf(sx0, sx1, sx2, sx3)
-        val sys = intArrayOf(sy0, sy1, sy2, sy3)
-        val dxs = floatArrayOf(dx0, dx1, dx2, dx3)
-        val dys = floatArrayOf(dy0, dy1, dy2, dy3)
+        val x0 = left
+        val x1 = left + wL
+        val x2 = left + wL + wM
+        val x3 = right
+        val y0 = top
+        val y1 = top + hT
+        val y2 = top + hT + hM
+        val y3 = bottom
 
+        val sxLi = wLsrc.toInt().coerceAtLeast(0)
+        val sxR = rxN * bw
+        val sxTi = hTsrc.toInt().coerceAtLeast(0)
+        val sxB = byN * bh
+        val bwI = bw.toInt()
+        val bhI = bh.toInt()
+        // 两条线重合时中带 src 宽为 0，借 1px 作为可拉伸中心带，避免空白
+        val sxRi = if (rxN > lxN) sxR.toInt().coerceAtLeast(0)
+        else (lxN * bw + 1f).toInt().coerceAtMost(bwI)
+        val sxBii = if (byN > tyN) sxB.toInt().coerceAtLeast(0)
+        else (tyN * bh + 1f).toInt().coerceAtMost(bhI)
+
+        val srcRects = arrayOf(
+            Rect(0, 0, sxLi, sxTi),
+            Rect(sxLi, 0, sxRi, sxTi),
+            Rect(sxRi, 0, bwI, sxTi),
+            Rect(0, sxTi, sxLi, sxBii),
+            Rect(sxLi, sxTi, sxRi, sxBii),
+            Rect(sxRi, sxTi, bwI, sxBii),
+            Rect(0, sxBii, sxLi, bhI),
+            Rect(sxLi, sxBii, sxRi, bhI),
+            Rect(sxRi, sxBii, bwI, bhI)
+        )
+
+        val dstRects = arrayOf(
+            RectF(x0, y0, x1, y1),
+            RectF(x1, y0, x2, y1),
+            RectF(x2, y0, x3, y1),
+            RectF(x0, y1, x1, y2),
+            RectF(x1, y1, x2, y2),
+            RectF(x2, y1, x3, y2),
+            RectF(x0, y2, x1, y3),
+            RectF(x1, y2, x2, y3),
+            RectF(x2, y2, x3, y3)
+        )
+
+        // 裁切到目标矩形：避免极小高亮框里角块相互覆盖
         canvas.save()
         canvas.clipRect(left, top, right, bottom)
-        for (row in 0 until 3) {
-            for (col in 0 until 3) {
-                val sl = sxs[col]
-                val sr = sxs[col + 1]
-                val st = sys[row]
-                val sb = sys[row + 1]
-                if (sr <= sl || sb <= st) continue
-                val dl = dxs[col]
-                val dr = dxs[col + 1]
-                val dt = dys[row]
-                val db = dys[row + 1]
-                if (dr <= dl || db <= dt) continue
-                srcRect.set(sl, st, sr, sb)
-                dstRect.set(dl, dt, dr, db)
-                canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
-            }
+        for (i in 0 until 9) {
+            val src = srcRects[i]
+            if (src.width() <= 0 || src.height() <= 0) continue
+            canvas.drawBitmap(bitmap, src, dstRects[i], paint)
         }
         canvas.restore()
     }

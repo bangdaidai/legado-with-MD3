@@ -31,15 +31,21 @@ data class HighlightRule(
     var fontPath: String? = null,
     var fontWeight: Int = 400,
     var isItalic: Boolean = false,
-    var npLeft: Float = 0.1f,
-    var npRight: Float = 0.1f,
-    var npTop: Float = 0.1f,
-    var npBottom: Float = 0.1f,
+    var npLeft: Float = 0.5f,
+    var npRight: Float = 0.5f,
+    var npTop: Float = 0.5f,
+    var npBottom: Float = 0.5f,
     var useProtagonist: Boolean = false,
+    // 内边距：文字在背景图内部的边距（背景图相对文字四周向外扩多少 dp）
     var bgPaddingStart: Float = 0f,
     var bgPaddingEnd: Float = 0f,
     var bgPaddingTop: Float = 0f,
     var bgPaddingBottom: Float = 0f,
+    // 外边距：背景图与相邻文字/行之间的距离（dp）
+    var bgMarginStart: Float = 0f,
+    var bgMarginEnd: Float = 0f,
+    var bgMarginTop: Float = 0f,
+    var bgMarginBottom: Float = 0f,
 ) {
 
     fun styleSummary(): String {

@@ -28,6 +28,10 @@ interface TextBaseColumn : BaseColumn {
     val bgPadEnd: Float
     val bgPadTop: Float
     val bgPadBottom: Float
+    val bgMarginStart: Float
+    val bgMarginEnd: Float
+    val bgMarginTop: Float
+    val bgMarginBottom: Float
     var selected: Boolean
     var isSearchResult: Boolean
 }

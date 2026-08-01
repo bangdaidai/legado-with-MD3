@@ -17,14 +17,18 @@ data class CharStyle(
     val fontPath: String = "",
     val fontWeight: Int = 400,
     val isItalic: Boolean = false,
-    val npLeft: Float = 0.1f,
-    val npRight: Float = 0.1f,
-    val npTop: Float = 0.1f,
-    val npBottom: Float = 0.1f,
+    val npLeft: Float = 0.5f,
+    val npRight: Float = 0.5f,
+    val npTop: Float = 0.5f,
+    val npBottom: Float = 0.5f,
     val bgPadStart: Float = 0f,
     val bgPadEnd: Float = 0f,
     val bgPadTop: Float = 0f,
     val bgPadBottom: Float = 0f,
+    val bgMarginStart: Float = 0f,
+    val bgMarginEnd: Float = 0f,
+    val bgMarginTop: Float = 0f,
+    val bgMarginBottom: Float = 0f,
 ) {
     val hasStyle: Boolean
         get() = textColor != null || bgColor != null || underlineMode != 0 || bgImage.isNotEmpty() || fontPath.isNotEmpty() || fontWeight != 400 || isItalic
