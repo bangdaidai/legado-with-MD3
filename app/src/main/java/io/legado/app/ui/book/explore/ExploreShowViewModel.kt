@@ -201,9 +201,14 @@ class ExploreShowViewModel(
             )
         }
 
-        if (incomingExploreUrl == null) {
-            viewModelScope.launch {
-                loadKinds(incomingSourceUrl)
+        viewModelScope.launch {
+            loadKinds(incomingSourceUrl)
+            if (incomingExploreUrl != null) {
+                val kinds = _kindState.value.kinds
+                val matchedKind = kinds.firstOrNull { it.url == incomingExploreUrl }
+                if (matchedKind != null) {
+                    _kindState.update { it.copy(selectedKindTitle = matchedKind.title) }
+                }
             }
         }
 

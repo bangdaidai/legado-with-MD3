@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,11 +20,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -71,6 +74,10 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import org.koin.androidx.compose.koinViewModel
+import io.legado.app.data.entities.rule.ExploreKind
+import io.legado.app.ui.theme.fadingEdge
+import io.legado.app.ui.widget.components.button.ToggleChip
+import io.legado.app.ui.widget.components.explore.exploreKindKey
 
 private enum class BookFilterState(val id: Int) {
     SHOW_ALL(0),
@@ -163,6 +170,14 @@ fun ExploreShowScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val isGridMode = state.layoutState == 1
     val hazeState = remember { HazeState() }
+    // 只有 url 类型的分类能直接切换，其余类型（button/text/toggle/select）仍走 ExploreKindSelectSheet
+    val chipKinds = remember(state.kinds) {
+        state.kinds.filter { it.type == ExploreKind.Type.url && !it.url.isNullOrBlank() }
+    }
+    val chipListState = rememberLazyListState()
+    val selectedChipIndex = remember(chipKinds, state.selectedKindTitle) {
+        chipKinds.indexOfFirst { it.title == state.selectedKindTitle }
+    }
     val showLoadMoreFooter = !state.isRefreshing &&
         (state.isLoading || state.errorMsg != null || state.isEnd)
     val canLoadMore = state.books.isNotEmpty() &&
@@ -214,6 +229,14 @@ fun ExploreShowScreen(
             }
         }
     }
+
+    // 切换分类后把选中的标签滚动到可见范围
+    LaunchedEffect(selectedChipIndex) {
+        if (selectedChipIndex >= 0) {
+            chipListState.animateScrollToItem(selectedChipIndex)
+        }
+    }
+
 
     AppModalBottomSheet(
         show = state.sheet == ExploreShowSheet.GridCount,
@@ -270,46 +293,70 @@ fun ExploreShowScreen(
         modifier = Modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            GlassMediumFlexibleTopAppBar(
-                modifier = Modifier.responsiveHazeEffect(state = hazeState),
-                title = state.selectedKindTitle ?: title,
-                navigationIcon = {
-                    TopBarNavigationButton(onClick = onBack)
-                },
-                actions = {
+            Column {
+                GlassMediumFlexibleTopAppBar(
+                    modifier = Modifier.responsiveHazeEffect(state = hazeState),
+                    title = state.selectedKindTitle ?: title,
+                    navigationIcon = {
+                        TopBarNavigationButton(onClick = onBack)
+                    },
+                    actions = {
 
-                    AnimatedVisibility(
-                        visible = isGridMode,
-                        enter = fadeIn(tween(300)),
-                        exit = fadeOut(tween(300))
-                    ) {
-                        TopBarActionButton(
-                            onClick = {
-                                onIntent(
-                                    ExploreShowIntent.ShowSheet(
-                                        ExploreShowSheet.GridCount
+                        AnimatedVisibility(
+                            visible = isGridMode,
+                            enter = fadeIn(tween(300)),
+                            exit = fadeOut(tween(300))
+                        ) {
+                            TopBarActionButton(
+                                onClick = {
+                                    onIntent(
+                                        ExploreShowIntent.ShowSheet(
+                                            ExploreShowSheet.GridCount
+                                        )
                                     )
-                                )
-                            },
-                            imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
-                            contentDescription = stringResource(R.string.a11y_grid_columns)
+                                },
+                                imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
+                                contentDescription = stringResource(R.string.a11y_grid_columns)
+                            )
+                        }
+
+                        TopBarActionButton(
+                            onClick = { onIntent(ExploreShowIntent.ShowSheet(ExploreShowSheet.KindSelect)) },
+                            imageVector = Icons.Outlined.FilterAlt,
+                            contentDescription = stringResource(R.string.select_or_search_category)
                         )
+
+                        TopBarActionButton(
+                            onClick = { onIntent(ExploreShowIntent.ToggleLayout) },
+                            imageVector = if (!isGridMode) Icons.AutoMirrored.Outlined.FormatListBulleted else Icons.Default.GridView,
+                            contentDescription = stringResource(R.string.a11y_switch_layout)
+                        )
+                    },
+                    scrollBehavior = scrollBehavior
+                )
+
+                if (chipKinds.isNotEmpty()) {
+                    LazyRow(
+                        state = chipListState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fadingEdge(chipListState, gradientWidth = 16.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            items = chipKinds,
+                            key = { exploreKindKey(it) }
+                        ) { kind ->
+                            ToggleChip(
+                                label = kind.title,
+                                selected = kind.title == state.selectedKindTitle,
+                                onToggle = { onIntent(ExploreShowIntent.SwitchKind(kind)) }
+                            )
+                        }
                     }
-
-                    TopBarActionButton(
-                        onClick = { onIntent(ExploreShowIntent.ShowSheet(ExploreShowSheet.KindSelect)) },
-                        imageVector = Icons.Outlined.FilterAlt,
-                        contentDescription = stringResource(R.string.select_or_search_category)
-                    )
-
-                    TopBarActionButton(
-                        onClick = { onIntent(ExploreShowIntent.ToggleLayout) },
-                        imageVector = if (!isGridMode) Icons.AutoMirrored.Outlined.FormatListBulleted else Icons.Default.GridView,
-                        contentDescription = stringResource(R.string.a11y_switch_layout)
-                    )
-                },
-                scrollBehavior = scrollBehavior
-            )
+                }
+            }
         }
     ) { paddingValues ->
         AppPullToRefresh(
