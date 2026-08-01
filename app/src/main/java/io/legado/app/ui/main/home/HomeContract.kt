@@ -6,6 +6,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.domain.model.DEFAULT_DAILY_READING_GOAL_MINUTES
 import io.legado.app.domain.model.DEFAULT_HOME_DASHBOARD_SECTIONS
 import io.legado.app.domain.model.HomeDashboardSection
+import io.legado.app.domain.model.HomepageLayoutMode
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
@@ -20,6 +21,7 @@ data class HomeUiState(
     val recentBook: HomeRecentBookUi? = null,
     val recentBooks: ImmutableList<HomeRecentBookUi> = persistentListOf(),
     val selectedSourceSetUrl: String? = null,
+    val layoutMode: HomepageLayoutMode = HomepageLayoutMode.Default,
     val visibleSections: ImmutableSet<HomeDashboardSection> =
         DEFAULT_HOME_DASHBOARD_SECTIONS.toImmutableSet(),
     val latestBackup: HomeBackupUi? = null,
@@ -51,6 +53,7 @@ sealed interface HomeIntent {
     data object RecentBookClick : HomeIntent
     data class RecentHistoryBookClick(val bookUrl: String) : HomeIntent
     data class SelectSourceSet(val sourceUrl: String) : HomeIntent
+    data class SetLayoutMode(val mode: HomepageLayoutMode) : HomeIntent
     data object DashboardSettingsClick : HomeIntent
     data class SetSectionVisible(
         val section: HomeDashboardSection,

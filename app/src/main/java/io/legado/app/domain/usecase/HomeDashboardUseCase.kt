@@ -4,6 +4,7 @@ import io.legado.app.domain.gateway.HomeDashboardGateway
 import io.legado.app.domain.model.DEFAULT_DAILY_READING_GOAL_MINUTES
 import io.legado.app.domain.model.HomeDashboard
 import io.legado.app.domain.model.HomeDashboardSection
+import io.legado.app.domain.model.HomepageLayoutMode
 import io.legado.app.domain.model.MAX_DAILY_READING_GOAL_MINUTES
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import java.time.Clock
 import java.time.Duration
 import java.time.ZonedDateTime
@@ -58,8 +60,15 @@ class HomeDashboardUseCase(
     fun observeVisibleSections(): Flow<Set<HomeDashboardSection>> =
         gateway.observeVisibleSections()
 
+    fun observeLayoutMode(): Flow<HomepageLayoutMode> =
+        gateway.observeLayoutMode().map { HomepageLayoutMode.fromStorage(it) }
+
     suspend fun updateSelectedSourceSetUrl(sourceUrl: String) {
         gateway.updateSelectedSourceSetUrl(sourceUrl)
+    }
+
+    suspend fun updateLayoutMode(mode: HomepageLayoutMode) {
+        gateway.updateLayoutMode(mode.storageValue)
     }
 
     suspend fun updateVisibleSections(sections: Set<HomeDashboardSection>) {

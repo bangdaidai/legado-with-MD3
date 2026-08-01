@@ -5,6 +5,7 @@ import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.domain.gateway.HomeDashboardGateway
 import io.legado.app.domain.model.DEFAULT_HOME_DASHBOARD_SECTIONS
 import io.legado.app.domain.model.HomeDashboardSection
+import io.legado.app.domain.model.HomepageLayoutMode
 import io.legado.app.domain.model.HomeReadingBook
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -70,6 +71,12 @@ class HomeDashboardRepository(
             DEFAULT_HOME_DASHBOARD_SECTIONS.joinToString(",") { it.storageValue },
         ).map(HomeDashboardSection::fromStorage)
 
+    override fun observeLayoutMode(): Flow<String> =
+        localPreferencesRepository.getPreference(
+            LocalPreferencesKeys.HOME_LAYOUT_MODE,
+            HomepageLayoutMode.Default.storageValue,
+        )
+
     override suspend fun updateDailyGoal(minutes: Int) {
         localPreferencesRepository.updatePreference(
             LocalPreferencesKeys.DAILY_READING_GOAL_MINUTES,
@@ -81,6 +88,13 @@ class HomeDashboardRepository(
         localPreferencesRepository.updatePreference(
             LocalPreferencesKeys.HOME_SOURCE_SET_URL,
             sourceUrl,
+        )
+    }
+
+    override suspend fun updateLayoutMode(mode: String) {
+        localPreferencesRepository.updatePreference(
+            LocalPreferencesKeys.HOME_LAYOUT_MODE,
+            mode,
         )
     }
 

@@ -43,12 +43,19 @@ fun ExploreKindSelectSheet(
     onSelected: (List<ExploreKind>) -> Unit,
     multiple: Boolean = false,
     initialSelectedTitles: List<String> = emptyList(),
+    initialSelectedKeys: Set<String>? = null,
     repository: ExploreRepository = koinInject(),
     useCase: ExploreKindUiUseCase = koinInject()
 ) {
     var kinds by remember { mutableStateOf<List<ExploreKind>>(emptyList()) }
-    var selectedTitles by remember(initialSelectedTitles, show) {
-        mutableStateOf(initialSelectedTitles.toSet())
+    // 用 title||url 作为唯一 key，避免同名分类互相干扰
+    var selectedKeys by remember(initialSelectedKeys, initialSelectedTitles, kinds, show) {
+        mutableStateOf(
+            initialSelectedKeys
+                ?: kinds.filter { it.title in initialSelectedTitles }
+                    .map { exploreKindKey(it) }
+                    .toSet()
+        )
     }
     var query by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -76,10 +83,10 @@ fun ExploreKindSelectSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         endAction = {
-            if (multiple && selectedTitles.isNotEmpty()) {
+            if (multiple && selectedKeys.isNotEmpty()) {
                 MediumTonalButton(
                     onClick = {
-                        val selectedKinds = kinds.filter { it.title in selectedTitles }
+                        val selectedKinds = kinds.filter { exploreKindKey(it) in selectedKeys }
                         onSelected(selectedKinds)
                         onDismissRequest()
                     },
@@ -111,7 +118,8 @@ fun ExploreKindSelectSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         rowItems.forEach { (kind, span) ->
-                            val isSelected = kind.title in selectedTitles
+                            val kindKey = exploreKindKey(kind)
+                            val isSelected = kindKey in selectedKeys
                             ExploreKindMultiTypeItem(
                                 modifier = Modifier
                                     .weight(span.toFloat())
@@ -128,10 +136,10 @@ fun ExploreKindSelectSheet(
                                 isSelected = isSelected,
                                 onClick = {
                                     if (multiple) {
-                                        selectedTitles = if (isSelected) {
-                                            selectedTitles - kind.title
+                                        selectedKeys = if (isSelected) {
+                                            selectedKeys - kindKey
                                         } else {
-                                            selectedTitles + kind.title
+                                            selectedKeys + kindKey
                                         }
                                     } else {
                                         onSelected(listOf(kind))
@@ -156,3 +164,6 @@ fun ExploreKindSelectSheet(
         }
     }
 }
+
+/** 分类唯一标识：同名分类靠 url 区分 */
+fun exploreKindKey(kind: ExploreKind): String = "${kind.title}||${kind.url}"

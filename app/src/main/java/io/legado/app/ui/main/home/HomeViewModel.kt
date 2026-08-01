@@ -7,6 +7,7 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.model.HomeDashboardSection
 import io.legado.app.domain.model.HomeReadingBook
+import io.legado.app.domain.model.HomepageLayoutMode
 import io.legado.app.domain.model.WebDavBackup
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.HomeDashboardUseCase
@@ -49,8 +50,9 @@ class HomeViewModel(
         homeDashboardUseCase.observe(),
         homeDashboardUseCase.observeSelectedSourceSetUrl(),
         homeDashboardUseCase.observeVisibleSections(),
-    ) { dashboard, selectedSourceUrl, visibleSections ->
-        Triple(dashboard, selectedSourceUrl, visibleSections)
+        homeDashboardUseCase.observeLayoutMode(),
+    ) { dashboard, selectedSourceUrl, visibleSections, layoutMode ->
+        DashboardData(dashboard, selectedSourceUrl, visibleSections, layoutMode)
     }
 
     val uiState = combine(
@@ -59,7 +61,7 @@ class HomeViewModel(
         _activeDialog,
         _activeSheet,
     ) { dashboardData, backup, dialog, sheet ->
-        val (dashboard, selectedSourceUrl, visibleSections) = dashboardData
+        val (dashboard, selectedSourceUrl, visibleSections, layoutMode) = dashboardData
         HomeUiState(
             totalReadBooks = dashboard.totalReadBooks,
             totalReadTimeMillis = dashboard.totalReadTimeMillis,
@@ -72,6 +74,7 @@ class HomeViewModel(
                 .map { it.toUi() }
                 .toImmutableList(),
             selectedSourceSetUrl = selectedSourceUrl,
+            layoutMode = layoutMode,
             visibleSections = visibleSections.toImmutableSet(),
             latestBackup = backup.latest?.toUi(),
             isBackupLoading = backup.isLoading,
@@ -107,6 +110,7 @@ class HomeViewModel(
             HomeIntent.RecentBookClick -> openRecentBook()
             is HomeIntent.RecentHistoryBookClick -> openBook(intent.bookUrl)
             is HomeIntent.SelectSourceSet -> selectSourceSet(intent.sourceUrl)
+            is HomeIntent.SetLayoutMode -> setLayoutMode(intent.mode)
             HomeIntent.DashboardSettingsClick -> {
                 _activeSheet.value = HomeSheet.DashboardSettings
             }
@@ -180,6 +184,12 @@ class HomeViewModel(
     private fun selectSourceSet(sourceUrl: String) {
         viewModelScope.launch {
             homeDashboardUseCase.updateSelectedSourceSetUrl(sourceUrl)
+        }
+    }
+
+    private fun setLayoutMode(mode: HomepageLayoutMode) {
+        viewModelScope.launch {
+            homeDashboardUseCase.updateLayoutMode(mode)
         }
     }
 
@@ -380,5 +390,12 @@ class HomeViewModel(
         coverPath = coverPath,
         chapterTitle = chapterTitle,
         chapterProgress = chapterProgress,
+    )
+
+    private data class DashboardData(
+        val dashboard: io.legado.app.domain.model.HomeDashboard,
+        val selectedSourceUrl: String?,
+        val visibleSections: Set<HomeDashboardSection>,
+        val layoutMode: HomepageLayoutMode,
     )
 }

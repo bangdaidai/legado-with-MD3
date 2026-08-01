@@ -27,12 +27,14 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -562,23 +564,26 @@ private fun ModuleHeaderTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AppText(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = when {
-            selected && highlightSelected -> LegadoTheme.colorScheme.primary
-            selected -> Color.Unspecified
-            else -> LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-        },
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    val isPill = selected && highlightSelected
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (isPill) LegadoTheme.colorScheme.primaryContainer else Color.Transparent,
+        contentColor = if (isPill) LegadoTheme.colorScheme.onPrimaryContainer
+        else LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
         modifier = modifier
             .selectable(
                 selected = selected,
                 role = Role.Tab,
                 onClick = onClick,
-            )
-            .padding(vertical = 4.dp),
-    )
+            ),
+    ) {
+        AppText(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
 }

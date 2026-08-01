@@ -2187,6 +2187,13 @@
     <string name="homepage_select_multiple_kinds">Select multiple kinds</string>
     <string name="homepage_n_selected">%1$d selected</string>
     <string name="homepage_select_one_kind">Select one kind</string>
+    <string name="homepage_join_selected">Join %1$d selected modules</string>
+    <string name="homepage_selected_categories">Selected Categories</string>
+    <string name="homepage_no_category_selected">No category selected</string>
+    <string name="homepage_select_category">Select Category</string>
+    <string name="homepage_modify_category">Modify Category</string>
+    <string name="homepage_layout_mixed">Mixed Mode</string>
+    <string name="homepage_layout_paged">Paged Mode</string>
     <string name="or">OR</string>
     <string name="homepage_add_button_group">Add Button Group</string>
     <string name="homepage_module_title_label">Module Title</string>

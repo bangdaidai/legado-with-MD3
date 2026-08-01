@@ -50,7 +50,7 @@ fun TagChip(
     modifier: Modifier = Modifier,
 ) {
     val (horizontalPadding, verticalPadding) = if (size == TagChipSize.Small) {
-        6.dp to 3.dp
+        4.dp to 2.dp
     } else {
         10.dp to 5.dp
     }
@@ -82,12 +82,12 @@ fun TagChip(
     val backgroundColor = if (tagColor != null) {
         tagColor.copy(alpha = 0.14f)
     } else {
-        LegadoTheme.colorScheme.surfaceContainer
+        LegadoTheme.colorScheme.secondaryContainer
     }
     val contentColor = if (tagColor != null) {
         tagColor
     } else {
-        LegadoTheme.colorScheme.primary
+        LegadoTheme.colorScheme.onSecondaryContainer
     }
 
     val clickModifier = if (onClick != null || onRemove != null) {

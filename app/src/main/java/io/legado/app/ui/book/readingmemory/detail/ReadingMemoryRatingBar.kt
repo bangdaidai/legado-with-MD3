@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.readingmemory.detail
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
@@ -11,10 +10,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LegadoTheme
 
@@ -44,11 +41,6 @@ fun ReadingMemoryRatingBar(
                 isHalf -> Icons.AutoMirrored.Filled.StarHalf
                 else -> Icons.Filled.StarOutline
             }
-            val interactionSource = remember { MutableInteractionSource() }
-            val scale by animateFloatAsState(
-                targetValue = if (isFilled) 1.15f else 1f,
-                label = "ratingStarScale",
-            )
             Icon(
                 imageVector = icon,
                 contentDescription = null,
@@ -58,7 +50,6 @@ fun ReadingMemoryRatingBar(
                     LegadoTheme.colorScheme.outlineVariant,
                 modifier = Modifier
                     .size(16.dp)
-                    .scale(scale)
                     .then(
                         if (enabled) {
                             Modifier.clickable(

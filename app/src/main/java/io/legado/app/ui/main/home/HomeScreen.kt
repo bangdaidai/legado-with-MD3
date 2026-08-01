@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Refresh
@@ -88,6 +90,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.HomeDashboardSection
+import io.legado.app.domain.model.HomepageLayoutMode
 import io.legado.app.domain.model.MAX_DAILY_READING_GOAL_MINUTES
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
@@ -401,6 +404,7 @@ fun HomeScreen(
     val pagerState = rememberPagerState(pageCount = {
         selectedSets.size.coerceAtLeast(1)
     })
+    val isMixedMode = state.layoutMode == HomepageLayoutMode.Mixed
 
     var showPageMenu by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -409,7 +413,8 @@ fun HomeScreen(
         derivedStateOf { selectedSets.getOrNull(pagerState.currentPage)?.sourceName }
     }
 
-    LaunchedEffect(pagerState) {
+    LaunchedEffect(pagerState, isMixedMode) {
+        if (isMixedMode) return@LaunchedEffect
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { page ->
@@ -418,7 +423,8 @@ fun HomeScreen(
             }
     }
 
-    LaunchedEffect(state.selectedSourceSetUrl, pagerState) {
+    LaunchedEffect(state.selectedSourceSetUrl, pagerState, isMixedMode) {
+        if (isMixedMode) return@LaunchedEffect
         val targetUrl = state.selectedSourceSetUrl ?: return@LaunchedEffect
         val targetIndex = selectedSets.indexOfFirst { it.sourceUrl == targetUrl }
         if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
@@ -432,9 +438,19 @@ fun HomeScreen(
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = stringResource(R.string.home),
-                subtitle = currentPageSourceName,
+                subtitle = if (isMixedMode) null else currentPageSourceName,
                 scrollBehavior = scrollBehavior,
                 actions = {
+                    TopBarActionButton(
+                        onClick = {
+                            val newMode = if (isMixedMode) HomepageLayoutMode.Paged else HomepageLayoutMode.Mixed
+                            onIntent(HomeIntent.SetLayoutMode(newMode))
+                        },
+                        imageVector = if (isMixedMode) Icons.Default.Dashboard else Icons.Default.DashboardCustomize,
+                        contentDescription = stringResource(
+                            if (isMixedMode) R.string.homepage_layout_paged else R.string.homepage_layout_mixed
+                        ),
+                    )
                     TopBarActionButton(
                         onClick = onToggleHomepageManage,
                         imageVector = AppIcons.Settings,
@@ -461,9 +477,12 @@ fun HomeScreen(
                             selectedSets.forEachIndexed { index, source ->
                                 RoundDropdownMenuItem(
                                     text = source.sourceName,
-                                    isSelected = index == pagerState.currentPage,
+                                    isSelected = !isMixedMode && index == pagerState.currentPage,
                                     onClick = {
                                         showPageMenu = false
+                                        if (isMixedMode) {
+                                            onIntent(HomeIntent.SetLayoutMode(HomepageLayoutMode.Paged))
+                                        }
                                         scope.launch {
                                             pagerState.animateScrollToPage(index)
                                         }
@@ -549,6 +568,26 @@ fun HomeScreen(
                             ) {
                                 AppText(stringResource(R.string.homepage_no_source_sets_selected))
                             }
+                        } else if (isMixedMode) {
+                            // 混合模式：所有选中集合的模块合并为一个流
+                            val allModules = remember(homepageState.modules, selectedSets) {
+                                val selectedSetUrls = selectedSets.map { it.sourceUrl }.toSet()
+                                homepageState.modules.filter { module ->
+                                    val setUrl = HomepageViewModel.customSetUrl(module.customSetId ?: "")
+                                    module.sourceUrl in selectedSetUrls || setUrl in selectedSetUrls
+                                }
+                            }
+                            HomepageModuleFeed(
+                                modules = allModules,
+                                actions = homepageFeedActions,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .nestedScroll(moduleNestedScrollConnection),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                onBookLongClick = onHomepageBookLongClick,
+                                onErrorClick = { errorMessage = it },
+                            )
                         } else {
                             HorizontalPager(
                                 state = pagerState,

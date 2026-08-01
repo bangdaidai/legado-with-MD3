@@ -629,6 +629,11 @@ private fun BookInfoTopBarActions(
         imageVector = Icons.Default.Timeline,
         contentDescription = "阅读记忆"
     )
+    TopBarActionButton(
+        onClick = { onMenuAction(BookInfoMenuAction.Edit) },
+        imageVector = Icons.Default.Edit,
+        contentDescription = stringResource(R.string.edit)
+    )
     BookInfoOverflowAction(
         state = state,
         onMenuAction = onMenuAction,

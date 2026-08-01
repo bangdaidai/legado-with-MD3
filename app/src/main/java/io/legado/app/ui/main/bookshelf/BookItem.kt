@@ -800,14 +800,9 @@ fun BookItem(
                         }
                         val wc = bookUi.book.wordCount
                         if (!wc.isNullOrBlank()) {
-                            TextCard(
-                                text = formatShelfWordCount(wc),
-                                backgroundColor = LegadoTheme.colorScheme.primary.copy(alpha = 0.08f),
-                                contentColor = LegadoTheme.colorScheme.primary,
-                                cornerRadius = 4.dp,
-                                horizontalPadding = 4.dp,
-                                verticalPadding = 2.dp,
-                                textStyle = LegadoTheme.typography.labelSmallEmphasized
+                            TagChip(
+                                tag = formatShelfWordCount(wc),
+                                size = TagChipSize.Small,
                             )
                         }
                     }

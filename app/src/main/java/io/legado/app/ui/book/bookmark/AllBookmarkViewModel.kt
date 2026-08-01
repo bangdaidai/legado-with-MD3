@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
+import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -82,11 +83,12 @@ sealed interface AllBookmarkEffect {
 class AllBookmarkViewModel(
     application: Application,
     private val bookmarkRepository: BookmarkRepository,
+    private val otherSettingsGateway: OtherSettingsGateway,
 ) : AndroidViewModel(application) {
 
     private val _searchQuery = MutableStateFlow("")
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
-    private val _onlyNotes = MutableStateFlow(false)
+    private val _onlyNotes = MutableStateFlow(otherSettingsGateway.currentSettings.bookmarkOnlyNotes)
     private val _effects = MutableSharedFlow<AllBookmarkEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
@@ -155,7 +157,12 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is AllBookmarkIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is AllBookmarkIntent.Export -> exportBookmark(intent.treeUri, intent.isMarkdown)
-            AllBookmarkIntent.ToggleOnlyNotes -> _onlyNotes.update { !it }
+            AllBookmarkIntent.ToggleOnlyNotes -> {
+                _onlyNotes.update { !it }
+                viewModelScope.launch {
+                    otherSettingsGateway.update { it.copy(bookmarkOnlyNotes = _onlyNotes.value) }
+                }
+            }
         }
     }
 

@@ -724,8 +724,13 @@ private fun HighlightRulePreview(
     NormalCard(
         modifier = modifier,
         cornerRadius = 12.dp,
+        containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
             if (pattern.isNotBlank() && matchRanges.isEmpty()) {
                 AppText(
                     text = stringResource(R.string.highlight_preview_no_match),

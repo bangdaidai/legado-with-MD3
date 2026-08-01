@@ -98,6 +98,7 @@ fun SourceBrowseDetailPage(
             selectedTabIndex = browseTab,
             onTabSelected = { onBrowseTabChange(it) }
         )
+        Spacer(modifier = Modifier.height(8.dp))
         when (browseTab) {
             0 -> {
                 if (joinedModules.isEmpty()) {
@@ -251,29 +252,49 @@ fun SourceBrowseDetailPage(
                         AppText(stringResource(R.string.homepage_source_json_empty))
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(
-                            sourceModules.distinctBy { it.id },
-                            key = { it.id }) { module ->
-                            val isJoined = joinedKeys.contains(module.moduleKey)
-                            val isInfinite =
-                                HomepageViewModel.isInfinite(module.type, module.layoutConfig)
-                            val isBlocked = !isJoined && isInfinite && hasInfiniteInSet
+                    var selectedModuleKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(
+                                sourceModules.distinctBy { it.id },
+                                key = { it.id }) { module ->
+                                val isJoined = joinedKeys.contains(module.moduleKey)
+                                val isInfinite =
+                                    HomepageViewModel.isInfinite(module.type, module.layoutConfig)
+                                val isBlocked = !isJoined && isInfinite && hasInfiniteInSet
+                                val isSelected = selectedModuleKeys.contains(module.moduleKey)
 
-                            SelectionItemCard(
-                                title = module.title,
-                                subtitle = module.moduleKey + if (isJoined) stringResource(
-                                    R.string.homepage_status_joined
-                                ) else if (isBlocked) " (${stringResource(R.string.homepage_module_duplicate_infinite)})" else "",
-                                containerColor = LegadoTheme.colorScheme.onSheetContent,
-                                isSelected = isJoined,
-                                inSelectionMode = true,
-                                isEnabled = !isBlocked,
-                                onToggleSelection = {
-                                    if (!isJoined && !isBlocked) {
+                                SelectionItemCard(
+                                    title = module.title,
+                                    subtitle = module.moduleKey + if (isJoined) stringResource(
+                                        R.string.homepage_status_joined
+                                    ) else if (isBlocked) " (${stringResource(R.string.homepage_module_duplicate_infinite)})" else "",
+                                    containerColor = LegadoTheme.colorScheme.onSheetContent,
+                                    isSelected = isJoined || isSelected,
+                                    inSelectionMode = true,
+                                    isEnabled = !isBlocked,
+                                    onToggleSelection = {
+                                        if (!isJoined && !isBlocked) {
+                                            selectedModuleKeys = if (isSelected) {
+                                                selectedModuleKeys - module.moduleKey
+                                            } else {
+                                                selectedModuleKeys + module.moduleKey
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        if (selectedModuleKeys.isNotEmpty()) {
+                            SecondaryButton(
+                                text = stringResource(R.string.homepage_join_selected, selectedModuleKeys.size),
+                                onClick = {
+                                    sourceModules.filter { it.moduleKey in selectedModuleKeys }.forEach { module ->
                                         onJoinModule(
                                             browseUrl, currentSetId, ModuleDef(
                                                 key = module.moduleKey,
@@ -283,7 +304,11 @@ fun SourceBrowseDetailPage(
                                             )
                                         )
                                     }
-                                }
+                                    selectedModuleKeys = emptySet()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp)
                             )
                         }
                     }
@@ -296,7 +321,9 @@ fun SourceBrowseDetailPage(
                 val isRanking = browseModuleType == HomepageModuleType.Ranking.key ||
                         browseModuleType == HomepageModuleType.GridRanking.key
                 val supportsMultipleKinds = isButtonGroup || isRanking
-                Column {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     val typeList = remember(canSelectInfiniteGlobal) {
                         HomepageModuleType.entries.filter {
                             it != HomepageModuleType.Unknown && (canSelectInfiniteGlobal || !HomepageViewModel.isInfinite(

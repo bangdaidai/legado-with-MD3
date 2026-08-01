@@ -1937,6 +1937,13 @@
     <string name="homepage_select_multiple_kinds">选择多个分类</string>
     <string name="homepage_n_selected">已选择 %1$d 个</string>
     <string name="homepage_select_one_kind">选择一个分类</string>
+    <string name="homepage_join_selected">加入 %1$d 个所选模块</string>
+    <string name="homepage_selected_categories">已选分类</string>
+    <string name="homepage_no_category_selected">暂无选中分类</string>
+    <string name="homepage_select_category">选择分类</string>
+    <string name="homepage_modify_category">修改分类</string>
+    <string name="homepage_layout_mixed">混合模式</string>
+    <string name="homepage_layout_paged">分栏模式</string>
     <string name="or">或</string>
     <string name="homepage_add_button_group">添加按钮组</string>
     <string name="homepage_module_title_label">模块标题</string>

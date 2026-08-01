@@ -44,5 +44,21 @@ enum class HomeDashboardSection(val storageValue: String) {
 val DEFAULT_HOME_DASHBOARD_SECTIONS: Set<HomeDashboardSection> =
     HomeDashboardSection.entries.toSet()
 
+/** 首页模块流布局模式 */
+enum class HomepageLayoutMode(val storageValue: String) {
+    /** 混合模式：所有已选集合的模块合并成一个流 */
+    Mixed("mixed"),
+
+    /** 分栏模式：每个集合一页，左右滑动切换 */
+    Paged("paged");
+
+    companion object {
+        val Default = Paged
+
+        fun fromStorage(value: String): HomepageLayoutMode =
+            entries.firstOrNull { it.storageValue == value } ?: Default
+    }
+}
+
 const val DEFAULT_DAILY_READING_GOAL_MINUTES = 30
 const val MAX_DAILY_READING_GOAL_MINUTES = 24 * 60
