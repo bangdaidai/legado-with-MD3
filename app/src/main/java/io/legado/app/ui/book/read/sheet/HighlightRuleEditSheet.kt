@@ -150,6 +150,7 @@ fun HighlightRuleEditSheet(
     // Font weight state
     var fontWeight by remember(show, rule) { mutableIntStateOf(initial.fontWeight) }
     var isItalic by remember(show, rule) { mutableStateOf(initial.isItalic) }
+    var fontSizeOffset by remember(show, rule) { mutableIntStateOf(initial.fontSizeOffset) }
 
     // Nine-slice state
     var npLeft by remember(show, rule) { mutableFloatStateOf(initial.npLeft) }
@@ -280,6 +281,7 @@ fun HighlightRuleEditSheet(
                             fontPath = if (hasFont) fontPath.ifBlank { null } else null,
                             fontWeight = fontWeight,
                             isItalic = isItalic,
+                            fontSizeOffset = fontSizeOffset,
                             npLeft = npLeft,
                             npRight = npRight,
                             npTop = npTop,
@@ -399,6 +401,20 @@ fun HighlightRuleEditSheet(
                 title = stringResource(R.string.read_config_italic),
                 checked = isItalic,
                 onCheckedChange = { isItalic = it },
+            )
+
+            // Font size offset
+            TinySliderSettingItem(
+                title = stringResource(R.string.font_size_offset),
+                value = fontSizeOffset.toFloat(),
+                valueRange = -10f..10f,
+                steps = 19,
+                description = if (fontSizeOffset == 0) {
+                    stringResource(R.string.text_default)
+                } else {
+                    stringResource(R.string.font_size_offset_value, fontSizeOffset)
+                },
+                onValueChange = { fontSizeOffset = it.toInt() },
             )
 
             // Underline
@@ -671,6 +687,7 @@ fun HighlightRuleEditSheet(
                 bgMarginEnd = bgMarginEnd,
                 bgMarginTop = bgMarginTop,
                 bgMarginBottom = bgMarginBottom,
+                fontSizeOffset = fontSizeOffset,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -713,6 +730,7 @@ fun HighlightRuleEditSheet(
                     bgMarginEnd = bgMarginEnd,
                     bgMarginTop = bgMarginTop,
                     bgMarginBottom = bgMarginBottom,
+                    fontSizeOffset = fontSizeOffset,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -864,6 +882,7 @@ private fun HighlightRulePreview(
     bgMarginEnd: Float = 0f,
     bgMarginTop: Float = 0f,
     bgMarginBottom: Float = 0f,
+    fontSizeOffset: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -955,7 +974,7 @@ private fun HighlightRulePreview(
                 val textResult = textMeasurer.measure(
                     text = annotated,
                     style = TextStyle(
-                        fontSize = 16.sp,
+                        fontSize = (16 + fontSizeOffset).sp,
                         color = defaultTextColor,
                     ),
                     maxLines = 3,

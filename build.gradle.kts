@@ -1,13 +1,3 @@
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.provider.MapProperty
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.TaskAction
-import org.gradle.work.DisableCachingByDefault
-
 @DisableCachingByDefault(because = "架构验证任务没有输出文件")
 abstract class VerifyConfigArchitectureTask : DefaultTask() {
 
@@ -285,14 +275,12 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
             "io/legado/app/ui/book/changesource/ChangeBookSourceDialog.kt" to 1,
             "io/legado/app/ui/book/group/GroupManageDialog.kt" to 2,
             "io/legado/app/ui/book/group/GroupSelectDialog.kt" to 1,
-            "io/legado/app/ui/book/source/manage/BookSourceGroupManageActivity.kt" to 1,
             "io/legado/app/ui/book/manga/ReadMangaActivity.kt" to 1,
             "io/legado/app/ui/book/read/ReadBookController.kt" to 4,
             "io/legado/app/ui/book/read/page/provider/TextChapterLayout.kt" to 1,
             // 护栏缺席期间 main 新增（整书页码估算），随合并冻结
             "io/legado/app/ui/book/read/pageestimate/ExactChapterPageCountStore.kt" to 3,
             "io/legado/app/ui/book/search/SearchScope.kt" to 4,
-            "io/legado/app/ui/book/search/SearchScopeDialog.kt" to 3,
             "io/legado/app/ui/config/bookshelfConfig/BookshelfManageScreenConfig.kt" to 1,
             "io/legado/app/ui/main/MainNavGraph.kt" to 2,
             "io/legado/app/ui/rss/article/RssArticlesCompose.kt" to 1,

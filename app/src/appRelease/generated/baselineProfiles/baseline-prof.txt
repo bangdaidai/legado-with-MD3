@@ -36807,7 +36807,6 @@ Lio/legado/app/ui/widget/components/topbar/TopBarButtonKt;
 SPLio/legado/app/ui/widget/components/topbar/TopBarButtonKt;->TopBarActionButton(Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/graphics/vector/ImageVector;Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
 Lio/legado/app/ui/widget/components/topbar/TopBarButtonKt$$ExternalSyntheticLambda3;
 SPLio/legado/app/ui/widget/components/topbar/TopBarButtonKt$$ExternalSyntheticLambda3;-><init>(Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/graphics/vector/ImageVector;Ljava/lang/String;Landroidx/compose/ui/Modifier;II)V
-Lio/legado/app/ui/widget/dialog/VariableDialog$Callback;
 Lio/legado/app/utils/ActivityExtensionsKt;
 SPLio/legado/app/utils/ActivityExtensionsKt;->getWindowSize(Landroid/view/WindowManager;)Landroid/util/DisplayMetrics;
 SPLio/legado/app/utils/ActivityExtensionsKt;->setLightStatusBar(Landroid/app/Activity;Z)V

@@ -11,6 +11,7 @@ import io.legado.app.ui.book.read.page.entities.TextLine.Companion.emptyTextLine
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.ResourceLoadFailureCache
 import io.legado.app.utils.isContentScheme
+import io.legado.app.utils.spToPx
 import splitties.init.appCtx
 import java.io.File
 
@@ -32,6 +33,7 @@ data class TextColumn(
     override val fontPath: String = "",
     override val fontWeight: Int = 400,
     override val isItalic: Boolean = false,
+    override val fontSizeOffset: Int = 0,
     override val npLeft: Float = 0.5f,
     override val npRight: Float = 0.5f,
     override val npTop: Float = 0.5f,
@@ -85,12 +87,14 @@ data class TextColumn(
             }
         }
         val titleTextSize = textLine.titleTextSize
+        val hasFontSizeOffset = fontSizeOffset != 0
+        val needRestoreSize = titleTextSize != null || hasFontSizeOffset
         val needRestoreColor = textPaint.color != drawColor
         val customTypeface = getCustomTypeface()
         val needRestoreTypeface = customTypeface != null
         // 合成加粗：字重 >= 700 时用 isFakeBoldText 保证任意字体都能变粗
         val needFakeBold = fontWeight >= 700
-        if (titleTextSize == null && !needRestoreColor && !needRestoreTypeface && !needFakeBold) {
+        if (!needRestoreSize && !needRestoreColor && !needRestoreTypeface && !needFakeBold) {
             drawText(canvas, textLine.lineBase - textLine.lineTop, textPaint)
         } else {
             val originalSize = textPaint.textSize
@@ -98,14 +102,21 @@ data class TextColumn(
             val originalTypeface = textPaint.typeface
             val originalFakeBold = textPaint.isFakeBoldText
             try {
-                if (titleTextSize != null) textPaint.textSize = titleTextSize
+                if (needRestoreSize) {
+                    val baseSize = titleTextSize ?: originalSize
+                    textPaint.textSize = if (hasFontSizeOffset) {
+                        baseSize + fontSizeOffset.toFloat().spToPx()
+                    } else {
+                        baseSize
+                    }
+                }
                 if (needRestoreColor) textPaint.color = drawColor
                 if (needRestoreTypeface) textPaint.typeface = customTypeface
                 if (needFakeBold) textPaint.isFakeBoldText = true
                 drawText(canvas, textLine.lineBase - textLine.lineTop, textPaint)
             } finally {
                 // 共享 paint，任何路径都必须复原，否则样式会泄漏到后续文字
-                if (titleTextSize != null) textPaint.textSize = originalSize
+                if (needRestoreSize) textPaint.textSize = originalSize
                 if (needRestoreColor) textPaint.color = originalColor
                 if (needRestoreTypeface) textPaint.typeface = originalTypeface
                 if (needFakeBold) textPaint.isFakeBoldText = originalFakeBold
