@@ -385,12 +385,6 @@ private fun groupKeyFor(uiState: ReadingMemoryUiState, memory: ReadingMemory): S
     return when (uiState.groupBy) {
         ReadingMemoryGroupBy.Year -> yearOf(memory)
         ReadingMemoryGroupBy.Rating -> (memory.rating + 0.5f).toInt().coerceIn(0, 5).toString()
-        ReadingMemoryGroupBy.Status -> when {
-            memory.abandoned -> "abandoned"
-            memory.progress >= 1f -> "finished"
-            memory.progress > 0f -> "reading"
-            else -> "toread"
-        }
         ReadingMemoryGroupBy.None -> ""
     }
 }

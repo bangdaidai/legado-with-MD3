@@ -23,7 +23,7 @@ class WatchRecordProvider : ContentProvider() {
         val cursor = MatrixCursor(arrayOf("bookName", "readTime", "lastRead"))
         val records = appDb.readRecordDao.all
         records.forEach { r ->
-            cursor.addRow(arrayOf(r.bookName, r.readTime, r.lastRead))
+            cursor.addRow(arrayOf<Any>(r.bookName, r.readTime, r.lastRead))
         }
         return cursor
     }
