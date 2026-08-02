@@ -92,35 +92,33 @@ data class TextColumn(
         val needRestoreColor = textPaint.color != drawColor
         val customTypeface = getCustomTypeface()
         val needRestoreTypeface = customTypeface != null
-        // 合成加粗：字重 >= 700 时用 isFakeBoldText 保证任意字体都能变粗
-        val needFakeBold = fontWeight >= 700
-        if (!needRestoreSize && !needRestoreColor && !needRestoreTypeface && !needFakeBold) {
-            drawText(canvas, textLine.lineBase - textLine.lineTop, textPaint)
-        } else {
+        if (needRestoreSize) {
             val originalSize = textPaint.textSize
+            val originalTypeface = if (needRestoreTypeface) textPaint.typeface else null
+            val baseSize = titleTextSize ?: textPaint.textSize
+            textPaint.textSize = if (hasFontSizeOffset) {
+                baseSize + fontSizeOffset.toFloat().spToPx()
+            } else {
+                baseSize
+            }
+            if (needRestoreColor) textPaint.color = drawColor
+            if (needRestoreTypeface) textPaint.typeface = customTypeface
+            val y = textLine.lineBase - textLine.lineTop
+            drawText(canvas, y, textPaint)
+            textPaint.textSize = originalSize
+            if (needRestoreTypeface) textPaint.typeface = originalTypeface
+        } else if (needRestoreColor || needRestoreTypeface) {
             val originalColor = textPaint.color
             val originalTypeface = textPaint.typeface
-            val originalFakeBold = textPaint.isFakeBoldText
-            try {
-                if (needRestoreSize) {
-                    val baseSize = titleTextSize ?: originalSize
-                    textPaint.textSize = if (hasFontSizeOffset) {
-                        baseSize + fontSizeOffset.toFloat().spToPx()
-                    } else {
-                        baseSize
-                    }
-                }
-                if (needRestoreColor) textPaint.color = drawColor
-                if (needRestoreTypeface) textPaint.typeface = customTypeface
-                if (needFakeBold) textPaint.isFakeBoldText = true
-                drawText(canvas, textLine.lineBase - textLine.lineTop, textPaint)
-            } finally {
-                // 共享 paint，任何路径都必须复原，否则样式会泄漏到后续文字
-                if (needRestoreSize) textPaint.textSize = originalSize
-                if (needRestoreColor) textPaint.color = originalColor
-                if (needRestoreTypeface) textPaint.typeface = originalTypeface
-                if (needFakeBold) textPaint.isFakeBoldText = originalFakeBold
-            }
+            if (needRestoreColor) textPaint.color = drawColor
+            if (needRestoreTypeface) textPaint.typeface = customTypeface
+            val y = textLine.lineBase - textLine.lineTop
+            drawText(canvas, y, textPaint)
+            if (needRestoreColor) textPaint.color = originalColor
+            if (needRestoreTypeface) textPaint.typeface = originalTypeface
+        } else {
+            val y = textLine.lineBase - textLine.lineTop
+            drawText(canvas, y, textPaint)
         }
         if (selected) {
             canvas.drawRect(start, 0f, end, textLine.height, view.selectedPaint)
@@ -159,16 +157,13 @@ data class TextColumn(
 
         private fun applyStyleTypeface(typeface: Typeface?, fontWeight: Int, isItalic: Boolean): Typeface? {
             if (fontWeight == 400 && !isItalic) return typeface
-            // 无自定义字体时不改动 typeface，加粗完全交给 isFakeBoldText 承担，
-            // 避免把用户阅读字体切换成 Typeface.DEFAULT 造成的整体观感异常。
-            val base = typeface ?: return null
             val style = when {
                 isItalic && fontWeight == 700 -> Typeface.BOLD_ITALIC
                 isItalic -> Typeface.ITALIC
                 fontWeight == 700 -> Typeface.BOLD
                 else -> Typeface.NORMAL // 300 (Light) falls back to NORMAL via Typeface.create
             }
-            return Typeface.create(base, style)
+            return Typeface.create(typeface ?: Typeface.DEFAULT, style)
         }
 
         private fun loadTypeface(fontPath: String): Typeface? {
