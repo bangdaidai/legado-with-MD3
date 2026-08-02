@@ -90,7 +90,15 @@ data class TextColumn(
         val hasFontSizeOffset = fontSizeOffset != 0
         val needRestoreSize = titleTextSize != null || hasFontSizeOffset
         val needRestoreColor = textPaint.color != drawColor
-        val customTypeface = getCustomTypeface()
+        // 有自定义字体则加载该字体并套用字重/斜体；
+        // 无自定义字体时在“当前阅读字体”基础上派生字重/斜体，避免回退成系统默认字体造成观感突兀
+        val customTypeface = if (fontPath.isNotEmpty()) {
+            getCustomTypeface()
+        } else if (fontWeight != 400 || isItalic) {
+            applyStyleTypeface(textPaint.typeface, fontWeight, isItalic)
+        } else {
+            null
+        }
         val needRestoreTypeface = customTypeface != null
         if (needRestoreSize) {
             val originalSize = textPaint.textSize
@@ -155,7 +163,7 @@ data class TextColumn(
             }?.let { applyStyleTypeface(it, fontWeight, isItalic) }
         }
 
-        private fun applyStyleTypeface(typeface: Typeface?, fontWeight: Int, isItalic: Boolean): Typeface? {
+        internal fun applyStyleTypeface(typeface: Typeface?, fontWeight: Int, isItalic: Boolean): Typeface? {
             if (fontWeight == 400 && !isItalic) return typeface
             val style = when {
                 isItalic && fontWeight == 700 -> Typeface.BOLD_ITALIC
@@ -163,6 +171,7 @@ data class TextColumn(
                 fontWeight == 700 -> Typeface.BOLD
                 else -> Typeface.NORMAL // 300 (Light) falls back to NORMAL via Typeface.create
             }
+            // 基于传入的 typeface（可以是用户阅读字体），不回退成 Typeface.DEFAULT
             return Typeface.create(typeface ?: Typeface.DEFAULT, style)
         }
 

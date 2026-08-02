@@ -1602,7 +1602,12 @@ class TextChapterLayout(
                 i++
             }
             val segEnd = i
-            val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic) ?: continue
+            // 与绘制端保持一致：有自定义字体走字体文件，否则在当前阅读字体上派生字重/斜体
+            val typeface = if (fontPath.isNotEmpty()) {
+                TextColumn.getTypeface(fontPath, fontWeight, isItalic)
+            } else {
+                TextColumn.applyStyleTypeface(textPaint.typeface, fontWeight, isItalic)
+            } ?: continue
             measurePaint.typeface = typeface
             val segLen = segEnd - segStart
             val segWidths = FloatArray(segLen)
