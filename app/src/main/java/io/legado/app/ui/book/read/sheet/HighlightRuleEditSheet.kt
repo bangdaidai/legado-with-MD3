@@ -564,52 +564,17 @@ fun HighlightRuleEditSheet(
 
                     AnimatedVisibility(visible = bgImageFit == 3) {
                         Column {
-                            // 九宫格模式下预览放在边距设置前面，方便编辑边距时实时看到效果
-                            HighlightRulePreview(
-                                label = stringResource(R.string.day),
-                                sampleText = sampleText,
-                                pattern = pattern,
-                                textColor = if (hasTextColor) textColor else null,
-                                bgColor = if (hasBgColor) bgColor else null,
-                                bgImage = if (hasBgImage) bgImage else "",
-                                bgImageFit = bgImageFit,
-                                bgImageScale = bgImageScale,
-                                underlineMode = 0,
-                                underlineColor = null,
-                                underlineWidth = 1f,
-                                underlineOffset = 2f,
-                                pageBgColor = runCatching {
-                                    android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStr)
-                                }.getOrDefault(0xFFEEEEEE.toInt()),
-                                pageTextColor = ReadBookConfig.textColor,
-                                npLeft = npLeft,
-                                npRight = npRight,
-                                npTop = npTop,
-                                npBottom = npBottom,
-                                bgPadStart = bgPaddingStart,
-                                bgPadEnd = bgPaddingEnd,
-                                bgPadTop = bgPaddingTop,
-                                bgPadBottom = bgPaddingBottom,
-                                bgMarginStart = bgMarginStart,
-                                bgMarginEnd = bgMarginEnd,
-                                bgMarginTop = bgMarginTop,
-                                bgMarginBottom = bgMarginBottom,
-                                fontSizeOffset = fontSizeOffset,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                            )
                             TinyClickableSettingItem(
                                 title = "内边距",
                                 description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom),
                                 onClick = { showInsetEditor = !showInsetEditor },
                             )
                             AnimatedVisibility(visible = showInsetEditor) {
-                                Column {
+                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                     // 一行四个按钮，点击切换哪个方向的滑块
                                     var activeInset by remember { mutableIntStateOf(-1) }
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
                                         listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
@@ -652,7 +617,7 @@ fun HighlightRuleEditSheet(
                                                 }
                                             },
                                             valueRange = range,
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         )
                                     }
                                 }
@@ -663,10 +628,10 @@ fun HighlightRuleEditSheet(
                                 onClick = { showMarginEditor = !showMarginEditor },
                             )
                             AnimatedVisibility(visible = showMarginEditor) {
-                                Column {
+                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                     var activeMargin by remember { mutableIntStateOf(-1) }
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
                                         listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
@@ -707,7 +672,7 @@ fun HighlightRuleEditSheet(
                                                 }
                                             },
                                             valueRange = 0f..32f,
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         )
                                     }
                                 }
@@ -921,16 +886,17 @@ fun HighlightRuleEditSheet(
     NinePatchEditorDialog(
         show = showNinePatchEditor,
         imagePath = bgImage,
+        // np* 存的是「角块占比」，编辑器内部用「绝对线位置(0~1)」，此处做转换
         initialLeft = npLeft,
-        initialRight = npRight,
+        initialRight = 1f - npRight,
         initialTop = npTop,
-        initialBottom = npBottom,
+        initialBottom = 1f - npBottom,
         onDismissRequest = { showNinePatchEditor = false },
         onSave = { left, right, top, bottom ->
             npLeft = left
-            npRight = right
+            npRight = 1f - right
             npTop = top
-            npBottom = bottom
+            npBottom = 1f - bottom
             showNinePatchEditor = false
         },
     )
@@ -1131,12 +1097,13 @@ private fun HighlightRulePreview(
                                 val textH = rectB - rectT
                                 val bw = bgRawBitmap.width.toFloat()
                                 val bh = bgRawBitmap.height.toFloat()
-                                val midRatioV = (1f - npTop - npBottom).coerceAtLeast(0.01f)
-                                val s = if (bh > 0f) textH / (bh * midRatioV) else 1f
-                                val cornerL = npLeft * bw * s
-                                val cornerR = npRight * bw * s
-                                val cornerT = npTop * bh * s
-                                val cornerB = npBottom * bh * s
+                                val s = if (bh > 0f) textH / bh else 1f
+                                val maxCornerV = textH * 0.5f
+                                val maxCornerH = (rectR - rectL) * 0.5f
+                                val cornerL = (npLeft * bw * s).coerceAtMost(maxCornerH)
+                                val cornerR = (npRight * bw * s).coerceAtMost(maxCornerH)
+                                val cornerT = (npTop * bh * s).coerceAtMost(maxCornerV)
+                                val cornerB = (npBottom * bh * s).coerceAtMost(maxCornerV)
                                 val drawLeft = rectL - cornerL - bgPadStart * density
                                 val drawTop = rectT - cornerT - bgPadTop * density
                                 val drawRight = rectR + cornerR + bgPadEnd * density
@@ -1345,30 +1312,45 @@ private fun NinePatchEditorDialog(
                         modifier = Modifier
                             .fillMaxSize()
                             .pointerInput(Unit) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    val pos = change.position
-                                    val ir = imageRect
-                                    if (ir.width <= 0f || ir.height <= 0f) return@detectDragGestures
-                                    val relX = (pos.x - ir.left) / ir.width
-                                    val relY = (pos.y - ir.top) / ir.height
-                                    val lx = left
-                                    val rx = 1f - right
-                                    val ty = top
-                                    val by2 = 1f - bottom
-                                    val distL = kotlin.math.abs(relX - lx)
-                                    val distR = kotlin.math.abs(relX - rx)
-                                    val distT = kotlin.math.abs(relY - ty)
-                                    val distB = kotlin.math.abs(relY - by2)
-                                    val minDist = minOf(distL, distR, distT, distB)
-                                    if (minDist > 0.15f) return@detectDragGestures
-                                    when (minDist) {
-                                        distL -> left = relX.coerceIn(0.01f, 0.99f)
-                                        distR -> right = (1f - relX).coerceIn(0.01f, 0.99f)
-                                        distT -> top = relY.coerceIn(0.01f, 0.99f)
-                                        distB -> bottom = (1f - relY).coerceIn(0.01f, 0.99f)
-                                    }
-                                }
+                                // 参照 R 项目：按下时锁定最近的线，拖动期间只更新锁定目标
+                                var dragTarget by mutableIntStateOf(-1)
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        val ir = imageRect
+                                        if (ir.width <= 0f || ir.height <= 0f) { dragTarget = -1; return@detectDragGestures }
+                                        val relX = (offset.x - ir.left) / ir.width
+                                        val relY = (offset.y - ir.top) / ir.height
+                                        // 四条线的绝对位置（left/right 都是从左数，top/bottom 都是从上数）
+                                        val dL = kotlin.math.abs(relX - left)
+                                        val dR = kotlin.math.abs(relX - right)
+                                        val dT = kotlin.math.abs(relY - top)
+                                        val dB = kotlin.math.abs(relY - bottom)
+                                        // 竖线取最近的一条、横线取最近的一条
+                                        val bestV = if (dL <= dR) Pair(0, dL) else Pair(1, dR)
+                                        val bestH = if (dT <= dB) Pair(2, dT) else Pair(3, dB)
+                                        dragTarget = if (bestV.second <= bestH.second) {
+                                            if (bestV.second <= 0.15f) bestV.first else -1
+                                        } else {
+                                            if (bestH.second <= 0.15f) bestH.first else -1
+                                        }
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        if (dragTarget == -1) return@detectDragGestures
+                                        val ir = imageRect
+                                        if (ir.width <= 0f || ir.height <= 0f) return@detectDragGestures
+                                        val relX = ((change.position.x - ir.left) / ir.width).coerceIn(0.02f, 0.98f)
+                                        val relY = ((change.position.y - ir.top) / ir.height).coerceIn(0.02f, 0.98f)
+                                        when (dragTarget) {
+                                            0 -> left = relX
+                                            1 -> right = relX
+                                            2 -> top = relY
+                                            3 -> bottom = relY
+                                        }
+                                    },
+                                    onDragEnd = { dragTarget = -1 },
+                                    onDragCancel = { dragTarget = -1 },
+                                )
                             }
                     ) {
                         // 图片填满 Canvas（已用 aspectRatio 保证比例）
@@ -1384,14 +1366,24 @@ private fun NinePatchEditorDialog(
 
                         val lineColor = splitLineColor
                         val lineWidth = 2.dp.toPx()
+                        // left/right/top/bottom 都是从左/上数的绝对位置(0~1)
                         val lx = canvasW * left
-                        drawLine(lineColor, Offset(lx, 0f), Offset(lx, canvasH), lineWidth)
-                        val rx = canvasW * (1f - right)
-                        drawLine(lineColor, Offset(rx, 0f), Offset(rx, canvasH), lineWidth)
+                        val rx = canvasW * right
                         val ty = canvasH * top
+                        val by2 = canvasH * bottom
+                        drawLine(lineColor, Offset(lx, 0f), Offset(lx, canvasH), lineWidth)
+                        drawLine(lineColor, Offset(rx, 0f), Offset(rx, canvasH), lineWidth)
                         drawLine(lineColor, Offset(0f, ty), Offset(canvasW, ty), lineWidth)
-                        val by = canvasH * (1f - bottom)
-                        drawLine(lineColor, Offset(0f, by), Offset(canvasW, by), lineWidth)
+                        drawLine(lineColor, Offset(0f, by2), Offset(canvasW, by2), lineWidth)
+                        // 中间矩形（可拉伸区）描边
+                        val minX = minOf(lx, rx); val maxX = maxOf(lx, rx)
+                        val minY = minOf(ty, by2); val maxY = maxOf(ty, by2)
+                        drawRect(
+                            color = lineColor.copy(alpha = 0.3f),
+                            topLeft = Offset(minX, minY),
+                            size = androidx.compose.ui.geometry.Size(maxX - minX, maxY - minY),
+                            style = Stroke(width = 1.dp.toPx()),
+                        )
                     }
                 }
                 }

@@ -596,16 +596,17 @@ data class TextLine(
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
                 // 文字落在九宫格的"中段拉伸区"内，四角自然落在文字外部。
-                // 按行高计算缩放因子，再推算四角在像素上的实际宽高，
-                // 使默认（pad=0）时绘制矩形 = 文字区 + 四角外扩，背景稳定包住文字。
+                // 用行高作为基准计算四角像素尺寸，但限制四角不超过行高的一半，
+                // 避免线重合时 s 爆炸。NinePatchDrawHelper 内部会借 1px 处理重合。
                 val bw = bitmap.width.toFloat()
                 val bh = bitmap.height.toFloat()
-                val midRatioV = (1f - npTop - npBottom).coerceAtLeast(0.01f)
-                val s = if (bh > 0f) height / (bh * midRatioV) else 1f
-                val cornerL = npLeft * bw * s
-                val cornerR = npRight * bw * s
-                val cornerT = npTop * bh * s
-                val cornerB = npBottom * bh * s
+                val s = if (bh > 0f) height / bh else 1f
+                val maxCornerV = height * 0.5f
+                val maxCornerH = (endX - startX) * 0.5f
+                val cornerL = (npLeft * bw * s).coerceAtMost(maxCornerH)
+                val cornerR = (npRight * bw * s).coerceAtMost(maxCornerH)
+                val cornerT = (npTop * bh * s).coerceAtMost(maxCornerV)
+                val cornerB = (npBottom * bh * s).coerceAtMost(maxCornerV)
                 val drawLeft = startX - cornerL - padStartPx
                 val drawRight = endX + cornerR + padEndPx
                 val drawTop = 0f - cornerT - padTopPx

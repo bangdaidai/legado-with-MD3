@@ -40,8 +40,8 @@ data class HomepageManageActions(
     val onJoinModule: (String, String?, ModuleDef) -> Unit = { _, _, _ -> },
     val onAddCustomModule: (String, String?, ModuleDef) -> Unit = { _, _, _ -> },
     val onAddButtonGroupFromKinds: (String, String?, String, List<String>) -> Unit = { _, _, _, _ -> },
-    val onAddRankingFromKinds: (String, String?, String, String, List<String>) -> Unit =
-        { _, _, _, _, _ -> },
+    val onAddRankingFromKinds: (String, String?, String, String, List<String>, List<String?>) -> Unit =
+        { _, _, _, _, _, _ -> },
     val onGetExploreKinds: (String) -> List<Pair<String, String>> = { emptyList() },
     val onUpdateModule: (String, ModuleDef) -> Unit = { _, _ -> },
     val onDeleteModule: (String) -> Unit = {},

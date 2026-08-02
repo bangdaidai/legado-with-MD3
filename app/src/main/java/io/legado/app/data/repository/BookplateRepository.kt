@@ -46,5 +46,10 @@ class BookplateRepository(
 
     suspend fun delete(template: BookplateTemplate) = dao.delete(template)
 
+    suspend fun updateGroupName(oldName: String, newName: String) =
+        dao.updateGroupName(oldName, newName)
+
+    suspend fun deleteByGroupName(groupName: String) = dao.deleteByGroupName(groupName)
+
     // endregion
 }

@@ -207,13 +207,14 @@ fun HomeRouteScreen(
             onAddButtonGroupFromKinds = { sourceUrl, targetSetId, title, kinds ->
                 homepageViewModel.addButtonGroupFromKinds(sourceUrl, targetSetId, title, kinds)
             },
-            onAddRankingFromKinds = { sourceUrl, targetSetId, title, type, kinds ->
+            onAddRankingFromKinds = { sourceUrl, targetSetId, title, type, kinds, kindUrls ->
                 homepageViewModel.addRankingFromKinds(
                     sourceUrl,
                     targetSetId,
                     title,
                     type,
-                    kinds
+                    kinds,
+                    kindUrls
                 )
             },
             onGetExploreKinds = { homepageViewModel.getSourceExploreKinds(it) },

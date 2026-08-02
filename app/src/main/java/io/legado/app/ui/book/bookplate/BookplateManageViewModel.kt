@@ -30,12 +30,6 @@ class BookplateManageViewModel(
     private val _effects = MutableSharedFlow<BookplateManageEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
-    private val defaultGroups = listOf(
-        BookplateTemplate.DEFAULT_GROUP_BOOK,
-        BookplateTemplate.DEFAULT_GROUP_STATS,
-        BookplateTemplate.DEFAULT_GROUP_ANNOTATION,
-    )
-
     init {
         onIntent(BookplateManageIntent.Load)
     }
@@ -45,10 +39,18 @@ class BookplateManageViewModel(
             is BookplateManageIntent.Load -> load()
             is BookplateManageIntent.SelectGroup -> selectGroup(intent.group)
             is BookplateManageIntent.SelectTemplate -> selectTemplate(intent.id)
-            is BookplateManageIntent.StartEdit -> _uiState.update { it.copy(editing = intent.template ?: BookplateTemplate(groupName = it.selectedGroup)) }
+            is BookplateManageIntent.StartEdit -> _uiState.update {
+                it.copy(editing = intent.template ?: BookplateTemplate(groupName = it.selectedGroup ?: ""))
+            }
             is BookplateManageIntent.CancelEdit -> _uiState.update { it.copy(editing = null) }
-            is BookplateManageIntent.SaveTemplate -> saveTemplate(intent.name, intent.html)
-            is BookplateManageIntent.DeleteTemplate -> deleteTemplate(intent.template)
+            is BookplateManageIntent.SaveTemplate -> saveTemplate(intent.name, intent.html, intent.group)
+            is BookplateManageIntent.RequestDelete -> _uiState.update { it.copy(deleteConfirm = intent.template) }
+            is BookplateManageIntent.ConfirmDelete -> confirmDelete()
+            is BookplateManageIntent.DismissDelete -> _uiState.update { it.copy(deleteConfirm = null) }
+            is BookplateManageIntent.ShowGroupManage -> _uiState.update { it.copy(showGroupManage = true) }
+            is BookplateManageIntent.DismissGroupManage -> _uiState.update { it.copy(showGroupManage = false) }
+            is BookplateManageIntent.RenameGroup -> renameGroup(intent.oldName, intent.newName)
+            is BookplateManageIntent.DeleteGroup -> deleteGroup(intent.group)
             is BookplateManageIntent.RestoreBuiltins -> restoreBuiltins()
         }
     }
@@ -57,14 +59,17 @@ class BookplateManageViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true) }
             withContext(Dispatchers.IO) {
-                // 确保内置模板存在
                 BookplateGenerator.getOrCreateBuiltinTemplates()
             }
-            val group = _uiState.value.selectedGroup
+            val selectedGroup = _uiState.value.selectedGroup
             val (groups, templates) = withContext(Dispatchers.IO) {
                 val existing = repository.getDistinctGroupNames()
-                val merged = (defaultGroups + existing).distinct()
-                merged to repository.getByGroupName(group)
+                val tpls = if (selectedGroup == null) {
+                    repository.getAll()
+                } else {
+                    repository.getByGroupName(selectedGroup)
+                }
+                existing to tpls
             }
             _uiState.update {
                 it.copy(
@@ -76,12 +81,13 @@ class BookplateManageViewModel(
         }
     }
 
-    private fun selectGroup(group: String) {
+    private fun selectGroup(group: String?) {
         if (group == _uiState.value.selectedGroup) return
         _uiState.update { it.copy(selectedGroup = group, templates = persistentListOf()) }
         viewModelScope.launch {
             val templates = withContext(Dispatchers.IO) {
-                repository.getByGroupName(group)
+                if (group == null) repository.getAll()
+                else repository.getByGroupName(group)
             }
             _uiState.update { it.copy(templates = templates.toImmutableList()) }
         }
@@ -92,7 +98,7 @@ class BookplateManageViewModel(
         repository.setSelectedTemplateId(id)
     }
 
-    private fun saveTemplate(name: String, html: String) {
+    private fun saveTemplate(name: String, html: String, group: String) {
         val editing = _uiState.value.editing ?: return
         if (name.isBlank()) {
             _effects.tryEmit(BookplateManageEffect.ShowToast("名称不能为空"))
@@ -106,7 +112,7 @@ class BookplateManageViewModel(
                     htmlContent = html,
                     updateTime = now,
                     createTime = if (editing.createTime == 0L) now else editing.createTime,
-                    groupName = editing.groupName.ifBlank { _uiState.value.selectedGroup },
+                    groupName = group.ifBlank { _uiState.value.selectedGroup ?: "" },
                 )
                 if (toSave.id == 0L) {
                     repository.insert(toSave)
@@ -115,20 +121,44 @@ class BookplateManageViewModel(
                 }
             }
             _uiState.update { it.copy(editing = null) }
-            reloadTemplates()
+            reloadAll()
         }
     }
 
-    private fun deleteTemplate(template: BookplateTemplate) {
-        if (template.isBuiltin) {
-            _effects.tryEmit(BookplateManageEffect.ShowToast("内置模板不可删除"))
-            return
-        }
+    private fun confirmDelete() {
+        val template = _uiState.value.deleteConfirm ?: return
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 repository.delete(template)
             }
-            reloadTemplates()
+            _uiState.update { it.copy(deleteConfirm = null) }
+            reloadAll()
+        }
+    }
+
+    private fun renameGroup(oldName: String, newName: String) {
+        if (newName.isBlank() || oldName == newName) return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.updateGroupName(oldName, newName)
+            }
+            // update selectedGroup if it was renamed
+            _uiState.update {
+                it.copy(selectedGroup = if (it.selectedGroup == oldName) newName else it.selectedGroup)
+            }
+            reloadAll()
+        }
+    }
+
+    private fun deleteGroup(group: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.deleteByGroupName(group)
+            }
+            _uiState.update {
+                it.copy(selectedGroup = if (it.selectedGroup == group) null else it.selectedGroup)
+            }
+            reloadAll()
         }
     }
 
@@ -137,16 +167,27 @@ class BookplateManageViewModel(
             withContext(Dispatchers.IO) {
                 BookplateGenerator.getOrCreateBuiltinTemplates()
             }
-            reloadTemplates()
+            reloadAll()
             _effects.tryEmit(BookplateManageEffect.ShowToast("已恢复内置模板"))
         }
     }
 
-    private suspend fun reloadTemplates() {
-        val group = _uiState.value.selectedGroup
-        val templates = withContext(Dispatchers.IO) {
-            repository.getByGroupName(group)
+    private suspend fun reloadAll() {
+        val selectedGroup = _uiState.value.selectedGroup
+        val (groups, templates) = withContext(Dispatchers.IO) {
+            val existing = repository.getDistinctGroupNames()
+            val tpls = if (selectedGroup == null) {
+                repository.getAll()
+            } else {
+                repository.getByGroupName(selectedGroup)
+            }
+            existing to tpls
         }
-        _uiState.update { it.copy(templates = templates.toImmutableList()) }
+        _uiState.update {
+            it.copy(
+                groups = groups.toImmutableList(),
+                templates = templates.toImmutableList(),
+            )
+        }
     }
 }

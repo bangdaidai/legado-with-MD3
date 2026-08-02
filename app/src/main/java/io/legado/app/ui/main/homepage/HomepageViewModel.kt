@@ -922,14 +922,32 @@ class HomepageViewModel(
         targetSetId: String?,
         title: String,
         type: String,
-        kindTitles: List<String>
+        kindTitles: List<String>,
+        kindUrls: List<String?> = emptyList()
     ) {
         if (kindTitles.isEmpty()) return
         viewModelScope.launch {
             val source = bookSourceRepository.getBookSource(sourceUrl) ?: return@launch
             val allKinds = withContext(Dispatchers.IO) { source.exploreKinds() }
-            val selectedKinds = kindTitles.mapNotNull { selectedTitle ->
-                allKinds.find { it.title == selectedTitle }
+            // 若调用方给了 kindUrls（长度匹配），优先按 url 精确定位，避免同名分类互相覆盖
+            val hasUrls = kindUrls.size == kindTitles.size &&
+                    kindUrls.any { !it.isNullOrBlank() }
+            val selectedKinds = if (hasUrls) {
+                kindTitles.mapIndexedNotNull { i, title ->
+                    val wantUrl = kindUrls[i]
+                    val found = if (!wantUrl.isNullOrBlank()) {
+                        allKinds.find { it.url == wantUrl && it.title == title }
+                            ?: allKinds.find { it.url == wantUrl }
+                    } else null
+                    found ?: io.legado.app.data.entities.rule.ExploreKind(
+                        title = title,
+                        url = wantUrl
+                    )
+                }
+            } else {
+                kindTitles.mapNotNull { selectedTitle ->
+                    allKinds.find { it.title == selectedTitle }
+                }
             }
             if (selectedKinds.isEmpty()) return@launch
 
@@ -952,7 +970,8 @@ class HomepageViewModel(
                         RankingKindsArgs(
                             isHomepageRankingGroup = true,
                             kindTitles = selectedKinds.map { it.title },
-                            kindUrls = selectedKinds.map { it.url }
+                            kindUrls = kindUrls.takeIf { it.size == selectedKinds.size }
+                                ?: selectedKinds.map { it.url }
                         )
                     )
                 } else {

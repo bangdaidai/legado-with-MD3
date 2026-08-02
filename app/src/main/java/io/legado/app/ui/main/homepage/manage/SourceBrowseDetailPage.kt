@@ -65,8 +65,9 @@ fun SourceBrowseDetailPage(
     onBrowseTabChange: (Int) -> Unit,
     browseModuleType: String,
     onBrowseModuleTypeChange: (String) -> Unit,
-    selectedKindTitles: Set<String>,
-    onSelectedKindTitlesChange: (Set<String>) -> Unit,
+    selectedKindTitles: List<String>,
+    selectedKindUrls: List<String?>,
+    onSelectedKindsChange: (List<String>, List<String?>) -> Unit,
 ) {
     var showKindSelect by remember { mutableStateOf(false) }
 
@@ -354,7 +355,7 @@ fun SourceBrowseDetailPage(
                             entryValues = typeList.map { it.key }.toTypedArray(),
                             onValueChange = {
                                 onBrowseModuleTypeChange(it)
-                                onSelectedKindTitlesChange(emptySet())
+                                onSelectedKindsChange(emptyList(), emptyList())
                             }
                         )
                     }
@@ -388,10 +389,14 @@ fun SourceBrowseDetailPage(
                         onDismissRequest = { showKindSelect = false },
                         sourceUrl = browseUrl,
                         multiple = supportsMultipleKinds,
-                        initialSelectedTitles = selectedKindTitles.toList(),
+                        initialSelectedTitles = selectedKindTitles,
+                        initialSelectedUrls = selectedKindUrls,
                         onSelected = { kinds ->
                             if (supportsMultipleKinds) {
-                                onSelectedKindTitlesChange(kinds.map { it.title }.toSet())
+                                onSelectedKindsChange(
+                                    kinds.map { it.title },
+                                    kinds.map { it.url }
+                                )
                             } else {
                                 kinds.firstOrNull()?.let { kind ->
                                     onAddDialogPrefill(

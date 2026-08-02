@@ -68,7 +68,8 @@ fun <T> HomepageModuleManageSheet(
     var browsingDetail by remember(data != null) { mutableStateOf(false) }
     var browseTab by remember(data != null) { mutableIntStateOf(0) }
     var browseModuleType by remember(data != null) { mutableStateOf("card") }
-    var selectedKindTitles by remember(data != null) { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedKindTitles by remember(data != null) { mutableStateOf<List<String>>(emptyList()) }
+    var selectedKindUrls by remember(data != null) { mutableStateOf<List<String?>>(emptyList()) }
     var showCustomSetAddModules by remember(data != null) { mutableStateOf(false) }
     var showAddKindGroupDialog by remember(data != null) { mutableStateOf(false) }
     val defaultQuickActionsTitle = stringResource(R.string.homepage_quick_actions)
@@ -269,7 +270,11 @@ fun <T> HomepageModuleManageSheet(
                         browseModuleType = browseModuleType,
                         onBrowseModuleTypeChange = { browseModuleType = it },
                         selectedKindTitles = selectedKindTitles,
-                        onSelectedKindTitlesChange = { selectedKindTitles = it },
+                        selectedKindUrls = selectedKindUrls,
+                        onSelectedKindsChange = { titles, urls ->
+                            selectedKindTitles = titles
+                            selectedKindUrls = urls
+                        },
                     )
                 }
 
@@ -492,16 +497,19 @@ fun <T> HomepageModuleManageSheet(
                         selectedKindTitles.toList()
                     )
                 } else {
-                    // 所有非按钮组类型：合并为一个模块，args 存储多分类
+                    // 所有非按钮组类型：合并为一个模块，args 存储多分类（含 url）
                     actions.onAddRankingFromKinds(
                         browsingSourceUrl!!,
                         effectiveTargetSetId,
                         tempKindGroupTitle,
                         browseModuleType,
-                        selectedKindTitles.toList()
+                        selectedKindTitles.toList(),
+                        selectedKindUrls.toList()
                     )
                 }
-                selectedKindTitles = emptySet()
+                selectedKindTitles = emptyList()
+                selectedKindUrls = emptyList()
+                selectedKindUrls = emptyList()
                 showAddKindGroupDialog = false
             },
             confirmText = stringResource(R.string.dialog_confirm),

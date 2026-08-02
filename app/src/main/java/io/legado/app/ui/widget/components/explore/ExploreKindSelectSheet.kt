@@ -49,18 +49,7 @@ fun ExploreKindSelectSheet(
 ) {
     var kinds by remember { mutableStateOf<List<ExploreKind>>(emptyList()) }
     // 用列表下标作为唯一标识，同名（甚至同名同 url）的分类也能独立选中
-    var selectedIndices by remember(kinds, show) {
-        mutableStateOf(
-            initialSelectedTitles.mapIndexedNotNull { i, title ->
-                val wantUrl = initialSelectedUrls.getOrNull(i)
-                // 优先按 url 精确定位，其次按标题；已被占用的下标跳过
-                val byUrl = if (!wantUrl.isNullOrBlank()) {
-                    kinds.indexOfFirst { it.url == wantUrl }.takeIf { it >= 0 }
-                } else null
-                byUrl ?: kinds.indexOfFirst { it.title == title }.takeIf { it >= 0 }
-            }.toSet()
-        )
-    }
+    var selectedIndices by remember(show) { mutableStateOf<Set<Int>>(emptySet()) }
     var query by remember { mutableStateOf("") }
     val context = LocalContext.current
     val activity = context as? AppCompatActivity
@@ -68,7 +57,32 @@ fun ExploreKindSelectSheet(
 
     LaunchedEffect(show, sourceUrl) {
         if (show && !sourceUrl.isNullOrBlank()) {
-            kinds = repository.getSourceExploreKinds(sourceUrl)
+            val loadedKinds = repository.getSourceExploreKinds(sourceUrl)
+            kinds = loadedKinds
+            // kinds 加载完后再做初始选中匹配
+            val usedIndices = mutableSetOf<Int>()
+            val initIndices = mutableSetOf<Int>()
+            for (i in initialSelectedTitles.indices) {
+                val wantTitle = initialSelectedTitles[i]
+                val wantUrl = initialSelectedUrls.getOrNull(i)
+                // 优先按 url 精确匹配（跳过已占用的下标）
+                val byUrl = if (!wantUrl.isNullOrBlank()) {
+                    loadedKinds.indices.firstOrNull { idx ->
+                        idx !in usedIndices && loadedKinds[idx].url == wantUrl
+                    }
+                } else null
+                val idx = byUrl ?: run {
+                    // 按 title 匹配，跳过已占用的下标
+                    loadedKinds.indices.firstOrNull { idx ->
+                        idx !in usedIndices && loadedKinds[idx].title == wantTitle
+                    }
+                }
+                if (idx != null) {
+                    initIndices.add(idx)
+                    usedIndices.add(idx)
+                }
+            }
+            selectedIndices = initIndices
         }
     }
 
