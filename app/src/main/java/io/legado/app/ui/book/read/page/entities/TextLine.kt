@@ -595,15 +595,22 @@ data class TextLine(
                 val padEndPx = bgPadEnd.dpToPx()
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
-                // 默认（pad=0）矩形 = 整行高 × 命中列宽，保证九宫格背景稳定盖住整行文字。
-                // 内边距为正 → 背景四周向外扩；为负 → 背景四周向内收。
-                val drawLeft = startX - padStartPx
-                val drawTop = 0f - padTopPx
-                val drawRight = endX + padEndPx
-                val drawBottom = height + padBottomPx
+                // 文字落在九宫格的"中段拉伸区"内，四角自然落在文字外部。
+                // 按行高计算缩放因子，再推算四角在像素上的实际宽高，
+                // 使默认（pad=0）时绘制矩形 = 文字区 + 四角外扩，背景稳定包住文字。
+                val bw = bitmap.width.toFloat()
+                val bh = bitmap.height.toFloat()
+                val midRatioV = (1f - npTop - npBottom).coerceAtLeast(0.01f)
+                val s = if (bh > 0f) height / (bh * midRatioV) else 1f
+                val cornerL = npLeft * bw * s
+                val cornerR = npRight * bw * s
+                val cornerT = npTop * bh * s
+                val cornerB = npBottom * bh * s
+                val drawLeft = startX - cornerL - padStartPx
+                val drawRight = endX + cornerR + padEndPx
+                val drawTop = 0f - cornerT - padTopPx
+                val drawBottom = height + cornerB + padBottomPx
                 if (drawRight > drawLeft && drawBottom > drawTop) {
-                    // np* 为「角块占图比例」；转成 helper 需要的绝对线位置：
-                    //   leftX=npLeft, rightX=1-npRight, topY=npTop, bottomY=1-npBottom
                     NinePatchDrawHelper.draw(
                         canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, paint,
                         npLeft, 1f - npRight, npTop, 1f - npBottom,

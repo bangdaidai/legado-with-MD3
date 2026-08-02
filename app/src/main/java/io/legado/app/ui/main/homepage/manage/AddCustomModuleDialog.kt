@@ -42,7 +42,6 @@ import io.legado.app.ui.widget.components.button.SecondaryButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.divider.PillHeaderDivider
 import io.legado.app.ui.widget.components.explore.ExploreKindSelectSheet
-import io.legado.app.ui.widget.components.explore.exploreKindKey
 import io.legado.app.ui.widget.components.settingItem.CompactClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
 import io.legado.app.ui.widget.components.text.AppText
@@ -304,17 +303,13 @@ fun <T> AddCustomModuleDialog(
     )
 
     if (showKindSelect) {
-        // 重建的分类可能没有 url（RankingKindsArgs 只存标题），此时退回按标题匹配
-        val hasAllUrls = selectedKinds.isNotEmpty() && selectedKinds.all { !it.url.isNullOrBlank() }
         ExploreKindSelectSheet(
             show = true,
             onDismissRequest = { showKindSelect = false },
             sourceUrl = sourceUrl,
             multiple = true,
             initialSelectedTitles = selectedKinds.map { it.title },
-            initialSelectedKeys = if (hasAllUrls) {
-                selectedKinds.map { exploreKindKey(it) }.toSet()
-            } else null,
+            initialSelectedUrls = selectedKinds.map { it.url },
             onSelected = { kinds ->
                 selectedKinds = kinds
                 if (kinds.size >= 2) {

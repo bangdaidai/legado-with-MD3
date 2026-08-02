@@ -7,11 +7,11 @@ import android.graphics.Color
 import android.os.Build
 import android.util.Base64
 import android.graphics.BitmapFactory
+import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import io.legado.app.data.entities.BookplateData
 import io.legado.app.data.entities.BookplateTemplate
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -97,21 +97,46 @@ object BookplateHtmlRenderer {
             setBackgroundColor(Color.TRANSPARENT)
         }
         return try {
-            val loaded = CompletableDeferred<Unit>()
-            wv.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) { loaded.complete(Unit) }
-            }
-            wv.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
-            withTimeoutOrNull(RENDER_TIMEOUT_MS) { loaded.await() } ?: return null
-            delay(200) // let layout settle
+            // 先给 WebView "预热" 一次 layout，否则 loadDataWithBaseURL 之后测量拿不到内容高度
             wv.measure(
-                android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
-                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
             )
-            val h = wv.measuredHeight.coerceAtLeast(100)
-            wv.layout(0, 0, width, h)
+            wv.layout(0, 0, width, wv.measuredHeight.coerceAtLeast(100))
+
+            var pageFinished = false
+            wv.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) { pageFinished = true }
+            }
+            wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
+
+            // 等 onPageFinished（最长 RENDER_TIMEOUT_MS）
+            withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                while (!pageFinished) delay(30)
+            }
+
+            // 首次测量，读取内容高度
             delay(100)
-            Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888).also {
+            wv.measure(
+                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            val contentHeight = wv.measuredHeight
+            if (contentHeight <= 100) return null
+
+            // 再等 300ms 让图片/字体加载完成
+            delay(300)
+            wv.measure(
+                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            val finalHeight = wv.measuredHeight.coerceAtLeast(contentHeight)
+            if (finalHeight <= 0) return null
+
+            wv.layout(0, 0, width, finalHeight)
+            delay(100)
+
+            Bitmap.createBitmap(width, finalHeight, Bitmap.Config.ARGB_8888).also {
                 val canvas = Canvas(it)
                 canvas.drawColor(Color.WHITE)
                 wv.draw(canvas)

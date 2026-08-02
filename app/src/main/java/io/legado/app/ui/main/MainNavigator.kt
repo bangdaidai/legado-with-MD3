@@ -242,6 +242,7 @@ object MainNavigator {
             }
 
             MainRouteHighlightTagRule,
+            MainRouteBookplateManage,
             MainRouteReadRecord -> {
                 if (currentRoute == MainRouteHome) {
                     backStack.add(route)
@@ -301,6 +302,11 @@ object MainNavigator {
                     backStack.add(MainRouteHome)
                     backStack.add(route)
                 }
+            }
+
+            else -> {
+                // 兜底：未显式注册的路由直接 push，避免静默丢失导航
+                backStack.add(route)
             }
         }
     }

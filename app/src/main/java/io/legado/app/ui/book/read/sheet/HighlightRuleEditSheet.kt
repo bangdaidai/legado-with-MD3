@@ -365,6 +365,20 @@ fun HighlightRuleEditSheet(
             // === Section 2: Style Settings ===
             SectionTitle(stringResource(R.string.style_settings))
 
+            // 自定义字体
+            TinySwitchSettingItem(
+                title = "自定义字体",
+                checked = hasFont,
+                onCheckedChange = { hasFont = it },
+            )
+            AnimatedVisibility(visible = hasFont) {
+                TinyClickableSettingItem(
+                    title = stringResource(R.string.select_font),
+                    description = fontPath.ifBlank { null }?.let { File(it).name },
+                    onClick = { showFontSelect = true },
+                )
+            }
+
             // Text color
             TinySwitchSettingItem(
                 title = stringResource(R.string.text_color),
@@ -550,6 +564,41 @@ fun HighlightRuleEditSheet(
 
                     AnimatedVisibility(visible = bgImageFit == 3) {
                         Column {
+                            // 九宫格模式下预览放在边距设置前面，方便编辑边距时实时看到效果
+                            HighlightRulePreview(
+                                label = stringResource(R.string.day),
+                                sampleText = sampleText,
+                                pattern = pattern,
+                                textColor = if (hasTextColor) textColor else null,
+                                bgColor = if (hasBgColor) bgColor else null,
+                                bgImage = if (hasBgImage) bgImage else "",
+                                bgImageFit = bgImageFit,
+                                bgImageScale = bgImageScale,
+                                underlineMode = 0,
+                                underlineColor = null,
+                                underlineWidth = 1f,
+                                underlineOffset = 2f,
+                                pageBgColor = runCatching {
+                                    android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStr)
+                                }.getOrDefault(0xFFEEEEEE.toInt()),
+                                pageTextColor = ReadBookConfig.textColor,
+                                npLeft = npLeft,
+                                npRight = npRight,
+                                npTop = npTop,
+                                npBottom = npBottom,
+                                bgPadStart = bgPaddingStart,
+                                bgPadEnd = bgPaddingEnd,
+                                bgPadTop = bgPaddingTop,
+                                bgPadBottom = bgPaddingBottom,
+                                bgMarginStart = bgMarginStart,
+                                bgMarginEnd = bgMarginEnd,
+                                bgMarginTop = bgMarginTop,
+                                bgMarginBottom = bgMarginBottom,
+                                fontSizeOffset = fontSizeOffset,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            )
                             TinyClickableSettingItem(
                                 title = "内边距",
                                 description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom),
@@ -557,10 +606,55 @@ fun HighlightRuleEditSheet(
                             )
                             AnimatedVisibility(visible = showInsetEditor) {
                                 Column {
-                                    TinySliderSettingItem(title = "左", value = bgPaddingStart, valueRange = -8f..24f, description = "${bgPaddingStart.toInt()} dp", onValueChange = { bgPaddingStart = it.toInt().toFloat() })
-                                    TinySliderSettingItem(title = "右", value = bgPaddingEnd, valueRange = -8f..24f, description = "${bgPaddingEnd.toInt()} dp", onValueChange = { bgPaddingEnd = it.toInt().toFloat() })
-                                    TinySliderSettingItem(title = "上", value = bgPaddingTop, valueRange = -8f..24f, description = "${bgPaddingTop.toInt()} dp", onValueChange = { bgPaddingTop = it.toInt().toFloat() })
-                                    TinySliderSettingItem(title = "下", value = bgPaddingBottom, valueRange = -8f..24f, description = "${bgPaddingBottom.toInt()} dp", onValueChange = { bgPaddingBottom = it.toInt().toFloat() })
+                                    // 一行四个按钮，点击切换哪个方向的滑块
+                                    var activeInset by remember { mutableIntStateOf(-1) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
+                                            val selected = activeInset == idx
+                                            val values = listOf(bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom)
+                                            NormalCard(
+                                                onClick = { activeInset = if (selected) -1 else idx },
+                                                containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                                                    else LegadoTheme.colorScheme.surfaceContainerLow,
+                                                cornerRadius = 8.dp,
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                AppText(
+                                                    "$label ${values[idx].toInt()}",
+                                                    style = LegadoTheme.typography.labelSmall,
+                                                    color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                                                        else LegadoTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    // 选中方向的滑块
+                                    AnimatedVisibility(visible = activeInset >= 0) {
+                                        val range = -8f..24f
+                                        val currentVal = when (activeInset) {
+                                            0 -> bgPaddingStart; 1 -> bgPaddingEnd
+                                            2 -> bgPaddingTop; else -> bgPaddingBottom
+                                        }
+                                        Slider(
+                                            value = currentVal,
+                                            onValueChange = { v ->
+                                                val rounded = v.toInt().toFloat()
+                                                when (activeInset) {
+                                                    0 -> bgPaddingStart = rounded
+                                                    1 -> bgPaddingEnd = rounded
+                                                    2 -> bgPaddingTop = rounded
+                                                    3 -> bgPaddingBottom = rounded
+                                                }
+                                            },
+                                            valueRange = range,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
                             TinyClickableSettingItem(
@@ -570,10 +664,52 @@ fun HighlightRuleEditSheet(
                             )
                             AnimatedVisibility(visible = showMarginEditor) {
                                 Column {
-                                    TinySliderSettingItem(title = "左", value = bgMarginStart, valueRange = 0f..32f, description = "${bgMarginStart.toInt()} dp", onValueChange = { bgMarginStart = it.toInt().toFloat() })
-                                    TinySliderSettingItem(title = "右", value = bgMarginEnd, valueRange = 0f..32f, description = "${bgMarginEnd.toInt()} dp", onValueChange = { bgMarginEnd = it.toInt().toFloat() })
-                                    TinySliderSettingItem(title = "上", value = bgMarginTop, valueRange = 0f..32f, description = "${bgMarginTop.toInt()} dp", onValueChange = { bgMarginTop = it.toInt().toFloat() })
-                                    TinySliderSettingItem(title = "下", value = bgMarginBottom, valueRange = 0f..32f, description = "${bgMarginBottom.toInt()} dp", onValueChange = { bgMarginBottom = it.toInt().toFloat() })
+                                    var activeMargin by remember { mutableIntStateOf(-1) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
+                                            val selected = activeMargin == idx
+                                            val values = listOf(bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom)
+                                            NormalCard(
+                                                onClick = { activeMargin = if (selected) -1 else idx },
+                                                containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                                                    else LegadoTheme.colorScheme.surfaceContainerLow,
+                                                cornerRadius = 8.dp,
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                AppText(
+                                                    "$label ${values[idx].toInt()}",
+                                                    style = LegadoTheme.typography.labelSmall,
+                                                    color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                                                        else LegadoTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    AnimatedVisibility(visible = activeMargin >= 0) {
+                                        val currentVal = when (activeMargin) {
+                                            0 -> bgMarginStart; 1 -> bgMarginEnd
+                                            2 -> bgMarginTop; else -> bgMarginBottom
+                                        }
+                                        Slider(
+                                            value = currentVal,
+                                            onValueChange = { v ->
+                                                val rounded = v.toInt().toFloat()
+                                                when (activeMargin) {
+                                                    0 -> bgMarginStart = rounded
+                                                    1 -> bgMarginEnd = rounded
+                                                    2 -> bgMarginTop = rounded
+                                                    3 -> bgMarginBottom = rounded
+                                                }
+                                            },
+                                            valueRange = 0f..32f,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -631,21 +767,6 @@ fun HighlightRuleEditSheet(
                         }
                     }
                 }
-            }
-
-            // === Section 4: Font ===
-            SectionTitle("字体替换")
-            TinySwitchSettingItem(
-                title = "自定义字体",
-                checked = hasFont,
-                onCheckedChange = { hasFont = it },
-            )
-            AnimatedVisibility(visible = hasFont) {
-                TinyClickableSettingItem(
-                    title = stringResource(R.string.select_font),
-                    description = fontPath.ifBlank { null }?.let { File(it).name },
-                    onClick = { showFontSelect = true },
-                )
             }
 
             // === Section 5: Preview ===
@@ -1005,11 +1126,21 @@ private fun HighlightRulePreview(
                             val rectT = top
                             val rectB = bottom
                             if (bgImageFit == 3 && bgRawBitmap != null) {
-                                // 九宫格绘制：padding 向外扩展
-                                val drawLeft = rectL - bgPadStart * density
-                                val drawTop = rectT - bgPadTop * density
-                                val drawRight = rectR + bgPadEnd * density
-                                val drawBottom = rectB + bgPadBottom * density
+                                // 让文字落在九宫格中段拉伸区内，四角自然落在文字外部；padding 再向外扩
+                                val textW = rectR - rectL
+                                val textH = rectB - rectT
+                                val bw = bgRawBitmap.width.toFloat()
+                                val bh = bgRawBitmap.height.toFloat()
+                                val midRatioV = (1f - npTop - npBottom).coerceAtLeast(0.01f)
+                                val s = if (bh > 0f) textH / (bh * midRatioV) else 1f
+                                val cornerL = npLeft * bw * s
+                                val cornerR = npRight * bw * s
+                                val cornerT = npTop * bh * s
+                                val cornerB = npBottom * bh * s
+                                val drawLeft = rectL - cornerL - bgPadStart * density
+                                val drawTop = rectT - cornerT - bgPadTop * density
+                                val drawRight = rectR + cornerR + bgPadEnd * density
+                                val drawBottom = rectB + cornerB + bgPadBottom * density
                                 io.legado.app.help.highlight.NinePatchDrawHelper.draw(
                                     drawContext.canvas.nativeCanvas,
                                     bgRawBitmap,
@@ -1192,18 +1323,30 @@ private fun NinePatchEditorDialog(
                 val bmpAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
                 var imageRect by remember { mutableStateOf(Rect.Zero) }
                 val splitLineColor = MaterialTheme.colorScheme.primary
-                Box(
+                NormalCard(
                     modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .aspectRatio(bmpAspect)
-                        .align(Alignment.CenterHorizontally)
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    cornerRadius = 12.dp,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.8f)
+                                .aspectRatio(bmpAspect),
+                        ) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
                             .pointerInput(Unit) {
-                                detectDragGestures { change, _ ->
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
                                     val pos = change.position
                                     val ir = imageRect
                                     if (ir.width <= 0f || ir.height <= 0f) return@detectDragGestures
@@ -1251,11 +1394,13 @@ private fun NinePatchEditorDialog(
                         drawLine(lineColor, Offset(0f, by), Offset(canvasW, by), lineWidth)
                     }
                 }
+                }
+                }
                 Text(
                     text = "拖动线条调整切分位置",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(vertical = 4.dp),
                 )
                 Spacer(Modifier.height(8.dp))
                 NineSlicePreview(
@@ -1270,6 +1415,10 @@ private fun NinePatchEditorDialog(
     }
 }
 
+/**
+ * 紧凑的竖向边距滑块：标题+数值 在上，Slider 在下，适合一行四个
+ */
+@Composable
 /**
  * 九宫格预览：背景图铺占大部分区域，中央虚线框代表文字，直观表达"背景包住文字"
  */
@@ -1313,11 +1462,11 @@ private fun NineSlicePreview(
             bgLeft, bgTop, bgRight, bgBottom,
             paint, npLeft, 1f - npRight, npTop, 1f - npBottom,
         )
-        // 文字行虚线：缩到 canvas 中央一小块，明显被背景图包住
-        val textLeft = canvasW * 0.25f
-        val textRight = canvasW * 0.75f
-        val textTop = canvasH * 0.35f
-        val textBottom = canvasH * 0.65f
+        // 文字行虚线：根据切分线位置，正好落在九宫格中段拉伸区内
+        val textLeft = bgLeft + (bgRight - bgLeft) * npLeft
+        val textRight = bgRight - (bgRight - bgLeft) * npRight
+        val textTop = bgTop + (bgBottom - bgTop) * npTop
+        val textBottom = bgBottom - (bgBottom - bgTop) * npBottom
         drawRect(
             color = Color(0x66000000),
             topLeft = Offset(textLeft, textTop),

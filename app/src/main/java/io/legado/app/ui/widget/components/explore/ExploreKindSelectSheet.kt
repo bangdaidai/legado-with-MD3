@@ -43,18 +43,22 @@ fun ExploreKindSelectSheet(
     onSelected: (List<ExploreKind>) -> Unit,
     multiple: Boolean = false,
     initialSelectedTitles: List<String> = emptyList(),
-    initialSelectedKeys: Set<String>? = null,
+    initialSelectedUrls: List<String?> = emptyList(),
     repository: ExploreRepository = koinInject(),
     useCase: ExploreKindUiUseCase = koinInject()
 ) {
     var kinds by remember { mutableStateOf<List<ExploreKind>>(emptyList()) }
-    // 用 title||url 作为唯一 key，避免同名分类互相干扰
-    var selectedKeys by remember(initialSelectedKeys, initialSelectedTitles, kinds, show) {
+    // 用列表下标作为唯一标识，同名（甚至同名同 url）的分类也能独立选中
+    var selectedIndices by remember(kinds, show) {
         mutableStateOf(
-            initialSelectedKeys
-                ?: kinds.filter { it.title in initialSelectedTitles }
-                    .map { exploreKindKey(it) }
-                    .toSet()
+            initialSelectedTitles.mapIndexedNotNull { i, title ->
+                val wantUrl = initialSelectedUrls.getOrNull(i)
+                // 优先按 url 精确定位，其次按标题；已被占用的下标跳过
+                val byUrl = if (!wantUrl.isNullOrBlank()) {
+                    kinds.indexOfFirst { it.url == wantUrl }.takeIf { it >= 0 }
+                } else null
+                byUrl ?: kinds.indexOfFirst { it.title == title }.takeIf { it >= 0 }
+            }.toSet()
         )
     }
     var query by remember { mutableStateOf("") }
@@ -68,6 +72,7 @@ fun ExploreKindSelectSheet(
         }
     }
 
+    // 过滤后仍需知道每项在原列表中的下标
     val filteredKinds = remember(query, kinds) {
         if (query.isBlank()) kinds
         else kinds.filter { kind ->
@@ -83,10 +88,11 @@ fun ExploreKindSelectSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         endAction = {
-            if (multiple && selectedKeys.isNotEmpty()) {
+            if (multiple && selectedIndices.isNotEmpty()) {
                 MediumTonalButton(
                     onClick = {
-                        val selectedKinds = kinds.filter { exploreKindKey(it) in selectedKeys }
+                        val selectedKinds = selectedIndices.sorted()
+                            .mapNotNull { kinds.getOrNull(it) }
                         onSelected(selectedKinds)
                         onDismissRequest()
                     },
@@ -118,8 +124,11 @@ fun ExploreKindSelectSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         rowItems.forEach { (kind, span) ->
-                            val kindKey = exploreKindKey(kind)
-                            val isSelected = kindKey in selectedKeys
+                            // 该项在原始 kinds 列表中的下标（用引用相等定位，保证同名项不串）
+                            val kindIndex = remember(kinds, kind) {
+                                kinds.indexOfFirst { it === kind }
+                            }
+                            val isSelected = kindIndex in selectedIndices
                             ExploreKindMultiTypeItem(
                                 modifier = Modifier
                                     .weight(span.toFloat())
@@ -136,10 +145,11 @@ fun ExploreKindSelectSheet(
                                 isSelected = isSelected,
                                 onClick = {
                                     if (multiple) {
-                                        selectedKeys = if (isSelected) {
-                                            selectedKeys - kindKey
+                                        if (kindIndex < 0) return@ExploreKindMultiTypeItem
+                                        selectedIndices = if (isSelected) {
+                                            selectedIndices - kindIndex
                                         } else {
-                                            selectedKeys + kindKey
+                                            selectedIndices + kindIndex
                                         }
                                     } else {
                                         onSelected(listOf(kind))
