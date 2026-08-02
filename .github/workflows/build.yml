@@ -178,6 +178,13 @@ jobs:
           path: app/build/outputs/apk/app/**/*.apk
           retention-days: 30
 
+      - name: Upload Mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping
+          path: app/build/outputs/mapping/appRelease/mapping.txt
+          retention-days: 30
+
   release:
     name: Create GitHub Release
     needs: build
@@ -194,11 +201,18 @@ jobs:
           name: legado_release_signed_apk
           path: apk_nested
 
+      - name: Download Mapping
+        uses: actions/download-artifact@v4
+        with:
+          name: mapping
+          path: mapping_dir
+
       - name: Flatten APK files
         run: |
           mkdir -p artifacts
           find apk_nested -name "*.apk" -type f -exec cp {} artifacts/ \;
-          echo "Flattened APKs:"
+          find mapping_dir -name "mapping.txt" -type f -exec cp {} artifacts/mapping.txt \;
+          echo "Flattened artifacts:"
           ls -la artifacts/
 
       - name: Get version info
@@ -227,7 +241,9 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           name: Release v${{ steps.version.outputs.version }}
           body_path: RELEASE_NOTES.md
-          files: artifacts/*.apk
+          files: |
+            artifacts/*.apk
+            artifacts/mapping.txt
           draft: false
           prerelease: false
         env:

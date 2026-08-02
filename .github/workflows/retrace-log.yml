@@ -64,18 +64,27 @@ jobs:
       - name: Download Mapping File
         env:
           VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p logs
           echo "获取版本:"
           echo "$VERSION"
-          
-          gh release download "$VERSION" \
-            --repo "HapeLee/legado-with-MD3" \
+
+          # build.yml 打的 tag 是 v${VERSION}；兼容传入带/不带 v 前缀
+          TAG="$VERSION"
+          case "$TAG" in
+            v*) ;;
+            *) TAG="v$TAG" ;;
+          esac
+          echo "使用 tag: $TAG"
+
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
             --pattern "*mapping*.txt" \
             --dir logs
             
           if [ ! -f logs/mapping.txt ]; then
-            FILE=$(find logs -name "*.txt" | head -n 1)
+            FILE=$(find logs -name "*.txt" ! -name "obfuscated.txt" | head -n 1)
             if [ -n "$FILE" ]; then
               mv "$FILE" logs/mapping.txt
             fi
@@ -93,12 +102,14 @@ jobs:
 
         run: |
           retrace logs/mapping.txt logs/obfuscated.txt 2>&1 | tee logs/recovered.txt
+          echo "=== 还原结果 ==="
+          cat logs/recovered.txt
 
       - name: Upload Result
 
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
 
         with:
-          archive: false
-          path:
-            logs/recovered.txt
+          name: recovered-log
+          path: logs/recovered.txt
+          retention-days: 30
