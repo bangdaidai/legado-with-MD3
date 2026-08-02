@@ -35,9 +35,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookplateData
 import io.legado.app.data.entities.BookplateTemplate
+import io.legado.app.data.repository.BookplateRepository
 import io.legado.app.help.book.BookplateGenerator
 import io.legado.app.help.book.BookplateHtmlRenderer
 import io.legado.app.ui.theme.LegadoTheme
@@ -47,6 +47,7 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 import java.io.File
 import java.io.FileOutputStream
 
@@ -60,6 +61,7 @@ fun BookplatePreviewSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val bookplateRepository = koinInject<BookplateRepository>()
 
     var templates by remember { mutableStateOf<List<BookplateTemplate>>(emptyList()) }
     var selectedTemplateId by remember { mutableLongStateOf(0L) }
@@ -72,7 +74,7 @@ fun BookplatePreviewSheet(
         if (show) {
             templates = withContext(Dispatchers.IO) {
                 BookplateGenerator.getOrCreateBuiltinTemplates()
-                appDb.bookplateTemplateDao.getAll()
+                bookplateRepository.getAll()
             }
         }
     }

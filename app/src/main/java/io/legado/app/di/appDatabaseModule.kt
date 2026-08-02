@@ -27,6 +27,7 @@ val appDatabaseModule = module {
     factory<BookContentProcessDao> { get<AppDatabase>().bookContentProcessDao }
     factory<BookKnowledgeDao> { get<AppDatabase>().bookKnowledgeDao }
     factory<ReadingMemoryDao> { get<AppDatabase>().readingMemoryDao }
+    factory<BookplateTemplateDao> { get<AppDatabase>().bookplateTemplateDao }
     factory<ReadAloudVoiceDao> { get<AppDatabase>().readAloudVoiceDao }
     factory<ChapterSpeechDao> { get<AppDatabase>().chapterSpeechDao }
     factory<CloudTtsEngineDao> { get<AppDatabase>().cloudTtsEngineDao }

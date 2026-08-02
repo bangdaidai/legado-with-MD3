@@ -7,7 +7,6 @@ import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
-import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
@@ -55,8 +54,7 @@ class ReadingMemoryViewModel(
     private val _loading = MutableStateFlow(false)
 
     /** 标签管理中设置的标签名 -> 颜色（Long），与书架一致。 */
-    private val tagColorMapFlow: StateFlow<Map<String, Long>> = appDb.bookTagDao.observeAll()
-        .map { list -> list.associate { it.name to it.color } }
+    private val tagColorMapFlow: StateFlow<Map<String, Long>> = repository.observeTagColorMap()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private data class Controls(

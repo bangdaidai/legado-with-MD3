@@ -2,11 +2,9 @@ package io.legado.app.ui.book.bookplate
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookplateTemplate
+import io.legado.app.data.repository.BookplateRepository
 import io.legado.app.help.book.BookplateGenerator
-import io.legado.app.utils.getPrefLong
-import io.legado.app.utils.putPrefLong
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -17,13 +15,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import splitties.init.appCtx
 
-class BookplateManageViewModel : ViewModel() {
+class BookplateManageViewModel(
+    private val repository: BookplateRepository,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         BookplateManageUiState(
-            selectedTemplateId = appCtx.getPrefLong(PREF_SELECTED_TEMPLATE_ID, 0L)
+            selectedTemplateId = repository.getSelectedTemplateId()
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -63,9 +62,9 @@ class BookplateManageViewModel : ViewModel() {
             }
             val group = _uiState.value.selectedGroup
             val (groups, templates) = withContext(Dispatchers.IO) {
-                val existing = appDb.bookplateTemplateDao.getDistinctGroupNames()
+                val existing = repository.getDistinctGroupNames()
                 val merged = (defaultGroups + existing).distinct()
-                merged to appDb.bookplateTemplateDao.getByGroupName(group)
+                merged to repository.getByGroupName(group)
             }
             _uiState.update {
                 it.copy(
@@ -82,7 +81,7 @@ class BookplateManageViewModel : ViewModel() {
         _uiState.update { it.copy(selectedGroup = group, templates = persistentListOf()) }
         viewModelScope.launch {
             val templates = withContext(Dispatchers.IO) {
-                appDb.bookplateTemplateDao.getByGroupName(group)
+                repository.getByGroupName(group)
             }
             _uiState.update { it.copy(templates = templates.toImmutableList()) }
         }
@@ -90,7 +89,7 @@ class BookplateManageViewModel : ViewModel() {
 
     private fun selectTemplate(id: Long) {
         _uiState.update { it.copy(selectedTemplateId = id) }
-        appCtx.putPrefLong(PREF_SELECTED_TEMPLATE_ID, id)
+        repository.setSelectedTemplateId(id)
     }
 
     private fun saveTemplate(name: String, html: String) {
@@ -110,9 +109,9 @@ class BookplateManageViewModel : ViewModel() {
                     groupName = editing.groupName.ifBlank { _uiState.value.selectedGroup },
                 )
                 if (toSave.id == 0L) {
-                    appDb.bookplateTemplateDao.insert(toSave)
+                    repository.insert(toSave)
                 } else {
-                    appDb.bookplateTemplateDao.update(toSave)
+                    repository.update(toSave)
                 }
             }
             _uiState.update { it.copy(editing = null) }
@@ -127,7 +126,7 @@ class BookplateManageViewModel : ViewModel() {
         }
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                appDb.bookplateTemplateDao.delete(template)
+                repository.delete(template)
             }
             reloadTemplates()
         }
@@ -146,12 +145,8 @@ class BookplateManageViewModel : ViewModel() {
     private suspend fun reloadTemplates() {
         val group = _uiState.value.selectedGroup
         val templates = withContext(Dispatchers.IO) {
-            appDb.bookplateTemplateDao.getByGroupName(group)
+            repository.getByGroupName(group)
         }
         _uiState.update { it.copy(templates = templates.toImmutableList()) }
-    }
-
-    companion object {
-        private const val PREF_SELECTED_TEMPLATE_ID = "selectedBookplateTemplateId"
     }
 }

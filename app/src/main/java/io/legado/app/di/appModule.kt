@@ -33,6 +33,7 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceCallbackRepository
 import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.BookshelfRepository
+import io.legado.app.data.repository.BookplateRepository
 import io.legado.app.data.repository.BookshelfSettingsRepository
 import io.legado.app.data.repository.CacheBookDownloadRepository
 import io.legado.app.data.repository.ChangeSourceSettingsRepository
@@ -449,6 +450,7 @@ val appModule = module {
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
     singleOf(::ReadingMemoryRepository)
+    singleOf(::BookplateRepository)
     single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get()) }
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }

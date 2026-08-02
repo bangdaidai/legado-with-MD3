@@ -6,10 +6,9 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookplateData
 import io.legado.app.data.entities.BookplateTemplate
 import io.legado.app.data.entities.ReadingMemory
-import io.legado.app.utils.getPrefLong
+import io.legado.app.help.config.AppConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import splitties.init.appCtx
 
 /**
  * 藏书票生成入口。
@@ -63,7 +62,7 @@ object BookplateGenerator {
     }
 
     private suspend fun resolveTemplate(): BookplateTemplate? {
-        val savedId = appCtx.getPrefLong(SELECTED_TEMPLATE_KEY, 0L)
+        val savedId = AppConfigStore.getLong(SELECTED_TEMPLATE_KEY) ?: 0L
         if (savedId > 0L) {
             appDb.bookplateTemplateDao.getById(savedId)?.let { return it }
         }
