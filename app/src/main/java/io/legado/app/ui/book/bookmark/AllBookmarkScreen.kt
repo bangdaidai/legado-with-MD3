@@ -168,87 +168,86 @@ fun AllBookmarkScreen(
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
-                GlassMediumFlexibleTopAppBar(
-                    title = stringResource(R.string.all_bookmark),
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        TopBarNavigationButton(onClick = onBack)
-                    },
-                    actions = {
-                        if (bookmarksGrouped.isNotEmpty()) {
-                            TopBarActionButton(
-                                onClick = { onIntent(AllBookmarkIntent.ToggleAllCollapse(allKeys)) },
-                                imageVector = if (isAllCollapsed) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
-                                contentDescription = stringResource(
-                                    if (isAllCollapsed) {
-                                        R.string.a11y_expand_all_bookmark_groups
-                                    } else {
-                                        R.string.a11y_collapse_all_bookmark_groups
-                                    }
-                                )
-                            )
-                        }
+            GlassMediumFlexibleTopAppBar(
+                title = stringResource(R.string.all_bookmark),
+                scrollBehavior = scrollBehavior,
+                navigationIcon = {
+                    TopBarNavigationButton(onClick = onBack)
+                },
+                actions = {
+                    if (bookmarksGrouped.isNotEmpty()) {
                         TopBarActionButton(
-                            onClick = {
-                                showSearch = !showSearch
-                                if (!showSearch) {
-                                    onIntent(AllBookmarkIntent.SetSearchQuery(""))
+                            onClick = { onIntent(AllBookmarkIntent.ToggleAllCollapse(allKeys)) },
+                            imageVector = if (isAllCollapsed) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
+                            contentDescription = stringResource(
+                                if (isAllCollapsed) {
+                                    R.string.a11y_expand_all_bookmark_groups
+                                } else {
+                                    R.string.a11y_collapse_all_bookmark_groups
                                 }
-                            },
-                            imageVector = Icons.Default.Search,
-                            contentDescription = stringResource(R.string.search)
+                            )
                         )
-                        TopBarActionButton(
-                            onClick = { showMenu = true },
-                            imageVector = AppIcons.MoreVert,
-                            contentDescription = stringResource(R.string.more_menu)
-                        )
-                        RoundDropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            RoundDropdownMenuItem(
-                                text = stringResource(R.string.filter_only_notes),
-                                isSelected = state.onlyNotes,
-                                onClick = {
-                                    showMenu = false
-                                    onIntent(AllBookmarkIntent.ToggleOnlyNotes)
-                                }
-                            )
-                            RoundDropdownMenuItem(
-                                text = stringResource(R.string.export_bookmarks_json),
-                                onClick = {
-                                    showMenu = false
-                                    onRequestExport(false)
-                                }
-                            )
-                            RoundDropdownMenuItem(
-                                text = stringResource(R.string.export_bookmarks_markdown),
-                                onClick = {
-                                    showMenu = false
-                                    onRequestExport(true)
-                                }
-                            )
-                        }
                     }
-                )
-
-                AnimatedVisibility(
-                    modifier = Modifier.adaptiveHorizontalPadding(),
-                    visible = showSearch,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    SearchBar(
-                        query = searchText,
-                        onQueryChange = { onIntent(AllBookmarkIntent.SetSearchQuery(it)) },
-                        placeholder = stringResource(R.string.search),
-                        scrollState = listState,
-                        scope = scope
+                    TopBarActionButton(
+                        onClick = {
+                            showSearch = !showSearch
+                            if (!showSearch) {
+                                onIntent(AllBookmarkIntent.SetSearchQuery(""))
+                            }
+                        },
+                        imageVector = Icons.Default.Search,
+                        contentDescription = stringResource(R.string.search)
                     )
+                    TopBarActionButton(
+                        onClick = { showMenu = true },
+                        imageVector = AppIcons.MoreVert,
+                        contentDescription = stringResource(R.string.more_menu)
+                    )
+                    RoundDropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        RoundDropdownMenuItem(
+                            text = stringResource(R.string.filter_only_notes),
+                            isSelected = state.onlyNotes,
+                            onClick = {
+                                showMenu = false
+                                onIntent(AllBookmarkIntent.ToggleOnlyNotes)
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = stringResource(R.string.export_bookmarks_json),
+                            onClick = {
+                                showMenu = false
+                                onRequestExport(false)
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = stringResource(R.string.export_bookmarks_markdown),
+                            onClick = {
+                                showMenu = false
+                                onRequestExport(true)
+                            }
+                        )
+                    }
+                },
+                bottomContent = {
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = showSearch,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        SearchBar(
+                            query = searchText,
+                            onQueryChange = { onIntent(AllBookmarkIntent.SetSearchQuery(it)) },
+                            placeholder = stringResource(R.string.search),
+                            scrollState = listState,
+                            scope = scope
+                        )
+                    }
                 }
-            }
+            )
         }
     ) { paddingValues ->
         Column(

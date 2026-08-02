@@ -813,7 +813,6 @@
     <string name="underline_width">Underline Width</string>
     <string name="underline_offset">Underline Offset</string>
     <string name="underline_below_text">Underline Below Text</string>
-    <string name="underline_below_text_desc">Draw the underline behind glyphs</string>
     <string name="font_size_offset">Font Size Offset</string>
     <string name="font_size_offset_value">%1$+d sp</string>
     <string name="svg_path">SVG Path</string>

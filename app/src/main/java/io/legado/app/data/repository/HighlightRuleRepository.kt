@@ -186,7 +186,7 @@ class HighlightRuleRepository(
             underlineWidth = runCatching { rule.underlineWidth }.getOrDefault(1f)
                 .coerceIn(0.1f, 10f),
             underlineOffset = runCatching { rule.underlineOffset }.getOrDefault(2f)
-                .coerceIn(0f, 20f),
+                .coerceIn(-10f, 20f),
             underlineSvgPath = runCatching { rule.underlineSvgPath }.getOrNull(),
             bgImage = runCatching { rule.bgImage }.getOrNull()?.takeIf { it.isNotBlank() },
             bgImageFit = runCatching { rule.bgImageFit }.getOrDefault(0).coerceIn(0, 3),

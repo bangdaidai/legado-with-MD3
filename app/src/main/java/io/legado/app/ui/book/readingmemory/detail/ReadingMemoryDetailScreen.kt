@@ -60,6 +60,8 @@ import androidx.compose.foundation.background
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.icon.AppIcons
 import java.util.Locale
 import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
@@ -490,31 +492,29 @@ private fun ProtagonistsSection(
     }
 
     if (adding) {
-        AppModalBottomSheet(
+        AppAlertDialog(
             show = true,
             onDismissRequest = { adding = false },
             title = "添加人物",
-        ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("人物名称") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            FilledTonalButton(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        onIntent(ReadingMemoryDetailIntent.AddProtagonist(name.trim()))
-                        adding = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                AppText("确定")
-            }
-        }
+            content = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("人物名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmText = "确定",
+            onConfirm = {
+                if (name.isNotBlank()) {
+                    onIntent(ReadingMemoryDetailIntent.AddProtagonist(name.trim()))
+                    adding = false
+                }
+            },
+            dismissText = "取消",
+            onDismiss = { adding = false },
+        )
     }
 
     if (pendingRemoveProtagonist != null) {
@@ -676,6 +676,22 @@ private fun ReviewEditorSheet(
         show = true,
         onDismissRequest = onDismiss,
         title = "编辑书评",
+        startAction = if (onDelete != null && draft.isNotBlank()) {
+            {
+                MediumTonalButton(
+                    onClick = onDelete,
+                    icon = AppIcons.Delete,
+                    contentDescription = "删除书评",
+                )
+            }
+        } else null,
+        endAction = {
+            MediumTonalButton(
+                onClick = onSave,
+                icon = AppIcons.Check,
+                contentDescription = "保存",
+            )
+        },
     ) {
         OutlinedTextField(
             value = draft,
@@ -684,32 +700,14 @@ private fun ReviewEditorSheet(
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        if (onDelete != null && draft.isNotBlank()) {
-            FilledTonalButton(
-                onClick = onDelete,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(imageVector = Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                AppText("删除书评")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
         if (onGenerateBookplate != null) {
+            Spacer(modifier = Modifier.height(12.dp))
             FilledTonalButton(
                 onClick = onGenerateBookplate,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 AppText("生成书评票")
             }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-        FilledTonalButton(
-            onClick = onSave,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            AppText("保存")
         }
     }
 }

@@ -223,103 +223,102 @@ fun ReadRecordScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Column {
-                GlassMediumFlexibleTopAppBar(
-                    title = if (inSelectionMode) {
-                        stringResource(R.string.selected_count, selectedItemKeys.size)
-                    } else {
-                        stringResource(R.string.read_record)
-                    },
-                    subtitle = run {
-                        if (inSelectionMode) return@run stringResource(R.string.long_press_select_mode)
-                        val subTitle = when (displayMode) {
-                            DisplayMode.AGGREGATE -> stringResource(R.string.read_record_view_aggregate)
-                            DisplayMode.TIMELINE -> stringResource(R.string.read_record_view_timeline)
-                            DisplayMode.LATEST -> stringResource(R.string.read_record_view_latest)
-                            DisplayMode.DURATION -> stringResource(R.string.read_record_view_duration)
-                        }
-                        subTitle
-                    },
-                    navigationIcon = {
-                        TopBarNavigationButton(
-                            onClick = {
-                                if (inSelectionMode) {
-                                    selectedItemKeys = emptySet()
-                                } else {
-                                    onBackClick()
-                                }
-                            }
-                        )
-                    },
-                    actions = {
-                        if (inSelectionMode) {
-                            AppIconButton(
-                                onClick = {
-                                    val action = {
-                                        deleteSelectedReadRecords(
-                                            state = state,
-                                            selectedItemKeys = selectedItemKeys,
-                                            onIntent = onIntent
-                                        )
-                                        selectedItemKeys = emptySet()
-                                    }
-                                    onConfirmDelete(selectedItemKeys.size, action)
-                                }
-                            ) {
-                                AppIcon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.delete_selected)
-                                )
-                            }
-                        } else {
-                            AppIconButton(onClick = {
-                                val newMode = when (displayMode) {
-                                    DisplayMode.AGGREGATE -> DisplayMode.TIMELINE
-                                    DisplayMode.TIMELINE -> DisplayMode.LATEST
-                                    DisplayMode.LATEST -> DisplayMode.DURATION
-                                    DisplayMode.DURATION -> DisplayMode.AGGREGATE
-                                }
-                                onIntent(ReadRecordIntent.SetDisplayMode(newMode))
+            GlassMediumFlexibleTopAppBar(
+                title = if (inSelectionMode) {
+                    stringResource(R.string.selected_count, selectedItemKeys.size)
+                } else {
+                    stringResource(R.string.read_record)
+                },
+                subtitle = run {
+                    if (inSelectionMode) return@run stringResource(R.string.long_press_select_mode)
+                    val subTitle = when (displayMode) {
+                        DisplayMode.AGGREGATE -> stringResource(R.string.read_record_view_aggregate)
+                        DisplayMode.TIMELINE -> stringResource(R.string.read_record_view_timeline)
+                        DisplayMode.LATEST -> stringResource(R.string.read_record_view_latest)
+                        DisplayMode.DURATION -> stringResource(R.string.read_record_view_duration)
+                    }
+                    subTitle
+                },
+                navigationIcon = {
+                    TopBarNavigationButton(
+                        onClick = {
+                            if (inSelectionMode) {
                                 selectedItemKeys = emptySet()
-                            }) {
-                                val icon = when (displayMode) {
-                                    DisplayMode.AGGREGATE -> Icons.Default.Timeline
-                                    DisplayMode.TIMELINE -> Icons.Default.Schedule
-                                    DisplayMode.LATEST -> Icons.Default.HourglassBottom
-                                    DisplayMode.DURATION -> Icons.AutoMirrored.Filled.List
-                                }
-                                val description = when (displayMode) {
-                                    DisplayMode.AGGREGATE -> stringResource(R.string.a11y_switch_to_timeline_view)
-                                    DisplayMode.TIMELINE -> stringResource(R.string.a11y_switch_to_latest_view)
-                                    DisplayMode.LATEST -> stringResource(R.string.a11y_switch_to_duration_view)
-                                    DisplayMode.DURATION -> stringResource(R.string.a11y_switch_to_aggregate_view)
-                                }
-                                AppIcon(icon, description)
-                            }
-                            AppIconButton(onClick = { showSearch = !showSearch }) {
-                                AppIcon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
-                            }
-                            AppIconButton(onClick = { showActionsSheet = true }) {
-                                AppIcon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = stringResource(R.string.more_actions)
-                                )
+                            } else {
+                                onBackClick()
                             }
                         }
-                    },
-                    scrollBehavior = scrollBehavior
-                )
-
-                AnimatedVisibility(
-                    modifier = Modifier.adaptiveHorizontalPadding(),
-                    visible = showSearch
-                ) {
-                    SearchBar(
-                        query = state.searchKey ?: "",
-                        onQueryChange = { onIntent(ReadRecordIntent.Search(it)) }
                     )
+                },
+                actions = {
+                    if (inSelectionMode) {
+                        AppIconButton(
+                            onClick = {
+                                val action = {
+                                    deleteSelectedReadRecords(
+                                        state = state,
+                                        selectedItemKeys = selectedItemKeys,
+                                        onIntent = onIntent
+                                    )
+                                    selectedItemKeys = emptySet()
+                                }
+                                onConfirmDelete(selectedItemKeys.size, action)
+                            }
+                        ) {
+                            AppIcon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.delete_selected)
+                            )
+                        }
+                    } else {
+                        AppIconButton(onClick = {
+                            val newMode = when (displayMode) {
+                                DisplayMode.AGGREGATE -> DisplayMode.TIMELINE
+                                DisplayMode.TIMELINE -> DisplayMode.LATEST
+                                DisplayMode.LATEST -> DisplayMode.DURATION
+                                DisplayMode.DURATION -> DisplayMode.AGGREGATE
+                            }
+                            onIntent(ReadRecordIntent.SetDisplayMode(newMode))
+                            selectedItemKeys = emptySet()
+                        }) {
+                            val icon = when (displayMode) {
+                                DisplayMode.AGGREGATE -> Icons.Default.Timeline
+                                DisplayMode.TIMELINE -> Icons.Default.Schedule
+                                DisplayMode.LATEST -> Icons.Default.HourglassBottom
+                                DisplayMode.DURATION -> Icons.AutoMirrored.Filled.List
+                            }
+                            val description = when (displayMode) {
+                                DisplayMode.AGGREGATE -> stringResource(R.string.a11y_switch_to_timeline_view)
+                                DisplayMode.TIMELINE -> stringResource(R.string.a11y_switch_to_latest_view)
+                                DisplayMode.LATEST -> stringResource(R.string.a11y_switch_to_duration_view)
+                                DisplayMode.DURATION -> stringResource(R.string.a11y_switch_to_aggregate_view)
+                            }
+                            AppIcon(icon, description)
+                        }
+                        AppIconButton(onClick = { showSearch = !showSearch }) {
+                            AppIcon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
+                        }
+                        AppIconButton(onClick = { showActionsSheet = true }) {
+                            AppIcon(
+                                Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.more_actions)
+                            )
+                        }
+                    }
+                },
+                scrollBehavior = scrollBehavior,
+                bottomContent = {
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = showSearch
+                    ) {
+                        SearchBar(
+                            query = state.searchKey ?: "",
+                            onQueryChange = { onIntent(ReadRecordIntent.Search(it)) }
+                        )
+                    }
                 }
-            }
+            )
         }
     ) { padding ->
         val contentState = when {

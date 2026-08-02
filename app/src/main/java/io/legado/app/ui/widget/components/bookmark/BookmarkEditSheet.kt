@@ -6,12 +6,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,8 +72,7 @@ fun BookmarkEditSheet(
             onContentChange = { content = it },
         )
         if (onGenerateBookplate != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(
+            MediumTonalButton(
                 onClick = {
                     val bm = bookmark.apply {
                         this.bookText = bookText
@@ -84,12 +80,10 @@ fun BookmarkEditSheet(
                     }
                     onGenerateBookplate(bm)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-            ) {
-                Text("生成书摘票")
-            }
+                modifier = Modifier.fillMaxWidth(),
+                text = "生成书摘票",
+            )
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 

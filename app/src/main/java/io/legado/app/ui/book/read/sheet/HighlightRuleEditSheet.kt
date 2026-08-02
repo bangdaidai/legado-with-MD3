@@ -8,6 +8,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -457,6 +459,15 @@ fun HighlightRuleEditSheet(
                         onValueChange = { underlineMode = it.toIntOrNull() ?: 1 },
                     )
 
+                    AnimatedVisibility(visible = underlineMode == 5) {
+                        AppTextField(
+                            value = underlineSvgPath,
+                            onValueChange = { underlineSvgPath = it },
+                            label = stringResource(R.string.svg_path),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     TinySwitchSettingItem(
                         title = stringResource(R.string.underline_color),
                         checked = hasUnderlineColor,
@@ -489,22 +500,13 @@ fun HighlightRuleEditSheet(
                     TinySliderSettingItem(
                         title = stringResource(R.string.underline_offset),
                         value = underlineOffset,
-                        valueRange = 0f..20f,
-                        description = String.format("%.1f dp", underlineOffset),
+                        valueRange = -10f..20f,
+                        description = String.format("%+.1f dp", underlineOffset),
                         onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
                     )
 
-                    AnimatedVisibility(visible = underlineMode == 5) {
-                        AppTextField(
-                            value = underlineSvgPath,
-                            onValueChange = { underlineSvgPath = it },
-                            label = stringResource(R.string.svg_path),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
                     TinySwitchSettingItem(
                         title = stringResource(R.string.underline_below_text),
-                        description = stringResource(R.string.underline_below_text_desc),
                         checked = underlineBelowText,
                         onCheckedChange = { underlineBelowText = it },
                     )
@@ -1086,10 +1088,28 @@ private fun HighlightRulePreview(
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
             }
+            // 预先测量文本以获取实际高度（使用卡片内容宽度估计值）
+            val density = LocalDensity.current
+            val previewConstraintWidth = with(density) {
+                // 卡片内内容宽度 ≈ 屏幕宽 - sheet水平padding*2(16*2) - 卡片内padding*2(16*2)
+                (LocalConfiguration.current.screenWidthDp.dp - 64.dp).roundToPx()
+            }
+            val previewTextResult = textMeasurer.measure(
+                text = annotated,
+                style = TextStyle(
+                    fontSize = PREVIEW_BASE_FONT_SIZE.sp,
+                    color = defaultTextColor,
+                ),
+                maxLines = 5,
+                constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
+            )
+            val canvasHeightDp = with(density) {
+                previewTextResult.size.height.toDp()
+            }
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(36.dp)
+                    .height(canvasHeightDp)
             ) {
                 val textResult = textMeasurer.measure(
                     text = annotated,
@@ -1097,7 +1117,7 @@ private fun HighlightRulePreview(
                         fontSize = PREVIEW_BASE_FONT_SIZE.sp,
                         color = defaultTextColor,
                     ),
-                    maxLines = 3,
+                    maxLines = 5,
                     constraints = androidx.compose.ui.unit.Constraints(
                         maxWidth = size.width.toInt()
                     ),
@@ -1185,7 +1205,7 @@ private fun HighlightRulePreview(
                                 if (segEnd <= offset) break
                                 val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
                                 val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
-                                val y = textResult.getLineBottom(line) - underlineOffset.dp.toPx()
+                                val y = textResult.getLineBottom(line) + underlineOffset.dp.toPx()
                                 drawUnderlineSegment(
                                     mode = underlineMode,
                                     color = resolvedUnderlineColor,
@@ -1464,12 +1484,18 @@ private fun NineSlicePreview(
     }
     if (bitmap == null) return
 
+    NormalCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        cornerRadius = 12.dp,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(88.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            .height(80.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         val canvasW = size.width
         val canvasH = size.height
@@ -1499,5 +1525,6 @@ private fun NineSlicePreview(
             size = androidx.compose.ui.geometry.Size(textRight - textLeft, textBottom - textTop),
             style = Stroke(width = 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))),
         )
+    }
     }
 }

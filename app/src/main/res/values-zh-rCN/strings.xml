@@ -782,7 +782,6 @@
     <string name="underline_width">下划线宽度</string>
     <string name="underline_offset">下划线偏移</string>
     <string name="underline_below_text">下划线置于文字下方</string>
-    <string name="underline_below_text_desc">下划线绘制在文字笔画之下</string>
     <string name="font_size_offset">字号偏移</string>
     <string name="font_size_offset_value">%1$+d sp</string>
     <string name="svg_path">SVG路径</string>

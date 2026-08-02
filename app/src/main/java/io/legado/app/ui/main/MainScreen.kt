@@ -3,7 +3,6 @@ package io.legado.app.ui.main
 import android.content.Intent
 import android.os.Build
 import androidx.activity.ComponentActivity
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -98,10 +97,9 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.navigation.AppNavigationBar
 import io.legado.app.ui.widget.components.navigation.AppNavigationBarItem
 import io.legado.app.ui.widget.components.pager.rememberPagerFlingPassThroughConnection
+import io.legado.app.ui.about.MarkdownSheet
 import io.legado.app.ui.widget.components.text.AppText
-import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.sendToClip
-import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivityForBook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -166,6 +164,16 @@ fun MainScreen(
     val coroutineScope = rememberCoroutineScope()
     val defaultHelpTitle = stringResource(R.string.help)
 
+    var markdownSheetTitle by remember { mutableStateOf<String?>(null) }
+    var markdownSheetContent by remember { mutableStateOf("") }
+
+    MarkdownSheet(
+        show = markdownSheetTitle != null,
+        title = markdownSheetTitle ?: "",
+        content = markdownSheetContent,
+        onDismissRequest = { markdownSheetTitle = null },
+    )
+
     LaunchedEffect(effects, context) {
         effects.collectLatest { effect ->
             when (effect) {
@@ -177,7 +185,6 @@ fun MainScreen(
 
                 is MainEffect.CopyUrl -> context.sendToClip(effect.url)
                 is MainEffect.ShowMarkdown -> {
-                    val activity = context as? AppCompatActivity ?: return@collectLatest
                     val title = effect.title.ifBlank { defaultHelpTitle }
                     val mdText = withContext(Dispatchers.IO) {
                         context.assets
@@ -185,7 +192,8 @@ fun MainScreen(
                             .bufferedReader()
                             .use { it.readText() }
                     }
-                    activity.showDialogFragment(TextDialog(title, mdText, TextDialog.Mode.MD))
+                    markdownSheetTitle = title
+                    markdownSheetContent = mdText
                 }
 
                 is MainEffect.StartActivity -> {

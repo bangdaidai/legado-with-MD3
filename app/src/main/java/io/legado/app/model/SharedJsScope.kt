@@ -69,7 +69,13 @@ object SharedJsScope {
                 RhinoScriptEngine.eval(jsLib, scope, coroutineContext)
             }
             if (scope is ScriptableObject) {
-                scope.sealObject()
+                /**
+                 * 阻止新全局增加（即函数内未用var的隐性全局变量创建）,会直接隐性创建失败,提示变量未定义
+                 * 注意：不能用 sealObject()，那会把 jsLib 里已声明的变量也冻成只读，
+                 * 导致书源在 click 等钩子里更新共享状态（如 FQ_LAST_CMT_CLICK）时抛
+                 * "Cannot modify property of a sealed object" 异常。
+                 */
+                scope.preventExtensions()
             }
             scopeMap.put(key, WeakReference(scope))
         }

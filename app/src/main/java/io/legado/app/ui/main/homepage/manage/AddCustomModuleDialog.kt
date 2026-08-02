@@ -58,14 +58,29 @@ private fun reconstructSelectedKinds(
     prefillTitle: String,
     prefillUrl: String,
 ): List<ExploreKind> {
-    // 尝试从 args JSON 解析多分类（isHomepageRankingGroup 或 isMultiKinds 标记）
+    // 尝试从 args JSON 解析多分类
     if (prefillArgs.isNotBlank()) {
-        runCatching {
+        try {
             val obj = com.google.gson.JsonParser.parseString(prefillArgs).asJsonObject
-            if (obj.has("kindTitles")) {
-                val titles = obj.getAsJsonArray("kindTitles").map { it.asString }
-                val urls = if (obj.has("kindUrls")) {
-                    obj.getAsJsonArray("kindUrls").map { it.asString }
+            // 兼容两种字段名：正常的 kindTitles/kindUrls 和混淆后的 a/b
+            val titlesKey = when {
+                obj.has("kindTitles") -> "kindTitles"
+                obj.has("a") -> "a"
+                else -> null
+            }
+            val urlsKey = when {
+                obj.has("kindUrls") -> "kindUrls"
+                obj.has("b") -> "b"
+                else -> null
+            }
+            if (titlesKey != null) {
+                val titles = obj.getAsJsonArray(titlesKey).mapNotNull { el ->
+                    if (el.isJsonNull) null else el.asString
+                }
+                val urls = if (urlsKey != null) {
+                    obj.getAsJsonArray(urlsKey).map { el ->
+                        if (el.isJsonNull) null else el.asString
+                    }
                 } else emptyList()
                 if (titles.isNotEmpty()) {
                     return titles.mapIndexed { i, t ->
@@ -73,10 +88,34 @@ private fun reconstructSelectedKinds(
                     }
                 }
             }
+        } catch (_: Exception) {
+            // JSON parse failure, fall through
         }
     }
-    // 单分类：用标题+url 回显
+                val urls = if (obj.has("kindUrls")) {
+                    obj.getAsJsonArray("kindUrls").map { el ->
+                        if (el.isJsonNull) null else el.asString
+                    }
+                } else emptyList()
+                if (titles.isNotEmpty()) {
+                    return titles.mapIndexed { i, t ->
+                        ExploreKind(title = t, url = urls.getOrNull(i))
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // JSON parse failure, fall through
+        }
+    }
+    // 单分类或组合标题回显
     if (prefillTitle.isNotBlank()) {
+        // 组合标题（A·B·C）拆开成多个分类
+        if ("·" in prefillTitle) {
+            val parts = prefillTitle.split("·").map { it.trim() }.filter { it.isNotBlank() }
+            if (parts.size >= 2) {
+                return parts.map { ExploreKind(title = it, url = null) }
+            }
+        }
         return listOf(ExploreKind(title = prefillTitle, url = prefillUrl.ifBlank { null }))
     }
     return emptyList()

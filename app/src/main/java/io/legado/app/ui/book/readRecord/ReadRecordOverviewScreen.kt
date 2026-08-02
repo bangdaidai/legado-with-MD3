@@ -510,7 +510,7 @@ fun CalendarDayCell(
                 path = coverPath,
                 modifier = Modifier
                     .fillMaxSize()
-                    .alpha(0.4f)
+                    .alpha(0.5f)
             )
         }
         

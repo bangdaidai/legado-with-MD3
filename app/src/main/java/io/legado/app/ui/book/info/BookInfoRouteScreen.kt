@@ -156,6 +156,7 @@ fun BookInfoRouteScreen(
 
                 is BookInfoEffect.OpenToc -> tocActivityResult.launch(effect.bookUrl)
                 is BookInfoEffect.OpenBookSourceEdit -> {
+                    viewModel.markPendingSourceRefresh()
                     onOpenBookSourceEdit(effect.sourceUrl)
                 }
 

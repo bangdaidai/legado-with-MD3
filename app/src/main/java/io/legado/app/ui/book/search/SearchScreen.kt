@@ -307,82 +307,80 @@ fun SearchScreen(
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
-                GlassMediumFlexibleTopAppBar(
-                    title = stringResource(R.string.search),
-                    navigationIcon = {
-                        TopBarNavigationButton(
-                            onClick = onBack,
-                            imageVector = AppIcons.Back
-                        )
-                    },
-                    actions = {
-                        TopBarAnimatedActionButton(
-                            checked = isSourceGroupedMode || state.selectedSourceTypes.isNotEmpty(),
-                            onCheckedChange = {
-                                focusManager.clearFocus(force = true)
-                                keyboardController?.hide()
-                                onIntent(SearchIntent.SetSettingsSheetVisible(true))
-                            },
-                            iconChecked = AppIcons.Settings,
-                            iconUnchecked = AppIcons.Settings,
-                            activeText = stringResource(R.string.setting),
-                            inactiveText = stringResource(R.string.setting),
-                        )
-                        TopBarAnimatedActionButton(
-                            checked = state.matchMode == MatchMode.EXACT,
-                            onCheckedChange = {
-                                val newMode = if (state.matchMode == MatchMode.EXACT) MatchMode.DEFAULT else MatchMode.EXACT
-                                onIntent(SearchIntent.SetMatchMode(newMode))
-                            },
-                            iconChecked = AppIcons.PrecisionSearch,
-                            iconUnchecked = AppIcons.UnPrecisionSearch,
-                            activeText = stringResource(R.string.precision_search),
-                            inactiveText = stringResource(R.string.precision_search),
-                        )
-                        TopBarAnimatedActionButton(
-                            checked = !state.isAllScope,
-                            onCheckedChange = {
-                                focusManager.clearFocus(force = true)
-                                keyboardController?.hide()
-                                onIntent(SearchIntent.SetScopeSheetVisible(true))
-                            },
-                            iconChecked = AppIcons.Filter,
-                            iconUnchecked = AppIcons.Filter,
-                            activeText = stringResource(R.string.screen),
-                            inactiveText = stringResource(R.string.screen)
-                        )
-                    },
-                    scrollBehavior = scrollBehavior
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .adaptiveHorizontalPadding()
-                ) {
-                    SearchBar(
-                        query = queryInput,
-                        onQueryChange = { queryInput = it },
-                        onSearch = submitSearch,
-                        placeholder = searchLabel,
-                        trailingIcon = {
-                            if (queryInput.isNotEmpty()) {
-                                SmallPlainButton(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                    onClick = {
-                                        queryInput = ""
-                                        onIntent(SearchIntent.UpdateQuery(""))
-                                    },
-                                    icon = AppIcons.Close,
-                                    contentDescription = stringResource(R.string.clear)
-                                )
-                            }
-                        },
+            GlassMediumFlexibleTopAppBar(
+                title = stringResource(R.string.search),
+                navigationIcon = {
+                    TopBarNavigationButton(
+                        onClick = onBack,
+                        imageVector = AppIcons.Back
                     )
+                },
+                actions = {
+                    TopBarAnimatedActionButton(
+                        checked = isSourceGroupedMode || state.selectedSourceTypes.isNotEmpty(),
+                        onCheckedChange = {
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
+                            onIntent(SearchIntent.SetSettingsSheetVisible(true))
+                        },
+                        iconChecked = AppIcons.Settings,
+                        iconUnchecked = AppIcons.Settings,
+                        activeText = stringResource(R.string.setting),
+                        inactiveText = stringResource(R.string.setting),
+                    )
+                    TopBarAnimatedActionButton(
+                        checked = state.matchMode == MatchMode.EXACT,
+                        onCheckedChange = {
+                            val newMode = if (state.matchMode == MatchMode.EXACT) MatchMode.DEFAULT else MatchMode.EXACT
+                            onIntent(SearchIntent.SetMatchMode(newMode))
+                        },
+                        iconChecked = AppIcons.PrecisionSearch,
+                        iconUnchecked = AppIcons.UnPrecisionSearch,
+                        activeText = stringResource(R.string.precision_search),
+                        inactiveText = stringResource(R.string.precision_search),
+                    )
+                    TopBarAnimatedActionButton(
+                        checked = !state.isAllScope,
+                        onCheckedChange = {
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
+                            onIntent(SearchIntent.SetScopeSheetVisible(true))
+                        },
+                        iconChecked = AppIcons.Filter,
+                        iconUnchecked = AppIcons.Filter,
+                        activeText = stringResource(R.string.screen),
+                        inactiveText = stringResource(R.string.screen)
+                    )
+                },
+                scrollBehavior = scrollBehavior,
+                bottomContent = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .adaptiveHorizontalPadding()
+                    ) {
+                        SearchBar(
+                            query = queryInput,
+                            onQueryChange = { queryInput = it },
+                            onSearch = submitSearch,
+                            placeholder = searchLabel,
+                            trailingIcon = {
+                                if (queryInput.isNotEmpty()) {
+                                    SmallPlainButton(
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        onClick = {
+                                            queryInput = ""
+                                            onIntent(SearchIntent.UpdateQuery(""))
+                                        },
+                                        icon = AppIcons.Close,
+                                        contentDescription = stringResource(R.string.clear)
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
-            }
+            )
         },
         floatingActionButton = {
             val showFab = state.isSearching || (state.committedQuery.isNotBlank() && state.hasMore)

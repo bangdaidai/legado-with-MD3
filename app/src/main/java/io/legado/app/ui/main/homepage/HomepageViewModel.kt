@@ -1118,8 +1118,11 @@ private data class HomepageUiFlags(
 )
 
 private data class RankingKindsArgs(
+    @com.google.gson.annotations.SerializedName("isHomepageRankingGroup")
     val isHomepageRankingGroup: Boolean = false,
+    @com.google.gson.annotations.SerializedName("kindTitles")
     val kindTitles: List<String> = emptyList(),
+    @com.google.gson.annotations.SerializedName("kindUrls")
     val kindUrls: List<String?> = emptyList()
 )
 

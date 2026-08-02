@@ -211,6 +211,7 @@ class BookInfoViewModel(
     private var readRecordObserveJob: Job? = null
     private var relatedBooksLoadJob: Job? = null
     private var characterLoadJob: Job? = null
+    private var pendingSourceRefresh = false
 
     fun initData(intent: Intent) {
         initData(
@@ -406,11 +407,18 @@ class BookInfoViewModel(
     }
 
     fun onSourceEdited() {
+        if (!pendingSourceRefresh) return
+        pendingSourceRefresh = false
         currentBook?.let { book ->
             bookSource = bookSourceRepository.getBookSourceSync(book.origin)
             syncUiState()
             refreshBook(book)
         }
+    }
+
+    /** 标记即将进入书源编辑页；返回时（onSourceEdited）才会刷新，避免每次 resume 都刷新。 */
+    fun markPendingSourceRefresh() {
+        pendingSourceRefresh = true
     }
 
     fun onInfoEdited() {

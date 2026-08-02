@@ -39,6 +39,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.legado.app.help.book.BookplateHtmlRenderer
+import io.legado.app.ui.about.MarkdownSheet
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
@@ -237,12 +238,13 @@ fun BookplateManageScreen(
         )
     }
 
-    // 帮助 Sheet
-    if (state.showHelp) {
-        BookplateHelpSheet(
-            onDismissRequest = { onIntent(BookplateManageIntent.DismissHelp) },
-        )
-    }
+    // 帮助 Sheet（复用项目通用 MarkdownSheet）
+    MarkdownSheet(
+        show = state.showHelp,
+        title = "模板可用字段",
+        content = BookplateHelpMarkdown,
+        onDismissRequest = { onIntent(BookplateManageIntent.DismissHelp) },
+    )
 
     // 预览模板 Sheet（真实渲染为图片）
     state.previewTemplate?.let { template ->
@@ -310,124 +312,85 @@ private val PreviewVariables = mapOf(
     "wordCount" to "10万字",
 )
 
-/** 模板可用字段说明（分组 → 字段列表）。 */
-private val HelpFieldGroups = listOf(
-    "基本信息" to listOf(
-        "bookName" to "书名",
-        "author" to "作者",
-        "coverUrl" to "封面图 URL",
-        "intro" to "简介",
-        "kind" to "分类",
-        "wordCount" to "字数",
-        "originName" to "书源名称",
-        "totalChapterNum" to "总章节数",
-        "latestChapterTitle" to "最新章节标题",
-        "typeText" to "类型",
-        "charset" to "编码",
-    ),
-    "阅读进度" to listOf(
-        "readingStatusText" to "阅读状态",
-        "readingProgress" to "阅读进度（如 42%）",
-        "readChapters" to "已读章节",
-        "unreadChapters" to "未读章节数",
-        "readIteration" to "重读次数",
-        "readIterationText" to "重读次数（文本）",
-        "durChapterTitle" to "当前章节标题",
-    ),
-    "阅读统计" to listOf(
-        "totalReadTime" to "累计阅读时长",
-        "totalReadHours" to "累计小时",
-        "totalReadMinutes" to "累计分钟",
-        "readingDays" to "阅读天数",
-        "maxDayReadTime" to "单日最长阅读时长",
-        "maxDayReadDate" to "单日最长阅读日期",
-        "totalReadWords" to "累计已读字数",
-        "remainingWords" to "剩余字数",
-    ),
-    "日期时间" to listOf(
-        "firstReadTime" to "首次阅读时间",
-        "lastReadTime" to "最近阅读时间",
-        "finishReadTime" to "读完时间",
-        "addBookshelfTime" to "加入书架时间",
-        "lastCheckTime" to "最近检查更新时间",
-        "lastReadTimeRelative" to "最近阅读（相对时间）",
-    ),
-    "评分书评" to listOf(
-        "rating" to "评分（数值）",
-        "ratingStars" to "评分（星号）",
-        "ratingMax" to "评分上限",
-        "reviewContent" to "书评内容",
-    ),
-    "书摘想法" to listOf(
-        "annotationCount" to "书摘总数",
-        "thoughtCount" to "想法总数",
-        "latestAnnotation" to "最新书摘",
-        "latestAnnotationNote" to "最新书摘备注",
-        "latestAnnotationChapter" to "最新书摘所在章节",
-    ),
-    "其它" to listOf(
-        "protagonists" to "主角",
-        "tags" to "标签",
-        "tagCount" to "标签数",
-        "bookSourceName" to "书源名称",
-        "bookSourceGroup" to "书源分组",
-        "readTimeRank" to "阅读时长排名",
-    ),
-)
+/** 帮助内容（Markdown 格式，供 MarkdownSheet 渲染）。 */
+private val BookplateHelpMarkdown = """
+模板使用双大括号占位符（如 `{{bookName}}`）来引用书籍数据，生成藏书票时会自动替换为实际内容。
 
-@Composable
-private fun BookplateHelpSheet(
-    onDismissRequest: () -> Unit,
-) {
-    AppModalBottomSheet(
-        show = true,
-        onDismissRequest = onDismissRequest,
-        title = "模板可用字段",
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 480.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AppText(
-                text = "模板使用双大括号占位符（如 {{bookName}}）来引用书籍数据，" +
-                    "生成藏书票时会自动替换为实际内容。以下是全部支持的字段：",
-                style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-            HelpFieldGroups.forEach { (groupTitle, items) ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppText(
-                        text = groupTitle,
-                        style = LegadoTheme.typography.titleSmall,
-                        color = LegadoTheme.colorScheme.primary,
-                    )
-                    items.forEach { (key, desc) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            AppText(
-                                text = "{{$key}}",
-                                style = LegadoTheme.typography.bodyMedium,
-                                color = LegadoTheme.colorScheme.primary,
-                            )
-                            AppText(
-                                text = desc,
-                                style = LegadoTheme.typography.bodyMedium,
-                                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
+## 基本信息
+| 字段 | 说明 |
+|---|---|
+| `{{bookName}}` | 书名 |
+| `{{author}}` | 作者 |
+| `{{coverUrl}}` | 封面图 URL |
+| `{{intro}}` | 简介 |
+| `{{kind}}` | 分类 |
+| `{{wordCount}}` | 字数 |
+| `{{originName}}` | 来源名称 |
+| `{{totalChapterNum}}` | 总章节数 |
+| `{{latestChapterTitle}}` | 最新章节标题 |
+| `{{typeText}}` | 类型 |
+| `{{charset}}` | 编码 |
+
+## 阅读进度
+| 字段 | 说明 |
+|---|---|
+| `{{readingStatusText}}` | 阅读状态 |
+| `{{readingProgress}}` | 阅读进度（如 42%） |
+| `{{readChapters}}` | 已读章节 |
+| `{{unreadChapters}}` | 未读章节数 |
+| `{{readIteration}}` | 重读次数 |
+| `{{readIterationText}}` | 重读次数（文本） |
+| `{{durChapterTitle}}` | 当前章节标题 |
+
+## 阅读统计
+| 字段 | 说明 |
+|---|---|
+| `{{totalReadTime}}` | 累计阅读时长 |
+| `{{totalReadHours}}` | 累计小时 |
+| `{{totalReadMinutes}}` | 累计分钟 |
+| `{{readingDays}}` | 阅读天数 |
+| `{{maxDayReadTime}}` | 单日最长阅读时长 |
+| `{{maxDayReadDate}}` | 单日最长阅读日期 |
+| `{{totalReadWords}}` | 累计已读字数 |
+| `{{remainingWords}}` | 剩余字数 |
+
+## 日期时间
+| 字段 | 说明 |
+|---|---|
+| `{{firstReadTime}}` | 首次阅读时间 |
+| `{{lastReadTime}}` | 最近阅读时间 |
+| `{{finishReadTime}}` | 读完时间 |
+| `{{addBookshelfTime}}` | 加入书架时间 |
+| `{{lastCheckTime}}` | 最近检查更新时间 |
+| `{{lastReadTimeRelative}}` | 最近阅读（相对时间） |
+
+## 评分书评
+| 字段 | 说明 |
+|---|---|
+| `{{rating}}` | 评分（数值） |
+| `{{ratingStars}}` | 评分（星号） |
+| `{{ratingMax}}` | 评分上限 |
+| `{{reviewContent}}` | 书评内容 |
+
+## 书摘想法
+| 字段 | 说明 |
+|---|---|
+| `{{annotationCount}}` | 书摘总数 |
+| `{{thoughtCount}}` | 想法总数 |
+| `{{latestAnnotation}}` | 最新书摘 |
+| `{{latestAnnotationNote}}` | 最新书摘备注 |
+| `{{latestAnnotationChapter}}` | 最新书摘所在章节 |
+
+## 其它
+| 字段 | 说明 |
+|---|---|
+| `{{protagonists}}` | 主角 |
+| `{{tags}}` | 标签 |
+| `{{tagCount}}` | 标签数 |
+| `{{bookSourceName}}` | 书源名称 |
+| `{{bookSourceGroup}}` | 书源分组 |
+| `{{readTimeRank}}` | 阅读时长排名 |
+""".trimIndent()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -444,6 +407,13 @@ private fun BookplateEditSheet(
         show = true,
         onDismissRequest = { onIntent(BookplateManageIntent.CancelEdit) },
         title = if (editing.id == 0L) "新建模板" else "编辑模板",
+        endAction = {
+            MediumTonalButton(
+                onClick = { onIntent(BookplateManageIntent.SaveTemplate(name, html, group)) },
+                icon = AppIcons.Check,
+                contentDescription = "保存",
+            )
+        },
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -473,23 +443,6 @@ private fun BookplateEditSheet(
                 maxLines = 8,
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (editing.id != 0L) {
-                    MediumTonalButton(
-                        onClick = { onIntent(BookplateManageIntent.RequestDelete(editing)) },
-                        modifier = Modifier.weight(1f),
-                        text = "删除",
-                    )
-                }
-                MediumTonalButton(
-                    onClick = { onIntent(BookplateManageIntent.SaveTemplate(name, html, group)) },
-                    modifier = Modifier.weight(1f),
-                    text = "保存",
-                )
-            }
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
