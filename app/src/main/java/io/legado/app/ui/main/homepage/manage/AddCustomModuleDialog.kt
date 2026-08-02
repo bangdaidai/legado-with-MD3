@@ -92,21 +92,6 @@ private fun reconstructSelectedKinds(
             // JSON parse failure, fall through
         }
     }
-                val urls = if (obj.has("kindUrls")) {
-                    obj.getAsJsonArray("kindUrls").map { el ->
-                        if (el.isJsonNull) null else el.asString
-                    }
-                } else emptyList()
-                if (titles.isNotEmpty()) {
-                    return titles.mapIndexed { i, t ->
-                        ExploreKind(title = t, url = urls.getOrNull(i))
-                    }
-                }
-            }
-        } catch (_: Exception) {
-            // JSON parse failure, fall through
-        }
-    }
     // 单分类或组合标题回显
     if (prefillTitle.isNotBlank()) {
         // 组合标题（A·B·C）拆开成多个分类
