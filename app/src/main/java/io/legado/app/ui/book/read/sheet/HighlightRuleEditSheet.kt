@@ -1416,10 +1416,6 @@ private fun NinePatchEditorDialog(
 }
 
 /**
- * 紧凑的竖向边距滑块：标题+数值 在上，Slider 在下，适合一行四个
- */
-@Composable
-/**
  * 九宫格预览：背景图铺占大部分区域，中央虚线框代表文字，直观表达"背景包住文字"
  */
 @Composable
