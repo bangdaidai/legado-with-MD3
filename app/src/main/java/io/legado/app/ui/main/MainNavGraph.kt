@@ -134,6 +134,7 @@ import io.legado.app.ui.rss.source.edit.RssSourceEditViewModel
 import io.legado.app.ui.rss.source.manage.RssSourceRouteScreen
 import io.legado.app.ui.rss.subscription.RuleSubRouteScreen
 import io.legado.app.utils.openUrl
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.toggleSystemBar
