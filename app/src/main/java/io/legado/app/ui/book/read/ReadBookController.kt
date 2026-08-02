@@ -800,8 +800,14 @@ class ReadBookController(
         viewModel.viewModelScope.launch(Dispatchers.IO) {
             val dao = appDb.bookKnowledgeDao
             val existing = dao.getCharacterProfile(book.bookUrl, name)
+                ?: dao.getCharacterByNameIncludeDeleted(book.bookUrl, name)
             if (existing != null) {
-                dao.upsertCharacterProfile(existing.copy(isProtagonist = true))
+                dao.upsertCharacterProfile(
+                    existing.copy(
+                        status = io.legado.app.data.entities.BookCharacterProfile.STATUS_ACTIVE,
+                        isProtagonist = true,
+                    )
+                )
             } else {
                 val newProfile = io.legado.app.data.entities.BookCharacterProfile(
                     id = java.util.UUID.randomUUID().toString(),

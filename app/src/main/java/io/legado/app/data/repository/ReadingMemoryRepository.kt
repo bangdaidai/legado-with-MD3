@@ -465,7 +465,7 @@ class ReadingMemoryRepository(
 
         val now = System.currentTimeMillis()
         names.forEach { name ->
-            val existing = bookKnowledgeDao.getProtagonistByName(bookUrl, name)
+            val existing = bookKnowledgeDao.getCharacterByNameIncludeDeleted(bookUrl, name)
             if (existing == null) {
                 // 创建新的角色条目并标记为主角
                 val profile = BookCharacterProfile(
@@ -478,6 +478,8 @@ class ReadingMemoryRepository(
                     updatedAt = now,
                 )
                 bookKnowledgeDao.upsertCharacterProfile(profile)
+            } else if (existing.status == BookCharacterProfile.STATUS_DELETED) {
+                // 用户已删除，不再自动重建
             } else if (!existing.isProtagonist) {
                 // 已有角色但未标记为主角，更新标记
                 bookKnowledgeDao.setProtagonist(bookUrl, name, true, now)
@@ -516,7 +518,7 @@ class ReadingMemoryRepository(
      * 设置/取消某角色的主角标记。
      */
     suspend fun setProtagonist(bookUrl: String, name: String, isProtagonist: Boolean) {
-        val existing = bookKnowledgeDao.getProtagonistByName(bookUrl, name)
+        val existing = bookKnowledgeDao.getCharacterByNameIncludeDeleted(bookUrl, name)
         if (existing == null) {
             if (!isProtagonist) return
             bookKnowledgeDao.upsertCharacterProfile(
@@ -526,6 +528,16 @@ class ReadingMemoryRepository(
                     name = name,
                     isProtagonist = true,
                     role = "主角",
+                )
+            )
+        } else if (existing.status == BookCharacterProfile.STATUS_DELETED) {
+            // 用户主动重新添加：复活已删除的角色
+            if (!isProtagonist) return
+            bookKnowledgeDao.upsertCharacterProfile(
+                existing.copy(
+                    status = BookCharacterProfile.STATUS_ACTIVE,
+                    isProtagonist = true,
+                    updatedAt = System.currentTimeMillis(),
                 )
             )
         } else {

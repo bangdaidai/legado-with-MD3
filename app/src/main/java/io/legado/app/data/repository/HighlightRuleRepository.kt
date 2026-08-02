@@ -209,6 +209,7 @@ class HighlightRuleRepository(
             bgMarginEnd = runCatching { rule.bgMarginEnd }.getOrDefault(0f).coerceIn(0f, 32f),
             bgMarginTop = runCatching { rule.bgMarginTop }.getOrDefault(0f).coerceIn(0f, 32f),
             bgMarginBottom = runCatching { rule.bgMarginBottom }.getOrDefault(0f).coerceIn(0f, 32f),
+            underlineBelowText = runCatching { rule.underlineBelowText }.getOrDefault(false),
         )
     }
 

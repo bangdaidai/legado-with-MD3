@@ -30,6 +30,7 @@ object DatabaseMigrations {
             migration_105_106,
             migration_106_107,
             migration_107_108,
+            migration_108_109,
         )
     }
 
@@ -760,6 +761,12 @@ object DatabaseMigrations {
     private val migration_107_108 = object : Migration(107, 108) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN fontSizeOffset INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private val migration_108_109 = object : Migration(108, 109) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineBelowText INTEGER NOT NULL DEFAULT 0")
         }
     }
 

@@ -120,9 +120,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             canvas.translate(0f, scrollY.toFloat())
         }
         check(!visibleRect.isEmpty) { "visibleRect 为空" }
-        // 高亮背景允许水平延伸到页边距之外：裁剪区在水平方向放宽到整屏，
-        // 垂直仍限制在内容区。文字坐标本就在内容区内，放宽不会溢出。
-        canvas.clipRect(0f, visibleRect.top, width.toFloat(), visibleRect.bottom)
+        // 高亮背景允许延伸到页边距之外：裁剪区放宽到整个 View 尺寸。
+        // 文字坐标本就在内容区内，放宽不会导致正文溢出。
+        canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
         drawPage(canvas)
     }
 

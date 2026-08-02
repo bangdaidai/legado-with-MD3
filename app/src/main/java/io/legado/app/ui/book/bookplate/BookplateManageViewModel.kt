@@ -22,7 +22,7 @@ class BookplateManageViewModel(
 
     private val _uiState = MutableStateFlow(
         BookplateManageUiState(
-            selectedTemplateId = repository.getSelectedTemplateId()
+            defaultTemplateId = repository.getSelectedTemplateId()
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -38,12 +38,14 @@ class BookplateManageViewModel(
         when (intent) {
             is BookplateManageIntent.Load -> load()
             is BookplateManageIntent.SelectGroup -> selectGroup(intent.group)
-            is BookplateManageIntent.SelectTemplate -> selectTemplate(intent.id)
+            is BookplateManageIntent.SetDefault -> setDefault(intent.id)
             is BookplateManageIntent.StartEdit -> _uiState.update {
                 it.copy(editing = intent.template ?: BookplateTemplate(groupName = it.selectedGroup ?: ""))
             }
             is BookplateManageIntent.CancelEdit -> _uiState.update { it.copy(editing = null) }
             is BookplateManageIntent.SaveTemplate -> saveTemplate(intent.name, intent.html, intent.group)
+            is BookplateManageIntent.ShowPreview -> _uiState.update { it.copy(previewTemplate = intent.template) }
+            is BookplateManageIntent.DismissPreview -> _uiState.update { it.copy(previewTemplate = null) }
             is BookplateManageIntent.RequestDelete -> _uiState.update { it.copy(deleteConfirm = intent.template) }
             is BookplateManageIntent.ConfirmDelete -> confirmDelete()
             is BookplateManageIntent.DismissDelete -> _uiState.update { it.copy(deleteConfirm = null) }
@@ -51,6 +53,8 @@ class BookplateManageViewModel(
             is BookplateManageIntent.DismissGroupManage -> _uiState.update { it.copy(showGroupManage = false) }
             is BookplateManageIntent.RenameGroup -> renameGroup(intent.oldName, intent.newName)
             is BookplateManageIntent.DeleteGroup -> deleteGroup(intent.group)
+            is BookplateManageIntent.ShowHelp -> _uiState.update { it.copy(showHelp = true) }
+            is BookplateManageIntent.DismissHelp -> _uiState.update { it.copy(showHelp = false) }
             is BookplateManageIntent.RestoreBuiltins -> restoreBuiltins()
         }
     }
@@ -93,8 +97,8 @@ class BookplateManageViewModel(
         }
     }
 
-    private fun selectTemplate(id: Long) {
-        _uiState.update { it.copy(selectedTemplateId = id) }
+    private fun setDefault(id: Long) {
+        _uiState.update { it.copy(defaultTemplateId = id) }
         repository.setSelectedTemplateId(id)
     }
 

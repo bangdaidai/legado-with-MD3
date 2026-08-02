@@ -1,5 +1,7 @@
 package io.legado.app.ui.book.bookplate
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,27 +11,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.RadioButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import io.legado.app.help.book.BookplateHtmlRenderer
+import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.GroupManageBottomSheet
@@ -42,6 +51,7 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.tabRow.AppTabRow
+import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
@@ -133,6 +143,13 @@ fun BookplateManageScreen(
                                     showMenu = false
                                 }
                             )
+                            RoundDropdownMenuItem(
+                                text = "帮助",
+                                onClick = {
+                                    onIntent(BookplateManageIntent.ShowHelp)
+                                    showMenu = false
+                                }
+                            )
                         }
                     }
                 },
@@ -178,27 +195,28 @@ fun BookplateManageScreen(
                                 if (isNotEmpty()) append(" · ")
                                 append("内置")
                             }
+                            if (template.id == state.defaultTemplateId) {
+                                if (isNotEmpty()) append(" · ")
+                                append("默认")
+                            }
                         }.ifBlank { null },
-                        isSelected = template.id == state.selectedTemplateId,
+                        isSelected = template.id == state.defaultTemplateId,
                         onToggleSelection = {
-                            onIntent(BookplateManageIntent.SelectTemplate(template.id))
-                        },
-                        leadingContent = {
-                            RadioButton(
-                                selected = template.id == state.selectedTemplateId,
-                                onClick = {
-                                    onIntent(BookplateManageIntent.SelectTemplate(template.id))
-                                },
-                            )
-                        },
-                        onClickEdit = {
-                            onIntent(BookplateManageIntent.StartEdit(template))
+                            onIntent(BookplateManageIntent.SetDefault(template.id))
                         },
                         trailingAction = {
                             SmallPlainButton(
-                                onClick = {
-                                    onIntent(BookplateManageIntent.RequestDelete(template))
-                                },
+                                onClick = { onIntent(BookplateManageIntent.ShowPreview(template)) },
+                                icon = Icons.Default.Visibility,
+                                contentDescription = "预览",
+                            )
+                            SmallPlainButton(
+                                onClick = { onIntent(BookplateManageIntent.StartEdit(template)) },
+                                icon = AppIcons.Edit,
+                                contentDescription = "编辑",
+                            )
+                            SmallPlainButton(
+                                onClick = { onIntent(BookplateManageIntent.RequestDelete(template)) },
                                 icon = AppIcons.Delete,
                                 contentDescription = "删除",
                             )
@@ -216,6 +234,197 @@ fun BookplateManageScreen(
             groups = state.groups,
             onIntent = onIntent,
         )
+    }
+
+    // 帮助 Sheet
+    if (state.showHelp) {
+        BookplateHelpSheet(
+            onDismissRequest = { onIntent(BookplateManageIntent.DismissHelp) },
+        )
+    }
+
+    // 预览模板 Sheet（真实渲染为图片）
+    state.previewTemplate?.let { template ->
+        var bitmap by remember(template.id) { mutableStateOf<Bitmap?>(null) }
+        var rendering by remember(template.id) { mutableStateOf(true) }
+        LaunchedEffect(template.id) {
+            rendering = true
+            bitmap = BookplateHtmlRenderer.renderCustom(context, template.htmlContent, PreviewVariables)
+            rendering = false
+        }
+        AppModalBottomSheet(
+            show = true,
+            onDismissRequest = { onIntent(BookplateManageIntent.DismissPreview) },
+            title = "预览：${template.name.ifBlank { "未命名" }}",
+        ) {
+            when {
+                rendering -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+                bitmap != null -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                else -> AppText(
+                    text = "渲染失败",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/** 预览用示例变量。 */
+private val PreviewVariables = mapOf(
+    "bookName" to "示例书名",
+    "author" to "示例作者",
+    "coverUrl" to "",
+    "rating" to "4.5",
+    "ratingStars" to "★★★★☆",
+    "readingStatusText" to "在读",
+    "readingProgress" to "42%",
+    "totalReadTime" to "12小时30分",
+    "readingDays" to "15",
+    "firstReadTime" to "2026-01-01",
+    "lastReadTime" to "2026-08-02",
+    "reviewContent" to "这是一段示例书评，用于预览模板效果。",
+    "intro" to "这是一本示例书籍的简介。",
+    "kind" to "示例分类",
+    "wordCount" to "10万字",
+)
+
+/** 模板可用字段说明（分组 → 字段列表）。 */
+private val HelpFieldGroups = listOf(
+    "基本信息" to listOf(
+        "bookName" to "书名",
+        "author" to "作者",
+        "coverUrl" to "封面图 URL",
+        "intro" to "简介",
+        "kind" to "分类",
+        "wordCount" to "字数",
+        "originName" to "书源名称",
+        "totalChapterNum" to "总章节数",
+        "latestChapterTitle" to "最新章节标题",
+        "typeText" to "类型",
+        "charset" to "编码",
+    ),
+    "阅读进度" to listOf(
+        "readingStatusText" to "阅读状态",
+        "readingProgress" to "阅读进度（如 42%）",
+        "readChapters" to "已读章节",
+        "unreadChapters" to "未读章节数",
+        "readIteration" to "重读次数",
+        "readIterationText" to "重读次数（文本）",
+        "durChapterTitle" to "当前章节标题",
+    ),
+    "阅读统计" to listOf(
+        "totalReadTime" to "累计阅读时长",
+        "totalReadHours" to "累计小时",
+        "totalReadMinutes" to "累计分钟",
+        "readingDays" to "阅读天数",
+        "maxDayReadTime" to "单日最长阅读时长",
+        "maxDayReadDate" to "单日最长阅读日期",
+        "totalReadWords" to "累计已读字数",
+        "remainingWords" to "剩余字数",
+    ),
+    "日期时间" to listOf(
+        "firstReadTime" to "首次阅读时间",
+        "lastReadTime" to "最近阅读时间",
+        "finishReadTime" to "读完时间",
+        "addBookshelfTime" to "加入书架时间",
+        "lastCheckTime" to "最近检查更新时间",
+        "lastReadTimeRelative" to "最近阅读（相对时间）",
+    ),
+    "评分书评" to listOf(
+        "rating" to "评分（数值）",
+        "ratingStars" to "评分（星号）",
+        "ratingMax" to "评分上限",
+        "reviewContent" to "书评内容",
+    ),
+    "书摘想法" to listOf(
+        "annotationCount" to "书摘总数",
+        "thoughtCount" to "想法总数",
+        "latestAnnotation" to "最新书摘",
+        "latestAnnotationNote" to "最新书摘备注",
+        "latestAnnotationChapter" to "最新书摘所在章节",
+    ),
+    "其它" to listOf(
+        "protagonists" to "主角",
+        "tags" to "标签",
+        "tagCount" to "标签数",
+        "bookSourceName" to "书源名称",
+        "bookSourceGroup" to "书源分组",
+        "readTimeRank" to "阅读时长排名",
+    ),
+)
+
+@Composable
+private fun BookplateHelpSheet(
+    onDismissRequest: () -> Unit,
+) {
+    AppModalBottomSheet(
+        show = true,
+        onDismissRequest = onDismissRequest,
+        title = "模板可用字段",
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppText(
+                text = "模板使用双大括号占位符（如 {{bookName}}）来引用书籍数据，" +
+                    "生成藏书票时会自动替换为实际内容。以下是全部支持的字段：",
+                style = LegadoTheme.typography.bodySmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+            HelpFieldGroups.forEach { (groupTitle, items) ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AppText(
+                        text = groupTitle,
+                        style = LegadoTheme.typography.titleSmall,
+                        color = LegadoTheme.colorScheme.primary,
+                    )
+                    items.forEach { (key, desc) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            AppText(
+                                text = "{{$key}}",
+                                style = LegadoTheme.typography.bodyMedium,
+                                color = LegadoTheme.colorScheme.primary,
+                            )
+                            AppText(
+                                text = desc,
+                                style = LegadoTheme.typography.bodyMedium,
+                                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
@@ -299,29 +508,26 @@ private fun GroupSelector(
         modifier = Modifier.fillMaxWidth(),
     ) {
         AppTextField(
-            value = selectedGroup.ifBlank { "未分组" },
-            onValueChange = {},
-            readOnly = true,
+            value = selectedGroup,
+            onValueChange = onSelect,
             label = "分组",
             singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true),
         )
-        RoundDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            RoundDropdownMenuItem(
-                text = "未分组",
-                onClick = { onSelect(""); expanded = false },
-            )
-            groups.forEach { g ->
-                RoundDropdownMenuItem(
-                    text = g,
-                    onClick = { onSelect(g); expanded = false },
-                )
+        if (groups.isNotEmpty()) {
+            RoundDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                groups.forEach { g ->
+                    RoundDropdownMenuItem(
+                        text = g,
+                        onClick = { onSelect(g); expanded = false },
+                    )
+                }
             }
         }
     }

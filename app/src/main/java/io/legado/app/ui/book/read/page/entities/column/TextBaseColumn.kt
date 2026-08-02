@@ -33,6 +33,7 @@ interface TextBaseColumn : BaseColumn {
     val bgMarginEnd: Float
     val bgMarginTop: Float
     val bgMarginBottom: Float
+    val underlineBelowText: Boolean
     var selected: Boolean
     var isSearchResult: Boolean
 }

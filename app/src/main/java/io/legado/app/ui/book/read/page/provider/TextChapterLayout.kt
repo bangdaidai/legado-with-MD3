@@ -1319,6 +1319,48 @@ class TextChapterLayout(
         return (padStartDp * density) to (padEndDp * density)
     }
 
+    /*
+     * ============================================================================
+     * TODO: 让九宫格高亮背景像「内联盒子」一样嵌入文字流（参考部分阅读软件的效果）
+     * ----------------------------------------------------------------------------
+     * 目标：默认（内外边距=0）时，高亮段的背景图四角占用真实排版空间，前后普通文字
+     *       被自然推开、不重叠，看起来背景图“排进了”文字流里，而不是浮在文字底下。
+     *
+     * 当前实现：背景图只是绘制层的底图（见 TextLine.drawBgImageSegment 的 fit==3 分支，
+     *   四角靠 cornerL/cornerR 向文字外侧外扩），排版层并不为四角预留宽度，所以四角会
+     *   压在相邻文字上。calcNineSliceMargin 目前只处理用户设置的外边距(bgMargin*)，
+     *   且只在落位层 x 上偏移，未同步到断行/对齐，会造成“前后文被压缩”“行尾溢出”。
+     *
+     * 正确做法需要在「排版宽度预算」里为每个高亮段首尾各预留 cornerL / cornerR 像素：
+     *
+     *   1) 断行层 ZhLayout（ZhLayout.kt 的 init 累加 lineW += cw 处）：
+     *      当某字符是九宫格高亮段的“首字符”，额外 lineW += cornerL；
+     *      当是“末字符”，额外 lineW += cornerR。
+     *      否则断行位置算不准，导致行尾溢出。
+     *      cornerL/cornerR 依赖 bitmap 宽高与行高：
+     *        s = lineHeight / bh
+     *        cornerL = npLeft  * bw * s   （上限约 0.5*文字宽，防重叠）
+     *        cornerR = npRight * bw * s
+     *      bitmap 可用 TextLine.getBgBitmap(bgImage) 同步取到。
+     *
+     *   2) desiredWidth（setTypeText 里 desiredWidth = widths.fastSum() 处）：
+     *      加上该行内所有高亮段的 cornerL+cornerR 之和，
+     *      使 residualWidth = visibleWidth - desiredWidth 正确，两端对齐才不会压缩前后文。
+     *
+     *   3) 落位层 addCharsToLineNatural / addCharsToLineMiddle：
+     *      进入高亮段前 x += cornerL（文字被推到盒子内部），
+     *      离开高亮段后 x += cornerR；
+     *      并把右侧预留通过 exceed(..., extraRightMargin = cornerR) 传入。
+     *      用户设置的 bgMargin* 在此基础上再叠加。
+     *
+     *   4) 边界：cornerL/cornerR 需 coerceAtMost(可用宽度的一半)，
+     *      避免宽图 + 短文字时四角互相重叠或把整行挤爆。
+     *
+     * 风险：改动触及断行核心逻辑，会改变换行位置、两端对齐分配、行尾溢出补偿，
+     *      需回归测试：长高亮跨多行 / 行末高亮换行 / 中间高亮 / 纯正文行 / 两端对齐关闭。
+     * ============================================================================
+     */
+
     /**
      * 自然排列
      */
@@ -1602,12 +1644,7 @@ class TextChapterLayout(
                 i++
             }
             val segEnd = i
-            // 与绘制端保持一致：有自定义字体走字体文件，否则在当前阅读字体上派生字重/斜体
-            val typeface = if (fontPath.isNotEmpty()) {
-                TextColumn.getTypeface(fontPath, fontWeight, isItalic)
-            } else {
-                TextColumn.applyStyleTypeface(textPaint.typeface, fontWeight, isItalic)
-            } ?: continue
+            val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic) ?: continue
             measurePaint.typeface = typeface
             val segLen = segEnd - segStart
             val segWidths = FloatArray(segLen)

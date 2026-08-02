@@ -139,8 +139,9 @@ fun HomepageModuleFeed(
             processedModules.forEach { moduleUi ->
                 val rankingSources =
                     (moduleUi.state as? ModuleLoadState.Rankings)?.sources
+                val selectedSourceKey = selectedRankingSources[moduleUi.globalId]
                 val selectedRankingSource = rankingSources?.firstOrNull {
-                    it.title == selectedRankingSources[moduleUi.globalId]
+                    "${it.title}||${it.url}" == selectedSourceKey
                 } ?: rankingSources?.firstOrNull()
                 val displayState = selectedRankingSource?.state ?: moduleUi.state
 
@@ -148,10 +149,10 @@ fun HomepageModuleFeed(
                     ModuleHeader(
                         title = rankingSources?.firstOrNull()?.title ?: moduleUi.title,
                         sourceTabs = rankingSources,
-                        selectedSourceTitle = selectedRankingSource?.title,
-                        onSourceSelected = { sourceTitle ->
+                        selectedSourceKey = selectedRankingSource?.let { "${it.title}||${it.url}" },
+                        onSourceSelected = { sourceTitle, sourceUrl ->
                             selectedRankingSources = HashMap(selectedRankingSources).apply {
-                                put(moduleUi.globalId, sourceTitle)
+                                put(moduleUi.globalId, "${sourceTitle}||${sourceUrl}")
                             }
                         },
                         onNavigate = if (moduleUi.type == HomepageModuleType.ButtonGroup) {
@@ -509,8 +510,8 @@ fun HomepageModuleFeed(
 private fun ModuleHeader(
     title: String,
     sourceTabs: ImmutableList<HomepageRankingSourceUi>?,
-    selectedSourceTitle: String?,
-    onSourceSelected: (String) -> Unit,
+    selectedSourceKey: String?,
+    onSourceSelected: (String, String?) -> Unit,
     onNavigate: (() -> Unit)? = null,
 ) {
     val sourceTabItems = sourceTabs.orEmpty()
@@ -530,13 +531,14 @@ private fun ModuleHeader(
             ) {
                 items(
                     items = sourceTabItems,
-                    key = { it.title },
+                    key = { "${it.title}||${it.url}" },
                 ) { source ->
-                    val isSelected = selectedSourceTitle == source.title
+                    val sourceKey = "${source.title}||${source.url}"
+                    val isSelected = sourceKey == selectedSourceKey
                     ModuleHeaderTab(
                         title = source.title,
                         selected = isSelected,
-                        onClick = { onSourceSelected(source.title) },
+                        onClick = { onSourceSelected(source.title, source.url) },
                     )
                 }
             }

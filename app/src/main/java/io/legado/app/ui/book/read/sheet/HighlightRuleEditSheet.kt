@@ -142,6 +142,7 @@ fun HighlightRuleEditSheet(
         show,
         rule
     ) { mutableStateOf(initial.underlineSvgPath.orEmpty()) }
+    var underlineBelowText by remember(show, rule) { mutableStateOf(initial.underlineBelowText) }
     var bgImage by remember(show, rule) { mutableStateOf(initial.bgImage.orEmpty()) }
     var bgImageFit by remember(show, rule) { mutableIntStateOf(initial.bgImageFit) }
     var bgImageScale by remember(show, rule) { mutableFloatStateOf(initial.bgImageScale) }
@@ -274,6 +275,7 @@ fun HighlightRuleEditSheet(
                             underlineWidth = underlineWidth,
                             underlineOffset = underlineOffset,
                             underlineSvgPath = underlineSvgPath.ifBlank { null },
+                            underlineBelowText = underlineBelowText,
                             bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
                             bgImageFit = bgImageFit,
                             bgImageScale = bgImageScale,
@@ -500,6 +502,12 @@ fun HighlightRuleEditSheet(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.underline_below_text),
+                        description = stringResource(R.string.underline_below_text_desc),
+                        checked = underlineBelowText,
+                        onCheckedChange = { underlineBelowText = it },
+                    )
                 }
             }
 
@@ -774,6 +782,9 @@ fun HighlightRuleEditSheet(
                 bgMarginTop = bgMarginTop,
                 bgMarginBottom = bgMarginBottom,
                 fontSizeOffset = fontSizeOffset,
+                fontWeight = fontWeight,
+                isItalic = isItalic,
+                underlineBelowText = underlineBelowText,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -817,6 +828,9 @@ fun HighlightRuleEditSheet(
                     bgMarginTop = bgMarginTop,
                     bgMarginBottom = bgMarginBottom,
                     fontSizeOffset = fontSizeOffset,
+                    fontWeight = fontWeight,
+                    isItalic = isItalic,
+                    underlineBelowText = underlineBelowText,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -941,6 +955,8 @@ fun HighlightRuleEditSheet(
     )
 }
 
+private const val PREVIEW_BASE_FONT_SIZE = 16
+
 @Composable
 private fun HighlightRulePreview(
     label: String,
@@ -970,6 +986,9 @@ private fun HighlightRulePreview(
     bgMarginTop: Float = 0f,
     bgMarginBottom: Float = 0f,
     fontSizeOffset: Int = 0,
+    fontWeight: Int = 400,
+    isItalic: Boolean = false,
+    underlineBelowText: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -1008,7 +1027,9 @@ private fun HighlightRulePreview(
         }
     }
 
-    val annotated = remember(sampleText, matchRanges, resolvedTextColor, bgColor) {
+    val annotated = remember(
+        sampleText, matchRanges, resolvedTextColor, bgColor, fontWeight, isItalic, fontSizeOffset
+    ) {
         buildAnnotatedString {
             append(sampleText)
             matchRanges.forEach { range ->
@@ -1016,6 +1037,18 @@ private fun HighlightRulePreview(
                     SpanStyle(
                         color = resolvedTextColor,
                         background = if (bgColor != null && bgBitmap == null) Color(bgColor) else Color.Unspecified,
+                        fontWeight = when {
+                            fontWeight >= 700 -> androidx.compose.ui.text.font.FontWeight.Bold
+                            fontWeight <= 300 -> androidx.compose.ui.text.font.FontWeight.Light
+                            else -> null
+                        },
+                        fontStyle = if (isItalic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+                        // 字号偏移只作用于命中文字，不影响整行
+                        fontSize = if (fontSizeOffset != 0) {
+                            (PREVIEW_BASE_FONT_SIZE + fontSizeOffset).sp
+                        } else {
+                            androidx.compose.ui.unit.TextUnit.Unspecified
+                        },
                     ),
                     range.first,
                     (range.last + 1).coerceAtMost(sampleText.length),
@@ -1061,7 +1094,7 @@ private fun HighlightRulePreview(
                 val textResult = textMeasurer.measure(
                     text = annotated,
                     style = TextStyle(
-                        fontSize = (16 + fontSizeOffset).sp,
+                        fontSize = PREVIEW_BASE_FONT_SIZE.sp,
                         color = defaultTextColor,
                     ),
                     maxLines = 3,
@@ -1136,35 +1169,40 @@ private fun HighlightRulePreview(
                     }
                 }
 
-                drawText(textResult)
-
-                if (underlineMode > 0) {
-                    val strokeWidth = underlineWidth.dp.toPx()
-                    matchRanges.forEach { range ->
-                        val start = range.first
-                        val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
-                        if (start >= endExclusive) return@forEach
-                        var offset = start
-                        while (offset < endExclusive) {
-                            val line = textResult.getLineForOffset(offset)
-                            val lineEnd = textResult.getLineEnd(line, visibleEnd = true)
-                            val segEnd = minOf(endExclusive, lineEnd)
-                            if (segEnd <= offset) break
-                            val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
-                            val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
-                            val y = textResult.getLineBottom(line) - underlineOffset.dp.toPx()
-                            drawUnderlineSegment(
-                                mode = underlineMode,
-                                color = resolvedUnderlineColor,
-                                strokeWidth = strokeWidth,
-                                startX = minOf(left, right),
-                                endX = maxOf(left, right),
-                                y = y,
-                            )
-                            offset = segEnd
+                // 下划线绘制块（可在文字上层或下层）
+                val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
+                    if (underlineMode > 0) {
+                        val strokeWidth = underlineWidth.dp.toPx()
+                        matchRanges.forEach { range ->
+                            val start = range.first
+                            val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                            if (start >= endExclusive) return@forEach
+                            var offset = start
+                            while (offset < endExclusive) {
+                                val line = textResult.getLineForOffset(offset)
+                                val lineEnd = textResult.getLineEnd(line, visibleEnd = true)
+                                val segEnd = minOf(endExclusive, lineEnd)
+                                if (segEnd <= offset) break
+                                val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
+                                val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
+                                val y = textResult.getLineBottom(line) - underlineOffset.dp.toPx()
+                                drawUnderlineSegment(
+                                    mode = underlineMode,
+                                    color = resolvedUnderlineColor,
+                                    strokeWidth = strokeWidth,
+                                    startX = minOf(left, right),
+                                    endX = maxOf(left, right),
+                                    y = y,
+                                )
+                                offset = segEnd
+                            }
                         }
                     }
                 }
+
+                if (underlineBelowText) drawUnderlinesBlock()
+                drawText(textResult)
+                if (!underlineBelowText) drawUnderlinesBlock()
             }
         }
     }

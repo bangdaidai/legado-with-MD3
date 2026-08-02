@@ -157,8 +157,8 @@ interface BookKnowledgeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOutlineNode(node: BookOutlineNode)
 
-    @Query("delete from book_character_profiles where bookUrl = :bookUrl and id = :characterId")
-    suspend fun deleteCharacterProfile(bookUrl: String, characterId: String)
+    @Query("update book_character_profiles set status = ${BookCharacterProfile.STATUS_DELETED}, updatedAt = :now where bookUrl = :bookUrl and id = :characterId")
+    suspend fun deleteCharacterProfile(bookUrl: String, characterId: String, now: Long = System.currentTimeMillis())
 
     @Query("update book_character_relations set status = ${BookCharacterProfile.STATUS_DELETED} where fromCharacterId = :characterId or toCharacterId = :characterId")
     suspend fun deleteRelationsForCharacter(characterId: String)
@@ -197,6 +197,17 @@ interface BookKnowledgeDao {
         """
     )
     suspend fun getProtagonistByName(bookUrl: String, name: String): BookCharacterProfile?
+
+    /** 按书+名查角色（包含已删除，用于自动提取去重） */
+    @Query(
+        """
+        select * from book_character_profiles
+        where bookUrl = :bookUrl
+          and name = :name
+        limit 1
+        """
+    )
+    suspend fun getCharacterByNameIncludeDeleted(bookUrl: String, name: String): BookCharacterProfile?
 
     /** 设置/取消主角标志 */
     @Query("UPDATE book_character_profiles SET isProtagonist = :isProtagonist, updatedAt = :updatedAt WHERE bookUrl = :bookUrl AND name = :name")

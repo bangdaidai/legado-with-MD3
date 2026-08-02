@@ -30,6 +30,7 @@ data class CharStyle(
     val bgMarginEnd: Float = 0f,
     val bgMarginTop: Float = 0f,
     val bgMarginBottom: Float = 0f,
+    val underlineBelowText: Boolean = false,
 ) {
     val hasStyle: Boolean
         get() = textColor != null || bgColor != null || underlineMode != 0 || bgImage.isNotEmpty() || fontPath.isNotEmpty() || fontWeight != 400 || isItalic || fontSizeOffset != 0

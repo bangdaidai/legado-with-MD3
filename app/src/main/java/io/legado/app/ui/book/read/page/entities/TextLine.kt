@@ -171,6 +171,7 @@ data class TextLine(
     private fun drawTextLine(view: ContentTextView, canvas: Canvas) {
         drawStyledBackgrounds(canvas)
         drawBgColors(canvas)
+        drawStyledUnderlines(canvas, belowText = true)
         if (checkFastDraw()) {
             fastDrawTextLine(view, canvas)
         } else {
@@ -183,7 +184,7 @@ data class TextLine(
             canvas.drawLine(lineStart + indentWidth, lineY, lineEnd, lineY, linePaint)
         }
 
-        drawStyledUnderlines(canvas)
+        drawStyledUnderlines(canvas, belowText = false)
 
         val renderStyle = ChapterProvider.renderStyle
         if (renderStyle.underline && !isImage && ReadBook.book?.isImage != true) {
@@ -379,9 +380,13 @@ data class TextLine(
     /**
      * 绘制高亮规则匹配文本的下划线段
      */
-    private fun drawStyledUnderlines(canvas: Canvas) {
+    private fun drawStyledUnderlines(canvas: Canvas, belowText: Boolean) {
         if (isImage || columns.isEmpty()) return
-        if (columns.none { (it as? TextBaseColumn)?.underlineMode?.let { m -> m != 0 } == true }) return
+        if (columns.none {
+            val c = it as? TextBaseColumn
+            c?.underlineMode?.let { m -> m != 0 } == true &&
+                c.underlineBelowText == belowText
+        }) return
         var rangeStart = 0f
         var rangeEnd = 0f
         var mode = 0
@@ -393,6 +398,9 @@ data class TextLine(
         columns.forEachIndexed { index, column ->
             val textColumn = column as? TextBaseColumn
             val currentMode = textColumn?.underlineMode ?: 0
+            val currentBelowText = textColumn?.underlineBelowText ?: false
+            // 只绘制匹配当前层级（文字上/下）的下划线
+            val effectiveMode = if (currentBelowText == belowText) currentMode else 0
             val currentColor = textColumn?.underlineColor
                 ?: textColumn?.textColor
                 ?: ChapterProvider.renderStyle.textColor
@@ -400,34 +408,34 @@ data class TextLine(
             val currentOffset = textColumn?.underlineOffset ?: 2f
             val currentSvgPath = textColumn?.underlineSvgPath ?: ""
             val shouldContinue = active &&
-                currentMode == mode &&
+                effectiveMode == mode &&
                 currentColor == color &&
                 currentWidth == width &&
                 currentOffset == offset &&
                 currentSvgPath == svgPath
             when {
-                currentMode == 0 && active -> {
+                effectiveMode == 0 && active -> {
                     drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath)
                     active = false
                 }
-                currentMode != 0 && !active -> {
+                effectiveMode != 0 && !active -> {
                     rangeStart = textColumn!!.start
                     rangeEnd = textColumn.end
-                    mode = currentMode
+                    mode = effectiveMode
                     color = currentColor
                     width = currentWidth
                     offset = currentOffset
                     svgPath = currentSvgPath
                     active = true
                 }
-                currentMode != 0 && shouldContinue -> {
+                effectiveMode != 0 && shouldContinue -> {
                     rangeEnd = textColumn!!.end
                 }
-                currentMode != 0 -> {
+                effectiveMode != 0 -> {
                     drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath)
                     rangeStart = textColumn!!.start
                     rangeEnd = textColumn.end
-                    mode = currentMode
+                    mode = effectiveMode
                     color = currentColor
                     width = currentWidth
                     offset = currentOffset
