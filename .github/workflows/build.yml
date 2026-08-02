@@ -102,10 +102,27 @@ jobs:
             fi
           fi
 
+      - name: Resolve version name
+        id: appversion
+        run: |
+          BASE=$(grep -oP 'VERSION_MAJOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_MINOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_PATCH=\K[0-9]+' app/version.properties)
+          SUFFIX=$(grep -oP 'VERSION_SUFFIX=\K[0-9]+' app/version.properties)
+          if [ "$SUFFIX" = "1" ]; then
+            BASE="${BASE}-beta"
+          fi
+          # 云端构建在现有版本号后追加 run_number 作为构建后缀，保证每次构建版本唯一
+          NAME="${BASE}.${{ github.run_number }}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "APP_VERSION_NAME=$NAME" >> $GITHUB_ENV
+          echo "构建版本号: $NAME"
+
       - name: Build Release APK
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           chmod +x gradlew
           ./gradlew assembleAppRelease -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log
+
 
       - name: Check Build Log for Signing Info
         run: |
@@ -178,12 +195,13 @@ jobs:
           path: app/build/outputs/apk/app/**/*.apk
           retention-days: 30
 
-      - name: Upload Mapping
+      - name: Upload Mapping (compressed)
         uses: actions/upload-artifact@v4
         with:
           name: mapping
           path: app/build/outputs/mapping/appRelease/mapping.txt
           retention-days: 30
+          compression-level: 9
 
   release:
     name: Create GitHub Release
@@ -211,7 +229,11 @@ jobs:
         run: |
           mkdir -p artifacts
           find apk_nested -name "*.apk" -type f -exec cp {} artifacts/ \;
-          find mapping_dir -name "mapping.txt" -type f -exec cp {} artifacts/mapping.txt \;
+          # mapping.txt 体积很大（数百 MB），gzip 后再随 Release 分发
+          MAPPING=$(find mapping_dir -name "mapping.txt" -type f | head -n 1)
+          if [ -n "$MAPPING" ]; then
+            gzip -c "$MAPPING" > artifacts/mapping.txt.gz
+          fi
           echo "Flattened artifacts:"
           ls -la artifacts/
 
@@ -223,6 +245,8 @@ jobs:
           if [ "$SUFFIX" = "1" ]; then
             VERSION="${VERSION}-beta"
           fi
+          # 与 build job 保持一致：追加 run_number 构建后缀
+          VERSION="${VERSION}.${{ github.run_number }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
       - name: Generate Release Notes
@@ -243,7 +267,7 @@ jobs:
           body_path: RELEASE_NOTES.md
           files: |
             artifacts/*.apk
-            artifacts/mapping.txt
+            artifacts/mapping.txt.gz
           draft: false
           prerelease: false
         env:
