@@ -227,17 +227,36 @@ class ReadRecordViewModel(
 
     /**
      * 旧记录的 bookAuthor 可能为空(当年书源未返回作者), 展示时按书名从 books 表兜底补齐.
+     * 补齐后可能出现与已有记录相同身份键(deviceId, bookName, bookAuthor)的重复行,
+     * 需合并以避免 LazyColumn 重复 key 崩溃, 同时修正同书重复展示.
      */
     private suspend fun fillMissingAuthors(records: List<ReadRecord>): List<ReadRecord> {
         if (records.none { it.bookAuthor.isBlank() }) return records
         val resolved = mutableMapOf<String, String?>()
-        return records.map { record ->
+        val patched = records.map { record ->
             if (record.bookAuthor.isNotBlank()) return@map record
             val author = resolved.getOrPut(record.bookName) {
                 bookRepository.getBookAuthorByName(record.bookName)
             }
             if (author.isNullOrBlank()) record else record.copy(bookAuthor = author)
         }
+        val hasDuplicate = patched
+            .groupingBy { Triple(it.deviceId, it.bookName, it.bookAuthor) }
+            .eachCount()
+            .any { it.value > 1 }
+        if (!hasDuplicate) return patched
+        return patched
+            .groupBy { Triple(it.deviceId, it.bookName, it.bookAuthor) }
+            .map { (_, group) ->
+                if (group.size == 1) group.first()
+                else group.reduce { acc, r ->
+                    acc.copy(
+                        readTime = acc.readTime + r.readTime,
+                        lastRead = maxOf(acc.lastRead, r.lastRead)
+                    )
+                }
+            }
+            .sortedByDescending { it.lastRead }
     }
 
     suspend fun getChapterTitle(bookName: String, bookAuthor: String, chapterIndexLong: Long): String? {
