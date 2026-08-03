@@ -3,6 +3,7 @@ package io.legado.app.ui.book.toc.rule.preview
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -17,21 +18,20 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.Utf8BomUtils
-import io.legado.app.R
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.ensureActive
-import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.launch
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import kotlin.coroutines.coroutineContext
 
 class TxtTocRulePreviewViewModel(
     private val app: Application,
@@ -431,6 +431,12 @@ class TxtTocRulePreviewViewModel(
             _uiState.update {
                 it.copy(
                     rules = currentRules.toImmutableList(),
+                    selectedRule = if (it.selectedRule == existing?.chapterRule) {
+                        updatedRule.chapterRule
+                    } else {
+                        it.selectedRule
+                    },
+                    activeSheet = TxtTocRulePreviewSheet.ChapterList(refreshed),
                     editingRule = null,
                 )
             }
