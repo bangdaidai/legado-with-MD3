@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.toc.rule.preview
 
 import android.app.Activity
-import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -33,7 +32,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -63,7 +61,6 @@ import io.legado.app.R
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.ui.replace.ReplaceEditRoute
 import io.legado.app.ui.replace.ReplaceRuleActivity
-import io.legado.app.utils.toastOnUi
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
@@ -285,15 +282,6 @@ fun TxtTocRulePreviewScreen(
                     }
                 },
             )
-        },
-        floatingActionButton = {
-            if (state.isTxt && state.hasSelection) {
-                AppFloatingActionButton(
-                    onClick = { onIntent(TxtTocRulePreviewIntent.ApplyRule) },
-                    icon = Icons.Default.Check,
-                    tooltipText = stringResource(R.string.ok),
-                )
-            }
         },
     ) { contentPadding ->
         if (state.loading) {
