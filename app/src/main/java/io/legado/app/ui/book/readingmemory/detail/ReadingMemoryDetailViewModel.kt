@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.help.book.BookplateGenerator
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +27,7 @@ import splitties.init.appCtx
 class ReadingMemoryDetailViewModel(
     private val bookUrl: String,
     private val repository: ReadingMemoryRepository,
+    private val themeSettingsGateway: ThemeSettingsGateway,
 ) : ViewModel() {
 
     // 主角实时源变化触发器：增删主角后强制重算
@@ -55,7 +58,10 @@ class ReadingMemoryDetailViewModel(
         protagonistRefresh,
         _showTagPicker,
         bookmarkRefresh,
-        repository.observeTagColorMap(),
+        combine(
+            repository.observeTagColorMap(),
+            themeSettingsGateway.settings.map { it.enableCustomTagColors }
+        ) { colors, enabled -> if (enabled) colors else emptyMap() },
     ) { memory, _, tagPicker, _, tagColorMap -> memory to tagPicker to tagColorMap }
         .flatMapLatest { (memoryAbandoned, tagColorMap) ->
             val (memory, _) = memoryAbandoned

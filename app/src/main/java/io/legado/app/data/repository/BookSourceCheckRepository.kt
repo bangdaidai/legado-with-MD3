@@ -1,7 +1,6 @@
 package io.legado.app.data.repository
 
 import com.script.ScriptException
-import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookSourceType
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
@@ -67,7 +66,6 @@ class BookSourceCheckRepository(
             updateResult(sourceId, source.bookSourceName, "校验成功", completed = true)
         }.onFailure { error ->
             coroutineContext.ensureActive()
-            AppLog.put("[校验失败] ${source.bookSourceName} (${source.bookSourceUrl})", error, true)
             when (error) {
                 is TimeoutCancellationException -> source.addGroup("校验超时")
                 is ScriptException, is WrappedException -> source.addGroup("js失效")

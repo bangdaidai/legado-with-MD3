@@ -59,8 +59,37 @@
 
 # 保持js引擎调用的java类
 -keep class * extends io.legado.app.help.JsExtensions{*;}
+# Rhino JS 引擎：书源通过 Packages.xxx 反射访问这些类，不能被混淆
+-keep class org.mozilla.javascript.** { *; }
+-keep class com.script.** { *; }
+-keep class io.legado.app.model.SharedJsScope { *; }
+-dontwarn org.mozilla.javascript.**
+-dontnote org.mozilla.javascript.**
 # 数据类
 -keep class **.data.entities.**{*;}
+# Gson 保留字段信息，防止混淆后字段名改变导致反序列化失败
+-keepattributes Signature
+-keepattributes *Annotation*
+# 保留 data class 的 companion object 中的 jsonDeserializer
+-keepclassmembers class **.data.entities.rule.** {
+    public static com.google.gson.JsonDeserializer jsonDeserializer;
+}
+# 保留所有 Rule 类的 companion object
+-keepclassmembers class **.data.entities.rule.** {
+    public static ** Companion;
+    public static ** jsonDeserializer;
+}
+# 保留 Gson 需要的字段名
+-keepclassmembernames class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+# 保留 Rule 类的类名，防止 Gson TypeAdapter 注册失效
+-keepnames class **.data.entities.rule.ExploreRule
+-keepnames class **.data.entities.rule.SearchRule
+-keepnames class **.data.entities.rule.BookInfoRule
+-keepnames class **.data.entities.rule.TocRule
+-keepnames class **.data.entities.rule.ContentRule
+-keepnames class **.data.entities.rule.ReviewRule
 # Gson反序列化用的数据传输类
 -keep class io.legado.app.model.translation.**{*;}
 -keep class io.legado.app.domain.model.DictPair{*;}

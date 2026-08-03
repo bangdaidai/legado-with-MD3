@@ -539,6 +539,7 @@ val appModule = module {
         ReadingMemoryDetailViewModel(
             bookUrl = bookUrl,
             repository = get(),
+            themeSettingsGateway = get(),
         )
     }
     viewModelOf(::ExploreShowViewModel)

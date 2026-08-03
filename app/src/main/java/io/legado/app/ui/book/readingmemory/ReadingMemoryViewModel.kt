@@ -10,6 +10,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.help.book.TagManager
 import io.legado.app.help.config.AppConfigStore
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,7 @@ import java.util.Calendar
 class ReadingMemoryViewModel(
     private val repository: ReadingMemoryRepository,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+    private val themeSettingsGateway: ThemeSettingsGateway,
 ) : ViewModel() {
 
     private val _intent = MutableSharedFlow<ReadingMemoryIntent>(extraBufferCapacity = 1)
@@ -53,8 +55,11 @@ class ReadingMemoryViewModel(
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
     private val _loading = MutableStateFlow(false)
 
-    /** 标签管理中设置的标签名 -> 颜色（Long），与书架一致。 */
-    private val tagColorMapFlow: StateFlow<Map<String, Long>> = repository.observeTagColorMap()
+    /** 标签管理中设置的标签名 -> 颜色（Long），与书架一致；仅在“自定义标签颜色”开关开启时生效。 */
+    private val tagColorMapFlow: StateFlow<Map<String, Long>> = combine(
+        repository.observeTagColorMap(),
+        themeSettingsGateway.settings.map { it.enableCustomTagColors }
+    ) { colors, enabled -> if (enabled) colors else emptyMap() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private data class Controls(
