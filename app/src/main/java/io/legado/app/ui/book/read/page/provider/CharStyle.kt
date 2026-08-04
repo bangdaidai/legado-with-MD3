@@ -11,6 +11,8 @@ data class CharStyle(
     val underlineWidth: Float = 1f,
     val underlineOffset: Float = 2f,
     val underlineSvgPath: String = "",
+    val underlineRoundCap: Boolean = false,
+    val underlineFeather: Float = 0f,
     val bgImage: String = "",
     val bgImageFit: Int = 0,
     val bgImageScale: Float = 1f,

@@ -47,6 +47,10 @@ data class HighlightRule(
     var bgMarginEnd: Float = 0f,
     var bgMarginTop: Float = 0f,
     var bgMarginBottom: Float = 0f,
+    // 下划线端点圆角
+    var underlineRoundCap: Boolean = false,
+    // 下划线羽化半径（dp），0=不羽化
+    var underlineFeather: Float = 0f,
     // 下划线层级：true=文字下方（被文字笔画遮挡），false=文字上方（默认）
     var underlineBelowText: Boolean = false,
 ) {

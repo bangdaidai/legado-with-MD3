@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
@@ -394,6 +395,8 @@ data class TextLine(
         var width = 1f
         var offset = 2f
         var svgPath = ""
+        var roundCap = false
+        var feather = 0f
         var active = false
         columns.forEachIndexed { index, column ->
             val textColumn = column as? TextBaseColumn
@@ -407,15 +410,19 @@ data class TextLine(
             val currentWidth = textColumn?.underlineWidth ?: 1f
             val currentOffset = textColumn?.underlineOffset ?: 2f
             val currentSvgPath = textColumn?.underlineSvgPath ?: ""
+            val currentRoundCap = textColumn?.underlineRoundCap ?: false
+            val currentFeather = textColumn?.underlineFeather ?: 0f
             val shouldContinue = active &&
                 effectiveMode == mode &&
                 currentColor == color &&
                 currentWidth == width &&
                 currentOffset == offset &&
-                currentSvgPath == svgPath
+                currentSvgPath == svgPath &&
+                currentRoundCap == roundCap &&
+                currentFeather == feather
             when {
                 effectiveMode == 0 && active -> {
-                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath)
+                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather)
                     active = false
                 }
                 effectiveMode != 0 && !active -> {
@@ -426,13 +433,15 @@ data class TextLine(
                     width = currentWidth
                     offset = currentOffset
                     svgPath = currentSvgPath
+                    roundCap = currentRoundCap
+                    feather = currentFeather
                     active = true
                 }
                 effectiveMode != 0 && shouldContinue -> {
                     rangeEnd = textColumn!!.end
                 }
                 effectiveMode != 0 -> {
-                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath)
+                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather)
                     rangeStart = textColumn!!.start
                     rangeEnd = textColumn.end
                     mode = effectiveMode
@@ -440,10 +449,12 @@ data class TextLine(
                     width = currentWidth
                     offset = currentOffset
                     svgPath = currentSvgPath
+                    roundCap = currentRoundCap
+                    feather = currentFeather
                 }
             }
             if (active && index == columns.lastIndex) {
-                drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath)
+                drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather)
             }
         }
     }
@@ -460,6 +471,8 @@ data class TextLine(
         underlineWidth: Float = 1f,
         underlineOffset: Float = 2f,
         svgPathStr: String = "",
+        roundCap: Boolean = false,
+        feather: Float = 0f,
     ) {
         val paint = PaintPool.obtain()
         paint.set(ChapterProvider.contentPaint)
@@ -467,13 +480,47 @@ data class TextLine(
         paint.color = underlineColor
         paint.strokeWidth = underlineWidth.dpToPx()
         paint.style = Paint.Style.STROKE
+        if (roundCap) paint.strokeCap = Paint.Cap.ROUND
         val lineY = height + underlineOffset.dpToPx()
+        if (feather > 0f) {
+            // 羽化：多 pass 递减 alpha、递增宽度，模拟全边缘柔化
+            val passes = 4
+            val baseAlpha = Color.alpha(underlineColor)
+            for (i in passes downTo 0) {
+                val fraction = (passes - i + 1).toFloat() / (passes + 1)
+                val alpha = (baseAlpha * fraction).toInt().coerceIn(0, 255)
+                paint.color = (underlineColor and 0x00FFFFFF) or (alpha shl 24)
+                val passWidth = underlineWidth + i * feather * 2f / passes
+                drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, passWidth, underlineWidth, svgPathStr)
+            }
+        } else {
+            drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, underlineWidth, underlineWidth, svgPathStr)
+        }
+        PaintPool.recycle(paint)
+    }
+
+    /**
+     * @param strokeWidth 实际描边宽度（dp），羽化时逐层放大
+     * @param geomWidth 基准宽度（dp），仅用于双线间距等几何计算
+     */
+    private fun drawUnderlineShape(
+        canvas: Canvas,
+        paint: Paint,
+        startX: Float,
+        endX: Float,
+        lineY: Float,
+        underlineMode: Int,
+        strokeWidth: Float,
+        geomWidth: Float,
+        svgPathStr: String,
+    ) {
+        paint.strokeWidth = strokeWidth.dpToPx()
         when (underlineMode) {
             1 -> canvas.drawLine(startX, lineY, endX, lineY, paint)
-            2 -> drawDashedLine(canvas, paint, startX, lineY, endX, underlineWidth)
-            3 -> drawWavyLine(canvas, paint, startX, lineY, endX, underlineWidth)
+            2 -> drawDashedLine(canvas, paint, startX, lineY, endX, strokeWidth)
+            3 -> drawWavyLine(canvas, paint, startX, lineY, endX, strokeWidth)
             4 -> {
-                val line2Y = lineY + doubleLineGap + underlineWidth.dpToPx()
+                val line2Y = lineY + doubleLineGap + geomWidth.dpToPx()
                 canvas.drawLine(startX, lineY, endX, lineY, paint)
                 canvas.drawLine(startX, line2Y, endX, line2Y, paint)
             }
@@ -483,7 +530,6 @@ data class TextLine(
                 }
             }
         }
-        PaintPool.recycle(paint)
     }
 
     private fun drawDashedLine(canvas: Canvas, paint: Paint, startX: Float, y: Float, endX: Float, underlineWidth: Float) {

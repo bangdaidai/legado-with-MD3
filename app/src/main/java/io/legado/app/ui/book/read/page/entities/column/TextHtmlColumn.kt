@@ -26,6 +26,8 @@ data class TextHtmlColumn(
     override val underlineWidth: Float = 1f,
     override val underlineOffset: Float = 2f,
     override val underlineSvgPath: String = "",
+    override val underlineRoundCap: Boolean = false,
+    override val underlineFeather: Float = 0f,
     override val underlineBelowText: Boolean = false,
     override val bgImage: String = "",
     override val bgImageFit: Int = 0,
