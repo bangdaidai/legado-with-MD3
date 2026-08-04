@@ -1,5 +1,6 @@
 package io.legado.app.data.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.util.UUID
@@ -36,22 +37,34 @@ data class HighlightRule(
     var npRight: Float = 0.5f,
     var npTop: Float = 0.5f,
     var npBottom: Float = 0.5f,
+    @ColumnInfo(defaultValue = "0")
     var useProtagonist: Boolean = false,
     // 内边距：文字在背景图内部的边距（背景图相对文字四周向外扩多少 dp）
+    @ColumnInfo(defaultValue = "0")
     var bgPaddingStart: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
     var bgPaddingEnd: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
     var bgPaddingTop: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
     var bgPaddingBottom: Float = 0f,
     // 外边距：背景图与相邻文字/行之间的距离（dp）
+    @ColumnInfo(defaultValue = "0")
     var bgMarginStart: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
     var bgMarginEnd: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
     var bgMarginTop: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
     var bgMarginBottom: Float = 0f,
     // 下划线端点圆角
+    @ColumnInfo(defaultValue = "0")
     var underlineRoundCap: Boolean = false,
     // 下划线羽化半径（dp），0=不羽化
+    @ColumnInfo(defaultValue = "0")
     var underlineFeather: Float = 0f,
     // 下划线层级：true=文字下方（被文字笔画遮挡），false=文字上方（默认）
+    @ColumnInfo(defaultValue = "0")
     var underlineBelowText: Boolean = false,
 ) {
 
