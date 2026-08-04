@@ -79,6 +79,21 @@ data class BookChapter(
         return true
     }
 
+    /**
+     * 书源js调用: 存入标题段评图标链接
+     */
+    fun putImgUrl(value: String?) {
+        reviewImg = value
+    }
+
+    /**
+     * 书源js调用: 存入歌词文本
+     */
+    fun putLyric(value: String?) {
+        putVariable("lyric", value)
+    }
+
+
     override fun putBigVariable(key: String, value: String?) {
         RuleBigDataHelp.putChapterVariable(bookUrl, url, key, value)
     }

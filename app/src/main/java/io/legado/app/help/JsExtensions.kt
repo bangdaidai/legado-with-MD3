@@ -339,6 +339,22 @@ interface JsExtensions : JsEncodeUtils {
     }
 
     /**
+     * legado-E 书源兼容: 打开视频播放器
+     * md 不含视频播放子系统，此处仅作存根，避免书源 JS 走到彩蛋章分支时抛 ReferenceError
+     */
+    @JavascriptInterface
+    fun openVideoPlayer(url: String, title: String) {
+        openVideoPlayer(url, title, false)
+    }
+
+    @JavascriptInterface
+    fun openVideoPlayer(url: String, title: String, isFloat: Boolean) {
+        rhinoContextOrNull?.ensureActive()
+        log("openVideoPlayer(url=$url, title=$title, isFloat=$isFloat) - 本项目暂不支持视频播放")
+    }
+
+
+    /**
      * 使用内置浏览器打开链接，并等待网页结果
      */
     fun startBrowserAwait(url: String, title: String): StrResponse {
@@ -1107,7 +1123,16 @@ interface JsExtensions : JsEncodeUtils {
      */
     fun toast(msg: Any?) {
         rhinoContextOrNull?.ensureActive()
-        appCtx.toastForJs("${getSource()?.getTag()}: ${msg.toString()}")
+        val text = msg.toString()
+        if (text.contains("验证失败") || text.contains("暂不开放")) {
+            val jsStack = try {
+                org.mozilla.javascript.RhinoException("qd_trace").scriptStackTrace
+            } catch (_: Throwable) { "no js stack" }
+            io.legado.app.constant.AppLog.put(
+                "[QDTrace] toast=$text\n---JS stack---\n$jsStack\n---Java stack---\n${Thread.currentThread().stackTrace.take(15).joinToString("\n")}"
+            )
+        }
+        appCtx.toastForJs("${getSource()?.getTag()}: $text")
     }
 
     /**
