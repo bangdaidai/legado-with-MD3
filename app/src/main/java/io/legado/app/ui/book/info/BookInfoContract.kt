@@ -58,6 +58,7 @@ data class BookInfoUiState(
     val defaultCover: String = "",
     val defaultCoverDark: String = "",
     val showMangaUi: Boolean = true,
+    val enableCustomTagColors: Boolean = false,
 )
 
 @Stable

@@ -1822,6 +1822,7 @@ internal fun BookInfoUiState.withSettings(
     defaultCover = cover.defaultCover,
     defaultCoverDark = cover.defaultCoverDark,
     showMangaUi = other.showMangaUi,
+    enableCustomTagColors = theme.enableCustomTagColors,
 )
 
 private val BookInfoWebFile.suffix: String

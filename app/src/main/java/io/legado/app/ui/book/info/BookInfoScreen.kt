@@ -1016,7 +1016,7 @@ private fun BookInfoHeader(
                         items = coloredTags,
                         key = { tag -> "colored-${tag.id}-${tag.name}" }
                     ) { tag ->
-                        val tagColor = if (tag.color != 0L) {
+                        val tagColor = if (state.enableCustomTagColors && tag.color != 0L) {
                             tag.color
                         } else {
                             null
