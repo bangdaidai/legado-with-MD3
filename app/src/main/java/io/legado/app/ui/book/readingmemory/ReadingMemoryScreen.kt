@@ -37,7 +37,7 @@ import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
-import io.legado.app.ui.main.bookshelf.BookshelfItem
+import io.legado.app.ui.main.bookshelf.BookshelfListItem
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -462,10 +462,8 @@ private fun MemoryBookCard(
         else -> LegadoTheme.colorScheme.onSurfaceVariant
     }
 
-    BookshelfItem(
+    BookshelfListItem(
         settings = settings.copy(bookshelfCoverAlignTop = true),
-        isGrid = false,
-        gridStyle = 0,
         isCompact = false,
         cover = { m ->
             CoilBookCover(
@@ -534,8 +532,6 @@ private fun MemoryBookCard(
                 )
             }
         },
-        titleSmallFont = settings.bookshelfTitleSmallFont,
-        titleCenter = settings.bookshelfTitleCenter,
         titleMaxLines = settings.bookshelfTitleMaxLines,
         coverShadow = settings.bookshelfCoverShadow,
         coverWidth = uiState.coverWidth,

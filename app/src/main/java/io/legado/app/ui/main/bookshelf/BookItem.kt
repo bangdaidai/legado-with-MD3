@@ -835,7 +835,7 @@ fun BookItem(
                 }
                 if (showIntro && !showIntroBelowContent) {
                     BookItemIntro(
-                        intro = intro,
+                        intro = intro!!,
                         maxLines = settings.bookshelfIntroMaxLines,
                     )
                 }
@@ -849,7 +849,7 @@ fun BookItem(
                     containerColor = LegadoTheme.colorScheme.cardContainer
                 ) {
                     BookItemIntro(
-                        intro = intro,
+                        intro = intro!!,
                         maxLines = settings.bookshelfIntroMaxLines,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
