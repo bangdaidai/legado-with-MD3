@@ -1126,7 +1126,7 @@ interface JsExtensions : JsEncodeUtils {
         val text = msg.toString()
         if (text.contains("验证失败") || text.contains("暂不开放")) {
             val jsStack = try {
-                org.mozilla.javascript.RhinoException("qd_trace").scriptStackTrace
+                org.mozilla.javascript.EvaluatorException("qd_trace").scriptStackTrace
             } catch (_: Throwable) { "no js stack" }
             io.legado.app.constant.AppLog.put(
                 "[QDTrace] toast=$text\n---JS stack---\n$jsStack\n---Java stack---\n${Thread.currentThread().stackTrace.take(15).joinToString("\n")}"
