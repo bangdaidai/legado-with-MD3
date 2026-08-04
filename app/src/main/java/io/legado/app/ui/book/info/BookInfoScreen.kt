@@ -290,6 +290,7 @@ private fun BookInfoScreenContent(
                                 highlightedTags = state.highlightedTags,
                                 coloredTags = state.coloredTags,
                                 groupNames = state.groupNames,
+                                enableCustomTagColors = state.enableCustomTagColors,
                                 onCoverClick = { onIntent(BookInfoIntent.CoverClick) },
                                 onCoverLongClick = { onIntent(BookInfoIntent.CoverLongClick) },
                                 onAuthorClick = { onIntent(BookInfoIntent.AuthorClick(it)) },
@@ -867,6 +868,7 @@ private fun BookInfoHeader(
     highlightedTags: List<HighlightedTag>,
     coloredTags: List<BookTagUi>,
     groupNames: String?,
+    enableCustomTagColors: Boolean,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
     onAuthorClick: (Boolean) -> Unit,
@@ -1016,7 +1018,7 @@ private fun BookInfoHeader(
                         items = coloredTags,
                         key = { tag -> "colored-${tag.id}-${tag.name}" }
                     ) { tag ->
-                        val tagColor = if (state.enableCustomTagColors && tag.color != 0L) {
+                        val tagColor = if (enableCustomTagColors && tag.color != 0L) {
                             tag.color
                         } else {
                             null
