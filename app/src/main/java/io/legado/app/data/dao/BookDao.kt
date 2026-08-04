@@ -111,7 +111,7 @@ interface BookDao {
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -154,7 +154,7 @@ interface BookDao {
         `group`,
         `order`,
         canUpdate,
-        ifnull(customIntro, intro) as intro,
+        ifnull(customIntro, ifnull(listIntro, intro)) as intro,
         kind,
         customTag,
         wordCount,
@@ -192,7 +192,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -230,7 +230,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -273,7 +273,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -317,7 +317,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -356,7 +356,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -396,7 +396,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -435,7 +435,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -474,7 +474,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -512,7 +512,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -552,7 +552,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -592,7 +592,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -630,7 +630,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -668,7 +668,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -706,7 +706,7 @@ FROM books
             `group`,
             `order`,
             canUpdate,
-            ifnull(customIntro, intro) as intro,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
             wordCount,
@@ -955,10 +955,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
@@ -973,10 +972,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.text} > 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
             AND $PUBLIC_BOOK_FILTER
@@ -994,10 +992,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.local} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1013,10 +1010,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.audio} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1032,10 +1028,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.audio} = 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
             AND $PUBLIC_BOOK_FILTER
@@ -1052,10 +1047,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.local} > 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
             AND $PUBLIC_BOOK_FILTER
@@ -1072,10 +1066,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.image} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1091,10 +1084,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.text} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1110,10 +1102,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE type & ${BookType.updateError} > 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1129,10 +1120,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE durChapterIndex = 0 AND durChapterPos = 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1148,10 +1138,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1167,10 +1156,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1186,10 +1174,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1205,10 +1192,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1224,10 +1210,9 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, intro) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
-    FROM books
-
+        FROM books
         WHERE (`group` & :groupId) > 0
             AND ((SELECT isPrivate FROM book_groups WHERE groupId = :groupId) = 1 OR $PUBLIC_BOOK_FILTER)
         ORDER BY durChapterTime DESC

@@ -24,13 +24,6 @@ object DatabaseMigrations {
             migration_98_99,
             migration_99_100,
             migration_100_101,
-            migration_102_103,
-            migration_103_104,
-            migration_104_105,
-            migration_105_106,
-            migration_106_107,
-            migration_107_108,
-            migration_108_109,
         )
     }
 
@@ -676,68 +669,36 @@ object DatabaseMigrations {
     private val migration_100_101 = object : Migration(100, 101) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("DROP TABLE IF EXISTS bookTagBooks")
-        }
-    }
-
-    // endregion
-
-    // region 102→103: highlightRules 新增 useProtagonist 列（主角高亮）
-
-    private val migration_102_103 = object : Migration(102, 103) {
-        override fun migrate(database: SupportSQLiteDatabase) {
+            // 上游: books 新增 listIntro 列, 并从搜索缓存回填
+            database.execSQL("ALTER TABLE books ADD COLUMN listIntro TEXT")
+            database.execSQL(
+                """
+                update books set listIntro = (
+                    select intro from searchBooks where searchBooks.bookUrl = books.bookUrl
+                )
+                where listIntro is null
+                """.trimIndent()
+            )
+            // 本地额外: highlightRules 扩展列
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN useProtagonist INTEGER NOT NULL DEFAULT 0")
-        }
-    }
-
-    // endregion
-
-    // region 103→104: highlightRules 新增夜间配色列（textColorNight / bgColorNight / underlineColorNight）
-
-    private val migration_103_104 = object : Migration(103, 104) {
-        override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN textColorNight INTEGER")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgColorNight INTEGER")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineColorNight INTEGER")
-        }
-    }
-
-    // endregion
-
-    // region 104→105: highlightRules 新增九宫格外扩边距字段
-
-    private val migration_104_105 = object : Migration(104, 105) {
-        override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingStart REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingEnd REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingTop REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgPaddingBottom REAL NOT NULL DEFAULT 0")
-            // 旧默认 0.1 会把中心区域过度拉伸导致图片变形，仅将仍停留在旧默认值的行重置为 0.5
             database.execSQL("UPDATE highlightRules SET npLeft = 0.5 WHERE npLeft = 0.1")
             database.execSQL("UPDATE highlightRules SET npRight = 0.5 WHERE npRight = 0.1")
             database.execSQL("UPDATE highlightRules SET npTop = 0.5 WHERE npTop = 0.1")
             database.execSQL("UPDATE highlightRules SET npBottom = 0.5 WHERE npBottom = 0.1")
-        }
-    }
-
-    // endregion
-
-    // region 105→106: highlightRules 新增外边距字段
-
-    private val migration_105_106 = object : Migration(105, 106) {
-        override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginStart REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginEnd REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginTop REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginBottom REAL NOT NULL DEFAULT 0")
-        }
-    }
-
-    // endregion
-
-    // region 106→107: 新增藏书票模板表
-
-    private val migration_106_107 = object : Migration(106, 107) {
-        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN fontSizeOffset INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineBelowText INTEGER NOT NULL DEFAULT 0")
+            // 本地额外: 藏书票模板表
             database.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS bookplateTemplates (
@@ -751,22 +712,6 @@ object DatabaseMigrations {
                 )
                 """.trimIndent()
             )
-        }
-    }
-
-    // endregion
-
-    // region 107→108: highlightRules 新增 fontSizeOffset 列
-
-    private val migration_107_108 = object : Migration(107, 108) {
-        override fun migrate(database: SupportSQLiteDatabase) {
-            database.execSQL("ALTER TABLE highlightRules ADD COLUMN fontSizeOffset INTEGER NOT NULL DEFAULT 0")
-        }
-    }
-
-    private val migration_108_109 = object : Migration(108, 109) {
-        override fun migrate(database: SupportSQLiteDatabase) {
-            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineBelowText INTEGER NOT NULL DEFAULT 0")
         }
     }
 
