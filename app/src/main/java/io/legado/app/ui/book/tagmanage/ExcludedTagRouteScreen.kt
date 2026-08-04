@@ -95,13 +95,8 @@ fun ExcludedTagScreen(
                         exit = shrinkVertically() + fadeOut(),
                     ) {
                         SearchBar(
-                            modifier = Modifier.padding(vertical = 4.dp),
                             query = state.searchQuery,
                             onQueryChange = { onIntent(ExcludedTagIntent.Search(it)) },
-                            onClose = {
-                                showSearch = false
-                                onIntent(ExcludedTagIntent.Search(""))
-                            },
                             placeholder = "搜索排除项",
                         )
                     }

@@ -462,6 +462,11 @@ private fun MemoryBookCard(
         else -> LegadoTheme.colorScheme.onSurfaceVariant
     }
 
+    val showIntroBelowContent = uiState.showIntro && !memory.intro.isNullOrBlank()
+        && settings.bookshelfListIntroBelowContent
+    val showReviewBelowContent = uiState.showReview && !memory.review.isNullOrBlank()
+        && settings.bookshelfListIntroBelowContent
+
     BookshelfListItem(
         settings = settings.copy(bookshelfCoverAlignTop = true),
         isCompact = false,
@@ -511,7 +516,7 @@ private fun MemoryBookCard(
                     TagChip(tag = tag, color = tagColor, size = TagChipSize.Small)
                 }
             }
-            if (uiState.showIntro && !memory.intro.isNullOrBlank()) {
+            if (uiState.showIntro && !memory.intro.isNullOrBlank() && !showIntroBelowContent) {
                 AppText(
                     text = memory.intro.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
@@ -521,7 +526,7 @@ private fun MemoryBookCard(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 )
             }
-            if (uiState.showReview && !memory.review.isNullOrBlank()) {
+            if (uiState.showReview && !memory.review.isNullOrBlank() && !showReviewBelowContent) {
                 AppText(
                     text = memory.review.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
@@ -532,6 +537,32 @@ private fun MemoryBookCard(
                 )
             }
         },
+        bottomContent = if (showIntroBelowContent || showReviewBelowContent) {
+            {
+                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    if (showIntroBelowContent) {
+                        AppText(
+                            text = memory.intro.orEmpty(),
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        )
+                    }
+                    if (showReviewBelowContent) {
+                        AppText(
+                            text = memory.review.orEmpty(),
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurface,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        )
+                    }
+                }
+            }
+        } else null,
         titleMaxLines = settings.bookshelfTitleMaxLines,
         coverShadow = settings.bookshelfCoverShadow,
         coverWidth = uiState.coverWidth,

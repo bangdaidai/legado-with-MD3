@@ -7,11 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -37,6 +33,7 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
+import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.text.AppText
 import kotlinx.coroutines.CoroutineScope
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -60,7 +57,6 @@ fun SearchBar(
     scrollState: LazyListState? = null,
     scope: CoroutineScope = rememberCoroutineScope(),
     trailingIcon: @Composable (() -> Unit)? = null,
-    onClose: (() -> Unit)? = null,
     autoFocus: Boolean = true,
     dropdownMenu: (@Composable (onDismiss: () -> Unit) -> Unit)? = null
 ) {
@@ -70,12 +66,17 @@ fun SearchBar(
     val keyboardController = LocalSoftwareKeyboardController.current
     var hasFocused by rememberSaveable { mutableStateOf(false) }
 
-    val resolvedTrailingIcon = trailingIcon ?: onClose?.let {
+    val resolvedTrailingIcon: @Composable (() -> Unit)? = trailingIcon ?: if (query.isNotEmpty()) {
         {
-            IconButton(onClick = it) {
-                Icon(Icons.Filled.Clear, contentDescription = null)
-            }
+            SmallPlainButton(
+                modifier = Modifier.padding(horizontal = 8.dp),
+                onClick = { textFieldState.edit { replace(0, length, "") } },
+                icon = AppIcons.Close,
+                contentDescription = stringResource(R.string.clear)
+            )
         }
+    } else {
+        null
     }
 
     val submitSearch: (String) -> Unit = { value ->

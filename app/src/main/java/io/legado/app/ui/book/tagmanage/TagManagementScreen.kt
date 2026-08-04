@@ -131,13 +131,8 @@ fun TagManagementScreen(
                         exit = shrinkVertically() + fadeOut(),
                     ) {
                         SearchBar(
-                            modifier = Modifier.padding(vertical = 4.dp),
                             query = state.searchQuery,
                             onQueryChange = { onIntent(TagManagementIntent.Search(it)) },
-                            onClose = {
-                                showSearch = false
-                                onIntent(TagManagementIntent.Search(""))
-                            },
                             placeholder = stringResource(R.string.search_tag),
                         )
                     }
