@@ -26,14 +26,21 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
             }
         }
         val v = super.get(name, start)
-        // === [QDProbe] 诊断: 起点助手 QDSign 指纹校验读取 source 字段。
-        // 一次性把整个 source 序列化成 JSON 打到一条日志（喂给指纹算法的原料），用完删除。
+        // === [QDProbe] 诊断日志: 定位起点助手书源验证失败具体读了哪些字段/返回了什么 ===
+        // 用完后删除或注释掉这段。只打印首字符/长度以避免刷屏；跳过明显的方法调用。
         if (QDProbe.enabled) {
             runCatching {
-                val src = javaObject
-                if (src != null && QDProbe.dumped.add(System.identityHashCode(src))) {
-                    val json = io.legado.app.utils.GSON.toJson(src)
-                    AppLog.put("[QDProbe] ${src.javaClass.simpleName} JSON = $json")
+                val isMethod = v is org.mozilla.javascript.NativeJavaMethod
+                if (!isMethod) {
+                    val src = javaObject
+                    val srcTag = src?.javaClass?.simpleName ?: "?"
+                    val vStr = when (v) {
+                        null -> "null"
+                        NOT_FOUND -> "NOT_FOUND"
+                        is CharSequence -> "\"${v.toString().take(80).replace("\n", "\\n")}\"(len=${v.length})"
+                        else -> "${v.javaClass.simpleName}=${v.toString().take(80).replace("\n", "\\n")}"
+                    }
+                    AppLog.put("[QDProbe] $srcTag.$name -> $vStr")
                 }
             }
         }
@@ -65,6 +72,4 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
  */
 object QDProbe {
     val enabled: Boolean = true  // ← 用完改 false 或删文件
-    val dumped: MutableSet<Int> =
-        java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Int, Boolean>())
 }
