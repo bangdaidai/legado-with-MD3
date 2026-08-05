@@ -202,10 +202,10 @@ fun BookshelfListItem(
                     modifier = Modifier
                         .weight(1f)
                         .padding(top = 4.dp, bottom = 4.dp, end = 8.dp, start = 4.dp),
-                    verticalArrangement = if (settings.bookshelfCoverAlignTop) {
-                        Arrangement.Top
-                    } else {
+                    verticalArrangement = if (settings.bookshelfListCoverCenter) {
                         Arrangement.Center
+                    } else {
+                        Arrangement.Top
                     }
                 ) {
                     Row(

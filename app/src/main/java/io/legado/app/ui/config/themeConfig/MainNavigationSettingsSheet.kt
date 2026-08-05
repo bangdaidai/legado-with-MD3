@@ -93,6 +93,7 @@ fun MainNavigationSettingsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             CompactDropdownSettingItem(
                 title = stringResource(R.string.default_home_page),

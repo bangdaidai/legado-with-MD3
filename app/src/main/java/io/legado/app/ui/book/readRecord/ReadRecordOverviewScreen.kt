@@ -287,8 +287,13 @@ fun ReadingDistributionCard(state: ReadRecordOverviewUiState) {
         ReadPeriod.DAY -> {
             if (state.hourlyTimeData.isEmpty()) return
             val bars = state.hourlyTimeData.map { (hour, time) ->
-                // 每 6 小时标注一次刻度: 0 / 6 / 12 / 18
-                ReadingBar(label = if (hour % 6 == 0) hour.toString() else null, value = time)
+                // 每 6 小时标一次: 0 / 6 / 12 / 18；最后一根柱(23)的右侧标为"24"表示当日结束
+                val label = when {
+                    hour == 23 -> "24"
+                    hour % 6 == 0 -> hour.toString()
+                    else -> null
+                }
+                ReadingBar(label = label, value = time)
             }
             ReadingTimeBarChartCard(
                 bars = bars,
@@ -365,7 +370,7 @@ fun HeatmapCard(state: ReadRecordOverviewUiState) {
                 dailyReadCounts = state.allReadCounts,
                 dailyReadTimes = state.allReadTimes,
                 currentMode = HeatmapMode.TIME,
-                selectedDate = null,
+                selectedDate = state.referenceDate,
                 onDateSelected = null
             )
         }

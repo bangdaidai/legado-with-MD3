@@ -3,7 +3,9 @@ package io.legado.app.ui.book.readRecord.component
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -24,11 +26,29 @@ fun HeatmapCalendarSection(
     val days = rememberDaysInRange(startDate, endDate)
     val weeks = rememberWeeks(days, startDate)
 
+    val listState = rememberLazyListState()
+
+    // 聚焦：滚动到 selectedDate 所在那一周（列表用 reverseLayout=true，最早那周 index=0）
+    LaunchedEffect(selectedDate, weeks) {
+        if (weeks.isEmpty()) return@LaunchedEffect
+        val focus = selectedDate
+        val targetIndex = if (focus != null) {
+            weeks.indexOfFirst { week -> week.any { it == focus } }
+                .takeIf { it >= 0 }
+                ?: (weeks.size - 1)
+        } else {
+            weeks.size - 1
+        }
+        // reverseLayout 下 index 越大越靠左，index 0 在最右侧
+        listState.scrollToItem(targetIndex)
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         LazyRow(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
             reverseLayout = true
