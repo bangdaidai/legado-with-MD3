@@ -1129,7 +1129,10 @@ interface JsExtensions : JsEncodeUtils {
                 org.mozilla.javascript.EvaluatorException("qd_trace").scriptStackTrace
             } catch (_: Throwable) { "no js stack" }
             io.legado.app.constant.AppLog.put(
-                "[QDTrace] toast=$text\n---JS stack---\n$jsStack\n---Java stack---\n${Thread.currentThread().stackTrace.take(15).joinToString("\n")}"
+                "[QDTrace] toast=$text" +
+                    "\n---CALLS(本线程最近80次成员解析,<undefined>为不存在)---\n" +
+                    io.legado.app.help.rhino.QDTrace.dump() +
+                    "\n---JS stack---\n" + jsStack
             )
         }
         appCtx.toastForJs("${getSource()?.getTag()}: $text")

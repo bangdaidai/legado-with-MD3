@@ -24,7 +24,13 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
                 return NOT_FOUND
             }
         }
-        return super.get(name, start)
+        val v = super.get(name, start)
+        if (v == NOT_FOUND) {
+            QDTrace.rec("source.$name=<undefined>")
+        } else {
+            QDTrace.rec("source.$name")
+        }
+        return v
     }
 
     override fun put(
