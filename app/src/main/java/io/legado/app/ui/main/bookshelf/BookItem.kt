@@ -184,43 +184,19 @@ fun BookshelfListItem(
             onClick = onClick,
             onLongClick = onLongClick
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                verticalAlignment = if (settings.bookshelfCoverAlignTop) {
-                    Alignment.Top
-                } else {
-                    Alignment.CenterVertically
-                }
-            ) {
-                if (coverWidth > 0) {
-                    Box(
-                        modifier = Modifier
-                            .then(
-                                if (settings.bookshelfCoverAlignTop) {
-                                    Modifier.align(Alignment.Top)
-                                } else {
-                                    Modifier.align(Alignment.CenterVertically)
-                                }
-                            )
-                            .width(coverWidth.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
-                                .fillMaxWidth()
-                                .aspectRatio(5f / 7f)
-                                .then(
-                                    if (coverShadow) Modifier.shadow(
-                                        4.dp,
-                                        RoundedCornerShape(4.dp)
-                                    ) else Modifier
-                                )
-                                .clip(RoundedCornerShape(4.dp))
-                        ) {
-                            cover(Modifier.fillMaxSize())
-                        }
-                    }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .align(
+                            if (settings.bookshelfListCoverCenter) {
+                                Alignment.CenterVertically
+                            } else {
+                                Alignment.Top
+                            }
+                        )
+                        .width(coverWidth.dp)
+                ) {
+                    BookshelfItemCover(coverShadow = coverShadow, cover = cover)
                 }
                 Column(
                     modifier = Modifier

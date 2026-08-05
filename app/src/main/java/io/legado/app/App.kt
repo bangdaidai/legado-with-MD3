@@ -19,6 +19,7 @@ import com.jeremyliao.liveeventbus.logger.DefaultLogger
 import com.script.rhino.ReadOnlyJavaObject
 import com.script.rhino.RhinoScriptEngine
 import com.script.rhino.RhinoWrapFactory
+import io.legado.app.constant.AppConst.channelIdBookSourceCheck
 import io.legado.app.constant.AppConst.channelIdDownload
 import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
@@ -303,6 +304,17 @@ class App : Application(), ImageLoaderFactory {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
 
+        val bookSourceCheckChannel = NotificationChannel(
+            channelIdBookSourceCheck,
+            getString(R.string.check_book_source),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            enableLights(false)
+            enableVibration(false)
+            setSound(null, null)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+
         val webChannel = NotificationChannel(
             channelIdWeb,
             getString(R.string.web_service),
@@ -318,6 +330,7 @@ class App : Application(), ImageLoaderFactory {
         notificationManager.createNotificationChannels(
             listOf(
                 downloadChannel,
+                bookSourceCheckChannel,
                 readAloudChannel,
                 webChannel
             )

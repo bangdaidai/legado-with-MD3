@@ -2,7 +2,6 @@ package io.legado.app.ui.book.read.sheet
 
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,6 +84,8 @@ import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
 import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.SelectImageContract
+import io.legado.app.utils.launch
 import io.legado.app.ui.widget.components.text.AppText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -198,10 +199,11 @@ fun HighlightRuleEditSheet(
     // Validation
     var patternError by remember(show, rule) { mutableStateOf<String?>(null) }
 
-    // File picker for background images (uses OpenDocument to avoid MediaStore transcoding)
+    // File picker for background images (uses SelectImageContract for visual photo picker)
     val imagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
+        SelectImageContract()
+    ) { result ->
+        val uri = result.uri
         if (uri != null) {
             coroutineScope.launch {
                 runCatching {
@@ -599,7 +601,7 @@ fun HighlightRuleEditSheet(
                     title = stringResource(R.string.highlight_bg_image),
                     description = bgImage.ifBlank { null }?.let { File(it).name },
                     onClick = {
-                        imagePicker.launch(arrayOf("image/*"))
+                        imagePicker.launch()
                     },
                 )
             }
