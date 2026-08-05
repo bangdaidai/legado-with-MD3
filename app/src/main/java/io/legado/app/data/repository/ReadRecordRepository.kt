@@ -34,34 +34,58 @@ class ReadRecordRepository(
     /**
      * 获取总阅读时长流
      */
-    fun getTotalReadTime(): Flow<Long> {
-        return dao.getTotalReadTime().map { it ?: 0L }
+    fun getTotalReadTime(bookType: Int? = null): Flow<Long> {
+        return if (bookType != null) {
+            dao.getTotalReadTimeByType(bookType).map { it ?: 0L }
+        } else {
+            dao.getTotalReadTime().map { it ?: 0L }
+        }
     }
 
     /**
      * 根据搜索关键字获取最新的阅读书籍列表流
      */
-    fun getLatestReadRecords(query: String = ""): Flow<List<ReadRecord>> {
-        return if (query.isBlank()) {
-            dao.getAllReadRecordsSortedByLastRead()
+    fun getLatestReadRecords(query: String = "", bookType: Int? = null): Flow<List<ReadRecord>> {
+        return if (bookType != null) {
+            if (query.isBlank()) {
+                dao.getAllReadRecordsSortedByLastReadByType(bookType)
+            } else {
+                dao.searchReadRecordsByLastReadByType(query, bookType)
+            }
         } else {
-            dao.searchReadRecordsByLastRead(query)
+            if (query.isBlank()) {
+                dao.getAllReadRecordsSortedByLastRead()
+            } else {
+                dao.searchReadRecordsByLastRead(query)
+            }
         }
     }
 
     /**
      * 获取所有的每日统计详情流
      */
-    fun getAllRecordDetails(query: String = ""): Flow<List<ReadRecordDetail>> {
-        return if (query.isBlank()) {
-            dao.getAllDetails()
+    fun getAllRecordDetails(query: String = "", bookType: Int? = null): Flow<List<ReadRecordDetail>> {
+        return if (bookType != null) {
+            if (query.isBlank()) {
+                dao.getAllDetailsByType(bookType)
+            } else {
+                dao.searchDetailsByType(query, bookType)
+            }
         } else {
-            dao.searchDetails(query)
+            if (query.isBlank()) {
+                dao.getAllDetails()
+            } else {
+                dao.searchDetails(query)
+            }
         }
     }
 
-    fun getAllSessions(): Flow<List<ReadRecordSession>> {
-        return dao.getAllSessions(getCurrentDeviceId())
+    fun getAllSessions(bookType: Int? = null): Flow<List<ReadRecordSession>> {
+        return if (bookType != null) {
+            dao.getAllSessionsByType(getCurrentDeviceId(), bookType)
+        } else {
+            dao.getAllSessions(getCurrentDeviceId())
+        }
     }
 
     fun getBookSessions(bookName: String, bookAuthor: String): Flow<List<ReadRecordSession>> {
@@ -170,7 +194,8 @@ class ReadRecordRepository(
                     readTime = durationDelta,
                     readWords = wordsDelta,
                     firstReadTime = session.startTime,
-                    lastReadTime = session.endTime
+                    lastReadTime = session.endTime,
+                    bookType = session.bookType
                 )
             )
         }
@@ -237,6 +262,7 @@ class ReadRecordRepository(
                         readWords = totalWords,
                         firstReadTime = firstRead,
                         lastReadTime = lastRead,
+                        bookType = session.bookType
                     )
                 )
             }

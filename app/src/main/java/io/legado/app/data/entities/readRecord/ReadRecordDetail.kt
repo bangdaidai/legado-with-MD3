@@ -26,5 +26,8 @@ data class ReadRecordDetail(
     var firstReadTime: Long = 0L,
     // 当天最后一次阅读时间
     @ColumnInfo(defaultValue = "0")
-    var lastReadTime: Long = 0L
+    var lastReadTime: Long = 0L,
+    // 书籍类型位标记 (BookType)
+    @ColumnInfo(defaultValue = "8")
+    var bookType: Int = io.legado.app.constant.BookType.text
 )

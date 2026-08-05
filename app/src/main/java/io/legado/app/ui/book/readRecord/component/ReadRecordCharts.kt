@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,21 +29,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.legado.app.ui.book.readRecord.ReadPeriod
 import io.legado.app.ui.book.readRecord.ReadRecordFormatter
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.text.AppText
-import java.time.LocalDate
+
+/**
+ * 柱状图的单根柱子。[label] 为 null 时该柱不显示 X 轴刻度文字。
+ */
+@Stable
+data class ReadingBar(
+    val label: String?,
+    val value: Long
+)
 
 @Composable
 fun ReadingTimeBarChartCard(
-    data: List<Pair<LocalDate, Long>>,
-    period: ReadPeriod,
+    bars: List<ReadingBar>,
+    title: String,
+    barWidthFraction: Float = 0.6f,
     modifier: Modifier = Modifier
 ) {
-    val rawMaxTime = data.maxOfOrNull { it.second }?.coerceAtLeast(1L) ?: 1L
+    val rawMaxTime = bars.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
 
     // 向上取整逻辑：根据时长跨度选择合适的对齐单位
     val roundedMaxTime = when {
@@ -67,7 +76,7 @@ fun ReadingTimeBarChartCard(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                AppText("阅读时长分布", style = LegadoTheme.typography.titleMedium)
+                AppText(title, style = LegadoTheme.typography.titleMedium)
             }
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -76,31 +85,6 @@ fun ReadingTimeBarChartCard(
                     .fillMaxWidth()
                     .height(140.dp)
             ) {
-                // Y-Axis
-                Column(
-                    modifier = Modifier
-                        .width(32.dp)
-                        .fillMaxHeight()
-                        .padding(bottom = 20.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.End
-                ) {
-                    AppText(
-                        text = ReadRecordFormatter.formatDuration(roundedMaxTime),
-                        style = LegadoTheme.typography.labelSmall,
-                        fontSize = 8.sp,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant
-                    )
-                    AppText(
-                        text = "0",
-                        style = LegadoTheme.typography.labelSmall,
-                        fontSize = 8.sp,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
                 // Chart
                 Row(
                     modifier = Modifier
@@ -109,29 +93,15 @@ fun ReadingTimeBarChartCard(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    data.forEachIndexed { index, (date, time) ->
-                        val targetHeightFactor = time.toFloat() / roundedMaxTime
+                    val maxValue = bars.maxOfOrNull { it.value }
+                    val maxIndex = bars.indexOfFirst { it.value == maxValue }
+                    bars.forEachIndexed { index, bar ->
+                        val targetHeightFactor = bar.value.toFloat() / roundedMaxTime
                         val heightFactor by animateFloatAsState(
                             targetValue = targetHeightFactor,
                             animationSpec = tween(durationMillis = 320, delayMillis = index * 20),
                             label = "BarHeight"
                         )
-
-                        val showLabel = when (period) {
-                            ReadPeriod.DAY -> true
-                            ReadPeriod.WEEK -> true
-                            ReadPeriod.MONTH -> date.dayOfMonth == 1 || date.dayOfMonth == 15 || index == data.lastIndex
-                            ReadPeriod.YEAR -> true
-                            else -> false
-                        }
-
-                        val labelText = when (period) {
-                            ReadPeriod.YEAR -> "${date.monthValue}月"
-                            ReadPeriod.WEEK -> when (date.dayOfWeek.value) {
-                                1 -> "一"; 2 -> "二"; 3 -> "三"; 4 -> "四"; 5 -> "五"; 6 -> "六"; 7 -> "日"; else -> ""
-                            }
-                            else -> date.dayOfMonth.toString()
-                        }
 
                         Column(
                             modifier = Modifier
@@ -146,23 +116,36 @@ fun ReadingTimeBarChartCard(
                                     .fillMaxWidth(),
                                 contentAlignment = Alignment.BottomCenter
                             ) {
+                                if (index == maxIndex && bar.value > 0) {
+                                    AppText(
+                                        text = ReadRecordFormatter.formatBarPeakDuration(bar.value),
+                                        style = LegadoTheme.typography.labelSmall,
+                                        fontSize = 8.sp,
+                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Visible,
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .wrapContentWidth(unbounded = true)
+                                    )
+                                }
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(if (period == ReadPeriod.MONTH) 0.8f else 0.6f)
+                                        .fillMaxWidth(barWidthFraction)
                                         .fillMaxHeight(heightFactor.coerceAtLeast(0.01f))
                                         .padding(horizontal = 1.dp)
                                         .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                         .background(
-                                            if (time > 0) LegadoTheme.colorScheme.primary
+                                            if (bar.value > 0) LegadoTheme.colorScheme.primary
                                             else LegadoTheme.colorScheme.surfaceVariant
                                         )
                                 )
                             }
 
                             Box(modifier = Modifier.height(20.dp), contentAlignment = Alignment.TopCenter) {
-                                if (showLabel) {
+                                bar.label?.let { label ->
                                     AppText(
-                                        text = labelText,
+                                        text = label,
                                         style = LegadoTheme.typography.labelSmall,
                                         fontSize = 8.sp,
                                         color = LegadoTheme.colorScheme.onSurfaceVariant,

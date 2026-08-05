@@ -118,6 +118,7 @@
     <string name="book_type_text">文本</string>
     <string name="book_type_audio">音频</string>
     <string name="book_type_image">图片</string>
+    <string name="book_type_video">视频</string>
     <string name="add_tag">添加标签</string>
     <string name="edit_tag">编辑标签</string>
     <string name="tag">标签</string>
@@ -2415,8 +2416,8 @@
     <string name="month_format">%1$d月</string>
     <string name="count_unit">次</string>
     <string name="duration_unit">长</string>
-    <string name="less_count">少(</string>
-    <string name="more_count">多(</string>
+    <string name="less_count">少</string>
+    <string name="more_count">多</string>
     <string name="format_json">格式化</string>
     <string name="minify_json">压缩</string>
     <string name="no_logs">暂无日志</string>
@@ -2584,6 +2585,8 @@
     <string name="a11y_toggle_read_calendar">显示或隐藏阅读日历</string>
     <string name="no_read_record">没有阅读记录</string>
     <string name="read_record_options">阅读记录选项</string>
+    <string name="read_record_type_filter">记录类型</string>
+    <string name="read_record_type_all">全部</string>
     <string name="show_read_calendar">显示阅读日历</string>
     <string name="hide_read_calendar">隐藏阅读日历</string>
     <string name="selected_count">已选 %1$d 项</string>
@@ -2623,12 +2626,16 @@
     <string name="reading_days">阅读天数</string>
     <string name="total_read_books">累计读过</string>
     <string name="finished_books">读完书籍</string>
+    <string name="abandoned_books">弃文</string>
     <string name="reading_books">在读书籍</string>
     <string name="reading_words">阅读字数</string>
+    <string name="review_count">书评</string>
     <string name="reading_data">阅读数据</string>
     <string name="reading_heatmap">阅读热力图</string>
     <string name="reading_time_ranking">阅读时长榜</string>
     <string name="reading_calendar">读书日历</string>
+    <string name="reading_time_distribution">阅读时长分布</string>
+    <string name="reading_hourly_distribution">时段分布</string>
     <string name="days_format">%1$d天</string>
     <string name="books_format">%1$d本</string>
     <string name="a11y_reading_ranking_item">第 %1$d 名，%2$s，%3$s，阅读时长 %4$s</string>

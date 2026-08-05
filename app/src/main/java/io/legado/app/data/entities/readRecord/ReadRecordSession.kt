@@ -19,5 +19,9 @@ data class ReadRecordSession(
     val endTime: Long = 0,
 
     // 本次阅读的字数
-    val words: Long = 0
+    val words: Long = 0,
+
+    // 书籍类型位标记 (BookType)
+    @ColumnInfo(defaultValue = "8")
+    val bookType: Int = io.legado.app.constant.BookType.text
 )

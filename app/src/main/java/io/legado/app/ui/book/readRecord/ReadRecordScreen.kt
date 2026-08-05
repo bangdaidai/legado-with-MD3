@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Merge
 import androidx.compose.material.icons.filled.MoreVert
@@ -165,6 +166,7 @@ fun ReadRecordScreen(
     var showSearch by remember { mutableStateOf(false) }
     var showCalendar by remember { mutableStateOf(false) }
     var showActionsSheet by remember { mutableStateOf(false) }
+    var showTypeFilterDialog by remember { mutableStateOf(false) }
     var heatmapMode by remember { mutableStateOf(HeatmapMode.COUNT) }
     var selectedItemKeys by remember { mutableStateOf(emptySet<String>()) }
     val listState = rememberLazyListState()
@@ -442,10 +444,15 @@ fun ReadRecordScreen(
         show = showActionsSheet,
         showCalendar = showCalendar,
         readRecordEnabled = readRecordEnabled,
+        bookTypeFilter = state.bookTypeFilter,
         onDismissRequest = { showActionsSheet = false },
         onToggleCalendar = {
             showCalendar = !showCalendar
             showActionsSheet = false
+        },
+        onOpenTypeFilter = {
+            showActionsSheet = false
+            showTypeFilterDialog = true
         },
         onReadRecordEnabledChange = { checked ->
             onIntent(ReadRecordIntent.SetEnabled(checked))
@@ -456,6 +463,16 @@ fun ReadRecordScreen(
                 onIntent(ReadRecordIntent.ClearRecords)
                 selectedItemKeys = emptySet()
             }
+        }
+    )
+
+    ReadRecordTypeFilterDialog(
+        show = showTypeFilterDialog,
+        selected = state.bookTypeFilter,
+        onDismissRequest = { showTypeFilterDialog = false },
+        onSelect = { type ->
+            onIntent(ReadRecordIntent.SetBookTypeFilter(type))
+            showTypeFilterDialog = false
         }
     )
 
@@ -604,8 +621,10 @@ private fun ReadRecordActionsSheet(
     show: Boolean,
     showCalendar: Boolean,
     readRecordEnabled: Boolean,
+    bookTypeFilter: Int?,
     onDismissRequest: () -> Unit,
     onToggleCalendar: () -> Unit,
+    onOpenTypeFilter: () -> Unit,
     onReadRecordEnabledChange: (Boolean) -> Unit,
     onClearReadRecords: () -> Unit
 ) {
@@ -627,6 +646,12 @@ private fun ReadRecordActionsSheet(
                 imageVector = Icons.Default.CalendarMonth,
                 onClick = onToggleCalendar
             )
+            CompactClickableSettingItem(
+                title = stringResource(R.string.read_record_type_filter),
+                description = bookTypeFilterLabel(bookTypeFilter),
+                imageVector = Icons.Default.FilterList,
+                onClick = onOpenTypeFilter
+            )
             CompactSwitchSettingItem(
                 title = stringResource(R.string.enable_read_record),
                 checked = readRecordEnabled,
@@ -641,6 +666,65 @@ private fun ReadRecordActionsSheet(
             )
         }
     }
+}
+
+@Composable
+private fun bookTypeFilterLabel(bookType: Int?): String {
+    return when (bookType) {
+        io.legado.app.constant.BookType.text -> stringResource(R.string.book_type_text)
+        io.legado.app.constant.BookType.audio -> stringResource(R.string.book_type_audio)
+        io.legado.app.constant.BookType.video -> stringResource(R.string.book_type_video)
+        else -> stringResource(R.string.read_record_type_all)
+    }
+}
+
+@Composable
+private fun ReadRecordTypeFilterDialog(
+    show: Boolean,
+    selected: Int?,
+    onDismissRequest: () -> Unit,
+    onSelect: (Int?) -> Unit
+) {
+    if (!show) return
+    val options = listOf<Pair<Int?, String>>(
+        null to stringResource(R.string.read_record_type_all),
+        io.legado.app.constant.BookType.text to stringResource(R.string.book_type_text),
+        io.legado.app.constant.BookType.audio to stringResource(R.string.book_type_audio),
+        io.legado.app.constant.BookType.video to stringResource(R.string.book_type_video)
+    )
+    AppAlertDialog(
+        show = show,
+        onDismissRequest = onDismissRequest,
+        title = stringResource(R.string.read_record_type_filter),
+        content = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                options.forEach { (type, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                role = Role.Button,
+                                onClick = { onSelect(type) }
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppText(
+                            text = label,
+                            modifier = Modifier.weight(1f),
+                            style = if (type == selected) {
+                                MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                MaterialTheme.typography.bodyLarge
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    )
 }
 
 private fun ReadRecord.mergeKey(): String {
@@ -778,44 +862,23 @@ fun HeatmapCalendarSection(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .padding(bottom = 32.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            WeekdayLabelsColumn(
-                cellSize = config.interactiveCellSize,
-                cellSpacing = config.cellSpacing
-            )
-
-            LazyRow(
-                state = listState,
-                horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
-                modifier = Modifier
-                    .weight(1f)
-                    .fadingEdge(listState, config.gradientWidth)
-            ) {
-                val firstReadDate = listOfNotNull(
-                    dailyReadCounts.filterValues { it > 0 }.keys.minOrNull(),
-                    dailyReadTimes.filterValues { it > 0L }.keys.minOrNull()
-                ).minOrNull()
-
-                if (firstReadDate != null) {
-                    item {
-                        NoEarlierDataIndicator(
-                            cellSize = config.cellSize,
-                            touchTargetSize = config.interactiveCellSize,
-                        )
-                    }
-                }
-
-                items(weeks.size) { weekIndex ->
-                    HeatmapWeekColumn(
-                        week = weeks[weekIndex],
-                        mode = currentMode,
-                        dailyReadCounts = dailyReadCounts,
-                        dailyReadTimes = dailyReadTimes,
-                        selectedDate = selectedDate,
-                        config = config,
-                        onDateSelected = onDateSelected
-                    )
-                }
+        LazyRow(
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fadingEdge(listState, config.gradientWidth)
+        ) {
+            items(weeks.size) { weekIndex ->
+                HeatmapWeekColumn(
+                    week = weeks[weekIndex],
+                    mode = currentMode,
+                    dailyReadCounts = dailyReadCounts,
+                    dailyReadTimes = dailyReadTimes,
+                    selectedDate = selectedDate,
+                    config = config,
+                    onDateSelected = onDateSelected
+                )
             }
         }
 

@@ -7,9 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.heatmap.*
-import io.legado.app.ui.widget.components.text.AppText
 import java.time.LocalDate
 
 @Composable
@@ -19,7 +17,7 @@ fun HeatmapCalendarSection(
     dailyReadTimes: Map<LocalDate, Long>,
     currentMode: HeatmapMode,
     selectedDate: LocalDate?,
-    onDateSelected: (LocalDate) -> Unit,
+    onDateSelected: ((LocalDate) -> Unit)?,
     config: HeatmapConfig = HeatmapConfig()
 ) {
     val (startDate, endDate) = rememberDateRange(dailyReadCounts, dailyReadTimes)
@@ -28,63 +26,28 @@ fun HeatmapCalendarSection(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Start
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
+        LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
+            reverseLayout = true
         ) {
-            AppText(
-                text = heatmapCalendarTitle(),
-                style = LegadoTheme.typography.titleSmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            HeatmapLegend(mode = currentMode, config = config)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            WeekdayLabelsColumn(
-                cellSize = config.interactiveCellSize,
-                cellSpacing = config.cellSpacing
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            LazyRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
-                reverseLayout = true
-            ) {
-                item {
-                    HeatmapCalendarEndAction(
-                        onClearDate = { onDateSelected(LocalDate.now()) }
-                    )
-                }
-                items(weeks) { week ->
-                    HeatmapWeekColumn(
-                        week = week,
-                        mode = currentMode,
-                        dailyReadCounts = dailyReadCounts,
-                        dailyReadTimes = dailyReadTimes,
-                        selectedDate = selectedDate,
-                        config = config,
-                        onDateSelected = onDateSelected
-                    )
-                }
-                item {
-                    HeatmapCalendarStartAction(
-                        currentMode = currentMode,
-                        onModeChanged = {}
-                    )
-                }
-                item {
-                    NoEarlierDataIndicator(
-                        cellSize = config.cellSize,
-                        touchTargetSize = config.interactiveCellSize,
-                    )
-                }
+            items(weeks) { week ->
+                HeatmapWeekColumn(
+                    week = week,
+                    mode = currentMode,
+                    dailyReadCounts = dailyReadCounts,
+                    dailyReadTimes = dailyReadTimes,
+                    selectedDate = selectedDate,
+                    config = config,
+                    onDateSelected = onDateSelected
+                )
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        HeatmapLegend(mode = currentMode, config = config)
     }
 }

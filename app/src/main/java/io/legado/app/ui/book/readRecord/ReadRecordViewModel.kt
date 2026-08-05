@@ -39,6 +39,7 @@ data class ReadRecordUiState(
     val dailyReadTimes: Map<LocalDate, Long> = emptyMap(),
     val displayMode: DisplayMode = DisplayMode.AGGREGATE,
     val readRecordEnabled: Boolean = true,
+    val bookTypeFilter: Int? = null,
 )
 
 enum class DisplayMode {
@@ -70,6 +71,7 @@ class ReadRecordViewModel(
 
     private val _searchKey = MutableStateFlow("")
     private val _selectedDate = MutableStateFlow<LocalDate?>(null)
+    private val _bookTypeFilter = MutableStateFlow<Int?>(null)
     val readRecordEnabled: StateFlow<Boolean> = repository.readRecordEnabled
         .stateIn(
             scope = viewModelScope,
@@ -78,25 +80,25 @@ class ReadRecordViewModel(
         )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val loadedDataFlow = _searchKey
-        .flatMapLatest { query ->
+    private val loadedDataFlow = combine(_searchKey, _bookTypeFilter) { q, t -> q to t }
+        .flatMapLatest { (query, bookType) ->
             combine(
-                repository.getAllRecordDetails(query),
-                repository.getLatestReadRecords(query),
-                repository.getAllSessions(),
-                repository.getTotalReadTime()
+                repository.getAllRecordDetails(query, bookType),
+                repository.getLatestReadRecords(query, bookType),
+                repository.getAllSessions(bookType),
+                repository.getTotalReadTime(bookType)
             ) { details, latest, sessions, totalTime ->
                 LoadedData(totalTime, details, latest, sessions)
             }
         }
 
     val uiState: StateFlow<ReadRecordUiState> = combine(
-        loadedDataFlow,
+        combine(loadedDataFlow, _bookTypeFilter) { d, t -> d to t },
         _selectedDate,
         _searchKey,
         _displayMode,
         readRecordEnabled,
-    ) { data, selectedDate, searchKey, displayMode, enabled ->
+    ) { (data, bookTypeFilter), selectedDate, searchKey, displayMode, enabled ->
         val dateStr = selectedDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
 
         val dailyCounts = data.details
@@ -145,6 +147,7 @@ class ReadRecordViewModel(
             dailyReadTimes = dailyTimes,
             displayMode = displayMode,
             readRecordEnabled = enabled,
+            bookTypeFilter = bookTypeFilter,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -163,11 +166,16 @@ class ReadRecordViewModel(
             ReadRecordIntent.ClearRecords -> clearReadRecords()
             is ReadRecordIntent.SetEnabled -> setReadRecordEnabled(intent.enabled)
             is ReadRecordIntent.MergeRecords -> mergeReadRecords(intent.target, intent.sources)
+            is ReadRecordIntent.SetBookTypeFilter -> setBookTypeFilter(intent.bookType)
         }
     }
 
     fun setSearchKey(query: String) {
         _searchKey.value = query
+    }
+
+    fun setBookTypeFilter(bookType: Int?) {
+        _bookTypeFilter.value = bookType
     }
 
     fun setDisplayMode(mode: DisplayMode) {
@@ -296,6 +304,7 @@ sealed interface ReadRecordIntent {
     data object ClearRecords : ReadRecordIntent
     data class SetEnabled(val enabled: Boolean) : ReadRecordIntent
     data class MergeRecords(val target: ReadRecord, val sources: List<ReadRecord>) : ReadRecordIntent
+    data class SetBookTypeFilter(val bookType: Int?) : ReadRecordIntent
 }
 
 sealed interface ReadRecordEffect

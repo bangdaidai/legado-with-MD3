@@ -310,7 +310,8 @@ fun Book.clearType() {
 fun Book.isType(@BookType.Type bookType: Int): Boolean = type and bookType > 0
 
 fun Book.upType() {
-    if (type < 8) {
+    // 4 已是 BookType.video 位标记, 不再当作旧的 BookSourceType 值转换
+    if (type < 4) {
         type = when (type) {
             BookSourceType.image -> BookType.image
             BookSourceType.audio -> BookType.audio

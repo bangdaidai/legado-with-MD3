@@ -24,6 +24,7 @@ object DatabaseMigrations {
             migration_98_99,
             migration_99_100,
             migration_100_101,
+            migration_103_104,
         )
     }
 
@@ -712,6 +713,18 @@ object DatabaseMigrations {
                 )
                 """.trimIndent()
             )
+        }
+    }
+
+    // endregion
+
+    // region 103→104: readRecord / readRecordDetail / readRecordSession 增加 bookType 列
+
+    private val migration_103_104 = object : Migration(103, 104) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE readRecord ADD COLUMN bookType INTEGER NOT NULL DEFAULT 8")
+            database.execSQL("ALTER TABLE readRecordDetail ADD COLUMN bookType INTEGER NOT NULL DEFAULT 8")
+            database.execSQL("ALTER TABLE readRecordSession ADD COLUMN bookType INTEGER NOT NULL DEFAULT 8")
         }
     }
 

@@ -10,7 +10,8 @@ import io.legado.app.ui.theme.LegadoTheme
 import java.time.LocalDate
 
 /**
- * 计算日期范围：从最早有数据的日期前1个月到最晚有数据的日期后1个月
+ * 计算日期范围：起始日为最早有记录的年份 1 月 1 日（无记录则为今年 1 月 1 日）；
+ * 结束日为今年最后一周的周日（即 12 月 31 日所在那周的周日），确保整年格子完整显示。
  */
 @Composable
 fun rememberDateRange(
@@ -23,13 +24,12 @@ fun rememberDateRange(
             dailyReadTimes.filterValues { it > 0L }.keys.minOrNull()
         ).minOrNull()
 
-        val lastReadDate = listOfNotNull(
-            dailyReadCounts.filterValues { it > 0 }.keys.maxOrNull(),
-            dailyReadTimes.filterValues { it > 0L }.keys.maxOrNull()
-        ).maxOrNull()
-
-        val startDate = firstReadDate?.minusMonths(1) ?: LocalDate.now()
-        val endDate = lastReadDate ?: startDate
+        val today = LocalDate.now()
+        val startYear = firstReadDate?.year ?: today.year
+        val startDate = LocalDate.of(startYear, 1, 1)
+        // 结束日：今年 12 月 31 日所在那周的周日
+        val endOfYear = LocalDate.of(today.year, 12, 31)
+        val endDate = endOfYear.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY))
 
         startDate to endDate
     }
@@ -106,7 +106,7 @@ fun rememberHeatmapLevel(
 fun heatmapColorForLevel(
     level: Int,
     primary: Color = LegadoTheme.colorScheme.primary,
-    emptyColor: Color = LegadoTheme.colorScheme.surface
+    emptyColor: Color = LegadoTheme.colorScheme.surfaceVariant
 ): Color {
     return when (level) {
         0 -> emptyColor

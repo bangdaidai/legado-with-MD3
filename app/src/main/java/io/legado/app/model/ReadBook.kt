@@ -708,7 +708,8 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                     bookAuthor = currentBookAuthor,
                     startTime = readStartTime,
                     endTime = readStartTime,
-                    words = durChapterIndex.toLong()
+                    words = durChapterIndex.toLong(),
+                    bookType = book?.type ?: io.legado.app.constant.BookType.text
                 )
             }
         }

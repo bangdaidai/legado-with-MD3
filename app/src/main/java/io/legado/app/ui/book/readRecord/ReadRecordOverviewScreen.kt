@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.ui.book.readRecord.component.ReadingBar
 import io.legado.app.ui.book.readRecord.component.ReadingTimeBarChartCard
 import io.legado.app.ui.book.readRecord.component.StatItem
 import io.legado.app.ui.book.readRecord.component.StatsGridCard
@@ -136,12 +137,6 @@ fun ReadRecordOverviewScreen(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
 
-                if (state.period != ReadPeriod.ALL && state.dailyTimeData.isNotEmpty()) {
-                    item {
-                        ReadingTimeBarChartCard(data = state.dailyTimeData, period = state.period)
-                    }
-                }
-
                 item {
                     val readingTime = ReadRecordFormatter.hourMinuteDuration(state.totalTime)
                     val readingTimeText = when {
@@ -160,18 +155,23 @@ fun ReadRecordOverviewScreen(
                         )
                     }
                     val stats = listOf(
-                        StatItem(
-                            stringResource(R.string.reading_time),
-                            readingTimeText,
-                        ),
-                        StatItem(stringResource(R.string.reading_days), stringResource(R.string.days_format, state.readingDays)),
-                        StatItem(stringResource(R.string.total_read_books), stringResource(R.string.books_format, state.totalBooks)),
-                        StatItem(stringResource(R.string.finished_books), stringResource(R.string.books_format, state.finishedBooks)),
+                        StatItem(stringResource(R.string.reading_time), readingTimeText),
                         StatItem(stringResource(R.string.reading_books), stringResource(R.string.books_format, state.readingBooks)),
+                        StatItem(stringResource(R.string.finished_books), stringResource(R.string.books_format, state.finishedBooks)),
+                        StatItem(stringResource(R.string.abandoned_books), stringResource(R.string.books_format, state.abandonedBooks)),
+                        StatItem(stringResource(R.string.reading_days), stringResource(R.string.days_format, state.readingDays)),
+                        StatItem(stringResource(R.string.review_count), state.reviewCount.toString()),
                         StatItem(stringResource(R.string.reading_words), ReadRecordFormatter.formatWords(state.totalWords))
                     )
                     StatsGridCard(title = stringResource(R.string.reading_data), items = stats)
                 }
+
+                if (state.period != ReadPeriod.ALL) {
+                    item {
+                        ReadingDistributionCard(state)
+                    }
+                }
+
 
                 item {
                     HeatmapCard(state)
@@ -183,8 +183,10 @@ fun ReadRecordOverviewScreen(
                     }
                 }
 
-                item {
-                    ReadingCalendarCard(state, loadBookCover)
+                if (state.period == ReadPeriod.MONTH) {
+                    item {
+                        ReadingCalendarCard(state, loadBookCover)
+                    }
                 }
             }
         }
@@ -273,6 +275,67 @@ fun DateNavigator(
             icon = Icons.AutoMirrored.Filled.ArrowRight,
             contentDescription = stringResource(R.string.next)
         )
+    }
+}
+
+@Composable
+fun ReadingDistributionCard(state: ReadRecordOverviewUiState) {
+    when (state.period) {
+        ReadPeriod.DAY -> {
+            if (state.hourlyTimeData.isEmpty()) return
+            val bars = state.hourlyTimeData.map { (hour, time) ->
+                // 每 6 小时标注一次刻度: 0 / 6 / 12 / 18
+                ReadingBar(label = if (hour % 6 == 0) hour.toString() else null, value = time)
+            }
+            ReadingTimeBarChartCard(
+                bars = bars,
+                title = stringResource(R.string.reading_hourly_distribution),
+                barWidthFraction = 0.7f
+            )
+        }
+
+        ReadPeriod.WEEK -> {
+            if (state.dailyTimeData.isEmpty()) return
+            val bars = state.dailyTimeData.map { (date, time) ->
+                val label = when (date.dayOfWeek.value) {
+                    1 -> "一"; 2 -> "二"; 3 -> "三"; 4 -> "四"; 5 -> "五"; 6 -> "六"; 7 -> "日"; else -> ""
+                }
+                ReadingBar(label = label, value = time)
+            }
+            ReadingTimeBarChartCard(
+                bars = bars,
+                title = stringResource(R.string.reading_time_distribution),
+                barWidthFraction = 0.6f
+            )
+        }
+
+        ReadPeriod.MONTH -> {
+            if (state.dailyTimeData.isEmpty()) return
+            val lastIndex = state.dailyTimeData.lastIndex
+            val bars = state.dailyTimeData.mapIndexed { index, (date, time) ->
+                val show = date.dayOfMonth == 1 || date.dayOfMonth == 15 || index == lastIndex
+                ReadingBar(label = if (show) date.dayOfMonth.toString() else null, value = time)
+            }
+            ReadingTimeBarChartCard(
+                bars = bars,
+                title = stringResource(R.string.reading_time_distribution),
+                barWidthFraction = 0.8f
+            )
+        }
+
+        ReadPeriod.YEAR -> {
+            if (state.dailyTimeData.isEmpty()) return
+            val bars = state.dailyTimeData.map { (date, time) ->
+                ReadingBar(label = "${date.monthValue}月", value = time)
+            }
+            ReadingTimeBarChartCard(
+                bars = bars,
+                title = stringResource(R.string.reading_time_distribution),
+                barWidthFraction = 0.6f
+            )
+        }
+
+        ReadPeriod.ALL -> Unit
     }
 }
 
@@ -408,7 +471,8 @@ fun ReadingCalendarCard(
     val currentMonth = YearMonth.from(state.referenceDate)
     val daysInMonth = currentMonth.lengthOfMonth()
     val firstDayOfMonth = currentMonth.atDay(1)
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 0 for Sunday
+    // 周一为第一天: Monday=0, Tuesday=1, ..., Sunday=6
+    val firstDayOfWeek = (firstDayOfMonth.dayOfWeek.value - 1) % 7
 
     GlassCard(
         modifier = Modifier
@@ -429,7 +493,7 @@ fun ReadingCalendarCard(
             Spacer(modifier = Modifier.height(16.dp))
             
             Row(modifier = Modifier.fillMaxWidth()) {
-                val days = listOf("日", "一", "二", "三", "四", "五", "六")
+                val days = listOf("一", "二", "三", "四", "五", "六", "日")
                 days.forEach { day ->
                     AppText(
                         text = day,

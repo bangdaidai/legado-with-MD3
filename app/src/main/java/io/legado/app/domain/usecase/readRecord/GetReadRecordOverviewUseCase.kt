@@ -3,11 +3,13 @@ package io.legado.app.domain.usecase.readRecord
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
+import io.legado.app.data.entities.readRecord.ReadRecordSession
 import io.legado.app.ui.book.readRecord.ReadBookRanking
 import io.legado.app.ui.book.readRecord.ReadPeriod
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewUiState
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
@@ -18,7 +20,8 @@ class GetReadRecordOverviewUseCase {
         refDate: LocalDate,
         details: List<ReadRecordDetail>,
         latestRecords: List<ReadRecord>,
-        allBooks: List<Book>
+        allBooks: List<Book>,
+        sessions: List<ReadRecordSession>
     ): ReadRecordOverviewUiState {
         val (startDate, endDate) = getPeriodRange(period, refDate)
 
@@ -131,6 +134,12 @@ class GetReadRecordOverviewUseCase {
             .filterKeys { it != LocalDate.MIN }
             .mapValues { it.value.size }
 
+        val hourlyTimeData = if (period == ReadPeriod.DAY) {
+            computeHourlyDistribution(refDate, sessions)
+        } else {
+            emptyList()
+        }
+
         return ReadRecordOverviewUiState(
             period = period,
             referenceDate = refDate,
@@ -141,11 +150,40 @@ class GetReadRecordOverviewUseCase {
             readingBooks = readingCount,
             totalWords = totalWords,
             dailyTimeData = dailyTimeData,
+            hourlyTimeData = hourlyTimeData,
             topBooks = topBooks,
             dailyTopBook = dailyTopBookMap,
             allReadTimes = allReadTimesMap,
             allReadCounts = allReadCountsMap
         )
+    }
+
+    /**
+     * 将某一天内的阅读会话按小时(0-23)拆分累加，返回 24 个桶的时长(毫秒)。
+     * 跨小时的会话会按各小时占用的时间分别计入对应桶。
+     */
+    private fun computeHourlyDistribution(
+        refDate: LocalDate,
+        sessions: List<ReadRecordSession>
+    ): List<Pair<Int, Long>> {
+        val zone = ZoneId.systemDefault()
+        val dayStart = refDate.atStartOfDay(zone).toInstant().toEpochMilli()
+        val dayEnd = refDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val buckets = LongArray(24)
+        sessions.forEach { session ->
+            val start = maxOf(session.startTime, dayStart)
+            val end = minOf(session.endTime, dayEnd)
+            if (end <= start) return@forEach
+            var cursor = start
+            while (cursor < end) {
+                val hour = ((cursor - dayStart) / 3_600_000L).toInt().coerceIn(0, 23)
+                val nextHourBoundary = dayStart + (hour + 1) * 3_600_000L
+                val segmentEnd = minOf(end, nextHourBoundary)
+                buckets[hour] += segmentEnd - cursor
+                cursor = segmentEnd
+            }
+        }
+        return (0..23).map { it to buckets[it] }
     }
 
     private fun getPeriodRange(period: ReadPeriod, refDate: LocalDate): Pair<LocalDate, LocalDate> {

@@ -27,6 +27,9 @@ interface ReadRecordDao {
     @Query("SELECT sum(readTime) FROM readRecord")
     fun getTotalReadTime(): Flow<Long?>
 
+    @Query("SELECT sum(readTime) FROM readRecord WHERE (bookType & :bookType) > 0")
+    fun getTotalReadTimeByType(bookType: Int): Flow<Long?>
+
     @Query(
         """
         SELECT COUNT(*) FROM (
@@ -156,9 +159,17 @@ interface ReadRecordDao {
     @Query("SELECT * FROM readRecord ORDER BY lastRead DESC")
     fun getAllReadRecordsSortedByLastRead(): Flow<List<ReadRecord>>
 
+    /** 获取所有 ReadRecord（按 bookType 过滤），按最后阅读时间倒序排列 */
+    @Query("SELECT * FROM readRecord WHERE (bookType & :bookType) > 0 ORDER BY lastRead DESC")
+    fun getAllReadRecordsSortedByLastReadByType(bookType: Int): Flow<List<ReadRecord>>
+
     /** 搜索 ReadRecord，按最后阅读时间倒序排列 */
     @Query("SELECT * FROM readRecord WHERE bookName LIKE '%' || :query || '%' OR bookAuthor LIKE '%' || :query || '%' ORDER BY lastRead DESC")
     fun searchReadRecordsByLastRead(query: String): Flow<List<ReadRecord>>
+
+    /** 搜索 ReadRecord（按 bookType 过滤），按最后阅读时间倒序排列 */
+    @Query("SELECT * FROM readRecord WHERE ((bookType & :bookType) > 0) AND (bookName LIKE '%' || :query || '%' OR bookAuthor LIKE '%' || :query || '%') ORDER BY lastRead DESC")
+    fun searchReadRecordsByLastReadByType(query: String, bookType: Int): Flow<List<ReadRecord>>
 
     @Query("SELECT * FROM readRecord WHERE deviceId = :deviceId AND bookName = :bookName AND bookAuthor != :excludeAuthor ORDER BY lastRead DESC")
     suspend fun getReadRecordsByNameExcludingAuthor(
@@ -221,11 +232,20 @@ interface ReadRecordDao {
     @Query("SELECT * FROM readRecordDetail ORDER BY date DESC, lastReadTime DESC")
     fun getAllDetails(): Flow<List<ReadRecordDetail>>
 
+    @Query("SELECT * FROM readRecordDetail WHERE (bookType & :bookType) > 0 ORDER BY date DESC, lastReadTime DESC")
+    fun getAllDetailsByType(bookType: Int): Flow<List<ReadRecordDetail>>
+
     @Query("SELECT * FROM readRecordDetail WHERE bookName LIKE '%' || :query || '%' OR bookAuthor LIKE '%' || :query || '%' ORDER BY date DESC, lastReadTime DESC")
     fun searchDetails(query: String): Flow<List<ReadRecordDetail>>
 
+    @Query("SELECT * FROM readRecordDetail WHERE ((bookType & :bookType) > 0) AND (bookName LIKE '%' || :query || '%' OR bookAuthor LIKE '%' || :query || '%') ORDER BY date DESC, lastReadTime DESC")
+    fun searchDetailsByType(query: String, bookType: Int): Flow<List<ReadRecordDetail>>
+
     @Query("SELECT * FROM readRecordSession WHERE deviceId = :deviceId ORDER BY startTime ASC")
     fun getAllSessions(deviceId: String): Flow<List<ReadRecordSession>>
+
+    @Query("SELECT * FROM readRecordSession WHERE deviceId = :deviceId AND (bookType & :bookType) > 0 ORDER BY startTime ASC")
+    fun getAllSessionsByType(deviceId: String, bookType: Int): Flow<List<ReadRecordSession>>
 
     @Query("SELECT * FROM readRecordSession WHERE deviceId = :deviceId AND bookName = :bookName AND bookAuthor = :bookAuthor")
     suspend fun getSessionsByBook(deviceId: String, bookName: String, bookAuthor: String): List<ReadRecordSession>

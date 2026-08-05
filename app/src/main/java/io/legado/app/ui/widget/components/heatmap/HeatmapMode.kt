@@ -8,12 +8,12 @@ enum class HeatmapMode {
 }
 
 data class HeatmapConfig(
-    val cellSize: Dp = 16.dp,
-    val touchTargetSize: Dp = 16.dp,
-    val cellSpacing: Dp = 4.dp,
-    val cornerRadius: Dp = 4.dp,
-    val gradientWidth: Dp = 16.dp,
-    val legendSize: Dp = 12.dp
+    val cellSize: Dp = 12.dp,
+    val touchTargetSize: Dp = 14.dp,
+    val cellSpacing: Dp = 3.dp,
+    val cornerRadius: Dp = 3.dp,
+    val gradientWidth: Dp = 12.dp,
+    val legendSize: Dp = 10.dp
 ) {
     val interactiveCellSize: Dp
         get() = maxOf(cellSize, touchTargetSize)

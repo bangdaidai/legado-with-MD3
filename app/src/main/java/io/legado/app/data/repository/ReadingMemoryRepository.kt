@@ -44,6 +44,14 @@ class ReadingMemoryRepository(
 
     fun observeAll(): Flow<List<ReadingMemory>> = dao.getAll()
 
+    /** 弃文书籍数（供阅读统计使用） */
+    fun observeAbandonedCount(): Flow<Int> = dao.getAbandonedCount()
+
+    /** 书评条数（供阅读统计使用） */
+    fun observeReviewCount(): Flow<Int> = dao.getReviewCount()
+
+
+
     fun observeByBookUrl(bookUrl: String): Flow<ReadingMemory?> =
         dao.getByBookUrl(bookUrl).onEach {
             AppLog.put("[阅读记忆] observeByBookUrl bookUrl=$bookUrl result=${it?.bookName ?: "null(无记忆行)"}")

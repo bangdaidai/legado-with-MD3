@@ -201,7 +201,8 @@ fun BookInfoEditContent(
                     bookTypes = listOf(
                         BookInfoEditType.TEXT to stringResource(R.string.book_type_text),
                         BookInfoEditType.AUDIO to stringResource(R.string.book_type_audio),
-                        BookInfoEditType.IMAGE to stringResource(R.string.book_type_image)
+                        BookInfoEditType.IMAGE to stringResource(R.string.book_type_image),
+                        BookInfoEditType.VIDEO to stringResource(R.string.book_type_video)
                     ),
                     selectedType = uiState.selectedType,
                     onTypeSelected = { viewModel.onBookTypeChange(it) }

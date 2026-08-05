@@ -12,5 +12,7 @@ data class ReadRecord(
     @ColumnInfo(defaultValue = "0")
     var readTime: Long = 0L,
     @ColumnInfo(defaultValue = "0")
-    var lastRead: Long = System.currentTimeMillis()
+    var lastRead: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "8")
+    var bookType: Int = io.legado.app.constant.BookType.text
 )

@@ -1609,6 +1609,7 @@
     <string name="book_type_image">圖漫</string>
     <string name="book_type_label">書籍類型</string>
     <string name="book_type_text">文字</string>
+    <string name="book_type_video">影片</string>
     <string name="bookmark_management">書籤管理</string>
     <string name="bookmarks_added_count">已添加 %1$d 個書籤</string>
     <string name="bookshelf_update_limit">書架更新限制</string>
@@ -1851,7 +1852,7 @@
     <string name="lab_enabled_summary">開啟以顯示實驗性功能。這些功能可能不穩定。</string>
     <string name="lab_enabled_title">啟用實驗室</string>
     <string name="lab_setting">實驗室</string>
-    <string name="less_count">較少（</string>
+    <string name="less_count">較少</string>
     <string name="light_mode">淺色模式</string>
     <string name="list">列表</string>
     <string name="list_cover_width">列表封面寬度</string>
@@ -1896,7 +1897,7 @@
     <string name="minify_json">壓縮</string>
     <string name="month_format">%1$d</string>
     <string name="more_actions">更多操作</string>
-    <string name="more_count">較多（</string>
+    <string name="more_count">較多</string>
     <string name="more_setting">更多設定</string>
     <string name="move_to_bottom">移至底部</string>
     <string name="move_to_top">移至頂部</string>

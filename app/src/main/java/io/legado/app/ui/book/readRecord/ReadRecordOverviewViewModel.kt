@@ -5,11 +5,14 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadRecordRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
@@ -21,9 +24,13 @@ data class ReadRecordOverviewUiState(
     val readingDays: Int = 0,
     val totalBooks: Int = 0,
     val finishedBooks: Int = 0,
+    // TODO: 尚未接入数据源，需要从 ReadingMemory(abandoned) 统计后填充
+    val abandonedBooks: Int = 0,
+    val reviewCount: Int = 0,
     val readingBooks: Int = 0,
     val totalWords: Long = 0,
     val dailyTimeData: List<Pair<LocalDate, Long>> = emptyList(),
+    val hourlyTimeData: List<Pair<Int, Long>> = emptyList(),
     val topBooks: List<ReadBookRanking> = emptyList(),
     val dailyTopBook: Map<LocalDate, Pair<String, String>> = emptyMap(),
     val allReadTimes: Map<LocalDate, Long> = emptyMap(),
@@ -44,21 +51,34 @@ enum class ReadPeriod {
 class ReadRecordOverviewViewModel(
     private val repository: ReadRecordRepository,
     private val bookRepository: BookRepository,
+    private val readingMemoryRepository: ReadingMemoryRepository,
     private val getReadRecordOverviewUseCase: GetReadRecordOverviewUseCase
 ) : ViewModel() {
 
     private val _period = MutableStateFlow(ReadPeriod.DAY)
     private val _referenceDate = MutableStateFlow(LocalDate.now())
 
+    private val periodAndDate = combine(_period, _referenceDate) { period, refDate ->
+        period to refDate
+    }
+
     val uiState: StateFlow<ReadRecordOverviewUiState> = combine(
-        _period,
-        _referenceDate,
+        periodAndDate,
         repository.getAllRecordDetails(""),
         repository.getLatestReadRecords(""),
-        bookRepository.getAllBooks()
-    ) { period, refDate, details, latestRecords, allBooks ->
-        getReadRecordOverviewUseCase(period, refDate, details, latestRecords, allBooks)
-    }.stateIn(
+        bookRepository.getAllBooks(),
+        combine(
+            repository.getAllSessions(),
+            readingMemoryRepository.observeAbandonedCount(),
+            readingMemoryRepository.observeReviewCount()
+        ) { sessions, abandoned, review ->
+            Triple(sessions, abandoned, review)
+        }
+    ) { (period, refDate), details, latestRecords, allBooks, extras ->
+        val (sessions, abandonedCount, reviewCount) = extras
+        getReadRecordOverviewUseCase(period, refDate, details, latestRecords, allBooks, sessions)
+            .copy(abandonedBooks = abandonedCount, reviewCount = reviewCount)
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReadRecordOverviewUiState()

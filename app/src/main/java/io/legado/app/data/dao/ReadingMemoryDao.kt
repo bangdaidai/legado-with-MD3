@@ -22,6 +22,16 @@ interface ReadingMemoryDao {
     @Query("SELECT * FROM readingMemory ORDER BY updateTime DESC")
     fun getAll(): Flow<List<ReadingMemory>>
 
+    /** 弃文书籍数（Flow，供阅读统计使用） */
+    @Query("SELECT COUNT(*) FROM readingMemory WHERE abandoned = 1")
+    fun getAbandonedCount(): Flow<Int>
+
+    /** 书评条数（Flow，供阅读统计使用） */
+    @Query("SELECT COUNT(*) FROM readingMemory WHERE review IS NOT NULL AND review != ''")
+    fun getReviewCount(): Flow<Int>
+
+
+
     /** 插入或替换 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(memory: ReadingMemory)

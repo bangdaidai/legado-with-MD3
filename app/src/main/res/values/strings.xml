@@ -146,6 +146,7 @@
     <string name="book_type_text">Text</string>
     <string name="book_type_audio">Audio</string>
     <string name="book_type_image">Image</string>
+    <string name="book_type_video">Video</string>
     <string name="add_tag">Add Tag</string>
     <string name="edit_tag">Edit Tag</string>
     <string name="tag">Tag</string>
@@ -2440,8 +2441,8 @@
     <string name="month_format">%1$d</string>
     <string name="count_unit">times</string>
     <string name="duration_unit">duration</string>
-    <string name="less_count">Less(</string>
-    <string name="more_count">More(</string>
+    <string name="less_count">Less</string>
+    <string name="more_count">More</string>
     <string name="format_json">Format</string>
     <string name="minify_json">Minify</string>
     <string name="no_logs">No logs</string>
@@ -2590,6 +2591,8 @@
     <string name="a11y_toggle_read_calendar">Show or hide reading calendar</string>
     <string name="no_read_record">No reading records</string>
     <string name="read_record_options">Reading record options</string>
+    <string name="read_record_type_filter">Record type</string>
+    <string name="read_record_type_all">All</string>
     <string name="show_read_calendar">Show reading calendar</string>
     <string name="hide_read_calendar">Hide reading calendar</string>
     <string name="selected_count">%1$d selected</string>
@@ -2629,12 +2632,16 @@
     <string name="reading_days">Reading days</string>
     <string name="total_read_books">Books read</string>
     <string name="finished_books">Finished books</string>
+    <string name="abandoned_books">Abandoned</string>
     <string name="reading_books">Reading books</string>
     <string name="reading_words">Words read</string>
+    <string name="review_count">Reviews</string>
     <string name="reading_data">Reading data</string>
     <string name="reading_heatmap">Reading heatmap</string>
     <string name="reading_time_ranking">Reading time ranking</string>
     <string name="reading_calendar">Reading calendar</string>
+    <string name="reading_time_distribution">Reading time distribution</string>
+    <string name="reading_hourly_distribution">Hourly distribution</string>
     <string name="days_format">%1$d days</string>
     <string name="books_format">%1$d books</string>
     <string name="a11y_reading_ranking_item">No. %1$d, %2$s, %3$s, read for %4$s</string>

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,11 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,22 +58,64 @@ fun StatsGridCard(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            Column {
-                for (i in items.indices step 2) {
+            if (items.isNotEmpty()) {
+                HeroStatCell(items[0], Modifier.fillMaxWidth())
+            }
+
+            val rest = if (items.size > 1) items.subList(1, items.size) else emptyList()
+            if (rest.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                for (i in rest.indices step 3) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        StatCell(items[i], Modifier.weight(1f))
-                        if (i + 1 < items.size) {
-                            StatCell(items[i + 1], Modifier.weight(1f))
-                        } else {
-                            Spacer(modifier = Modifier.weight(1f))
+                        for (j in 0 until 3) {
+                            val index = i + j
+                            if (index < rest.size) {
+                                StatCell(rest[index], Modifier.weight(1f))
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
-                    if (i + 2 < items.size) Spacer(modifier = Modifier.height(16.dp))
+                    if (i + 3 < rest.size) Spacer(modifier = Modifier.height(8.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HeroStatCell(
+    item: StatItem,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        AppText(
+            text = item.label,
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        AnimatedContent(
+            targetState = item.value,
+            transitionSpec = {
+                (fadeIn() + slideInVertically { it / 2 }).togetherWith(fadeOut() + slideOutVertically { -it / 2 })
+            },
+            label = "HeroStatValue"
+        ) { targetValue ->
+            AppText(
+                text = targetValue,
+                style = LegadoTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = LegadoTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -81,15 +126,12 @@ private fun StatCell(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.Start
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(LegadoTheme.colorScheme.surfaceVariant)
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AppText(
-            text = item.label,
-            style = LegadoTheme.typography.labelSmall,
-            color = LegadoTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Start
-        )
         AnimatedContent(
             targetState = item.value,
             transitionSpec = {
@@ -99,11 +141,18 @@ private fun StatCell(
         ) { targetValue ->
             AppText(
                 text = targetValue,
-                style = LegadoTheme.typography.titleLarge,
+                style = LegadoTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = LegadoTheme.colorScheme.primary,
-                textAlign = TextAlign.Start
+                color = LegadoTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
             )
         }
+        Spacer(modifier = Modifier.height(2.dp))
+        AppText(
+            text = item.label,
+            style = LegadoTheme.typography.labelSmall,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }

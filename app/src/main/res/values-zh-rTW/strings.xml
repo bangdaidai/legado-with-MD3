@@ -1464,6 +1464,7 @@
     <string name="book_type_text">文字</string>
     <string name="book_type_audio">音訊</string>
     <string name="book_type_image">圖片</string>
+    <string name="book_type_video">影片</string>
     <string name="add_tag">新增標籤</string>
     <string name="edit_tag">編輯標籤</string>
     <string name="tag">標籤</string>
@@ -2278,8 +2279,8 @@
     <string name="month_format">%1$d</string>
     <string name="count_unit">次</string>
     <string name="duration_unit">時長</string>
-    <string name="less_count">更少(</string>
-    <string name="more_count">更多(</string>
+    <string name="less_count">更少</string>
+    <string name="more_count">更多</string>
     <string name="format_json">格式化</string>
     <string name="minify_json">壓縮</string>
     <string name="no_logs">無日誌</string>
@@ -2453,12 +2454,16 @@
     <string name="reading_days">閱讀天數</string>
     <string name="total_read_books">累計讀過</string>
     <string name="finished_books">讀完書籍</string>
+    <string name="abandoned_books">棄文</string>
     <string name="reading_books">在讀書籍</string>
     <string name="reading_words">閱讀字數</string>
+    <string name="review_count">書評</string>
     <string name="reading_data">閱讀資料</string>
     <string name="reading_heatmap">閱讀熱力圖</string>
     <string name="reading_time_ranking">閱讀時長榜</string>
     <string name="reading_calendar">讀書日曆</string>
+    <string name="reading_time_distribution">閱讀時長分佈</string>
+    <string name="reading_hourly_distribution">時段分佈</string>
     <string name="days_format">%1$d天</string>
     <string name="books_format">%1$d本</string>
     <string name="a11y_reading_ranking_item">第 %1$d 名，%2$s，%3$s，閱讀時長 %4$s</string>

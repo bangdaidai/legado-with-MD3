@@ -291,14 +291,12 @@ fun HeatmapLegend(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val legendUnit = if (mode == HeatmapMode.COUNT) stringResource(R.string.count_unit) else stringResource(R.string.duration_unit)
-
         AppText(
-            stringResource(R.string.less_count) + legendUnit + ")",
+            stringResource(R.string.less_count),
             style = LegadoTheme.typography.bodySmall,
             color = Color.Gray
         )
@@ -316,7 +314,7 @@ fun HeatmapLegend(
         }
 
         AppText(
-            stringResource(R.string.more_count) + legendUnit + ")",
+            stringResource(R.string.more_count),
             style = LegadoTheme.typography.bodySmall,
             color = Color.Gray
         )
