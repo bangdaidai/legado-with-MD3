@@ -184,6 +184,13 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
 
     private var currentActiveSession: ReadRecordSession? = null
 
+    /** 本次 session 已累计的字数（不含当前章节未读完的部分） */
+    private var sessionWordAccum: Long = 0L
+    /** 本次 session 追踪的最后一次章节索引 */
+    private var sessionLastChapter: Int = -1
+    /** 进入 sessionLastChapter 时的章内位置 */
+    private var sessionChapterStartPos: Int = 0
+
     private val wholeBookPageCoordinator = WholeBookPageCoordinator(
         scope = this,
         calibrationStore = LocalPageEstimateCalibrationStore,
@@ -195,6 +202,31 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     )
     //占位
     private var currentReadLength: Long = 10L
+
+    /**
+     * 计算当前 session 的累计阅读字数：已经完整阅读过的章节字数 + 当前章节内的阅读进度字数。
+     * 只统计向前阅读，不会因翻回去而减少。
+     */
+    private fun computeSessionWords(): Long {
+        val chapterIdx = durChapterIndex
+        // 如果切换到了新章节，把旧章节的全部文本长度计入
+        if (chapterIdx != sessionLastChapter && sessionLastChapter >= 0) {
+            // 旧章的字数：取 curTextChapter（可能已切走变成 prev），或用 prevTextChapter
+            val finishedChapter = if (prevTextChapter != null && prevTextChapter!!.position == sessionLastChapter) {
+                prevTextChapter
+            } else if (curTextChapter != null && curTextChapter!!.position == sessionLastChapter) {
+                curTextChapter
+            } else null
+            val chapterLen = finishedChapter?.getContent()?.length?.toLong() ?: 0L
+            // 计入从进入该章到章末的增量
+            sessionWordAccum += (chapterLen - sessionChapterStartPos).coerceAtLeast(0)
+            sessionLastChapter = chapterIdx
+            sessionChapterStartPos = durChapterPos.coerceAtLeast(0)
+        }
+        // 当前章节内的进度字数
+        val currentChapterWords = (durChapterPos - sessionChapterStartPos).coerceAtLeast(0).toLong()
+        return sessionWordAccum + currentChapterWords
+    }
     private const val AUTO_SAVE_INTERVAL = 120 * 1000L
 
     private const val MIN_READ_DURATION = 10 * 1000L
@@ -702,13 +734,16 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
 
             if (currentActiveSession == null) {
                 lastReadLength = currentReadLength
+                sessionWordAccum = 0L
+                sessionLastChapter = durChapterIndex
+                sessionChapterStartPos = durChapterPos.coerceAtLeast(0)
                 currentActiveSession = ReadRecordSession(
                     deviceId = "",
                     bookName = currentBookName,
                     bookAuthor = currentBookAuthor,
                     startTime = readStartTime,
                     endTime = readStartTime,
-                    words = durChapterIndex.toLong(),
+                    words = 0L,
                     bookType = book?.type ?: io.legado.app.constant.BookType.text
                 )
             }
@@ -732,7 +767,7 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
 
             currentActiveSession = currentActiveSession!!.copy(
                 endTime = endTime,
-                words = durChapterIndex.toLong()
+                words = computeSessionWords()
             )
 
             readStartTime = endTime
@@ -792,10 +827,13 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                 current.bookName == sessionToSave.bookName &&
                 current.bookAuthor == sessionToSave.bookAuthor
             ) {
+                sessionWordAccum = 0L
+                sessionLastChapter = durChapterIndex
+                sessionChapterStartPos = durChapterPos.coerceAtLeast(0)
                 currentActiveSession = current.copy(
                     startTime = sessionToSave.endTime,
                     endTime = sessionToSave.endTime,
-                    words = durChapterIndex.toLong()
+                    words = 0L
                 )
             }
         }
