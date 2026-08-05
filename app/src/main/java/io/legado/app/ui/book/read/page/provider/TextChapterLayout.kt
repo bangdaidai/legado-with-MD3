@@ -104,11 +104,13 @@ class TextChapterLayout(
             cachedHighlightRules?.takeIf {
                 cachedHighlightRulesConfigName == cacheKey
             }?.let { return it }
-            val protagonistPattern = buildProtagonistPattern()
+            val protagonistPatternCache = HashMap<String?, String?>()
             return highlightRuleRepository.loadEnabled(configName).mapNotNull { rule ->
                 runCatching {
                     val pattern = if (rule.useProtagonist) {
-                        protagonistPattern ?: return@mapNotNull null
+                        protagonistPatternCache.getOrPut(rule.characterRole) {
+                            buildProtagonistPattern(rule.characterRole)
+                        } ?: return@mapNotNull null
                     } else {
                         rule.pattern
                     }
@@ -126,10 +128,14 @@ class TextChapterLayout(
     private val highlightRuleRepository: HighlightRuleRepository
         get() = GlobalContext.get().get()
 
-    private fun buildProtagonistPattern(): String? {
+    private fun buildProtagonistPattern(role: String?): String? {
         val bookKnowledgeDao: io.legado.app.data.dao.BookKnowledgeDao = GlobalContext.get().get()
         val names = kotlinx.coroutines.runBlocking {
-            bookKnowledgeDao.getProtagonists(book.bookUrl).map { it.name }
+            if (role.isNullOrBlank()) {
+                bookKnowledgeDao.getProtagonists(book.bookUrl)
+            } else {
+                bookKnowledgeDao.getProtagonistsByRole(book.bookUrl, role)
+            }.map { it.name }
         }
         if (names.isEmpty()) return null
         return names.joinToString("|") { java.util.regex.Pattern.quote(it) }

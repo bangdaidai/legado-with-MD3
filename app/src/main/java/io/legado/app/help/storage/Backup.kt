@@ -89,6 +89,7 @@ object Backup {
             "excludedTag.json",
             "tagMapping.json",
             "readingMemory.json",
+            "bookCharacterProfile.json",
             "servers.json",
             DirectLinkUpload.ruleFileName,
             ReadBookConfig.configFileName,
@@ -205,6 +206,13 @@ object Backup {
         }
         if (BackupConfig.dbIsNotIgnored("highlightRule", true)) {
             writeListToJson(appDb.highlightRuleDao.getAll(), "highlightRule.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookCharacterProfile", true)) {
+            writeListToJson(
+                appDb.bookKnowledgeDao.getAllCharacterProfilesSync(),
+                "bookCharacterProfile.json",
+                backupPath,
+            )
         }
         if (BackupConfig.dbIsNotIgnored("highlightTagRule", true)) {
             writeListToJson(appDb.highlightTagRuleDao.getAll(), "highlightTagRule.json", backupPath)

@@ -186,6 +186,27 @@ interface BookKnowledgeDao {
     )
     suspend fun getProtagonists(bookUrl: String): List<BookCharacterProfile>
 
+    /** 按角色类型获取主角（role 为 null 时等价于 getProtagonists） */
+    @Query(
+        """
+        select * from book_character_profiles
+        where bookUrl = :bookUrl
+          and isProtagonist = 1
+          and role = :role
+          and status != ${BookCharacterProfile.STATUS_DELETED}
+        order by updatedAt desc
+        """
+    )
+    suspend fun getProtagonistsByRole(bookUrl: String, role: String): List<BookCharacterProfile>
+
+    /** 备份用：全量人物档案（含已删除，保证恢复后状态一致） */
+    @Query("select * from book_character_profiles")
+    fun getAllCharacterProfilesSync(): List<BookCharacterProfile>
+
+    /** 恢复用：批量写入人物档案 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertCharacterProfiles(profiles: List<BookCharacterProfile>)
+
     /** 按书+名查主角（用于去重检查） */
     @Query(
         """

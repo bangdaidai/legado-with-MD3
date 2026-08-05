@@ -201,6 +201,7 @@ class HighlightRuleRepository(
             npTop = runCatching { rule.npTop }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
             npBottom = runCatching { rule.npBottom }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
             useProtagonist = runCatching { rule.useProtagonist }.getOrDefault(false),
+            characterRole = runCatching { rule.characterRole }.getOrNull(),
             bgPaddingStart = runCatching { rule.bgPaddingStart }.getOrDefault(0f).coerceIn(-8f, 24f),
             bgPaddingEnd = runCatching { rule.bgPaddingEnd }.getOrDefault(0f).coerceIn(-8f, 24f),
             bgPaddingTop = runCatching { rule.bgPaddingTop }.getOrDefault(0f).coerceIn(-8f, 24f),

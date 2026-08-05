@@ -480,17 +480,24 @@ data class TextLine(
         paint.color = underlineColor
         paint.strokeWidth = underlineWidth.dpToPx()
         paint.style = Paint.Style.STROKE
-        if (roundCap) paint.strokeCap = Paint.Cap.ROUND
+        if (roundCap || feather > 0f) paint.strokeCap = Paint.Cap.ROUND
         val lineY = height + underlineOffset.dpToPx()
         if (feather > 0f) {
-            // 羽化：多 pass 递减 alpha、递增宽度，模拟全边缘柔化
-            val passes = 4
+            // 羽化：多 pass 叠加、高斯权重的 alpha，从外到内逐层变窄，模拟全边缘柔化
+            // 层数随羽化半径增加以避免断层；不让中心满 alpha，避免硬芯
+            val passes = (feather * 3f).toInt().coerceIn(6, 24)
             val baseAlpha = Color.alpha(underlineColor)
+            val rgb = underlineColor and 0x00FFFFFF
+            // sigma 控制浓度衰减，越小越集中、越大越弥散
+            val sigma = 0.5f
             for (i in passes downTo 0) {
-                val fraction = (passes - i + 1).toFloat() / (passes + 1)
-                val alpha = (baseAlpha * fraction).toInt().coerceIn(0, 255)
-                paint.color = (underlineColor and 0x00FFFFFF) or (alpha shl 24)
-                val passWidth = underlineWidth + i * feather * 2f / passes
+                // d: 归一化的到中心距离（0=中心，1=最外层）
+                val d = i.toFloat() / passes
+                val gaussian = kotlin.math.exp(-(d * d) / (2f * sigma * sigma))
+                val alpha = (baseAlpha * gaussian * 0.5f).toInt().coerceIn(0, 255)
+                if (alpha <= 0) continue
+                paint.color = rgb or (alpha shl 24)
+                val passWidth = underlineWidth + d * feather * 2f
                 drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, passWidth, underlineWidth, svgPathStr)
             }
         } else {
@@ -515,14 +522,23 @@ data class TextLine(
         svgPathStr: String,
     ) {
         paint.strokeWidth = strokeWidth.dpToPx()
+        // 圆头端点会向外延伸半个宽度，需要向内收缩补偿以保持总长不变
+        val capInset = if (paint.strokeCap == Paint.Cap.ROUND) strokeWidth.dpToPx() / 2f else 0f
+        val sx = startX + capInset
+        val ex = endX - capInset
+        if (sx >= ex) {
+            // 线太短，退化为一个点/圆
+            canvas.drawPoint((startX + endX) / 2f, lineY, paint)
+            return
+        }
         when (underlineMode) {
-            1 -> canvas.drawLine(startX, lineY, endX, lineY, paint)
-            2 -> drawDashedLine(canvas, paint, startX, lineY, endX, strokeWidth)
-            3 -> drawWavyLine(canvas, paint, startX, lineY, endX, strokeWidth)
+            1 -> canvas.drawLine(sx, lineY, ex, lineY, paint)
+            2 -> drawDashedLine(canvas, paint, sx, lineY, ex, strokeWidth)
+            3 -> drawWavyLine(canvas, paint, sx, lineY, ex, strokeWidth)
             4 -> {
                 val line2Y = lineY + doubleLineGap + geomWidth.dpToPx()
-                canvas.drawLine(startX, lineY, endX, lineY, paint)
-                canvas.drawLine(startX, line2Y, endX, line2Y, paint)
+                canvas.drawLine(sx, lineY, ex, lineY, paint)
+                canvas.drawLine(sx, line2Y, ex, line2Y, paint)
             }
             5 -> {
                 if (svgPathStr.isNotBlank()) {

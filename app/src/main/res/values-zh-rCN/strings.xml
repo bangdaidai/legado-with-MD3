@@ -783,7 +783,14 @@
     <string name="underline_offset">下划线偏移</string>
     <string name="underline_below_text">下划线置于文字下方</string>
     <string name="underline_round_cap">端点圆角</string>
-    <string name="underline_feather">羽化半径</string>
+    <string name="underline_feather">模糊半径</string>
+    <string name="use_protagonist">跟随主角</string>
+    <string name="character_role_filter">角色筛选</string>
+    <string name="character_role_all">全部主角</string>
+    <string name="character_role_male_lead">男主</string>
+    <string name="character_role_female_lead">女主</string>
+    <string name="character_role_male_supporting">男配</string>
+    <string name="character_role_female_supporting">女配</string>
     <string name="font_size_offset">字号偏移</string>
     <string name="font_size_offset_value">%1$+d sp</string>
     <string name="svg_path">SVG路径</string>

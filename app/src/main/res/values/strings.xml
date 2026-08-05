@@ -814,7 +814,14 @@
     <string name="underline_offset">Underline Offset</string>
     <string name="underline_below_text">Underline Below Text</string>
     <string name="underline_round_cap">Rounded Endpoints</string>
-    <string name="underline_feather">Feather Radius</string>
+    <string name="underline_feather">Blur Radius</string>
+    <string name="use_protagonist">Follow Protagonist</string>
+    <string name="character_role_filter">Character Role</string>
+    <string name="character_role_all">All Protagonists</string>
+    <string name="character_role_male_lead">Male Lead</string>
+    <string name="character_role_female_lead">Female Lead</string>
+    <string name="character_role_male_supporting">Male Supporting</string>
+    <string name="character_role_female_supporting">Female Supporting</string>
     <string name="font_size_offset">Font Size Offset</string>
     <string name="font_size_offset_value">%1$+d sp</string>
     <string name="svg_path">SVG Path</string>

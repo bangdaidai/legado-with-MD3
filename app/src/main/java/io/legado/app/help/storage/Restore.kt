@@ -13,6 +13,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.DictRule
@@ -261,6 +262,11 @@ object Restore : KoinComponent {
         if (BackupConfig.dbIsNotIgnored("highlightRule")) {
             fileToListT<HighlightRule>(path, "highlightRule.json")?.let {
                 appDb.highlightRuleDao.replaceAll(it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("bookCharacterProfile")) {
+            fileToListT<BookCharacterProfile>(path, "bookCharacterProfile.json")?.let {
+                appDb.bookKnowledgeDao.insertCharacterProfiles(it)
             }
         }
         if (BackupConfig.dbIsNotIgnored("highlightTagRule")) {

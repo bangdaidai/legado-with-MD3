@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.HighlightRule
+import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
@@ -147,6 +148,8 @@ fun HighlightRuleEditSheet(
     var underlineBelowText by remember(show, rule) { mutableStateOf(initial.underlineBelowText) }
     var underlineRoundCap by remember(show, rule) { mutableStateOf(initial.underlineRoundCap) }
     var underlineFeather by remember(show, rule) { mutableFloatStateOf(initial.underlineFeather) }
+    var useProtagonist by remember(show, rule) { mutableStateOf(initial.useProtagonist) }
+    var characterRole by remember(show, rule) { mutableStateOf(initial.characterRole.orEmpty()) }
     var bgImage by remember(show, rule) { mutableStateOf(initial.bgImage.orEmpty()) }
     var bgImageFit by remember(show, rule) { mutableIntStateOf(initial.bgImageFit) }
     var bgImageScale by remember(show, rule) { mutableFloatStateOf(initial.bgImageScale) }
@@ -302,6 +305,8 @@ fun HighlightRuleEditSheet(
                             bgMarginEnd = bgMarginEnd,
                             bgMarginTop = bgMarginTop,
                             bgMarginBottom = bgMarginBottom,
+                            useProtagonist = useProtagonist,
+                            characterRole = characterRole.ifBlank { null },
                         )
                     )
                 },
@@ -339,10 +344,41 @@ fun HighlightRuleEditSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 isError = patternError != null,
+                enabled = !useProtagonist,
                 supportingText = patternError?.let {
                     { AppText(it, color = MaterialTheme.colorScheme.error) }
                 },
             )
+
+            Spacer(Modifier.height(8.dp))
+
+            // 跟随主角：用知识图谱中的人物名代替正则
+            TinySwitchSettingItem(
+                title = stringResource(R.string.use_protagonist),
+                checked = useProtagonist,
+                onCheckedChange = { useProtagonist = it },
+            )
+            AnimatedVisibility(visible = useProtagonist) {
+                TinyDropdownSettingItem(
+                    title = stringResource(R.string.character_role_filter),
+                    selectedValue = characterRole,
+                    displayEntries = arrayOf(
+                        stringResource(R.string.character_role_all),
+                        stringResource(R.string.character_role_male_lead),
+                        stringResource(R.string.character_role_female_lead),
+                        stringResource(R.string.character_role_male_supporting),
+                        stringResource(R.string.character_role_female_supporting),
+                    ),
+                    entryValues = arrayOf(
+                        "",
+                        BookCharacterProfile.ROLE_MALE_LEAD,
+                        BookCharacterProfile.ROLE_FEMALE_LEAD,
+                        BookCharacterProfile.ROLE_MALE_SUPPORTING,
+                        BookCharacterProfile.ROLE_FEMALE_SUPPORTING,
+                    ),
+                    onValueChange = { characterRole = it },
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
 
@@ -504,7 +540,7 @@ fun HighlightRuleEditSheet(
                     TinySliderSettingItem(
                         title = stringResource(R.string.underline_offset),
                         value = underlineOffset,
-                        valueRange = -10f..20f,
+                        valueRange = -20f..10f,
                         description = String.format("%+.1f dp", underlineOffset),
                         onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
                     )

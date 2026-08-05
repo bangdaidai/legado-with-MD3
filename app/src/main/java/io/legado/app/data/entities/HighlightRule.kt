@@ -39,6 +39,8 @@ data class HighlightRule(
     var npBottom: Float = 0.5f,
     @ColumnInfo(defaultValue = "0")
     var useProtagonist: Boolean = false,
+    // 角色筛选：null=全部主角，或指定角色如 "male_lead"/"female_lead"/"male_supporting"/"female_supporting"
+    var characterRole: String? = null,
     // 内边距：文字在背景图内部的边距（背景图相对文字四周向外扩多少 dp）
     @ColumnInfo(defaultValue = "0")
     var bgPaddingStart: Float = 0f,
