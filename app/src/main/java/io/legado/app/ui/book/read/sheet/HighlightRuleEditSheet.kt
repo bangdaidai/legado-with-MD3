@@ -1300,16 +1300,19 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
     roundCap: Boolean = false,
     feather: Float = 0f,
 ) {
-    val cap = if (roundCap) StrokeCap.Round else StrokeCap.Butt
+    val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
     if (feather > 0f) {
-        val passes = 4
+        val passes = (feather * 3f).toInt().coerceIn(6, 24)
         val baseAlpha = color.alpha
         val featherPx = feather.dp.toPx()
+        val sigma = 0.5f
         for (i in passes downTo 0) {
-            val fraction = (passes - i + 1).toFloat() / (passes + 1)
-            val alpha = baseAlpha * fraction
+            val d = i.toFloat() / passes
+            val gaussian = kotlin.math.exp(-(d * d) / (2f * sigma * sigma)).toFloat()
+            val alpha = baseAlpha * gaussian * 0.5f
+            if (alpha <= 0.001f) continue
             val passColor = color.copy(alpha = alpha)
-            val passWidth = strokeWidth + i * featherPx * 2f / passes
+            val passWidth = strokeWidth + d * featherPx * 2f
             drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap)
         }
     } else {
@@ -1326,11 +1329,16 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
 ) {
+    // 圆头向外延伸半个宽度，收缩补偿以保持总长不变
+    val capInset = if (cap == StrokeCap.Round) strokeWidth / 2f else 0f
+    val sx = startX + capInset
+    val ex = endX - capInset
+    if (sx >= ex) return
     when (mode) {
         1 -> drawLine(
             color = color,
-            start = Offset(startX, y),
-            end = Offset(endX, y),
+            start = Offset(sx, y),
+            end = Offset(ex, y),
             strokeWidth = strokeWidth,
             cap = cap,
         )
@@ -1338,9 +1346,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
         2 -> {
             val dashLength = 8.dp.toPx()
             val gapLength = 4.dp.toPx()
-            var x = startX
-            while (x < endX) {
-                val segEndX = minOf(x + dashLength, endX)
+            var x = sx
+            while (x < ex) {
+                val segEndX = minOf(x + dashLength, ex)
                 drawLine(
                     color = color,
                     start = Offset(x, y),
@@ -1357,11 +1365,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
             val amplitude = 2.5.dp.toPx()
             val halfPeriod = 8.dp.toPx()
             val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(startX, y)
-                var x = startX
+                moveTo(sx, y)
+                var x = sx
                 var up = true
-                while (x < endX) {
-                    val nextX = minOf(x + halfPeriod, endX)
+                while (x < ex) {
+                    val nextX = minOf(x + halfPeriod, ex)
                     val midX = (x + nextX) / 2f
                     val controlY = if (up) y - 2f * amplitude else y + 2f * amplitude
                     quadraticTo(midX, controlY, nextX, y)
@@ -1380,15 +1388,15 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
             val gap = 2.dp.toPx()
             drawLine(
                 color = color,
-                start = Offset(startX, y - gap),
-                end = Offset(endX, y - gap),
+                start = Offset(sx, y - gap),
+                end = Offset(ex, y - gap),
                 strokeWidth = strokeWidth,
                 cap = cap,
             )
             drawLine(
                 color = color,
-                start = Offset(startX, y + gap),
-                end = Offset(endX, y + gap),
+                start = Offset(sx, y + gap),
+                end = Offset(ex, y + gap),
                 strokeWidth = strokeWidth,
                 cap = cap,
             )
