@@ -2630,6 +2630,9 @@
     <string name="reading_books">在读书籍</string>
     <string name="reading_words">阅读字数</string>
     <string name="review_count">书评</string>
+    <string name="stat_type_text">书</string>
+    <string name="stat_type_video">影</string>
+    <string name="stat_type_audio">音</string>
     <string name="reading_data">阅读数据</string>
     <string name="reading_heatmap">阅读热力图</string>
     <string name="reading_time_ranking">阅读时长榜</string>
@@ -2638,6 +2641,8 @@
     <string name="reading_hourly_distribution">时段分布</string>
     <string name="days_format">%1$d天</string>
     <string name="books_format">%1$d本</string>
+    <string name="parts_format">%1$d部</string>
+    <string name="entries_format">%1$d条</string>
     <string name="a11y_reading_ranking_item">第 %1$d 名，%2$s，%3$s，阅读时长 %4$s</string>
     <string name="a11y_reading_calendar_day_with_book">%1$s，阅读最多：%2$s，作者 %3$s</string>
     <string name="a11y_reading_calendar_day_empty">%1$s，没有阅读记录</string>

@@ -2636,6 +2636,9 @@
     <string name="reading_books">Reading books</string>
     <string name="reading_words">Words read</string>
     <string name="review_count">Reviews</string>
+    <string name="stat_type_text">Books</string>
+    <string name="stat_type_video">Videos</string>
+    <string name="stat_type_audio">Audio</string>
     <string name="reading_data">Reading data</string>
     <string name="reading_heatmap">Reading heatmap</string>
     <string name="reading_time_ranking">Reading time ranking</string>
@@ -2644,6 +2647,8 @@
     <string name="reading_hourly_distribution">Hourly distribution</string>
     <string name="days_format">%1$d days</string>
     <string name="books_format">%1$d books</string>
+    <string name="parts_format">%1$d</string>
+    <string name="entries_format">%1$d entries</string>
     <string name="a11y_reading_ranking_item">No. %1$d, %2$s, %3$s, read for %4$s</string>
     <string name="a11y_reading_calendar_day_with_book">%1$s, top book %2$s by %3$s</string>
     <string name="a11y_reading_calendar_day_empty">%1$s, no reading record</string>

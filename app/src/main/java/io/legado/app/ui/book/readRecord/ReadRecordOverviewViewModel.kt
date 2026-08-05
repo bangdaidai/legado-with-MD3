@@ -23,6 +23,9 @@ data class ReadRecordOverviewUiState(
     val totalTime: Long = 0,
     val readingDays: Int = 0,
     val totalBooks: Int = 0,
+    val textBookCount: Int = 0,
+    val audioBookCount: Int = 0,
+    val videoBookCount: Int = 0,
     val finishedBooks: Int = 0,
     // TODO: 尚未接入数据源，需要从 ReadingMemory(abandoned) 统计后填充
     val abandonedBooks: Int = 0,

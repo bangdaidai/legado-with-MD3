@@ -6,13 +6,8 @@ import kotlin.time.Duration.Companion.milliseconds
 object ReadRecordFormatter {
     data class HourMinuteDuration(val hours: Long, val minutes: Int)
 
-    fun formatWords(words: Long): String {
-        return if (words >= 10000) {
-            String.format("%.1f万字", words / 10000f)
-        } else {
-            "${words}字"
-        }
-    }
+    /** 统一以"万"为单位展示阅读字数 */
+    fun formatWords(words: Long): String = String.format("%.1f万", words / 10000f)
 
     fun formatDuration(millis: Long): String = formatReadDuration(millis)
 

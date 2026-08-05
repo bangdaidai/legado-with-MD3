@@ -45,6 +45,19 @@ class GetReadRecordOverviewUseCase {
         val periodBooks = filteredDetails.groupBy { it.bookName to it.bookAuthor }
         val totalBooks = periodBooks.size
 
+        // 按书籍类型统计数量（书=文本、影=视频、音=音频），取每本书任一明细的 bookType 位标记
+        var textBookCount = 0
+        var audioBookCount = 0
+        var videoBookCount = 0
+        periodBooks.forEach { (_, bookDetails) ->
+            val type = bookDetails.firstOrNull()?.bookType ?: io.legado.app.constant.BookType.text
+            when {
+                type and io.legado.app.constant.BookType.audio != 0 -> audioBookCount++
+                type and io.legado.app.constant.BookType.video != 0 -> videoBookCount++
+                else -> textBookCount++
+            }
+        }
+
         val shelfBooksMap = latestRecords.associateBy { it.bookName to it.bookAuthor }
         val allShelfBooksMap = allBooks.associateBy { it.name to it.author }
         
@@ -146,6 +159,9 @@ class GetReadRecordOverviewUseCase {
             totalTime = totalTime,
             readingDays = readingDays,
             totalBooks = totalBooks,
+            textBookCount = textBookCount,
+            audioBookCount = audioBookCount,
+            videoBookCount = videoBookCount,
             finishedBooks = finishedCount,
             readingBooks = readingCount,
             totalWords = totalWords,

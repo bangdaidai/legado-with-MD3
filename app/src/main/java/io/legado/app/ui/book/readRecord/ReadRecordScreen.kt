@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -84,6 +85,7 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.AppIconButton
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
@@ -166,7 +168,6 @@ fun ReadRecordScreen(
     var showSearch by remember { mutableStateOf(false) }
     var showCalendar by remember { mutableStateOf(false) }
     var showActionsSheet by remember { mutableStateOf(false) }
-    var showTypeFilterDialog by remember { mutableStateOf(false) }
     var heatmapMode by remember { mutableStateOf(HeatmapMode.COUNT) }
     var selectedItemKeys by remember { mutableStateOf(emptySet<String>()) }
     val listState = rememberLazyListState()
@@ -450,9 +451,8 @@ fun ReadRecordScreen(
             showCalendar = !showCalendar
             showActionsSheet = false
         },
-        onOpenTypeFilter = {
-            showActionsSheet = false
-            showTypeFilterDialog = true
+        onTypeFilterSelected = { type ->
+            onIntent(ReadRecordIntent.SetBookTypeFilter(type))
         },
         onReadRecordEnabledChange = { checked ->
             onIntent(ReadRecordIntent.SetEnabled(checked))
@@ -463,16 +463,6 @@ fun ReadRecordScreen(
                 onIntent(ReadRecordIntent.ClearRecords)
                 selectedItemKeys = emptySet()
             }
-        }
-    )
-
-    ReadRecordTypeFilterDialog(
-        show = showTypeFilterDialog,
-        selected = state.bookTypeFilter,
-        onDismissRequest = { showTypeFilterDialog = false },
-        onSelect = { type ->
-            onIntent(ReadRecordIntent.SetBookTypeFilter(type))
-            showTypeFilterDialog = false
         }
     )
 
@@ -624,7 +614,7 @@ private fun ReadRecordActionsSheet(
     bookTypeFilter: Int?,
     onDismissRequest: () -> Unit,
     onToggleCalendar: () -> Unit,
-    onOpenTypeFilter: () -> Unit,
+    onTypeFilterSelected: (Int?) -> Unit,
     onReadRecordEnabledChange: (Boolean) -> Unit,
     onClearReadRecords: () -> Unit
 ) {
@@ -646,11 +636,9 @@ private fun ReadRecordActionsSheet(
                 imageVector = Icons.Default.CalendarMonth,
                 onClick = onToggleCalendar
             )
-            CompactClickableSettingItem(
-                title = stringResource(R.string.read_record_type_filter),
-                description = bookTypeFilterLabel(bookTypeFilter),
-                imageVector = Icons.Default.FilterList,
-                onClick = onOpenTypeFilter
+            ReadRecordTypeFilterRow(
+                selected = bookTypeFilter,
+                onSelect = onTypeFilterSelected
             )
             CompactSwitchSettingItem(
                 title = stringResource(R.string.enable_read_record),
@@ -669,62 +657,48 @@ private fun ReadRecordActionsSheet(
 }
 
 @Composable
-private fun bookTypeFilterLabel(bookType: Int?): String {
-    return when (bookType) {
-        io.legado.app.constant.BookType.text -> stringResource(R.string.book_type_text)
-        io.legado.app.constant.BookType.audio -> stringResource(R.string.book_type_audio)
-        io.legado.app.constant.BookType.video -> stringResource(R.string.book_type_video)
-        else -> stringResource(R.string.read_record_type_all)
-    }
-}
-
-@Composable
-private fun ReadRecordTypeFilterDialog(
-    show: Boolean,
+private fun ReadRecordTypeFilterRow(
     selected: Int?,
-    onDismissRequest: () -> Unit,
     onSelect: (Int?) -> Unit
 ) {
-    if (!show) return
     val options = listOf<Pair<Int?, String>>(
         null to stringResource(R.string.read_record_type_all),
         io.legado.app.constant.BookType.text to stringResource(R.string.book_type_text),
         io.legado.app.constant.BookType.audio to stringResource(R.string.book_type_audio),
         io.legado.app.constant.BookType.video to stringResource(R.string.book_type_video)
     )
-    AppAlertDialog(
-        show = show,
-        onDismissRequest = onDismissRequest,
-        title = stringResource(R.string.read_record_type_filter),
-        content = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                options.forEach { (type, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                role = Role.Button,
-                                onClick = { onSelect(type) }
-                            )
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppText(
-                            text = label,
-                            modifier = Modifier.weight(1f),
-                            style = if (type == selected) {
-                                MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                MaterialTheme.typography.bodyLarge
-                            }
-                        )
-                    }
-                }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AppIcon(
+                Icons.Default.FilterList,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = LegadoTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            AppText(
+                text = stringResource(R.string.read_record_type_filter),
+                style = LegadoTheme.typography.bodyLarge
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { (type, label) ->
+                ToggleChip(
+                    label = label,
+                    selected = type == selected,
+                    onToggle = { onSelect(type) }
+                )
             }
         }
-    )
+    }
 }
 
 private fun ReadRecord.mergeKey(): String {
@@ -859,8 +833,8 @@ fun HeatmapCalendarSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .padding(bottom = 32.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         LazyRow(
             state = listState,
@@ -882,7 +856,7 @@ fun HeatmapCalendarSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         HeatmapLegend(
             mode = currentMode,

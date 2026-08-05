@@ -156,11 +156,14 @@ fun ReadRecordOverviewScreen(
                     }
                     val stats = listOf(
                         StatItem(stringResource(R.string.reading_time), readingTimeText),
+                        StatItem(stringResource(R.string.stat_type_text), stringResource(R.string.books_format, state.textBookCount)),
+                        StatItem(stringResource(R.string.stat_type_video), stringResource(R.string.parts_format, state.videoBookCount)),
+                        StatItem(stringResource(R.string.stat_type_audio), stringResource(R.string.parts_format, state.audioBookCount)),
                         StatItem(stringResource(R.string.reading_books), stringResource(R.string.books_format, state.readingBooks)),
                         StatItem(stringResource(R.string.finished_books), stringResource(R.string.books_format, state.finishedBooks)),
                         StatItem(stringResource(R.string.abandoned_books), stringResource(R.string.books_format, state.abandonedBooks)),
                         StatItem(stringResource(R.string.reading_days), stringResource(R.string.days_format, state.readingDays)),
-                        StatItem(stringResource(R.string.review_count), state.reviewCount.toString()),
+                        StatItem(stringResource(R.string.review_count), stringResource(R.string.entries_format, state.reviewCount)),
                         StatItem(stringResource(R.string.reading_words), ReadRecordFormatter.formatWords(state.totalWords))
                     )
                     StatsGridCard(title = stringResource(R.string.reading_data), items = stats)
