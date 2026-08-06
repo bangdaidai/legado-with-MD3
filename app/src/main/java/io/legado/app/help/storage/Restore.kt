@@ -310,27 +310,39 @@ object Restore : KoinComponent {
             }
         }
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
-            fileToListT<ReadRecord>(path, "readRecord.json")?.let {
-                it.forEach { readRecord ->
-                    try {
-                        restoreReadRecord(readRecord)
-                    } catch (_: SQLiteConstraintException) {
+            // r 项目 (readdai) 备份特征：产出 readSession.json（单表会话流）+ readRecord.json
+            // （从 readSession 聚合出的兼容快照，字段名是 author 而非 bookAuthor），
+            // 没有 md 的 readRecordDetail.json / readRecordSession.json。
+            // 若检测到 readSession.json 就走兼容分支：以原始会话为准合成 md 的三张表，
+            // 避免用 readRecord.json 直读导致 bookAuthor 字段名不匹配后作者丢失。
+            val hasRReadSession = File(path, "readSession.json").exists()
+            if (hasRReadSession) {
+                fileToListT<RReadSessionDto>(path, "readSession.json")?.let {
+                    restoreFromRReadSessions(it)
+                }
+            } else {
+                fileToListT<ReadRecord>(path, "readRecord.json")?.let {
+                    it.forEach { readRecord ->
+                        try {
+                            restoreReadRecord(readRecord)
+                        } catch (_: SQLiteConstraintException) {
+                        }
                     }
                 }
-            }
-            fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
-                it.forEach { detail ->
-                    try {
-                        restoreReadRecordDetail(detail)
-                    } catch (_: SQLiteConstraintException) {
+                fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
+                    it.forEach { detail ->
+                        try {
+                            restoreReadRecordDetail(detail)
+                        } catch (_: SQLiteConstraintException) {
+                        }
                     }
                 }
-            }
-            fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
-                it.forEach { session ->
-                    try {
-                        restoreReadRecordSession(session)
-                    } catch (_: SQLiteConstraintException) {
+                fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
+                    it.forEach { session ->
+                        try {
+                            restoreReadRecordSession(session)
+                        } catch (_: SQLiteConstraintException) {
+                        }
                     }
                 }
             }
@@ -575,6 +587,86 @@ object Restore : KoinComponent {
             appCtx.toastOnUi("$fileName\n读取文件出错\n${e.localizedMessage}")
         }
         return null
+    }
+
+    /**
+     * r 项目 (readdai) readSession.json 里每条 ReadSession 的 DTO。
+     * 只保留恢复必需的字段，字段名严格对齐 r 项目的 JSON 输出（author / type）。
+     */
+    private data class RReadSessionDto(
+        val bookName: String = "",
+        val author: String = "",
+        val startTime: Long = 0L,
+        val endTime: Long = 0L,
+        val words: Long = 0L,
+        val type: Int = io.legado.app.constant.BookType.text
+    )
+
+    /**
+     * 用 r 项目 readSession.json 的原始会话流合成 md 的三张表：
+     * - readRecordSession：一条会话一行（deviceId 置空以匹配时间线视图 deviceId='' 的过滤）
+     * - readRecordDetail：按 (bookName, author, 日期) 聚合，供汇总视图使用
+     * - readRecord：按 (bookName, author) 聚合，供最新/时长视图使用
+     * 复用已有的 restoreXxx 幂等 upsert 语义，重复导入不会重复累加。
+     */
+    private suspend fun restoreFromRReadSessions(dtos: List<RReadSessionDto>) {
+        val valid = dtos.filter { it.startTime > 0L && it.endTime > it.startTime }
+        if (valid.isEmpty()) return
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+
+        valid.forEach { dto ->
+            try {
+                restoreReadRecordSession(
+                    ReadRecordSession(
+                        deviceId = "",
+                        bookName = dto.bookName,
+                        bookAuthor = dto.author,
+                        startTime = dto.startTime,
+                        endTime = dto.endTime,
+                        words = dto.words,
+                        bookType = dto.type
+                    )
+                )
+            } catch (_: SQLiteConstraintException) {
+            }
+        }
+
+        valid.groupBy { Triple(it.bookName, it.author, dateFormat.format(java.util.Date(it.startTime))) }
+            .forEach { (key, group) ->
+                try {
+                    restoreReadRecordDetail(
+                        ReadRecordDetail(
+                            deviceId = "",
+                            bookName = key.first,
+                            bookAuthor = key.second,
+                            date = key.third,
+                            readTime = group.sumOf { it.endTime - it.startTime },
+                            readWords = group.sumOf { it.words },
+                            firstReadTime = group.minOf { it.startTime },
+                            lastReadTime = group.maxOf { it.endTime },
+                            bookType = group.first().type
+                        )
+                    )
+                } catch (_: SQLiteConstraintException) {
+                }
+            }
+
+        valid.groupBy { it.bookName to it.author }
+            .forEach { (key, group) ->
+                try {
+                    restoreReadRecord(
+                        ReadRecord(
+                            deviceId = "",
+                            bookName = key.first,
+                            bookAuthor = key.second,
+                            readTime = group.sumOf { it.endTime - it.startTime },
+                            lastRead = group.maxOf { it.endTime },
+                            bookType = group.first().type
+                        )
+                    )
+                } catch (_: SQLiteConstraintException) {
+                }
+            }
     }
 
 }
