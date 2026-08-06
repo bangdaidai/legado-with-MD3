@@ -721,7 +721,3 @@ object DatabaseMigrations {
 
     // endregion
 }
-    }
-
-    // endregion
-}
