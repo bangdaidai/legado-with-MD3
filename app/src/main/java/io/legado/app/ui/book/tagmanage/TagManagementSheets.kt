@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
+
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -64,7 +64,10 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.button.PrimaryButton
+import io.legado.app.ui.widget.components.button.SecondaryButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
+import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.R
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -474,48 +477,49 @@ fun ExcludedEditSheet(
 ) {
     var name by remember(data) { mutableStateOf(data?.name ?: "") }
     var isRegex by remember(data) { mutableStateOf(data?.isRegex ?: false) }
-    AppAlertDialog(
+    AppModalBottomSheet(
         show = data != null,
         onDismissRequest = onDismiss,
         title = if (data?.id == 0L) "新增排除项" else "编辑排除项",
-        confirmText = "保存",
-        onConfirm = {
-            data?.let { d -> onSave(d.copy(name = name.trim(), isRegex = isRegex)) }
-        },
-        onDismiss = onDismiss,
-        content = {
-            if (data != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("名称/正则") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = isRegex,
-                            onCheckedChange = { isRegex = it },
-                        )
-                        Text(
-                            "作为正则匹配",
-                            style = LegadoTheme.typography.bodyMedium,
-                        )
-                    }
-                    if (data.id != 0L) {
-                        Text(
+    ) {
+        data?.let { d ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("名称/正则") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                CheckboxItem(
+                    title = "作为正则匹配",
+                    checked = isRegex,
+                    onCheckedChange = { isRegex = it },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (d.id != 0L) {
+                        SecondaryButton(
+                            onClick = { onDelete(d) },
                             text = "删除",
-                            color = LegadoTheme.colorScheme.error,
-                            style = LegadoTheme.typography.bodyMedium,
-                            modifier = Modifier
-                                .clickable { onDelete(data) },
                         )
                     }
+                    Spacer(modifier = Modifier.weight(1f))
+                    SecondaryButton(
+                        onClick = onDismiss,
+                        text = "取消",
+                    )
+                    PrimaryButton(
+                        onClick = { onSave(d.copy(name = name.trim(), isRegex = isRegex)) },
+                        text = "保存",
+                    )
                 }
             }
-        },
-    )
+        }
+    }
 }
 
 /* ---------------- 颜色辅助组件 ---------------- */

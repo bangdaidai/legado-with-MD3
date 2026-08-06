@@ -678,7 +678,11 @@ private fun ReadRecordTypeFilterRow(
                 ?: MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -686,13 +690,13 @@ private fun ReadRecordTypeFilterRow(
                 AppIcon(
                     Icons.Default.FilterList,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = LegadoTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 AppText(
                     text = stringResource(R.string.read_record_type_filter),
-                    style = LegadoTheme.typography.bodyLarge
+                    style = LegadoTheme.typography.titleMedium
                 )
             }
             Row(

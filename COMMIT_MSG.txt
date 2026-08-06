@@ -1,0 +1,7 @@
+feat(highlight): 虚线下划线支持自定义段长与间隔，滑块加重置按钮
+
+- HighlightRule 新增 underlineDashLen/underlineDashGap 字段及 migration
+- 编辑面板在虚线模式下显示段长/间隔滑块，宽度/偏移滑块加重置
+- 渲染链路（TextLine/TextColumn/CharStyle/TextChapterLayout）透传虚线参数
+- ReadRecord 类型筛选行改用 SettingCard 卡片样式
+- underline_title_bar 文案改为"双实线"
