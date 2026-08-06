@@ -125,6 +125,15 @@ object Restore : KoinComponent {
 
     private suspend fun restore(path: String) {
         val aes = BackupAES()
+        val restoreLogFile = try {
+            val cacheDir = appCtx.externalCacheDir ?: appCtx.cacheDir
+            java.io.File(cacheDir, "restore_log.txt").also { it.writeText("=== 恢复开始 ${java.util.Date()} ===\n") }
+        } catch (_: Throwable) { null }
+        fun log(msg: String) {
+            AppLog.put(msg)
+            try { restoreLogFile?.appendText("$msg\n") } catch (_: Throwable) {}
+        }
+        log("恢复备份路径: $path")
         fileToListT<Book>(path, "bookshelf.json")?.let {
             it.forEach { book ->
                 book.upType()
@@ -309,12 +318,13 @@ object Restore : KoinComponent {
                 appDb.readingMemoryDao.insertAll(it)
             }
         }
+        log("BackupConfig.dbIsNotIgnored(readRecord) = ${BackupConfig.dbIsNotIgnored("readRecord")}")
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
             // readRecord.json 走兼容 DTO：md 自己的备份字段名是 bookAuthor，r 项目 (readdai) 是 author，
             // 且 r 的备份不含 deviceId。用 DTO 统一接收，兼容两边字段名，deviceId 缺失时补空串，
             // 避免 md 原实体反序列化时因 deviceId=null 触发 NOT NULL 约束、整表恢复失败。
             fileToListT<RReadRecordDto>(path, "readRecord.json")?.let {
-                AppLog.put("恢复阅读记录 readRecord.json: ${it.size} 条")
+                log("恢复阅读记录 readRecord.json: ${it.size} 条")
                 it.forEach { dto ->
                     try {
                         restoreReadRecord(dto.toReadRecord())
@@ -341,17 +351,20 @@ object Restore : KoinComponent {
             // r 项目备份特征：单表 readSession.json 存原始会话流，没有 readRecordDetail/Session.json。
             // 检测到 readSession.json 就额外拆分成 md 的 detail/session 两张表填充汇总/时间线视图；
             // 用 Throwable 兜底，任何异常都不阻断后续恢复步骤。md 自身备份不产 readSession.json，不会误触。
-            if (File(path, "readSession.json").exists()) {
+            val hasRSession = File(path, "readSession.json").exists()
+            log("readSession.json 存在=$hasRSession")
+            if (hasRSession) {
                 try {
                     val sessions = fileToListT<RReadSessionDto>(path, "readSession.json")
                     if (sessions == null) {
-                        AppLog.put("r 项目 readSession.json 解析失败或为空")
+                        log("r 项目 readSession.json 解析失败或为空")
                     } else {
-                        AppLog.put("恢复 r 项目 readSession.json: ${sessions.size} 条")
-                        restoreFromRReadSessions(sessions)
+                        log("恢复 r 项目 readSession.json: ${sessions.size} 条")
+                        restoreFromRReadSessions(sessions, ::log)
                     }
                 } catch (t: Throwable) {
-                    AppLog.put("恢复 r 项目 readSession.json 兼容失败\n${t.localizedMessage}", t)
+                    log("恢复 r 项目 readSession.json 兼容失败\n${t.localizedMessage}")
+                    AppLog.put("恢复 r 项目 readSession.json 兼容失败", t)
                 }
             }
         }
@@ -640,9 +653,9 @@ object Restore : KoinComponent {
      * - readRecord：按 (bookName, author) 聚合，供最新/时长视图使用
      * 复用已有的 restoreXxx 幂等 upsert 语义，重复导入不会重复累加。
      */
-    private suspend fun restoreFromRReadSessions(dtos: List<RReadSessionDto>) {
+    private suspend fun restoreFromRReadSessions(dtos: List<RReadSessionDto>, log: (String) -> Unit) {
         val valid = dtos.filter { it.startTime > 0L && it.endTime > it.startTime }
-        AppLog.put("r 项目会话合成：输入 ${dtos.size} 条，有效 ${valid.size} 条")
+        log("r 项目会话合成：输入 ${dtos.size} 条，有效 ${valid.size} 条")
         if (valid.isEmpty()) return
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
 
@@ -665,14 +678,12 @@ object Restore : KoinComponent {
             } catch (t: Throwable) {
                 sessionFail++
                 if (sessionFail == 1) {
-                    AppLog.put(
-                        "r 项目会话合成：首条 readRecordSession 插入失败\n${t.localizedMessage}",
-                        t
-                    )
+                    log("首条 readRecordSession 插入失败: ${t.javaClass.simpleName} ${t.localizedMessage}")
+                    AppLog.put("r 项目会话合成：首条 readRecordSession 插入失败", t)
                 }
             }
         }
-        AppLog.put("r 项目会话合成：readRecordSession 成功 $sessionOk 条，失败 $sessionFail 条")
+        log("r 项目会话合成：readRecordSession 成功 $sessionOk 条，失败 $sessionFail 条")
 
         var detailOk = 0
         var detailFail = 0
@@ -696,14 +707,12 @@ object Restore : KoinComponent {
                 } catch (t: Throwable) {
                     detailFail++
                     if (detailFail == 1) {
-                        AppLog.put(
-                            "r 项目会话合成：首条 readRecordDetail 插入失败\n${t.localizedMessage}",
-                            t
-                        )
+                        log("首条 readRecordDetail 插入失败: ${t.javaClass.simpleName} ${t.localizedMessage}")
+                        AppLog.put("r 项目会话合成：首条 readRecordDetail 插入失败", t)
                     }
                 }
             }
-        AppLog.put("r 项目会话合成：readRecordDetail 成功 $detailOk 条，失败 $detailFail 条")
+        log("r 项目会话合成：readRecordDetail 成功 $detailOk 条，失败 $detailFail 条")
 
         var recordOk = 0
         var recordFail = 0
@@ -724,14 +733,12 @@ object Restore : KoinComponent {
                 } catch (t: Throwable) {
                     recordFail++
                     if (recordFail == 1) {
-                        AppLog.put(
-                            "r 项目会话合成：首条 readRecord 插入失败\n${t.localizedMessage}",
-                            t
-                        )
+                        log("首条 readRecord 插入失败: ${t.javaClass.simpleName} ${t.localizedMessage}")
+                        AppLog.put("r 项目会话合成：首条 readRecord 插入失败", t)
                     }
                 }
             }
-        AppLog.put("r 项目会话合成：readRecord 成功 $recordOk 条，失败 $recordFail 条")
+        log("r 项目会话合成：readRecord 成功 $recordOk 条，失败 $recordFail 条")
     }
 
 }
