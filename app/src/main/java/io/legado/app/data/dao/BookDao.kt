@@ -40,6 +40,7 @@ interface BookDao {
             BookGroup.IdAll -> flowAll()
             BookGroup.IdLocal -> flowLocal()
             BookGroup.IdAudio -> flowAudio()
+            BookGroup.IdVideo -> flowVideo()
             BookGroup.IdNetNone -> flowNetNoGroup()
             BookGroup.IdLocalNone -> flowLocalNoGroup()
             BookGroup.IdManga -> flowManga()
@@ -62,6 +63,7 @@ interface BookDao {
             BookGroup.IdAll -> flowBookShelf()
             BookGroup.IdLocal -> flowBookShelfLocal()
             BookGroup.IdAudio -> flowBookShelfAudio()
+            BookGroup.IdVideo -> flowBookShelfVideo()
             BookGroup.IdNetNone -> flowBookShelfNetNoGroup()
             BookGroup.IdLocalNone -> flowBookShelfLocalNoGroup()
             BookGroup.IdManga -> flowBookShelfManga()
@@ -170,6 +172,9 @@ FROM books
     @Query("SELECT * FROM books WHERE type & ${BookType.audio} > 0")
     fun flowAudio(): Flow<List<Book>>
 
+    @Query("SELECT * FROM books WHERE type & ${BookType.video} > 0")
+    fun flowVideo(): Flow<List<Book>>
+
     @Query(
         """
         SELECT 
@@ -204,6 +209,41 @@ FROM books
         """
     )
     fun flowBookShelfAudio(): Flow<List<BookShelfItem>>
+
+    @Query(
+        """
+        SELECT 
+            books.bookUrl,
+            name,
+            author,
+            origin,
+            originName,
+            coverUrl,
+            customCoverUrl,
+            durChapterTitle,
+            durChapterTime,
+            durChapterPos,
+            latestChapterTitle,
+            latestChapterTime,
+            lastCheckCount,
+            totalChapterNum,
+            durChapterIndex,
+            type,
+            `group`,
+            `order`,
+            canUpdate,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
+            kind,
+            customTag,
+            wordCount,
+            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+    FROM books
+
+        WHERE type & ${BookType.video} > 0
+        AND $PUBLIC_BOOK_FILTER
+        """
+    )
+    fun flowBookShelfVideo(): Flow<List<BookShelfItem>>
 
     @Query("SELECT * FROM books WHERE type & ${BookType.local} > 0")
     fun flowLocal(): Flow<List<Book>>
@@ -897,6 +937,7 @@ FROM books
             AND (SELECT show FROM book_groups WHERE groupId = ${BookGroup.IdNetNone}) != 1
         UNION ALL SELECT ${BookGroup.IdLocal}, COUNT(*) FROM books WHERE type & ${BookType.local} > 0 AND $PUBLIC_BOOK_FILTER
         UNION ALL SELECT ${BookGroup.IdAudio}, COUNT(*) FROM books WHERE type & ${BookType.audio} > 0 AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdVideo}, COUNT(*) FROM books WHERE type & ${BookType.video} > 0 AND $PUBLIC_BOOK_FILTER
         UNION ALL SELECT ${BookGroup.IdNetNone}, COUNT(*) FROM books
             WHERE type & ${BookType.audio} = 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
@@ -932,6 +973,7 @@ FROM books
             BookGroup.IdAll -> flowBookShelfPreview()
             BookGroup.IdLocal -> flowBookShelfLocalPreview()
             BookGroup.IdAudio -> flowBookShelfAudioPreview()
+            BookGroup.IdVideo -> flowBookShelfVideoPreview()
             BookGroup.IdNetNone -> flowBookShelfNetNoGroupPreview()
             BookGroup.IdLocalNone -> flowBookShelfLocalNoGroupPreview()
             BookGroup.IdManga -> flowBookShelfMangaPreview()
@@ -1020,6 +1062,24 @@ FROM books
         """
     )
     fun flowBookShelfAudioPreview(): Flow<List<BookShelfItem>>
+
+    @Query(
+        """
+        SELECT books.bookUrl, name, author, origin, originName,
+            coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
+            durChapterPos, latestChapterTitle, latestChapterTime,
+            lastCheckCount, totalChapterNum, durChapterIndex,
+            type, `group`, `order`, canUpdate,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+        FROM books
+        WHERE type & ${BookType.video} > 0
+            AND $PUBLIC_BOOK_FILTER
+        ORDER BY durChapterTime DESC
+        LIMIT 10
+        """
+    )
+    fun flowBookShelfVideoPreview(): Flow<List<BookShelfItem>>
 
     @Query(
         """

@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -288,7 +289,7 @@ fun HighlightRuleEditSheet(
                             underlineFeather = underlineFeather,
                             underlineBelowText = underlineBelowText,
                             bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
-                            bgImageFit = bgImageFit,
+                            bgImageFit = if (hasBgImage && bgImage.isNotBlank()) bgImageFit else 0,
                             bgImageScale = bgImageScale,
                             configName = if (configNames.isEmpty()) null else configNames.toList().toJsonArray(),
                             fontPath = if (hasFont) fontPath.ifBlank { null } else null,
@@ -1307,15 +1308,26 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
         val passes = (feather * 3f).toInt().coerceIn(6, 24)
         val baseAlpha = color.alpha
         val featherPx = feather.dp.toPx()
-        val sigma = 0.5f
+        val sigma = 0.55f
+        // 端部渐隐长度：至少覆盖羽化扩散半径与线宽
+        val featherLen = maxOf(feather.dp.toPx() * 1.5f, strokeWidth)
+        val segLen = endX - startX
+        val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
             val gaussian = kotlin.math.exp(-(d * d) / (2f * sigma * sigma)).toFloat()
-            val alpha = baseAlpha * gaussian * 0.5f
+            val alpha = baseAlpha * gaussian
             if (alpha <= 0.001f) continue
             val passColor = color.copy(alpha = alpha)
             val passWidth = strokeWidth + d * featherPx * 2f
-            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap)
+            // 端点水平渐隐：两端 alpha 渐变为 0
+            val brush = Brush.linearGradient(
+                colors = listOf(Color.Transparent, passColor, passColor, Color.Transparent),
+                start = Offset(startX, 0f),
+                end = Offset(endX, 0f),
+                stops = floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
+            )
+            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, brush)
         }
     } else {
         drawUnderlineShape(mode, color, strokeWidth, startX, endX, y, cap)
@@ -1330,6 +1342,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
     endX: Float,
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
+    brush: Brush? = null,
 ) {
     // 圆头向外延伸半个宽度，收缩补偿以保持总长不变
     val capInset = if (cap == StrokeCap.Round) strokeWidth / 2f else 0f
@@ -1338,7 +1351,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
     if (sx >= ex) return
     when (mode) {
         1 -> drawLine(
-            color = color,
+            brush = brush ?: Brush.linearGradient(listOf(color, color)),
             start = Offset(sx, y),
             end = Offset(ex, y),
             strokeWidth = strokeWidth,
@@ -1352,7 +1365,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
             while (x < ex) {
                 val segEndX = minOf(x + dashLength, ex)
                 drawLine(
-                    color = color,
+                    brush = brush ?: Brush.linearGradient(listOf(color, color)),
                     start = Offset(x, y),
                     end = Offset(segEndX, y),
                     strokeWidth = strokeWidth,
@@ -1381,7 +1394,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
             }
             drawPath(
                 path = path,
-                color = color,
+                brush = brush ?: Brush.linearGradient(listOf(color, color)),
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
             )
         }
@@ -1389,14 +1402,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
         4 -> {
             val gap = 2.dp.toPx()
             drawLine(
-                color = color,
+                brush = brush ?: Brush.linearGradient(listOf(color, color)),
                 start = Offset(sx, y - gap),
                 end = Offset(ex, y - gap),
                 strokeWidth = strokeWidth,
                 cap = cap,
             )
             drawLine(
-                color = color,
+                brush = brush ?: Brush.linearGradient(listOf(color, color)),
                 start = Offset(sx, y + gap),
                 end = Offset(ex, y + gap),
                 strokeWidth = strokeWidth,

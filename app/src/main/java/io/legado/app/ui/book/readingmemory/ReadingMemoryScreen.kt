@@ -468,7 +468,7 @@ private fun MemoryBookCard(
         && settings.bookshelfListIntroBelowContent
 
     BookshelfListItem(
-        settings = settings.copy(bookshelfCoverAlignTop = true),
+        settings = settings,
         isCompact = false,
         cover = { m ->
             CoilBookCover(

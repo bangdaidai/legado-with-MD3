@@ -281,7 +281,7 @@ private fun BookshelfItemCover(
 ) {
     Box(
         modifier = Modifier
-            .padding(4.dp)
+            .padding(8.dp)
             .fillMaxWidth()
             .aspectRatio(5f / 7f)
             .then(if (coverShadow) Modifier.shadow(4.dp, RoundedCornerShape(4.dp)) else Modifier)

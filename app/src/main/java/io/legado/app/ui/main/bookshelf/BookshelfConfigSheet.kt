@@ -422,15 +422,6 @@ fun BookshelfConfigSheet(
                         }
                     )
 
-                    CompactSwitchSettingItem(
-                        title = stringResource(R.string.cover_align_top),
-                        checked = settings.bookshelfCoverAlignTop,
-                        color = LegadoTheme.colorScheme.surface,
-                        onCheckedChange = { value ->
-                            onUpdate { it.copy(bookshelfCoverAlignTop = value) }
-                        }
-                    )
-
                     AnimatedVisibility(visible = settings.showBookIntro) {
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp)

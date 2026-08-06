@@ -1193,7 +1193,7 @@ class TextChapterLayout(
         textLine.startX = absStartX + startX
 
         // 九宫格状态追踪
-        val continuingFromPrevLine = lineStart > 0 && charStyles?.getOrNull(lineStart - 1)?.bgImageFit == 3
+        val continuingFromPrevLine = lineStart > 0 && isNineSliceStyle(charStyles?.getOrNull(lineStart - 1))
         var inNineSlice = false
         var nsBgImage = ""
         var nsNpLeft = 0.1f
@@ -1223,7 +1223,7 @@ class TextChapterLayout(
                 val char = words[index]
                 val cw = textWidths[index]
                 val style = charStyles?.getOrNull(lineStart + index)
-                val isNineSlice = style?.bgImageFit == 3
+                val isNineSlice = isNineSliceStyle(style)
 
                 if (isNineSlice && !inNineSlice) {
                     nsBgImage = style.bgImage
@@ -1276,7 +1276,7 @@ class TextChapterLayout(
                 val char = words[index]
                 val cw = textWidths[index]
                 val style = charStyles?.getOrNull(lineStart + index)
-                val isNineSlice = style?.bgImageFit == 3
+                val isNineSlice = isNineSliceStyle(style)
 
                 if (isNineSlice && !inNineSlice) {
                     nsBgImage = style.bgImage
@@ -1309,6 +1309,15 @@ class TextChapterLayout(
             extraRightMargin = marginRight
         }
         exceed(absStartX, textLine, words, extraRightMargin)
+    }
+
+    /**
+     * 判断是否为生效中的九宫格样式：必须同时开启背景图且 fit==3。
+     * 关闭背景图（bgImage 为空）后不再视为九宫格，外边距也随之失效，
+     * 避免"关闭背景图后文字仍被外边距推动"。
+     */
+    private fun isNineSliceStyle(style: CharStyle?): Boolean {
+        return style?.bgImageFit == 3 && style.bgImage.isNotEmpty()
     }
 
     /**
@@ -1389,7 +1398,7 @@ class TextChapterLayout(
         textLine.startX = absStartX + startX
 
         // 检查是否从前一行延续九宫格段落
-        val continuingFromPrevLine = lineStart > 0 && charStyles?.getOrNull(lineStart - 1)?.bgImageFit == 3
+        val continuingFromPrevLine = lineStart > 0 && isNineSliceStyle(charStyles?.getOrNull(lineStart - 1))
 
         var inNineSlice = false
         var nsBgImage = ""
@@ -1417,7 +1426,7 @@ class TextChapterLayout(
             val char = words[index]
             val cw = textWidths[index]
             val style = charStyles?.getOrNull(lineStart + index)
-            val isNineSlice = style?.bgImageFit == 3
+            val isNineSlice = isNineSliceStyle(style)
 
             if (isNineSlice && !inNineSlice) {
                 // 进入九宫格段落：添加 margin-left（边4宽度）

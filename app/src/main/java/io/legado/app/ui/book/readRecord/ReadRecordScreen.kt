@@ -824,16 +824,24 @@ fun HeatmapCalendarSection(
 
     val listState = rememberLazyListState()
 
-    LaunchedEffect(weeks) {
-        if (weeks.isNotEmpty()) {
-            listState.scrollToItem(weeks.size - 1)
+    // 聚焦：滚动到 selectedDate 所在那一周，无选中日期时定位到最近一周
+    LaunchedEffect(selectedDate, weeks) {
+        if (weeks.isEmpty()) return@LaunchedEffect
+        val focus = selectedDate
+        val targetIndex = if (focus != null) {
+            weeks.indexOfFirst { week -> week.any { it == focus } }
+                .takeIf { it >= 0 }
+                ?: (weeks.size - 1)
+        } else {
+            weeks.size - 1
         }
+        listState.scrollToItem(targetIndex)
     }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         LazyRow(

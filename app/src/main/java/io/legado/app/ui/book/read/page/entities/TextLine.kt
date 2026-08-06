@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
@@ -484,22 +485,36 @@ data class TextLine(
         val lineY = height + underlineOffset.dpToPx()
         if (feather > 0f) {
             // 羽化：多 pass 叠加、高斯权重的 alpha，从外到内逐层变窄，模拟全边缘柔化
-            // 层数随羽化半径增加以避免断层；不让中心满 alpha，避免硬芯
+            // 中心保持满 alpha 形成清晰线芯，向两侧按高斯快速衰减形成柔和晕边；
+            // 端点额外做水平渐隐，消除硬切端点
             val passes = (feather * 3f).toInt().coerceIn(6, 24)
             val baseAlpha = Color.alpha(underlineColor)
             val rgb = underlineColor and 0x00FFFFFF
             // sigma 控制浓度衰减，越小越集中、越大越弥散
-            val sigma = 0.5f
+            val sigma = 0.55f
+            // 端部渐隐长度：至少覆盖羽化扩散半径与线宽
+            val featherLen = (feather * 1.5f).coerceAtLeast(underlineWidth).dpToPx()
+            val segLen = endX - startX
+            val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
             for (i in passes downTo 0) {
                 // d: 归一化的到中心距离（0=中心，1=最外层）
                 val d = i.toFloat() / passes
                 val gaussian = kotlin.math.exp(-(d * d) / (2f * sigma * sigma))
-                val alpha = (baseAlpha * gaussian * 0.5f).toInt().coerceIn(0, 255)
+                val alpha = (baseAlpha * gaussian).toInt().coerceIn(0, 255)
                 if (alpha <= 0) continue
-                paint.color = rgb or (alpha shl 24)
+                val centerColor = rgb or (alpha shl 24)
+                paint.color = centerColor
+                // 端点水平渐隐：两端 alpha 渐变为 0
+                paint.shader = LinearGradient(
+                    startX, 0f, endX, 0f,
+                    intArrayOf(0, centerColor, centerColor, 0),
+                    floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
+                    Shader.TileMode.CLAMP,
+                )
                 val passWidth = underlineWidth + d * feather * 2f
                 drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, passWidth, underlineWidth, svgPathStr)
             }
+            paint.shader = null
         } else {
             drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, underlineWidth, underlineWidth, svgPathStr)
         }
