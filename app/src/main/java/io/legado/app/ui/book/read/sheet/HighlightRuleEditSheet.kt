@@ -1322,10 +1322,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
             val passWidth = strokeWidth + d * featherPx * 2f
             // 端点水平渐隐：两端 alpha 渐变为 0
             val brush = Brush.linearGradient(
-                colors = listOf(Color.Transparent, passColor, passColor, Color.Transparent),
+                colorStops = arrayOf(
+                    0f to Color.Transparent,
+                    edgePos to passColor,
+                    1f - edgePos to passColor,
+                    1f to Color.Transparent,
+                ),
                 start = Offset(startX, 0f),
                 end = Offset(endX, 0f),
-                stops = floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
             )
             drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, brush)
         }

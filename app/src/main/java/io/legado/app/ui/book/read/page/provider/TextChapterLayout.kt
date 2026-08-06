@@ -1207,7 +1207,7 @@ class TextChapterLayout(
             var x = startX
             // 跨行延续：添加 margin-left
             if (continuingFromPrevLine) {
-                val prevStyle = charStyles.getOrNull(lineStart - 1)
+                val prevStyle = charStyles?.getOrNull(lineStart - 1)
                 if (prevStyle != null) {
                     nsBgImage = prevStyle.bgImage
                     nsNpLeft = prevStyle.npLeft
@@ -1225,7 +1225,7 @@ class TextChapterLayout(
                 val style = charStyles?.getOrNull(lineStart + index)
                 val isNineSlice = isNineSliceStyle(style)
 
-                if (isNineSlice && !inNineSlice) {
+                if (style != null && isNineSlice && !inNineSlice) {
                     nsBgImage = style.bgImage
                     nsNpLeft = style.npLeft
                     nsNpRight = style.npRight
@@ -1260,7 +1260,7 @@ class TextChapterLayout(
             var x = startX
             // 跨行延续：添加 margin-left
             if (continuingFromPrevLine) {
-                val prevStyle = charStyles.getOrNull(lineStart - 1)
+                val prevStyle = charStyles?.getOrNull(lineStart - 1)
                 if (prevStyle != null) {
                     nsBgImage = prevStyle.bgImage
                     nsNpLeft = prevStyle.npLeft
@@ -1278,7 +1278,7 @@ class TextChapterLayout(
                 val style = charStyles?.getOrNull(lineStart + index)
                 val isNineSlice = isNineSliceStyle(style)
 
-                if (isNineSlice && !inNineSlice) {
+                if (style != null && isNineSlice && !inNineSlice) {
                     nsBgImage = style.bgImage
                     nsNpLeft = style.npLeft
                     nsNpRight = style.npRight
@@ -1409,7 +1409,7 @@ class TextChapterLayout(
 
         // 跨行延续：在新行开头添加 margin-left（边4宽度）
         if (continuingFromPrevLine) {
-            val prevStyle = charStyles.getOrNull(lineStart - 1)
+            val prevStyle = charStyles?.getOrNull(lineStart - 1)
             if (prevStyle != null) {
                 nsBgImage = prevStyle.bgImage
                 nsNpLeft = prevStyle.npLeft
@@ -1428,7 +1428,7 @@ class TextChapterLayout(
             val style = charStyles?.getOrNull(lineStart + index)
             val isNineSlice = isNineSliceStyle(style)
 
-            if (isNineSlice && !inNineSlice) {
+            if (style != null && isNineSlice && !inNineSlice) {
                 // 进入九宫格段落：添加 margin-left（边4宽度）
                 nsBgImage = style.bgImage
                 nsNpLeft = style.npLeft
