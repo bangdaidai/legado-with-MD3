@@ -310,40 +310,43 @@ object Restore : KoinComponent {
             }
         }
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
-            // r 项目 (readdai) 备份特征：产出 readSession.json（单表会话流）+ readRecord.json
-            // （从 readSession 聚合出的兼容快照，字段名是 author 而非 bookAuthor），
-            // 没有 md 的 readRecordDetail.json / readRecordSession.json。
-            // 若检测到 readSession.json 就走兼容分支：以原始会话为准合成 md 的三张表，
-            // 避免用 readRecord.json 直读导致 bookAuthor 字段名不匹配后作者丢失。
-            val hasRReadSession = File(path, "readSession.json").exists()
-            if (hasRReadSession) {
-                fileToListT<RReadSessionDto>(path, "readSession.json")?.let {
-                    restoreFromRReadSessions(it)
-                }
-            } else {
-                fileToListT<ReadRecord>(path, "readRecord.json")?.let {
-                    it.forEach { readRecord ->
-                        try {
-                            restoreReadRecord(readRecord)
-                        } catch (_: SQLiteConstraintException) {
-                        }
+            // readRecord.json 走兼容 DTO：md 自己的备份字段名是 bookAuthor，r 项目 (readdai) 是 author，
+            // 且 r 的备份不含 deviceId。用 DTO 统一接收，兼容两边字段名，deviceId 缺失时补空串，
+            // 避免 md 原实体反序列化时因 deviceId=null 触发 NOT NULL 约束、整表恢复失败。
+            fileToListT<RReadRecordDto>(path, "readRecord.json")?.let {
+                it.forEach { dto ->
+                    try {
+                        restoreReadRecord(dto.toReadRecord())
+                    } catch (_: SQLiteConstraintException) {
                     }
                 }
-                fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
-                    it.forEach { detail ->
-                        try {
-                            restoreReadRecordDetail(detail)
-                        } catch (_: SQLiteConstraintException) {
-                        }
+            }
+            fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
+                it.forEach { detail ->
+                    try {
+                        restoreReadRecordDetail(detail)
+                    } catch (_: SQLiteConstraintException) {
                     }
                 }
-                fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
-                    it.forEach { session ->
-                        try {
-                            restoreReadRecordSession(session)
-                        } catch (_: SQLiteConstraintException) {
-                        }
+            }
+            fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
+                it.forEach { session ->
+                    try {
+                        restoreReadRecordSession(session)
+                    } catch (_: SQLiteConstraintException) {
                     }
+                }
+            }
+            // r 项目备份特征：单表 readSession.json 存原始会话流，没有 readRecordDetail/Session.json。
+            // 检测到 readSession.json 就额外拆分成 md 的 detail/session 两张表填充汇总/时间线视图；
+            // 用 Throwable 兜底，任何异常都不阻断后续恢复步骤。md 自身备份不产 readSession.json，不会误触。
+            if (File(path, "readSession.json").exists()) {
+                try {
+                    fileToListT<RReadSessionDto>(path, "readSession.json")?.let {
+                        restoreFromRReadSessions(it)
+                    }
+                } catch (t: Throwable) {
+                    AppLog.put("恢复 r 项目 readSession.json 兼容失败\n${t.localizedMessage}", t)
                 }
             }
         }
@@ -587,6 +590,29 @@ object Restore : KoinComponent {
             appCtx.toastOnUi("$fileName\n读取文件出错\n${e.localizedMessage}")
         }
         return null
+    }
+
+    /**
+     * readRecord.json 的兼容 DTO。兼容 md（bookAuthor/deviceId/bookType）与
+     * r 项目（author，且无 deviceId/bookType）两种字段命名，缺失字段用安全默认值。
+     */
+    private data class RReadRecordDto(
+        val deviceId: String? = null,
+        val bookName: String = "",
+        val bookAuthor: String? = null,
+        val author: String? = null,
+        val readTime: Long = 0L,
+        val lastRead: Long = 0L,
+        val bookType: Int = io.legado.app.constant.BookType.text
+    ) {
+        fun toReadRecord(): ReadRecord = ReadRecord(
+            deviceId = deviceId ?: "",
+            bookName = bookName,
+            bookAuthor = bookAuthor ?: author ?: "",
+            readTime = readTime,
+            lastRead = lastRead,
+            bookType = bookType
+        )
     }
 
     /**
