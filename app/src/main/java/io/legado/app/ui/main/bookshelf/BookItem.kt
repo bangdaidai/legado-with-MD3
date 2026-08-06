@@ -820,7 +820,7 @@ fun BookItem(
         bottomContent = if (showIntroBelowContent) {
             {
                 GlassCard(
-                    modifier = Modifier.padding(all = 4.dp),
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
                     cornerRadius = 4.dp,
                     containerColor = LegadoTheme.colorScheme.cardContainer
                 ) {
