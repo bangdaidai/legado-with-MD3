@@ -761,7 +761,9 @@ fun BookItem(
                     iconSize = 12.dp,
                     cornerRadius = 4.dp,
                     horizontalPadding = 4.dp,
-                    verticalPadding = 0.dp
+                    verticalPadding = 0.dp,
+                    backgroundColor = LegadoTheme.colorScheme.secondaryContainer,
+                    contentColor = LegadoTheme.colorScheme.onSecondaryContainer
                 )
             }
         } else null,
