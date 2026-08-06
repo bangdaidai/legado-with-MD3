@@ -314,6 +314,7 @@ object Restore : KoinComponent {
             // 且 r 的备份不含 deviceId。用 DTO 统一接收，兼容两边字段名，deviceId 缺失时补空串，
             // 避免 md 原实体反序列化时因 deviceId=null 触发 NOT NULL 约束、整表恢复失败。
             fileToListT<RReadRecordDto>(path, "readRecord.json")?.let {
+                AppLog.put("恢复阅读记录 readRecord.json: ${it.size} 条")
                 it.forEach { dto ->
                     try {
                         restoreReadRecord(dto.toReadRecord())
@@ -342,8 +343,12 @@ object Restore : KoinComponent {
             // 用 Throwable 兜底，任何异常都不阻断后续恢复步骤。md 自身备份不产 readSession.json，不会误触。
             if (File(path, "readSession.json").exists()) {
                 try {
-                    fileToListT<RReadSessionDto>(path, "readSession.json")?.let {
-                        restoreFromRReadSessions(it)
+                    val sessions = fileToListT<RReadSessionDto>(path, "readSession.json")
+                    if (sessions == null) {
+                        AppLog.put("r 项目 readSession.json 解析失败或为空")
+                    } else {
+                        AppLog.put("恢复 r 项目 readSession.json: ${sessions.size} 条")
+                        restoreFromRReadSessions(sessions)
                     }
                 } catch (t: Throwable) {
                     AppLog.put("恢复 r 项目 readSession.json 兼容失败\n${t.localizedMessage}", t)
@@ -637,9 +642,12 @@ object Restore : KoinComponent {
      */
     private suspend fun restoreFromRReadSessions(dtos: List<RReadSessionDto>) {
         val valid = dtos.filter { it.startTime > 0L && it.endTime > it.startTime }
+        AppLog.put("r 项目会话合成：输入 ${dtos.size} 条，有效 ${valid.size} 条")
         if (valid.isEmpty()) return
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
 
+        var sessionOk = 0
+        var sessionFail = 0
         valid.forEach { dto ->
             try {
                 restoreReadRecordSession(
@@ -653,10 +661,21 @@ object Restore : KoinComponent {
                         bookType = dto.type
                     )
                 )
-            } catch (_: SQLiteConstraintException) {
+                sessionOk++
+            } catch (t: Throwable) {
+                sessionFail++
+                if (sessionFail == 1) {
+                    AppLog.put(
+                        "r 项目会话合成：首条 readRecordSession 插入失败\n${t.localizedMessage}",
+                        t
+                    )
+                }
             }
         }
+        AppLog.put("r 项目会话合成：readRecordSession 成功 $sessionOk 条，失败 $sessionFail 条")
 
+        var detailOk = 0
+        var detailFail = 0
         valid.groupBy { Triple(it.bookName, it.author, dateFormat.format(java.util.Date(it.startTime))) }
             .forEach { (key, group) ->
                 try {
@@ -673,10 +692,21 @@ object Restore : KoinComponent {
                             bookType = group.first().type
                         )
                     )
-                } catch (_: SQLiteConstraintException) {
+                    detailOk++
+                } catch (t: Throwable) {
+                    detailFail++
+                    if (detailFail == 1) {
+                        AppLog.put(
+                            "r 项目会话合成：首条 readRecordDetail 插入失败\n${t.localizedMessage}",
+                            t
+                        )
+                    }
                 }
             }
+        AppLog.put("r 项目会话合成：readRecordDetail 成功 $detailOk 条，失败 $detailFail 条")
 
+        var recordOk = 0
+        var recordFail = 0
         valid.groupBy { it.bookName to it.author }
             .forEach { (key, group) ->
                 try {
@@ -690,9 +720,18 @@ object Restore : KoinComponent {
                             bookType = group.first().type
                         )
                     )
-                } catch (_: SQLiteConstraintException) {
+                    recordOk++
+                } catch (t: Throwable) {
+                    recordFail++
+                    if (recordFail == 1) {
+                        AppLog.put(
+                            "r 项目会话合成：首条 readRecord 插入失败\n${t.localizedMessage}",
+                            t
+                        )
+                    }
                 }
             }
+        AppLog.put("r 项目会话合成：readRecord 成功 $recordOk 条，失败 $recordFail 条")
     }
 
 }
