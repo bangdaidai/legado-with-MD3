@@ -33,6 +33,7 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.ToggleChip
+import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -41,6 +42,8 @@ import io.legado.app.ui.main.bookshelf.BookshelfListItem
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.OptionCard
+import io.legado.app.ui.widget.components.modalBottomSheet.OptionSheet
 import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
@@ -323,43 +326,38 @@ fun ReadingMemoryScreen(
     longPressBookUrl?.let { bookUrl ->
         val mem = (uiState.items.filterIsInstance<ReadingMemoryListItem.BookItem>()
             .firstOrNull { it.memory.bookUrl == bookUrl })?.memory
-        AppModalBottomSheet(
+        OptionSheet(
             show = longPressBookUrl != null,
             onDismissRequest = { longPressBookUrl = null },
-            title = mem?.bookName,
+            title = mem?.bookName ?: "",
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                if (mem?.abandoned == true) {
-                    RoundDropdownMenuItem(
-                        text = stringResource(R.string.reading_memory_unmark_abandoned),
-                        onClick = {
-                            onIntent(ReadingMemoryIntent.RemoveAbandoned(bookUrl))
-                            longPressBookUrl = null
-                        },
-                    )
-                } else {
-                    RoundDropdownMenuItem(
-                        text = stringResource(R.string.reading_memory_mark_abandoned),
-                        onClick = {
-                            onIntent(ReadingMemoryIntent.SetAbandoned(bookUrl))
-                            longPressBookUrl = null
-                        },
-                    )
-                }
-                RoundDropdownMenuItem(
-                    text = stringResource(R.string.reading_memory_delete),
-                    color = LegadoTheme.colorScheme.error,
+            if (mem?.abandoned == true) {
+                OptionCard(
+                    icon = Icons.Default.Undo,
+                    text = stringResource(R.string.reading_memory_unmark_abandoned),
                     onClick = {
-                        onIntent(ReadingMemoryIntent.DeleteMemory(bookUrl))
+                        onIntent(ReadingMemoryIntent.RemoveAbandoned(bookUrl))
+                        longPressBookUrl = null
+                    },
+                )
+            } else {
+                OptionCard(
+                    icon = Icons.Default.Block,
+                    text = stringResource(R.string.reading_memory_mark_abandoned),
+                    onClick = {
+                        onIntent(ReadingMemoryIntent.SetAbandoned(bookUrl))
                         longPressBookUrl = null
                     },
                 )
             }
+            OptionCard(
+                icon = Icons.Default.Delete,
+                text = stringResource(R.string.reading_memory_delete),
+                onClick = {
+                    onIntent(ReadingMemoryIntent.DeleteMemory(bookUrl))
+                    longPressBookUrl = null
+                },
+            )
         }
     }
 
@@ -539,26 +537,32 @@ private fun MemoryBookCard(
         },
         bottomContent = if (showIntroBelowContent || showReviewBelowContent) {
             {
-                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    if (showIntroBelowContent) {
-                        AppText(
-                            text = memory.intro.orEmpty(),
-                            style = LegadoTheme.typography.bodySmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                            maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        )
-                    }
-                    if (showReviewBelowContent) {
-                        AppText(
-                            text = memory.review.orEmpty(),
-                            style = LegadoTheme.typography.bodySmall,
-                            color = LegadoTheme.colorScheme.onSurface,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        )
+                GlassCard(
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
+                    cornerRadius = 4.dp,
+                    containerColor = LegadoTheme.colorScheme.cardContainer
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+                        if (showIntroBelowContent) {
+                            AppText(
+                                text = memory.intro.orEmpty(),
+                                style = LegadoTheme.typography.bodySmall,
+                                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            )
+                        }
+                        if (showReviewBelowContent) {
+                            AppText(
+                                text = memory.review.orEmpty(),
+                                style = LegadoTheme.typography.bodySmall,
+                                color = LegadoTheme.colorScheme.onSurface,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            )
+                        }
                     }
                 }
             }
