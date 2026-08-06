@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ fun ValueStepper(
     stepSize: Float = 1f,
     showDecimal: Boolean = false,
     valueFormat: ((Float) -> String)? = null,
+    onReset: (() -> Unit)? = null,
     content: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
@@ -34,6 +36,14 @@ fun ValueStepper(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        if (onReset != null) {
+            SmallOutlinedButton(
+                onClick = onReset,
+                enabled = enabled,
+                icon = Icons.Default.Refresh,
+                contentDescription = stringResource(R.string.a11y_reset),
+            )
+        }
         SmallOutlinedButton(
             onClick = {
                 val newValue = (value - stepSize).coerceIn(valueRange)

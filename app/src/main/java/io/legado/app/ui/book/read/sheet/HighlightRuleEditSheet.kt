@@ -150,6 +150,8 @@ fun HighlightRuleEditSheet(
     var underlineBelowText by remember(show, rule) { mutableStateOf(initial.underlineBelowText) }
     var underlineRoundCap by remember(show, rule) { mutableStateOf(initial.underlineRoundCap) }
     var underlineFeather by remember(show, rule) { mutableFloatStateOf(initial.underlineFeather) }
+    var underlineDashLen by remember(show, rule) { mutableFloatStateOf(initial.underlineDashLen) }
+    var underlineDashGap by remember(show, rule) { mutableFloatStateOf(initial.underlineDashGap) }
     var useProtagonist by remember(show, rule) { mutableStateOf(initial.useProtagonist) }
     var characterRole by remember(show, rule) { mutableStateOf(initial.characterRole.orEmpty()) }
     var bgImage by remember(show, rule) { mutableStateOf(initial.bgImage.orEmpty()) }
@@ -288,6 +290,8 @@ fun HighlightRuleEditSheet(
                             underlineRoundCap = underlineRoundCap,
                             underlineFeather = underlineFeather,
                             underlineBelowText = underlineBelowText,
+                            underlineDashLen = underlineDashLen,
+                            underlineDashGap = underlineDashGap,
                             bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
                             bgImageFit = if (hasBgImage && bgImage.isNotBlank()) bgImageFit else 0,
                             bgImageScale = bgImageScale,
@@ -538,6 +542,7 @@ fun HighlightRuleEditSheet(
                         valueRange = 0.1f..20f,
                         description = String.format("%.1f dp", underlineWidth),
                         onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
+                        onReset = { underlineWidth = 1f },
                     )
 
                     TinySliderSettingItem(
@@ -546,6 +551,7 @@ fun HighlightRuleEditSheet(
                         valueRange = -20f..10f,
                         description = String.format("%+.1f dp", underlineOffset),
                         onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
+                        onReset = { underlineOffset = 2f },
                     )
 
                     TinySwitchSettingItem(
@@ -567,6 +573,27 @@ fun HighlightRuleEditSheet(
                         description = String.format("%.1f dp", underlineFeather),
                         onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
                     )
+
+                    AnimatedVisibility(visible = underlineMode == 2) {
+                        Column {
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_dash_len),
+                                value = underlineDashLen,
+                                valueRange = 0f..20f,
+                                description = String.format("%.1f dp", underlineDashLen),
+                                onValueChange = { underlineDashLen = (it * 10).toInt() / 10f },
+                                onReset = { underlineDashLen = 0f },
+                            )
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_dash_gap),
+                                value = underlineDashGap,
+                                valueRange = 0f..20f,
+                                description = String.format("%.1f dp", underlineDashGap),
+                                onValueChange = { underlineDashGap = (it * 10).toInt() / 10f },
+                                onReset = { underlineDashGap = 0f },
+                            )
+                        }
+                    }
                 }
             }
 
@@ -846,6 +873,8 @@ fun HighlightRuleEditSheet(
                 underlineBelowText = underlineBelowText,
                 underlineRoundCap = underlineRoundCap,
                 underlineFeather = underlineFeather,
+                underlineDashLen = underlineDashLen,
+                underlineDashGap = underlineDashGap,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -894,6 +923,8 @@ fun HighlightRuleEditSheet(
                     underlineBelowText = underlineBelowText,
                     underlineRoundCap = underlineRoundCap,
                     underlineFeather = underlineFeather,
+                    underlineDashLen = underlineDashLen,
+                    underlineDashGap = underlineDashGap,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -1054,6 +1085,8 @@ private fun HighlightRulePreview(
     underlineBelowText: Boolean = false,
     underlineRoundCap: Boolean = false,
     underlineFeather: Float = 0f,
+    underlineDashLen: Float = 0f,
+    underlineDashGap: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -1278,6 +1311,8 @@ private fun HighlightRulePreview(
                                     y = y,
                                     roundCap = underlineRoundCap,
                                     feather = underlineFeather,
+                                    dashLen = underlineDashLen,
+                                    dashGap = underlineDashGap,
                                 )
                                 offset = segEnd
                             }
@@ -1302,6 +1337,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
     y: Float,
     roundCap: Boolean = false,
     feather: Float = 0f,
+    dashLen: Float = 0f,
+    dashGap: Float = 0f,
 ) {
     val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
     if (feather > 0f) {
@@ -1331,10 +1368,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
                 start = Offset(startX, 0f),
                 end = Offset(endX, 0f),
             )
-            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, brush)
+            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, brush, dashLen, dashGap)
         }
     } else {
-        drawUnderlineShape(mode, color, strokeWidth, startX, endX, y, cap)
+        drawUnderlineShape(mode, color, strokeWidth, startX, endX, y, cap, dashLen = dashLen, dashGap = dashGap)
     }
 }
 
@@ -1347,6 +1384,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
     brush: Brush? = null,
+    dashLen: Float = 0f,
+    dashGap: Float = 0f,
 ) {
     // 圆头向外延伸半个宽度，收缩补偿以保持总长不变
     val capInset = if (cap == StrokeCap.Round) strokeWidth / 2f else 0f
@@ -1363,8 +1402,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
         )
 
         2 -> {
-            val dashLength = 8.dp.toPx()
-            val gapLength = 4.dp.toPx()
+            val dashLength = if (dashLen > 0f) dashLen.dp.toPx() else 8.dp.toPx()
+            val gapLength = if (dashGap > 0f) dashGap.dp.toPx() else 4.dp.toPx()
             var x = sx
             while (x < ex) {
                 val segEndX = minOf(x + dashLength, ex)

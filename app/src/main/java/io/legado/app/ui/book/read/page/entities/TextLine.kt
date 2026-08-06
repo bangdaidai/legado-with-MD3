@@ -398,6 +398,8 @@ data class TextLine(
         var svgPath = ""
         var roundCap = false
         var feather = 0f
+        var dashLen = 0f
+        var dashGap = 0f
         var active = false
         columns.forEachIndexed { index, column ->
             val textColumn = column as? TextBaseColumn
@@ -413,6 +415,8 @@ data class TextLine(
             val currentSvgPath = textColumn?.underlineSvgPath ?: ""
             val currentRoundCap = textColumn?.underlineRoundCap ?: false
             val currentFeather = textColumn?.underlineFeather ?: 0f
+            val currentDashLen = textColumn?.underlineDashLen ?: 0f
+            val currentDashGap = textColumn?.underlineDashGap ?: 0f
             val shouldContinue = active &&
                 effectiveMode == mode &&
                 currentColor == color &&
@@ -420,10 +424,12 @@ data class TextLine(
                 currentOffset == offset &&
                 currentSvgPath == svgPath &&
                 currentRoundCap == roundCap &&
-                currentFeather == feather
+                currentFeather == feather &&
+                currentDashLen == dashLen &&
+                currentDashGap == dashGap
             when {
                 effectiveMode == 0 && active -> {
-                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather)
+                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather, dashLen, dashGap)
                     active = false
                 }
                 effectiveMode != 0 && !active -> {
@@ -436,13 +442,15 @@ data class TextLine(
                     svgPath = currentSvgPath
                     roundCap = currentRoundCap
                     feather = currentFeather
+                    dashLen = currentDashLen
+                    dashGap = currentDashGap
                     active = true
                 }
                 effectiveMode != 0 && shouldContinue -> {
                     rangeEnd = textColumn!!.end
                 }
                 effectiveMode != 0 -> {
-                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather)
+                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather, dashLen, dashGap)
                     rangeStart = textColumn!!.start
                     rangeEnd = textColumn.end
                     mode = effectiveMode
@@ -452,10 +460,12 @@ data class TextLine(
                     svgPath = currentSvgPath
                     roundCap = currentRoundCap
                     feather = currentFeather
+                    dashLen = currentDashLen
+                    dashGap = currentDashGap
                 }
             }
             if (active && index == columns.lastIndex) {
-                drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather)
+                drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather, dashLen, dashGap)
             }
         }
     }
@@ -474,6 +484,8 @@ data class TextLine(
         svgPathStr: String = "",
         roundCap: Boolean = false,
         feather: Float = 0f,
+        dashLen: Float = 0f,
+        dashGap: Float = 0f,
     ) {
         val paint = PaintPool.obtain()
         paint.set(ChapterProvider.contentPaint)
@@ -512,11 +524,11 @@ data class TextLine(
                     Shader.TileMode.CLAMP,
                 )
                 val passWidth = underlineWidth + d * feather * 2f
-                drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, passWidth, underlineWidth, svgPathStr)
+                drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, passWidth, underlineWidth, svgPathStr, dashLen, dashGap)
             }
             paint.shader = null
         } else {
-            drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, underlineWidth, underlineWidth, svgPathStr)
+            drawUnderlineShape(canvas, paint, startX, endX, lineY, underlineMode, underlineWidth, underlineWidth, svgPathStr, dashLen, dashGap)
         }
         PaintPool.recycle(paint)
     }
@@ -535,6 +547,8 @@ data class TextLine(
         strokeWidth: Float,
         geomWidth: Float,
         svgPathStr: String,
+        dashLen: Float = 0f,
+        dashGap: Float = 0f,
     ) {
         paint.strokeWidth = strokeWidth.dpToPx()
         // 圆头端点会向外延伸半个宽度，需要向内收缩补偿以保持总长不变
@@ -548,7 +562,7 @@ data class TextLine(
         }
         when (underlineMode) {
             1 -> canvas.drawLine(sx, lineY, ex, lineY, paint)
-            2 -> drawDashedLine(canvas, paint, sx, lineY, ex, strokeWidth)
+            2 -> drawDashedLine(canvas, paint, sx, lineY, ex, strokeWidth, dashLen, dashGap)
             3 -> drawWavyLine(canvas, paint, sx, lineY, ex, strokeWidth)
             4 -> {
                 val line2Y = lineY + doubleLineGap + geomWidth.dpToPx()
@@ -563,10 +577,10 @@ data class TextLine(
         }
     }
 
-    private fun drawDashedLine(canvas: Canvas, paint: Paint, startX: Float, y: Float, endX: Float, underlineWidth: Float) {
+    private fun drawDashedLine(canvas: Canvas, paint: Paint, startX: Float, y: Float, endX: Float, underlineWidth: Float, dashLenDp: Float, dashGapDp: Float) {
         paint.strokeWidth = underlineWidth.dpToPx()
-        val dashLen = 8.dpToPx().toFloat()
-        val gapLen = 5.dpToPx().toFloat()
+        val dashLen = if (dashLenDp > 0f) dashLenDp.dpToPx() else 8.dpToPx().toFloat()
+        val gapLen = if (dashGapDp > 0f) dashGapDp.dpToPx() else 5.dpToPx().toFloat()
         var x = startX
         while (x < endX) {
             val x2 = (x + dashLen).coerceAtMost(endX)

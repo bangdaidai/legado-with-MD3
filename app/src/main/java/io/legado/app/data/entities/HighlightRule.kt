@@ -60,6 +60,12 @@ data class HighlightRule(
     var bgMarginTop: Float = 0f,
     @ColumnInfo(defaultValue = "0")
     var bgMarginBottom: Float = 0f,
+    // 虚线段长度（dp），0=使用默认 8dp
+    @ColumnInfo(defaultValue = "0")
+    var underlineDashLen: Float = 0f,
+    // 虚线间隔长度（dp），0=使用默认 5dp
+    @ColumnInfo(defaultValue = "0")
+    var underlineDashGap: Float = 0f,
     // 下划线端点圆角
     @ColumnInfo(defaultValue = "0")
     var underlineRoundCap: Boolean = false,

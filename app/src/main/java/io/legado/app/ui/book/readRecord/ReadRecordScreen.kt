@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -88,6 +89,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.AppIconButton
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.card.SettingCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.heatmap.HeatmapCalendarEndAction
@@ -668,35 +670,44 @@ private fun ReadRecordTypeFilterRow(
         io.legado.app.constant.BookType.audio to stringResource(R.string.book_type_audio),
         io.legado.app.constant.BookType.video to stringResource(R.string.book_type_video)
     )
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AppIcon(
-                Icons.Default.FilterList,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = LegadoTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            AppText(
-                text = stringResource(R.string.read_record_type_filter),
-                style = LegadoTheme.typography.bodyLarge
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            options.forEach { (type, label) ->
-                ToggleChip(
-                    label = label,
-                    selected = type == selected,
-                    onToggle = { onSelect(type) }
+    SettingCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 8.dp,
+        colors = CardDefaults.cardColors(
+            containerColor = LegadoTheme.colorScheme.onSheetContent
+                ?: MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppIcon(
+                    Icons.Default.FilterList,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = LegadoTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.width(12.dp))
+                AppText(
+                    text = stringResource(R.string.read_record_type_filter),
+                    style = LegadoTheme.typography.bodyLarge
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                options.forEach { (type, label) ->
+                    ToggleChip(
+                        label = label,
+                        selected = type == selected,
+                        onToggle = { onSelect(type) }
+                    )
+                }
             }
         }
     }

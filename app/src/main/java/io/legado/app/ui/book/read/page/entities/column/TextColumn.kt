@@ -29,6 +29,8 @@ data class TextColumn(
     override val underlineSvgPath: String = "",
     override val underlineRoundCap: Boolean = false,
     override val underlineFeather: Float = 0f,
+    override val underlineDashLen: Float = 0f,
+    override val underlineDashGap: Float = 0f,
     override val underlineBelowText: Boolean = false,
     override val bgImage: String = "",
     override val bgImageFit: Int = 0,

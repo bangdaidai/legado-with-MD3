@@ -788,13 +788,15 @@
     <string name="underline_solid">实线下划线</string>
     <string name="underline_dashed">虚线下划线</string>
     <string name="underline_wave">波浪下划线</string>
-    <string name="underline_title_bar">标题强调条</string>
+    <string name="underline_title_bar">双实线</string>
     <string name="underline_svg">自定义SVG</string>
     <string name="underline_width">下划线宽度</string>
     <string name="underline_offset">下划线偏移</string>
     <string name="underline_below_text">下划线置于文字下方</string>
     <string name="underline_round_cap">端点圆角</string>
     <string name="underline_feather">模糊半径</string>
+    <string name="underline_dash_len">虚线段长</string>
+    <string name="underline_dash_gap">虚线间隔</string>
     <string name="use_protagonist">跟随主角</string>
     <string name="character_role_filter">角色筛选</string>
     <string name="character_role_all">全部主角</string>

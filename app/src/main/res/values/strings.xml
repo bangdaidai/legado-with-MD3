@@ -826,6 +826,8 @@
     <string name="underline_below_text">Underline Below Text</string>
     <string name="underline_round_cap">Rounded Endpoints</string>
     <string name="underline_feather">Blur Radius</string>
+    <string name="underline_dash_len">Dash Length</string>
+    <string name="underline_dash_gap">Dash Gap</string>
     <string name="use_protagonist">Follow Protagonist</string>
     <string name="character_role_filter">Character Role</string>
     <string name="character_role_all">All Protagonists</string>
@@ -2539,6 +2541,7 @@
     <string name="a11y_off">Off</string>
     <string name="a11y_decrease">Decrease</string>
     <string name="a11y_increase">Increase</string>
+    <string name="a11y_reset">Reset to default</string>
     <string name="a11y_move_up">Move up</string>
     <string name="a11y_move_down">Move down</string>
     <string name="a11y_reorder_named">Reorder %1$s</string>

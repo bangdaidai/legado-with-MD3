@@ -289,6 +289,7 @@ fun TinySliderSettingItem(
     stepSize: Float = 1f,
     showDecimal: Boolean = false,
     valueFormat: ((Float) -> String)? = null,
+    onReset: (() -> Unit)? = null,
     onValueChange: (Float) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -315,6 +316,7 @@ fun TinySliderSettingItem(
                 stepSize = stepSize,
                 showDecimal = showDecimal,
                 valueFormat = valueFormat,
+                onReset = onReset,
             )
         },
         expandContent = {
