@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Environment
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import androidx.room.withTransaction
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import cn.hutool.core.date.DateUtil
@@ -607,7 +608,7 @@ object Restore : KoinComponent {
             }
         }
 
-        appDb.runInTransaction {
+        appDb.withTransaction {
             sessions.forEach { session ->
                 try {
                     restoreReadRecordSession(session)
