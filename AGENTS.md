@@ -2,6 +2,17 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+## HARD RULE: Never run builds
+
+**The agent MUST NOT run Gradle builds, compiles, tests, or lint.** No exceptions, no "just to
+verify". Do not run `gradlew`, `gradlew.bat`, `./gradlew`, or any `assemble*` / `compile*` / `test` /
+`lint` / `connectedAndroidTest` task — not in the foreground, not in the background.
+
+Make the code change and stop. The user runs the build and reports back.
+
+The commands in "Build / Test / Run" below are reference documentation for the **user**, not
+instructions for the agent to execute.
+
 ## Coding Guidelines
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

@@ -582,7 +582,7 @@ fun HighlightRuleEditSheet(
                                 valueRange = 0f..20f,
                                 description = String.format("%.1f dp", underlineDashLen),
                                 onValueChange = { underlineDashLen = (it * 10).toInt() / 10f },
-                                onReset = { underlineDashLen = 0f },
+                                onReset = { underlineDashLen = 8f },
                             )
                             TinySliderSettingItem(
                                 title = stringResource(R.string.underline_dash_gap),
@@ -590,7 +590,7 @@ fun HighlightRuleEditSheet(
                                 valueRange = 0f..20f,
                                 description = String.format("%.1f dp", underlineDashGap),
                                 onValueChange = { underlineDashGap = (it * 10).toInt() / 10f },
-                                onReset = { underlineDashGap = 0f },
+                                onReset = { underlineDashGap = 5f },
                             )
                         }
                     }
@@ -1085,8 +1085,8 @@ private fun HighlightRulePreview(
     underlineBelowText: Boolean = false,
     underlineRoundCap: Boolean = false,
     underlineFeather: Float = 0f,
-    underlineDashLen: Float = 0f,
-    underlineDashGap: Float = 0f,
+    underlineDashLen: Float = 8f,
+    underlineDashGap: Float = 5f,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -1337,8 +1337,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
     y: Float,
     roundCap: Boolean = false,
     feather: Float = 0f,
-    dashLen: Float = 0f,
-    dashGap: Float = 0f,
+    dashLen: Float = 8f,
+    dashGap: Float = 5f,
 ) {
     val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
     if (feather > 0f) {
@@ -1384,8 +1384,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
     brush: Brush? = null,
-    dashLen: Float = 0f,
-    dashGap: Float = 0f,
+    dashLen: Float = 8f,
+    dashGap: Float = 5f,
 ) {
     // 圆头向外延伸半个宽度，收缩补偿以保持总长不变
     val capInset = if (cap == StrokeCap.Round) strokeWidth / 2f else 0f
@@ -1402,8 +1402,18 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
         )
 
         2 -> {
-            val dashLength = if (dashLen > 0f) dashLen.dp.toPx() else 8.dp.toPx()
-            val gapLength = if (dashGap > 0f) dashGap.dp.toPx() else 4.dp.toPx()
+            val dashLength = dashLen.dp.toPx()
+            val gapLength = dashGap.dp.toPx()
+            if (dashLength + gapLength <= 0f) {
+                drawLine(
+                    brush = brush ?: Brush.linearGradient(listOf(color, color)),
+                    start = Offset(sx, y),
+                    end = Offset(ex, y),
+                    strokeWidth = strokeWidth,
+                    cap = cap,
+                )
+                return
+            }
             var x = sx
             while (x < ex) {
                 val segEndX = minOf(x + dashLength, ex)

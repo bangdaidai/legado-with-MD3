@@ -698,8 +698,8 @@ object DatabaseMigrations {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN bgMarginBottom REAL NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN fontSizeOffset INTEGER NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineBelowText INTEGER NOT NULL DEFAULT 0")
-            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashLen REAL NOT NULL DEFAULT 0")
-            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashGap REAL NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashLen REAL NOT NULL DEFAULT 8")
+            database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashGap REAL NOT NULL DEFAULT 5")
             // 本地额外: 藏书票模板表
             database.execSQL(
                 """

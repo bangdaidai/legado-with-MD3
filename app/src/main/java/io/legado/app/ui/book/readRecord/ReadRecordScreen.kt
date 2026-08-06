@@ -6,7 +6,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,10 +75,10 @@ import io.legado.app.R
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
+import io.legado.app.ui.book.readRecord.component.HeatmapCalendarSection
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPaddingOnlyVertical
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
-import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.CollapsibleHeader
 import io.legado.app.ui.widget.components.EmptyMessage
@@ -94,16 +92,8 @@ import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.heatmap.HeatmapCalendarEndAction
 import io.legado.app.ui.widget.components.heatmap.HeatmapCalendarStartAction
-import io.legado.app.ui.widget.components.heatmap.HeatmapConfig
-import io.legado.app.ui.widget.components.heatmap.HeatmapLegend
 import io.legado.app.ui.widget.components.heatmap.HeatmapMode
-import io.legado.app.ui.widget.components.heatmap.HeatmapWeekColumn
-import io.legado.app.ui.widget.components.heatmap.NoEarlierDataIndicator
-import io.legado.app.ui.widget.components.heatmap.WeekdayLabelsColumn
 import io.legado.app.ui.widget.components.heatmap.heatmapCalendarTitle
-import io.legado.app.ui.widget.components.heatmap.rememberDateRange
-import io.legado.app.ui.widget.components.heatmap.rememberDaysInRange
-import io.legado.app.ui.widget.components.heatmap.rememberWeeks
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
@@ -120,7 +110,6 @@ import io.legado.app.utils.StringUtils.formatFriendlyDate
 import io.legado.app.utils.formatReadDuration
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Date
 
@@ -537,7 +526,10 @@ fun ReadRecordScreen(
             onDateSelected = { date ->
                 onIntent(ReadRecordIntent.SelectDate(date))
                 showCalendar = false
-            }
+            },
+            showFadingEdge = true,
+            verticalPadding = 8.dp,
+            legendSpacing = 12.dp
         )
     }
 
@@ -820,78 +812,6 @@ fun SummarySection(
                 onClick = onSummaryClick
             )
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun HeatmapCalendarSection(
-    modifier: Modifier = Modifier,
-    dailyReadCounts: Map<LocalDate, Int>,
-    dailyReadTimes: Map<LocalDate, Long>,
-    currentMode: HeatmapMode,
-    selectedDate: LocalDate?,
-    onDateSelected: ((LocalDate) -> Unit)?,
-    config: HeatmapConfig = HeatmapConfig()
-) {
-    val (startDate, endDate) = rememberDateRange(dailyReadCounts, dailyReadTimes)
-    val days = rememberDaysInRange(startDate, endDate)
-    val weeks = rememberWeeks(days, startDate)
-
-    val listState = rememberLazyListState()
-
-    // 聚焦：滚动到 selectedDate 所在那一周并水平居中，无选中日期时定位到最近一周
-    LaunchedEffect(selectedDate, weeks) {
-        if (weeks.isEmpty()) return@LaunchedEffect
-        val focus = selectedDate
-        val targetIndex = if (focus != null) {
-            weeks.indexOfFirst { week -> week.any { it == focus } }
-                .takeIf { it >= 0 }
-                ?: (weeks.size - 1)
-        } else {
-            weeks.size - 1
-        }
-        listState.scrollToItem(targetIndex)
-        // 把目标周中心对齐视口中心
-        val layoutInfo = listState.layoutInfo
-        val targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == targetIndex }
-            ?: return@LaunchedEffect
-        val diff = (targetItem.offset + targetItem.size / 2f) - layoutInfo.viewportSize.width / 2f
-        listState.scrollBy(diff)
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        LazyRow(
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
-            modifier = Modifier
-                .fillMaxWidth()
-                .fadingEdge(listState, config.gradientWidth)
-        ) {
-            items(weeks.size) { weekIndex ->
-                HeatmapWeekColumn(
-                    week = weeks[weekIndex],
-                    mode = currentMode,
-                    dailyReadCounts = dailyReadCounts,
-                    dailyReadTimes = dailyReadTimes,
-                    selectedDate = selectedDate,
-                    config = config,
-                    onDateSelected = onDateSelected
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        HeatmapLegend(
-            mode = currentMode,
-            config = config
-        )
     }
 }
 

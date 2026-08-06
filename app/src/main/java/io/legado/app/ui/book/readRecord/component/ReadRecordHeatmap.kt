@@ -9,7 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.widget.components.heatmap.*
 import java.time.LocalDate
 
@@ -21,7 +23,10 @@ fun HeatmapCalendarSection(
     currentMode: HeatmapMode,
     selectedDate: LocalDate?,
     onDateSelected: ((LocalDate) -> Unit)?,
-    config: HeatmapConfig = HeatmapConfig()
+    config: HeatmapConfig = HeatmapConfig(),
+    showFadingEdge: Boolean = false,
+    verticalPadding: Dp = 0.dp,
+    legendSpacing: Dp = 8.dp
 ) {
     val (startDate, endDate) = rememberDateRange(dailyReadCounts, dailyReadTimes)
     val days = rememberDaysInRange(startDate, endDate)
@@ -29,7 +34,7 @@ fun HeatmapCalendarSection(
 
     val listState = rememberLazyListState()
 
-    // 聚焦：滚动到 selectedDate 所在那一周并水平居中（列表用 reverseLayout=true，最早那周 index=0）
+    // 聚焦：滚动到 selectedDate 所在那一周并水平居中（reverseLayout=true，最早那周 index=0 在最右侧）
     LaunchedEffect(selectedDate, weeks) {
         if (weeks.isEmpty()) return@LaunchedEffect
         val focus = selectedDate
@@ -40,7 +45,6 @@ fun HeatmapCalendarSection(
         } else {
             weeks.size - 1
         }
-        // reverseLayout 下 index 越大越靠左，index 0 在最右侧
         listState.scrollToItem(targetIndex)
         // 把目标周中心对齐视口中心
         val layoutInfo = listState.layoutInfo
@@ -51,12 +55,19 @@ fun HeatmapCalendarSection(
     }
 
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = verticalPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         LazyRow(
             state = listState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (showFadingEdge) Modifier.fadingEdge(listState, config.gradientWidth)
+                    else Modifier
+                ),
             horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
             reverseLayout = true
         ) {
@@ -73,7 +84,7 @@ fun HeatmapCalendarSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(legendSpacing))
 
         HeatmapLegend(mode = currentMode, config = config)
     }

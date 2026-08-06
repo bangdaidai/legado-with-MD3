@@ -373,7 +373,7 @@ fun ExploreShowScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .fadingEdge(chipListState, gradientWidth = 16.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(

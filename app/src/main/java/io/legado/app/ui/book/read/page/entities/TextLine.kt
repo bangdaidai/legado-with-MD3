@@ -398,8 +398,8 @@ data class TextLine(
         var svgPath = ""
         var roundCap = false
         var feather = 0f
-        var dashLen = 0f
-        var dashGap = 0f
+        var dashLen = 8f
+        var dashGap = 5f
         var active = false
         columns.forEachIndexed { index, column ->
             val textColumn = column as? TextBaseColumn
@@ -415,8 +415,8 @@ data class TextLine(
             val currentSvgPath = textColumn?.underlineSvgPath ?: ""
             val currentRoundCap = textColumn?.underlineRoundCap ?: false
             val currentFeather = textColumn?.underlineFeather ?: 0f
-            val currentDashLen = textColumn?.underlineDashLen ?: 0f
-            val currentDashGap = textColumn?.underlineDashGap ?: 0f
+            val currentDashLen = textColumn?.underlineDashLen ?: 8f
+            val currentDashGap = textColumn?.underlineDashGap ?: 5f
             val shouldContinue = active &&
                 effectiveMode == mode &&
                 currentColor == color &&
@@ -484,8 +484,8 @@ data class TextLine(
         svgPathStr: String = "",
         roundCap: Boolean = false,
         feather: Float = 0f,
-        dashLen: Float = 0f,
-        dashGap: Float = 0f,
+        dashLen: Float = 8f,
+        dashGap: Float = 5f,
     ) {
         val paint = PaintPool.obtain()
         paint.set(ChapterProvider.contentPaint)
@@ -547,8 +547,8 @@ data class TextLine(
         strokeWidth: Float,
         geomWidth: Float,
         svgPathStr: String,
-        dashLen: Float = 0f,
-        dashGap: Float = 0f,
+        dashLen: Float = 8f,
+        dashGap: Float = 5f,
     ) {
         paint.strokeWidth = strokeWidth.dpToPx()
         // 圆头端点会向外延伸半个宽度，需要向内收缩补偿以保持总长不变
@@ -579,8 +579,13 @@ data class TextLine(
 
     private fun drawDashedLine(canvas: Canvas, paint: Paint, startX: Float, y: Float, endX: Float, underlineWidth: Float, dashLenDp: Float, dashGapDp: Float) {
         paint.strokeWidth = underlineWidth.dpToPx()
-        val dashLen = if (dashLenDp > 0f) dashLenDp.dpToPx() else 8.dpToPx().toFloat()
-        val gapLen = if (dashGapDp > 0f) dashGapDp.dpToPx() else 5.dpToPx().toFloat()
+        val dashLen = dashLenDp.dpToPx()
+        val gapLen = dashGapDp.dpToPx()
+        // 段长与间隔同时为 0 时无法推进，退化为整条实线，避免死循环
+        if (dashLen + gapLen <= 0f) {
+            canvas.drawLine(startX, y, endX, y, paint)
+            return
+        }
         var x = startX
         while (x < endX) {
             val x2 = (x + dashLen).coerceAtMost(endX)
