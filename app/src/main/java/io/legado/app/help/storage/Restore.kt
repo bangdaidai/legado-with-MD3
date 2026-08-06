@@ -8,7 +8,9 @@ import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.BuildConfig
 import io.legado.app.R
+import cn.hutool.core.date.DateUtil
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.BookType
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -78,6 +80,9 @@ import org.xmlpull.v1.XmlPullParserFactory
 import splitties.init.appCtx
 import java.io.File
 import java.io.FileInputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 恢复
@@ -310,27 +315,36 @@ object Restore : KoinComponent {
             }
         }
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
-            fileToListT<ReadRecord>(path, "readRecord.json")?.let {
-                it.forEach { readRecord ->
-                    try {
-                        restoreReadRecord(readRecord)
-                    } catch (_: SQLiteConstraintException) {
+            if (File(path, "readSession.json").exists()) {
+                // r 格式备份（readdai）：readSession.json 存放 readdai 的 ReadSession 列表，
+                // 需转换为 MD 的三张表后再写库。注意该格式备份里的 readRecord.json 是
+                // ReadRecordShow（视图），并非 MD 的 ReadRecord，因此不能进入下方 MD 自有格式分支。
+                fileToListT<RReadSession>(path, "readSession.json")?.let { rSessions ->
+                    restoreReadRecordFromRFormat(rSessions)
+                }
+            } else {
+                fileToListT<ReadRecord>(path, "readRecord.json")?.let {
+                    it.forEach { readRecord ->
+                        try {
+                            restoreReadRecord(readRecord)
+                        } catch (_: SQLiteConstraintException) {
+                        }
                     }
                 }
-            }
-            fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
-                it.forEach { detail ->
-                    try {
-                        restoreReadRecordDetail(detail)
-                    } catch (_: SQLiteConstraintException) {
+                fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
+                    it.forEach { detail ->
+                        try {
+                            restoreReadRecordDetail(detail)
+                        } catch (_: SQLiteConstraintException) {
+                        }
                     }
                 }
-            }
-            fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
-                it.forEach { session ->
-                    try {
-                        restoreReadRecordSession(session)
-                    } catch (_: SQLiteConstraintException) {
+                fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
+                    it.forEach { session ->
+                        try {
+                            restoreReadRecordSession(session)
+                        } catch (_: SQLiteConstraintException) {
+                        }
                     }
                 }
             }
@@ -509,6 +523,109 @@ object Restore : KoinComponent {
             left <= 0L -> right
             right <= 0L -> left
             else -> minOf(left, right)
+        }
+    }
+
+    /**
+     * 把 r 格式(readdai)的 ReadSession 列表转换成 MD 的三张表再写库：
+     * - ReadRecordSession：每条会话 1:1 映射(deviceId 统一留空)
+     * - ReadRecordDetail：按 yyyy-MM-dd 聚合, readTime = endTime - startTime
+     * - ReadRecord：按书聚合, readTime = 各会话时长之和, lastRead = 最晚 endTime
+     * 三条写库均在单事务内完成, 并复用已有的 merge 逻辑与现有数据正确合并。
+     */
+    private suspend fun restoreReadRecordFromRFormat(rSessions: List<RReadSession>) {
+        if (rSessions.isEmpty()) return
+        val deviceId = ""
+        val sessions = rSessions.mapNotNull { rs ->
+            if (rs.endTime <= rs.startTime) return@mapNotNull null
+            ReadRecordSession(
+                deviceId = deviceId,
+                bookName = rs.bookName,
+                bookAuthor = rs.author,
+                startTime = rs.startTime,
+                endTime = rs.endTime,
+                words = rs.words,
+                bookType = rs.type
+            )
+        }
+        if (sessions.isEmpty()) return
+
+        val detailsByKey = mutableMapOf<Triple<String, String, String>, ReadRecordDetail>()
+        val recordsByKey = mutableMapOf<Pair<String, String>, ReadRecord>()
+        for (session in sessions) {
+            val date = DateUtil.format(Date(session.startTime), "yyyy-MM-dd")
+            val duration = session.endTime - session.startTime
+
+            val dKey = Triple(deviceId, session.bookName, session.bookAuthor)
+            val prevDetail = detailsByKey[dKey]
+            detailsByKey[dKey] = if (prevDetail != null) {
+                ReadRecordDetail(
+                    deviceId = deviceId,
+                    bookName = session.bookName,
+                    bookAuthor = session.bookAuthor,
+                    date = date,
+                    readTime = prevDetail.readTime + duration,
+                    readWords = prevDetail.readWords + session.words,
+                    firstReadTime = minOf(prevDetail.firstReadTime, session.startTime),
+                    lastReadTime = maxOf(prevDetail.lastReadTime, session.endTime),
+                    bookType = session.bookType
+                )
+            } else {
+                ReadRecordDetail(
+                    deviceId = deviceId,
+                    bookName = session.bookName,
+                    bookAuthor = session.bookAuthor,
+                    date = date,
+                    readTime = duration,
+                    readWords = session.words,
+                    firstReadTime = session.startTime,
+                    lastReadTime = session.endTime,
+                    bookType = session.bookType
+                )
+            }
+
+            val rKey = deviceId to session.bookName
+            val prevRecord = recordsByKey[rKey]
+            recordsByKey[rKey] = if (prevRecord != null) {
+                ReadRecord(
+                    deviceId = deviceId,
+                    bookName = session.bookName,
+                    bookAuthor = session.bookAuthor,
+                    readTime = prevRecord.readTime + duration,
+                    lastRead = maxOf(prevRecord.lastRead, session.endTime),
+                    bookType = session.bookType
+                )
+            } else {
+                ReadRecord(
+                    deviceId = deviceId,
+                    bookName = session.bookName,
+                    bookAuthor = session.bookAuthor,
+                    readTime = duration,
+                    lastRead = session.endTime,
+                    bookType = session.bookType
+                )
+            }
+        }
+
+        appDb.runInTransaction {
+            sessions.forEach { session ->
+                try {
+                    restoreReadRecordSession(session)
+                } catch (_: SQLiteConstraintException) {
+                }
+            }
+            detailsByKey.values.forEach { detail ->
+                try {
+                    restoreReadRecordDetail(detail)
+                } catch (_: SQLiteConstraintException) {
+                }
+            }
+            recordsByKey.values.forEach { record ->
+                try {
+                    restoreReadRecord(record)
+                } catch (_: SQLiteConstraintException) {
+                }
+            }
         }
     }
 
