@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.os.Environment
+import androidx.annotation.Keep
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.BuildConfig
@@ -355,15 +356,19 @@ object Restore : KoinComponent {
             log("readSession.json 存在=$hasRSession")
             if (hasRSession) {
                 try {
-                    val sessions = fileToListT<RReadSessionDto>(path, "readSession.json")
+                    val sessions = FileInputStream(File(path, "readSession.json")).use {
+                        GSON.fromJsonArray<RReadSessionDto>(it)
+                    }.onFailure {
+                        log("readSession.json 解析异常: ${it.javaClass.simpleName} ${it.localizedMessage}")
+                    }.getOrNull()
                     if (sessions == null) {
-                        log("r 项目 readSession.json 解析失败或为空")
+                        log("r 项目 readSession.json 解析失败")
                     } else {
                         log("恢复 r 项目 readSession.json: ${sessions.size} 条")
                         restoreFromRReadSessions(sessions, ::log)
                     }
                 } catch (t: Throwable) {
-                    log("恢复 r 项目 readSession.json 兼容失败\n${t.localizedMessage}")
+                    log("恢复 r 项目 readSession.json 兼容失败: ${t.javaClass.simpleName} ${t.localizedMessage}")
                     AppLog.put("恢复 r 项目 readSession.json 兼容失败", t)
                 }
             }
@@ -614,6 +619,7 @@ object Restore : KoinComponent {
      * readRecord.json 的兼容 DTO。兼容 md（bookAuthor/deviceId/bookType）与
      * r 项目（author，且无 deviceId/bookType）两种字段命名，缺失字段用安全默认值。
      */
+    @Keep
     private data class RReadRecordDto(
         val deviceId: String? = null,
         val bookName: String = "",
@@ -637,6 +643,7 @@ object Restore : KoinComponent {
      * r 项目 (readdai) readSession.json 里每条 ReadSession 的 DTO。
      * 只保留恢复必需的字段，字段名严格对齐 r 项目的 JSON 输出（author / type）。
      */
+    @Keep
     private data class RReadSessionDto(
         val bookName: String = "",
         val author: String = "",
