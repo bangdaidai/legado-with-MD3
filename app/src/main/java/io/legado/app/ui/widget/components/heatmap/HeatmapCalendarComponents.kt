@@ -221,8 +221,8 @@ fun HeatmapCalendarCell(
                 .clip(RoundedCornerShape(config.cornerRadius))
                 .background(cellColor)
                 .border(
-                    width = if (isSelected) 2.dp else 0.dp,
-                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                    width = if (isSelected) 1.dp else 0.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                     shape = RoundedCornerShape(config.cornerRadius)
                 )
         )

@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -824,7 +825,7 @@ fun HeatmapCalendarSection(
 
     val listState = rememberLazyListState()
 
-    // 聚焦：滚动到 selectedDate 所在那一周，无选中日期时定位到最近一周
+    // 聚焦：滚动到 selectedDate 所在那一周并水平居中，无选中日期时定位到最近一周
     LaunchedEffect(selectedDate, weeks) {
         if (weeks.isEmpty()) return@LaunchedEffect
         val focus = selectedDate
@@ -836,6 +837,12 @@ fun HeatmapCalendarSection(
             weeks.size - 1
         }
         listState.scrollToItem(targetIndex)
+        // 把目标周中心对齐视口中心
+        val layoutInfo = listState.layoutInfo
+        val targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == targetIndex }
+            ?: return@LaunchedEffect
+        val diff = (targetItem.offset + targetItem.size / 2f) - layoutInfo.viewportSize.width / 2f
+        listState.scrollBy(diff)
     }
 
     Column(
