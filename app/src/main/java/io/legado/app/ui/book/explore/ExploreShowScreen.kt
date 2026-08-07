@@ -345,7 +345,7 @@ fun ExploreShowScreen(
                     scrollBehavior = scrollBehavior
                 )
 
-                Column(verticalArrangement = Arrangement.spacedBy((-4).dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (state.kindGroups.isNotEmpty()) {
                         LazyRow(
                             state = groupListState,
