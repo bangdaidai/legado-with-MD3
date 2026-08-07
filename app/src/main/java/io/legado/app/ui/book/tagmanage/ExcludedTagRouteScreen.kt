@@ -128,6 +128,7 @@ fun ExcludedTagScreen(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
                             .clickable { edit = excluded }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -142,7 +143,7 @@ fun ExcludedTagScreen(
                         Text(
                             excluded.name + if (excluded.isRegex) "  (正则)" else "",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
                 }

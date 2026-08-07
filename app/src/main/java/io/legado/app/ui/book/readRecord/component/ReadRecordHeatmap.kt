@@ -34,17 +34,13 @@ fun HeatmapCalendarSection(
 
     val listState = rememberLazyListState()
 
-    // 聚焦：滚动到 selectedDate 所在那一周并水平居中（reverseLayout=true，最早那周 index=0 在最右侧）
+    // 聚焦：滚动到 selectedDate（未选中时为今天）所在那一周并水平居中
     LaunchedEffect(selectedDate, weeks) {
         if (weeks.isEmpty()) return@LaunchedEffect
-        val focus = selectedDate
-        val targetIndex = if (focus != null) {
-            weeks.indexOfFirst { week -> week.any { it == focus } }
-                .takeIf { it >= 0 }
-                ?: (weeks.size - 1)
-        } else {
-            weeks.size - 1
-        }
+        val focus = selectedDate ?: LocalDate.now()
+        val targetIndex = weeks.indexOfFirst { week -> week.any { it == focus } }
+            .takeIf { it >= 0 }
+            ?: (weeks.size - 1)
         listState.scrollToItem(targetIndex)
         // 把目标周中心对齐视口中心
         val layoutInfo = listState.layoutInfo
@@ -68,8 +64,7 @@ fun HeatmapCalendarSection(
                     if (showFadingEdge) Modifier.fadingEdge(listState, config.gradientWidth)
                     else Modifier
                 ),
-            horizontalArrangement = Arrangement.spacedBy(config.cellSpacing),
-            reverseLayout = true
+            horizontalArrangement = Arrangement.spacedBy(config.cellSpacing)
         ) {
             items(weeks) { week ->
                 HeatmapWeekColumn(

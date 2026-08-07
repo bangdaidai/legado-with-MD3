@@ -345,46 +345,52 @@ fun ExploreShowScreen(
                     scrollBehavior = scrollBehavior
                 )
 
-                if (state.kindGroups.isNotEmpty()) {
-                    LazyRow(
-                        state = groupListState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fadingEdge(groupListState, gradientWidth = 16.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            items = state.kindGroups,
-                            key = { it }
-                        ) { group ->
-                            ToggleChip(
-                                label = group,
-                                selected = group == state.selectedGroup,
-                                onToggle = { onIntent(ExploreShowIntent.SwitchGroup(group)) }
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy((-4).dp)) {
+                    if (state.kindGroups.isNotEmpty()) {
+                        LazyRow(
+                            state = groupListState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fadingEdge(groupListState, gradientWidth = 16.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(
+                                items = state.kindGroups,
+                                key = { it }
+                            ) { group ->
+                                ToggleChip(
+                                    label = group,
+                                    selected = group == state.selectedGroup,
+                                    cornerRadius = 50.dp,
+                                    compact = true,
+                                    onToggle = { onIntent(ExploreShowIntent.SwitchGroup(group)) }
+                                )
+                            }
                         }
                     }
-                }
 
-                if (chipKinds.isNotEmpty()) {
-                    LazyRow(
-                        state = chipListState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fadingEdge(chipListState, gradientWidth = 16.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            items = chipKinds,
-                            key = { exploreKindKey(it) }
-                        ) { kind ->
-                            ToggleChip(
-                                label = kind.title,
-                                selected = kind.title == state.selectedKindTitle,
-                                onToggle = { onIntent(ExploreShowIntent.SwitchKind(kind)) }
-                            )
+                    if (chipKinds.isNotEmpty()) {
+                        LazyRow(
+                            state = chipListState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fadingEdge(chipListState, gradientWidth = 16.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(
+                                items = chipKinds,
+                                key = { exploreKindKey(it) }
+                            ) { kind ->
+                                ToggleChip(
+                                    label = kind.title,
+                                    selected = kind.title == state.selectedKindTitle,
+                                    cornerRadius = 50.dp,
+                                    compact = true,
+                                    onToggle = { onIntent(ExploreShowIntent.SwitchKind(kind)) }
+                                )
+                            }
                         }
                     }
                 }
