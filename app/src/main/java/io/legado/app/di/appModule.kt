@@ -27,6 +27,8 @@ import io.legado.app.data.repository.BookDomainRepositoryImpl
 import io.legado.app.data.repository.BookExportSettingsRepository
 import io.legado.app.data.repository.BookGroupMutationRepository
 import io.legado.app.data.repository.BookGroupRepository
+import io.legado.app.data.repository.BookshelfAutoGroupRepository
+import io.legado.app.data.repository.BookshelfAutoGroupPromptRepository
 import io.legado.app.data.repository.BookImportRepository
 import io.legado.app.data.repository.BookKnowledgeRepository
 import io.legado.app.data.repository.BookRepository
@@ -115,6 +117,8 @@ import io.legado.app.domain.gateway.BookContentProcessGateway
 import io.legado.app.domain.gateway.BookExportSettingsGateway
 import io.legado.app.domain.gateway.BookGroupMutationGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
+import io.legado.app.domain.gateway.BookshelfAutoGroupGateway
+import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
 import io.legado.app.domain.gateway.BookSearchGateway
 import io.legado.app.domain.gateway.BookSourceCallbackGateway
 import io.legado.app.domain.gateway.BookSourceCheckGateway
@@ -159,6 +163,7 @@ import io.legado.app.domain.usecase.AiTaskManager
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.AiToolAwareGenerationUseCase
 import io.legado.app.domain.usecase.AnalyzeChapterSpeechUseCase
+import io.legado.app.domain.usecase.ApplyBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.AppStartupMaintenanceUseCase
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
@@ -173,6 +178,7 @@ import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
+import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.domain.usecase.GetReadingMemoryDetailUseCase
@@ -285,6 +291,7 @@ import io.legado.app.ui.login.SourceLoginViewModel
 import io.legado.app.ui.main.MainRouteSearchContent
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.ui.main.bookshelf.BookshelfViewModel
+import io.legado.app.ui.main.bookshelf.autoGroup.AiAutoGroupViewModel
 import io.legado.app.ui.main.explore.ExploreViewModel
 import io.legado.app.ui.main.home.HomeViewModel
 import io.legado.app.ui.main.homepage.HomepageViewModel
@@ -337,6 +344,8 @@ val appModule = module {
     singleOf(::BookCacheManageRepository)
     singleOf(::TagGroupRuleApplier)
     single<BookGroupMutationGateway> { BookGroupMutationRepository(get(), get()) }
+    single<BookshelfAutoGroupGateway> { BookshelfAutoGroupRepository(get()) }
+    single<BookshelfAutoGroupPromptGateway> { BookshelfAutoGroupPromptRepository(get()) }
     singleOf(::BookSourceRepository)
     singleOf(::BookshelfRepository)
     singleOf(::DictRuleRepository)
@@ -484,6 +493,8 @@ val appModule = module {
     singleOf(::IdentifyBookCharactersUseCase)
     singleOf(::GenerateChapterSummaryUseCase)
     singleOf(::AiTextFactoryUseCase)
+    singleOf(::GenerateBookshelfAutoGroupPlanUseCase)
+    singleOf(::ApplyBookshelfAutoGroupPlanUseCase)
     singleOf(::CleanSelectedTextUseCase)
     singleOf(::SaveBookContentProcessUseCase)
     singleOf(::ReplaceRuleRepository)
@@ -547,6 +558,7 @@ val appModule = module {
     viewModelOf(::BookplateManageViewModel)
     viewModelOf(::MyViewModel)
     viewModelOf(::BookshelfViewModel)
+    viewModelOf(::AiAutoGroupViewModel)
     viewModelOf(::MainViewModel)
     viewModelOf(::HomeViewModel)
     viewModelOf(::HomepageViewModel)
