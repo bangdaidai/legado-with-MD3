@@ -41,6 +41,7 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.button.series.MediumPlainButton
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.SelectionItemCard
+import io.legado.app.ui.widget.components.dialog.TextListInputDialog
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -61,6 +62,7 @@ fun ChangeChapterSourceSheet(
 ) {
     var showOptionsMenu by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
+    var showWordCountThresholdDialog by remember { mutableStateOf(false) }
 
     AppModalBottomSheet(
         show = show,
@@ -107,6 +109,21 @@ fun ChangeChapterSourceSheet(
                             isSelected = state.loadWordCount,
                             onClick = {
                                 onIntent(ChangeChapterSourceIntent.SetLoadWordCount(!state.loadWordCount))
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "过滤少于${state.wordCountThreshold}字",
+                            isSelected = state.filterLowWordCount,
+                            onClick = {
+                                onIntent(ChangeChapterSourceIntent.SetFilterLowWordCount(!state.filterLowWordCount))
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "设置过滤字数…",
+                            onClick = {
+                                showWordCountThresholdDialog = true
                                 dismiss()
                             }
                         )
@@ -167,7 +184,24 @@ fun ChangeChapterSourceSheet(
             showFilterSheet = false
         }
     )
+
+    TextListInputDialog(
+        show = showWordCountThresholdDialog,
+        title = "过滤字数",
+        hint = "少于该字数的结果不显示",
+        initialValue = state.wordCountThreshold.toString(),
+        suggestions = chapterSourceThresholdSuggestions,
+        onDismissRequest = { showWordCountThresholdDialog = false },
+        onConfirm = { input ->
+            input.trim().toIntOrNull()?.let {
+                onIntent(ChangeChapterSourceIntent.SetWordCountThreshold(it))
+            }
+            showWordCountThresholdDialog = false
+        }
+    )
 }
+
+private val chapterSourceThresholdSuggestions = listOf("1000", "2000", "3000", "5000", "10000")
 
 @Composable
 private fun TocContent(

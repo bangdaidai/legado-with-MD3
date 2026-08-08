@@ -8,6 +8,8 @@ data class ChangeSourceSettings(
     val loadInfo: Boolean = false,
     val loadToc: Boolean = false,
     val loadWordCount: Boolean = false,
+    val filterLowWordCount: Boolean = false,
+    val wordCountThreshold: Int = 3000,
     val keepOfficialMeta: Boolean = true,
     val migrateChapters: Boolean = true,
     val migrateReadingProgress: Boolean = true,

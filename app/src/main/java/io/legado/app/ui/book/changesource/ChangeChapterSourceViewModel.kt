@@ -38,6 +38,8 @@ class ChangeChapterSourceViewModel(
             loadInfo = initialSettings.loadInfo,
             loadToc = initialSettings.loadToc,
             loadWordCount = initialSettings.loadWordCount,
+            filterLowWordCount = initialSettings.filterLowWordCount,
+            wordCountThreshold = initialSettings.wordCountThreshold,
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -79,6 +81,8 @@ class ChangeChapterSourceViewModel(
                         loadInfo = settings.loadInfo,
                         loadToc = settings.loadToc,
                         loadWordCount = settings.loadWordCount,
+                        filterLowWordCount = settings.filterLowWordCount,
+                        wordCountThreshold = settings.wordCountThreshold,
                     )
                 }
             }
@@ -204,6 +208,35 @@ class ChangeChapterSourceViewModel(
                 } else {
                     refreshResults()
                 }
+            }
+
+            is ChangeChapterSourceIntent.SetFilterLowWordCount -> {
+                // 过滤依赖字数，开启时同时打开「显示更多信息」
+                val needWordCount = intent.enabled && !_uiState.value.loadWordCount
+                updateSetting {
+                    it.copy(
+                        filterLowWordCount = intent.enabled,
+                        loadWordCount = it.loadWordCount || intent.enabled,
+                    )
+                }
+                _uiState.update {
+                    it.copy(
+                        filterLowWordCount = intent.enabled,
+                        loadWordCount = it.loadWordCount || intent.enabled,
+                    )
+                }
+                if (needWordCount) {
+                    startSearch()
+                } else {
+                    filterResults()
+                }
+            }
+
+            is ChangeChapterSourceIntent.SetWordCountThreshold -> {
+                val value = intent.threshold.coerceAtLeast(0)
+                updateSetting { it.copy(wordCountThreshold = value) }
+                _uiState.update { it.copy(wordCountThreshold = value) }
+                filterResults()
             }
             // Source actions
             is ChangeChapterSourceIntent.TopSource -> {
@@ -368,12 +401,13 @@ class ChangeChapterSourceViewModel(
     }
 
     private fun filterResults() {
-        val filtered = if (screenKey.isEmpty()) {
-            searchResults.toList()
-        } else {
-            searchResults.filter {
-                it.name.contains(screenKey) || it.originName.contains(screenKey)
-            }
+        val filterLowWordCount = _uiState.value.filterLowWordCount
+        val threshold = _uiState.value.wordCountThreshold
+        val filtered = searchResults.filter {
+            (screenKey.isEmpty() ||
+                it.name.contains(screenKey) ||
+                it.originName.contains(screenKey)) &&
+                (!filterLowWordCount || it.chapterWordCount >= threshold)
         }
         val comparator = if (_uiState.value.loadWordCount) {
             compareByDescending<SearchBook> { ObservableSourceConfig.getBookScore(it) }

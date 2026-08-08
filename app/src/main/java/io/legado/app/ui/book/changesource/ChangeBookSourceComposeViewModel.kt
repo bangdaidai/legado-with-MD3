@@ -128,6 +128,10 @@ class ChangeBookSourceComposeViewModel(
     private var fromReadBookActivity: Boolean = false
     @Volatile
     private var screenKey: String = ""
+    @Volatile
+    private var lowWordCountFiltered: Boolean = settings.value.filterLowWordCount
+    @Volatile
+    private var wordCountThreshold: Int = settings.value.wordCountThreshold
     private var cachedTocChapterCount = 0
     private val searchResults = Collections.synchronizedList(mutableListOf<SearchBook>())
     private val bookMap = ConcurrentHashMap<String, Book>()
@@ -335,14 +339,14 @@ class ChangeBookSourceComposeViewModel(
 
     private fun filterResults() {
         val key = screenKey
+        val filterLowWordCount = lowWordCountFiltered
+        val threshold = wordCountThreshold
         val filtered = synchronized(searchResults) {
-            if (key.isEmpty()) {
-                searchResults.toList()
-            } else {
-                searchResults.filter {
+            searchResults.filter {
+                (key.isEmpty() ||
                     it.originName.contains(key) ||
-                        it.latestChapterTitle?.contains(key) == true
-                }
+                    it.latestChapterTitle?.contains(key) == true) &&
+                    (!filterLowWordCount || it.chapterWordCount >= threshold)
             }
         }
         val comparator = if (settings.value.loadWordCount) {
@@ -421,6 +425,32 @@ class ChangeBookSourceComposeViewModel(
         } else {
             refresh()
         }
+    }
+
+    fun onFilterLowWordCountChange(enabled: Boolean) {
+        if (lowWordCountFiltered == enabled) return
+        lowWordCountFiltered = enabled
+        // 过滤依赖字数，开启时同时打开「显示更多信息」并补抓缺失的字数
+        val needWordCount = enabled && !settings.value.loadWordCount
+        updateSetting {
+            it.copy(
+                filterLowWordCount = enabled,
+                loadWordCount = it.loadWordCount || enabled,
+            )
+        }
+        if (needWordCount) {
+            refreshMissingWordCounts()
+        } else {
+            filterResults()
+        }
+    }
+
+    fun onWordCountThresholdChange(threshold: Int) {
+        val value = threshold.coerceAtLeast(0)
+        if (wordCountThreshold == value) return
+        wordCountThreshold = value
+        updateSetting { it.copy(wordCountThreshold = value) }
+        filterResults()
     }
 
     fun setMigrationOptions(options: ChangeSourceMigrationOptions) {

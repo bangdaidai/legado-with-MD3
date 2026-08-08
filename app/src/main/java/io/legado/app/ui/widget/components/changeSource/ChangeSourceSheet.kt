@@ -55,6 +55,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumPlainButton
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.SelectionItemCard
+import io.legado.app.ui.widget.components.dialog.TextListInputDialog
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -108,6 +109,9 @@ fun ChangeSourceSheet(
     val loadInfo = settings.loadInfo
     val loadToc = settings.loadToc
     val loadWordCount = settings.loadWordCount
+    val filterLowWordCount = settings.filterLowWordCount
+    val wordCountThreshold = settings.wordCountThreshold
+    var showWordCountThresholdDialog by rememberSaveable { mutableStateOf(false) }
     var actionBook by remember { mutableStateOf<SearchBook?>(null) }
     var mismatchBook by remember { mutableStateOf<SearchBook?>(null) }
     var shelfConflict by remember { mutableStateOf<PendingShelfConflict?>(null) }
@@ -256,6 +260,21 @@ fun ChangeSourceSheet(
                             isSelected = loadWordCount,
                             onClick = {
                                 viewModel.onLoadWordCountChange(!loadWordCount)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "过滤少于${wordCountThreshold}字",
+                            isSelected = filterLowWordCount,
+                            onClick = {
+                                viewModel.onFilterLowWordCountChange(!filterLowWordCount)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "设置过滤字数…",
+                            onClick = {
+                                showWordCountThresholdDialog = true
                                 dismiss()
                             }
                         )
@@ -591,4 +610,19 @@ fun ChangeSourceSheet(
             showFilterSheet = false
         }
     )
+
+    TextListInputDialog(
+        show = showWordCountThresholdDialog,
+        title = "过滤字数",
+        hint = "少于该字数的结果不显示",
+        initialValue = wordCountThreshold.toString(),
+        suggestions = wordCountThresholdSuggestions,
+        onDismissRequest = { showWordCountThresholdDialog = false },
+        onConfirm = { input ->
+            input.trim().toIntOrNull()?.let { viewModel.onWordCountThresholdChange(it) }
+            showWordCountThresholdDialog = false
+        }
+    )
 }
+
+private val wordCountThresholdSuggestions = listOf("1000", "2000", "3000", "5000", "10000")
