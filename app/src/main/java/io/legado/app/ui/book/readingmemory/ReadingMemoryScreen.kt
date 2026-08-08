@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import io.legado.app.R
 import io.legado.app.constant.AppLog
+import io.legado.app.utils.HtmlFormatter
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
@@ -464,7 +465,16 @@ private fun MemoryBookCard(
         else -> LegadoTheme.colorScheme.onSurfaceVariant
     }
 
-    val showIntroBelowContent = uiState.showIntro && !memory.intro.isNullOrBlank()
+    val intro = remember(memory.intro, settings.bookshelfIntroMaxLines) {
+        val formatted = if (settings.bookshelfIntroMaxLines == 0) {
+            HtmlFormatter.formatIntroText(memory.intro)
+        } else {
+            HtmlFormatter.formatSummaryText(memory.intro)
+        }
+        formatted.takeIf { it.isNotBlank() }
+    }
+
+    val showIntroBelowContent = uiState.showIntro && intro != null
         && settings.bookshelfListIntroBelowContent
     val showReviewBelowContent = uiState.showReview && !memory.review.isNullOrBlank()
         && settings.bookshelfListIntroBelowContent
@@ -548,13 +558,13 @@ private fun MemoryBookCard(
                     )
                 }
             }
-            val showIntroInline = uiState.showIntro && !memory.intro.isNullOrBlank()
+            val showIntroInline = uiState.showIntro && intro != null
                 && !showIntroBelowContent
             val showReviewInline = uiState.showReview && !memory.review.isNullOrBlank()
                 && !showReviewBelowContent
             if (showIntroInline) {
                 AppText(
-                    text = memory.intro.orEmpty(),
+                    text = intro.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -573,7 +583,7 @@ private fun MemoryBookCard(
                 AppText(
                     text = memory.review.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSurface,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -586,7 +596,7 @@ private fun MemoryBookCard(
                     Column {
                         if (showIntroBelowContent) {
                             AppText(
-                                text = memory.intro.orEmpty(),
+                                text = intro.orEmpty(),
                                 style = LegadoTheme.typography.bodySmall,
                                 color = LegadoTheme.colorScheme.onSurfaceVariant,
                                 maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
@@ -606,7 +616,7 @@ private fun MemoryBookCard(
                             AppText(
                                 text = memory.review.orEmpty(),
                                 style = LegadoTheme.typography.bodySmall,
-                                color = LegadoTheme.colorScheme.onSurface,
+                                color = LegadoTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth()

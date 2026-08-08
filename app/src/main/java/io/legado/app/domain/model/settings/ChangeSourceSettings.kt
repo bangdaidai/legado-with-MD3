@@ -9,7 +9,7 @@ data class ChangeSourceSettings(
     val loadToc: Boolean = false,
     val loadWordCount: Boolean = false,
     val filterLowWordCount: Boolean = false,
-    val wordCountThreshold: Int = 3000,
+    val wordCountThreshold: Int = DEFAULT_WORD_COUNT_THRESHOLD,
     val keepOfficialMeta: Boolean = true,
     val migrateChapters: Boolean = true,
     val migrateReadingProgress: Boolean = true,
@@ -32,3 +32,6 @@ data class ChangeSourceSettings(
         keepOfficialMeta = keepOfficialMeta,
     )
 }
+
+const val DEFAULT_WORD_COUNT_THRESHOLD = 3000
+val WordCountThresholdSuggestions = listOf("1000", "2000", "3000", "5000", "10000")

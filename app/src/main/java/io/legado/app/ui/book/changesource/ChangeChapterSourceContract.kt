@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.domain.model.settings.DEFAULT_WORD_COUNT_THRESHOLD
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -20,7 +21,7 @@ data class ChangeChapterSourceUiState(
     val loadToc: Boolean = true,
     val loadWordCount: Boolean = true,
     val filterLowWordCount: Boolean = false,
-    val wordCountThreshold: Int = 3000,
+    val wordCountThreshold: Int = DEFAULT_WORD_COUNT_THRESHOLD,
     // TOC view
     val showToc: Boolean = false,
     val selectedSourceName: String = "",

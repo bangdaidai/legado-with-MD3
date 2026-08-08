@@ -42,6 +42,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.domain.model.settings.WordCountThresholdSuggestions
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.ui.book.changesource.ChangeBookSourceComposeViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceEffect
@@ -616,7 +617,7 @@ fun ChangeSourceSheet(
         title = "过滤字数",
         hint = "少于该字数的结果不显示",
         initialValue = wordCountThreshold.toString(),
-        suggestions = wordCountThresholdSuggestions,
+        suggestions = WordCountThresholdSuggestions,
         onDismissRequest = { showWordCountThresholdDialog = false },
         onConfirm = { input ->
             input.trim().toIntOrNull()?.let { viewModel.onWordCountThresholdChange(it) }
@@ -624,5 +625,3 @@ fun ChangeSourceSheet(
         }
     )
 }
-
-private val wordCountThresholdSuggestions = listOf("1000", "2000", "3000", "5000", "10000")

@@ -170,11 +170,10 @@ fun ReadRecordOverviewScreen(
                     StatsGridCard(title = stringResource(R.string.reading_data), items = stats)
                 }
 
-                if (state.period != ReadPeriod.ALL) {
-                    item {
-                        ReadingDistributionCard(state)
-                    }
+                item {
+                    ReadingDistributionCard(state)
                 }
+
 
 
                 item {
@@ -344,7 +343,17 @@ fun ReadingDistributionCard(state: ReadRecordOverviewUiState) {
             )
         }
 
-        ReadPeriod.ALL -> Unit
+        ReadPeriod.ALL -> {
+            if (state.dailyTimeData.isEmpty()) return
+            val bars = state.dailyTimeData.map { (date, time) ->
+                ReadingBar(label = "${date.year}", value = time)
+            }
+            ReadingTimeBarChartCard(
+                bars = bars,
+                title = stringResource(R.string.reading_time_distribution),
+                barWidthFraction = 0.6f
+            )
+        }
     }
 }
 

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.domain.model.settings.WordCountThresholdSuggestions
 import io.legado.app.ui.book.changesource.ChangeChapterSourceIntent
 import io.legado.app.ui.book.changesource.ChangeChapterSourceUiState
 import io.legado.app.ui.book.search.ScopeSelectSheet
@@ -190,7 +191,7 @@ fun ChangeChapterSourceSheet(
         title = "过滤字数",
         hint = "少于该字数的结果不显示",
         initialValue = state.wordCountThreshold.toString(),
-        suggestions = chapterSourceThresholdSuggestions,
+        suggestions = WordCountThresholdSuggestions,
         onDismissRequest = { showWordCountThresholdDialog = false },
         onConfirm = { input ->
             input.trim().toIntOrNull()?.let {
@@ -200,8 +201,6 @@ fun ChangeChapterSourceSheet(
         }
     )
 }
-
-private val chapterSourceThresholdSuggestions = listOf("1000", "2000", "3000", "5000", "10000")
 
 @Composable
 private fun TocContent(

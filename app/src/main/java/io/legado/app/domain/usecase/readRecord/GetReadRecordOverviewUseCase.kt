@@ -99,7 +99,24 @@ class GetReadRecordOverviewUseCase {
             }.toMap()
 
         val dailyTimeData = if (period == ReadPeriod.ALL) {
-            emptyList()
+            // 按年聚合：每年一根柱，key 为该年 1 月 1 日
+            val dateToTime = filteredDetails.groupBy {
+                LocalDate.parse(it.date, DateTimeFormatter.ISO_LOCAL_DATE).with(TemporalAdjusters.firstDayOfYear())
+            }.mapValues { it.value.sumOf { d -> d.readTime } }
+
+            val years = dateToTime.keys.sorted()
+            if (years.isEmpty()) {
+                emptyList()
+            } else {
+                val yearList = mutableListOf<Pair<LocalDate, Long>>()
+                var curr = years.first()
+                val last = years.last()
+                while (!curr.isAfter(last)) {
+                    yearList.add(curr to (dateToTime[curr] ?: 0L))
+                    curr = curr.plusYears(1)
+                }
+                yearList
+            }
         } else if (period == ReadPeriod.YEAR) {
             val dateToTime = filteredDetails.groupBy { 
                 LocalDate.parse(it.date, DateTimeFormatter.ISO_LOCAL_DATE).with(TemporalAdjusters.firstDayOfMonth())

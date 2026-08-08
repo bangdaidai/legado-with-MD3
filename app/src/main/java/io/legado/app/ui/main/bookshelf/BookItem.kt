@@ -33,7 +33,9 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,8 +46,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,8 +74,10 @@ import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TextCard
+import io.legado.app.ui.widget.components.card.LocalTicketNotchRegistry
 import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.card.TicketShape
+import io.legado.app.ui.widget.components.card.rememberTicketNotchRegistry
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
@@ -268,7 +272,9 @@ fun BookshelfListItem(
     }
     Column {
         if (ticketStyle && bottomContent != null) {
-            var notchY by remember { mutableStateOf(-1f) }
+            val notchPositions = remember { mutableStateMapOf<Any, Float>() }
+            var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+            val notchRegistry = rememberTicketNotchRegistry(notchPositions) { containerCoordinates }
             val themeSettings = LocalAppUiConfiguration.current.theme
             val ticketCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
                 themeSettings.baseCardCornerRadius.dp
@@ -283,37 +289,38 @@ fun BookshelfListItem(
             val ticketBorder: BorderStroke? = if (themeSettings.overrideBaseCardBorder) {
                 BorderStroke(themeSettings.baseCardBorderWidth.dp, ticketBorderColor)
             } else null
-            val ticketShape = remember(notchY, ticketCornerRadius) {
-                TicketShape(cornerRadius = ticketCornerRadius, notchCenterY = notchY)
+            val notchYs = notchPositions.values.sorted()
+            val ticketShape = remember(notchYs, ticketCornerRadius) {
+                TicketShape(cornerRadius = ticketCornerRadius, notchCenterYs = notchYs)
             }
             Box(modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(ticketShape)
-                        .background(containerColor)
-                        .then(
-                            if (ticketBorder != null) {
-                                Modifier.border(ticketBorder, ticketShape)
-                            } else Modifier
+                CompositionLocalProvider(LocalTicketNotchRegistry provides notchRegistry) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { containerCoordinates = it }
+                            .clip(ticketShape)
+                            .background(containerColor)
+                            .then(
+                                if (ticketBorder != null) {
+                                    Modifier.border(ticketBorder, ticketShape)
+                                } else Modifier
+                            )
+                            .combinedClickable(
+                                role = Role.Button,
+                                onClick = onClick,
+                                onLongClick = onLongClick
+                            )
+                            .bookshelfItemSemantics(accessibilityLabel ?: title, isSelected),
+                    ) {
+                        topContent()
+                        TicketNotchDivider(
+                            color = ticketBorderColor,
+                            strokeWidth = themeSettings.baseCardBorderWidth.dp,
+                            dotted = settings.bookshelfTicketDotted,
                         )
-                        .combinedClickable(
-                            role = Role.Button,
-                            onClick = onClick,
-                            onLongClick = onLongClick
-                        )
-                        .bookshelfItemSemantics(accessibilityLabel ?: title, isSelected),
-                ) {
-                    topContent()
-                    TicketNotchDivider(
-                        modifier = Modifier.onGloballyPositioned { coords ->
-                            notchY = coords.positionInParent().y + coords.size.height / 2f
-                        },
-                        color = ticketBorderColor,
-                        strokeWidth = themeSettings.baseCardBorderWidth.dp,
-                        dotted = settings.bookshelfTicketDotted,
-                    )
-                    bottomContent.invoke()
+                        bottomContent.invoke()
+                    }
                 }
             }
         } else {

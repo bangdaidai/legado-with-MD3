@@ -41,9 +41,9 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
         synchronized(lock) { shareConfigRef = config }
     }
 
-    /** 按下标取用。配置文件缺斤少两时先恢复默认，保证 5 份预设始终在。 */
+    /** 按下标取用。配置文件为空时先恢复默认，保证至少 1 份可用。 */
     fun configAt(index: Int): ReadBookConfig.Config = synchronized(lock) {
-        if (configList.size < 5) {
+        if (configList.isEmpty()) {
             resetAllLocked()
         }
         configList.getOrNull(index) ?: configList[0]
@@ -68,7 +68,7 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
      */
     fun updateStyleAt(index: Int, transform: (ReadBookConfig.Config) -> ReadBookConfig.Config) {
         synchronized(lock) {
-            if (configList.size < 5) {
+            if (configList.isEmpty()) {
                 resetAllLocked()
             }
             val target = if (index in configList.indices) index else 0
@@ -111,9 +111,9 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
         config.name
     }
 
-    /** 5 份预设不允许删。 */
+    /** 至少留 1 份，删到空会失去当前排版。 */
     fun deleteConfigAt(index: Int): Boolean = synchronized(lock) {
-        if (configList.size <= 5) return@synchronized false
+        if (configList.size <= 1) return@synchronized false
         configList.removeAt(index)
         true
     }

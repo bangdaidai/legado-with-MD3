@@ -114,7 +114,7 @@ fun BgTextConfigSheet(
                     title = stringResource(R.string.delete),
                     imageVector = Icons.Default.Delete,
                     modifier = Modifier.weight(1f),
-                    enabled = styleConfig.styleSelect >= 5,
+                    enabled = styleConfig.configCount > 1,
                     onClick = { onIntent(ReadBookIntent.DeleteCurrentReadStyleConfig) },
                 )
                 ActionCard(

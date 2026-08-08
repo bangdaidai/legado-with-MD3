@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.Preferences
 import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.model.settings.ChangeSourceSettings
+import io.legado.app.domain.model.settings.DEFAULT_WORD_COUNT_THRESHOLD
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.config.compatDsBoolean
@@ -52,7 +53,8 @@ internal fun Preferences.toChangeSourceSettings() = ChangeSourceSettings(
     loadToc = compatDsBoolean(LocalPreferencesKeys.CHANGE_SOURCE_LOAD_TOC.name) ?: false,
     loadWordCount = compatDsBoolean(LocalPreferencesKeys.CHANGE_SOURCE_LOAD_WORD_COUNT.name) ?: false,
     filterLowWordCount = compatDsBoolean(LocalPreferencesKeys.CHANGE_SOURCE_FILTER_LOW_WORD_COUNT.name) ?: false,
-    wordCountThreshold = compatDsInt(LocalPreferencesKeys.CHANGE_SOURCE_WORD_COUNT_THRESHOLD.name) ?: 3000,
+    wordCountThreshold = compatDsInt(LocalPreferencesKeys.CHANGE_SOURCE_WORD_COUNT_THRESHOLD.name)
+        ?: DEFAULT_WORD_COUNT_THRESHOLD,
     keepOfficialMeta = compatDsBoolean(KEY_KEEP_OFFICIAL_META) ?: true,
     migrateChapters = compatDsBoolean(KEY_MIGRATE_CHAPTERS) ?: true,
     migrateReadingProgress = compatDsBoolean(KEY_MIGRATE_READING_PROGRESS) ?: true,
