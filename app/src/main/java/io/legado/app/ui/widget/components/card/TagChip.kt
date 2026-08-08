@@ -52,7 +52,7 @@ fun TagChip(
     modifier: Modifier = Modifier,
 ) {
     val (horizontalPadding, verticalPadding) = if (size == TagChipSize.Small) {
-        4.dp to 2.dp
+        4.dp to 1.dp
     } else {
         10.dp to 5.dp
     }
@@ -67,8 +67,19 @@ fun TagChip(
     }
     val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
 
-    val borderModifier = if (showColoredBorder && tagColor != null) {
-        Modifier.border(BorderStroke(0.5.dp, tagColor), resolvedShape)
+    val backgroundColor = if (tagColor != null) {
+        tagColor.copy(alpha = 0.14f)
+    } else {
+        LegadoTheme.colorScheme.secondaryContainer
+    }
+    val contentColor = if (tagColor != null) {
+        tagColor
+    } else {
+        LegadoTheme.colorScheme.onSecondaryContainer
+    }
+
+    val borderModifier = if (showColoredBorder) {
+        Modifier.border(BorderStroke(0.5.dp, contentColor), resolvedShape)
     } else if (themeSettings.overrideBaseCardBorder) {
         val configuredColor = if (LegadoTheme.isDark) {
             themeSettings.baseCardBorderColorNight
@@ -81,17 +92,6 @@ fun TagChip(
         Modifier.border(BorderStroke(borderWidth, borderColor), resolvedShape)
     } else {
         Modifier
-    }
-
-    val backgroundColor = if (tagColor != null) {
-        tagColor.copy(alpha = 0.14f)
-    } else {
-        LegadoTheme.colorScheme.secondaryContainer
-    }
-    val contentColor = if (tagColor != null) {
-        tagColor
-    } else {
-        LegadoTheme.colorScheme.onSecondaryContainer
     }
 
     val clickModifier = if (onClick != null || onRemove != null) {

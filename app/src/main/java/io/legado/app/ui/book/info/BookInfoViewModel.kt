@@ -30,9 +30,11 @@ import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.data.repository.RemoteBookRepository
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.gateway.BookKnowledgeGateway
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.CoverSettingsGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
+import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ThemeSettings
@@ -116,6 +118,7 @@ class BookInfoViewModel(
     private val themeSettingsGateway: ThemeSettingsGateway,
     private val coverSettingsGateway: CoverSettingsGateway,
     private val otherSettingsGateway: OtherSettingsGateway,
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
 ) : BaseViewModel(application) {
 
     val allGroups = bookGroupRepository.flowSelect().map { it.toImmutableList() }
@@ -129,8 +132,9 @@ class BookInfoViewModel(
         themeSettingsGateway.settings,
         coverSettingsGateway.settings,
         otherSettingsGateway.settings,
-    ) { screen, theme, cover, other ->
-        screen.withSettings(theme, cover, other)
+        bookshelfSettingsGateway.settings,
+    ) { screen, theme, cover, other, bookshelf ->
+        screen.withSettings(theme, cover, other, bookshelf)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -138,6 +142,7 @@ class BookInfoViewModel(
             themeSettingsGateway.currentSettings,
             coverSettingsGateway.currentSettings,
             otherSettingsGateway.currentSettings,
+            bookshelfSettingsGateway.currentSettings,
         ),
     )
 
@@ -1814,6 +1819,7 @@ internal fun BookInfoUiState.withSettings(
     theme: ThemeSettings,
     cover: CoverSettings,
     other: OtherSettings,
+    bookshelf: BookshelfSettings,
 ): BookInfoUiState = copy(
     bookInfoFollowCoverColor = theme.bookInfoFollowCoverColor,
     bookInfoNetworkCoverBackground = theme.bookInfoNetworkCoverBackground,
@@ -1823,6 +1829,7 @@ internal fun BookInfoUiState.withSettings(
     defaultCoverDark = cover.defaultCoverDark,
     showMangaUi = other.showMangaUi,
     enableCustomTagColors = theme.enableCustomTagColors,
+    bookshelfTagBorder = bookshelf.bookshelfTagBorder,
 )
 
 private val BookInfoWebFile.suffix: String

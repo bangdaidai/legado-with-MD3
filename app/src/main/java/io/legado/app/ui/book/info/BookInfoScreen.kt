@@ -292,6 +292,7 @@ private fun BookInfoScreenContent(
                                 coloredTags = state.coloredTags,
                                 groupNames = state.groupNames,
                                 enableCustomTagColors = state.enableCustomTagColors,
+                                tagBorder = state.bookshelfTagBorder,
                                 onCoverClick = { onIntent(BookInfoIntent.CoverClick) },
                                 onCoverLongClick = { onIntent(BookInfoIntent.CoverLongClick) },
                                 onAuthorClick = { onIntent(BookInfoIntent.AuthorClick(it)) },
@@ -870,6 +871,7 @@ private fun BookInfoHeader(
     coloredTags: List<BookTagUi>,
     groupNames: String?,
     enableCustomTagColors: Boolean,
+    tagBorder: Boolean,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
     onAuthorClick: (Boolean) -> Unit,
@@ -1027,6 +1029,7 @@ private fun BookInfoHeader(
                         TagChip(
                             tag = formatWordCount(tag.name),
                             color = tagColor,
+                            showColoredBorder = tagBorder,
                         )
                     }
                 }
