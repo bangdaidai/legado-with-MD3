@@ -166,7 +166,8 @@ object ReadManga : CoroutineScope by MainScope() , KoinComponent{
                 startTime = readStartTime,
                 endTime = readStartTime,
                 words = durChapterIndex.toLong(),
-                bookType = book?.type ?: io.legado.app.constant.BookType.text
+                bookType = book?.type ?: io.legado.app.constant.BookType.text,
+                chapterTitle = book?.durChapterTitle.orEmpty()
             )
         }
     }
@@ -187,7 +188,8 @@ object ReadManga : CoroutineScope by MainScope() , KoinComponent{
 
         currentActiveSession = currentActiveSession!!.copy(
             endTime = endTime,
-            words = durChapterIndex.toLong()
+            words = durChapterIndex.toLong(),
+            chapterTitle = book?.durChapterTitle.orEmpty()
         )
 
         readStartTime = endTime

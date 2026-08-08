@@ -744,7 +744,8 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                     startTime = readStartTime,
                     endTime = readStartTime,
                     words = 0L,
-                    bookType = book?.type ?: io.legado.app.constant.BookType.text
+                    bookType = book?.type ?: io.legado.app.constant.BookType.text,
+                    chapterTitle = book?.durChapterTitle.orEmpty()
                 )
             }
         }
@@ -767,7 +768,8 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
 
             currentActiveSession = currentActiveSession!!.copy(
                 endTime = endTime,
-                words = computeSessionWords()
+                words = computeSessionWords(),
+                chapterTitle = book?.durChapterTitle.orEmpty()
             )
 
             readStartTime = endTime
@@ -833,7 +835,8 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                 currentActiveSession = current.copy(
                     startTime = sessionToSave.endTime,
                     endTime = sessionToSave.endTime,
-                    words = 0L
+                    words = 0L,
+                    chapterTitle = book?.durChapterTitle.orEmpty()
                 )
             }
         }
