@@ -650,7 +650,8 @@ object Restore : KoinComponent {
         val startTime: Long = 0L,
         val endTime: Long = 0L,
         val words: Long = 0L,
-        val type: Int = io.legado.app.constant.BookType.text
+        val type: Int = io.legado.app.constant.BookType.text,
+        val durChapterTitle: String? = null
     )
 
     /**
@@ -678,7 +679,8 @@ object Restore : KoinComponent {
                         startTime = dto.startTime,
                         endTime = dto.endTime,
                         words = dto.words,
-                        bookType = dto.type
+                        bookType = dto.type,
+                        chapterTitle = dto.durChapterTitle.orEmpty()
                     )
                 )
                 sessionOk++

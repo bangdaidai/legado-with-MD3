@@ -718,6 +718,8 @@ object DatabaseMigrations {
             database.execSQL("ALTER TABLE readRecord ADD COLUMN bookType INTEGER NOT NULL DEFAULT 8")
             database.execSQL("ALTER TABLE readRecordDetail ADD COLUMN bookType INTEGER NOT NULL DEFAULT 8")
             database.execSQL("ALTER TABLE readRecordSession ADD COLUMN bookType INTEGER NOT NULL DEFAULT 8")
+            // 本地额外: readRecordSession 新增 chapterTitle 列（视频集数名/文本章节名，冗余存储）
+            database.execSQL("ALTER TABLE readRecordSession ADD COLUMN chapterTitle TEXT NOT NULL DEFAULT ''")
         }
     }
 

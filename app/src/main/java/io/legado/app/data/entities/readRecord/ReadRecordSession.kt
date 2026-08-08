@@ -23,5 +23,9 @@ data class ReadRecordSession(
 
     // 书籍类型位标记 (BookType)
     @ColumnInfo(defaultValue = "8")
-    val bookType: Int = io.legado.app.constant.BookType.text
+    val bookType: Int = io.legado.app.constant.BookType.text,
+
+    // 章节标题（视频为集数名，文本为章节名；冗余存储避免删书后丢失）
+    @ColumnInfo(defaultValue = "")
+    val chapterTitle: String = ""
 )

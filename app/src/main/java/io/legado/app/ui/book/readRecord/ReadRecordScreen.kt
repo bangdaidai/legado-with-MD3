@@ -1147,10 +1147,14 @@ fun TimelineSessionItem(
     val fallbackChapterTitle = stringResource(R.string.chapter_index_format, session.words)
     var chapterTitle by remember { mutableStateOf<String?>(loadingText) }
 
-    LaunchedEffect(session.bookName, session.bookAuthor, session.words, fallbackChapterTitle) {
+    LaunchedEffect(session.bookName, session.bookAuthor, session.words, session.chapterTitle, fallbackChapterTitle) {
         coverPath = loadBookCover(session.bookName, session.bookAuthor)
-        val title = loadChapterTitle(session.bookName, session.bookAuthor, session.words)
-        chapterTitle = title ?: fallbackChapterTitle
+        if (session.chapterTitle.isNotBlank()) {
+            chapterTitle = session.chapterTitle
+        } else {
+            val title = loadChapterTitle(session.bookName, session.bookAuthor, session.words)
+            chapterTitle = title ?: fallbackChapterTitle
+        }
     }
 
     val endTimeText = DateUtil.format(Date(session.endTime), "HH:mm")
