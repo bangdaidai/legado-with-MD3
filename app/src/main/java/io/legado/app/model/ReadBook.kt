@@ -231,6 +231,13 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
 
     private const val MIN_READ_DURATION = 10 * 1000L
 
+    /**
+     * 无操作宽限期。session 的 endTime 只在翻页/朗读进度回调时前进，
+     * 因此「距上次阅读动作的间隔」即为无操作时长。超过此宽限期的部分不计入阅读时长，
+     * 避免开着阅读界面挂机被算成在读。
+     */
+    private const val IDLE_GRACE_PERIOD = 2 * 60 * 1000L
+
     // region 会话所有权：外部只能通过下列语义化命令改写会话字段（book/durChapterIndex/durChapterPos
     // 已 private set）。判定用意图化谓词替代裸实体比较，避免调用方直接持有可变 Book。
 
@@ -766,6 +773,18 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                 return
             }
 
+            // 距上次阅读动作超过宽限期，说明中间挂机了：先按宽限期截断结算旧 session，
+            // 再从当前时刻重新起算，避免把挂机时间算进阅读时长。
+            if (endTime - currentActiveSession!!.endTime > IDLE_GRACE_PERIOD) {
+                val idleTrimmed = sessionWithGraceCappedEnd(currentActiveSession!!)
+                currentActiveSession = null
+                ioScope.launch { saveSessionToDb(idleTrimmed) }
+                readStartTime = endTime
+                initReadTime()
+                lastReadLength = currentLength
+                return
+            }
+
             currentActiveSession = currentActiveSession!!.copy(
                 endTime = endTime,
                 words = computeSessionWords(),
@@ -800,7 +819,7 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         val sessionToCommit = synchronized(this) {
             val session = currentActiveSession
             currentActiveSession = null
-            session
+            session?.let { sessionWithGraceCappedEnd(it) }
         } ?: return
         ioScope.launch {
             saveSessionToDb(sessionToCommit)
@@ -808,10 +827,25 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     }
 
     /**
+     * 提交前把 endTime 推进到当前时刻，但最多只补到「最后一次阅读动作 + 宽限期」为止，
+     * 超出宽限期的部分视为挂机不计。尚无任何阅读动作的 session（endTime 未超过 startTime）
+     * 不给宽限，避免挂机期间每次自动保存都白送一个宽限期。
+     */
+    private fun sessionWithGraceCappedEnd(session: ReadRecordSession): ReadRecordSession {
+        if (session.endTime <= session.startTime) return session
+        val cappedEnd = System.currentTimeMillis()
+            .coerceAtMost(session.endTime + IDLE_GRACE_PERIOD)
+            .coerceAtLeast(session.endTime)
+        return session.copy(endTime = cappedEnd)
+    }
+
+    /**
      * 内部提交逻辑（auto-save 专用）：保存后立即创建新 session 保证连续记录
      */
     private suspend fun commitSessionInternal() {
-        val sessionToSave = synchronized(this) { currentActiveSession } ?: return
+        val sessionToSave = synchronized(this) {
+            currentActiveSession?.let { sessionWithGraceCappedEnd(it) }
+        } ?: return
         val sessionDuration = sessionToSave.endTime - sessionToSave.startTime
         if (sessionDuration < MIN_READ_DURATION) {
             return

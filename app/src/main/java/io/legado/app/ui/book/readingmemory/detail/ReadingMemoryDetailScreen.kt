@@ -48,9 +48,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import io.legado.app.ui.theme.LegadoTheme
@@ -376,7 +381,7 @@ private fun StatItem(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = primary,
+            text = buildStyledStatText(primary),
             style = LegadoTheme.typography.headlineSmall,
             color = primaryColor,
         )
@@ -387,6 +392,35 @@ private fun StatItem(
                 style = LegadoTheme.typography.bodySmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/**
+ * 将数值+单位字符串转为带大小层次的 AnnotatedString。
+ * 数字部分保持原字号，单位部分（小时/分/天/万字）缩小显示。
+ */
+private fun buildStyledStatText(text: String): AnnotatedString {
+    if (text == "—") return AnnotatedString(text)
+    return buildAnnotatedString {
+        val unitPattern = Regex("(\\d+\\.?\\d*)")
+        var lastEnd = 0
+        unitPattern.findAll(text).forEach { match ->
+            // 数字之前的文字（单位文字）
+            if (match.range.first > lastEnd) {
+                withStyle(SpanStyle(fontSize = 0.7.em)) {
+                    append(text.substring(lastEnd, match.range.first))
+                }
+            }
+            // 数字部分保持原大小
+            append(match.value)
+            lastEnd = match.range.last + 1
+        }
+        // 末尾剩余的单位文字
+        if (lastEnd < text.length) {
+            withStyle(SpanStyle(fontSize = 0.7.em)) {
+                append(text.substring(lastEnd))
+            }
         }
     }
 }
@@ -544,16 +578,7 @@ private fun ReviewSection(
 ) {
     SectionCard(
         title = "我的书评",
-        trailing = {
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = "编辑书评",
-                tint = LegadoTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(20.dp)
-                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenReviewEditor(state.review)) },
-            )
-        },
+        onClick = { onIntent(ReadingMemoryDetailIntent.OpenReviewEditor(state.review)) },
     ) {
         if (state.review.isBlank()) {
             AppText(
@@ -649,13 +674,13 @@ private fun ExcerptSection(
                 )
                 if (excerpt.content.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(text = excerpt.content, style = LegadoTheme.typography.bodySmall, lineHeight = 22.sp)
+                    AppText(text = excerpt.content, style = LegadoTheme.typography.labelLarge, lineHeight = 22.sp)
                 }
                 if (!excerpt.bookText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
                         text = excerpt.bookText,
-                        style = LegadoTheme.typography.bodySmall,
+                        style = LegadoTheme.typography.labelLarge,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
@@ -724,6 +749,7 @@ private fun ReviewEditorSheet(
 private fun SectionCard(
     title: String,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -732,7 +758,12 @@ private fun SectionCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(16.dp),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -765,14 +796,9 @@ private fun formatWordCount(raw: String): String {
 }
 
 private fun formatWordCountLong(count: Long): String {
-    return when {
-        count >= 10000 -> {
-            val wan = count.toFloat() / 10000
-            if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
-        }
-        count > 0 -> "${count}字"
-        else -> ""
-    }
+    if (count <= 0) return ""
+    val wan = count.toFloat() / 10000
+    return if (wan % 1 == 0f) "${wan.toLong()}万字" else String.format("%.1f万字", wan)
 }
 
 @Composable
@@ -806,10 +832,10 @@ private fun formatDurationNoSeconds(millis: Long): String {
     val hours = millis / (1000 * 60 * 60)
     val minutes = millis % (1000 * 60 * 60) / (1000 * 60)
     return when {
-        hours > 0 && minutes > 0 -> "${hours}小时${minutes}分钟"
+        hours > 0 && minutes > 0 -> "${hours}小时${minutes}分"
         hours > 0 -> "${hours}小时"
-        minutes > 0 -> "${minutes}分钟"
-        else -> "0分钟"
+        minutes > 0 -> "${minutes}分"
+        else -> "0分"
     }
 }
 

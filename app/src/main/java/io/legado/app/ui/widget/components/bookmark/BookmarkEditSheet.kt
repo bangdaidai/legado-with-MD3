@@ -53,11 +53,8 @@ fun BookmarkEditSheet(
         endAction = {
             MediumTonalButton(
                 onClick = {
-                    val newBookmark = bookmark.apply {
-                        this.bookText = bookText
-                        this.content = content
-                    }
-                    onSave(newBookmark)
+                    // 必须用 copy 而非 apply：原地修改会让上游 StateFlow 的新旧状态相等而被去重，导致列表不刷新
+                    onSave(bookmark.copy(bookText = bookText, content = content))
                 },
                 icon = AppIcons.Check,
                 contentDescription = stringResource(R.string.action_save)
@@ -74,11 +71,7 @@ fun BookmarkEditSheet(
         if (onGenerateBookplate != null) {
             MediumTonalButton(
                 onClick = {
-                    val bm = bookmark.apply {
-                        this.bookText = bookText
-                        this.content = content
-                    }
-                    onGenerateBookplate(bm)
+                    onGenerateBookplate(bookmark.copy(bookText = bookText, content = content))
                 },
                 modifier = Modifier.fillMaxWidth(),
                 text = "生成书摘票",

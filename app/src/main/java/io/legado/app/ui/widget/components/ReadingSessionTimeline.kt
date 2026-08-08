@@ -120,9 +120,9 @@ private fun TimelineSessionRow(
                 color = LegadoTheme.colorScheme.onSurfaceVariant
             )
         }
-        if (showChapterInfo && session.words > 0) {
+        if (showChapterInfo && session.chapterTitle.isNotBlank()) {
             TextCard(
-                text = "第${session.words}章",
+                text = session.chapterTitle,
                 textStyle = LegadoTheme.typography.labelSmall,
                 backgroundColor = LegadoTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.padding(start = 8.dp)
