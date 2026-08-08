@@ -475,6 +475,22 @@ fun BookshelfConfigSheet(
                                 )
                             }
                             AnimatedVisibility(
+                                visible = settings.bookshelfShowIntro && settings.bookshelfListIntroBelowContent && settings.bookshelfTicketStyle && layoutMode == 0
+                            ) {
+                                CompactDropdownSettingItem(
+                                    title = stringResource(R.string.ticket_dash_style),
+                                    selectedValue = if (settings.bookshelfTicketDotted) "1" else "0",
+                                    displayEntries = arrayOf(
+                                        stringResource(R.string.ticket_dash_style_dash),
+                                        stringResource(R.string.ticket_dash_style_dot),
+                                    ),
+                                    entryValues = arrayOf("0", "1"),
+                                    onValueChange = { value ->
+                                        onUpdate { it.copy(bookshelfTicketDotted = value == "1") }
+                                    }
+                                )
+                            }
+                            AnimatedVisibility(
                                 visible = settings.bookshelfShowIntro
                             ) {
                                 CompactSliderSettingItem(

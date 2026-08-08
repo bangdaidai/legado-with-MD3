@@ -39,6 +39,7 @@ data class BookshelfSettings(
     val bookshelfListCoverCenter: Boolean = true,
     val bookshelfListIntroBelowContent: Boolean = false,
     val bookshelfTicketStyle: Boolean = false,
+    val bookshelfTicketDotted: Boolean = false,
     val bookshelfShowDivider: Boolean = true,
     val bookshelfTitleSmallFont: Boolean = false,
     val bookshelfTitleCenter: Boolean = true,

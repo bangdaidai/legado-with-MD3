@@ -60,6 +60,7 @@ object PreferKey {
     const val bookshelfListCoverCenter = "bookshelfListCoverCenter"
     const val bookshelfListIntroBelowContent = "bookshelfListIntroBelowContent"
     const val bookshelfTicketStyle = "bookshelfTicketStyle"
+    const val bookshelfTicketDotted = "bookshelfTicketDotted"
     const val bookshelfShowDivider = "bookshelfShowDivider"
     const val bookshelfGridLayout = "bookshelfGridLayout"
     const val bookshelfSort = "bookshelfSort"

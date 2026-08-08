@@ -8,6 +8,7 @@ data class ExcludedTagUiState(
     val version: Long = 0L,
     val searchQuery: String = "",
     val excludedTags: ImmutableList<ExcludedTag> = persistentListOf(),
+    val bookshelfTagBorder: Boolean = false,
 )
 
 sealed interface ExcludedTagIntent {

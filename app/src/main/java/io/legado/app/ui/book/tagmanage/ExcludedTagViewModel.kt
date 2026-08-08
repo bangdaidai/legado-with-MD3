@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.ExcludedTag
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.help.book.TagManager
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +15,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ExcludedTagViewModel : ViewModel() {
+class ExcludedTagViewModel(
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExcludedTagUiState())
     val uiState = _uiState.asStateFlow()
@@ -24,6 +27,13 @@ class ExcludedTagViewModel : ViewModel() {
 
     init {
         loadData()
+        viewModelScope.launch {
+            bookshelfSettingsGateway.settings.collect { settings ->
+                _uiState.value = _uiState.value.copy(
+                    bookshelfTagBorder = settings.bookshelfTagBorder,
+                )
+            }
+        }
     }
 
     fun sendEvent(intent: ExcludedTagIntent) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -77,19 +78,26 @@ fun TicketNotchDivider(
     modifier: Modifier = Modifier,
     notchRadius: Dp = 6.dp,
     color: Color = LegadoTheme.colorScheme.outlineVariant,
+    strokeWidth: Dp = 1.dp,
+    dotted: Boolean = false,
 ) {
     val density = LocalDensity.current
     val dashPx = with(density) { 4.dp.toPx() }
     val notchPx = with(density) { notchRadius.toPx() }
-    val strokePx = with(density) { 1.dp.toPx() }
+    val strokePx = with(density) { strokeWidth.toPx() }
 
-    Canvas(modifier = modifier.fillMaxWidth().height(1.dp)) {
+    Canvas(modifier = modifier.fillMaxWidth().height(strokeWidth)) {
         drawLine(
             color = color,
             start = Offset(notchPx, size.height / 2f),
             end = Offset(size.width - notchPx, size.height / 2f),
             strokeWidth = strokePx,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashPx, dashPx), 0f),
+            cap = if (dotted) StrokeCap.Round else StrokeCap.Butt,
+            pathEffect = if (dotted) {
+                PathEffect.dashPathEffect(floatArrayOf(0f, dashPx), 0f)
+            } else {
+                PathEffect.dashPathEffect(floatArrayOf(dashPx, dashPx), 0f)
+            },
         )
     }
 }

@@ -74,7 +74,6 @@ import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.card.TicketShape
-import io.legado.app.ui.widget.components.divider.themeDividerColor
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
@@ -206,7 +205,7 @@ fun BookshelfListItem(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(top = 4.dp, bottom = 4.dp, end = 8.dp, start = 4.dp),
+                        .padding(top = 4.dp, bottom = 4.dp, end = 8.dp, start = 0.dp),
                     verticalArrangement = if (settings.bookshelfListCoverCenter) {
                         Arrangement.Center
                     } else {
@@ -276,17 +275,13 @@ fun BookshelfListItem(
             } else {
                 8.dp
             }
+            val ticketBorderColor = if (LegadoTheme.isDark) {
+                themeSettings.baseCardBorderColorNight
+            } else {
+                themeSettings.baseCardBorderColor
+            }.takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.outlineVariant
             val ticketBorder: BorderStroke? = if (themeSettings.overrideBaseCardBorder) {
-                val configuredColor = if (LegadoTheme.isDark) {
-                    themeSettings.baseCardBorderColorNight
-                } else {
-                    themeSettings.baseCardBorderColor
-                }
-                BorderStroke(
-                    themeSettings.baseCardBorderWidth.dp,
-                    configuredColor.takeIf { it != 0 }?.let(::Color)
-                        ?: LegadoTheme.colorScheme.outlineVariant
-                )
+                BorderStroke(themeSettings.baseCardBorderWidth.dp, ticketBorderColor)
             } else null
             val ticketShape = remember(notchY, ticketCornerRadius) {
                 TicketShape(cornerRadius = ticketCornerRadius, notchCenterY = notchY)
@@ -314,7 +309,9 @@ fun BookshelfListItem(
                         modifier = Modifier.onGloballyPositioned { coords ->
                             notchY = coords.positionInParent().y + coords.size.height / 2f
                         },
-                        color = themeDividerColor(),
+                        color = ticketBorderColor,
+                        strokeWidth = themeSettings.baseCardBorderWidth.dp,
+                        dotted = settings.bookshelfTicketDotted,
                     )
                     bottomContent.invoke()
                 }
@@ -338,7 +335,7 @@ fun BookshelfListItem(
             HorizontalDivider(
                 Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = themeDividerColor()
+                color = LegadoTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
         }
     }
@@ -701,7 +698,7 @@ fun BookGroupItemHorizontalCovers(
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = themeDividerColor()
+                color = LegadoTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
     }
 }
@@ -899,7 +896,7 @@ fun BookItem(
                     BookItemIntro(
                         intro = intro!!,
                         maxLines = settings.bookshelfIntroMaxLines,
-                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp),
                     )
                 } else {
                     GlassCard(

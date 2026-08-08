@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,9 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,7 +39,7 @@ import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
-import io.legado.app.ui.widget.components.divider.themeDividerColor
+import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.main.bookshelf.BookshelfListItem
@@ -473,6 +470,13 @@ private fun MemoryBookCard(
         && settings.bookshelfListIntroBelowContent
     val ticketStyle = (showIntroBelowContent || showReviewBelowContent)
         && settings.bookshelfTicketStyle
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val ticketBorderColor = if (LegadoTheme.isDark) {
+        themeSettings.baseCardBorderColorNight
+    } else {
+        themeSettings.baseCardBorderColor
+    }.takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.outlineVariant
+
 
     BookshelfListItem(
         settings = settings,
@@ -559,7 +563,11 @@ private fun MemoryBookCard(
                 )
             }
             if (showIntroInline && showReviewInline) {
-                DashedDivider()
+                TicketNotchDivider(
+                    color = ticketBorderColor,
+                    strokeWidth = themeSettings.baseCardBorderWidth.dp,
+                    dotted = settings.bookshelfTicketDotted,
+                )
             }
             if (showReviewInline) {
                 AppText(
@@ -575,7 +583,7 @@ private fun MemoryBookCard(
         bottomContent = if (showIntroBelowContent || showReviewBelowContent) {
             {
                 val belowContent: @Composable () -> Unit = {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Column {
                         if (showIntroBelowContent) {
                             AppText(
                                 text = memory.intro.orEmpty(),
@@ -583,11 +591,16 @@ private fun MemoryBookCard(
                                 color = LegadoTheme.colorScheme.onSurfaceVariant,
                                 maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
                         if (showIntroBelowContent && showReviewBelowContent) {
-                            DashedDivider()
+                            TicketNotchDivider(
+                                color = ticketBorderColor,
+                                strokeWidth = themeSettings.baseCardBorderWidth.dp,
+                                dotted = settings.bookshelfTicketDotted,
+                            )
                         }
                         if (showReviewBelowContent) {
                             AppText(
@@ -596,15 +609,14 @@ private fun MemoryBookCard(
                                 color = LegadoTheme.colorScheme.onSurface,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
                     }
                 }
                 if (ticketStyle) {
-                    Box(modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)) {
-                        belowContent()
-                    }
+                    belowContent()
                 } else {
                     GlassCard(
                         modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
@@ -625,21 +637,3 @@ private fun MemoryBookCard(
     )
 }
 
-@Composable
-private fun DashedDivider(modifier: Modifier = Modifier) {
-    val color = themeDividerColor()
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .height(1.dp)
-    ) {
-        drawLine(
-            color = color,
-            start = Offset(0f, size.height / 2),
-            end = Offset(size.width, size.height / 2),
-            strokeWidth = 1.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())),
-        )
-    }
-}

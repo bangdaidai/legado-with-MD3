@@ -134,7 +134,14 @@ fun ExcludedTagScreen(
                     8.dp
                 }
                 val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
-                val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+                // 排除项用主题的 error 色表达「被屏蔽」语义
+                val excludedAccent = LegadoTheme.colorScheme.error
+                val borderModifier = if (state.bookshelfTagBorder) {
+                    Modifier.border(
+                        BorderStroke(0.5.dp, excludedAccent),
+                        resolvedShape
+                    )
+                } else if (themeSettings.overrideBaseCardBorder) {
                     val configuredColor = if (LegadoTheme.isDark) {
                         themeSettings.baseCardBorderColorNight
                     } else {
@@ -164,7 +171,7 @@ fun ExcludedTagScreen(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFFB71C1C)),
+                                .background(excludedAccent),
                         )
                         Text(
                             excluded.name + if (excluded.isRegex) "  (正则)" else "",
