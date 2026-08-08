@@ -3,8 +3,10 @@ package io.legado.app.ui.main.bookshelf
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -64,6 +66,7 @@ import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.help.book.TagManager
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TagChip
@@ -71,6 +74,7 @@ import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.card.TicketShape
+import io.legado.app.ui.widget.components.divider.themeDividerColor
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
@@ -266,13 +270,38 @@ fun BookshelfListItem(
     Column {
         if (ticketStyle && bottomContent != null) {
             var notchY by remember { mutableStateOf(-1f) }
-            val ticketShape = remember(notchY) { TicketShape(notchCenterY = notchY) }
+            val themeSettings = LocalAppUiConfiguration.current.theme
+            val ticketCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
+                themeSettings.baseCardCornerRadius.dp
+            } else {
+                8.dp
+            }
+            val ticketBorder: BorderStroke? = if (themeSettings.overrideBaseCardBorder) {
+                val configuredColor = if (LegadoTheme.isDark) {
+                    themeSettings.baseCardBorderColorNight
+                } else {
+                    themeSettings.baseCardBorderColor
+                }
+                BorderStroke(
+                    themeSettings.baseCardBorderWidth.dp,
+                    configuredColor.takeIf { it != 0 }?.let(::Color)
+                        ?: LegadoTheme.colorScheme.outlineVariant
+                )
+            } else null
+            val ticketShape = remember(notchY, ticketCornerRadius) {
+                TicketShape(cornerRadius = ticketCornerRadius, notchCenterY = notchY)
+            }
             Box(modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(ticketShape)
                         .background(containerColor)
+                        .then(
+                            if (ticketBorder != null) {
+                                Modifier.border(ticketBorder, ticketShape)
+                            } else Modifier
+                        )
                         .combinedClickable(
                             role = Role.Button,
                             onClick = onClick,
@@ -285,6 +314,7 @@ fun BookshelfListItem(
                         modifier = Modifier.onGloballyPositioned { coords ->
                             notchY = coords.positionInParent().y + coords.size.height / 2f
                         },
+                        color = themeDividerColor(),
                     )
                     bottomContent.invoke()
                 }
@@ -308,7 +338,7 @@ fun BookshelfListItem(
             HorizontalDivider(
                 Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = LegadoTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                color = themeDividerColor()
             )
         }
     }
@@ -671,7 +701,7 @@ fun BookGroupItemHorizontalCovers(
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = LegadoTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                color = themeDividerColor()
             )
     }
 }

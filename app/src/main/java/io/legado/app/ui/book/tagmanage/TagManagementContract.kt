@@ -16,6 +16,7 @@ data class TagManagementUiState(
     val mappings: ImmutableList<TagMapping> = persistentListOf(),
     val tagCounts: Map<Long, Int> = emptyMap(),
     val groupTagCounts: Map<Long, Int> = emptyMap(),
+    val bookshelfTagBorder: Boolean = false,
 )
 
 sealed interface TagManagementIntent {

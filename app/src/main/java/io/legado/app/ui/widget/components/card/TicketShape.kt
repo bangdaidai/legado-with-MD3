@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -75,8 +76,8 @@ class TicketShape(
 fun TicketNotchDivider(
     modifier: Modifier = Modifier,
     notchRadius: Dp = 6.dp,
+    color: Color = LegadoTheme.colorScheme.outlineVariant,
 ) {
-    val color = LegadoTheme.colorScheme.outlineVariant
     val density = LocalDensity.current
     val dashPx = with(density) { 4.dp.toPx() }
     val notchPx = with(density) { notchRadius.toPx() }

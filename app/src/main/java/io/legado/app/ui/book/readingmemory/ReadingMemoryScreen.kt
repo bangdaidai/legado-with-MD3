@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +31,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
@@ -40,6 +42,7 @@ import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
+import io.legado.app.ui.widget.components.divider.themeDividerColor
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.main.bookshelf.BookshelfListItem
@@ -468,6 +471,8 @@ private fun MemoryBookCard(
         && settings.bookshelfListIntroBelowContent
     val showReviewBelowContent = uiState.showReview && !memory.review.isNullOrBlank()
         && settings.bookshelfListIntroBelowContent
+    val ticketStyle = (showIntroBelowContent || showReviewBelowContent)
+        && settings.bookshelfTicketStyle
 
     BookshelfListItem(
         settings = settings,
@@ -502,18 +507,31 @@ private fun MemoryBookCard(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             ) {
                 // 状态标签放最前面
+                val statusThemeSettings = LocalAppUiConfiguration.current.theme
+                val statusBorder = if (uiState.settings.bookshelfTagBorder) {
+                    BorderStroke(0.5.dp, statusContent)
+                } else if (statusThemeSettings.overrideBaseCardBorder) {
+                    val configuredColor = if (LegadoTheme.isDark) {
+                        statusThemeSettings.baseCardBorderColorNight
+                    } else {
+                        statusThemeSettings.baseCardBorderColor
+                    }
+                    BorderStroke(
+                        statusThemeSettings.baseCardBorderWidth.dp,
+                        configuredColor.takeIf { it != 0 }?.let(::Color)
+                            ?: LegadoTheme.colorScheme.outlineVariant,
+                    )
+                } else null
                 Surface(
                     shape = MaterialTheme.shapes.small,
                     color = statusContainer,
-                    border = if (uiState.settings.bookshelfTagBorder) {
-                        BorderStroke(0.5.dp, statusContent)
-                    } else null,
+                    border = statusBorder,
                 ) {
                     AppText(
                         text = statusText,
                         style = LegadoTheme.typography.labelSmall,
                         color = statusContent,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                     )
                 }
                 tags.forEach { tag ->
@@ -556,11 +574,7 @@ private fun MemoryBookCard(
         },
         bottomContent = if (showIntroBelowContent || showReviewBelowContent) {
             {
-                GlassCard(
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
-                    cornerRadius = 4.dp,
-                    containerColor = LegadoTheme.colorScheme.cardContainer
-                ) {
+                val belowContent: @Composable () -> Unit = {
                     Column(modifier = Modifier.padding(horizontal = 8.dp)) {
                         if (showIntroBelowContent) {
                             AppText(
@@ -587,10 +601,24 @@ private fun MemoryBookCard(
                         }
                     }
                 }
+                if (ticketStyle) {
+                    Box(modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)) {
+                        belowContent()
+                    }
+                } else {
+                    GlassCard(
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
+                        cornerRadius = 4.dp,
+                        containerColor = LegadoTheme.colorScheme.cardContainer
+                    ) {
+                        belowContent()
+                    }
+                }
             }
         } else null,
         titleMaxLines = settings.bookshelfTitleMaxLines,
         coverShadow = settings.bookshelfCoverShadow,
+        ticketStyle = ticketStyle,
         coverWidth = uiState.coverWidth,
         onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
         onLongClick = { onLongPress(memory.bookUrl) },
@@ -599,7 +627,7 @@ private fun MemoryBookCard(
 
 @Composable
 private fun DashedDivider(modifier: Modifier = Modifier) {
-    val color = LegadoTheme.colorScheme.outlineVariant
+    val color = themeDividerColor()
     Canvas(
         modifier = modifier
             .fillMaxWidth()

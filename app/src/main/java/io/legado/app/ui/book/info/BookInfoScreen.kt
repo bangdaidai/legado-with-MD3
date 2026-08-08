@@ -104,7 +104,6 @@ import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.HighlightTagRow
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
-import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.changeSource.ChangeSourceSheet
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -1009,11 +1008,9 @@ private fun BookInfoHeader(
                 ) {
                     groupNames?.takeIf { it.isNotBlank() }?.let {
                         item(key = "group-$it") {
-                            TextCard(
-                                text = stringResource(R.string.group_s, it),
-                                textStyle = LegadoTheme.typography.labelLargeEmphasized,
-                                backgroundColor = LegadoTheme.colorScheme.surfaceContainer,
-                                contentColor = LegadoTheme.colorScheme.onSurfaceVariant,
+                            TagChip(
+                                tag = stringResource(R.string.group_s, it),
+                                showColoredBorder = tagBorder,
                             )
                         }
                     }

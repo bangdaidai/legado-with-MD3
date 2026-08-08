@@ -278,7 +278,9 @@ private fun TagChipRow(
         tags.forEach { tag ->
             val color = if (tag.color != 0L) Color(tag.color.toInt()) else LegadoTheme.colorScheme.primary
             val count = state.tagCounts[tag.id] ?: 0
-            val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+            val borderModifier = if (state.bookshelfTagBorder) {
+                Modifier.border(BorderStroke(0.5.dp, color), resolvedShape)
+            } else if (themeSettings.overrideBaseCardBorder) {
                 val configuredColor = if (LegadoTheme.isDark) {
                     themeSettings.baseCardBorderColorNight
                 } else {

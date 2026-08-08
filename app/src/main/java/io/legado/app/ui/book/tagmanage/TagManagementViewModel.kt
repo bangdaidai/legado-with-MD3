@@ -9,6 +9,7 @@ import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
 import kotlinx.collections.immutable.toImmutableList
@@ -21,7 +22,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class TagManagementViewModel : ViewModel() {
+class TagManagementViewModel(
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TagManagementUiState())
     val uiState = _uiState.asStateFlow()
@@ -34,6 +37,13 @@ class TagManagementViewModel : ViewModel() {
         viewModelScope.launch {
             FlowEventBus.with<Any>(EventBus.TAGS_UPDATED).collect {
                 loadData()
+            }
+        }
+        viewModelScope.launch {
+            bookshelfSettingsGateway.settings.collect { settings ->
+                _uiState.value = _uiState.value.copy(
+                    bookshelfTagBorder = settings.bookshelfTagBorder,
+                )
             }
         }
     }

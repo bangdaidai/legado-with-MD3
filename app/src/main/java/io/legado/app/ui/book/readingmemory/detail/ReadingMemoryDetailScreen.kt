@@ -489,6 +489,7 @@ private fun ProtagonistsSection(
                 state.protagonistNames.forEach { p ->
                     TagChip(
                         tag = p,
+                        showColoredBorder = state.bookshelfTagBorder,
                         onClick = { pendingRemoveProtagonist = p },
                     )
                 }

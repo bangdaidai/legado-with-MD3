@@ -15,6 +15,20 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LocalAppUiConfiguration
 
+/**
+ * 主题设置中的「分割线颜色」，未自定义时回退到默认灰。
+ * 与 [SettingItemDivider] 的开关无关，只取颜色。
+ */
+@Composable
+fun themeDividerColor(): Color {
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    return if (themeSettings.itemDividerColor != 0) {
+        Color(themeSettings.itemDividerColor)
+    } else {
+        Color.Gray.copy(alpha = 0.3f)
+    }
+}
+
 @Composable
 fun SettingItemDivider(
     modifier: Modifier = Modifier
@@ -24,11 +38,7 @@ fun SettingItemDivider(
 
     val thickness = themeSettings.itemDividerWidth.dp
     val lengthPercent = themeSettings.itemDividerLength / 100f
-    val dividerColor = if (themeSettings.itemDividerColor != 0) {
-        Color(themeSettings.itemDividerColor)
-    } else {
-        Color.Gray.copy(alpha = 0.3f)
-    }
+    val dividerColor = themeDividerColor()
 
     Box(
         modifier = modifier
