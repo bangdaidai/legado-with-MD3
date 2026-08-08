@@ -463,6 +463,18 @@ fun BookshelfConfigSheet(
                                 )
                             }
                             AnimatedVisibility(
+                                visible = settings.bookshelfShowIntro && settings.bookshelfListIntroBelowContent && layoutMode == 0
+                            ) {
+                                CompactSwitchSettingItem(
+                                    title = stringResource(R.string.ticket_style),
+                                    checked = settings.bookshelfTicketStyle,
+                                    color = LegadoTheme.colorScheme.surface,
+                                    onCheckedChange = { value ->
+                                        onUpdate { it.copy(bookshelfTicketStyle = value) }
+                                    }
+                                )
+                            }
+                            AnimatedVisibility(
                                 visible = settings.bookshelfShowIntro
                             ) {
                                 CompactSliderSettingItem(

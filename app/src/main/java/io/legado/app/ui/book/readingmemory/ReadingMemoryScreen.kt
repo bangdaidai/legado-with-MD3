@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -504,6 +505,9 @@ private fun MemoryBookCard(
                 Surface(
                     shape = MaterialTheme.shapes.small,
                     color = statusContainer,
+                    border = if (uiState.settings.bookshelfTagBorder) {
+                        BorderStroke(0.5.dp, statusContent)
+                    } else null,
                 ) {
                     AppText(
                         text = statusText,

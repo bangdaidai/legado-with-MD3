@@ -31,7 +31,10 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +42,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -64,6 +69,8 @@ import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TextCard
+import io.legado.app.ui.widget.components.card.TicketNotchDivider
+import io.legado.app.ui.widget.components.card.TicketShape
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
@@ -144,6 +151,7 @@ fun BookshelfGridItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookshelfListItem(
     settings: BookshelfSettings,
@@ -164,6 +172,7 @@ fun BookshelfListItem(
     titleMaxLines: Int = 2,
     coverShadow: Boolean = false,
     titleColor: Color? = null,
+    ticketStyle: Boolean = false,
     accessibilityLabel: String? = null,
     coverWidth: Int = 84,
     onClick: () -> Unit,
@@ -171,20 +180,12 @@ fun BookshelfListItem(
 ) {
     val cardColor =
         if (LegadoTheme.isDark) settings.bookshelfCardColorDark else settings.bookshelfCardColor
-    Column {
-        NormalCard(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .bookshelfItemSemantics(accessibilityLabel ?: title, isSelected),
-            cornerRadius = 8.dp,
-            containerColor = if (isSelected) LegadoTheme.colorScheme.secondaryContainer else if (cardColor != 0) Color(
-                cardColor
-            ) else LegadoTheme.colorScheme.cardContainer,
-            onClick = onClick,
-            onLongClick = onLongClick
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    val containerColor =
+        if (isSelected) LegadoTheme.colorScheme.secondaryContainer else if (cardColor != 0) Color(
+            cardColor
+        ) else LegadoTheme.colorScheme.cardContainer
+    val topContent: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .align(
@@ -261,7 +262,47 @@ fun BookshelfListItem(
                     columnContent?.invoke(this)
                 }
             }
-            bottomContent?.invoke()
+    }
+    Column {
+        if (ticketStyle && bottomContent != null) {
+            var notchY by remember { mutableStateOf(-1f) }
+            val ticketShape = remember(notchY) { TicketShape(notchCenterY = notchY) }
+            Box(modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(ticketShape)
+                        .background(containerColor)
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClick = onClick,
+                            onLongClick = onLongClick
+                        )
+                        .bookshelfItemSemantics(accessibilityLabel ?: title, isSelected),
+                ) {
+                    topContent()
+                    TicketNotchDivider(
+                        modifier = Modifier.onGloballyPositioned { coords ->
+                            notchY = coords.positionInParent().y + coords.size.height / 2f
+                        },
+                    )
+                    bottomContent.invoke()
+                }
+            }
+        } else {
+            NormalCard(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .bookshelfItemSemantics(accessibilityLabel ?: title, isSelected),
+                cornerRadius = 8.dp,
+                containerColor = containerColor,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ) {
+                topContent()
+                bottomContent?.invoke()
+            }
         }
         if (settings.bookshelfShowDivider) {
             HorizontalDivider(
@@ -672,6 +713,7 @@ fun BookItem(
     val showListDetails = layoutMode == 0 && !isCompact && settings.showBookIntro
     val showIntro = showListDetails && settings.bookshelfShowIntro && intro != null
     val showIntroBelowContent = showIntro && settings.bookshelfListIntroBelowContent
+    val ticketStyle = showIntroBelowContent && settings.bookshelfTicketStyle
     val unreadCount = book.getUnreadChapterNum()
     val unreadText = if (settings.showUnread && unreadCount > 0) unreadCount.toString() else null
     val showUpdateBadge = settings.showUnread && settings.showUnreadNew && book.isNew
@@ -808,6 +850,7 @@ fun BookItem(
                             TagChip(
                                 tag = formatShelfWordCount(wc),
                                 size = TagChipSize.Small,
+                                showColoredBorder = settings.bookshelfTagBorder,
                             )
                         }
                     }
@@ -822,16 +865,24 @@ fun BookItem(
         } else null,
         bottomContent = if (showIntroBelowContent) {
             {
-                GlassCard(
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
-                    cornerRadius = 4.dp,
-                    containerColor = LegadoTheme.colorScheme.cardContainer
-                ) {
+                if (ticketStyle) {
                     BookItemIntro(
                         intro = intro!!,
                         maxLines = settings.bookshelfIntroMaxLines,
-                        modifier = Modifier.padding(horizontal = 8.dp),
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
                     )
+                } else {
+                    GlassCard(
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
+                        cornerRadius = 4.dp,
+                        containerColor = LegadoTheme.colorScheme.cardContainer
+                    ) {
+                        BookItemIntro(
+                            intro = intro!!,
+                            maxLines = settings.bookshelfIntroMaxLines,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
                 }
             }
         } else null,
@@ -857,6 +908,7 @@ fun BookItem(
         } else null,
         titleMaxLines = titleMaxLines,
         coverShadow = coverShadow,
+        ticketStyle = ticketStyle,
         accessibilityLabel = accessibilityLabel,
         coverWidth = settings.bookshelfListCoverWidth,
         onClick = onClick,
