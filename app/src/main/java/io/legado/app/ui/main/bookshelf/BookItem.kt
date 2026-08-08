@@ -800,6 +800,7 @@ fun BookItem(
                                 tag = label,
                                 color = tagColor,
                                 size = TagChipSize.Small,
+                                showColoredBorder = settings.bookshelfTagBorder,
                             )
                         }
                         val wc = bookUi.book.wordCount

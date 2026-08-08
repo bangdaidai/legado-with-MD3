@@ -424,7 +424,12 @@ private fun TagsSection(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 state.tags.forEach { tag ->
-                    TagChip(tag = tag, color = state.tagColorMap[tag], onClick = { pendingRemoveTag = tag })
+                    TagChip(
+                        tag = tag,
+                        color = state.tagColorMap[tag],
+                        showColoredBorder = state.bookshelfTagBorder,
+                        onClick = { pendingRemoveTag = tag },
+                    )
                 }
             }
         }

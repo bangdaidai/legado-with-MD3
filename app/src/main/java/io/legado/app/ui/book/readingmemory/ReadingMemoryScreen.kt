@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -511,10 +514,19 @@ private fun MemoryBookCard(
                 }
                 tags.forEach { tag ->
                     val tagColor = uiState.tagColorMap[tag]
-                    TagChip(tag = tag, color = tagColor, size = TagChipSize.Small)
+                    TagChip(
+                        tag = tag,
+                        color = tagColor,
+                        size = TagChipSize.Small,
+                        showColoredBorder = uiState.settings.bookshelfTagBorder,
+                    )
                 }
             }
-            if (uiState.showIntro && !memory.intro.isNullOrBlank() && !showIntroBelowContent) {
+            val showIntroInline = uiState.showIntro && !memory.intro.isNullOrBlank()
+                && !showIntroBelowContent
+            val showReviewInline = uiState.showReview && !memory.review.isNullOrBlank()
+                && !showReviewBelowContent
+            if (showIntroInline) {
                 AppText(
                     text = memory.intro.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
@@ -524,7 +536,10 @@ private fun MemoryBookCard(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 )
             }
-            if (uiState.showReview && !memory.review.isNullOrBlank() && !showReviewBelowContent) {
+            if (showIntroInline && showReviewInline) {
+                DashedDivider()
+            }
+            if (showReviewInline) {
                 AppText(
                     text = memory.review.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
@@ -553,6 +568,9 @@ private fun MemoryBookCard(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             )
                         }
+                        if (showIntroBelowContent && showReviewBelowContent) {
+                            DashedDivider()
+                        }
                         if (showReviewBelowContent) {
                             AppText(
                                 text = memory.review.orEmpty(),
@@ -573,4 +591,23 @@ private fun MemoryBookCard(
         onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
         onLongClick = { onLongPress(memory.bookUrl) },
     )
+}
+
+@Composable
+private fun DashedDivider(modifier: Modifier = Modifier) {
+    val color = LegadoTheme.colorScheme.outlineVariant
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .height(1.dp)
+    ) {
+        drawLine(
+            color = color,
+            start = Offset(0f, size.height / 2),
+            end = Offset(size.width, size.height / 2),
+            strokeWidth = 1.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())),
+        )
+    }
 }

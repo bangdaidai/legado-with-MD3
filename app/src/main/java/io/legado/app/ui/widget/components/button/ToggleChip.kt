@@ -1,7 +1,9 @@
 package io.legado.app.ui.widget.components.button
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -19,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
@@ -27,6 +30,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LegadoTheme.composeEngine
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.card.NormalCard
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -101,9 +105,30 @@ fun ToggleChip(
             }
         }
     } else if (compact) {
+        val themeSettings = LocalAppUiConfiguration.current.theme
+        val resolvedShape = if (themeSettings.overrideBaseCardCornerRadius) {
+            RoundedCornerShape(themeSettings.baseCardCornerRadius.dp)
+        } else {
+            cornerRadius?.let { RoundedCornerShape(it) } ?: RoundedCornerShape(50)
+        }
+        val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+            val configuredColor = if (LegadoTheme.isDark) {
+                themeSettings.baseCardBorderColorNight
+            } else {
+                themeSettings.baseCardBorderColor
+            }
+            val borderColor = configuredColor.takeIf { it != 0 }?.let(::Color)
+                ?: LegadoTheme.colorScheme.outlineVariant
+            Modifier.border(
+                BorderStroke(themeSettings.baseCardBorderWidth.dp, borderColor),
+                resolvedShape
+            )
+        } else {
+            Modifier
+        }
         Row(
             modifier = modifier
-                .clip(cornerRadius?.let { RoundedCornerShape(it) } ?: RoundedCornerShape(50))
+                .clip(resolvedShape)
                 .background(
                     if (selected) {
                         MaterialTheme.colorScheme.secondaryContainer
@@ -111,6 +136,7 @@ fun ToggleChip(
                         MaterialTheme.colorScheme.surfaceContainer
                     }
                 )
+                .then(borderModifier)
                 .clickable(onClick = onToggle)
                 .padding(horizontal = 10.dp, vertical = 6.dp)
                 .semantics {

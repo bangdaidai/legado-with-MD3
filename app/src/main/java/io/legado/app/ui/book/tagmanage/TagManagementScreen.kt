@@ -5,7 +5,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
@@ -265,13 +268,36 @@ private fun TagChipRow(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
+        val themeSettings = LocalAppUiConfiguration.current.theme
+        val resolvedCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
+            themeSettings.baseCardCornerRadius.dp
+        } else {
+            8.dp
+        }
+        val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
         tags.forEach { tag ->
             val color = if (tag.color != 0L) Color(tag.color.toInt()) else LegadoTheme.colorScheme.primary
             val count = state.tagCounts[tag.id] ?: 0
+            val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+                val configuredColor = if (LegadoTheme.isDark) {
+                    themeSettings.baseCardBorderColorNight
+                } else {
+                    themeSettings.baseCardBorderColor
+                }
+                val borderColor = configuredColor.takeIf { it != 0 }?.let(::Color)
+                    ?: LegadoTheme.colorScheme.outlineVariant
+                Modifier.border(
+                    BorderStroke(themeSettings.baseCardBorderWidth.dp, borderColor),
+                    resolvedShape
+                )
+            } else {
+                Modifier
+            }
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(resolvedShape)
                     .background(color.copy(alpha = 0.14f))
+                    .then(borderModifier)
                     .clickable { onIntent(TagManagementIntent.OpenTagDetail(tag.id)) }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,

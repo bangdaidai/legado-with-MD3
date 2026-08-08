@@ -5,7 +5,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +45,7 @@ import android.widget.Toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
@@ -118,31 +121,54 @@ fun ExcludedTagScreen(
                 state.excludedTags.filter { it.name.contains(query, ignoreCase = true) }
             }
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
             ) {
+                val themeSettings = LocalAppUiConfiguration.current.theme
+                val resolvedCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
+                    themeSettings.baseCardCornerRadius.dp
+                } else {
+                    8.dp
+                }
+                val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
+                val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+                    val configuredColor = if (LegadoTheme.isDark) {
+                        themeSettings.baseCardBorderColorNight
+                    } else {
+                        themeSettings.baseCardBorderColor
+                    }
+                    val borderColor = configuredColor.takeIf { it != 0 }?.let(::Color)
+                        ?: LegadoTheme.colorScheme.outlineVariant
+                    Modifier.border(
+                        BorderStroke(themeSettings.baseCardBorderWidth.dp, borderColor),
+                        resolvedShape
+                    )
+                } else {
+                    Modifier
+                }
                 filtered.forEach { excluded ->
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(resolvedShape)
                             .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .then(borderModifier)
                             .clickable { edit = excluded }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(10.dp)
-                                .clip(RoundedCornerShape(5.dp))
+                                .size(7.dp)
+                                .clip(RoundedCornerShape(4.dp))
                                 .background(Color(0xFFB71C1C)),
                         )
                         Text(
                             excluded.name + if (excluded.isRegex) "  (正则)" else "",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = LegadoTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }

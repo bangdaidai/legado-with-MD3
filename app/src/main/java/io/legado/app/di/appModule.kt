@@ -552,6 +552,7 @@ val appModule = module {
             bookUrl = bookUrl,
             repository = get(),
             themeSettingsGateway = get(),
+            bookshelfSettingsGateway = get(),
         )
     }
     viewModelOf(::ExploreShowViewModel)

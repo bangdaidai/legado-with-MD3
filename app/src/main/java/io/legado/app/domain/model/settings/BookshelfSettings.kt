@@ -15,6 +15,7 @@ data class BookshelfSettings(
     val showBookIntro: Boolean = false,
     val bookshelfShowIntro: Boolean = true,
     val bookshelfShowTag: Boolean = true,
+    val bookshelfTagBorder: Boolean = false,
     val bookshelfShowLatestChapter: Boolean = true,
     val bookshelfIntroMaxLines: Int = 0,
     val showWaitUpCount: Boolean = false,

@@ -496,6 +496,14 @@ fun BookshelfConfigSheet(
                                         color = LegadoTheme.colorScheme.surface,
                                         onCheckedChange = onCustomTagColorsEnabledChange
                                     )
+                                    CompactSwitchSettingItem(
+                                        title = stringResource(R.string.tag_border),
+                                        checked = settings.bookshelfTagBorder,
+                                        color = LegadoTheme.colorScheme.surface,
+                                        onCheckedChange = { value ->
+                                            onUpdate { it.copy(bookshelfTagBorder = value) }
+                                        }
+                                    )
                                 }
                             }
                         }

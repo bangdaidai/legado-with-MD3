@@ -7,6 +7,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.ThemeSettingsGateway
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.help.book.BookplateGenerator
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ class ReadingMemoryDetailViewModel(
     private val bookUrl: String,
     private val repository: ReadingMemoryRepository,
     private val themeSettingsGateway: ThemeSettingsGateway,
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
 ) : ViewModel() {
 
     // 主角实时源变化触发器：增删主角后强制重算
@@ -160,6 +162,7 @@ class ReadingMemoryDetailViewModel(
                     excerptCount = excerptCount,
                     totalChapterCount = totalChapterCount,
                     durChapterIndex = durChapterIdx,
+                    bookshelfTagBorder = bookshelfSettingsGateway.currentSettings.bookshelfTagBorder,
                 )
             }
         }

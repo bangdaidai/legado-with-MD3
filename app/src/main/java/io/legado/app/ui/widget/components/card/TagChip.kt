@@ -37,6 +37,7 @@ enum class TagChipSize {
  * @param tag 标签名
  * @param color 标签颜色（可为 null，此时使用默认色）
  * @param size 标签大小
+ * @param showColoredBorder 为 true 时，用标签颜色绘制边框（优先级高于主题边框设置）
  * @param onClick 点击回调
  * @param onRemove 移除按钮回调（提供时会显示关闭图标）
  */
@@ -45,6 +46,7 @@ fun TagChip(
     tag: String,
     color: Long? = null,
     size: TagChipSize = TagChipSize.Medium,
+    showColoredBorder: Boolean = false,
     onClick: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -65,7 +67,9 @@ fun TagChip(
     }
     val resolvedShape = RoundedCornerShape(resolvedCornerRadius)
 
-    val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+    val borderModifier = if (showColoredBorder && tagColor != null) {
+        Modifier.border(BorderStroke(0.5.dp, tagColor), resolvedShape)
+    } else if (themeSettings.overrideBaseCardBorder) {
         val configuredColor = if (LegadoTheme.isDark) {
             themeSettings.baseCardBorderColorNight
         } else {

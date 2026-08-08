@@ -135,7 +135,7 @@ fun RoundDropdownMenuItem(
                 .padding(horizontal = 8.dp)
                 .fillMaxWidth(),
             enabled = enabled,
-            shape = MaterialTheme.shapes.extraSmall,
+            shape = MaterialTheme.shapes.small,
             color = containerColor,
             contentColor = contentColor,
             interactionSource = interaction

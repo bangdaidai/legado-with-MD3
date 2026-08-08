@@ -51,6 +51,7 @@ data class ReadingMemoryDetailUiState(
     val excerptCount: Int = 0,
     val totalChapterCount: Int = 0,
     val durChapterIndex: Int = 0,
+    val bookshelfTagBorder: Boolean = false,
     val bookplateBitmap: android.graphics.Bitmap? = null,
     val bookplateLoading: Boolean = false,
     val showBookplate: Boolean = false,
