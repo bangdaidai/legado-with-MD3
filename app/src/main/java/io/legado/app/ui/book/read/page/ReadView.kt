@@ -26,6 +26,7 @@ import androidx.core.view.updateLayoutParams
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.PageAnim
+import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadSessionState
 import io.legado.app.ui.book.read.page.api.DataSource
 import io.legado.app.ui.book.read.page.delegate.CoverPageDelegate
@@ -276,6 +277,7 @@ class ReadView(
         }
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                ReadBook.onUserInteraction()
                 callBack.screenOffTimerStart()
                 if (isTextSelected) {
                     curPage.cancelSelect()

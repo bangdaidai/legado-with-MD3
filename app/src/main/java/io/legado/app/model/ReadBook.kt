@@ -232,11 +232,19 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     private const val MIN_READ_DURATION = 10 * 1000L
 
     /**
-     * 无操作宽限期。session 的 endTime 只在翻页/朗读进度回调时前进，
-     * 因此「距上次阅读动作的间隔」即为无操作时长。超过此宽限期的部分不计入阅读时长，
-     * 避免开着阅读界面挂机被算成在读。
+     * 无操作切段阈值。session 的 endTime 只在「翻页/点屏/滑动/划线/朗读进度」等阅读动作时前进，
+     * 因此「距上次阅读动作的间隔」即为无操作时长。
+     * 一旦间隔超过此阈值，视为用户已停止阅读：旧 session 就地按最后一次动作时刻结算，
+     * 之后的动作另起新 session。中间的挂机时间既不计入旧段，也不计入新段。
+     * 时长 = 最后一次动作时刻 − 段起点，宽限期本身不计入。
      */
-    private const val IDLE_GRACE_PERIOD = 2 * 60 * 1000L
+    private const val IDLE_SPLIT_THRESHOLD = 60 * 1000L
+
+    /** 触摸/滑动信号的节流间隔，避免高频触摸事件反复进入计时逻辑。 */
+    private const val INTERACTION_THROTTLE = 1000L
+
+    /** 最近一次处理触摸/滑动信号的时刻，用于节流。 */
+    private var lastInteractionRecordTime = 0L
 
     // region 会话所有权：外部只能通过下列语义化命令改写会话字段（book/durChapterIndex/durChapterPos
     // 已 private set）。判定用意图化谓词替代裸实体比较，避免调用方直接持有可变 Book。
@@ -773,12 +781,12 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                 return
             }
 
-            // 距上次阅读动作超过宽限期，说明中间挂机了：先按宽限期截断结算旧 session，
-            // 再从当前时刻重新起算，避免把挂机时间算进阅读时长。
-            if (endTime - currentActiveSession!!.endTime > IDLE_GRACE_PERIOD) {
-                val idleTrimmed = sessionWithGraceCappedEnd(currentActiveSession!!)
+            // 距上次阅读动作超过阈值 → 视为中间挂机：旧 session 就地按最后一次动作时刻结算，
+            // 新动作另起一段。中间空闲既不算旧段也不算新段。
+            if (endTime - currentActiveSession!!.endTime > IDLE_SPLIT_THRESHOLD) {
+                val trimmedOld = currentActiveSession!!
                 currentActiveSession = null
-                ioScope.launch { saveSessionToDb(idleTrimmed) }
+                ioScope.launch { saveSessionToDb(trimmedOld) }
                 readStartTime = endTime
                 initReadTime()
                 lastReadLength = currentLength
@@ -794,6 +802,17 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
             readStartTime = endTime
             lastReadLength = currentLength
         }
+    }
+
+    /**
+     * 用户触摸/滑动等非翻页交互也算「在读」的信号，用于把 endTime 推进到当前时刻。
+     * 节流到 [INTERACTION_THROTTLE]，避免高频事件反复进入 [upReadTime]。
+     */
+    fun onUserInteraction() {
+        val now = System.currentTimeMillis()
+        if (now - lastInteractionRecordTime < INTERACTION_THROTTLE) return
+        lastInteractionRecordTime = now
+        upReadTime()
     }
 
     fun startAutoSaveSession() {
@@ -819,7 +838,7 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         val sessionToCommit = synchronized(this) {
             val session = currentActiveSession
             currentActiveSession = null
-            session?.let { sessionWithGraceCappedEnd(it) }
+            session
         } ?: return
         ioScope.launch {
             saveSessionToDb(sessionToCommit)
@@ -827,25 +846,12 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     }
 
     /**
-     * 提交前把 endTime 推进到当前时刻，但最多只补到「最后一次阅读动作 + 宽限期」为止，
-     * 超出宽限期的部分视为挂机不计。尚无任何阅读动作的 session（endTime 未超过 startTime）
-     * 不给宽限，避免挂机期间每次自动保存都白送一个宽限期。
-     */
-    private fun sessionWithGraceCappedEnd(session: ReadRecordSession): ReadRecordSession {
-        if (session.endTime <= session.startTime) return session
-        val cappedEnd = System.currentTimeMillis()
-            .coerceAtMost(session.endTime + IDLE_GRACE_PERIOD)
-            .coerceAtLeast(session.endTime)
-        return session.copy(endTime = cappedEnd)
-    }
-
-    /**
-     * 内部提交逻辑（auto-save 专用）：保存后立即创建新 session 保证连续记录
+     * 内部提交逻辑（auto-save 专用）：保存后立即创建新 session 保证连续记录。
+     * session.endTime 已由 [upReadTime]/[onUserInteraction] 更新为最后一次阅读动作时刻，
+     * 直接提交 [start, endTime]，不再补任何宽限。
      */
     private suspend fun commitSessionInternal() {
-        val sessionToSave = synchronized(this) {
-            currentActiveSession?.let { sessionWithGraceCappedEnd(it) }
-        } ?: return
+        val sessionToSave = synchronized(this) { currentActiveSession } ?: return
         val sessionDuration = sessionToSave.endTime - sessionToSave.startTime
         if (sessionDuration < MIN_READ_DURATION) {
             return
