@@ -629,7 +629,15 @@ class HomepageViewModel(
             _isRefreshing.value = true
             loadJobs.values.forEach { it.cancel() }
             loadJobs.clear()
-            uiState.value.modules.map { it.sourceUrl }.distinct().forEach { url ->
+            // 空态兜底：首页没有任何模块时，扫描全部启用发现且带 homepageModules 的书源，
+            // 通过 syncModulesFromSource → ensureSetForSource 自动生成各书源的集合。
+            val existingSourceUrls = uiState.value.modules.map { it.sourceUrl }.distinct()
+            val sourcesToSync = if (existingSourceUrls.isEmpty()) {
+                bookSourceRepository.flowHomepageModules().first().map { it.bookSourceUrl }
+            } else {
+                existingSourceUrls
+            }
+            sourcesToSync.forEach { url ->
                 resolveBookSource(url)?.let { syncModulesFromSource(it) }
             }
             _moduleContentStates.value = emptyMap()
@@ -951,7 +959,11 @@ class HomepageViewModel(
             }
             if (selectedKinds.isEmpty()) return@launch
 
-            val setId = targetSetId ?: ensureSetForSource(sourceUrl, source.bookSourceName)
+            // 与 addCustomModule / addButtonGroupFromKinds 保持一致：无条件建该书源的集合。
+            // 从「浏览书源 → 发现分类」进来时 targetSetId 恒为 "src_$sourceUrl"（非 null），
+            // 若写成 targetSetId ?: ensureSetForSource(...) 会跳过建集合，模块挂在不存在的集合上。
+            ensureSetForSource(sourceUrl, source.bookSourceName)
+            val setId = targetSetId ?: "src_$sourceUrl"
             val isGroup = selectedKinds.size > 1
             val key = if (isGroup) {
                 "${type}_${jsonHash(GSON.toJson(kindTitles)).take(12)}"
