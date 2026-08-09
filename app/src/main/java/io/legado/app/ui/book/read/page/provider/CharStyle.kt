@@ -22,10 +22,10 @@ data class CharStyle(
     val fontWeight: Int = 400,
     val isItalic: Boolean = false,
     val fontSizeOffset: Int = 0,
-    val npLeft: Float = 0.5f,
-    val npRight: Float = 0.5f,
-    val npTop: Float = 0.5f,
-    val npBottom: Float = 0.5f,
+    val npLeft: Float = 0.1f,
+    val npRight: Float = 0.1f,
+    val npTop: Float = 0.1f,
+    val npBottom: Float = 0.1f,
     val bgPadStart: Float = 0f,
     val bgPadEnd: Float = 0f,
     val bgPadTop: Float = 0f,
@@ -35,6 +35,7 @@ data class CharStyle(
     val bgMarginTop: Float = 0f,
     val bgMarginBottom: Float = 0f,
     val underlineBelowText: Boolean = false,
+    val markingId: String? = null,
 ) {
     val hasStyle: Boolean
         get() = textColor != null || bgColor != null || underlineMode != 0 || bgImage.isNotEmpty() || fontPath.isNotEmpty() || fontWeight != 400 || isItalic || fontSizeOffset != 0

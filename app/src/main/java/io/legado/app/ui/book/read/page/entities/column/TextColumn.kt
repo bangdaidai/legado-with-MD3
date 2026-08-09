@@ -6,10 +6,10 @@ import android.os.Build
 import androidx.annotation.Keep
 import androidx.core.net.toUri
 import io.legado.app.ui.book.read.page.ContentTextView
+import io.legado.app.ui.book.read.page.ResourceLoadFailureCache
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextLine.Companion.emptyTextLine
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
-import io.legado.app.ui.book.read.page.ResourceLoadFailureCache
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.spToPx
 import splitties.init.appCtx
@@ -39,10 +39,10 @@ data class TextColumn(
     override val fontWeight: Int = 400,
     override val isItalic: Boolean = false,
     override val fontSizeOffset: Int = 0,
-    override val npLeft: Float = 0.5f,
-    override val npRight: Float = 0.5f,
-    override val npTop: Float = 0.5f,
-    override val npBottom: Float = 0.5f,
+    override val npLeft: Float = 0.1f,
+    override val npRight: Float = 0.1f,
+    override val npTop: Float = 0.1f,
+    override val npBottom: Float = 0.1f,
     override val bgPadStart: Float = 0f,
     override val bgPadEnd: Float = 0f,
     override val bgPadTop: Float = 0f,
@@ -51,6 +51,7 @@ data class TextColumn(
     override val bgMarginEnd: Float = 0f,
     override val bgMarginTop: Float = 0f,
     override val bgMarginBottom: Float = 0f,
+    val markingId: String? = null,
 ) : TextBaseColumn {
 
     override var textLine: TextLine = emptyTextLine

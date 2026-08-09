@@ -3,11 +3,11 @@ package io.legado.app.ui.book.read
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.ReadMenuBlurMode
-import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.domain.gateway.ReadStyleBooleanKey
 import io.legado.app.domain.gateway.ReadStyleColorKey
 import io.legado.app.domain.gateway.ReadStyleFloatKey
+import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.gateway.ReadStyleIntKey
 import io.legado.app.domain.gateway.ReadStyleMutation
 import io.legado.app.domain.gateway.ReadStyleStringKey
@@ -16,6 +16,7 @@ import io.legado.app.model.ReadSessionState
 import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -356,6 +357,15 @@ class ReadConfigUpdateDelegate(
                 }
             }
 
+            is ConfigUpdate.MenuTopBarMergeButtons -> {
+                scope.launch {
+                    readSettingsRepository.setReadMenuTopBarMergeButtons(update.value)
+                }
+                host.updateMenuConfig {
+                    it.copy(readMenuTopBarMergeButtons = update.value)
+                }
+            }
+
             is ConfigUpdate.MenuTopBarTitleCapsule -> {
                 scope.launch {
                     readSettingsRepository.setReadMenuTopBarTitleCapsule(update.value)
@@ -629,6 +639,16 @@ class ReadConfigUpdateDelegate(
             is ConfigUpdate.SwipeToAddBookmark -> {
                 scope.launch {
                     readSettingsRepository.update { it.copy(swipeToAddBookmark = update.value) }
+                }
+            }
+            is ConfigUpdate.BookmarkBadgeSize -> {
+                scope.launch {
+                    readSettingsRepository.update { it.copy(bookmarkBadgeSize = update.value) }
+                    // 等写入落地再发 UpdateStyle，否则 upBookmarkBadge 读到旧尺寸
+                    readSettingsRepository.preferences.first { it.bookmarkBadgeSize == update.value }
+                    host.emitEffect(
+                        ReadBookEffect.UpdateReadViewConfig(setOf(ConfigUpdateAction.UpdateStyle))
+                    )
                 }
             }
             is ConfigUpdate.SliderVibrator -> {

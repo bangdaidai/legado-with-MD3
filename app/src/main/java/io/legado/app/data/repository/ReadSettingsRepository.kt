@@ -260,6 +260,9 @@ class ReadSettingsRepository(
     suspend fun setReadMenuTopBarLiquidGlassButtons(value: Boolean) =
         settingsRepository.putBoolean(PreferKey.readMenuTopBarLiquidGlassButtons, value)
 
+    suspend fun setReadMenuTopBarMergeButtons(value: Boolean) =
+        settingsRepository.putBoolean(PreferKey.readMenuTopBarMergeButtons, value)
+
     suspend fun setReadMenuTopBarTitleCapsule(value: Boolean) =
         settingsRepository.putBoolean(PreferKey.readMenuTopBarTitleCapsule, value)
 
@@ -360,6 +363,8 @@ class ReadSettingsRepository(
             volumeKeyPageOnPlay = compatDsValue(Keys.VolumeKeyPageOnPlay, true),
             keyPageOnLongPress = compatDsValue(Keys.KeyPageOnLongPress, false),
             swipeToAddBookmark = compatDsValue(Keys.SwipeToAddBookmark, false),
+            bookmarkBadgeImage = compatDsValue(Keys.BookmarkBadgeImage, ""),
+            bookmarkBadgeSize = compatDsValue(Keys.BookmarkBadgeSize, 10),
             pageTouchSlop = compatDsValue(Keys.PageTouchSlop, 0),
             sliderVibrator = compatDsValue(Keys.SliderVibrator, false),
             useNewTocSheet = compatDsValue(Keys.UseNewTocSheet, true),
@@ -417,6 +422,7 @@ class ReadSettingsRepository(
             readMenuTopBarBlurMode = compatDsValue(Keys.ReadMenuTopBarBlurMode, ReadMenuBlurMode.None),
             readMenuBottomBarBlurMode = compatDsValue(Keys.ReadMenuBottomBarBlurMode, ReadMenuBlurMode.None),
             readMenuTopBarLiquidGlassButtons = compatDsValue(Keys.ReadMenuTopBarLiquidGlassButtons, false),
+            readMenuTopBarMergeButtons = compatDsValue(Keys.ReadMenuTopBarMergeButtons, false),
             readMenuTopBarTitleCapsule = compatDsValue(Keys.ReadMenuTopBarTitleCapsule, false),
             readMenuBottomBarLiquidGlassButtons = compatDsValue(Keys.ReadMenuBottomBarLiquidGlassButtons, false),
             readMenuFloatingIconLiquidGlass = compatDsValue(
@@ -475,6 +481,8 @@ class ReadSettingsRepository(
         val VolumeKeyPageOnPlay = booleanPreferencesKey(PreferKey.volumeKeyPageOnPlay)
         val KeyPageOnLongPress = booleanPreferencesKey(PreferKey.keyPageOnLongPress)
         val SwipeToAddBookmark = booleanPreferencesKey(PreferKey.swipeToAddBookmark)
+        val BookmarkBadgeImage = stringPreferencesKey(PreferKey.bookmarkBadgeImage)
+        val BookmarkBadgeSize = intPreferencesKey(PreferKey.bookmarkBadgeSize)
         val PageTouchSlop = intPreferencesKey(PreferKey.pageTouchSlop)
         val SliderVibrator = booleanPreferencesKey(PreferKey.sliderVibrator)
         val UseNewTocSheet = booleanPreferencesKey(PreferKey.useNewTocSheet)
@@ -533,6 +541,8 @@ class ReadSettingsRepository(
         val ReadMenuBottomBarBlurMode = intPreferencesKey(PreferKey.readMenuBottomBarBlurMode)
         val ReadMenuTopBarLiquidGlassButtons =
             booleanPreferencesKey(PreferKey.readMenuTopBarLiquidGlassButtons)
+        val ReadMenuTopBarMergeButtons =
+            booleanPreferencesKey(PreferKey.readMenuTopBarMergeButtons)
         val ReadMenuTopBarTitleCapsule =
             booleanPreferencesKey(PreferKey.readMenuTopBarTitleCapsule)
         val ReadMenuBottomBarLiquidGlassButtons =
@@ -599,6 +609,8 @@ internal fun ReadSettings.toGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.volumeKeyPageOnPlay to volumeKeyPageOnPlay,
     PreferKey.keyPageOnLongPress to keyPageOnLongPress,
     PreferKey.swipeToAddBookmark to swipeToAddBookmark,
+    PreferKey.bookmarkBadgeImage to bookmarkBadgeImage,
+    PreferKey.bookmarkBadgeSize to bookmarkBadgeSize,
     PreferKey.pageTouchSlop to pageTouchSlop,
     PreferKey.sliderVibrator to sliderVibrator,
     PreferKey.useNewTocSheet to useNewTocSheet,
@@ -656,6 +668,7 @@ internal fun ReadSettings.toGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.readMenuTopBarBlurMode to readMenuTopBarBlurMode,
     PreferKey.readMenuBottomBarBlurMode to readMenuBottomBarBlurMode,
     PreferKey.readMenuTopBarLiquidGlassButtons to readMenuTopBarLiquidGlassButtons,
+    PreferKey.readMenuTopBarMergeButtons to readMenuTopBarMergeButtons,
     PreferKey.readMenuTopBarTitleCapsule to readMenuTopBarTitleCapsule,
     PreferKey.readMenuBottomBarLiquidGlassButtons to readMenuBottomBarLiquidGlassButtons,
     PreferKey.readMenuFloatingIconLiquidGlass to readMenuFloatingIconLiquidGlass,

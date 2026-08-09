@@ -196,7 +196,7 @@ class ReadBookController(
     private val prevPageDebounce by lazy { Debounce { keyPage(PageDirection.PREV) } }
 
     private val upSeekBarThrottle = throttle(200) {
-        onUnhandledEffect(ReadBookEffect.UpSeekBar)
+        viewModel.refreshSeekState()
     }
 
     fun onRefsReady(newRefs: ReadBookViewRefs) {
@@ -585,6 +585,10 @@ class ReadBookController(
     override fun onLongScreenshotTouchEvent(event: MotionEvent): Boolean =
         refs?.readView?.onTouchEvent(event) ?: false
 
+    override fun onMarkingClick(markingId: String) {
+        viewModel.onIntent(ReadBookIntent.EditMarking(markingId))
+    }
+
     override fun oldClickImg(src: String): Boolean {
         val urlMatcher = paramPattern.matcher(src)
         if (urlMatcher.find()) {
@@ -742,6 +746,13 @@ class ReadBookController(
                 return true
             }
 
+            R.id.menu_mark -> {
+                refs?.readView?.curPage?.createBookmark()?.let {
+                    viewModel.onIntent(ReadBookIntent.OpenMarking(it))
+                } ?: activity.toastOnUi(R.string.create_bookmark_error)
+                return true
+            }
+
             R.id.menu_edit -> {
                 viewModel.onIntent(ReadBookIntent.OpenContentEdit)
                 return true
@@ -840,6 +851,7 @@ class ReadBookController(
             items.add(ActionMenuItem(R.id.menu_browser, activity.getString(R.string.browser)))
             items.add(ActionMenuItem(R.id.menu_aloud, activity.getString(R.string.read_aloud)))
             items.add(ActionMenuItem(R.id.menu_bookmark, activity.getString(R.string.bookmark)))
+            items.add(ActionMenuItem(R.id.menu_mark, activity.getString(R.string.menu_mark)))
             items.add(ActionMenuItem(R.id.menu_dict, activity.getString(R.string.dict)))
             items.add(ActionMenuItem(R.id.menu_replace, activity.getString(R.string.replace)))
             items.add(ActionMenuItem(R.id.menu_edit, activity.getString(R.string.edit)))
@@ -1087,6 +1099,7 @@ class ReadBookController(
                     consumePendingSearchResultMark()
                 }
                 if (effect.relativePosition == 0) onUnhandledEffect(ReadBookEffect.UpSeekBar)
+                if (effect.relativePosition == 0) viewModel.refreshSeekState()
             }
 
             is ReadBookEffect.UpPageAnim -> refs?.readView?.upPageAnim(effect.upRecorder)
@@ -1697,6 +1710,7 @@ data class ActionMenuItem(
                 R.id.menu_browser -> "menu_browser"
                 R.id.menu_aloud -> "menu_aloud"
                 R.id.menu_bookmark -> "menu_bookmark"
+                R.id.menu_mark -> "menu_mark"
                 R.id.menu_dict -> "menu_dict"
                 R.id.menu_replace -> "menu_replace"
                 R.id.menu_edit -> "menu_edit"

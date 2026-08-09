@@ -27,15 +27,16 @@ import io.legado.app.data.repository.BookDomainRepositoryImpl
 import io.legado.app.data.repository.BookExportSettingsRepository
 import io.legado.app.data.repository.BookGroupMutationRepository
 import io.legado.app.data.repository.BookGroupRepository
-import io.legado.app.data.repository.BookshelfAutoGroupRepository
-import io.legado.app.data.repository.BookshelfAutoGroupPromptRepository
 import io.legado.app.data.repository.BookImportRepository
 import io.legado.app.data.repository.BookKnowledgeRepository
+import io.legado.app.data.repository.BookMarkingRepository
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceCallbackRepository
 import io.legado.app.data.repository.BookSourceCheckRepository
 import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.BookmarkRepository
+import io.legado.app.data.repository.BookshelfAutoGroupPromptRepository
+import io.legado.app.data.repository.BookshelfAutoGroupRepository
 import io.legado.app.data.repository.BookshelfRepository
 import io.legado.app.data.repository.BookplateRepository
 import io.legado.app.data.repository.BookshelfSettingsRepository
@@ -117,11 +118,12 @@ import io.legado.app.domain.gateway.BookContentProcessGateway
 import io.legado.app.domain.gateway.BookExportSettingsGateway
 import io.legado.app.domain.gateway.BookGroupMutationGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
-import io.legado.app.domain.gateway.BookshelfAutoGroupGateway
-import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
+import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.gateway.BookSearchGateway
 import io.legado.app.domain.gateway.BookSourceCallbackGateway
 import io.legado.app.domain.gateway.BookSourceCheckGateway
+import io.legado.app.domain.gateway.BookshelfAutoGroupGateway
+import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
@@ -163,8 +165,8 @@ import io.legado.app.domain.usecase.AiTaskManager
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.AiToolAwareGenerationUseCase
 import io.legado.app.domain.usecase.AnalyzeChapterSpeechUseCase
-import io.legado.app.domain.usecase.ApplyBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.AppStartupMaintenanceUseCase
+import io.legado.app.domain.usecase.ApplyBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
@@ -189,10 +191,12 @@ import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
 import io.legado.app.domain.usecase.RefineSpeechWithAiUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
+import io.legado.app.domain.usecase.RelocateMarkingTargetUseCase
 import io.legado.app.domain.usecase.RemoveBookGroupAssignmentUseCase
 import io.legado.app.domain.usecase.ResolveBookShelfStateUseCase
 import io.legado.app.domain.usecase.ResolveLocalSpeakersUseCase
 import io.legado.app.domain.usecase.SaveBookContentProcessUseCase
+import io.legado.app.domain.usecase.SaveMarkingUseCase
 import io.legado.app.domain.usecase.SaveSearchBooksUseCase
 import io.legado.app.domain.usecase.SearchBooksUseCase
 import io.legado.app.domain.usecase.ShrinkDatabaseUseCase
@@ -201,6 +205,7 @@ import io.legado.app.domain.usecase.SyncReadAloudVoicesUseCase
 import io.legado.app.domain.usecase.TranslateChapterUseCase
 import io.legado.app.domain.usecase.UpdateBooksGroupUseCase
 import io.legado.app.domain.usecase.UploadReadingProgressUseCase
+import io.legado.app.domain.usecase.VerifyBookmarkTargetUseCase
 import io.legado.app.domain.usecase.WebDavBackupUseCase
 import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
 import io.legado.app.help.coil.CoverFetcher
@@ -213,7 +218,6 @@ import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReaderSession
 import io.legado.app.ui.about.AboutViewModel
 import io.legado.app.ui.ai.chat.AiChatViewModel
-import io.legado.app.ui.association.ImportBookSourceViewModel
 import io.legado.app.ui.association.ImportDictRuleViewModel
 import io.legado.app.ui.association.ImportHttpTtsViewModel
 import io.legado.app.ui.association.ImportReplaceRuleViewModel
@@ -464,6 +468,7 @@ val appModule = module {
     single<HomepageModulesGateway> { HomepageModulesRepository(get(), get()) }
     single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get(), get()) }
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
+    single<BookMarkingGateway> { BookMarkingRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
     singleOf(::ReadingMemoryRepository)
     singleOf(::BookplateRepository)
@@ -497,6 +502,9 @@ val appModule = module {
     singleOf(::ApplyBookshelfAutoGroupPlanUseCase)
     singleOf(::CleanSelectedTextUseCase)
     singleOf(::SaveBookContentProcessUseCase)
+    singleOf(::SaveMarkingUseCase)
+    singleOf(::VerifyBookmarkTargetUseCase)
+    singleOf(::RelocateMarkingTargetUseCase)
     singleOf(::ReplaceRuleRepository)
     single<DictionaryGateway> { DictionaryRepositoryImpl() }
     singleOf(::TranslateChapterUseCase)
@@ -519,7 +527,6 @@ val appModule = module {
     }
 
     viewModelOf(::DictRuleViewModel)
-    viewModelOf(::ImportBookSourceViewModel)
     viewModelOf(::ImportDictRuleViewModel)
     viewModelOf(::ImportHttpTtsViewModel)
     viewModelOf(::ImportReplaceRuleViewModel)
@@ -725,6 +732,9 @@ val appModule = module {
             cleanSelectedTextUseCase = get(),
             aiTextFactoryUseCase = get(),
             saveBookContentProcessUseCase = get(),
+            saveMarkingUseCase = get(),
+            verifyBookmarkTargetUseCase = get(),
+            relocateMarkingTargetUseCase = get(),
             bookContentProcessGateway = get(),
             aiArtifactGateway = get(),
             aiPromptPresetGateway = get(),
