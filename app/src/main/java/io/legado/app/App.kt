@@ -348,27 +348,6 @@ class App : Application(), SingletonImageLoader.Factory {
         RhinoWrapFactory.register(ContentRule::class.java, ReadOnlyJavaObject.factory)
         RhinoWrapFactory.register(BookChapter::class.java, ReadOnlyJavaObject.factory)
         RhinoWrapFactory.register(Book.ReadConfig::class.java, ReadOnlyJavaObject.factory)
-        // 临时诊断：记录 JS 在 java/cache/cookie 上解析的成员名，用完删除
-        RhinoWrapFactory.register(
-            io.legado.app.model.analyzeRule.AnalyzeRule::class.java,
-            io.legado.app.help.rhino.TracingJavaObject.factory
-        )
-        RhinoWrapFactory.register(
-            io.legado.app.model.analyzeRule.AnalyzeUrl::class.java,
-            io.legado.app.help.rhino.TracingJavaObject.factory
-        )
-        RhinoWrapFactory.register(
-            io.legado.app.help.CacheManager::class.java,
-            io.legado.app.help.rhino.TracingJavaObject.factory
-        )
-        RhinoWrapFactory.register(
-            io.legado.app.help.http.CookieStore::class.java,
-            io.legado.app.help.rhino.TracingJavaObject.factory
-        )
-        com.script.rhino.RhinoProbe.sink = { msg -> io.legado.app.constant.AppLog.put(msg) }
-        com.script.rhino.RhinoProbe.jsonFormatter = { obj ->
-            try { io.legado.app.utils.GSON.toJson(obj) } catch (_: Throwable) { null }
-        }
     }
 
     class EventLogger : DefaultLogger() {

@@ -119,9 +119,6 @@ object RhinoScriptEngine : AbstractScriptEngine(), Invocable, Compilable {
             cx.coroutineContext = previousCoroutineContext
             cx.allowScriptRun = false
             cx.recursiveCount--
-            if (cx.recursiveCount == 0) {
-                RhinoProbe.dumpToSink("[QDFullProbe] eval完成")
-            }
             Context.exit()
         }
         return unwrapReturnValue(ret)

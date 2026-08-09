@@ -184,11 +184,7 @@ object RhinoClassShutter : ClassShutter {
     }
 
     override fun visibleToScripts(fullClassName: String): Boolean {
-        val blocked = protectedClassNamesMatcher.match(fullClassName)
-        if (blocked) {
-            RhinoProbe.rec("ClassShutter", fullClassName, null, true)
-        }
-        return !blocked
+        return !protectedClassNamesMatcher.match(fullClassName)
     }
 
 }
