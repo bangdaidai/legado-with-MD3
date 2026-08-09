@@ -25,6 +25,19 @@ class BookMarkingRepository(
         bookAuthor: String,
     ): Flow<List<BookMarking>> = dao.flowByBook(bookName, bookAuthor).flowOn(Dispatchers.IO)
 
+    override fun flowAll(): Flow<List<BookMarking>> = dao.flowAll().flowOn(Dispatchers.IO)
+
+    override suspend fun countByBook(
+        bookName: String,
+        bookAuthor: String,
+    ): Int = withContext(Dispatchers.IO) {
+        dao.countByBook(bookName, bookAuthor)
+    }
+
+    override fun flowTotalCount(): Flow<Int> = dao.flowTotalCount().flowOn(Dispatchers.IO)
+
+
+
     override suspend fun getById(id: String): BookMarking? = withContext(Dispatchers.IO) {
         dao.getById(id)
     }

@@ -225,6 +225,7 @@ import io.legado.app.ui.association.ImportRssSourceViewModel
 import io.legado.app.ui.association.ImportTxtTocRuleViewModel
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.bookmark.AllBookmarkViewModel
+import io.legado.app.ui.book.marking.AllMarkingViewModel
 import io.legado.app.ui.book.bookplate.BookplateManageViewModel
 import io.legado.app.ui.book.cache.manage.BookCacheManageViewModel
 import io.legado.app.ui.book.changecover.ChangeCoverViewModel
@@ -574,6 +575,7 @@ val appModule = module {
     viewModelOf(::GroupViewModel)
     viewModelOf(::ReplaceRuleViewModel)
     viewModelOf(::AllBookmarkViewModel)
+    viewModelOf(::AllMarkingViewModel)
     viewModelOf(::TxtTocRuleViewModel)
     viewModel {
         TxtTocRulePreviewViewModel(

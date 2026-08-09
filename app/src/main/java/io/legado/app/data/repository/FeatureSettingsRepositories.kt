@@ -524,7 +524,6 @@ internal fun Preferences.toOtherSettings(): OtherSettings {
         importKeepGroup = compatDsBoolean(PreferKey.importKeepGroup) ?: false,
         importKeepEnable = compatDsBoolean(PreferKey.importKeepEnable) ?: false,
         fontSort = compatDsInt(PreferKey.fontSort) ?: 0,
-        bookmarkOnlyNotes = compatDsBoolean(PreferKey.bookmarkOnlyNotes) ?: false,
     )
 }
 
@@ -554,7 +553,6 @@ internal fun OtherSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.importKeepGroup to importKeepGroup,
     PreferKey.importKeepEnable to importKeepEnable,
     PreferKey.fontSort to fontSort,
-    PreferKey.bookmarkOnlyNotes to bookmarkOnlyNotes,
 )
 
 class OtherSettingsRepository : OtherSettingsGateway {

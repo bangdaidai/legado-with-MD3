@@ -49,6 +49,18 @@ interface BookMarkingDao {
     )
     fun flowByBook(bookName: String, bookAuthor: String): Flow<List<BookMarking>>
 
+    @Query("select * from book_marks order by updatedAt desc")
+    fun flowAll(): Flow<List<BookMarking>>
+
+    /** 单本书的笔记数，供阅读记忆 annotationCount 统计。 */
+    @Query("select count(*) from book_marks where bookName = :bookName and bookAuthor = :bookAuthor")
+    suspend fun countByBook(bookName: String, bookAuthor: String): Int
+
+    /** 全库笔记总数，供阅读总览统计。 */
+    @Query("select count(*) from book_marks")
+    fun flowTotalCount(): Flow<Int>
+
+
     @Query("select * from book_marks where id = :id")
     suspend fun getById(id: String): BookMarking?
 

@@ -208,14 +208,6 @@ fun AllBookmarkScreen(
                         onDismissRequest = { showMenu = false }
                     ) {
                         RoundDropdownMenuItem(
-                            text = stringResource(R.string.filter_only_notes),
-                            isSelected = state.onlyNotes,
-                            onClick = {
-                                showMenu = false
-                                onIntent(AllBookmarkIntent.ToggleOnlyNotes)
-                            }
-                        )
-                        RoundDropdownMenuItem(
                             text = stringResource(R.string.export_bookmarks_json),
                             onClick = {
                                 showMenu = false

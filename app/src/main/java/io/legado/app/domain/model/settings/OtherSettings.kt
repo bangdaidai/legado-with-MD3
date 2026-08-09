@@ -26,5 +26,4 @@ data class OtherSettings(
     val importKeepGroup: Boolean = false,
     val importKeepEnable: Boolean = false,
     val fontSort: Int = 0,
-    val bookmarkOnlyNotes: Boolean = false,
 )

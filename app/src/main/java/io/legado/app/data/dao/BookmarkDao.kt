@@ -40,16 +40,9 @@ interface BookmarkDao {
     )
     fun getByBook(bookName: String, bookAuthor: String): List<Bookmark>
 
-    /** 含笔记的书签条数（content 非空），用于阅读记忆的书摘统计 */
-    @Query(
-        """SELECT COUNT(*) FROM bookmarks 
-        WHERE bookName = :bookName AND bookAuthor = :bookAuthor 
-        AND content IS NOT NULL AND TRIM(content) != ''"""
-    )
-    suspend fun countWithNote(bookName: String, bookAuthor: String): Int
-
     @Query(
         """SELECT * FROM bookmarks 
+
         where bookName = :bookName and bookAuthor = :bookAuthor 
         and chapterName like '%'||:key||'%' or content like '%'||:key||'%'
         order by chapterIndex"""

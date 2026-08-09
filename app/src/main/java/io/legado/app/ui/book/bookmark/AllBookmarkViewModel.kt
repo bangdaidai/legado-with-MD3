@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
-import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.help.book.BookplateDataBuilder
 import io.legado.app.help.book.BookplateGenerator
 import io.legado.app.utils.FileDoc
@@ -65,7 +64,6 @@ data class BookmarkUiState(
     val error: Throwable? = null,
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
-    val onlyNotes: Boolean = false,
     val bookplateBitmap: android.graphics.Bitmap? = null,
     val bookplateLoading: Boolean = false,
     val showBookplate: Boolean = false,
@@ -79,7 +77,6 @@ sealed interface AllBookmarkIntent {
     data class UpdateBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class DeleteBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
-    data object ToggleOnlyNotes : AllBookmarkIntent
     data class GenerateBookplate(val bookmark: Bookmark) : AllBookmarkIntent
     data object DismissBookplate : AllBookmarkIntent
 }
@@ -92,13 +89,11 @@ sealed interface AllBookmarkEffect {
 class AllBookmarkViewModel(
     application: Application,
     private val bookmarkRepository: BookmarkRepository,
-    private val otherSettingsGateway: OtherSettingsGateway,
     private val readingMemoryRepository: ReadingMemoryRepository,
 ) : AndroidViewModel(application) {
 
     private val _searchQuery = MutableStateFlow("")
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
-    private val _onlyNotes = MutableStateFlow(otherSettingsGateway.currentSettings.bookmarkOnlyNotes)
     private val _effects = MutableSharedFlow<AllBookmarkEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
@@ -112,9 +107,8 @@ class AllBookmarkViewModel(
     private val baseUiState: StateFlow<BookmarkUiState> = combine(
         _searchQuery,
         _collapsedGroups,
-        _onlyNotes,
         bookmarkRepository.flowAll()
-    ) { query, collapsed, onlyNotes, allBookmarks ->
+    ) { query, collapsed, allBookmarks ->
 
         val queryFiltered = if (query.isBlank()) {
             allBookmarks
@@ -126,13 +120,7 @@ class AllBookmarkViewModel(
             }
         }
 
-        val filteredList = if (onlyNotes) {
-            queryFiltered.filter { it.content.isNotBlank() }
-        } else {
-            queryFiltered
-        }
-
-        val grouped = filteredList.asSequence()
+        val grouped = queryFiltered.asSequence()
             .map { bookmark ->
                 BookmarkItemUi(
                     id = bookmark.time,
@@ -154,8 +142,7 @@ class AllBookmarkViewModel(
             isLoading = false,
             bookmarks = grouped,
             searchQuery = query,
-            collapsedGroups = collapsed.toImmutableSet(),
-            onlyNotes = onlyNotes
+            collapsedGroups = collapsed.toImmutableSet()
         )
     }.catch { e ->
         emit(BookmarkUiState(isLoading = false, error = e))
@@ -193,12 +180,6 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is AllBookmarkIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is AllBookmarkIntent.Export -> exportBookmark(intent.treeUri, intent.isMarkdown)
-            AllBookmarkIntent.ToggleOnlyNotes -> {
-                _onlyNotes.update { !it }
-                viewModelScope.launch {
-                    otherSettingsGateway.update { it.copy(bookmarkOnlyNotes = _onlyNotes.value) }
-                }
-            }
             is AllBookmarkIntent.GenerateBookplate -> generateBookplate(intent.bookmark)
             AllBookmarkIntent.DismissBookplate -> {
                 _showBookplate.value = false

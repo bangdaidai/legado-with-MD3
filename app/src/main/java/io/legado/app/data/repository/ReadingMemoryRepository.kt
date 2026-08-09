@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteConstraintException
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookKnowledgeDao
+import io.legado.app.data.dao.BookMarkingDao
 import io.legado.app.data.dao.BookmarkDao
 import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.dao.ReadingMemoryDao
@@ -31,6 +32,7 @@ class ReadingMemoryRepository(
     private val bookDao: BookDao,
     private val bookKnowledgeDao: BookKnowledgeDao,
     private val bookmarkDao: BookmarkDao,
+    private val bookMarkingDao: BookMarkingDao,
     private val readRecordDao: ReadRecordDao,
     private val database: AppDatabase,
     private val readRecordRepository: ReadRecordRepository,
@@ -49,6 +51,9 @@ class ReadingMemoryRepository(
 
     /** 书评条数（供阅读统计使用） */
     fun observeReviewCount(): Flow<Int> = dao.getReviewCount()
+
+    /** 全库笔记总数（book_marks），供阅读总览「笔记」统计。 */
+    fun observeMarkingCount(): Flow<Int> = bookMarkingDao.flowTotalCount()
 
 
 
@@ -174,7 +179,7 @@ class ReadingMemoryRepository(
 
         // 计算阅读统计
         val stats = computeStatistics(book)
-        val annotationCount = bookmarkDao.countWithNote(book.name, book.author)
+        val annotationCount = bookMarkingDao.countByBook(book.name, book.author)
         val progress = computeProgress(book)
         val lastReadTime = if (book.durChapterTime > 0) book.durChapterTime else book.lastCheckTime
 
@@ -222,7 +227,7 @@ class ReadingMemoryRepository(
         val existing = dao.getByBookUrlSync(book.bookUrl)
         val base = existing ?: ReadingMemory(bookUrl = book.bookUrl)
         val stats = computeStatistics(book)
-        val annotationCount = bookmarkDao.countWithNote(book.name, book.author)
+        val annotationCount = bookMarkingDao.countByBook(book.name, book.author)
         val now = System.currentTimeMillis()
         val progress = computeProgress(book)
         val lastReadTime = if (book.durChapterTime > 0) book.durChapterTime else book.lastCheckTime

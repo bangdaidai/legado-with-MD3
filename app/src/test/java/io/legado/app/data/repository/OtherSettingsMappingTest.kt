@@ -58,7 +58,6 @@ private fun otherMappingSamples(): List<OtherSettings> {
         base.copy(importKeepName = true),
         base.copy(importKeepGroup = true),
         base.copy(importKeepEnable = true),
-        base.copy(bookmarkOnlyNotes = true),
     )
 }
 
@@ -88,5 +87,4 @@ private fun OtherSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.importKeepGroup to importKeepGroup,
     PreferKey.importKeepEnable to importKeepEnable,
     PreferKey.fontSort to fontSort,
-    PreferKey.bookmarkOnlyNotes to bookmarkOnlyNotes,
 )

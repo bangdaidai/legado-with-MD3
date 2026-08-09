@@ -30,6 +30,7 @@ data class ReadRecordOverviewUiState(
     // TODO: 尚未接入数据源，需要从 ReadingMemory(abandoned) 统计后填充
     val abandonedBooks: Int = 0,
     val reviewCount: Int = 0,
+    val markingCount: Int = 0,
     val readingBooks: Int = 0,
     val totalWords: Long = 0,
     val dailyTimeData: List<Pair<LocalDate, Long>> = emptyList(),
@@ -50,6 +51,13 @@ data class ReadBookRanking(
 enum class ReadPeriod {
     DAY, WEEK, MONTH, YEAR, ALL
 }
+
+private data class ExtraStats(
+    val sessions: List<io.legado.app.data.entities.readRecord.ReadRecordSession>,
+    val abandonedCount: Int,
+    val reviewCount: Int,
+    val markingCount: Int,
+)
 
 class ReadRecordOverviewViewModel(
     private val repository: ReadRecordRepository,
@@ -73,14 +81,18 @@ class ReadRecordOverviewViewModel(
         combine(
             repository.getAllSessions(),
             readingMemoryRepository.observeAbandonedCount(),
-            readingMemoryRepository.observeReviewCount()
-        ) { sessions, abandoned, review ->
-            Triple(sessions, abandoned, review)
+            readingMemoryRepository.observeReviewCount(),
+            readingMemoryRepository.observeMarkingCount()
+        ) { sessions, abandoned, review, marking ->
+            ExtraStats(sessions, abandoned, review, marking)
         }
     ) { (period, refDate), details, latestRecords, allBooks, extras ->
-        val (sessions, abandonedCount, reviewCount) = extras
-        getReadRecordOverviewUseCase(period, refDate, details, latestRecords, allBooks, sessions)
-            .copy(abandonedBooks = abandonedCount, reviewCount = reviewCount)
+        getReadRecordOverviewUseCase(period, refDate, details, latestRecords, allBooks, extras.sessions)
+            .copy(
+                abandonedBooks = extras.abandonedCount,
+                reviewCount = extras.reviewCount,
+                markingCount = extras.markingCount,
+            )
     }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

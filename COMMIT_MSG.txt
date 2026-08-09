@@ -1,7 +1,19 @@
-feat(highlight): 虚线下划线支持自定义段长与间隔，滑块加重置按钮
+feat(marking): 笔记页面重构 - 拆分书签与笔记为独立功能
 
-- HighlightRule 新增 underlineDashLen/underlineDashGap 字段及 migration
-- 编辑面板在虚线模式下显示段长/间隔滑块，宽度/偏移滑块加重置
-- 渲染链路（TextLine/TextColumn/CharStyle/TextChapterLayout）透传虚线参数
-- ReadRecord 类型筛选行改用 SettingCard 卡片样式
-- underline_title_bar 文案改为"双实线"
+1. 书签页瘦身:
+   - 「书签笔记」→「书签」(all_bookmark 恢复原名)
+   - 移除"只看笔记"筛选 (bookmarkOnlyNotes / ToggleOnlyNotes)
+   - 清理 OtherSettings / PreferKey / FeatureSettingsRepositories 中相关映射
+
+2. 新增独立笔记页:
+   - AllMarkingActivity / AllMarkingScreen / AllMarkingViewModel (inline contract)
+   - 数据源: BookMarkingDao.flowAll() -> BookMarkingGateway -> BookMarkingRepository
+   - 入口: 我的页面新增「笔记」条目 (EditNote icon)
+   - Koin/Manifest 注册
+
+3. 笔记统计数据源切换:
+   - ReadingMemoryRepository: annotationCount 改用 bookMarkingDao.countByBook()
+   - 新增 observeMarkingCount() (flowTotalCount)
+   - ReadRecordOverviewViewModel: 阅读总览 combine 新增 markingCount
+   - ReadRecordOverviewScreen: StatsGridCard 新增「笔记」统计项
+   - 移除 BookmarkDao.countWithNote() (不再使用)
