@@ -838,8 +838,8 @@ fun BookItem(
                     cornerRadius = 4.dp,
                     horizontalPadding = 4.dp,
                     verticalPadding = 0.dp,
-                    backgroundColor = LegadoTheme.colorScheme.secondaryContainer,
-                    contentColor = LegadoTheme.colorScheme.onSecondaryContainer
+                    backgroundColor = LegadoTheme.colorScheme.tertiaryContainer,
+                    contentColor = LegadoTheme.colorScheme.onTertiaryContainer
                 )
             }
         } else null,

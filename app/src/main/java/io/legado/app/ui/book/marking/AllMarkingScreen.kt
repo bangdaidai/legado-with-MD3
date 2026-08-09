@@ -308,7 +308,7 @@ private fun MarkingRow(
         item.note?.let {
             AppText(
                 text = it,
-                style = LegadoTheme.typography.bodySmall,
+                style = LegadoTheme.typography.bodyMedium,
                 color = LegadoTheme.colorScheme.primary,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,

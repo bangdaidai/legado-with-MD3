@@ -569,7 +569,7 @@ private fun MemoryBookCard(
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 )
             }
             if (showIntroInline && showReviewInline) {
@@ -586,7 +586,7 @@ private fun MemoryBookCard(
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 )
             }
         },
@@ -602,7 +602,7 @@ private fun MemoryBookCard(
                                 maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                             )
                         }
                         if (showIntroBelowContent && showReviewBelowContent) {
@@ -620,7 +620,7 @@ private fun MemoryBookCard(
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                             )
                         }
                     }

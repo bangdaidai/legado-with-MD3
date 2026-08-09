@@ -43,11 +43,25 @@ class ReadingMemoryViewModel(
 
     private val _statusFilter = MutableStateFlow(ReadingMemoryStatusFilter.All)
     private val _readTypeFilter = MutableStateFlow(ReadingMemoryReadTypeFilter.All)
-    private val _onlyWithReview = MutableStateFlow(false)
-    private val _groupBy = MutableStateFlow(ReadingMemoryGroupBy.None)
-    private val _sortBy = MutableStateFlow(ReadingMemorySortBy.Recent)
-    private val _showIntro = MutableStateFlow(true)
-    private val _showReview = MutableStateFlow(false)
+    private val _onlyWithReview = MutableStateFlow(
+        AppConfigStore.getBoolean(PreferKey.readingMemoryOnlyWithReview) ?: false
+    )
+    private val _groupBy = MutableStateFlow(
+        AppConfigStore.getInt(PreferKey.readingMemoryGroupBy)
+            ?.let { ReadingMemoryGroupBy.entries.getOrNull(it) }
+            ?: ReadingMemoryGroupBy.None
+    )
+    private val _sortBy = MutableStateFlow(
+        AppConfigStore.getInt(PreferKey.readingMemorySortBy)
+            ?.let { ReadingMemorySortBy.entries.getOrNull(it) }
+            ?: ReadingMemorySortBy.Recent
+    )
+    private val _showIntro = MutableStateFlow(
+        AppConfigStore.getBoolean(PreferKey.readingMemoryShowIntro) ?: true
+    )
+    private val _showReview = MutableStateFlow(
+        AppConfigStore.getBoolean(PreferKey.readingMemoryShowReview) ?: false
+    )
     private val _coverWidth = MutableStateFlow(
         AppConfigStore.getInt(PreferKey.readingMemoryCoverWidth) ?: 84
     )
@@ -122,24 +136,37 @@ class ReadingMemoryViewModel(
                     is ReadingMemoryIntent.Refresh -> load()
                     is ReadingMemoryIntent.FilterStatus -> _statusFilter.value = intent.filter
                     is ReadingMemoryIntent.SetReadTypeFilter -> _readTypeFilter.value = intent.filter
-                    is ReadingMemoryIntent.ToggleOnlyWithReview -> _onlyWithReview.value = intent.value
+                    is ReadingMemoryIntent.ToggleOnlyWithReview -> {
+                        _onlyWithReview.value = intent.value
+                        AppConfigStore.putBoolean(PreferKey.readingMemoryOnlyWithReview, intent.value)
+                    }
                     is ReadingMemoryIntent.SetGroupBy -> {
                         _groupBy.value = intent.groupBy
                         _collapsedGroups.value = emptySet()
+                        AppConfigStore.putInt(PreferKey.readingMemoryGroupBy, intent.groupBy.ordinal)
                     }
                     is ReadingMemoryIntent.ToggleGroupCollapse -> {
                         _collapsedGroups.value = _collapsedGroups.value.toMutableSet().apply {
                             if (contains(intent.key)) remove(intent.key) else add(intent.key)
                         }
                     }
-                    is ReadingMemoryIntent.SetSortBy -> _sortBy.value = intent.sortBy
+                    is ReadingMemoryIntent.SetSortBy -> {
+                        _sortBy.value = intent.sortBy
+                        AppConfigStore.putInt(PreferKey.readingMemorySortBy, intent.sortBy.ordinal)
+                    }
                     is ReadingMemoryIntent.SetCoverWidth -> {
                         val width = intent.width.coerceIn(0, 120)
                         _coverWidth.value = width
                         AppConfigStore.putInt(PreferKey.readingMemoryCoverWidth, width)
                     }
-                    is ReadingMemoryIntent.ToggleShowIntro -> _showIntro.value = intent.value
-                    is ReadingMemoryIntent.ToggleShowReview -> _showReview.value = intent.value
+                    is ReadingMemoryIntent.ToggleShowIntro -> {
+                        _showIntro.value = intent.value
+                        AppConfigStore.putBoolean(PreferKey.readingMemoryShowIntro, intent.value)
+                    }
+                    is ReadingMemoryIntent.ToggleShowReview -> {
+                        _showReview.value = intent.value
+                        AppConfigStore.putBoolean(PreferKey.readingMemoryShowReview, intent.value)
+                    }
                     is ReadingMemoryIntent.Search -> _searchQuery.value = intent.query
                     is ReadingMemoryIntent.ClickBook ->
                         _effect.emit(ReadingMemoryEffect.NavigateToDetail(intent.bookUrl))
