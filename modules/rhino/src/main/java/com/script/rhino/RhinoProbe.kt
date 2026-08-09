@@ -19,7 +19,7 @@ object RhinoProbe {
     fun rec(objectType: String, name: String, value: Any?, notFound: Boolean) {
         if (!enabled) return
         val sb = buffer.get()
-        if (sb.length > 200_000) return
+        if (sb.length > 400_000) return
         val n = count.get()
         n[0]++
         if (sb.isNotEmpty()) sb.append('\n')
@@ -30,6 +30,18 @@ object RhinoProbe {
         }
         sb.append(describe(value))
     }
+
+    /** 直接追加一行原始文本（不带编号），供 Debugger 使用 */
+    fun raw(line: String) {
+        if (!enabled) return
+        val sb = buffer.get()
+        if (sb.length > 400_000) return
+        if (sb.isNotEmpty()) sb.append('\n')
+        sb.append(line)
+    }
+
+    /** 供 Debugger 复用的值格式化 */
+    fun describePublic(value: Any?): String = describe(value)
 
     private fun describe(value: Any?): String = try {
         when (value) {

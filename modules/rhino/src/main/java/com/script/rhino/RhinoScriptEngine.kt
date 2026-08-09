@@ -327,6 +327,8 @@ object RhinoScriptEngine : AbstractScriptEngine(), Invocable, Compilable {
                 cx.isInterpretedMode = true
                 cx.setClassShutter(RhinoClassShutter)
                 cx.wrapFactory = RhinoWrapFactory
+                cx.setGeneratingDebug(true)
+                cx.setDebugger(QDDebugger, null)
                 cx.instructionObserverThreshold = 10000
                 cx.maximumInterpreterStackDepth = 1000
                 return cx
