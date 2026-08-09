@@ -66,7 +66,9 @@ fun <T> calculateFlexRows(
             style.basisPercent > 0 -> (maxSpan * style.basisPercent).roundToInt()
                 .coerceIn(1, maxSpan)
 
-            style.flexGrow > 0f -> 3
+            // flexGrow>0 且无 basisPercent：对齐 r 项目的 FlexboxLayout 行为，一行放 3 个（span=2），
+            // 而非之前的 span=3（一行 2 个）。
+            style.flexGrow > 0f -> 2
             else -> 2
         }
         if ((style.wrapBefore && currentRow.isNotEmpty()) || (currentSpan + span > maxSpan)) {
