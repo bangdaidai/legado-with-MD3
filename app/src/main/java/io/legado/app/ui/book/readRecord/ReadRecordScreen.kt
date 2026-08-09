@@ -6,7 +6,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,10 +53,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +72,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,6 +85,7 @@ import io.legado.app.ui.book.readRecord.component.HeatmapCalendarSection
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPaddingOnlyVertical
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
+import io.legado.app.ui.theme.adaptiveHorizontalPaddingValue
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.CollapsibleHeader
 import io.legado.app.ui.widget.components.EmptyMessage
@@ -751,8 +753,13 @@ private fun deleteSelectedReadRecords(
 }
 
 @Composable
-private fun Modifier.selectionBackground(isSelected: Boolean): Modifier {
-    // 与书源管理(SelectionItemCard)保持一致：选中用 secondaryContainer，并做 200ms 颜色过渡
+private fun Modifier.selectionBackground(
+    isSelected: Boolean,
+    verticalInset: Dp = 4.dp
+): Modifier {
+    // 选中时用 drawBehind 直接绘制一张收缩的圆角高亮，「只画不占位」——不改变行高、不额外增加行距。
+    // 左右内缩跟随主题标准水平边距 (M3=16dp, Miuix=12dp)，让卡片边缘与 DateHeader / 汇总卡片对齐。
+    val horizontalInset = adaptiveHorizontalPaddingValue()
     val animatedColor by animateColorAsState(
         targetValue = if (isSelected) {
             LegadoTheme.colorScheme.secondaryContainer
@@ -762,9 +769,21 @@ private fun Modifier.selectionBackground(isSelected: Boolean): Modifier {
         animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
         label = "SelectionColor"
     )
-    return this
-        .clip(RoundedCornerShape(12.dp))
-        .background(animatedColor)
+    return this.drawBehind {
+        if (animatedColor.alpha == 0f) return@drawBehind
+        val h = horizontalInset.toPx()
+        val v = verticalInset.toPx()
+        val r = 12.dp.toPx()
+        val w = (size.width - h * 2).coerceAtLeast(0f)
+        val hgt = (size.height - v * 2).coerceAtLeast(0f)
+        if (w <= 0f || hgt <= 0f) return@drawBehind
+        drawRoundRect(
+            color = animatedColor,
+            topLeft = Offset(h, v),
+            size = Size(w, hgt),
+            cornerRadius = CornerRadius(r, r)
+        )
+    }
 }
 
 @Composable
@@ -776,7 +795,7 @@ private fun SelectionCheckmark(
     // 由 checked 状态区分选中/未选中；整行可点，Checkbox 本身不接收点击。
     AnimatedVisibility(visible = inSelectionMode) {
         Box(
-            modifier = Modifier.padding(end = 8.dp),
+            modifier = Modifier.padding(end = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             AppCheckbox(

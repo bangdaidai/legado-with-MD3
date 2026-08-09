@@ -14,6 +14,11 @@ fun Modifier.adaptiveHorizontalPadding(): Modifier {
     return this.padding(horizontal = horizontal)
 }
 
+/** 屏幕标准水平边距的原始数值，供需要自行排布(如自绘卡片)的场景对齐使用。 */
+@Composable
+fun adaptiveHorizontalPaddingValue(): Dp =
+    if (ThemeResolver.isMiuixEngine(composeEngine)) 12.dp else 16.dp
+
 @Composable
 fun Modifier.adaptiveHorizontalPaddingTab(): Modifier {
     val start = if (ThemeResolver.isMiuixEngine(composeEngine)) 12.dp else 0.dp
