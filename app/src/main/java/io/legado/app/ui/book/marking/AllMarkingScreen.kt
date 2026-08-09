@@ -1,5 +1,9 @@
 package io.legado.app.ui.book.marking
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -21,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -31,6 +36,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -86,12 +93,31 @@ fun AllMarkingRouteScreen(
     viewModel: AllMarkingViewModel = koinViewModel(),
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.onIntent(AllMarkingIntent.Export(it, isMarkdown = true))
+            Toast.makeText(context, context.getString(R.string.export_started), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is AllMarkingEffect.ShowMessage ->
+                    Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     AllMarkingScreen(
         state = uiState,
         onIntent = viewModel::onIntent,
         onBack = onBack,
+        onRequestExport = { exportLauncher.launch(null) },
     )
 }
 
@@ -105,6 +131,7 @@ fun AllMarkingScreen(
     state: MarkingUiState,
     onIntent: (AllMarkingIntent) -> Unit,
     onBack: () -> Unit,
+    onRequestExport: () -> Unit = {},
 ) {
     val contentState = when {
         state.isLoading -> "LOADING"
@@ -168,6 +195,11 @@ fun AllMarkingScreen(
                             )
                         )
                     }
+                    TopBarActionButton(
+                        onClick = onRequestExport,
+                        imageVector = Icons.Default.FileDownload,
+                        contentDescription = stringResource(R.string.export_markings)
+                    )
                     TopBarActionButton(
                         onClick = {
                             showSearch = !showSearch

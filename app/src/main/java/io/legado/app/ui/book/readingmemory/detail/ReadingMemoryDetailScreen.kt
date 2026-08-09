@@ -33,7 +33,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -59,6 +58,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
+import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.book.tagmanage.TagEditData
 import io.legado.app.ui.book.tagmanage.TagEditSheet
 import androidx.compose.foundation.background
@@ -663,6 +664,13 @@ private fun ExcerptSection(
     onEditMarking: (BookMarking) -> Unit,
 ) {
     if (state.excerpts.isEmpty()) return
+    val ticketThemeSettings = LocalAppUiConfiguration.current.theme
+    val ticketBorderColor = (if (LegadoTheme.isDark) {
+        ticketThemeSettings.baseCardBorderColorNight
+    } else {
+        ticketThemeSettings.baseCardBorderColor
+    }).takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.outlineVariant
+    val ticketStrokeWidth = ticketThemeSettings.baseCardBorderWidth.dp
     SectionCard(title = "书摘笔记") {
         state.excerpts.forEachIndexed { index, excerpt ->
             val selectedText = remember(excerpt.anchorJson) {
@@ -671,9 +679,10 @@ private fun ExcerptSection(
             }
             Column(modifier = Modifier.clickable { onEditMarking(excerpt) }) {
                 if (index > 0) {
-                    HorizontalDivider(
+                    TicketNotchDivider(
                         modifier = Modifier.padding(vertical = 10.dp),
-                        color = LegadoTheme.colorScheme.outlineVariant,
+                        color = ticketBorderColor,
+                        strokeWidth = ticketStrokeWidth,
                     )
                 }
                 AppText(

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.marking
 
+import android.net.Uri
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,8 +10,12 @@ import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.help.book.BookplateDataBuilder
 import io.legado.app.help.book.BookplateGenerator
+import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
+import io.legado.app.utils.createFileIfNotExist
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.openOutputStream
+import io.legado.app.utils.writeToOutputStream
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet
@@ -26,10 +31,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import splitties.init.appCtx
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** 「所有笔记」页的分组键：与书签页一致，按「书名+作者」跨源聚合。 */
 data class MarkingGroupHeader(
@@ -68,6 +77,7 @@ sealed interface AllMarkingIntent {
     data class ToggleGroupCollapse(val group: MarkingGroupHeader) : AllMarkingIntent
     data class ToggleAllCollapse(val groups: Set<MarkingGroupHeader>) : AllMarkingIntent
     data class DeleteMarking(val id: String) : AllMarkingIntent
+    data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllMarkingIntent
     data class OpenEdit(val id: String) : AllMarkingIntent
     data object CloseEdit : AllMarkingIntent
     data class SaveMarkingNote(val id: String, val note: String) : AllMarkingIntent
@@ -171,6 +181,7 @@ class AllMarkingViewModel(
             is AllMarkingIntent.ToggleGroupCollapse -> toggleGroupCollapse(intent.group)
             is AllMarkingIntent.ToggleAllCollapse -> toggleAllCollapse(intent.groups)
             is AllMarkingIntent.DeleteMarking -> deleteMarking(intent.id)
+            is AllMarkingIntent.Export -> exportMarking(intent.treeUri, intent.isMarkdown)
             is AllMarkingIntent.OpenEdit -> openEdit(intent.id)
             is AllMarkingIntent.CloseEdit -> _editing.value = null
             is AllMarkingIntent.SaveMarkingNote -> saveMarkingNote(intent.id, intent.note)
@@ -205,6 +216,58 @@ class AllMarkingViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             bookMarkingGateway.delete(id)
         }
+    }
+
+    private fun exportMarking(treeUri: Uri, isMarkdown: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
+                val suffix = if (isMarkdown) "md" else "json"
+                val fileName = "markings-${dateFormat.format(Date())}.$suffix"
+
+                val dirDoc = FileDoc.fromUri(treeUri, true)
+                val fileDoc = dirDoc.createFileIfNotExist(fileName)
+
+                fileDoc.openOutputStream().getOrThrow().use { outputStream ->
+                    val allMarkings = bookMarkingGateway.flowAll().first()
+                    if (isMarkdown) {
+                        writeMarkdown(outputStream, allMarkings)
+                    } else {
+                        GSON.writeToOutputStream(outputStream, allMarkings)
+                    }
+                }
+
+                _effects.emit(AllMarkingEffect.ShowMessage("导出成功: $fileName"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _effects.emit(AllMarkingEffect.ShowMessage("导出失败: ${e.message}"))
+            }
+        }
+    }
+
+    private fun writeMarkdown(outputStream: java.io.OutputStream, markings: List<BookMarking>) {
+        val sb = StringBuilder()
+        var lastHeader = ""
+        markings.forEach { marking ->
+            val currentHeader = "${marking.bookName}|${marking.bookAuthor}"
+            if (currentHeader != lastHeader) {
+                lastHeader = currentHeader
+                sb.append("\n## ${marking.bookName} - ${marking.bookAuthor}\n\n")
+            }
+            if (marking.chapterName.isNotBlank()) {
+                sb.append("#### ${marking.chapterName}\n")
+            }
+            val selectedText = GSON.fromJsonObject<TextProcessAnchor>(marking.anchorJson)
+                .getOrNull()?.selectedText.orEmpty()
+            if (selectedText.isNotBlank()) {
+                sb.append("> **原文：** $selectedText\n\n")
+            }
+            if (marking.note.isNotBlank()) {
+                sb.append("${marking.note}\n\n")
+            }
+            sb.append("---\n")
+        }
+        outputStream.write(sb.toString().toByteArray())
     }
 
     private fun openEdit(id: String) {

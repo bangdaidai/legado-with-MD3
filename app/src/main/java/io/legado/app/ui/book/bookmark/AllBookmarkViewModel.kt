@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
@@ -79,6 +80,7 @@ sealed interface AllBookmarkIntent {
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
     data class GenerateBookplate(val bookmark: Bookmark) : AllBookmarkIntent
     data object DismissBookplate : AllBookmarkIntent
+    data object ClearAll : AllBookmarkIntent
 }
 
 sealed interface AllBookmarkEffect {
@@ -186,6 +188,7 @@ class AllBookmarkViewModel(
                 _bookplateBitmap.value = null
                 _bookplateData.value = null
             }
+            AllBookmarkIntent.ClearAll -> clearAllBookmarks()
         }
     }
 
@@ -201,6 +204,18 @@ class AllBookmarkViewModel(
             val bitmap = BookplateGenerator.generate(splitties.init.appCtx, data)
             _bookplateLoading.value = false
             _bookplateBitmap.value = bitmap
+        }
+    }
+
+    /** 清空全部书签，完成后提示。 */
+    private fun clearAllBookmarks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            bookmarkRepository.clearAll()
+            _effects.tryEmit(
+                AllBookmarkEffect.ShowMessage(
+                    getApplication<Application>().getString(R.string.clear_all_bookmarks_done)
+                )
+            )
         }
     }
 

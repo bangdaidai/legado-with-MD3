@@ -63,6 +63,7 @@ import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import io.legado.app.ui.widget.components.bookmark.BookmarkItem
@@ -148,6 +149,7 @@ fun AllBookmarkScreen(
     val scope = rememberCoroutineScope()
     var showMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    var showClearAllDialog by remember { mutableStateOf(false) }
     var editingBookmark by remember { mutableStateOf<Bookmark?>(null) }
     var showBottomSheet by remember { mutableStateOf(false) }
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
@@ -228,6 +230,13 @@ fun AllBookmarkScreen(
                             onClick = {
                                 showMenu = false
                                 onRequestExport(true)
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = stringResource(R.string.clear_all_bookmarks),
+                            onClick = {
+                                showMenu = false
+                                showClearAllDialog = true
                             }
                         )
                     }
@@ -416,6 +425,22 @@ fun AllBookmarkScreen(
         loading = state.bookplateLoading,
         onDismissRequest = { onIntent(AllBookmarkIntent.DismissBookplate) },
     )
+
+    if (showClearAllDialog) {
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { showClearAllDialog = false },
+            title = stringResource(R.string.clear_all_bookmarks),
+            text = stringResource(R.string.clear_all_bookmarks_confirm),
+            confirmText = stringResource(R.string.delete),
+            onConfirm = {
+                showClearAllDialog = false
+                onIntent(AllBookmarkIntent.ClearAll)
+            },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { showClearAllDialog = false }
+        )
+    }
 }
 
 @Composable

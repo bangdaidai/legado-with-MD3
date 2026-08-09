@@ -50,4 +50,9 @@ class BookmarkRepository(
     suspend fun delete(bookmark: Bookmark) = withContext(Dispatchers.IO) {
         dao.delete(bookmark)
     }
+
+    /** 清空全部书签。 */
+    suspend fun clearAll() = withContext(Dispatchers.IO) {
+        dao.deleteAll()
+    }
 }

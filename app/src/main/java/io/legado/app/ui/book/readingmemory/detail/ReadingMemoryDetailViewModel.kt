@@ -111,8 +111,7 @@ class ReadingMemoryDetailViewModel(
                     memory?.intro ?: book?.intro ?: ""
                 }
                 val firstReadDate = readRecordTimelineDays.firstOrNull()?.date
-                val totalBookWords = (book?.wordCount ?: memory?.wordCount ?: "0")
-                    .toLongOrNull() ?: 0L
+                val totalBookWords = parseTotalWords(book?.wordCount ?: memory?.wordCount)
                 val totalReadWords = statistics?.totalWords ?: 0L
                 val remainingWords = (totalBookWords - totalReadWords).coerceAtLeast(0L)
                 val excerptCount = excerpts.size
@@ -334,5 +333,18 @@ class ReadingMemoryDetailViewModel(
             _bookplateLoading.value = false
             _bookplateBitmap.value = bitmap
         }
+    }
+
+    /**
+     * 书籍总字数是展示用字符串, 常见形如 "123456" / "12.5万字" / "约30万字",
+     * 直接 toLongOrNull() 只有纯数字才成功, 其余一律得到 0, 导致「剩余字数」永远算不出来。
+     * 这里按「万」单位换算, 并容忍前后缀文字。
+     */
+    private fun parseTotalWords(raw: String?): Long {
+        val text = raw?.trim().orEmpty()
+        if (text.isBlank()) return 0L
+        val number = text.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: return 0L
+        val scale = if (text.contains("万")) 10000 else 1
+        return (number * scale).toLong().coerceAtLeast(0L)
     }
 }

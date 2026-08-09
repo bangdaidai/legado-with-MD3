@@ -26,5 +26,11 @@
     <string name="more">更多</string>
     <string name="all_marking">笔记</string>
     <string name="generate_bookplate">生成书摘票</string>
+    <string name="clear_all_bookmarks">清除所有书签</string>
+    <string name="clear_all_bookmarks_confirm">确定删除全部书签？此操作不可撤销。</string>
+    <string name="clear_all_bookmarks_done">已清除所有书签</string>
+    <string name="export_markings">导出所有笔记</string>
+
+
 
 </resources>

@@ -795,7 +795,7 @@ private fun SelectionCheckmark(
     // 由 checked 状态区分选中/未选中；整行可点，Checkbox 本身不接收点击。
     AnimatedVisibility(visible = inSelectionMode) {
         Box(
-            modifier = Modifier.padding(end = 12.dp),
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             AppCheckbox(
