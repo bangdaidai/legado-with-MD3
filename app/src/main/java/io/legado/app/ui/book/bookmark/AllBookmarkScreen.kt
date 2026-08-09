@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
@@ -67,6 +68,7 @@ import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import io.legado.app.ui.widget.components.bookmark.BookmarkItem
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
+import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
@@ -150,6 +152,13 @@ fun AllBookmarkScreen(
     var showBottomSheet by remember { mutableStateOf(false) }
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val isMiuix = ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)
+    val ticketThemeSettings = LocalAppUiConfiguration.current.theme
+    val ticketBorderColor = (if (LegadoTheme.isDark) {
+        ticketThemeSettings.baseCardBorderColorNight
+    } else {
+        ticketThemeSettings.baseCardBorderColor
+    }).takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.outlineVariant
+    val ticketStrokeWidth = ticketThemeSettings.baseCardBorderWidth.dp
     val stickyGroup by remember(bookmarkGroups, collapsedGroups, listState) {
         derivedStateOf {
             val firstVisibleIndex = listState.firstVisibleItemIndex
@@ -319,7 +328,13 @@ fun AllBookmarkScreen(
                                                 HorizontalDivider(
                                                     color = LegadoTheme.colorScheme.surface
                                                 )
-                                                bookmarks.forEach { bookmarkUi ->
+                                                bookmarks.forEachIndexed { index, bookmarkUi ->
+                                                    if (index > 0) {
+                                                        TicketNotchDivider(
+                                                            color = ticketBorderColor,
+                                                            strokeWidth = ticketStrokeWidth,
+                                                        )
+                                                    }
                                                     BookmarkItem(
                                                         bookmark = bookmarkUi.rawBookmark,
                                                         modifier = Modifier.fillMaxWidth(),

@@ -1,8 +1,12 @@
 package io.legado.app.help.book
 
+import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.BookplateData
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.ReadingMemory
+import io.legado.app.domain.model.TextProcessAnchor
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -68,6 +72,26 @@ object BookplateDataBuilder {
             annotationCount = if (memory != null) memory.annotationCount else 1,
         )
     }
+
+    /**
+     * 从划线笔记（BookMarking）构建藏书票数据。
+     * 原文取 anchorJson.selectedText，笔记取 note，章节取 chapterName。
+     */
+    fun buildFromMarking(marking: BookMarking, memory: ReadingMemory?): BookplateData {
+        val base = if (memory != null) build(memory) else BookplateData(
+            bookName = marking.bookName,
+            author = marking.bookAuthor,
+        )
+        val selectedText = GSON.fromJsonObject<TextProcessAnchor>(marking.anchorJson)
+            .getOrNull()?.selectedText.orEmpty()
+        return base.copy(
+            latestAnnotation = selectedText.take(500),
+            latestAnnotationNote = marking.note.take(500),
+            latestAnnotationChapter = marking.chapterName,
+            annotationCount = if (memory != null) memory.annotationCount else 1,
+        )
+    }
+
 
     private fun formatTime(ts: Long): String {
         return if (ts > 0) dateFormat.format(Date(ts)) else "____/__/__"

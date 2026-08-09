@@ -62,9 +62,13 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.book.tagmanage.TagEditData
 import io.legado.app.ui.book.tagmanage.TagEditSheet
 import androidx.compose.foundation.background
-import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.BookMarking
+import io.legado.app.domain.model.TextProcessAnchor
+import io.legado.app.ui.book.read.MarkingUiState
+import io.legado.app.ui.book.read.sheet.MarkingSheet
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.icon.AppIcons
 import java.util.Locale
@@ -95,7 +99,7 @@ fun ReadingMemoryDetailScreen(
     onIntent: (ReadingMemoryDetailIntent) -> Unit,
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
-    var editingBookmark by remember { mutableStateOf<Bookmark?>(null) }
+    var editingMarking by remember { mutableStateOf<BookMarking?>(null) }
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -134,7 +138,7 @@ fun ReadingMemoryDetailScreen(
                 item { IntroSection(state = state, onIntent = onIntent) }
                 item { TagsSection(state = state, onIntent = onIntent) }
                 item { StatsSection(state = state) }
-                item { ExcerptSection(state = state, onEditBookmark = { editingBookmark = it }) }
+                item { ExcerptSection(state = state, onEditMarking = { editingMarking = it }) }
                 item { ReviewSection(state = state, onIntent = onIntent) }
                 item { ReadSessionSection(state = state) }
                 item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -172,22 +176,23 @@ fun ReadingMemoryDetailScreen(
         )
     }
 
-    if (editingBookmark != null) {
-        BookmarkEditSheet(
+    editingMarking?.let { marking ->
+        MarkingSheet(
             show = true,
-            bookmark = editingBookmark!!,
-            onDismiss = { editingBookmark = null },
-            onSave = {
-                onIntent(ReadingMemoryDetailIntent.EditBookmark(it))
-                editingBookmark = null
+            state = MarkingUiState(editing = marking),
+            onDismissRequest = { editingMarking = null },
+            onSave = { _, note ->
+                onIntent(ReadingMemoryDetailIntent.EditMarking(marking.copy(note = note)))
+                editingMarking = null
             },
             onDelete = {
-                onIntent(ReadingMemoryDetailIntent.DeleteBookmark(it))
-                editingBookmark = null
+                onIntent(ReadingMemoryDetailIntent.DeleteMarking(marking.id))
+                editingMarking = null
             },
-            onGenerateBookplate = { bookmark ->
-                editingBookmark = null
-                onIntent(ReadingMemoryDetailIntent.GenerateBookplateFromBookmark(bookmark))
+            showStyleConfig = false,
+            onGenerateBookplate = {
+                editingMarking = null
+                onIntent(ReadingMemoryDetailIntent.GenerateBookplateFromMarking(marking))
             },
         )
     }
@@ -655,12 +660,16 @@ private fun IntroSection(
 @Composable
 private fun ExcerptSection(
     state: ReadingMemoryDetailUiState,
-    onEditBookmark: (Bookmark) -> Unit,
+    onEditMarking: (BookMarking) -> Unit,
 ) {
     if (state.excerpts.isEmpty()) return
     SectionCard(title = "书摘笔记") {
         state.excerpts.forEachIndexed { index, excerpt ->
-            Column(modifier = Modifier.clickable { onEditBookmark(excerpt) }) {
+            val selectedText = remember(excerpt.anchorJson) {
+                GSON.fromJsonObject<TextProcessAnchor>(excerpt.anchorJson)
+                    .getOrNull()?.selectedText.orEmpty()
+            }
+            Column(modifier = Modifier.clickable { onEditMarking(excerpt) }) {
                 if (index > 0) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 10.dp),
@@ -672,14 +681,14 @@ private fun ExcerptSection(
                     style = LegadoTheme.typography.labelMediumEmphasized,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
-                if (excerpt.content.isNotBlank()) {
+                if (excerpt.note.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(text = excerpt.content, style = LegadoTheme.typography.labelLarge, lineHeight = 22.sp)
+                    AppText(text = excerpt.note, style = LegadoTheme.typography.labelLarge, lineHeight = 22.sp)
                 }
-                if (!excerpt.bookText.isNullOrBlank()) {
+                if (selectedText.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
-                        text = excerpt.bookText,
+                        text = selectedText,
                         style = LegadoTheme.typography.labelLarge,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,

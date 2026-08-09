@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,15 +51,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.ui.book.read.sheet.MarkingSheet
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
+import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
+import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
 import io.legado.app.ui.widget.components.text.AppText
@@ -69,6 +74,7 @@ import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.legado.app.ui.book.read.MarkingUiState as ReaderMarkingUiState
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -117,6 +123,13 @@ fun AllMarkingScreen(
     var showSearch by remember { mutableStateOf(false) }
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val isMiuix = ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)
+    val ticketThemeSettings = LocalAppUiConfiguration.current.theme
+    val ticketBorderColor = (if (LegadoTheme.isDark) {
+        ticketThemeSettings.baseCardBorderColorNight
+    } else {
+        ticketThemeSettings.baseCardBorderColor
+    }).takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.outlineVariant
+    val ticketStrokeWidth = ticketThemeSettings.baseCardBorderWidth.dp
     val stickyGroup by remember(markingGroups, collapsedGroups, listState) {
         derivedStateOf {
             val firstVisibleIndex = listState.firstVisibleItemIndex
@@ -242,8 +255,20 @@ fun AllMarkingScreen(
                                     AnimatedVisibility(visible = !isCollapsed && markings.isNotEmpty()) {
                                         Column {
                                             HorizontalDivider(color = LegadoTheme.colorScheme.surface)
-                                            markings.forEach { item ->
-                                                MarkingRow(item = item, modifier = Modifier.fillMaxWidth())
+                                            markings.forEachIndexed { index, item ->
+                                                if (index > 0) {
+                                                    TicketNotchDivider(
+                                                        color = ticketBorderColor,
+                                                        strokeWidth = ticketStrokeWidth,
+                                                    )
+                                                }
+                                                MarkingRow(
+                                                    item = item,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    onClick = {
+                                                        onIntent(AllMarkingIntent.OpenEdit(item.id))
+                                                    },
+                                                )
                                             }
                                         }
                                     }
@@ -276,15 +301,46 @@ fun AllMarkingScreen(
             }
         }
     }
+
+    state.editing?.let { marking ->
+        MarkingSheet(
+            show = true,
+            state = ReaderMarkingUiState(editing = marking),
+            onDismissRequest = { onIntent(AllMarkingIntent.CloseEdit) },
+            onSave = { _, note ->
+                onIntent(AllMarkingIntent.SaveMarkingNote(marking.id, note))
+            },
+            onDelete = {
+                onIntent(AllMarkingIntent.DeleteMarking(marking.id))
+                onIntent(AllMarkingIntent.CloseEdit)
+            },
+            showStyleConfig = false,
+            onGenerateBookplate = {
+                onIntent(AllMarkingIntent.CloseEdit)
+                onIntent(AllMarkingIntent.GenerateBookplate(marking))
+            },
+        )
+    }
+
+    BookplatePreviewSheet(
+        show = state.showBookplate,
+        data = state.bookplateData,
+        initialBitmap = state.bookplateBitmap,
+        loading = state.bookplateLoading,
+        onDismissRequest = { onIntent(AllMarkingIntent.DismissBookplate) },
+    )
 }
 
 @Composable
 private fun MarkingRow(
     item: MarkingItemUi,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item.chapterName?.let {

@@ -1,4 +1,44 @@
-fix(build): 修复缺失的 imports 导致的编译错误
+feat(marking): 笔记编辑统一化 + 齿孔分割线 + 详情页书摘切到 book_marks
 
-- appDatabaseModule.kt: 补充 ReadingMemoryDao / BookplateTemplateDao / ExcludedTagDao imports
-- SearchContentScreen.kt: 补充 Row / Arrangement imports (上游合并后遗漏)
+1. MarkingSheet 复用改造（阅读页/笔记页/详情页共用同一个编辑 Sheet）:
+   - 新增 showStyleConfig: Boolean = true，false 时隐藏样式来源下拉/
+     高亮规则列表/颜色行/效果格/取色器，只保留原文标题 + 备注输入
+   - 新增 onGenerateBookplate: (() -> Unit)? = null，非空时在备注下方
+     显示「生成书摘票」按钮
+   - 阅读页默认行为不变（showStyleConfig 默认 true）
+
+2. 书签页/笔记页条目间加齿孔分割线:
+   - AllBookmarkScreen / AllMarkingScreen 的 forEach 改 forEachIndexed，
+     index > 0 时插入 TicketNotchDivider
+   - 取色/描边宽度读 LocalAppUiConfiguration.current.theme
+     (baseCardBorderColor / baseCardBorderColorNight / baseCardBorderWidth)
+
+3. 阅读记忆详情页「书摘笔记」从 bookmarks 切到 book_marks:
+   - ReadingMemoryRepository: getExcerpts 返回 List<BookMarking>，
+     移除旧的「content 非空的书签」过滤逻辑
+   - 移除 saveBookmark/deleteBookmark，新增 saveMarking/deleteMarking
+   - 构造函数移除不再使用的 bookmarkDao
+   - Contract: excerpts 类型改 List<BookMarking>；
+     EditBookmark/DeleteBookmark/GenerateBookplateFromBookmark 重命名为
+     EditMarking/DeleteMarking/GenerateBookplateFromMarking
+   - Screen: ExcerptSection 渲染 BookMarking（原文取 anchorJson 的
+     selectedText，笔记取 note），BookmarkEditSheet 换成
+     MarkingSheet(showStyleConfig=false)
+
+4. 所有笔记页增加编辑能力:
+   - AllMarkingViewModel 注入 ReadingMemoryRepository，新增 editing +
+     书摘票状态，采用 baseUiState/uiState 两段式 combine 叠加
+   - 新增 Intent: OpenEdit / CloseEdit / SaveMarkingNote /
+     GenerateBookplate / DismissBookplate
+   - MarkingRow 可点击 → 弹出 MarkingSheet(showStyleConfig=false)，
+     原文只读、备注可编辑，并可生成书摘票
+
+5. 阅读页 MarkingSheet 补书摘票入口:
+   - ReadBookContract/ViewModel/Screen 增加 GenerateBookplateFromMarking
+     和 DismissBookplate，挂载 BookplatePreviewSheet
+   - 仅编辑模式（editing != null）显示按钮：新建时笔记未落库、
+     且无参回调拿不到未保存的备注文本
+
+6. BookplateDataBuilder 新增 buildFromMarking(marking, memory)
+
+DB 无 schema 变更，版本号不动。

@@ -271,19 +271,19 @@ class ReadingMemoryDetailViewModel(
                             repository.deleteReview(bookUrl)
                             _showReviewEditor.value = false
                         }
-                        is ReadingMemoryDetailIntent.EditBookmark -> {
-                            repository.saveBookmark(intent.bookmark)
+                        is ReadingMemoryDetailIntent.EditMarking -> {
+                            repository.saveMarking(intent.marking)
                             bookmarkRefresh.value++
                         }
-                        is ReadingMemoryDetailIntent.DeleteBookmark -> {
-                            repository.deleteBookmark(intent.bookmark)
+                        is ReadingMemoryDetailIntent.DeleteMarking -> {
+                            repository.deleteMarking(intent.id)
                             bookmarkRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.GenerateBookplate -> {
                             generateBookplate()
                         }
-                        is ReadingMemoryDetailIntent.GenerateBookplateFromBookmark -> {
-                            generateBookplateFromBookmark(intent.bookmark)
+                        is ReadingMemoryDetailIntent.GenerateBookplateFromMarking -> {
+                            generateBookplateFromMarking(intent.marking)
                         }
                         is ReadingMemoryDetailIntent.GenerateBookplateFromReview -> {
                             _showReviewEditor.value = false
@@ -320,15 +320,15 @@ class ReadingMemoryDetailViewModel(
         }
     }
 
-    /** 从书签/书摘生成藏书票 */
-    private fun generateBookplateFromBookmark(bookmark: io.legado.app.data.entities.Bookmark) {
+    /** 从划线笔记生成藏书票 */
+    private fun generateBookplateFromMarking(marking: io.legado.app.data.entities.BookMarking) {
         _showBookplate.value = true
         _bookplateLoading.value = true
         _bookplateBitmap.value = null
         _bookplateData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
-            val data = io.legado.app.help.book.BookplateDataBuilder.buildFromBookmark(bookmark, memory)
+            val data = io.legado.app.help.book.BookplateDataBuilder.buildFromMarking(marking, memory)
             _bookplateData.value = data
             val bitmap = BookplateGenerator.generate(appCtx, data)
             _bookplateLoading.value = false

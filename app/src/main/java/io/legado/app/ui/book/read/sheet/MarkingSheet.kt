@@ -73,6 +73,8 @@ fun MarkingSheet(
     onDismissRequest: () -> Unit,
     onSave: (style: TextProcessStyle, note: String) -> Unit,
     onDelete: () -> Unit,
+    showStyleConfig: Boolean = true,
+    onGenerateBookplate: (() -> Unit)? = null,
 ) {
     val selection = state.selection
     val editing = state.editing
@@ -168,77 +170,80 @@ fun MarkingSheet(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            TinyDropdownSettingItem(
-                title = stringResource(R.string.bookmark_mark_style_source),
-                selectedValue = if (useRule) STYLE_SOURCE_RULE else STYLE_SOURCE_CUSTOM,
-                displayEntries = arrayOf(
-                    stringResource(R.string.bookmark_mark_reuse_rule),
-                    stringResource(R.string.bookmark_mark_custom),
-                ),
-                entryValues = arrayOf(STYLE_SOURCE_RULE, STYLE_SOURCE_CUSTOM),
-                onValueChange = { useRule = it == STYLE_SOURCE_RULE },
-            )
+            if (showStyleConfig) {
+                TinyDropdownSettingItem(
+                    title = stringResource(R.string.bookmark_mark_style_source),
+                    selectedValue = if (useRule) STYLE_SOURCE_RULE else STYLE_SOURCE_CUSTOM,
+                    displayEntries = arrayOf(
+                        stringResource(R.string.bookmark_mark_reuse_rule),
+                        stringResource(R.string.bookmark_mark_custom),
+                    ),
+                    entryValues = arrayOf(STYLE_SOURCE_RULE, STYLE_SOURCE_CUSTOM),
+                    onValueChange = { useRule = it == STYLE_SOURCE_RULE },
+                )
 
-            if (useRule) {
-                val rules = state.highlightRules
-                if (rules.isEmpty()) {
-                    EmptyMessage(
-                        message = stringResource(R.string.bookmark_mark_no_rules),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                    )
-                } else {
-                    rules.forEach { rule ->
-                        val selected = selectedRuleId == rule.id
-                        Row(
+                if (useRule) {
+                    val rules = state.highlightRules
+                    if (rules.isEmpty()) {
+                        EmptyMessage(
+                            message = stringResource(R.string.bookmark_mark_no_rules),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    selectedRuleId = if (selected) null else rule.id
+                                .height(200.dp),
+                        )
+                    } else {
+                        rules.forEach { rule ->
+                            val selected = selectedRuleId == rule.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedRuleId = if (selected) null else rule.id
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = if (selected) {
+                                        LegadoTheme.colorScheme.primary
+                                    } else {
+                                        LegadoTheme.colorScheme.outlineVariant
+                                    },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    AppText(
+                                        text = rule.name.ifBlank { rule.displayPattern() },
+                                        style = LegadoTheme.typography.bodyMedium,
+                                    )
+                                    AppText(
+                                        text = rule.styleSummary(),
+                                        style = LegadoTheme.typography.labelSmall,
+                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = if (selected) {
-                                    LegadoTheme.colorScheme.primary
-                                } else {
-                                    LegadoTheme.colorScheme.outlineVariant
-                                },
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                AppText(
-                                    text = rule.name.ifBlank { rule.displayPattern() },
-                                    style = LegadoTheme.typography.bodyMedium,
-                                )
-                                AppText(
-                                    text = rule.styleSummary(),
-                                    style = LegadoTheme.typography.labelSmall,
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                )
                             }
                         }
                     }
+                } else {
+                    // 自定义：预设颜色行（尾部自定义色）+ 5x1 效果格
+                    MarkingColorRow(
+                        selectedColor = markColor,
+                        onColorSelected = { markColor = it },
+                        onCustomColorClick = { showColorPicker = true },
+                    )
+                    MarkingEffectGrid(
+                        selectedEffect = effect,
+                        onEffectSelected = { effect = it },
+                    )
                 }
-            } else {
-                // 自定义：预设颜色行（尾部自定义色）+ 5x1 效果格
-                MarkingColorRow(
-                    selectedColor = markColor,
-                    onColorSelected = { markColor = it },
-                    onCustomColorClick = { showColorPicker = true },
-                )
-                MarkingEffectGrid(
-                    selectedEffect = effect,
-                    onEffectSelected = { effect = it },
-                )
+
+                Spacer(Modifier.padding(top = 16.dp))
             }
 
-            Spacer(Modifier.padding(top = 16.dp))
             // 备注（笔记）
             AppTextField(
                 state = noteState,
@@ -249,18 +254,30 @@ fun MarkingSheet(
                     AppText(stringResource(R.string.bookmark_mark_note_hint))
                 },
             )
+
+            if (onGenerateBookplate != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                MediumTonalButton(
+                    onClick = onGenerateBookplate,
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(R.string.generate_bookplate),
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 
-    ColorPickerSheet(
-        show = showColorPicker,
-        initialColor = markColor,
-        onDismissRequest = { showColorPicker = false },
-        onColorSelected = { color ->
-            markColor = color
-            showColorPicker = false
-        },
-    )
+    if (showStyleConfig) {
+        ColorPickerSheet(
+            show = showColorPicker,
+            initialColor = markColor,
+            onDismissRequest = { showColorPicker = false },
+            onColorSelected = { color ->
+                markColor = color
+                showColorPicker = false
+            },
+        )
+    }
 }
 
 /** 自定义样式区：预设颜色行（尾部为自定义颜色，打开取色器）。 */

@@ -5,13 +5,12 @@ import io.legado.app.data.AppDatabase
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookMarkingDao
-import io.legado.app.data.dao.BookmarkDao
 import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.dao.ReadingMemoryDao
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.BookTagGroup
-import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
@@ -31,7 +30,6 @@ class ReadingMemoryRepository(
     private val dao: ReadingMemoryDao,
     private val bookDao: BookDao,
     private val bookKnowledgeDao: BookKnowledgeDao,
-    private val bookmarkDao: BookmarkDao,
     private val bookMarkingDao: BookMarkingDao,
     private val readRecordDao: ReadRecordDao,
     private val database: AppDatabase,
@@ -366,25 +364,24 @@ class ReadingMemoryRepository(
     // region 书摘 / 阅读会话
 
     /**
-     * 书摘 = 含笔记的书签（content 非空），按章节顺序返回。
-     * 计划定义：书摘就用「有笔记的书签」。
+     * 书摘 = 该书的划线笔记（book_marks），按章节顺序返回。
      */
-    suspend fun getExcerpts(bookUrl: String): List<Bookmark> {
+    suspend fun getExcerpts(bookUrl: String): List<BookMarking> {
         val book = bookDao.getBook(bookUrl) ?: return emptyList()
-        return bookmarkDao.getByBook(book.name, book.author)
-            .filter { !it.content.isNullOrBlank() }
-            .sortedBy { it.chapterIndex }
+        return bookMarkingDao.getByBook(book.name, book.author, null)
+            .sortedBy { it.chapterIndex ?: Int.MAX_VALUE }
     }
 
-    /** 保存（新增或更新）书签，供阅读摘录编辑复用「书签对话框」。 */
-    suspend fun saveBookmark(bookmark: Bookmark) {
-        bookmarkDao.insert(bookmark)
+    /** 保存（新增或更新）划线笔记，供书摘编辑复用「笔记对话框」。 */
+    suspend fun saveMarking(marking: BookMarking) {
+        bookMarkingDao.upsert(marking)
     }
 
-    /** 删除书签。 */
-    suspend fun deleteBookmark(bookmark: Bookmark) {
-        bookmarkDao.delete(bookmark)
+    /** 删除划线笔记。 */
+    suspend fun deleteMarking(id: String) {
+        bookMarkingDao.delete(id)
     }
+
 
     // region 阅读记录（时间线 / 复用「阅读记录对话框」内容）
 

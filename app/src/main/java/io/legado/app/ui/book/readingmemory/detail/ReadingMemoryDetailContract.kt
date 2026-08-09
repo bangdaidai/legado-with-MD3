@@ -1,6 +1,6 @@
 package io.legado.app.ui.book.readingmemory.detail
 
-import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadingStatistics
@@ -34,7 +34,7 @@ data class ReadingMemoryDetailUiState(
     val statistics: ReadingStatistics? = null,
     val protagonistNames: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
-    val excerpts: List<Bookmark> = emptyList(),
+    val excerpts: List<BookMarking> = emptyList(),
     val readRecordTimelineDays: List<ReadRecordTimelineDay> = emptyList(),
     val readRecordTotalTime: Long = 0L,
     val availableTags: List<String> = emptyList(),
@@ -84,10 +84,10 @@ sealed interface ReadingMemoryDetailIntent {
     data object OpenBookInfo : ReadingMemoryDetailIntent
     data object OpenBookInfoEdit : ReadingMemoryDetailIntent
     data object DeleteReview : ReadingMemoryDetailIntent
-    data class EditBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
-    data class DeleteBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
+    data class EditMarking(val marking: BookMarking) : ReadingMemoryDetailIntent
+    data class DeleteMarking(val id: String) : ReadingMemoryDetailIntent
     data object GenerateBookplate : ReadingMemoryDetailIntent
-    data class GenerateBookplateFromBookmark(val bookmark: Bookmark) : ReadingMemoryDetailIntent
+    data class GenerateBookplateFromMarking(val marking: BookMarking) : ReadingMemoryDetailIntent
     data object GenerateBookplateFromReview : ReadingMemoryDetailIntent
     data object DismissBookplate : ReadingMemoryDetailIntent
 }

@@ -50,6 +50,7 @@ import io.legado.app.ui.dict.DictSheet
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
+import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
 import io.legado.app.ui.widget.components.FontFolderState
 import io.legado.app.ui.widget.components.FontSelectSheet
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -299,6 +300,11 @@ fun ReadBookScreen(
             onIntent(ReadBookIntent.SaveMarking(style, note))
         },
         onDelete = { onIntent(ReadBookIntent.DeleteMarking) },
+        onGenerateBookplate = if (markingState.editing != null) {
+            { onIntent(ReadBookIntent.GenerateBookplateFromMarking) }
+        } else {
+            null
+        },
     )
     ContentEditSheet(
         show = state.activeSheet is ReadBookSheet.ContentEdit,
@@ -417,6 +423,13 @@ fun ReadBookScreen(
         onImportConfig = { onIntent(ReadBookIntent.OpenReadStyleImport) },
         onExportConfig = { onIntent(ReadBookIntent.OpenReadStyleExport) },
         styleConfig = state.styleConfig,
+    )
+    BookplatePreviewSheet(
+        show = state.showBookplate,
+        data = state.bookplateData,
+        initialBitmap = state.bookplateBitmap,
+        loading = state.bookplateLoading,
+        onDismissRequest = { onIntent(ReadBookIntent.DismissBookplate) },
     )
 
     val aloudPlayerViewModel: ReadAloudPlayerViewModel =
