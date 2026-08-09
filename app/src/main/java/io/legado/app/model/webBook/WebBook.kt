@@ -12,6 +12,7 @@ import io.legado.app.help.book.removeAllBookType
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.StrResponse
 import io.legado.app.help.source.getBookType
+import io.legado.app.help.source.getExploreInfoMap
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
@@ -119,7 +120,9 @@ object WebBook {
             baseUrl = bookSource.bookSourceUrl,
             source = bookSource,
             ruleData = ruleData,
-            coroutineContext = currentCoroutineContext()
+            coroutineContext = currentCoroutineContext(),
+            // 发现规则里的 js 依赖 infoMap 共享控件状态(如 data:page 书单/评论页)
+            infoMap = getExploreInfoMap(bookSource.bookSourceUrl)
         )
         var res = analyzeUrl.getStrResponseAwait()
         //检测书源是否已登录
@@ -167,7 +170,8 @@ object WebBook {
             baseUrl = bookSource.bookSourceUrl,
             source = bookSource,
             ruleData = ruleData,
-            coroutineContext = currentCoroutineContext()
+            coroutineContext = currentCoroutineContext(),
+            infoMap = getExploreInfoMap(bookSource.bookSourceUrl)
         )
         var res = analyzeUrl.getStrResponseAwait()
         //检测书源是否已登录
