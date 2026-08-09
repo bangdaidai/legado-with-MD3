@@ -31,7 +31,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.icon.AppIcon
@@ -47,6 +46,7 @@ fun LoadMoreFooter(
     onRetry: () -> Unit,
     onLoadMore: (() -> Unit)? = null,
     autoLoad: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var showFullError by remember { mutableStateOf<String?>(null) }
@@ -88,9 +88,9 @@ fun LoadMoreFooter(
     )
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .adaptiveHorizontalPadding(vertical = 8.dp),
+            .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
 

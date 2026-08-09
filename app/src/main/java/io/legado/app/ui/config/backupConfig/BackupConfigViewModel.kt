@@ -154,15 +154,11 @@ class BackupConfigViewModel(
     private fun testWebDav() {
         _uiState.update { it.copy(activeDialog = BackupConfigDialog.Loading(R.string.test_sync_loading_text)) }
         viewModelScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                runCatching { webDavBackupUseCase.test() }.getOrDefault(false)
+            withContext(Dispatchers.IO) {
+                runCatching { webDavBackupUseCase.test() }
             }
+            // 成功/失败提示由 AppWebDav.testWebDav() 内部 toast 统一上报
             _uiState.update { it.copy(activeDialog = null) }
-            _effects.tryEmit(
-                BackupConfigEffect.ShowMessage(
-                    if (success) R.string.test_sync_status_success else R.string.test_sync_status_fail
-                )
-            )
         }
     }
 
@@ -352,8 +348,8 @@ class BackupConfigViewModel(
     }
 
     private suspend fun finishRestoreSuccess() = withContext(Dispatchers.Main) {
+        // 成功提示由 Restore 内部统一 toast，此处不再重复上报
         _uiState.update { it.copy(activeDialog = null) }
-        _effects.tryEmit(BackupConfigEffect.ShowMessage(R.string.restore_success))
     }
 
     private suspend fun finishRestoreFailure(message: String?, webDav: Boolean = false) =

@@ -56,6 +56,7 @@ import io.legado.app.R
 import io.legado.app.domain.model.BookShelfState
 import io.legado.app.ui.main.bookCoverSharedElementKey
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.theme.responsiveHazeEffect
 import io.legado.app.ui.theme.responsiveHazeSource
 import io.legado.app.ui.widget.components.AppPullToRefresh
@@ -464,6 +465,7 @@ fun ExploreShowScreen(
                                     state = state,
                                     onRetry = { onIntent(ExploreShowIntent.LoadMore) },
                                     onLoadMore = { onIntent(ExploreShowIntent.ForceLoadNext) },
+                                    modifier = Modifier.padding(horizontal = 4.dp),
                                 )
                             }
                         }
@@ -515,6 +517,7 @@ fun ExploreShowScreen(
                                     state = state,
                                     onRetry = { onIntent(ExploreShowIntent.LoadMore) },
                                     onLoadMore = { onIntent(ExploreShowIntent.ForceLoadNext) },
+                                    modifier = Modifier.adaptiveHorizontalPadding(),
                                 )
                             }
                         }
@@ -548,6 +551,7 @@ private fun ExploreShowLoadMoreFooter(
     state: ExploreShowUiState,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LoadMoreFooter(
         isLoading = state.isLoading,
@@ -556,6 +560,7 @@ private fun ExploreShowLoadMoreFooter(
         onRetry = onRetry,
         onLoadMore = onLoadMore,
         autoLoad = false,
+        modifier = modifier,
     )
 }
 

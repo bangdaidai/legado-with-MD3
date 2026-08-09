@@ -290,8 +290,6 @@ class HomeViewModel(
             try {
                 runCatching {
                     backupRestoreUseCase.restoreLocal(uri)
-                }.onSuccess {
-                    _effects.emit(HomeEffect.ShowMessage(R.string.restore_success))
                 }.onFailure { error ->
                     if (error is CancellationException) throw error
                     _effects.emit(
@@ -317,8 +315,6 @@ class HomeViewModel(
             try {
                 runCatching {
                     webDavBackupUseCase.restore(backup.name)
-                }.onSuccess {
-                    _effects.emit(HomeEffect.ShowMessage(R.string.restore_success))
                 }.onFailure { error ->
                     if (error is CancellationException) throw error
                     _effects.emit(

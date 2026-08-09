@@ -1164,7 +1164,7 @@ private fun MarkingListContent(
                     if (marking.note.isNotBlank()) {
                         AppText(
                             text = marking.note,
-                            style = LegadoTheme.typography.labelMedium,
+                            style = LegadoTheme.typography.bodyMedium,
                             color = LegadoTheme.colorScheme.primary,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,

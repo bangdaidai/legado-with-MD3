@@ -51,6 +51,9 @@ class WebDavFragment : BaseFragment(R.layout.fragment_webdav_auth) {
             waitDialog.show()
             val task = Coroutine.async {
                 Restore.restore(appCtx, uri)
+            }.onError {
+                AppLog.put("恢复备份出错\n${it.localizedMessage}", it)
+                appCtx.toastOnUi("恢复备份出错\n${it.localizedMessage}")
             }.onFinally {
                 waitDialog.dismiss()
             }

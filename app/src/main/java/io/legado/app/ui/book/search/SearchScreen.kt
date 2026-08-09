@@ -1033,6 +1033,7 @@ private fun ExpandedSourceSheet(
                         isEnd = isEnd,
                         onRetry = onLoadMore,
                         autoLoad = false,
+                        modifier = Modifier.adaptiveHorizontalPadding(),
                     )
                 }
             }

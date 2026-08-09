@@ -90,7 +90,7 @@ object Restore : KoinComponent {
     suspend fun restore(context: Context, uri: Uri) {
         BackupRestoreLock.withLock {
             LogUtils.d(TAG, "开始恢复备份 uri:$uri")
-            val unzipResult = kotlin.runCatching {
+            kotlin.runCatching {
                 FileUtils.delete(Backup.backupPath)
                 if (uri.isContentScheme()) {
                     DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use {
@@ -101,16 +101,11 @@ object Restore : KoinComponent {
                 }
             }.onFailure {
                 AppLog.put("复制解压文件出错\n${it.localizedMessage}", it)
-            }
-            if (unzipResult.isSuccess) {
-                kotlin.runCatching {
-                    restoreUnzipped(Backup.backupPath)
-                    LocalConfig.lastBackup = System.currentTimeMillis()
-                }.onFailure {
-                    appCtx.toastOnUi("恢复备份出错\n${it.localizedMessage}")
-                    AppLog.put("恢复备份出错\n${it.localizedMessage}", it)
-                }
-            }
+            }.getOrThrow()
+            // 恢复过程若抛异常，直接向上传播，由调用方(ViewModel/Fragment)统一提示失败，
+            // 避免此处再吞掉异常导致上层误判为成功。
+            restoreUnzipped(Backup.backupPath)
+            LocalConfig.lastBackup = System.currentTimeMillis()
         }
     }
 
@@ -610,7 +605,6 @@ object Restore : KoinComponent {
             }
         } catch (e: Exception) {
             AppLog.put("$fileName\n读取解析出错\n${e.localizedMessage}", e)
-            appCtx.toastOnUi("$fileName\n读取文件出错\n${e.localizedMessage}")
         }
         return null
     }

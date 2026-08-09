@@ -51,6 +51,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -633,6 +634,7 @@ private fun IntroSection(
             AppText(
                 text = state.intro,
                 style = LegadoTheme.typography.labelLarge,
+                fontWeight = FontWeight.Normal,
                 lineHeight = 22.sp,
                 maxLines = if (expanded) Int.MAX_VALUE else 5,
                 overflow = TextOverflow.Ellipsis,
@@ -692,13 +694,20 @@ private fun ExcerptSection(
                 )
                 if (excerpt.note.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(text = excerpt.note, style = LegadoTheme.typography.labelLarge, lineHeight = 22.sp)
+                    AppText(
+                        text = excerpt.note,
+                        style = LegadoTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Normal,
+                        color = LegadoTheme.colorScheme.primary,
+                        lineHeight = 22.sp,
+                    )
                 }
                 if (selectedText.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
                         text = selectedText,
                         style = LegadoTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Normal,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
