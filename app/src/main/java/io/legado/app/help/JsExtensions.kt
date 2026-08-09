@@ -1122,21 +1122,8 @@ interface JsExtensions : JsEncodeUtils {
      * 弹窗提示
      */
     fun toast(msg: Any?) {
-        // dump full probe on any toast
-        com.script.rhino.RhinoProbe.dumpToSink("[QDFullProbe] toast=$msg")
         rhinoContextOrNull?.ensureActive()
         val text = msg.toString()
-        if (text.contains("验证失败") || text.contains("暂不开放")) {
-            val jsStack = try {
-                org.mozilla.javascript.EvaluatorException("qd_trace").scriptStackTrace
-            } catch (_: Throwable) { "no js stack" }
-            io.legado.app.constant.AppLog.put(
-                "[QDTrace] toast=$text" +
-                    "\n---CALLS(本线程最近80次成员解析,<undefined>为不存在)---\n" +
-                    io.legado.app.help.rhino.QDTrace.dump() +
-                    "\n---JS stack---\n" + jsStack
-            )
-        }
         appCtx.toastForJs("${getSource()?.getTag()}: $text")
     }
 

@@ -366,6 +366,9 @@ class App : Application(), SingletonImageLoader.Factory {
             io.legado.app.help.rhino.TracingJavaObject.factory
         )
         com.script.rhino.RhinoProbe.sink = { msg -> io.legado.app.constant.AppLog.put(msg) }
+        com.script.rhino.RhinoProbe.jsonFormatter = { obj ->
+            try { io.legado.app.utils.GSON.toJson(obj) } catch (_: Throwable) { null }
+        }
     }
 
     class EventLogger : DefaultLogger() {
