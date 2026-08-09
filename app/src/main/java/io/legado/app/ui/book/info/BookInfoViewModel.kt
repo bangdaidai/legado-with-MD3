@@ -1807,6 +1807,10 @@ class BookInfoViewModel(
             snapshot.infoHtml = infoHtml
             snapshot.tocHtml = tocHtml
             snapshot.downloadUrls = downloadUrls
+            // putVariable 只写内存里的 variableMap, 不回写 variable 字符串。
+            // copy() 的 variableMap 是按 variable 重新 lazy 解析出来的, 会丢掉书源
+            // 解析阶段写入的变量(例如 bkid/bj), 导致 callBackJs 里 getVariable 取空。
+            snapshot.variableMap.putAll(variableMap)
         }
     }
 }
