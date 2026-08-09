@@ -25,6 +25,18 @@ data class BookInfoRule(
     var relatedBooks: String? = null
 ) : Parcelable {
 
+    /**
+     * 起点助手等书源用 JSON.stringify(source.ruleBookInfo) 的结果做指纹校验，
+     * 而 Rhino 对 Java 对象取的是 toString()。relatedBooks 是本 fork 新增字段，
+     * 若出现在 toString 里会让指纹与上游不一致，导致书源报"书源验证失败"。
+     * 因此手写 toString 排除该字段，字段本身与关联书籍推荐功能不受影响。
+     */
+    override fun toString(): String =
+        "BookInfoRule(init=$init, name=$name, author=$author, intro=$intro, " +
+            "kind=$kind, lastChapter=$lastChapter, updateTime=$updateTime, " +
+            "coverUrl=$coverUrl, tocUrl=$tocUrl, wordCount=$wordCount, " +
+            "canReName=$canReName, downloadUrls=$downloadUrls)"
+
     companion object {
 
         val jsonDeserializer = JsonDeserializer<BookInfoRule?> { json, _, _ ->
