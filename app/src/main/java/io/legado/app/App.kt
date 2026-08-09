@@ -365,6 +365,7 @@ class App : Application(), SingletonImageLoader.Factory {
             io.legado.app.help.http.CookieStore::class.java,
             io.legado.app.help.rhino.TracingJavaObject.factory
         )
+        com.script.rhino.RhinoProbe.sink = { msg -> io.legado.app.constant.AppLog.put(msg) }
     }
 
     class EventLogger : DefaultLogger() {

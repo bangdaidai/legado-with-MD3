@@ -19,17 +19,14 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
 
     override fun get(name: String, start: Scriptable): Any? {
         if (name != "setVariable" && name.length > 3 && name.startsWith("set")) {
-            val name = name.substring(3).replaceFirstChar { it.lowercase() }
-            if (super.has(name, start)) {
+            val propName = name.substring(3).replaceFirstChar { it.lowercase() }
+            if (super.has(propName, start)) {
+                com.script.rhino.RhinoProbe.rec("source", name, null, true)
                 return NOT_FOUND
             }
         }
         val v = super.get(name, start)
-        if (v == NOT_FOUND) {
-            QDTrace.rec("source.$name=<undefined>")
-        } else {
-            QDTrace.rec("source.$name")
-        }
+        com.script.rhino.RhinoProbe.rec("source", name, v, v == NOT_FOUND)
         return v
     }
 

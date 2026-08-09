@@ -1122,6 +1122,8 @@ interface JsExtensions : JsEncodeUtils {
      * 弹窗提示
      */
     fun toast(msg: Any?) {
+        // dump full probe on any toast
+        com.script.rhino.RhinoProbe.dumpToSink("[QDFullProbe] toast=$msg")
         rhinoContextOrNull?.ensureActive()
         val text = msg.toString()
         if (text.contains("验证失败") || text.contains("暂不开放")) {

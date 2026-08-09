@@ -18,12 +18,15 @@ class ReadOnlyJavaObject(scope: Scriptable?, javaObject: Any, staticType: Class<
 
     override fun get(name: String, start: Scriptable): Any? {
         if (name.length > 3 && name.startsWith("set")) {
-            val name = name.substring(3).replaceFirstChar { it.lowercase() }
-            if (super.has(name, start)) {
+            val propName = name.substring(3).replaceFirstChar { it.lowercase() }
+            if (super.has(propName, start)) {
+                RhinoProbe.rec(javaObject?.javaClass?.simpleName ?: "?", name, null, true)
                 return NOT_FOUND
             }
         }
-        return super.get(name, start)
+        val v = super.get(name, start)
+        RhinoProbe.rec(javaObject?.javaClass?.simpleName ?: "?", name, v, v == NOT_FOUND)
+        return v
     }
 
     override fun put(
