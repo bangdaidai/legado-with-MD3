@@ -504,11 +504,11 @@ fun HomeScreen(
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val dashboardScrollState = rememberScrollState()
-                // 混合/分页切换会整体换掉内容区的滚动容器，残留的折叠偏移会让顶栏
-                // 停在半折叠过渡态（标题呈半透明"变浅"），这里主动复位到展开态。
+                // 切换混合/分页会把内容区换成一个全新的 LazyColumn（内部滚动归零），
+                // 但顶栏的 heightOffset 仍是切换前的折叠值，导致标题停在半透明过渡态。
+                // 只复位顶栏，不动 dashboardScrollState，避免整页跳回顶部。
                 LaunchedEffect(isMixedMode) {
                     scrollBehavior.reset()
-                    dashboardScrollState.scrollTo(0)
                 }
                 val moduleNestedScrollConnection = remember(dashboardScrollState) {
                     object : NestedScrollConnection {
