@@ -3,6 +3,9 @@ package io.legado.app.ui.book.readRecord
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
@@ -51,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -59,6 +63,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -86,6 +91,7 @@ import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.AppIconButton
 import io.legado.app.ui.widget.components.button.ToggleChip
+import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.SettingCard
 import io.legado.app.ui.widget.components.card.TextCard
@@ -746,11 +752,19 @@ private fun deleteSelectedReadRecords(
 
 @Composable
 private fun Modifier.selectionBackground(isSelected: Boolean): Modifier {
-    return if (isSelected) {
-        background(LegadoTheme.colorScheme.primary.copy(alpha = 0.12f))
-    } else {
-        this
-    }
+    // 与书源管理(SelectionItemCard)保持一致：选中用 secondaryContainer，并做 200ms 颜色过渡
+    val animatedColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            LegadoTheme.colorScheme.secondaryContainer
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "SelectionColor"
+    )
+    return this
+        .clip(RoundedCornerShape(12.dp))
+        .background(animatedColor)
 }
 
 @Composable
@@ -758,14 +772,20 @@ private fun SelectionCheckmark(
     inSelectionMode: Boolean,
     isSelected: Boolean
 ) {
+    // 与书源管理(SelectionItemCard)保持一致：选择模式下每行都显示 Checkbox，
+    // 由 checked 状态区分选中/未选中；整行可点，Checkbox 本身不接收点击。
     AnimatedVisibility(visible = inSelectionMode) {
-        AppText(
-            text = if (isSelected) "✓" else "",
-            modifier = Modifier.width(24.dp),
-            color = LegadoTheme.colorScheme.primary,
-            style = LegadoTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        Box(
+            modifier = Modifier.padding(end = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            AppCheckbox(
+                checked = isSelected,
+                onCheckedChange = null,
+                includeStateSemantics = false,
+                modifier = Modifier.clearAndSetSemantics { }
+            )
+        }
     }
 }
 
@@ -1080,6 +1100,8 @@ fun LatestReadItem(
             .adaptiveHorizontalPadding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        SelectionCheckmark(inSelectionMode, isSelected)
+
         CoilBookCover(
             name = record.bookName,
             author = record.bookAuthor,
@@ -1087,9 +1109,7 @@ fun LatestReadItem(
             modifier = Modifier.width(44.dp)
         )
 
-        SelectionCheckmark(inSelectionMode, isSelected)
-
-        Spacer(modifier = Modifier.width(if (inSelectionMode) 8.dp else 16.dp))
+        Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             AppText(
@@ -1226,15 +1246,16 @@ fun TimelineSessionItem(
             }
 
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                SelectionCheckmark(inSelectionMode, isSelected)
                 CoilBookCover(
                     name = session.bookName,
                     author = session.bookAuthor,
                     path = coverPath,
                     modifier = Modifier.width(44.dp)
                 )
-                SelectionCheckmark(inSelectionMode, isSelected)
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     AppText(
@@ -1303,6 +1324,8 @@ fun ReadRecordItem(
             .adaptiveHorizontalPadding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        SelectionCheckmark(inSelectionMode, isSelected)
+
         CoilBookCover(
             name = detail.bookName,
             author = detail.bookAuthor,
@@ -1310,9 +1333,7 @@ fun ReadRecordItem(
             modifier = Modifier.width(44.dp)
         )
 
-        SelectionCheckmark(inSelectionMode, isSelected)
-
-        Spacer(modifier = Modifier.width(if (inSelectionMode) 8.dp else 16.dp))
+        Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             AppText(
