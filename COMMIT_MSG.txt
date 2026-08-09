@@ -1,3 +1,4 @@
-chore(readRecord): 清理 abandonedBooks 过时 TODO 注释
+fix(build): 修复缺失的 imports 导致的编译错误
 
-abandonedBooks 已通过 observeAbandonedCount() 填充，注释与实现不符，删除。
+- appDatabaseModule.kt: 补充 ReadingMemoryDao / BookplateTemplateDao / ExcludedTagDao imports
+- SearchContentScreen.kt: 补充 Row / Arrangement imports (上游合并后遗漏)

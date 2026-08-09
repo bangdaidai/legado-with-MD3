@@ -15,12 +15,14 @@ import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookMarkingDao
 import io.legado.app.data.dao.BookSourceDao
 import io.legado.app.data.dao.BookmarkDao
+import io.legado.app.data.dao.BookplateTemplateDao
 import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.dao.ChapterSpeechDao
 import io.legado.app.data.dao.CloudTtsEngineDao
 import io.legado.app.data.dao.CookieDao
 import io.legado.app.data.dao.DictRuleDao
 import io.legado.app.data.dao.ExactChapterPageCountDao
+import io.legado.app.data.dao.ExcludedTagDao
 import io.legado.app.data.dao.HighlightRuleDao
 import io.legado.app.data.dao.HighlightTagRuleDao
 import io.legado.app.data.dao.HomepageCustomSetDao
@@ -29,6 +31,7 @@ import io.legado.app.data.dao.HttpTTSDao
 import io.legado.app.data.dao.KeyboardAssistsDao
 import io.legado.app.data.dao.ReadAloudVoiceDao
 import io.legado.app.data.dao.ReadRecordDao
+import io.legado.app.data.dao.ReadingMemoryDao
 import io.legado.app.data.dao.ReplaceRuleDao
 import io.legado.app.data.dao.RssArticleDao
 import io.legado.app.data.dao.RssReadRecordDao
