@@ -60,7 +60,7 @@ private fun BaseCard(
     useItemBackground: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val resolvedContainerColor = (containerColor ?: LegadoTheme.colorScheme.surfaceContainer)
+    val resolvedContainerColor = (containerColor ?: LegadoTheme.colorScheme.surfaceContainerLow)
         .let { it.copy(alpha = it.alpha * alpha) }
     val themeSettings = LocalAppUiConfiguration.current.theme
     val isTransparent = containerColor == Color.Transparent
