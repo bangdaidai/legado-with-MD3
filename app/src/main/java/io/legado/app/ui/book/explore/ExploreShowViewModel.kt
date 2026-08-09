@@ -255,6 +255,11 @@ class ExploreShowViewModel(
                             selectedKindTitle = matchedKind.title,
                         )
                     }
+                } else {
+                    // 通过 java.open("explore", ...) 传入的自定义 URL(例如 data:page 书单/评论列表),
+                    // 不属于书源分类体系, 隐藏顶部分类标签栏, 只显示书单本身
+                    groupedKinds = emptyMap()
+                    _kindState.value = ExploreShowKindState()
                 }
             }
         }
