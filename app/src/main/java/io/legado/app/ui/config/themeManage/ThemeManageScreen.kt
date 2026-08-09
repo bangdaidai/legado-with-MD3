@@ -268,7 +268,8 @@ private fun SavedThemeItem(
 
     GlassCard(
         onClick = onApply,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = LegadoTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier
