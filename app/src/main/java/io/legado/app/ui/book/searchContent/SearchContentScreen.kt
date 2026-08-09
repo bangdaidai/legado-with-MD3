@@ -3,10 +3,8 @@ package io.legado.app.ui.book.searchContent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -167,64 +165,60 @@ fun SearchContentScreen(
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
-                GlassMediumFlexibleTopAppBar(
-                    title = if (searchQuery.isNotBlank() && searchResults.isNotEmpty()) {
-                        "共 ${searchResults.size} 条结果"
-                    } else "搜索内容",
-                    navigationIcon = { TopBarNavigationButton(onClick = onBack) },
-                    actions = {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TopBarAnimatedActionButton(
-                                checked = replaceEnabled,
-                                onCheckedChange = { onIntent(SearchContentIntent.ToggleReplace(it)) },
-                                iconChecked = Icons.Default.FindReplace,
-                                iconUnchecked = Icons.Default.FindReplace,
-                                activeText = "替换开启",
-                                inactiveText = "替换关闭"
-                            )
-
-                            TopBarAnimatedActionButton(
-                                checked = regexReplace,
-                                onCheckedChange = { onIntent(SearchContentIntent.ToggleRegex(it)) },
-                                iconChecked = Icons.Default.Code,
-                                iconUnchecked = Icons.Default.Code,
-                                activeText = "正则开启",
-                                inactiveText = "正则关闭"
-                            )
-                        }
-                    },
-                    scrollBehavior = scrollBehavior
-                )
-                Box(
-                    modifier = Modifier.adaptiveHorizontalPadding()
-                ) {
-                    SearchBar(
-                        query = searchQuery,
-                        autoFocus = autoFocus,
-                        scrollState = listState,
-                        onQueryChange = { onIntent(SearchContentIntent.UpdateQuery(it)) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                SmallPlainButton(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                    onClick = {
-                                        onIntent(SearchContentIntent.UpdateQuery(""))
-                                    },
-                                    icon = AppIcons.Close,
-                                    contentDescription = stringResource(R.string.clear)
-                                )
-                            }
-                        }
+            GlassMediumFlexibleTopAppBar(
+                title = if (searchQuery.isNotBlank() && searchResults.isNotEmpty()) {
+                    "共 ${searchResults.size} 条结果"
+                } else "搜索内容",
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
+                actions = {
+                    TopBarAnimatedActionButton(
+                        checked = replaceEnabled,
+                        onCheckedChange = { onIntent(SearchContentIntent.ToggleReplace(it)) },
+                        iconChecked = Icons.Default.FindReplace,
+                        iconUnchecked = Icons.Default.FindReplace,
+                        activeText = "替换开启",
+                        inactiveText = "替换关闭"
                     )
-                }
 
-                AnimatedVisibility(visible = isSearching) {
-                    AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    TopBarAnimatedActionButton(
+                        checked = regexReplace,
+                        onCheckedChange = { onIntent(SearchContentIntent.ToggleRegex(it)) },
+                        iconChecked = Icons.Default.Code,
+                        iconUnchecked = Icons.Default.Code,
+                        activeText = "正则开启",
+                        inactiveText = "正则关闭"
+                    )
+                },
+                scrollBehavior = scrollBehavior,
+                bottomContent = {
+                    Box(
+                        modifier = Modifier.adaptiveHorizontalPadding()
+                    ) {
+                        SearchBar(
+                            query = searchQuery,
+                            autoFocus = autoFocus,
+                            scrollState = listState,
+                            onQueryChange = { onIntent(SearchContentIntent.UpdateQuery(it)) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    SmallPlainButton(
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        onClick = {
+                                            onIntent(SearchContentIntent.UpdateQuery(""))
+                                        },
+                                        icon = AppIcons.Close,
+                                        contentDescription = stringResource(R.string.clear)
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isSearching) {
+                        AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
                 }
-            }
+            )
         },
         floatingActionButton = {
             val fabVisible = (isSearching || searchResults.isNotEmpty()) && searchQuery.isNotBlank()
