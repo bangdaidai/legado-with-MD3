@@ -27,11 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.help.config.SavedTheme
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.ThemeEngine
+import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
@@ -245,26 +248,39 @@ private fun SavedThemeItem(
     onDelete: () -> Unit
 ) {
     val data = theme.data
-    val lightPrimary = data.themeColor.takeIf { it != 0 }?.let(::Color)
-        ?: data.cPrimary.takeIf { it != 0 }?.let(::Color)
-        ?: MaterialTheme.colorScheme.primary
-    val darkPrimary = data.themeColorNight.takeIf { it != 0 }?.let(::Color)
-        ?: data.cNPrimary.takeIf { it != 0 }?.let(::Color)
-        ?: lightPrimary
-    val lightSecondary = data.secondaryThemeColor.takeIf { it != 0 }?.let(::Color)
-        ?: lightPrimary
-    val darkSecondary = data.secondaryThemeColorNight.takeIf { it != 0 }?.let(::Color)
-        ?: lightSecondary
-    val lightSurface = data.themeBackgroundColor.takeIf { it != 0 }?.let(::Color)
-        ?: Color(0xFFF7F2FA)
-    val darkSurface = data.themeBackgroundColorNight.takeIf { it != 0 }?.let(::Color)
-        ?: if (data.enableDeepPersonalization && data.themeBackgroundColor != 0) {
-            Color(data.themeBackgroundColor)
-        } else if (data.isPureBlack) {
-            Color.Black
-        } else {
-            Color(0xFF1C1B1F)
+    val context = LocalContext.current
+    val scheme = remember(data, context) {
+        val mode = ThemeResolver.resolveThemeMode(data.appTheme)
+        listOf(false, true).map { darkTheme ->
+            ThemeEngine.getColorScheme(
+                context = context,
+                mode = mode,
+                darkTheme = darkTheme,
+                isAmoled = data.isPureBlack,
+                paletteStyle = data.paletteStyle,
+                materialVersion = data.materialVersion,
+                forceOpaque = true,
+                customSeedColor = (if (darkTheme) data.cNPrimary else data.cPrimary)
+                    .takeIf { it != 0 },
+                customContrast = data.customContrast,
+            )
         }
+    }
+    val lightScheme = scheme[0]
+    val darkScheme = scheme[1]
+
+    val lightPrimary = data.themeColor.takeIf { it != 0 }?.let(::Color)
+        ?: lightScheme.primary
+    val darkPrimary = data.themeColorNight.takeIf { it != 0 }?.let(::Color)
+        ?: darkScheme.primary
+    val lightSecondary = data.secondaryThemeColor.takeIf { it != 0 }?.let(::Color)
+        ?: lightScheme.secondary
+    val darkSecondary = data.secondaryThemeColorNight.takeIf { it != 0 }?.let(::Color)
+        ?: darkScheme.secondary
+    val lightSurface = data.themeBackgroundColor.takeIf { it != 0 }?.let(::Color)
+        ?: lightScheme.surface
+    val darkSurface = data.themeBackgroundColorNight.takeIf { it != 0 }?.let(::Color)
+        ?: darkScheme.surface
 
     GlassCard(
         onClick = onApply,
