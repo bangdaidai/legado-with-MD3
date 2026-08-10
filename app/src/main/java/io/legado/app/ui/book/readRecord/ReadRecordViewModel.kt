@@ -216,7 +216,7 @@ class ReadRecordViewModel(
         val mergedList = mutableListOf<ReadRecordSession>()
         mergedList.add(sessions.first().copy())
 
-        val gapLimit = 20 * 60 * 1000L
+        val gapLimit = 60 * 1000L
 
         for (i in 1 until sessions.size) {
             val current = sessions[i]

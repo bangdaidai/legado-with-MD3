@@ -24,6 +24,8 @@ class ReadRecordRepository(
 ) {
     private fun getCurrentDeviceId(): String = ""
 
+    private val SESSION_MERGE_GAP = 60 * 1000L
+
     val readRecordEnabled: Flow<Boolean> =
         localPreferencesRepository.getPreference(LocalPreferencesKeys.ENABLE_READ_RECORD, true)
 
@@ -119,6 +121,8 @@ class ReadRecordRepository(
 
     /**
      * 保存一个完整的阅读会话.
+     * auto-save 每 120 秒提交一个片段, 若该书最后一条会话与本片段间隔不超过 [SESSION_MERGE_GAP],
+     * 直接合并延长该会话, 避免连续阅读在 DB 里积累大量 2 分钟碎片.
      */
     suspend fun saveReadSession(newSession: ReadRecordSession) {
         if (!readRecordEnabled.first()) return
@@ -134,7 +138,24 @@ class ReadRecordRepository(
             if (existingSession != null) return@withTransaction
 
             val segmentDuration = newSession.endTime - newSession.startTime
-            dao.insertSession(newSession)
+            val lastSession = dao.getLatestSessionByBook(
+                newSession.bookName,
+                newSession.bookAuthor
+            )
+            if (lastSession != null &&
+                lastSession.deviceId == newSession.deviceId &&
+                newSession.startTime - lastSession.endTime <= SESSION_MERGE_GAP
+            ) {
+                dao.updateSession(
+                    lastSession.copy(
+                        endTime = max(lastSession.endTime, newSession.endTime),
+                        words = lastSession.words + newSession.words,
+                        chapterTitle = newSession.chapterTitle.ifBlank { lastSession.chapterTitle }
+                    )
+                )
+            } else {
+                dao.insertSession(newSession)
+            }
             val dateString =
                 DateUtil.format(Date(newSession.startTime), DatePattern.NORM_DATE_PATTERN)
             updateReadRecordDetail(newSession, segmentDuration, newSession.words, dateString)
