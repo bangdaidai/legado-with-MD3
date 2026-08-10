@@ -24,7 +24,41 @@ class ReadRecordRepository(
 ) {
     private fun getCurrentDeviceId(): String = ""
 
-    private val SESSION_MERGE_GAP = 60 * 1000L
+    private val SESSION_MERGE_GAP = 2 * 60 * 1000L
+
+    /** UI 展示层合并阈值: 相邻同书会话间隔不超过 5 分钟时聚合为一段展示 */
+    private val DISPLAY_MERGE_GAP = 5 * 60 * 1000L
+
+    /**
+     * 展示层合并: 把按 startTime 升序排列的同书会话中, 相邻间隔 <= [DISPLAY_MERGE_GAP] 的聚合为一段.
+     * 仅用于展示, 不写库. 合并后:
+     * - endTime 取末段结束
+     * - words 累加(避免丢字数)
+     * - chapterTitle 保留首段(时间线上"从这一章开始")
+     * 返回的每段仍是 ReadRecordSession, 其 id 只指向首段,
+     * 因此 [deleteSession] 按 [startTime, endTime] 区间删除而非按主键删除.
+     */
+    private fun mergeContinuousSessions(sessions: List<ReadRecordSession>): List<ReadRecordSession> {
+        if (sessions.isEmpty()) return emptyList()
+        val merged = mutableListOf<ReadRecordSession>()
+        merged.add(sessions.first().copy())
+        for (i in 1 until sessions.size) {
+            val current = sessions[i]
+            val last = merged.last()
+            if (current.bookName == last.bookName &&
+                current.bookAuthor == last.bookAuthor &&
+                current.startTime - last.endTime <= DISPLAY_MERGE_GAP
+            ) {
+                merged[merged.lastIndex] = last.copy(
+                    endTime = maxOf(last.endTime, current.endTime),
+                    words = last.words + current.words
+                )
+            } else {
+                merged.add(current.copy())
+            }
+        }
+        return merged
+    }
 
     val readRecordEnabled: Flow<Boolean> =
         localPreferencesRepository.getPreference(LocalPreferencesKeys.ENABLE_READ_RECORD, true)
@@ -101,7 +135,9 @@ class ReadRecordRepository(
                 .map { (date, daySessions) ->
                     ReadRecordTimelineDay(
                         date = date,
-                        sessions = daySessions.sortedByDescending { it.startTime }
+                        sessions = mergeContinuousSessions(
+                            daySessions.sortedBy { it.startTime }
+                        ).reversed()
                     )
                 }
         }
@@ -235,9 +271,19 @@ class ReadRecordRepository(
         }
     }
 
+    /**
+     * 删除一个会话。传入的 session 可能是展示层合并后的聚合段，
+     * 其 id 只指向首段，因此按 [startTime, endTime] 区间删掉所有底层成员。
+     */
     suspend fun deleteSession(session: ReadRecordSession) {
         database.withTransaction {
-            dao.deleteSession(session)
+            dao.deleteSessionsByBookAndRange(
+                session.deviceId,
+                session.bookName,
+                session.bookAuthor,
+                session.startTime,
+                session.endTime
+            )
 
             val dateString = DateUtil.format(Date(session.startTime), "yyyy-MM-dd")
             val remainingSessions =

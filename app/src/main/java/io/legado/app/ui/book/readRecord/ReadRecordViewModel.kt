@@ -216,7 +216,7 @@ class ReadRecordViewModel(
         val mergedList = mutableListOf<ReadRecordSession>()
         mergedList.add(sessions.first().copy())
 
-        val gapLimit = 60 * 1000L
+        val gapLimit = 5 * 60 * 1000L
 
         for (i in 1 until sessions.size) {
             val current = sessions[i]
@@ -225,7 +225,10 @@ class ReadRecordViewModel(
                 current.bookAuthor == last.bookAuthor &&
                 (current.startTime - last.endTime) <= gapLimit
             ) {
-                mergedList[mergedList.lastIndex] = last.copy(endTime = current.endTime)
+                mergedList[mergedList.lastIndex] = last.copy(
+                    endTime = maxOf(last.endTime, current.endTime),
+                    words = last.words + current.words
+                )
             } else {
                 mergedList.add(current.copy())
             }

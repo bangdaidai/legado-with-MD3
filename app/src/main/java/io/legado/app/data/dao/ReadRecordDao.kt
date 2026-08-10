@@ -294,8 +294,28 @@ interface ReadRecordDao {
         date: String
     )
 
-    @Delete
-    suspend fun deleteSession(session: ReadRecordSession)
+    /**
+     * 删除某本书在 [from, to] 起始时间区间内的所有会话。
+     * 展示层会把相邻会话合并成一段，删除该段时需按区间清掉其所有底层成员，
+     * 否则只删掉首段、其余碎片会在刷新后重新出现。
+     */
+    @Query(
+        """
+        DELETE FROM readRecordSession
+        WHERE deviceId = :deviceId
+        AND bookName = :bookName
+        AND bookAuthor = :bookAuthor
+        AND startTime BETWEEN :from AND :to
+    """
+    )
+    suspend fun deleteSessionsByBookAndRange(
+        deviceId: String,
+        bookName: String,
+        bookAuthor: String,
+        from: Long,
+        to: Long
+    )
+
 
     @Delete
     suspend fun deleteReadRecord(record: ReadRecord)
