@@ -1199,6 +1199,8 @@
     <string name="unknown_state">未知状态</string>
     <string name="disable_source">禁用源</string>
     <string name="delete_source">删除源</string>
+    <string name="open_url_confirm_title">跳转确认</string>
+    <string name="open_url_confirm_message">%s 正在请求跳转链接/应用，是否跳转？</string>
     <string name="chapter_pay">购买</string>
     <string name="double_page_horizontal">平板/横屏双页</string>
     <string name="open_in_browser">浏览器打开</string>

@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -89,7 +91,10 @@ import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.NormalCard
+import io.legado.app.ui.widget.components.icon.AppIcon
+import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -519,28 +524,41 @@ fun AiChatScreen(
                         ) {
                             Surface(
                                 modifier = Modifier.height(40.dp),
+                                onClick = { onIntent(AiChatIntent.ShowModelPicker) },
                                 shape = RoundedCornerShape(50),
                                 color = LegadoTheme.colorScheme.surfaceContainerLow
                             ) {
-                                Column(
+                                Row(
                                     modifier = Modifier
                                         .height(40.dp)
-                                        .padding(horizontal = 12.dp),
-                                    horizontalAlignment = Alignment.Start,
-                                    verticalArrangement = Arrangement.Center
+                                        .padding(start = 12.dp, end = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    AppText(
-                                        text = conversationTitle,
-                                        style = LegadoTheme.typography.labelMediumEmphasized,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    AppText(
-                                        text = modelName,
-                                        style = LegadoTheme.typography.labelSmall,
-                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                    Column(
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        horizontalAlignment = Alignment.Start,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        AppText(
+                                            text = conversationTitle,
+                                            style = LegadoTheme.typography.labelMediumEmphasized,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        AppText(
+                                            text = modelName,
+                                            style = LegadoTheme.typography.labelSmall,
+                                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    AppIcon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = stringResource(R.string.ai_select_model),
+                                        tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
@@ -563,6 +581,17 @@ fun AiChatScreen(
         }
     }
 
+    AppModalBottomSheet(
+        show = state.showModelPicker,
+        onDismissRequest = { onIntent(AiChatIntent.DismissModelPicker) },
+        title = stringResource(R.string.ai_select_model)
+    ) {
+        AiChatModelPickerContent(
+            models = state.availableModels,
+            onSelect = { onIntent(AiChatIntent.SelectModel(it)) }
+        )
+    }
+
     AppAlertDialog(
         show = errorDialogMessage != null,
         onDismissRequest = { errorDialogMessage = null },
@@ -571,6 +600,66 @@ fun AiChatScreen(
         confirmText = stringResource(R.string.ok),
         onConfirm = { errorDialogMessage = null }
     )
+}
+
+@Composable
+private fun AiChatModelPickerContent(
+    models: ImmutableList<AiChatModelItemUi>,
+    onSelect: (String) -> Unit
+) {
+    if (models.isEmpty()) {
+        AppText(
+            text = stringResource(R.string.ai_no_models_imported),
+            style = LegadoTheme.typography.bodyMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+        return
+    }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 360.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items(models, key = { it.modelProfileId }) { model ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onSelect(model.modelProfileId) }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(
+                        text = model.modelName,
+                        style = LegadoTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (model.providerName.isNotBlank()) {
+                        AppText(
+                            text = model.providerName,
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (model.isSelected) {
+                    AppIcon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = LegadoTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

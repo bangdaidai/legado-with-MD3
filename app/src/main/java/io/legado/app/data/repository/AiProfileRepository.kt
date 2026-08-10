@@ -156,6 +156,52 @@ class AiProfileRepository(
             ?: error("Failed to save default model")
     }
 
+    override suspend fun setTaskPresetModel(
+        taskType: String,
+        modelProfileId: String
+    ): AiTaskPresetConfig = withContext(Dispatchers.IO) {
+        val model = aiProfileDao.getModel(modelProfileId) ?: error("Model is required")
+        val existing = aiProfileDao.getDefaultPreset(taskType)
+            ?: aiProfileDao.getPreset(defaultPresetId(taskType))
+        val now = System.currentTimeMillis()
+        val preset = existing?.copy(
+            modelProfileId = modelProfileId,
+            updatedAt = now
+        ) ?: AiTaskPreset(
+            id = defaultPresetId(taskType),
+            taskType = taskType,
+            name = defaultPresetName(taskType),
+            modelProfileId = modelProfileId,
+            promptTemplate = defaultPresetPromptTemplate(taskType),
+            paramsJson = GSON.toJson(parseParams(model.defaultParamsJson)),
+            isDefault = true,
+            createdAt = now,
+            updatedAt = now
+        )
+        aiProfileDao.insertPreset(preset)
+        preset.toConfig() ?: error("Failed to set task preset model")
+    }
+
+    private fun defaultPresetId(taskType: String): String = when (taskType) {
+        AiTaskType.TRANSLATE_CHAPTER -> DEFAULT_TRANSLATE_PRESET_ID
+        AiTaskType.SUMMARIZE_CHAPTER -> DEFAULT_SUMMARY_PRESET_ID
+        AiTaskType.CHAT -> DEFAULT_CHAT_PRESET_ID
+        else -> newId("preset")
+    }
+
+    private fun defaultPresetName(taskType: String): String = when (taskType) {
+        AiTaskType.TRANSLATE_CHAPTER -> "Default Translation"
+        AiTaskType.SUMMARIZE_CHAPTER -> "Default Chapter Summary"
+        AiTaskType.CHAT -> "Default Chat"
+        else -> "Default Preset"
+    }
+
+    private fun defaultPresetPromptTemplate(taskType: String): String = when (taskType) {
+        AiTaskType.TRANSLATE_CHAPTER -> TranslationConstants.DEFAULT_PROMPT
+        AiTaskType.SUMMARIZE_CHAPTER -> AiPromptTemplate.DEFAULT_CHAPTER_SUMMARY
+        else -> "You are a helpful AI assistant."
+    }
+
     override suspend fun deleteProvider(providerId: String) = withContext(Dispatchers.IO) {
         aiProfileDao.deleteModelsByProvider(providerId)
         aiProfileDao.deleteProvider(providerId)

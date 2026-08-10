@@ -1238,6 +1238,8 @@
     <string name="unknown_state">unknown</string>
     <string name="disable_source">disable source</string>
     <string name="delete_source">delete source</string>
+    <string name="open_url_confirm_title">Open link</string>
+    <string name="open_url_confirm_message">%s is requesting to open a link or app. Continue?</string>
     <string name="chapter_pay">pay</string>
     <string name="double_page_horizontal">Tablet/Landscape Dual Page</string>
     <string name="open_in_browser">open in browser</string>

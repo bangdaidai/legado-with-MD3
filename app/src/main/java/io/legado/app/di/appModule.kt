@@ -223,6 +223,7 @@ import io.legado.app.ui.association.ImportHttpTtsViewModel
 import io.legado.app.ui.association.ImportReplaceRuleViewModel
 import io.legado.app.ui.association.ImportRssSourceViewModel
 import io.legado.app.ui.association.ImportTxtTocRuleViewModel
+import io.legado.app.ui.association.OpenUrlConfirmViewModel
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.bookmark.AllBookmarkViewModel
 import io.legado.app.ui.book.marking.AllMarkingViewModel
@@ -533,6 +534,7 @@ val appModule = module {
     viewModelOf(::ImportReplaceRuleViewModel)
     viewModelOf(::ImportRssSourceViewModel)
     viewModelOf(::ImportTxtTocRuleViewModel)
+    viewModelOf(::OpenUrlConfirmViewModel)
     viewModelOf(::HighlightTagRuleViewModel)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)

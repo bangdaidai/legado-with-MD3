@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
@@ -55,6 +56,7 @@ class AiChatViewModel(
     init {
         observeConversations()
         observeCurrentMessages()
+        observeAvailableModels()
     }
 
     fun onIntent(intent: AiChatIntent) {
@@ -70,6 +72,67 @@ class AiChatViewModel(
             is AiChatIntent.SwitchBranch -> switchBranch(intent.messageId)
             is AiChatIntent.DeleteConversation -> deleteConversation(intent.id)
             is AiChatIntent.RenameConversation -> renameConversation(intent.id, intent.title)
+            AiChatIntent.ShowModelPicker -> _uiState.update { it.copy(showModelPicker = true) }
+            AiChatIntent.DismissModelPicker -> _uiState.update { it.copy(showModelPicker = false) }
+            is AiChatIntent.SelectModel -> selectModel(intent.modelProfileId)
+        }
+    }
+
+    // ---- Model selection ----
+
+    private fun observeAvailableModels() {
+        viewModelScope.launch {
+            combine(
+                aiProfileGateway.observeProviders(),
+                aiProfileGateway.observeModels(),
+                aiProfileGateway.observePresets()
+            ) { providers, models, presets ->
+                val providerMap = providers.filter { it.enabled }.associateBy { it.id }
+                val currentModelId = presets
+                    .filter { it.taskType == AiTaskType.CHAT && it.enabled }
+                    .let { chatPresets ->
+                        chatPresets.firstOrNull { it.isDefault } ?: chatPresets.firstOrNull()
+                    }
+                    ?.modelProfileId
+                models.filter { it.enabled && providerMap.containsKey(it.providerId) }
+                    .map { model ->
+                        AiChatModelItemUi(
+                            modelProfileId = model.id,
+                            providerName = providerMap[model.providerId]?.name.orEmpty(),
+                            modelName = model.displayName,
+                            isSelected = model.id == currentModelId
+                        )
+                    }
+                    .toImmutableList()
+            }.collect { items ->
+                _uiState.update { it.copy(availableModels = items) }
+            }
+        }
+    }
+
+    private fun selectModel(modelProfileId: String) {
+        viewModelScope.launch {
+            runCatching {
+                aiProfileGateway.setTaskPresetModel(AiTaskType.CHAT, modelProfileId)
+            }.onSuccess { preset ->
+                val providerName = preset.model.provider.name
+                val modelName = preset.model.displayName
+                _uiState.update { current ->
+                    current.copy(
+                        showModelPicker = false,
+                        conversations = current.conversations.map {
+                            if (it.id == current.currentConversationId || it.isSelected) {
+                                it.copy(providerName = providerName, modelName = modelName)
+                            } else {
+                                it
+                            }
+                        }.toImmutableList()
+                    )
+                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(showModelPicker = false) }
+                _effects.tryEmit(AiChatEffect.ShowMessage(error.message ?: "Failed to switch model"))
+            }
         }
     }
 

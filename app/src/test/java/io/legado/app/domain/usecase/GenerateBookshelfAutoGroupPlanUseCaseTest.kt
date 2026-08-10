@@ -373,6 +373,10 @@ class GenerateBookshelfAutoGroupPlanUseCaseTest {
             models: List<AiAvailableModel>,
         ): List<AiModelProfile> = error("unused")
         override suspend fun setDefaultModel(modelProfileId: String): AiTaskPresetConfig = error("unused")
+        override suspend fun setTaskPresetModel(
+            taskType: String,
+            modelProfileId: String,
+        ): AiTaskPresetConfig = error("unused")
         override suspend fun saveDefaultChatProfile(draft: AiProfileDraft): AiTaskPresetConfig = error("unused")
         override suspend fun saveTaskPreset(
             taskType: String,

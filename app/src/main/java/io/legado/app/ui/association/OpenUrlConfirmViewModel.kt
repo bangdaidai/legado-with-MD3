@@ -1,41 +1,73 @@
 package io.legado.app.ui.association
 
-import android.app.Application
-import android.os.Bundle
-import io.legado.app.base.BaseViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.legado.app.constant.SourceType
 import io.legado.app.help.source.SourceHelp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
-class OpenUrlConfirmViewModel(app: Application): BaseViewModel(app) {
+class OpenUrlConfirmViewModel : ViewModel() {
 
-    var uri = ""
-    var mimeType: String? = null
-    var sourceOrigin = ""
-    var sourceName = ""
-    var sourceType = SourceType.book
+    private val _uiState = MutableStateFlow(OpenUrlConfirmUiState())
+    val uiState = _uiState.asStateFlow()
 
-    fun initData(arguments: Bundle) {
-        uri = arguments.getString("uri") ?: ""
-        mimeType = arguments.getString("mimeType")
-        sourceName = arguments.getString("sourceName") ?: ""
-        sourceOrigin = arguments.getString("sourceOrigin") ?: ""
-        sourceType = arguments.getInt("sourceType", SourceType.book)
+    private val _effects = MutableSharedFlow<OpenUrlConfirmEffect>(extraBufferCapacity = 16)
+    val effects = _effects.asSharedFlow()
+
+    private var uri = ""
+    private var mimeType: String? = null
+    private var sourceOrigin = ""
+    private var sourceType = SourceType.book
+
+    fun onIntent(intent: OpenUrlConfirmIntent) {
+        when (intent) {
+            is OpenUrlConfirmIntent.Init -> init(intent)
+            OpenUrlConfirmIntent.ConfirmOpen -> confirmOpen()
+            OpenUrlConfirmIntent.Cancel -> _effects.tryEmit(OpenUrlConfirmEffect.Finish)
+            OpenUrlConfirmIntent.DisableSource -> disableSource()
+            OpenUrlConfirmIntent.RequestDeleteSource ->
+                _uiState.update { it.copy(showDeleteConfirm = true) }
+
+            OpenUrlConfirmIntent.DismissDeleteConfirm ->
+                _uiState.update { it.copy(showDeleteConfirm = false) }
+
+            OpenUrlConfirmIntent.ConfirmDeleteSource -> deleteSource()
+        }
     }
 
-    fun disableSource(block: () -> Unit) {
-        execute {
+    private fun init(intent: OpenUrlConfirmIntent.Init) {
+        uri = intent.uri
+        mimeType = intent.mimeType
+        sourceOrigin = intent.sourceOrigin
+        sourceType = intent.sourceType
+        _uiState.update { it.copy(sourceName = intent.sourceName) }
+    }
+
+    private fun confirmOpen() {
+        if (uri.isNotBlank()) {
+            _effects.tryEmit(OpenUrlConfirmEffect.OpenUrl(uri, mimeType))
+        } else {
+            _effects.tryEmit(OpenUrlConfirmEffect.Finish)
+        }
+    }
+
+    private fun disableSource() {
+        viewModelScope.launch(Dispatchers.IO) {
             SourceHelp.enableSource(sourceOrigin, sourceType, false)
-        }.onSuccess {
-            block.invoke()
+            _effects.tryEmit(OpenUrlConfirmEffect.Finish)
         }
     }
 
-    fun deleteSource(block: () -> Unit) {
-        execute {
+    private fun deleteSource() {
+        viewModelScope.launch(Dispatchers.IO) {
             SourceHelp.deleteSource(sourceOrigin, sourceType)
-        }.onSuccess {
-            block.invoke()
+            _effects.tryEmit(OpenUrlConfirmEffect.Finish)
         }
     }
-
 }

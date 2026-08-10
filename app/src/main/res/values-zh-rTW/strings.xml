@@ -1004,6 +1004,8 @@
     <string name="unknown_state">未知狀態</string>
     <string name="disable_source">禁用源</string>
     <string name="delete_source">刪除源</string>
+    <string name="open_url_confirm_title">跳轉確認</string>
+    <string name="open_url_confirm_message">%s 正在請求跳轉連結/應用程式，是否跳轉？</string>
     <string name="chapter_pay">購買</string>
     <string name="double_page_horizontal">平板/橫屏雙頁</string>
     <string name="open_in_browser">瀏覽器打開</string>
