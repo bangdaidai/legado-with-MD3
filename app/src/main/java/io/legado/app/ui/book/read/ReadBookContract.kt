@@ -14,6 +14,7 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.repository.ReadAloudSettingsRepository
+import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.model.settings.ReadStyleItem
@@ -496,6 +497,7 @@ sealed interface ReadBookIntent {
     data object OpenChapterSummary : ReadBookIntent
     data object OpenAiCurrentChapterRewrite : ReadBookIntent
     data object RetryChapterSummary : ReadBookIntent
+    data class SetChapterSummaryReasoningLevel(val level: AiReasoningLevel) : ReadBookIntent
     data object LoadContentProcesses : ReadBookIntent
     data class ToggleContentProcess(val id: String, val enabled: Boolean) : ReadBookIntent
     data class RequestDeleteContentProcess(val item: ContentProcessItemUi) : ReadBookIntent
@@ -710,6 +712,7 @@ sealed interface ReadBookIntent {
     ) : ReadBookIntent
 
     data object RetryAiTextClean : ReadBookIntent
+    data class SetAiTextCleanReasoningLevel(val level: AiReasoningLevel) : ReadBookIntent
     data object ConfirmAiTextClean : ReadBookIntent
     data class OpenAiTextRewrite(
         val text: String,
@@ -722,6 +725,7 @@ sealed interface ReadBookIntent {
     data class SelectAiRewriteHistory(val artifactId: String) : ReadBookIntent
     data object GenerateAiTextRewrite : ReadBookIntent
     data object RetryAiTextRewrite : ReadBookIntent
+    data class SetAiTextRewriteReasoningLevel(val level: AiReasoningLevel) : ReadBookIntent
     data object ConfirmAiTextRewrite : ReadBookIntent
     data object OpenAiRewritePresetConfig : ReadBookIntent
     data object CloseAiRewritePresetConfig : ReadBookIntent

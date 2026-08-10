@@ -63,7 +63,7 @@ data class TextLine(
     val lineEnd: Float get() = textColumns.lastOrNull()?.end ?: 0f
     val chapterIndices: IntRange get() = chapterPosition..chapterPosition + charSize
     val height: Float inline get() = lineBottom - lineTop
-    val canvasRecorder = CanvasRecorderFactory.create()
+    val canvasRecorder by lazy { CanvasRecorderFactory.create() }
     var searchResultColumnCount = 0
     var isReadAloud: Boolean = false
         set(value) {
@@ -75,7 +75,19 @@ data class TextLine(
             }
             field = value
         }
-    var textPage: TextPage = emptyTextPage
+
+    /**
+     * 惰性取默认页：`TextPage.emptyTextPage` 的构造会拉起
+     * `TextPage → ChapterProvider → ReadBookConfig` 全局链。排版成批构造 TextLine
+     * 时不该为每一行都求值这条链，改为首次访问（draw / addLine 赋值）时才解析。
+     * `by lazy` 只支持 val，此处需要可写，用显式 getter/setter 实现（D2/E5）。
+     */
+    var textPage: TextPage
+        get() = lazyTextPage ?: emptyTextPage.also { lazyTextPage = it }
+        set(value) {
+            lazyTextPage = value
+        }
+    private var lazyTextPage: TextPage? = null
     var isLeftLine = true
     val useUnderline: Boolean
         get() = ChapterProvider.renderStyle.useUnderline

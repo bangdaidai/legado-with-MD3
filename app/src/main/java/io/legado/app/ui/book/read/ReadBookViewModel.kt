@@ -927,6 +927,8 @@ class ReadBookViewModel(
             is ReadBookIntent.OpenChapterSummary -> aiDelegate.openChapterSummary()
             is ReadBookIntent.OpenAiCurrentChapterRewrite -> aiDelegate.openAiCurrentChapterRewrite()
             is ReadBookIntent.RetryChapterSummary -> aiDelegate.retryChapterSummary()
+            is ReadBookIntent.SetChapterSummaryReasoningLevel ->
+                aiDelegate.setChapterSummaryReasoningLevel(intent.level)
             is ReadBookIntent.LoadContentProcesses -> contentProcessDelegate.load()
             is ReadBookIntent.ToggleContentProcess ->
                 contentProcessDelegate.toggle(intent.id, intent.enabled)
@@ -941,6 +943,8 @@ class ReadBookViewModel(
                 aiDelegate.selectAiRewriteHistory(intent.artifactId)
             is ReadBookIntent.GenerateAiTextRewrite -> aiDelegate.generateSelectedAiTextRewrite()
             is ReadBookIntent.RetryAiTextRewrite -> aiDelegate.retryAiTextRewrite()
+            is ReadBookIntent.SetAiTextRewriteReasoningLevel ->
+                aiDelegate.setAiTextRewriteReasoningLevel(intent.level)
             is ReadBookIntent.ConfirmAiTextRewrite -> aiDelegate.confirmAiTextRewrite()
             is ReadBookIntent.OpenAiRewritePresetConfig -> aiDelegate.openAiRewritePresetConfig()
             is ReadBookIntent.CloseAiRewritePresetConfig -> aiDelegate.closeAiRewritePresetConfig()
@@ -1533,6 +1537,8 @@ class ReadBookViewModel(
             }
 
             is ReadBookIntent.RetryAiTextClean -> aiDelegate.retryAiTextClean()
+            is ReadBookIntent.SetAiTextCleanReasoningLevel ->
+                aiDelegate.setAiTextCleanReasoningLevel(intent.level)
             is ReadBookIntent.ConfirmAiTextClean -> aiDelegate.confirmAiTextClean()
 
             is ReadBookIntent.OpenAiTextRewrite -> {

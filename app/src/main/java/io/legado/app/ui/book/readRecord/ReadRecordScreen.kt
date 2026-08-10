@@ -91,7 +91,6 @@ import io.legado.app.ui.widget.components.CollapsibleHeader
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.AppIconButton
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import io.legado.app.ui.widget.components.card.GlassCard
@@ -113,6 +112,7 @@ import io.legado.app.ui.widget.components.swipe.SwipeActionContainer
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.StringUtils.formatFriendlyDate
 import io.legado.app.utils.formatReadDuration
@@ -255,7 +255,7 @@ fun ReadRecordScreen(
                 },
                 actions = {
                     if (inSelectionMode) {
-                        AppIconButton(
+                        TopBarActionButton(
                             onClick = {
                                 val action = {
                                     deleteSelectedReadRecords(
@@ -266,47 +266,48 @@ fun ReadRecordScreen(
                                     selectedItemKeys = emptySet()
                                 }
                                 onConfirmDelete(selectedItemKeys.size, action)
-                            }
-                        ) {
-                            AppIcon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.delete_selected)
-                            )
-                        }
+                            },
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.delete_selected)
+                        )
                     } else {
-                        AppIconButton(onClick = {
-                            val newMode = when (displayMode) {
-                                DisplayMode.AGGREGATE -> DisplayMode.TIMELINE
-                                DisplayMode.TIMELINE -> DisplayMode.LATEST
-                                DisplayMode.LATEST -> DisplayMode.DURATION
-                                DisplayMode.DURATION -> DisplayMode.AGGREGATE
-                            }
-                            onIntent(ReadRecordIntent.SetDisplayMode(newMode))
-                            selectedItemKeys = emptySet()
-                        }) {
-                            val icon = when (displayMode) {
-                                DisplayMode.AGGREGATE -> Icons.Default.Timeline
-                                DisplayMode.TIMELINE -> Icons.Default.Schedule
-                                DisplayMode.LATEST -> Icons.Default.HourglassBottom
-                                DisplayMode.DURATION -> Icons.AutoMirrored.Filled.List
-                            }
-                            val description = when (displayMode) {
-                                DisplayMode.AGGREGATE -> stringResource(R.string.a11y_switch_to_timeline_view)
-                                DisplayMode.TIMELINE -> stringResource(R.string.a11y_switch_to_latest_view)
-                                DisplayMode.LATEST -> stringResource(R.string.a11y_switch_to_duration_view)
-                                DisplayMode.DURATION -> stringResource(R.string.a11y_switch_to_aggregate_view)
-                            }
-                            AppIcon(icon, description)
+                        val (icon, description) = when (displayMode) {
+                            DisplayMode.AGGREGATE -> Icons.Default.Timeline to
+                                    stringResource(R.string.a11y_switch_to_timeline_view)
+
+                            DisplayMode.TIMELINE -> Icons.Default.Schedule to
+                                    stringResource(R.string.a11y_switch_to_latest_view)
+
+                            DisplayMode.LATEST -> Icons.Default.HourglassBottom to
+                                    stringResource(R.string.a11y_switch_to_duration_view)
+
+                            DisplayMode.DURATION -> Icons.AutoMirrored.Filled.List to
+                                    stringResource(R.string.a11y_switch_to_aggregate_view)
                         }
-                        AppIconButton(onClick = { showSearch = !showSearch }) {
-                            AppIcon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
-                        }
-                        AppIconButton(onClick = { showActionsSheet = true }) {
-                            AppIcon(
-                                Icons.Default.MoreVert,
-                                contentDescription = stringResource(R.string.more_actions)
-                            )
-                        }
+                        TopBarActionButton(
+                            onClick = {
+                                val newMode = when (displayMode) {
+                                    DisplayMode.AGGREGATE -> DisplayMode.TIMELINE
+                                    DisplayMode.TIMELINE -> DisplayMode.LATEST
+                                    DisplayMode.LATEST -> DisplayMode.DURATION
+                                    DisplayMode.DURATION -> DisplayMode.AGGREGATE
+                                }
+                                onIntent(ReadRecordIntent.SetDisplayMode(newMode))
+                                selectedItemKeys = emptySet()
+                            },
+                            imageVector = icon,
+                            contentDescription = description
+                        )
+                        TopBarActionButton(
+                            onClick = { showSearch = !showSearch },
+                            imageVector = Icons.Default.Search,
+                            contentDescription = stringResource(R.string.search)
+                        )
+                        TopBarActionButton(
+                            onClick = { showActionsSheet = true },
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.more_actions)
+                        )
                     }
                 },
                 scrollBehavior = scrollBehavior,

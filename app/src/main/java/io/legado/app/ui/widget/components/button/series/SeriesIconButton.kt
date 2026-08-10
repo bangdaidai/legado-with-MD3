@@ -6,6 +6,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Indication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -69,6 +70,8 @@ internal fun SeriesButton(
     onLongClick: (() -> Unit)? = null,
     size: DpSize? = null,
     enforceMinimumInteractiveSize: Boolean = true,
+    clipToShape: Boolean = true,
+    indication: Indication? = ripple(bounded = true),
     shape: Shape = IconButtonDefaults.extraSmallRoundShape,
     style: SeriesIconButtonStyle = SeriesIconButtonStyle.Plain,
     contentColor: Color = LegadoTheme.colorScheme.onSurfaceVariant,
@@ -114,12 +117,12 @@ internal fun SeriesButton(
             .then(if (enforceMinimumInteractiveSize) Modifier.minimumInteractiveComponentSize() else Modifier)
             .then(modifier)
             .then(if (size != null) Modifier.size(size) else Modifier)
-            .clip(shape)
+            .then(if (clipToShape) Modifier.clip(shape) else Modifier)
             .background(containerColor, shape)
             .then(if (border != null) Modifier.border(border, shape) else Modifier)
             .combinedClickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true),
+                indication = indication,
                 enabled = enabled,
                 role = Role.Button,
                 onLongClick = onLongClick,
