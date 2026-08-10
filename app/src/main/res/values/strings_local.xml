@@ -28,7 +28,7 @@
     <string name="ticket_dash_style_dash">段线</string>
     <string name="ticket_dash_style_dot">点线</string>
     <string name="all_marking">Markings</string>
-    <string name="generate_bookplate">Generate share card</string>
+    <string name="generate_share_card">Generate share card</string>
     <string name="clear_all_bookmarks">Clear all bookmarks</string>
     <string name="clear_all_bookmarks_confirm">Delete all bookmarks? This cannot be undone.</string>
     <string name="clear_all_bookmarks_done">All bookmarks cleared</string>

@@ -260,7 +260,7 @@ fun MarkingSheet(
                 MediumTonalButton(
                     onClick = onGenerateShareCard,
                     modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(R.string.generate_shareCard),
+                    text = stringResource(R.string.generate_share_card),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
