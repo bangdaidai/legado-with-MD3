@@ -74,7 +74,7 @@ fun MarkingSheet(
     onSave: (style: TextProcessStyle, note: String) -> Unit,
     onDelete: () -> Unit,
     showStyleConfig: Boolean = true,
-    onGenerateBookplate: (() -> Unit)? = null,
+    onGenerateShareCard: (() -> Unit)? = null,
 ) {
     val selection = state.selection
     val editing = state.editing
@@ -255,12 +255,12 @@ fun MarkingSheet(
                 },
             )
 
-            if (onGenerateBookplate != null) {
+            if (onGenerateShareCard != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 MediumTonalButton(
-                    onClick = onGenerateBookplate,
+                    onClick = onGenerateShareCard,
                     modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(R.string.generate_bookplate),
+                    text = stringResource(R.string.generate_shareCard),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }

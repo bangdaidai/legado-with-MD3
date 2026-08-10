@@ -1,10 +1,10 @@
 package io.legado.app.data.entities
 
 /**
- * 藏书票渲染入参 VO（非 Room 实体）
- * 移植自 readdai `BookplateData`。40+ 字段涵盖 9 大类：基本信息/进度/统计/日期/评分/书摘/主角/标签/书源。
+ * 分享卡片渲染入参 VO（非 Room 实体）
+ * 移植自 readdai `ShareCardData`。40+ 字段涵盖 9 大类：基本信息/进度/统计/日期/评分/书摘/主角/标签/书源。
  */
-data class BookplateData(
+data class ShareCardData(
     // 基本信息（11）
     val bookName: String = "",
     val author: String = "",

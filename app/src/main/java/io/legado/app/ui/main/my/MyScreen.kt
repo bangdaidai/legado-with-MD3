@@ -239,10 +239,10 @@ fun MyScreen(
                     }
                 )
                 ClickableSettingItem(
-                    title = "藏书票模板",
+                    title = "分享模板",
                     imageVector = Icons.Default.Image,
                     onClick = {
-                        onNavigate(PrefClickEvent.OpenBookplateManage)
+                        onNavigate(PrefClickEvent.OpenShareCardManage)
                     }
                 )
                 ClickableSettingItem(

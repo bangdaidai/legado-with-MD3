@@ -74,7 +74,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.icon.AppIcons
 import java.util.Locale
-import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
+import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TagChip
@@ -113,9 +113,9 @@ fun ReadingMemoryDetailScreen(
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
                     TopBarActionButton(
-                        onClick = { onIntent(ReadingMemoryDetailIntent.GenerateBookplate) },
+                        onClick = { onIntent(ReadingMemoryDetailIntent.GenerateShareCard) },
                         imageVector = Icons.Default.Image,
-                        contentDescription = "生成藏书票",
+                        contentDescription = "生成分享卡片",
                     )
                 },
             )
@@ -174,7 +174,7 @@ fun ReadingMemoryDetailScreen(
             onSave = { onIntent(ReadingMemoryDetailIntent.SaveReview) },
             onDismiss = { onIntent(ReadingMemoryDetailIntent.DismissReviewEditor) },
             onDelete = { onIntent(ReadingMemoryDetailIntent.DeleteReview) },
-            onGenerateBookplate = { onIntent(ReadingMemoryDetailIntent.GenerateBookplateFromReview) },
+            onGenerateShareCard = { onIntent(ReadingMemoryDetailIntent.GenerateShareCardFromReview) },
         )
     }
 
@@ -192,19 +192,19 @@ fun ReadingMemoryDetailScreen(
                 editingMarking = null
             },
             showStyleConfig = false,
-            onGenerateBookplate = {
+            onGenerateShareCard = {
                 editingMarking = null
-                onIntent(ReadingMemoryDetailIntent.GenerateBookplateFromMarking(marking))
+                onIntent(ReadingMemoryDetailIntent.GenerateShareCardFromMarking(marking))
             },
         )
     }
 
-    BookplatePreviewSheet(
-        show = state.showBookplate,
-        data = state.bookplateData,
-        initialBitmap = state.bookplateBitmap,
-        loading = state.bookplateLoading,
-        onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissBookplate) },
+    ShareCardPreviewSheet(
+        show = state.showShareCard,
+        data = state.shareCardData,
+        initialBitmap = state.shareCardBitmap,
+        loading = state.shareCardLoading,
+        onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissShareCard) },
     )
 }
 
@@ -728,7 +728,7 @@ private fun ReviewEditorSheet(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)? = null,
-    onGenerateBookplate: (() -> Unit)? = null,
+    onGenerateShareCard: (() -> Unit)? = null,
 ) {
     AppModalBottomSheet(
         show = true,
@@ -758,10 +758,10 @@ private fun ReviewEditorSheet(
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
-        if (onGenerateBookplate != null) {
+        if (onGenerateShareCard != null) {
             Spacer(modifier = Modifier.height(12.dp))
             FilledTonalButton(
-                onClick = onGenerateBookplate,
+                onClick = onGenerateShareCard,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 AppText("生成书评票")

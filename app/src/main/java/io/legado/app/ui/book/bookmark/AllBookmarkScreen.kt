@@ -60,7 +60,7 @@ import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
-import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
+import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -410,20 +410,20 @@ fun AllBookmarkScreen(
                 onIntent(AllBookmarkIntent.DeleteBookmark(bookmarkToDelete))
                 showBottomSheet = false
             },
-            onGenerateBookplate = { bookmark ->
+            onGenerateShareCard = { bookmark ->
                 showBottomSheet = false
                 editingBookmark = null
-                onIntent(AllBookmarkIntent.GenerateBookplate(bookmark))
+                onIntent(AllBookmarkIntent.GenerateShareCard(bookmark))
             }
         )
     }
 
-    BookplatePreviewSheet(
-        show = state.showBookplate,
-        data = state.bookplateData,
-        initialBitmap = state.bookplateBitmap,
-        loading = state.bookplateLoading,
-        onDismissRequest = { onIntent(AllBookmarkIntent.DismissBookplate) },
+    ShareCardPreviewSheet(
+        show = state.showShareCard,
+        data = state.shareCardData,
+        initialBitmap = state.shareCardBitmap,
+        loading = state.shareCardLoading,
+        onDismissRequest = { onIntent(AllBookmarkIntent.DismissShareCard) },
     )
 
     if (showClearAllDialog) {

@@ -50,7 +50,7 @@ import io.legado.app.ui.dict.DictSheet
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
-import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
+import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.FontFolderState
 import io.legado.app.ui.widget.components.FontSelectSheet
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -300,8 +300,8 @@ fun ReadBookScreen(
             onIntent(ReadBookIntent.SaveMarking(style, note))
         },
         onDelete = { onIntent(ReadBookIntent.DeleteMarking) },
-        onGenerateBookplate = if (markingState.editing != null) {
-            { onIntent(ReadBookIntent.GenerateBookplateFromMarking) }
+        onGenerateShareCard = if (markingState.editing != null) {
+            { onIntent(ReadBookIntent.GenerateShareCardFromMarking) }
         } else {
             null
         },
@@ -424,12 +424,12 @@ fun ReadBookScreen(
         onExportConfig = { onIntent(ReadBookIntent.OpenReadStyleExport) },
         styleConfig = state.styleConfig,
     )
-    BookplatePreviewSheet(
-        show = state.showBookplate,
-        data = state.bookplateData,
-        initialBitmap = state.bookplateBitmap,
-        loading = state.bookplateLoading,
-        onDismissRequest = { onIntent(ReadBookIntent.DismissBookplate) },
+    ShareCardPreviewSheet(
+        show = state.showShareCard,
+        data = state.shareCardData,
+        initialBitmap = state.shareCardBitmap,
+        loading = state.shareCardLoading,
+        onDismissRequest = { onIntent(ReadBookIntent.DismissShareCard) },
     )
 
     val aloudPlayerViewModel: ReadAloudPlayerViewModel =

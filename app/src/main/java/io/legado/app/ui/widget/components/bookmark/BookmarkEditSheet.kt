@@ -33,7 +33,7 @@ fun BookmarkEditSheet(
     onDismiss: () -> Unit,
     onSave: (Bookmark) -> Unit,
     onDelete: (Bookmark) -> Unit,
-    onGenerateBookplate: ((Bookmark) -> Unit)? = null,
+    onGenerateShareCard: ((Bookmark) -> Unit)? = null,
 ) {
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var bookText by remember(bookmark) { mutableStateOf(bookmark.bookText) }
@@ -68,13 +68,13 @@ fun BookmarkEditSheet(
             content = content,
             onContentChange = { content = it },
         )
-        if (onGenerateBookplate != null) {
+        if (onGenerateShareCard != null) {
             MediumTonalButton(
                 onClick = {
-                    onGenerateBookplate(bookmark.copy(bookText = bookText, content = content))
+                    onGenerateShareCard(bookmark.copy(bookText = bookText, content = content))
                 },
                 modifier = Modifier.fillMaxWidth(),
-                text = "生成书摘票",
+                text = "生成分享卡片",
             )
             Spacer(modifier = Modifier.height(16.dp))
         }

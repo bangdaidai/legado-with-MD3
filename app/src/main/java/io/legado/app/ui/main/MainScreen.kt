@@ -152,7 +152,7 @@ fun MainScreen(
     onNavigateToRuleSub: () -> Unit,
     onNavigateToReadRecord: () -> Unit,
     onNavigateToReadingMemoryList: () -> Unit,
-    onNavigateToBookplateManage: () -> Unit,
+    onNavigateToShareCardManage: () -> Unit,
     onNavigateToReadRecordOverview: () -> Unit,
     onNavigateToHighlightTagRule: () -> Unit,
     onNavigateToTagManagement: () -> Unit,
@@ -623,7 +623,7 @@ fun MainScreen(
                                         PrefClickEvent.OpenBookSourceManage -> onNavigateToBookSourceManage()
                                         PrefClickEvent.OpenReadRecord -> onNavigateToReadRecord()
                                         PrefClickEvent.OpenReadingMemoryList -> onNavigateToReadingMemoryList()
-                                        PrefClickEvent.OpenBookplateManage -> onNavigateToBookplateManage()
+                                        PrefClickEvent.OpenShareCardManage -> onNavigateToShareCardManage()
                                         PrefClickEvent.OpenTagManagement -> onNavigateToTagManagement()
                                         else -> onIntent(MainUiIntent.HandlePreferenceClick(event))
                                     }

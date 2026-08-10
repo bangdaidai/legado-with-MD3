@@ -54,8 +54,8 @@ import io.legado.app.domain.usecase.UploadReadingProgressUseCase
 import io.legado.app.domain.usecase.VerifyBookmarkTargetUseCase
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
-import io.legado.app.help.book.BookplateDataBuilder
-import io.legado.app.help.book.BookplateGenerator
+import io.legado.app.help.book.ShareCardDataBuilder
+import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isLocal
@@ -258,17 +258,17 @@ class ReadBookViewModel(
     }
 
     /**
-     * 从当前正在编辑的划线笔记生成书摘票，就地展示在预览弹窗中。
+     * 从当前正在编辑的划线笔记生成分享卡片，就地展示在预览弹窗中。
      * 仅编辑模式（markingState.editing 非空）可用——ReadBookScreen 据此决定是否显示按钮。
      */
-    private fun generateBookplateFromMarking() {
+    private fun generateShareCardFromMarking() {
         val marking = markingState.value.editing ?: return
         _uiState.update {
             it.copy(
-                showBookplate = true,
-                bookplateLoading = true,
-                bookplateBitmap = null,
-                bookplateData = null,
+                showShareCard = true,
+                shareCardLoading = true,
+                shareCardBitmap = null,
+                shareCardData = null,
                 activeSheet = null,
             )
         }
@@ -278,13 +278,13 @@ class ReadBookViewModel(
                 marking.bookName,
                 marking.bookAuthor,
             )
-            val data = BookplateDataBuilder.buildFromMarking(marking, memory)
-            val bitmap = BookplateGenerator.generate(context, data)
+            val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
+            val bitmap = ShareCardGenerator.generate(context, data)
             _uiState.update {
                 it.copy(
-                    bookplateData = data,
-                    bookplateLoading = false,
-                    bookplateBitmap = bitmap,
+                    shareCardData = data,
+                    shareCardLoading = false,
+                    shareCardBitmap = bitmap,
                 )
             }
         }
@@ -1481,16 +1481,16 @@ class ReadBookViewModel(
                 markingDelegate.deleteCurrent()
             }
 
-            is ReadBookIntent.GenerateBookplateFromMarking -> {
-                generateBookplateFromMarking()
+            is ReadBookIntent.GenerateShareCardFromMarking -> {
+                generateShareCardFromMarking()
             }
 
-            is ReadBookIntent.DismissBookplate -> {
+            is ReadBookIntent.DismissShareCard -> {
                 _uiState.update {
                     it.copy(
-                        showBookplate = false,
-                        bookplateBitmap = null,
-                        bookplateData = null,
+                        showShareCard = false,
+                        shareCardBitmap = null,
+                        shareCardData = null,
                     )
                 }
             }

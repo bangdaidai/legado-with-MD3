@@ -700,10 +700,10 @@ object DatabaseMigrations {
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineBelowText INTEGER NOT NULL DEFAULT 0")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashLen REAL NOT NULL DEFAULT 8")
             database.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashGap REAL NOT NULL DEFAULT 5")
-            // 本地额外: 藏书票模板表
+            // 本地额外: 分享模板表
             database.execSQL(
                 """
-                CREATE TABLE IF NOT EXISTS bookplateTemplates (
+                CREATE TABLE IF NOT EXISTS shareCardTemplates (
                     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     htmlContent TEXT NOT NULL,

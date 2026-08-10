@@ -1,7 +1,7 @@
 package io.legado.app.help.book
 
 import io.legado.app.data.entities.BookMarking
-import io.legado.app.data.entities.BookplateData
+import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.domain.model.TextProcessAnchor
@@ -13,19 +13,19 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
- * 从 ReadingMemory（阅读记忆）构建藏书票渲染数据。
+ * 从 ReadingMemory（阅读记忆）构建分享卡片渲染数据。
  * MD3 的 ReadingMemory 已包含大多数字段（书名/作者/进度/评分/书评/书摘/主角等）。
  */
-object BookplateDataBuilder {
+object ShareCardDataBuilder {
 
     private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
 
-    fun build(memory: ReadingMemory): BookplateData {
+    fun build(memory: ReadingMemory): ShareCardData {
         val totalMs = memory.statTotalReadTime
         val hours = TimeUnit.MILLISECONDS.toHours(totalMs)
         val minutes = TimeUnit.MILLISECONDS.toMinutes(totalMs) % 60
 
-        return BookplateData(
+        return ShareCardData(
             bookName = memory.bookName,
             author = memory.bookAuthor,
             coverUrl = memory.coverUrl.orEmpty(),
@@ -57,11 +57,11 @@ object BookplateDataBuilder {
     }
 
     /**
-     * 从书签/书摘构建藏书票数据。
+     * 从书签/书摘构建分享卡片数据。
      * bookmark 提供摘录文字和笔记内容，memory 提供书的基本信息和统计。
      */
-    fun buildFromBookmark(bookmark: Bookmark, memory: ReadingMemory?): BookplateData {
-        val base = if (memory != null) build(memory) else BookplateData(
+    fun buildFromBookmark(bookmark: Bookmark, memory: ReadingMemory?): ShareCardData {
+        val base = if (memory != null) build(memory) else ShareCardData(
             bookName = bookmark.bookName,
             author = bookmark.bookAuthor,
         )
@@ -74,11 +74,11 @@ object BookplateDataBuilder {
     }
 
     /**
-     * 从划线笔记（BookMarking）构建藏书票数据。
+     * 从划线笔记（BookMarking）构建分享卡片数据。
      * 原文取 anchorJson.selectedText，笔记取 note，章节取 chapterName。
      */
-    fun buildFromMarking(marking: BookMarking, memory: ReadingMemory?): BookplateData {
-        val base = if (memory != null) build(memory) else BookplateData(
+    fun buildFromMarking(marking: BookMarking, memory: ReadingMemory?): ShareCardData {
+        val base = if (memory != null) build(memory) else ShareCardData(
             bookName = marking.bookName,
             author = marking.bookAuthor,
         )

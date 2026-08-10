@@ -38,7 +38,7 @@ import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.BookshelfAutoGroupPromptRepository
 import io.legado.app.data.repository.BookshelfAutoGroupRepository
 import io.legado.app.data.repository.BookshelfRepository
-import io.legado.app.data.repository.BookplateRepository
+import io.legado.app.data.repository.ShareCardRepository
 import io.legado.app.data.repository.BookshelfSettingsRepository
 import io.legado.app.data.repository.CacheBookDownloadRepository
 import io.legado.app.data.repository.ChangeSourceSettingsRepository
@@ -226,7 +226,7 @@ import io.legado.app.ui.association.ImportTxtTocRuleViewModel
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.bookmark.AllBookmarkViewModel
 import io.legado.app.ui.book.marking.AllMarkingViewModel
-import io.legado.app.ui.book.bookplate.BookplateManageViewModel
+import io.legado.app.ui.book.shareCard.ShareCardManageViewModel
 import io.legado.app.ui.book.cache.manage.BookCacheManageViewModel
 import io.legado.app.ui.book.changecover.ChangeCoverViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceComposeViewModel
@@ -472,7 +472,7 @@ val appModule = module {
     single<BookMarkingGateway> { BookMarkingRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
     singleOf(::ReadingMemoryRepository)
-    singleOf(::BookplateRepository)
+    singleOf(::ShareCardRepository)
     single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get()) }
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }
@@ -564,7 +564,7 @@ val appModule = module {
         )
     }
     viewModelOf(::ExploreShowViewModel)
-    viewModelOf(::BookplateManageViewModel)
+    viewModelOf(::ShareCardManageViewModel)
     viewModelOf(::MyViewModel)
     viewModelOf(::BookshelfViewModel)
     viewModelOf(::AiAutoGroupViewModel)

@@ -15,7 +15,7 @@ import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookMarkingDao
 import io.legado.app.data.dao.BookSourceDao
 import io.legado.app.data.dao.BookmarkDao
-import io.legado.app.data.dao.BookplateTemplateDao
+import io.legado.app.data.dao.ShareCardTemplateDao
 import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.dao.ChapterSpeechDao
 import io.legado.app.data.dao.CloudTtsEngineDao
@@ -68,7 +68,7 @@ val appDatabaseModule = module {
     factory<BookMarkingDao> { get<AppDatabase>().bookMarkingDao }
     factory<BookKnowledgeDao> { get<AppDatabase>().bookKnowledgeDao }
     factory<ReadingMemoryDao> { get<AppDatabase>().readingMemoryDao }
-    factory<BookplateTemplateDao> { get<AppDatabase>().bookplateTemplateDao }
+    factory<ShareCardTemplateDao> { get<AppDatabase>().shareCardTemplateDao }
     factory<ReadAloudVoiceDao> { get<AppDatabase>().readAloudVoiceDao }
     factory<ChapterSpeechDao> { get<AppDatabase>().chapterSpeechDao }
     factory<CloudTtsEngineDao> { get<AppDatabase>().cloudTtsEngineDao }

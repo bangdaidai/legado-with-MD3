@@ -298,11 +298,11 @@ data class ReadBookUiState(
     val menuConfig: ReadMenuConfig = ReadMenuConfig(),
     // AI 域状态见 ReadAiUiState —— 由 ReadAiDelegate 独立持有
     val eyeProtection: EyeProtectionUiState = EyeProtectionUiState(),
-    // Bookplate preview (for generating bookplate from marking)
-    val bookplateBitmap: android.graphics.Bitmap? = null,
-    val bookplateLoading: Boolean = false,
-    val showBookplate: Boolean = false,
-    val bookplateData: io.legado.app.data.entities.BookplateData? = null,
+    // ShareCard preview (for generating shareCard from marking)
+    val shareCardBitmap: android.graphics.Bitmap? = null,
+    val shareCardLoading: Boolean = false,
+    val showShareCard: Boolean = false,
+    val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
 ) {
     val menuVisible: Boolean
         get() = menuState.visible
@@ -694,8 +694,8 @@ sealed interface ReadBookIntent {
     data object DismissMarking : ReadBookIntent
     data class SaveMarking(val style: TextProcessStyle, val note: String) : ReadBookIntent
     data object DeleteMarking : ReadBookIntent
-    data object GenerateBookplateFromMarking : ReadBookIntent
-    data object DismissBookplate : ReadBookIntent
+    data object GenerateShareCardFromMarking : ReadBookIntent
+    data object DismissShareCard : ReadBookIntent
 
     /** 书签/笔记跳转：先校验定位（源/标题），不通过则弹确认框。 */
     data class NavigateToBookmark(val bookmark: Bookmark) : ReadBookIntent

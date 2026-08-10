@@ -8,7 +8,7 @@ import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
-import io.legado.app.help.book.BookplateGenerator
+import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -42,11 +42,11 @@ class ReadingMemoryDetailViewModel(
     private val _reviewDraft = MutableStateFlow("")
     private val _showTagPicker = MutableStateFlow(false)
 
-    // 藏书票生成状态：由 GenerateBookplate / DismissBookplate 驱动
-    private val _bookplateBitmap = MutableStateFlow<Bitmap?>(null)
-    private val _bookplateLoading = MutableStateFlow(false)
-    private val _showBookplate = MutableStateFlow(false)
-    private val _bookplateData = MutableStateFlow<io.legado.app.data.entities.BookplateData?>(null)
+    // 分享卡片生成状态：由 GenerateShareCard / DismissShareCard 驱动
+    private val _shareCardBitmap = MutableStateFlow<Bitmap?>(null)
+    private val _shareCardLoading = MutableStateFlow(false)
+    private val _showShareCard = MutableStateFlow(false)
+    private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
 
 
     private val _effectFlow = MutableSharedFlow<ReadingMemoryDetailEffect>(extraBufferCapacity = 1)
@@ -167,19 +167,19 @@ class ReadingMemoryDetailViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingMemoryDetailUiState())
 
-    /** 在基础状态之上叠加藏书票预览状态，避免生成藏书票时重跑全部数据库查询 */
+    /** 在基础状态之上叠加分享卡片预览状态，避免生成分享卡片时重跑全部数据库查询 */
     val detailState = combine(
         baseDetailState,
-        _bookplateBitmap,
-        _bookplateLoading,
-        _showBookplate,
-        _bookplateData,
-    ) { base, bitmap, bookplateLoading, showBookplate, bookplateData ->
+        _shareCardBitmap,
+        _shareCardLoading,
+        _showShareCard,
+        _shareCardData,
+    ) { base, bitmap, shareCardLoading, showShareCard, shareCardData ->
         base.copy(
-            bookplateBitmap = bitmap,
-            bookplateLoading = bookplateLoading,
-            showBookplate = showBookplate,
-            bookplateData = bookplateData,
+            shareCardBitmap = bitmap,
+            shareCardLoading = shareCardLoading,
+            showShareCard = showShareCard,
+            shareCardData = shareCardData,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingMemoryDetailUiState())
 
@@ -278,20 +278,20 @@ class ReadingMemoryDetailViewModel(
                             repository.deleteMarking(intent.id)
                             bookmarkRefresh.value++
                         }
-                        is ReadingMemoryDetailIntent.GenerateBookplate -> {
-                            generateBookplate()
+                        is ReadingMemoryDetailIntent.GenerateShareCard -> {
+                            generateShareCard()
                         }
-                        is ReadingMemoryDetailIntent.GenerateBookplateFromMarking -> {
-                            generateBookplateFromMarking(intent.marking)
+                        is ReadingMemoryDetailIntent.GenerateShareCardFromMarking -> {
+                            generateShareCardFromMarking(intent.marking)
                         }
-                        is ReadingMemoryDetailIntent.GenerateBookplateFromReview -> {
+                        is ReadingMemoryDetailIntent.GenerateShareCardFromReview -> {
                             _showReviewEditor.value = false
-                            generateBookplate()
+                            generateShareCard()
                         }
-                        is ReadingMemoryDetailIntent.DismissBookplate -> {
-                            _showBookplate.value = false
-                            _bookplateBitmap.value = null
-                            _bookplateData.value = null
+                        is ReadingMemoryDetailIntent.DismissShareCard -> {
+                            _showShareCard.value = false
+                            _shareCardBitmap.value = null
+                            _shareCardData.value = null
                         }
                     }
                 }
@@ -303,35 +303,35 @@ class ReadingMemoryDetailViewModel(
         intentFlow.tryEmit(intent)
     }
 
-    /** 生成藏书票并就地展示在预览弹窗中 */
-    private fun generateBookplate() {
-        _showBookplate.value = true
-        _bookplateLoading.value = true
-        _bookplateBitmap.value = null
-        _bookplateData.value = null
+    /** 生成分享卡片并就地展示在预览弹窗中 */
+    private fun generateShareCard() {
+        _showShareCard.value = true
+        _shareCardLoading.value = true
+        _shareCardBitmap.value = null
+        _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
-            val data = memory?.let { io.legado.app.help.book.BookplateDataBuilder.build(it) }
-            _bookplateData.value = data
-            val bitmap = memory?.let { BookplateGenerator.generate(appCtx, it) }
-            _bookplateLoading.value = false
-            _bookplateBitmap.value = bitmap
+            val data = memory?.let { io.legado.app.help.book.ShareCardDataBuilder.build(it) }
+            _shareCardData.value = data
+            val bitmap = memory?.let { ShareCardGenerator.generate(appCtx, it) }
+            _shareCardLoading.value = false
+            _shareCardBitmap.value = bitmap
         }
     }
 
-    /** 从划线笔记生成藏书票 */
-    private fun generateBookplateFromMarking(marking: io.legado.app.data.entities.BookMarking) {
-        _showBookplate.value = true
-        _bookplateLoading.value = true
-        _bookplateBitmap.value = null
-        _bookplateData.value = null
+    /** 从划线笔记生成分享卡片 */
+    private fun generateShareCardFromMarking(marking: io.legado.app.data.entities.BookMarking) {
+        _showShareCard.value = true
+        _shareCardLoading.value = true
+        _shareCardBitmap.value = null
+        _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
-            val data = io.legado.app.help.book.BookplateDataBuilder.buildFromMarking(marking, memory)
-            _bookplateData.value = data
-            val bitmap = BookplateGenerator.generate(appCtx, data)
-            _bookplateLoading.value = false
-            _bookplateBitmap.value = bitmap
+            val data = io.legado.app.help.book.ShareCardDataBuilder.buildFromMarking(marking, memory)
+            _shareCardData.value = data
+            val bitmap = ShareCardGenerator.generate(appCtx, data)
+            _shareCardLoading.value = false
+            _shareCardBitmap.value = bitmap
         }
     }
 

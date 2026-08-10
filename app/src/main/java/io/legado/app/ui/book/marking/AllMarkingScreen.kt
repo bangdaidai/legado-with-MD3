@@ -64,7 +64,7 @@ import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
-import io.legado.app.ui.widget.bookplate.BookplatePreviewSheet
+import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
@@ -347,19 +347,19 @@ fun AllMarkingScreen(
                 onIntent(AllMarkingIntent.CloseEdit)
             },
             showStyleConfig = false,
-            onGenerateBookplate = {
+            onGenerateShareCard = {
                 onIntent(AllMarkingIntent.CloseEdit)
-                onIntent(AllMarkingIntent.GenerateBookplate(marking))
+                onIntent(AllMarkingIntent.GenerateShareCard(marking))
             },
         )
     }
 
-    BookplatePreviewSheet(
-        show = state.showBookplate,
-        data = state.bookplateData,
-        initialBitmap = state.bookplateBitmap,
-        loading = state.bookplateLoading,
-        onDismissRequest = { onIntent(AllMarkingIntent.DismissBookplate) },
+    ShareCardPreviewSheet(
+        show = state.showShareCard,
+        data = state.shareCardData,
+        initialBitmap = state.shareCardBitmap,
+        loading = state.shareCardLoading,
+        onDismissRequest = { onIntent(AllMarkingIntent.DismissShareCard) },
     )
 }
 

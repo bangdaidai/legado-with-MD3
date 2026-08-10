@@ -9,8 +9,8 @@ import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
-import io.legado.app.help.book.BookplateDataBuilder
-import io.legado.app.help.book.BookplateGenerator
+import io.legado.app.help.book.ShareCardDataBuilder
+import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -65,10 +65,10 @@ data class BookmarkUiState(
     val error: Throwable? = null,
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
-    val bookplateBitmap: android.graphics.Bitmap? = null,
-    val bookplateLoading: Boolean = false,
-    val showBookplate: Boolean = false,
-    val bookplateData: io.legado.app.data.entities.BookplateData? = null,
+    val shareCardBitmap: android.graphics.Bitmap? = null,
+    val shareCardLoading: Boolean = false,
+    val showShareCard: Boolean = false,
+    val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
 )
 
 sealed interface AllBookmarkIntent {
@@ -78,8 +78,8 @@ sealed interface AllBookmarkIntent {
     data class UpdateBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class DeleteBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
-    data class GenerateBookplate(val bookmark: Bookmark) : AllBookmarkIntent
-    data object DismissBookplate : AllBookmarkIntent
+    data class GenerateShareCard(val bookmark: Bookmark) : AllBookmarkIntent
+    data object DismissShareCard : AllBookmarkIntent
     data object ClearAll : AllBookmarkIntent
 }
 
@@ -99,11 +99,11 @@ class AllBookmarkViewModel(
     private val _effects = MutableSharedFlow<AllBookmarkEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
-    // 藏书票（书摘票）生成状态：由 GenerateBookplate / DismissBookplate 驱动
-    private val _bookplateBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
-    private val _bookplateLoading = MutableStateFlow(false)
-    private val _showBookplate = MutableStateFlow(false)
-    private val _bookplateData = MutableStateFlow<io.legado.app.data.entities.BookplateData?>(null)
+    // 分享卡片（分享卡片）生成状态：由 GenerateShareCard / DismissShareCard 驱动
+    private val _shareCardBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
+    private val _shareCardLoading = MutableStateFlow(false)
+    private val _showShareCard = MutableStateFlow(false)
+    private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val baseUiState: StateFlow<BookmarkUiState> = combine(
@@ -154,19 +154,19 @@ class AllBookmarkViewModel(
         initialValue = BookmarkUiState(isLoading = true)
     )
 
-    /** 在基础状态之上叠加书摘票预览状态，避免生成时重跑书签查询 */
+    /** 在基础状态之上叠加分享卡片预览状态，避免生成时重跑书签查询 */
     val uiState: StateFlow<BookmarkUiState> = combine(
         baseUiState,
-        _bookplateBitmap,
-        _bookplateLoading,
-        _showBookplate,
-        _bookplateData,
-    ) { base, bitmap, loading, show, bookplateData ->
+        _shareCardBitmap,
+        _shareCardLoading,
+        _showShareCard,
+        _shareCardData,
+    ) { base, bitmap, loading, show, shareCardData ->
         base.copy(
-            bookplateBitmap = bitmap,
-            bookplateLoading = loading,
-            showBookplate = show,
-            bookplateData = bookplateData,
+            shareCardBitmap = bitmap,
+            shareCardLoading = loading,
+            showShareCard = show,
+            shareCardData = shareCardData,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -182,28 +182,28 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is AllBookmarkIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is AllBookmarkIntent.Export -> exportBookmark(intent.treeUri, intent.isMarkdown)
-            is AllBookmarkIntent.GenerateBookplate -> generateBookplate(intent.bookmark)
-            AllBookmarkIntent.DismissBookplate -> {
-                _showBookplate.value = false
-                _bookplateBitmap.value = null
-                _bookplateData.value = null
+            is AllBookmarkIntent.GenerateShareCard -> generateShareCard(intent.bookmark)
+            AllBookmarkIntent.DismissShareCard -> {
+                _showShareCard.value = false
+                _shareCardBitmap.value = null
+                _shareCardData.value = null
             }
             AllBookmarkIntent.ClearAll -> clearAllBookmarks()
         }
     }
 
-    private fun generateBookplate(bookmark: Bookmark) {
-        _showBookplate.value = true
-        _bookplateLoading.value = true
-        _bookplateBitmap.value = null
-        _bookplateData.value = null
+    private fun generateShareCard(bookmark: Bookmark) {
+        _showShareCard.value = true
+        _shareCardLoading.value = true
+        _shareCardBitmap.value = null
+        _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = readingMemoryRepository.getByNameAuthor(bookmark.bookName, bookmark.bookAuthor)
-            val data = BookplateDataBuilder.buildFromBookmark(bookmark, memory)
-            _bookplateData.value = data
-            val bitmap = BookplateGenerator.generate(splitties.init.appCtx, data)
-            _bookplateLoading.value = false
-            _bookplateBitmap.value = bitmap
+            val data = ShareCardDataBuilder.buildFromBookmark(bookmark, memory)
+            _shareCardData.value = data
+            val bitmap = ShareCardGenerator.generate(splitties.init.appCtx, data)
+            _shareCardLoading.value = false
+            _shareCardBitmap.value = bitmap
         }
     }
 

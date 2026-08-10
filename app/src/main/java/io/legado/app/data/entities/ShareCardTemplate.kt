@@ -5,12 +5,12 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * 藏书票 HTML 模板
- * 移植自 readdai `BookplateTemplate`。
+ * 分享卡片 HTML 模板
+ * 移植自 readdai `ShareCardTemplate`。
  * 分组：书籍 / 统计 / 书摘 三大类
  */
-@Entity(tableName = "bookplateTemplates")
-data class BookplateTemplate(
+@Entity(tableName = "shareCardTemplates")
+data class ShareCardTemplate(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String = "",
     val htmlContent: String = "",

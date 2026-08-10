@@ -8,8 +8,8 @@ import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.model.TextProcessAnchor
-import io.legado.app.help.book.BookplateDataBuilder
-import io.legado.app.help.book.BookplateGenerator
+import io.legado.app.help.book.ShareCardDataBuilder
+import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -66,10 +66,10 @@ data class MarkingUiState(
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
     val editing: BookMarking? = null,
-    val bookplateBitmap: android.graphics.Bitmap? = null,
-    val bookplateLoading: Boolean = false,
-    val showBookplate: Boolean = false,
-    val bookplateData: io.legado.app.data.entities.BookplateData? = null,
+    val shareCardBitmap: android.graphics.Bitmap? = null,
+    val shareCardLoading: Boolean = false,
+    val showShareCard: Boolean = false,
+    val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
 )
 
 sealed interface AllMarkingIntent {
@@ -81,8 +81,8 @@ sealed interface AllMarkingIntent {
     data class OpenEdit(val id: String) : AllMarkingIntent
     data object CloseEdit : AllMarkingIntent
     data class SaveMarkingNote(val id: String, val note: String) : AllMarkingIntent
-    data class GenerateBookplate(val marking: BookMarking) : AllMarkingIntent
-    data object DismissBookplate : AllMarkingIntent
+    data class GenerateShareCard(val marking: BookMarking) : AllMarkingIntent
+    data object DismissShareCard : AllMarkingIntent
 }
 
 sealed interface AllMarkingEffect {
@@ -102,11 +102,11 @@ class AllMarkingViewModel(
     /** 笔记编辑 Sheet 当前编辑的笔记（点列表项进入）。 */
     private val _editing = MutableStateFlow<BookMarking?>(null)
 
-    // 书摘票生成状态：由 GenerateBookplate / DismissBookplate 驱动
-    private val _bookplateBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
-    private val _bookplateLoading = MutableStateFlow(false)
-    private val _showBookplate = MutableStateFlow(false)
-    private val _bookplateData = MutableStateFlow<io.legado.app.data.entities.BookplateData?>(null)
+    // 分享卡片生成状态：由 GenerateShareCard / DismissShareCard 驱动
+    private val _shareCardBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
+    private val _shareCardLoading = MutableStateFlow(false)
+    private val _showShareCard = MutableStateFlow(false)
+    private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
 
     private val baseUiState: StateFlow<MarkingUiState> = combine(
         _searchQuery,
@@ -151,23 +151,23 @@ class AllMarkingViewModel(
         initialValue = MarkingUiState(isLoading = true)
     )
 
-    /** 在基础状态之上叠加编辑/书摘票预览状态，避免生成书摘票时重跑数据库查询 */
+    /** 在基础状态之上叠加编辑/分享卡片预览状态，避免生成分享卡片时重跑数据库查询 */
     val uiState: StateFlow<MarkingUiState> = combine(
         baseUiState,
         _editing,
         combine(
-            _bookplateBitmap,
-            _bookplateLoading,
-            _showBookplate,
-            _bookplateData,
-        ) { bitmap, loading, show, data -> BookplateOverlay(bitmap, loading, show, data) },
+            _shareCardBitmap,
+            _shareCardLoading,
+            _showShareCard,
+            _shareCardData,
+        ) { bitmap, loading, show, data -> ShareCardOverlay(bitmap, loading, show, data) },
     ) { base, editing, overlay ->
         base.copy(
             editing = editing,
-            bookplateBitmap = overlay.bitmap,
-            bookplateLoading = overlay.loading,
-            showBookplate = overlay.show,
-            bookplateData = overlay.data,
+            shareCardBitmap = overlay.bitmap,
+            shareCardLoading = overlay.loading,
+            showShareCard = overlay.show,
+            shareCardData = overlay.data,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -185,11 +185,11 @@ class AllMarkingViewModel(
             is AllMarkingIntent.OpenEdit -> openEdit(intent.id)
             is AllMarkingIntent.CloseEdit -> _editing.value = null
             is AllMarkingIntent.SaveMarkingNote -> saveMarkingNote(intent.id, intent.note)
-            is AllMarkingIntent.GenerateBookplate -> generateBookplate(intent.marking)
-            is AllMarkingIntent.DismissBookplate -> {
-                _showBookplate.value = false
-                _bookplateBitmap.value = null
-                _bookplateData.value = null
+            is AllMarkingIntent.GenerateShareCard -> generateShareCard(intent.marking)
+            is AllMarkingIntent.DismissShareCard -> {
+                _showShareCard.value = false
+                _shareCardBitmap.value = null
+                _shareCardData.value = null
             }
         }
     }
@@ -288,30 +288,30 @@ class AllMarkingViewModel(
         _editing.value = null
     }
 
-    /** 从划线笔记生成书摘票并就地展示在预览弹窗中。 */
-    private fun generateBookplate(marking: BookMarking) {
-        _showBookplate.value = true
-        _bookplateLoading.value = true
-        _bookplateBitmap.value = null
-        _bookplateData.value = null
+    /** 从划线笔记生成分享卡片并就地展示在预览弹窗中。 */
+    private fun generateShareCard(marking: BookMarking) {
+        _showShareCard.value = true
+        _shareCardLoading.value = true
+        _shareCardBitmap.value = null
+        _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = readingMemoryRepository.getByNameAuthor(
                 marking.bookName,
                 marking.bookAuthor,
             )
-            val data = BookplateDataBuilder.buildFromMarking(marking, memory)
-            _bookplateData.value = data
-            val bitmap = BookplateGenerator.generate(appCtx, data)
-            _bookplateLoading.value = false
-            _bookplateBitmap.value = bitmap
+            val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
+            _shareCardData.value = data
+            val bitmap = ShareCardGenerator.generate(appCtx, data)
+            _shareCardLoading.value = false
+            _shareCardBitmap.value = bitmap
         }
     }
 
-    /** 4 路书摘票状态先合成一组，外层 combine 才不超过 5 路上限。 */
-    private data class BookplateOverlay(
+    /** 4 路分享卡片状态先合成一组，外层 combine 才不超过 5 路上限。 */
+    private data class ShareCardOverlay(
         val bitmap: android.graphics.Bitmap?,
         val loading: Boolean,
         val show: Boolean,
-        val data: io.legado.app.data.entities.BookplateData?,
+        val data: io.legado.app.data.entities.ShareCardData?,
     )
 }

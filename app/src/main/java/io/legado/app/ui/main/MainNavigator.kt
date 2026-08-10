@@ -244,7 +244,7 @@ object MainNavigator {
             }
 
             MainRouteHighlightTagRule,
-            MainRouteBookplateManage,
+            MainRouteShareCardManage,
             MainRouteReadRecord -> {
                 if (currentRoute == MainRouteHome) {
                     backStack.add(route)

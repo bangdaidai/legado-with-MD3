@@ -10,8 +10,10 @@ import android.graphics.BitmapFactory
 import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import io.legado.app.data.entities.BookplateData
-import io.legado.app.data.entities.BookplateTemplate
+import androidx.annotation.ColorInt
+import androidx.core.graphics.ColorUtils
+import io.legado.app.data.entities.ShareCardData
+import io.legado.app.data.entities.ShareCardTemplate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -21,10 +23,10 @@ import java.io.File
 import java.net.URI
 
 /**
- * 藏书票 HTML→Bitmap 离屏渲染器。
+ * 分享卡片 HTML→Bitmap 离屏渲染器。
  * 在主线程创建 WebView 加载 HTML，等待渲染完成后截图。
  */
-object BookplateHtmlRenderer {
+object ShareCardHtmlRenderer {
 
     private const val RENDER_TIMEOUT_MS = 5000L
     private const val MAX_CACHE_SIZE = 8
@@ -44,16 +46,20 @@ object BookplateHtmlRenderer {
     }
 
     /**
-     * 渲染藏书票
+     * 渲染分享卡片
+     * @param accentColor 用户临时选择的主题色（ARGB int）。非 null 时会向 HTML 注入
+     *        一组 `--bp-*` CSS 变量，模板中用 `var(--bp-accent, 默认色)` 等即可整体换色。
+     *        为 null 时不注入，模板走自身默认配色。
      * @return Bitmap or null if failed/timeout
      */
     suspend fun render(
         ctx: Context,
-        template: BookplateTemplate,
-        data: BookplateData,
+        template: ShareCardTemplate,
+        data: ShareCardData,
+        accentColor: Int? = null,
     ): Bitmap? {
         val w = getRenderWidth(ctx)
-        val key = "${data.bookName}_${data.author}_${template.id}_${template.htmlContent.hashCode()}_$w"
+        val key = "${data.bookName}_${data.author}_${template.id}_${template.htmlContent.hashCode()}_${accentColor ?: 0}_$w"
         synchronized(bitmapCache) { bitmapCache[key]?.takeIf { !it.isRecycled }?.let { return it } }
 
         return withContext(Dispatchers.Main) {
@@ -61,7 +67,8 @@ object BookplateHtmlRenderer {
             val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
             val html = replaceVariables(template.htmlContent, resolvedData)
             if (html.isBlank()) return@withContext null
-            val finalHtml = ensureViewportMeta(html, w)
+            val themed = if (accentColor != null) injectAccentVariables(html, accentColor) else html
+            val finalHtml = ensureViewportMeta(themed, w)
             renderHtml(ctx, finalHtml, w)?.also {
                 synchronized(bitmapCache) { bitmapCache[key] = it }
             }
@@ -73,7 +80,7 @@ object BookplateHtmlRenderer {
      */
     suspend fun renderCustom(ctx: Context, htmlContent: String, variables: Map<String, String> = emptyMap()): Bitmap? {
         val w = getRenderWidth(ctx)
-        val defaultVars = buildVariableMap(BookplateData())
+        val defaultVars = buildVariableMap(ShareCardData())
         val merged = defaultVars + variables
         val html = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
         if (html.isBlank()) return null
@@ -157,12 +164,66 @@ object BookplateHtmlRenderer {
         else "$vp\n$html"
     }
 
-    private fun replaceVariables(html: String, data: BookplateData): String {
+    /**
+     * 由用户选中的单个主题色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
+     * 变量含义：
+     * - `--bp-accent`        主题色（原样）
+     * - `--bp-accent-light`  提亮版（用于渐变另一端、浅色强调）
+     * - `--bp-accent-fade`   主题色半透明（用于浅色块背景、分隔线）
+     * - `--bp-bg`            由主题色压暗生成的深色背景
+     * - `--bp-surface`       比背景略亮的卡片表面
+     * - `--bp-text`          正文色（深色背景上的浅色文字）
+     * - `--bp-text-muted`    副文色（正文的半透明）
+     * - `--bp-divider`       分隔线（低透明度前景色）
+     * 模板通过 `var(--bp-accent, 默认色)` 引用，未注入时走默认色，兼容老模板。
+     */
+    private fun injectAccentVariables(html: String, @ColorInt accent: Int): String {
+        val accentLight = ColorUtils.blendARGB(accent, 0xFFFFFFFF.toInt(), 0.35f)
+        val bg = deriveBackground(accent)
+        val surface = ColorUtils.blendARGB(bg, 0xFFFFFFFF.toInt(), 0.06f)
+        val text = 0xFFECECEC.toInt()
+        val vars = buildString {
+            append(":root{")
+            append("--bp-accent:").append(cssRgba(accent, 1f)).append(';')
+            append("--bp-accent-light:").append(cssRgba(accentLight, 1f)).append(';')
+            append("--bp-accent-fade:").append(cssRgba(accent, 0.15f)).append(';')
+            append("--bp-bg:").append(cssRgba(bg, 1f)).append(';')
+            append("--bp-surface:").append(cssRgba(surface, 1f)).append(';')
+            append("--bp-text:").append(cssRgba(text, 1f)).append(';')
+            append("--bp-text-muted:").append(cssRgba(text, 0.6f)).append(';')
+            append("--bp-divider:").append(cssRgba(text, 0.12f)).append(';')
+            append('}')
+        }
+        val styleTag = "<style>$vars</style>"
+        return if (HEAD_TAG_REGEX.containsMatchIn(html))
+            HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$styleTag\n")
+        else "$styleTag\n$html"
+    }
+
+    /** 把主题色压成一个足够深、仍带色相的背景色，保证浅色文字可读 */
+    @ColorInt
+    private fun deriveBackground(@ColorInt accent: Int): Int {
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(accent, hsl)
+        hsl[1] = (hsl[1] * 0.6f).coerceIn(0f, 1f)
+        hsl[2] = 0.12f
+        return ColorUtils.HSLToColor(hsl)
+    }
+
+    private fun cssRgba(@ColorInt color: Int, alpha: Float): String {
+        val r = (color shr 16) and 0xFF
+        val g = (color shr 8) and 0xFF
+        val b = color and 0xFF
+        return "rgba($r,$g,$b,${alpha.coerceIn(0f, 1f)})"
+    }
+
+
+    private fun replaceVariables(html: String, data: ShareCardData): String {
         val map = buildVariableMap(data)
         return VARIABLE_REGEX.replace(html) { map[it.groupValues[1]] ?: it.value }
     }
 
-    internal fun buildVariableMap(d: BookplateData): Map<String, String> = mapOf(
+    internal fun buildVariableMap(d: ShareCardData): Map<String, String> = mapOf(
         "bookName" to d.bookName, "author" to d.author, "coverUrl" to d.coverUrl,
         "intro" to escapeHtml(d.intro), "kind" to d.kind, "wordCount" to d.wordCount,
         "originName" to d.originName, "totalChapterNum" to d.totalChapterNum.toString(),

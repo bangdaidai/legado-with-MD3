@@ -1,4 +1,4 @@
-package io.legado.app.ui.book.bookplate
+package io.legado.app.ui.book.shareCard
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import io.legado.app.help.book.BookplateHtmlRenderer
+import io.legado.app.help.book.ShareCardHtmlRenderer
 import io.legado.app.ui.about.MarkdownSheet
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
@@ -63,16 +63,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 
 /**
- * 藏书票模板管理页。
+ * 分享模板管理页。
  *
  * 参考替换净化页面风格：顶部 TabRow 分组、卡片列表、分组管理弹窗。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BookplateManageScreen(
-    state: BookplateManageUiState,
-    onIntent: (BookplateManageIntent) -> Unit,
-    effects: Flow<BookplateManageEffect>,
+fun ShareCardManageScreen(
+    state: ShareCardManageUiState,
+    onIntent: (ShareCardManageIntent) -> Unit,
+    effects: Flow<ShareCardManageEffect>,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -81,7 +81,7 @@ fun BookplateManageScreen(
     LaunchedEffect(Unit) {
         effects.collectLatest { effect ->
             when (effect) {
-                is BookplateManageEffect.ShowToast -> context.toastOnUi(effect.message)
+                is ShareCardManageEffect.ShowToast -> context.toastOnUi(effect.message)
             }
         }
     }
@@ -90,33 +90,33 @@ fun BookplateManageScreen(
     GroupManageBottomSheet(
         show = state.showGroupManage,
         groups = state.groups,
-        onDismissRequest = { onIntent(BookplateManageIntent.DismissGroupManage) },
-        onUpdateGroup = { old, new -> onIntent(BookplateManageIntent.RenameGroup(old, new)) },
-        onDeleteGroup = { onIntent(BookplateManageIntent.DeleteGroup(it)) }
+        onDismissRequest = { onIntent(ShareCardManageIntent.DismissGroupManage) },
+        onUpdateGroup = { old, new -> onIntent(ShareCardManageIntent.RenameGroup(old, new)) },
+        onDeleteGroup = { onIntent(ShareCardManageIntent.DeleteGroup(it)) }
     )
 
     // 删除确认对话框
     AppAlertDialog(
         show = state.deleteConfirm != null,
-        onDismissRequest = { onIntent(BookplateManageIntent.DismissDelete) },
+        onDismissRequest = { onIntent(ShareCardManageIntent.DismissDelete) },
         title = "删除模板",
         text = "确定要删除模板「${state.deleteConfirm?.name ?: ""}」吗？",
         confirmText = "删除",
-        onConfirm = { onIntent(BookplateManageIntent.ConfirmDelete) },
+        onConfirm = { onIntent(ShareCardManageIntent.ConfirmDelete) },
         dismissText = "取消",
-        onDismiss = { onIntent(BookplateManageIntent.DismissDelete) }
+        onDismiss = { onIntent(ShareCardManageIntent.DismissDelete) }
     )
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             GlassMediumFlexibleTopAppBar(
-                title = "藏书票模板",
+                title = "分享模板",
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
                     TopBarActionButton(
-                        onClick = { onIntent(BookplateManageIntent.StartEdit(null)) },
+                        onClick = { onIntent(ShareCardManageIntent.StartEdit(null)) },
                         imageVector = Icons.Default.Add,
                         contentDescription = "新建",
                     )
@@ -134,21 +134,21 @@ fun BookplateManageScreen(
                             RoundDropdownMenuItem(
                                 text = "分组管理",
                                 onClick = {
-                                    onIntent(BookplateManageIntent.ShowGroupManage)
+                                    onIntent(ShareCardManageIntent.ShowGroupManage)
                                     showMenu = false
                                 }
                             )
                             RoundDropdownMenuItem(
                                 text = "恢复内置模板",
                                 onClick = {
-                                    onIntent(BookplateManageIntent.RestoreBuiltins)
+                                    onIntent(ShareCardManageIntent.RestoreBuiltins)
                                     showMenu = false
                                 }
                             )
                             RoundDropdownMenuItem(
                                 text = "帮助",
                                 onClick = {
-                                    onIntent(BookplateManageIntent.ShowHelp)
+                                    onIntent(ShareCardManageIntent.ShowHelp)
                                     showMenu = false
                                 }
                             )
@@ -177,7 +177,7 @@ fun BookplateManageScreen(
                     selectedTabIndex = selectedTabIndex,
                     onTabSelected = { index ->
                         val group = if (index == 0) null else tabItems[index]
-                        onIntent(BookplateManageIntent.SelectGroup(group))
+                        onIntent(ShareCardManageIntent.SelectGroup(group))
                     }
                 )
             }
@@ -204,21 +204,21 @@ fun BookplateManageScreen(
                         }.ifBlank { null },
                         isSelected = template.id == state.defaultTemplateId,
                         onToggleSelection = {
-                            onIntent(BookplateManageIntent.SetDefault(template.id))
+                            onIntent(ShareCardManageIntent.SetDefault(template.id))
                         },
                         trailingAction = {
                             SmallPlainButton(
-                                onClick = { onIntent(BookplateManageIntent.ShowPreview(template)) },
+                                onClick = { onIntent(ShareCardManageIntent.ShowPreview(template)) },
                                 icon = Icons.Default.Visibility,
                                 contentDescription = "预览",
                             )
                             SmallPlainButton(
-                                onClick = { onIntent(BookplateManageIntent.StartEdit(template)) },
+                                onClick = { onIntent(ShareCardManageIntent.StartEdit(template)) },
                                 icon = AppIcons.Edit,
                                 contentDescription = "编辑",
                             )
                             SmallPlainButton(
-                                onClick = { onIntent(BookplateManageIntent.RequestDelete(template)) },
+                                onClick = { onIntent(ShareCardManageIntent.RequestDelete(template)) },
                                 icon = AppIcons.Delete,
                                 contentDescription = "删除",
                             )
@@ -231,7 +231,7 @@ fun BookplateManageScreen(
 
     // 编辑模板 Sheet
     state.editing?.let { editing ->
-        BookplateEditSheet(
+        ShareCardEditSheet(
             editing = editing,
             groups = state.groups,
             onIntent = onIntent,
@@ -241,9 +241,9 @@ fun BookplateManageScreen(
     // 帮助 Sheet（复用项目通用 MarkdownSheet）
     MarkdownSheet(
         show = state.showHelp,
-        title = "模板可用字段",
-        content = BookplateHelpMarkdown,
-        onDismissRequest = { onIntent(BookplateManageIntent.DismissHelp) },
+        title = "模板编写说明",
+        content = ShareCardHelpMarkdown,
+        onDismissRequest = { onIntent(ShareCardManageIntent.DismissHelp) },
     )
 
     // 预览模板 Sheet（真实渲染为图片）
@@ -252,12 +252,12 @@ fun BookplateManageScreen(
         var rendering by remember(template.id) { mutableStateOf(true) }
         LaunchedEffect(template.id) {
             rendering = true
-            bitmap = BookplateHtmlRenderer.renderCustom(context, template.htmlContent, PreviewVariables)
+            bitmap = ShareCardHtmlRenderer.renderCustom(context, template.htmlContent, PreviewVariables)
             rendering = false
         }
         AppModalBottomSheet(
             show = true,
-            onDismissRequest = { onIntent(BookplateManageIntent.DismissPreview) },
+            onDismissRequest = { onIntent(ShareCardManageIntent.DismissPreview) },
             title = "预览：${template.name.ifBlank { "未命名" }}",
         ) {
             when {
@@ -313,8 +313,42 @@ private val PreviewVariables = mapOf(
 )
 
 /** 帮助内容（Markdown 格式，供 MarkdownSheet 渲染）。 */
-private val BookplateHelpMarkdown = """
-模板使用双大括号占位符（如 `{{bookName}}`）来引用书籍数据，生成藏书票时会自动替换为实际内容。
+private val ShareCardHelpMarkdown = """
+模板使用双大括号占位符（如 `{{bookName}}`）来引用书籍数据，生成分享卡片时会自动替换为实际内容。
+
+## 主题色（长按换色）
+在分享卡片预览面板，**长按左上角切换模板按钮**可弹出色板：默认 / 8 种预设色 / 自定义取色。选中后**整套配色**（背景 / 表面 / 文字 / 强调色）会一起变。颜色仅本次预览生效，不写库、不修改模板。
+
+模板要用变量引用颜色才能被换色。语法是 `var(--变量名, 兜底色)`——兜底色是没有选颜色时的默认色，兼容旧模板。
+
+**可用变量：**
+
+| 变量 | 用途 | 建议兜底色 |
+|---|---|---|
+| `--bp-bg` | 整体背景 | 原深色渐变 |
+| `--bp-surface` | 卡片 / 高亮块背景 | `rgba(255,255,255,0.05)` |
+| `--bp-accent` | 主色（进度条、边框、强调线） | 你原来的强调色 |
+| `--bp-accent-light` | 主色提亮版（渐变另一端、副强调） | 你原来的浅强调色 |
+| `--bp-accent-fade` | 主色 15% 透明（浅色块底色） | `rgba(255,255,255,0.08)` |
+| `--bp-text` | 正文 | `#fff` 或 `#e0e0e0` |
+| `--bp-text-muted` | 副文（作者 / 标签 / 时间） | `#aaa` 或 `#888` |
+| `--bp-divider` | 分隔线 / 边框 | `rgba(255,255,255,0.1)` |
+
+**改造旧模板：** 把 CSS 里写死的十六进制颜色改成 `var(...)` 形式即可。示例：
+
+```css
+/* 改前 */
+.title { color: #fff; }
+.section { color: #4a9eff; }
+.card { background: #1a1a2e; border: 1px solid rgba(255,255,255,.1); }
+
+/* 改后 */
+.title { color: var(--bp-text, #fff); }
+.section { color: var(--bp-accent, #4a9eff); }
+.card { background: var(--bp-bg, #1a1a2e); border: 1px solid var(--bp-divider, rgba(255,255,255,.1)); }
+```
+
+改不改都行——不改的模板不会坏，只是长按选色对它没效果。想固定不参与换色的元素（比如封面图圆角、评分星星金色）**保留原色**即可。
 
 ## 基本信息
 | 字段 | 说明 |
@@ -394,10 +428,10 @@ private val BookplateHelpMarkdown = """
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BookplateEditSheet(
-    editing: io.legado.app.data.entities.BookplateTemplate,
+private fun ShareCardEditSheet(
+    editing: io.legado.app.data.entities.ShareCardTemplate,
     groups: List<String>,
-    onIntent: (BookplateManageIntent) -> Unit,
+    onIntent: (ShareCardManageIntent) -> Unit,
 ) {
     var name by remember(editing.id) { mutableStateOf(editing.name) }
     var html by remember(editing.id) { mutableStateOf(editing.htmlContent) }
@@ -405,11 +439,11 @@ private fun BookplateEditSheet(
 
     AppModalBottomSheet(
         show = true,
-        onDismissRequest = { onIntent(BookplateManageIntent.CancelEdit) },
+        onDismissRequest = { onIntent(ShareCardManageIntent.CancelEdit) },
         title = if (editing.id == 0L) "新建模板" else "编辑模板",
         endAction = {
             MediumTonalButton(
-                onClick = { onIntent(BookplateManageIntent.SaveTemplate(name, html, group)) },
+                onClick = { onIntent(ShareCardManageIntent.SaveTemplate(name, html, group)) },
                 icon = AppIcons.Check,
                 contentDescription = "保存",
             )

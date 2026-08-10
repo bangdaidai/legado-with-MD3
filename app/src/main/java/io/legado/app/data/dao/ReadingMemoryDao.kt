@@ -190,7 +190,7 @@ interface ReadingMemoryDao {
         updateTime: Long = System.currentTimeMillis(),
     )
 
-    /** 按书名+作者查询最近一条（供无 bookUrl 场景如全局书签生成藏书票） */
+    /** 按书名+作者查询最近一条（供无 bookUrl 场景如全局书签生成分享卡片） */
     @Query("SELECT * FROM readingMemory WHERE bookName = :bookName AND bookAuthor = :bookAuthor ORDER BY updateTime DESC LIMIT 1")
     suspend fun getByNameAuthorSync(bookName: String, bookAuthor: String): ReadingMemory?
 

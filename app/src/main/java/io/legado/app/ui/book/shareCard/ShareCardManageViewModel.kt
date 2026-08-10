@@ -1,10 +1,10 @@
-package io.legado.app.ui.book.bookplate
+package io.legado.app.ui.book.shareCard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.legado.app.data.entities.BookplateTemplate
-import io.legado.app.data.repository.BookplateRepository
-import io.legado.app.help.book.BookplateGenerator
+import io.legado.app.data.entities.ShareCardTemplate
+import io.legado.app.data.repository.ShareCardRepository
+import io.legado.app.help.book.ShareCardGenerator
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -16,46 +16,46 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BookplateManageViewModel(
-    private val repository: BookplateRepository,
+class ShareCardManageViewModel(
+    private val repository: ShareCardRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        BookplateManageUiState(
+        ShareCardManageUiState(
             defaultTemplateId = repository.getSelectedTemplateId()
         )
     )
     val uiState = _uiState.asStateFlow()
 
-    private val _effects = MutableSharedFlow<BookplateManageEffect>(extraBufferCapacity = 16)
+    private val _effects = MutableSharedFlow<ShareCardManageEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
 
     init {
-        onIntent(BookplateManageIntent.Load)
+        onIntent(ShareCardManageIntent.Load)
     }
 
-    fun onIntent(intent: BookplateManageIntent) {
+    fun onIntent(intent: ShareCardManageIntent) {
         when (intent) {
-            is BookplateManageIntent.Load -> load()
-            is BookplateManageIntent.SelectGroup -> selectGroup(intent.group)
-            is BookplateManageIntent.SetDefault -> setDefault(intent.id)
-            is BookplateManageIntent.StartEdit -> _uiState.update {
-                it.copy(editing = intent.template ?: BookplateTemplate(groupName = it.selectedGroup ?: ""))
+            is ShareCardManageIntent.Load -> load()
+            is ShareCardManageIntent.SelectGroup -> selectGroup(intent.group)
+            is ShareCardManageIntent.SetDefault -> setDefault(intent.id)
+            is ShareCardManageIntent.StartEdit -> _uiState.update {
+                it.copy(editing = intent.template ?: ShareCardTemplate(groupName = it.selectedGroup ?: ""))
             }
-            is BookplateManageIntent.CancelEdit -> _uiState.update { it.copy(editing = null) }
-            is BookplateManageIntent.SaveTemplate -> saveTemplate(intent.name, intent.html, intent.group)
-            is BookplateManageIntent.ShowPreview -> _uiState.update { it.copy(previewTemplate = intent.template) }
-            is BookplateManageIntent.DismissPreview -> _uiState.update { it.copy(previewTemplate = null) }
-            is BookplateManageIntent.RequestDelete -> _uiState.update { it.copy(deleteConfirm = intent.template) }
-            is BookplateManageIntent.ConfirmDelete -> confirmDelete()
-            is BookplateManageIntent.DismissDelete -> _uiState.update { it.copy(deleteConfirm = null) }
-            is BookplateManageIntent.ShowGroupManage -> _uiState.update { it.copy(showGroupManage = true) }
-            is BookplateManageIntent.DismissGroupManage -> _uiState.update { it.copy(showGroupManage = false) }
-            is BookplateManageIntent.RenameGroup -> renameGroup(intent.oldName, intent.newName)
-            is BookplateManageIntent.DeleteGroup -> deleteGroup(intent.group)
-            is BookplateManageIntent.ShowHelp -> _uiState.update { it.copy(showHelp = true) }
-            is BookplateManageIntent.DismissHelp -> _uiState.update { it.copy(showHelp = false) }
-            is BookplateManageIntent.RestoreBuiltins -> restoreBuiltins()
+            is ShareCardManageIntent.CancelEdit -> _uiState.update { it.copy(editing = null) }
+            is ShareCardManageIntent.SaveTemplate -> saveTemplate(intent.name, intent.html, intent.group)
+            is ShareCardManageIntent.ShowPreview -> _uiState.update { it.copy(previewTemplate = intent.template) }
+            is ShareCardManageIntent.DismissPreview -> _uiState.update { it.copy(previewTemplate = null) }
+            is ShareCardManageIntent.RequestDelete -> _uiState.update { it.copy(deleteConfirm = intent.template) }
+            is ShareCardManageIntent.ConfirmDelete -> confirmDelete()
+            is ShareCardManageIntent.DismissDelete -> _uiState.update { it.copy(deleteConfirm = null) }
+            is ShareCardManageIntent.ShowGroupManage -> _uiState.update { it.copy(showGroupManage = true) }
+            is ShareCardManageIntent.DismissGroupManage -> _uiState.update { it.copy(showGroupManage = false) }
+            is ShareCardManageIntent.RenameGroup -> renameGroup(intent.oldName, intent.newName)
+            is ShareCardManageIntent.DeleteGroup -> deleteGroup(intent.group)
+            is ShareCardManageIntent.ShowHelp -> _uiState.update { it.copy(showHelp = true) }
+            is ShareCardManageIntent.DismissHelp -> _uiState.update { it.copy(showHelp = false) }
+            is ShareCardManageIntent.RestoreBuiltins -> restoreBuiltins()
         }
     }
 
@@ -63,7 +63,7 @@ class BookplateManageViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true) }
             withContext(Dispatchers.IO) {
-                BookplateGenerator.getOrCreateBuiltinTemplates()
+                ShareCardGenerator.getOrCreateBuiltinTemplates()
             }
             val selectedGroup = _uiState.value.selectedGroup
             val (groups, templates) = withContext(Dispatchers.IO) {
@@ -105,7 +105,7 @@ class BookplateManageViewModel(
     private fun saveTemplate(name: String, html: String, group: String) {
         val editing = _uiState.value.editing ?: return
         if (name.isBlank()) {
-            _effects.tryEmit(BookplateManageEffect.ShowToast("名称不能为空"))
+            _effects.tryEmit(ShareCardManageEffect.ShowToast("名称不能为空"))
             return
         }
         viewModelScope.launch {
@@ -169,10 +169,10 @@ class BookplateManageViewModel(
     private fun restoreBuiltins() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                BookplateGenerator.getOrCreateBuiltinTemplates()
+                ShareCardGenerator.getOrCreateBuiltinTemplates()
             }
             reloadAll()
-            _effects.tryEmit(BookplateManageEffect.ShowToast("已恢复内置模板"))
+            _effects.tryEmit(ShareCardManageEffect.ShowToast("已恢复内置模板"))
         }
     }
 
