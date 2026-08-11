@@ -3,6 +3,7 @@ package io.legado.app.ui.widget.shareCard
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,7 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -52,14 +54,12 @@ import org.koin.compose.koinInject
 
 /** 长按换色可选的预设主题色，最后一项走取色器自定义 */
 private val ACCENT_PRESETS = listOf(
-    "蓝" to 0xFF4A9EFF.toInt(),
-    "青" to 0xFF2EC4B6.toInt(),
-    "绿" to 0xFF4CAF50.toInt(),
-    "黄" to 0xFFE0A32E.toInt(),
-    "橙" to 0xFFFF7043.toInt(),
-    "红" to 0xFFE5484D.toInt(),
-    "粉" to 0xFFE06C9F.toInt(),
-    "紫" to 0xFF9B6BDF.toInt(),
+    "薄荷绿" to 0xFF6BCBB1.toInt(),
+    "樱花粉" to 0xFFF4A9B6.toInt(),
+    "海蓝色" to 0xFF5BA3D9.toInt(),
+    "奶油黄" to 0xFFE6C97A.toInt(),
+    "雾霭紫" to 0xFF9B8BC0.toInt(),
+    "石墨灰" to 0xFF6B737D.toInt(),
 )
 
 @Composable
@@ -83,12 +83,15 @@ fun ShareCardPreviewSheet(
     var accentColor by remember { mutableStateOf<Int?>(null) }
     var showPaletteMenu by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    // 方案覆盖：null=自动（按所选色明度判定），false=强制亮，true=强制暗。便于预览另一种效果。
+    var schemeOverride by remember { mutableStateOf<Boolean?>(null) }
 
     LaunchedEffect(initialBitmap) { currentBitmap = initialBitmap }
 
     LaunchedEffect(show) {
         if (show) {
             accentColor = null
+            schemeOverride = null
             val loaded = withContext(Dispatchers.IO) {
                 ShareCardGenerator.getOrCreateBuiltinTemplates()
                 shareCardRepository.getAll()
@@ -108,12 +111,12 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    fun rerender(templateId: Long, accent: Int?) {
+    fun rerender(templateId: Long, accent: Int?, forceDark: Boolean? = schemeOverride) {
         if (data == null) return
         val tpl = templates.firstOrNull { it.id == templateId } ?: return
         scope.launch {
             rendering = true
-            currentBitmap = ShareCardHtmlRenderer.render(context, tpl, data, accent)
+            currentBitmap = ShareCardHtmlRenderer.render(context, tpl, data, accent, forceDark)
             rendering = false
         }
     }
@@ -159,6 +162,7 @@ fun ShareCardPreviewSheet(
                             dismiss()
                             if (accentColor == null) return@RoundDropdownMenuItem
                             accentColor = null
+                            schemeOverride = null
                             rerender(selectedTemplateId, null)
                         },
                     )
@@ -187,11 +191,23 @@ fun ShareCardPreviewSheet(
             }
         },
         endAction = {
+            // 亮/暗切换（太阳/月亮图标）：仅在已选主题色时生效（accentColor=null 不注入变量，无意义）。
+            // 点击在当前亮/暗之间翻转。图标显示当前方案，长按图片则自动保存到相册。
+            val effectiveDark = if (accentColor == null) {
+                null
+            } else {
+                schemeOverride ?: ShareCardHtmlRenderer.isDarkByDefault(accentColor)
+            }
             MediumTonalButton(
-                onClick = { currentBitmap?.let { saveToGallery(context, it) } },
-                enabled = currentBitmap != null && !rendering && !loading,
-                icon = Icons.Default.Save,
-                contentDescription = "保存到相册",
+                onClick = {
+                    val next = if (effectiveDark == true) false else true
+                    schemeOverride = next
+                    rerender(selectedTemplateId, accentColor, next)
+                },
+                enabled = accentColor != null && !rendering && !loading,
+                selected = schemeOverride != null,
+                icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
+                contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
             )
         },
     ) {
@@ -217,7 +233,13 @@ fun ShareCardPreviewSheet(
                     Image(
                         bitmap = currentBitmap!!.asImageBitmap(),
                         contentDescription = "分享卡片",
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                enabled = !rendering && !loading,
+                                onClick = {},
+                                onLongClick = { currentBitmap?.let { saveToGallery(context, it) } },
+                            ),
                         contentScale = ContentScale.FillWidth,
                     )
                 }

@@ -21,11 +21,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
-import androidx.compose.ui.graphics.Color as ComposeColor
-import com.materialkolor.PaletteStyle
-import com.materialkolor.dynamicColorScheme
-import io.legado.app.ui.theme.ThemeColorSpec
-import io.legado.app.ui.theme.ThemeResolver
 
 /**
  * 分享卡片 HTML→Bitmap 离屏渲染器。
@@ -62,9 +57,10 @@ object ShareCardHtmlRenderer {
         template: ShareCardTemplate,
         data: ShareCardData,
         accentColor: Int? = null,
+        forceDark: Boolean? = null,
     ): Bitmap? {
         val w = getRenderWidth(ctx)
-        val key = "${data.bookName}_${data.author}_${template.id}_${template.htmlContent.hashCode()}_${accentColor ?: 0}_$w"
+        val key = "${data.bookName}_${data.author}_${template.id}_${template.htmlContent.hashCode()}_${accentColor ?: 0}_${forceDark ?: "auto"}_$w"
         synchronized(bitmapCache) { bitmapCache[key]?.takeIf { !it.isRecycled }?.let { return it } }
 
         return withContext(Dispatchers.Main) {
@@ -72,7 +68,7 @@ object ShareCardHtmlRenderer {
             val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
             val html = replaceVariables(template.htmlContent, resolvedData)
             if (html.isBlank()) return@withContext null
-            val themed = if (accentColor != null) injectAccentVariables(html, accentColor) else html
+            val themed = if (accentColor != null) injectAccentVariables(html, accentColor, forceDark) else html
             val finalHtml = ensureViewportMeta(themed, w)
             renderHtml(ctx, finalHtml, w)?.also {
                 synchronized(bitmapCache) { bitmapCache[key] = it }
@@ -170,71 +166,97 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 由用户选中的主题色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
+     * 由用户选中的主色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
      *
-     * 关键修复：背景直接使用用户所选颜色（选什么色就是什么色），并依据 accent 的感知
-     * 亮度自动在「浅色方案 / 深色方案」间切换，而不是把所有模板强制压成深色：
-     * - accent 亮度高（浅色） → 浅色背景 + 深色文字
-     * - accent 亮度低（深色） → 深色背景 + 浅色文字
-     * 这样无论选浅色还是深色，卡片都保持可读，且模板原有的深浅设计不会被破坏。
+     * 纯派生规则（方案 C）：8 个变量全部从主色衍生，不依赖主题系统、不硬编码黑/白。
+     * 同色系 + 卡片表面始终被「提亮链」拉到近白 → 选浅色不发黑、文字永远压暗保证对比、
+     * 主色只做点缀不大面积铺色 → 怎么选都和谐可读。
      *
      * 变量含义（模板通过 `var(--bp-*, 默认)` 引用，未注入时走默认色）：
-     * - `--bp-accent`        主题色（原样）
-     * - `--bp-accent-light`  提亮版（用于渐变另一端、浅色强调）
-     * - `--bp-accent-fade`   主题色半透明（用于浅色块背景、分隔线）
-     * - `--bp-bg`            用户所选颜色本身（纯色，渐变感由模板默认值决定）
-     * - `--bp-surface`       卡片表面（浅色方案偏白、深色方案比背景略亮）
-     * - `--bp-text`          正文色（随方案切换深/浅）
-     * - `--bp-text-muted`    副文色
-     * - `--bp-divider`       分隔线
+     * - `--bp-accent`        主色（用户选色原样）：爱心/星/分割线/进度条核心色
+     * - `--bp-accent-light`  主色提亮+降饱和：背景渐变主力、卡片内装饰
+     * - `--bp-accent-fade`   主色半透明：阴影/光晕/半透明层
+     * - `--bp-bg`            同色系渐变（accent-light 的明暗四段）：整体氛围
+     * - `--bp-surface`       accent-light 再提亮+高透明：卡片本体（毛玻璃）
+     * - `--bp-text`          主色降饱和+压暗：标题/数值（必须可读）
+     * - `--bp-text-muted`    主文字再提亮：作者/标签/时间
+     * - `--bp-divider`       主色低透明：虚线边框/内分割
      */
-    private fun injectAccentVariables(html: String, @ColorInt accent: Int): String {
-        // 用户所选颜色 = 卡片背景（纯色），同时作为主题系统的「种子色（seed）」。
-        // 关键：卡片表面（--bp-surface）直接等于用户所选纯色，不再用 scheme.surface——
-        // 因为 scheme.surface 对同一颗种子只可能是「近白或近黑」两块面板，不是用户选的色，
-        // 用它会让卡片和你选的色脱节。所以整张卡片（背景+面板）都是你选的那个色，选啥就是啥。
-        // dynamicColorScheme 对同一种子永远生成「浅色系 + 深色系」两套，必须传 isDark 选其一。
-        // 这里 isDark 的唯一依据就是【你选的底色明暗】：底色亮→浅色系（深字），底色暗→深色系（浅字），
-        // 正好让文字/强调与你选的底色协调对比——这就是「适配背景色」，文字全是 scheme 的 on 协调色，非硬编码黑/白。
-        val isDark = ColorUtils.calculateLuminance(accent) < 0.5
-        val scheme = dynamicColorScheme(
-            seedColor = ComposeColor(accent),
-            isDark = isDark,
-            isAmoled = false,
-            style = PaletteStyle.Fidelity,
-            contrastLevel = ThemeResolver.resolveContrastLevel(),
-            specVersion = ThemeResolver.resolveColorSpecVersion(ThemeColorSpec.SPEC_2021),
-        )
-        val white = 0xFFFFFFFF.toInt()
-        // 强调色取自主题系统生成的 scheme.primary：与背景（用户纯色）拉开 tone，避免同色融合；
-        // accent-light/fade 在 primary 上做提亮与淡化
-        val primary = scheme.primary.value.toInt()
-        val accentLight = ColorUtils.blendARGB(primary, white, 0.3f)
-        val accentFade = cssRgba(primary, 0.18f)
-        // 背景 + 卡片面板：都是用户所选纯色（选什么色卡片就是什么色，不被 M3 固定 tone 抹平）
-        val bg = cssRgba(accent, 1f)
-        // 表面（卡片面板）：从种子色派生的同色系「容器色」——保持色相、降饱和、明度相对底色偏移，
-        // 与背景同色系但可区分（亮底压暗、暗底提亮），随选色变化，不用 scheme.surface 的中性灰面板。
-        val surface = cssRgba(deriveSurfaceColor(accent, isDark), 1f)
-        // 关键修复：文字必须与「表面」明度相反，否则表面亮→文字也亮、表面暗→文字也暗，对比崩溃看不清。
-        // 旧逻辑让 text 跟随 isDark 与 surface 同向变化，是切换颜色后文字糊掉的根因。
-        // 这里以「表面实际明度」为准反向取字色：表面暗→用亮字，表面亮→用暗字。
-        val surfaceLum = ColorUtils.calculateLuminance(surface)
-        val textOnDarkSurface = surfaceLum < 0.5f
-        // 文字/副文/分隔线：从表面同色相派生，保证随选色变化且始终与表面对比（非硬编码黑/白）。
-        // 次要文字降对比、分隔线更低对比。
-        val text = cssRgba(deriveOnColor(surface, textOnDarkSurface, if (textOnDarkSurface) 0.90f else 0.16f, 0.85f), 1f)
-        val textMuted = cssRgba(deriveOnColor(surface, textOnDarkSurface, if (textOnDarkSurface) 0.72f else 0.34f, 0.60f), 1f)
-        val divider = cssRgba(deriveOnColor(surface, textOnDarkSurface, if (textOnDarkSurface) 0.66f else 0.42f, 0.50f), 0.5f)
+    /**
+     * 给定主色，按 HSL 明度阈值 0.55 判定默认走暗方案(true)还是亮方案(false)。
+     * 供预览 UI 确定「当前显示的是亮还是暗」，让亮/暗切换按钮能正确翻转。
+     */
+    fun isDarkByDefault(@ColorInt accent: Int): Boolean {
+        val r = (accent shr 16) and 0xFF
+        val g = (accent shr 8) and 0xFF
+        val b = accent and 0xFF
+        val lightness = (maxOf(r, g, b) + minOf(r, g, b)) / 2f / 255f
+        return lightness < 0.55f
+    }
+
+    private fun injectAccentVariables(html: String, @ColorInt accent: Int, forceDark: Boolean? = null): String {
+        // 8 个变量全部由主色衍生，按【所选色明暗】分两套方案：
+        // - 亮方案（选浅色）：浅表面 + 深字，适合浅色模板（默认）
+        // - 暗方案（选深色）：深表面（近固定深灰带主色相）+ 浅字，保持暗色氛围且可读
+        // 两者都只用纯派生、不依赖主题系统，主色只做点缀不大面积铺色。
+        // 判断「所选色本身是亮是暗」用 HSL 明度 L=(max+min)/2（0–1），比线性加权更贴合人眼。
+        // 阈值取中点附近 0.55：<0.55 走暗方案，否则亮方案。与模板无关，模板只认 8 个变量。
+        // forceDark=null 时自动判定；非 null 时强制亮(false)/暗(true)方案，便于预览另一种效果。
+        val r = (accent shr 16) and 0xFF
+        val g = (accent shr 8) and 0xFF
+        val b = accent and 0xFF
+        val lightness = (maxOf(r, g, b) + minOf(r, g, b)) / 2f / 255f
+        val isDark = forceDark ?: (lightness < 0.55f)
+        val accentColor: Int
+        val accentLight: Int
+        val accentFade: String
+        val bg: String
+        val surface: String
+        val text: Int
+        val textMuted: Int
+        val divider: String
+        if (!isDark) {
+            // —— 亮方案 ——
+            accentColor = accent
+            accentLight = adjust(accent, +0.20f, 0.85f)
+            accentFade = cssRgba(accent, 0.15f)
+            bg = buildString {
+                append("linear-gradient(145deg,")
+                append(cssRgba(adjust(accentLight, +0.04f), 1f)).append(',')
+                append(cssRgba(accentLight, 1f)).append(',')
+                append(cssRgba(adjust(accentLight, -0.04f), 1f)).append(',')
+                append(cssRgba(adjust(accentLight, -0.08f), 1f))
+                append(')')
+            }
+            surface = cssRgba(adjust(accentLight, +0.10f), 0.88f)
+            val textBase = adjust(adjust(accent, satScale = 0.60f), -0.30f)
+            text = if (ColorUtils.calculateLuminance(textBase) > 0.30f) {
+                adjust(textBase, -0.32f)
+            } else {
+                textBase
+            }
+            textMuted = adjust(text, +0.25f)
+            divider = cssRgba(accent, 0.25f)
+        } else {
+            // —— 暗方案 ——（深表面 + 浅字，保持暗色氛围）
+            accentColor = tone(accent, 0.78f, 0.70f)        // 主色提亮发光（暗底上可见）
+            accentLight = tone(accent, 0.23f, 0.30f)        // 主色压暗成深薄荷灰（装饰浅块）
+            accentFade = cssRgba(accentColor, 0.12f)        // 发光色低透明（阴影/光晕在暗底可见）
+            bg = cssRgba(tone(accent, 0.086f, 0.25f), 1f)   // 深灰带主色相（整体氛围）
+            surface = cssRgba(tone(accent, 0.13f, 0.30f), 0.92f) // 深灰半透明（毛玻璃）
+            text = tone(accent, 0.90f, 0.12f)               // 灰白（必须可读）
+            textMuted = tone(accent, 0.68f, 0.25f)          // 中灰（弱化信息）
+            divider = "rgba(255,255,255,0.08)"              // 白透明（关键：暗底上可见，accent 派生会消失）
+        }
         val vars = buildString {
             append(":root{")
-            append("--bp-accent:").append(cssRgba(primary, 1f)).append(';')
+            append("--bp-accent:").append(cssRgba(accentColor, 1f)).append(';')
             append("--bp-accent-light:").append(cssRgba(accentLight, 1f)).append(';')
             append("--bp-accent-fade:").append(accentFade).append(';')
             append("--bp-bg:").append(bg).append(';')
             append("--bp-surface:").append(surface).append(';')
-            append("--bp-text:").append(text).append(';')
-            append("--bp-text-muted:").append(textMuted).append(';')
+            append("--bp-text:").append(cssRgba(text, 1f)).append(';')
+            append("--bp-text-muted:").append(cssRgba(textMuted, 1f)).append(';')
             append("--bp-divider:").append(divider).append(';')
             append('}')
         }
@@ -251,25 +273,22 @@ object ShareCardHtmlRenderer {
         return "rgba($r,$g,$b,${alpha.coerceIn(0f, 1f)})"
     }
 
-    // 从底色同色相派生「压在上面的文字/分隔线色」：保持色相与饱和度，只调明度与饱和，
-    // 让文字真正随用户所选颜色变化（而非主题系统的中性灰黑）。
-    // 亮底(isDark=false)→压暗成深字，暗底(isDark=true)→提亮成浅字。
-    private fun deriveOnColor(@ColorInt base: Int, isDark: Boolean, targetValue: Float, satScale: Float): Int {
+    // HSV 工具：从主色纯派生同色系变体。保持色相不变，只调明度与饱和度。
+    // valueDelta 正=提亮 / 负=压暗（绝对值加减），satScale<1=降饱和。
+    private fun adjust(@ColorInt color: Int, valueDelta: Float = 0f, satScale: Float = 1f): Int {
         val hsv = FloatArray(3)
-        Color.RGBToHSV((base shr 16) and 0xFF, (base shr 8) and 0xFF, base and 0xFF, hsv)
-        hsv[2] = targetValue
+        Color.RGBToHSV((color shr 16) and 0xFF, (color shr 8) and 0xFF, color and 0xFF, hsv)
+        hsv[2] = (hsv[2] + valueDelta).coerceIn(0f, 1f)
         hsv[1] = (hsv[1] * satScale).coerceIn(0f, 1f)
         return Color.HSVToColor(hsv)
     }
 
-    // 从种子色派生「卡片面板容器色」：保持色相，降低饱和，明度相对底色偏移形成层次
-    // （亮底压暗一档、暗底提亮一档），让卡片与背景同色系但可区分，且随选色变化（非中性灰面板）。
-    private fun deriveSurfaceColor(@ColorInt base: Int, isDark: Boolean): Int {
+    // 保留主色色相，绝对设定明度(value)与饱和度：用于暗方案里「近固定深灰/灰白带主色相」的变量。
+    private fun tone(@ColorInt color: Int, value: Float, satScale: Float): Int {
         val hsv = FloatArray(3)
-        Color.RGBToHSV((base shr 16) and 0xFF, (base shr 8) and 0xFF, base and 0xFF, hsv)
-        hsv[1] = (hsv[1] * 0.7f).coerceIn(0f, 1f)
-        val delta = if (isDark) 0.10f else -0.10f
-        hsv[2] = (hsv[2] + delta).coerceIn(0.10f, 0.95f)
+        Color.RGBToHSV((color shr 16) and 0xFF, (color shr 8) and 0xFF, color and 0xFF, hsv)
+        hsv[2] = value.coerceIn(0f, 1f)
+        hsv[1] = (hsv[1] * satScale).coerceIn(0f, 1f)
         return Color.HSVToColor(hsv)
     }
 
