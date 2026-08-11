@@ -193,10 +193,11 @@ fun ShareCardPreviewSheet(
         endAction = {
             // 亮/暗切换（太阳/月亮图标）：仅在已选主题色时生效（accentColor=null 不注入变量，无意义）。
             // 点击在当前亮/暗之间翻转。图标显示当前方案，长按图片则自动保存到相册。
-            val effectiveDark = if (accentColor == null) {
+            val accent = accentColor
+            val effectiveDark = if (accent == null) {
                 null
             } else {
-                schemeOverride ?: ShareCardHtmlRenderer.isDarkByDefault(accentColor)
+                schemeOverride ?: ShareCardHtmlRenderer.isDarkByDefault(accent)
             }
             MediumTonalButton(
                 onClick = {
