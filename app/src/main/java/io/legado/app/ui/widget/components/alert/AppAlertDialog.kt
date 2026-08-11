@@ -37,6 +37,8 @@ fun AppAlertDialog(
     title: String? = null,
     text: String? = null,
     content: (@Composable () -> Unit)? = null,
+    /** 标题栏尾部操作槽（如 ⋮ 溢出菜单）。Miuix 引擎的标题不支持自定义槽，退化到内容区右上角。 */
+    titleAction: (@Composable () -> Unit)? = null,
     confirmText: String = "确定", // 默认文字
     onConfirm: (() -> Unit)? = null,
     dismissText: String = "取消",
@@ -51,6 +53,14 @@ fun AppAlertDialog(
             onDismissRequest = onDismissRequest,
             content = {
                 ProvideAppDensity {
+                    if (titleAction != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            titleAction()
+                        }
+                    }
                     if (content != null) {
                         Column(
                             modifier = Modifier
@@ -102,7 +112,23 @@ fun AppAlertDialog(
                 titleContentColor = LegadoTheme.colorScheme.onSurface,
                 textContentColor = LegadoTheme.colorScheme.onSurfaceVariant,
                 tonalElevation = AlertDialogDefaults.TonalElevation,
-                title = title?.let { { ProvideAppDensity { Text(text = it) } } },
+                title = title?.let {
+                    {
+                        ProvideAppDensity {
+                            if (titleAction != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = it, modifier = Modifier.weight(1f))
+                                    titleAction()
+                                }
+                            } else {
+                                Text(text = it)
+                            }
+                        }
+                    }
+                },
                 text = {
                     ProvideAppDensity {
                         Column(
