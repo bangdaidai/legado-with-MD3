@@ -94,6 +94,8 @@ fun ShareCardPreviewSheet(
             schemeOverride = null
             htmlReady = false
             previewFailed = false
+            saveRequested = false
+            saving = false
             val loaded = withContext(Dispatchers.IO) {
                 ShareCardGenerator.getOrCreateBuiltinTemplates()
                 shareCardRepository.getAll()
@@ -305,20 +307,24 @@ fun ShareCardPreviewSheet(
     )
 
     // 长按保存：通过离屏渲染生成完整长图（跟当前所选 accent/scheme 一致）
+    // try/finally 保证 saving 一定复位；否则 render() 抛异常或被父作用域取消时，
+    // 菊花会永久卡住——即便切换模板、退出重进也停不下来（saving 状态在 sheet 内被 remember）。
     LaunchedEffect(saveRequested) {
         if (!saveRequested || data == null) return@LaunchedEffect
         saveRequested = false
         saving = true
-        val tpl = templates.firstOrNull { it.id == selectedTemplateId }
-        if (tpl != null) {
+        try {
+            val tpl = templates.firstOrNull { it.id == selectedTemplateId }
+                ?: return@LaunchedEffect
             val bitmap = ShareCardHtmlRenderer.render(context, tpl, data, accentColor, schemeOverride)
             if (bitmap != null) {
                 saveToGallery(context, bitmap)
             } else {
                 context.toastOnUi("保存失败")
             }
+        } finally {
+            saving = false
         }
-        saving = false
     }
 }
 

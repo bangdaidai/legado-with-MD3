@@ -29,8 +29,6 @@ import java.net.URI
 object ShareCardHtmlRenderer {
 
     private const val RENDER_TIMEOUT_MS = 5000L
-    /** 图片/字体就绪检测最长等待。触发页面 __BpReady=true 后立即结束，无需等满。 */
-    private const val READY_TIMEOUT_MS = 2000L
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
     private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
     private val HTML_OPEN_TAG_REGEX = Regex("<html([^>]*)>", RegexOption.IGNORE_CASE)
@@ -95,39 +93,33 @@ object ShareCardHtmlRenderer {
             wv.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) { pageFinished = true }
             }
-            // 注入就绪探针脚本：等 document.fonts.ready + 所有 <img> 完成后设 window.__BpReady = true
-            val htmlWithProbe = injectReadyProbe(html)
-            wv.loadDataWithBaseURL("about:blank", htmlWithProbe, "text/html", "UTF-8", null)
+            wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
 
             // 等 onPageFinished（最长 RENDER_TIMEOUT_MS）
             withTimeoutOrNull(RENDER_TIMEOUT_MS) {
                 while (!pageFinished) delay(30)
             }
 
-            // 等 __BpReady（字体 + 图片就绪），每 30ms 轮询，最长 READY_TIMEOUT_MS
-            withTimeoutOrNull(READY_TIMEOUT_MS) {
-                while (true) {
-                    val ready = kotlinx.coroutines.suspendCancellableCoroutine<Boolean> { cont ->
-                        wv.evaluateJavascript("(window.__BpReady===true).toString()") { value ->
-                            cont.resumeWith(Result.success(value?.contains("true") == true))
-                        }
-                    }
-                    if (ready) break
-                    delay(30)
-                }
-            }
-
-            // 测量最终内容高度
+            // 首次测量，读取内容高度
+            delay(100)
             wv.measure(
                 View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
             )
-            val finalHeight = wv.measuredHeight
-            if (finalHeight <= 100) return null
+            val contentHeight = wv.measuredHeight
+            if (contentHeight <= 100) return null
+
+            // 再等 300ms 让图片/字体加载完成
+            delay(300)
+            wv.measure(
+                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            val finalHeight = wv.measuredHeight.coerceAtLeast(contentHeight)
+            if (finalHeight <= 0) return null
 
             wv.layout(0, 0, width, finalHeight)
-            // 一帧（~16ms）让 layout 生效
-            delay(16)
+            delay(100)
 
             Bitmap.createBitmap(width, finalHeight, Bitmap.Config.ARGB_8888).also {
                 val canvas = Canvas(it)
@@ -138,24 +130,6 @@ object ShareCardHtmlRenderer {
         finally {
             try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
         }
-    }
-
-    /**
-     * 注入一段 JS 探针：document.fonts.ready + 所有 <img> onload 后设 `window.__BpReady = true`。
-     * 离屏渲染轮询该标志来判断何时截图，取代固定 delay(100+300+100)。
-     * 用 addEventListener 而非 img.onload= 赋值，避免覆盖模板自带的 onerror 兜底（如 `this.style.display='none'`）。
-     */
-    private fun injectReadyProbe(html: String): String {
-        val script = """<script>(function(){function c(){window.__BpReady=true}""" +
-            """var imgs=document.querySelectorAll('img');""" +
-            """var ps=[document.fonts?document.fonts.ready:Promise.resolve()];""" +
-            """imgs.forEach(function(i){if(!i.complete)ps.push(new Promise(function(r){""" +
-            """i.addEventListener('load',r);i.addEventListener('error',r)}))});""" +
-            """Promise.all(ps).then(c).catch(c)})()</script>"""
-        // 插到 </body> 前；没有则追加到末尾
-        val idx = html.lastIndexOf("</body>", ignoreCase = true)
-        return if (idx >= 0) html.substring(0, idx) + script + html.substring(idx)
-        else html + script
     }
 
     private fun getRenderWidth(ctx: Context): Int =
