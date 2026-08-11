@@ -23,29 +23,11 @@ import java.net.URI
 object ShareCardHtmlRenderer {
 
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
-    private val HEAD_OPEN_REGEX = Regex("<head\\b[^>]*>", RegexOption.IGNORE_CASE)
-    private val HTML_OPEN_REGEX = Regex("<html\\b[^>]*>", RegexOption.IGNORE_CASE)
-    /** 模板里已经写死的 viewport meta——我们要接管 layout viewport，所以先剥掉，再插我们的。 */
-    private val EXISTING_VIEWPORT_REGEX =
-        Regex("<meta[^>]*name\\s*=\\s*[\"']viewport[\"'][^>]*>", RegexOption.IGNORE_CASE)
+    private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
 
     /** 实时预览用：注入的 accent 变量 style 标签 id，供 JS 动态替换内容实现秒切换。 */
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
-    /**
-     * 取页面完整内容高度（**CSS px**）。
-     *
-     * 因为 viewport 用 `device-width`，layout viewport 宽度就等于 WebView 的 dp 宽度，
-     * 即 **1 CSS px 恒等于 1 dp、缩放比恒为 1.0**。所以这个数值可以直接当 dp 用来设 WebView
-     * 高度，**不需要乘任何缩放系数**。
-     *
-     * 历史坑：曾经把 viewport 改成固定 `width=390` 想统一跨设备比例，那样就必须自己算
-     * `物理宽/390` 的缩放比；但 `initial-scale=1.0` 会覆盖 `loadWithOverviewMode` 的自动
-     * 适配，实际缩放停在 1.0，导致换算公式全错——预览要左右滑、右侧和下方多出背景、
-     * 截图不完整。不要再走回去。
-     */
-    const val CONTENT_HEIGHT_JS =
-        "(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)).toString()"
 
     /** 主色 HSL 明度 < 0.55 时走暗方案。供预览 UI 判断亮/暗切换按钮当前朝向。 */
     fun isDarkByDefault(@ColorInt accent: Int): Boolean {
@@ -196,40 +178,24 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 给预览 HTML 加响应式 viewport + 横向溢出兜底 + 空的 accent style 占位；HTML 为空则返回 ""。
+     * 给预览 HTML 注入空的 accent style 占位 + 横向溢出兜底；HTML 为空则返回 ""。
      *
-     * viewport 用 `device-width`：layout viewport 宽度 == WebView 的 dp 宽度，
-     * 即 1 CSS px == 1 dp、缩放比恒为 1.0。页面宽度天然等于控件宽度，不会左右滑、右侧不留白，
-     * 内容高度的 CSS px 数值也能直接当 dp 用（详见 [CONTENT_HEIGHT_JS]）。
+     * 宽度 / 高度的正确性由 WebView 自身设置保证（`useWideViewPort=false`，Kotlin 用
+     * `MeasureSpec.EXACTLY` 钉死宽度），不依赖 viewport meta。viewport meta 不注入——
+     * 否则模板里自己的 viewport 可能覆盖它、或它落在 `<!DOCTYPE>` 之前变成无效标记，
+     * 都会让 WebView 的行为变得不可控。
      *
-     * 注入必须是**权威的**，否则 viewport 失效、WebView 回退到 980 CSS px 桌面宽度布局，卡片被
-     * 缩到约 43% 居中、四周留背景（历史尺寸回归的真正根因）。为此：
-     * 1. 先剥掉模板里所有已存在的 `<meta name="viewport">`，杜绝被模板自己的 viewport 覆盖；
-     * 2. 插入位置按优先级降级，保证 meta 一定进 `<head>` 且排在最前、`<!DOCTYPE>` 之后：
-     *    有 `<head>` → 插在它后面；没有 `<head>` 但有 `<html>` → 在 `<html>` 后补一个 `<head>`；
-     *    连 `<html>` 都没有 → 整份文档包一层 `<html><head>…</head><body>…</body></html>`。
-     *
-     * 额外注入 `html,body{overflow-x:hidden}`：模板里绝对定位的装饰元素（`left:89%` 之类）
-     * 可能越过右边界，撑大 scrollWidth 导致横向滚动、并污染 scrollHeight 的测量。
-     * 这是尺寸契约的一部分，统一在这里兜住，不指望每个模板自己写对。
+     * 注入 `html,body{overflow-x:hidden}` 是因为活 WebView 不像 Image 那样天然裁掉越界内容，
+     * 绝对定位装饰元素（`left:89%` 之类）会撑大可滚动区域导致横滑；这里统一兜住。
      */
     private fun injectPreviewHead(html: String): String {
         if (html.isBlank()) return ""
-        val stripped = EXISTING_VIEWPORT_REGEX.replace(html, "")
         val head =
-            """<meta name="viewport" content="width=device-width, initial-scale=1.0">""" +
-                """<style>html,body{overflow-x:hidden;}</style>""" +
+            """<style>html,body{overflow-x:hidden;}</style>""" +
                 """<style id="$ACCENT_STYLE_ID"></style>"""
-
-        HEAD_OPEN_REGEX.find(stripped)?.let { m ->
-            return stripped.substring(0, m.range.last + 1) + "\n" + head + "\n" +
-                stripped.substring(m.range.last + 1)
-        }
-        HTML_OPEN_REGEX.find(stripped)?.let { m ->
-            return stripped.substring(0, m.range.last + 1) + "\n<head>" + head + "</head>\n" +
-                stripped.substring(m.range.last + 1)
-        }
-        return "<html><head>$head</head><body>\n$stripped\n</body></html>"
+        return if (HEAD_TAG_REGEX.containsMatchIn(html))
+            HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
+        else "$head\n$html"
     }
 
     /**
