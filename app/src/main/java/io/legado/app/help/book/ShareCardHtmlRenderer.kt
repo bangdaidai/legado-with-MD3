@@ -169,10 +169,10 @@ object ShareCardHtmlRenderer {
      * - `--bp-accent-rgb`       主色裸三元组 `r,g,b`：配 `rgba(var(--bp-accent-rgb), α)` 自由控透明度
      * - `--bp-star`             星级/评分色（跟随主色色相，和谐优先）
      * - `--bp-on-accent`        压在 --bp-accent 之上的文字色（按主色明度自动取深/浅）
-     * - `--bp-bg`               整体背景（亮 L85%彩色底 / 暗 10%）——外层彩底，渐变交给模板自己拼
-     * - `--bp-surface`          卡片本体（亮 98%近白 / 暗 15%）——内层白卡，保障文字可读
+     * - `--bp-bg`               整体背景（亮 L85%彩底 / 暗 L11%带色深底）——外层彩底，渐变交给模板自己拼
+     * - `--bp-surface`          卡片本体（亮 L95%淡色 / 暗 L17%带色深卡）——内层淡色卡，仍保留色相
      * - `--bp-surface-rgb`      卡片色裸三元组：毛玻璃半透明卡片用
-     * - `--bp-surface-variant`  卡片内次级块（亮 90%带色凹陷 / 暗 20% 凸起）
+     * - `--bp-surface-variant`  卡片内次级块（亮 L91%带色凹陷 / 暗 L23%带色凸起）
      * - `--bp-text`             最深字（亮 22% / 暗 90%）：标题/数值
      * - `--bp-text-muted`       中等字（亮 42% / 暗 65%）：标签/badge
      * - `--bp-text-subtle`      最浅字（亮 58% / 暗 48%）：作者/label/底栏
@@ -227,13 +227,13 @@ object ShareCardHtmlRenderer {
 
         if (!isDark) {
             // —— 亮方案 ——
-            // 背景带明显色彩（外层彩底），卡片内部保持近白（内层白卡 + 可读性）
+            // 外层彩底 + 内层淡色卡：三层都保留色相，靠明度阶梯分层，不出现纯白/无彩块
             accentColor = hslColor(H, S * 0.95f, L.coerceIn(0.45f, 0.72f))
             accentLight = hslColor(H, S * 0.35f, 0.92f)
             star = hslColor(H, S * 0.5f, 0.55f)
             bg = hslColor(H, S * 0.75f, 0.85f)
-            surface = hslColor(H, S * 0.08f, 0.98f)
-            surfaceVariant = hslColor(H, S * 0.55f, 0.90f)
+            surface = hslColor(H, S * 0.55f, 0.955f)
+            surfaceVariant = hslColor(H, S * 0.65f, 0.91f)
             text = hslColor(H, S * 0.30f, 0.22f)
             textMuted = hslColor(H, S * 0.25f, 0.42f)
             textSubtle = hslColor(H, S * 0.20f, 0.58f)
@@ -243,17 +243,18 @@ object ShareCardHtmlRenderer {
             onAccent = if (accentL > 0.60f) hslColor(H, S * 0.30f, 0.15f) else hslColor(H, S * 0.10f, 0.96f)
         } else {
             // —— 暗方案 ——
+            // 同样保留色相，饱和度整体上调，避免"纯黑灰"观感
             val darkAccentL = (L + 0.18f).coerceIn(0.55f, 0.88f)
             accentColor = hslColor(H, S * 0.90f, darkAccentL)
-            accentLight = hslColor(H, S * 0.25f, 0.18f)
+            accentLight = hslColor(H, S * 0.45f, 0.20f)
             star = hslColor(H, S * 0.60f, (L + 0.20f).coerceIn(0.58f, 0.88f))
-            bg = hslColor(H, S * 0.20f, 0.10f)
-            surface = hslColor(H, S * 0.18f, 0.15f)
-            surfaceVariant = hslColor(H, S * 0.22f, 0.20f)
-            text = hslColor(H, S * 0.15f, 0.90f)
-            textMuted = hslColor(H, S * 0.15f, 0.65f)
-            textSubtle = hslColor(H, S * 0.12f, 0.48f)
-            divider = "rgba(255,255,255,0.08)"
+            bg = hslColor(H, S * 0.50f, 0.11f)
+            surface = hslColor(H, S * 0.45f, 0.17f)
+            surfaceVariant = hslColor(H, S * 0.55f, 0.23f)
+            text = hslColor(H, S * 0.25f, 0.92f)
+            textMuted = hslColor(H, S * 0.22f, 0.68f)
+            textSubtle = hslColor(H, S * 0.20f, 0.52f)
+            divider = cssHsla(H, S * 0.50f, 0.75f, 0.14f)
             // on-accent：暗方案 accent 已提亮，L > 60% 则深字
             onAccent = if (darkAccentL > 0.60f) hslColor(H, S * 0.30f, 0.15f) else hslColor(H, S * 0.10f, 0.96f)
         }
