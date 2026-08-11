@@ -29,17 +29,17 @@ object ShareCardHtmlRenderer {
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
     /**
-     * 卡片固定设计宽度（CSS px）——**整个功能唯一的尺寸契约**。
+     * 取页面完整内容高度（**CSS px**）。
      *
-     * WebView 开 `useWideViewPort` + `loadWithOverviewMode` 后，模板永远按这个 CSS 像素数
-     * 排版，再缩放贴合 WebView 的物理宽度。任何设备、任何时刻，模板里的固定 px 尺寸占比都相同。
+     * 因为 viewport 用 `device-width`，layout viewport 宽度就等于 WebView 的 dp 宽度，
+     * 即 **1 CSS px 恒等于 1 dp、缩放比恒为 1.0**。所以这个数值可以直接当 dp 用来设 WebView
+     * 高度，**不需要乘任何缩放系数**。
      *
-     * 不要改成 `device-width`（随设备 dp 漂移）或物理像素值（把物理像素当 CSS 像素用，
-     * 会让 20px padding 缩成 ~7dp，卡片看上去像宽屏）。
+     * 历史坑：曾经把 viewport 改成固定 `width=390` 想统一跨设备比例，那样就必须自己算
+     * `物理宽/390` 的缩放比；但 `initial-scale=1.0` 会覆盖 `loadWithOverviewMode` 的自动
+     * 适配，实际缩放停在 1.0，导致换算公式全错——预览要左右滑、右侧和下方多出背景、
+     * 截图不完整。不要再走回去。
      */
-    const val CARD_CSS_WIDTH = 390
-
-    /** 取页面完整内容高度（CSS px），把 WebView 高度设成内容高度、避免 body 背景填满空白区。 */
     const val CONTENT_HEIGHT_JS =
         "(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)).toString()"
 
@@ -192,13 +192,21 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 给预览 HTML 加固定设计宽度 viewport + 空的 accent style 占位；HTML 为空则返回 ""。
-     * 详见 [CARD_CSS_WIDTH] 的注释。
+     * 给预览 HTML 加响应式 viewport + 横向溢出兜底 + 空的 accent style 占位；HTML 为空则返回 ""。
+     *
+     * viewport 用 `device-width`：layout viewport 宽度 == WebView 的 dp 宽度，
+     * 即 1 CSS px == 1 dp、缩放比恒为 1.0。页面宽度天然等于控件宽度，不会左右滑、右侧不留白，
+     * 内容高度的 CSS px 数值也能直接当 dp 用（详见 [CONTENT_HEIGHT_JS]）。
+     *
+     * 额外注入 `html,body{overflow-x:hidden}`：模板里绝对定位的装饰元素（`left:89%` 之类）
+     * 可能越过右边界，撑大 scrollWidth 导致横向滚动、并污染 scrollHeight 的测量。
+     * 这是尺寸契约的一部分，统一在这里兜住，不指望每个模板自己写对。
      */
     private fun injectPreviewHead(html: String): String {
         if (html.isBlank()) return ""
         val head =
-            """<meta name="viewport" content="width=$CARD_CSS_WIDTH, initial-scale=1.0">""" +
+            """<meta name="viewport" content="width=device-width, initial-scale=1.0">""" +
+                """<style>html,body{overflow-x:hidden;}</style>""" +
                 """<style id="$ACCENT_STYLE_ID"></style>"""
         return if (HEAD_TAG_REGEX.containsMatchIn(html))
             HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")

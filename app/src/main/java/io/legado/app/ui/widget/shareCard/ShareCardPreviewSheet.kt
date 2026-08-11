@@ -8,7 +8,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -246,21 +245,17 @@ fun ShareCardPreviewSheet(
             )
         },
     ) {
-        // 尺寸契约：模板按 CARD_CSS_WIDTH 这个固定 CSS 宽度排版，WebView 再等比缩放贴合容器宽度。
-        // 所以「内容 CSS 高度 → 显示 dp 高度」的换算就是同一个缩放比：
-        //     heightDp = contentCssHeight × (容器宽度dp / CARD_CSS_WIDTH)
-        // 把 WebView 高度设成这个值，卡片就恰好铺满 WebView：不留空白（body 背景不会漏出来）、
-        // 也不裁切。保存时直接 draw 整个 WebView，出图 == 预览。
-        // 内容高度量到之前用 0.85 屏高兜底，避免首帧 WebView 高度为 0 而永远不渲染。
+        // viewport=device-width → 1 CSS px == 1 dp → contentCssHeight 直接就是 dp 高度。
+        // 上下滚动交给外层 verticalScroll，WebView 自身不滚（高度精确等于内容高度）。
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
-        BoxWithConstraints(
+        Box(
             Modifier
                 .fillMaxWidth()
                 .heightIn(max = maxPreviewHeight)
                 .verticalScroll(rememberScrollState()),
         ) {
             val previewHeight = if (contentCssHeight > 0f) {
-                (contentCssHeight * (maxWidth.value / ShareCardHtmlRenderer.CARD_CSS_WIDTH)).dp
+                contentCssHeight.dp
             } else {
                 maxPreviewHeight
             }
