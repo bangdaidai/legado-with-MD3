@@ -51,11 +51,16 @@ body {
   width: 100%;
   max-width: 100%;
   padding: 28px 18px;
+  /* 底色必须自己拼渐变：--bp-bg 注入的是纯色，靠 var() 兜底渐变的话「选了色」就退化成平色。
+     三个 radial 也要用三个不同变量，否则注入后三层同色、层次全没了。 */
   background:
-    radial-gradient(ellipse at 10% 20%, var(--bp-accent-light, #ffe2ea) 0%, transparent 55%),
+    radial-gradient(ellipse at 10% 20%, var(--bp-surface, #ffe2ea) 0%, transparent 55%),
     radial-gradient(ellipse at 90% 80%, var(--bp-accent-light, #fccfdf) 0%, transparent 55%),
-    radial-gradient(ellipse at 50% 110%, var(--bp-accent-light, #fbc8d8) 0%, transparent 50%),
-    var(--bp-bg, #fdd6e2);
+    radial-gradient(ellipse at 50% 110%, rgba(var(--bp-accent-rgb, 251, 200, 216), 0.45) 0%, transparent 50%),
+    linear-gradient(145deg,
+      var(--bp-accent-light, #ffe4ec) 0%,
+      var(--bp-bg, #fdd6e2) 55%,
+      rgba(var(--bp-accent-rgb, 247, 194, 212), 0.55) 100%);
   font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   position: relative;
   overflow-x: hidden;
@@ -67,9 +72,11 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  /* 格纹用 --bp-accent-rgb 自己配 alpha，不要用 --bp-accent-fade：
+     后者 alpha 被 Kotlin 写死成 0.15，是这里兜底值的 3 倍，一选色格纹就糊满整张卡。 */
   background-image:
-    repeating-linear-gradient(45deg, var(--bp-accent-fade, rgba(255, 205, 219, 0.06)) 0px, transparent 2px, transparent 8px),
-    repeating-linear-gradient(-45deg, var(--bp-accent-fade, rgba(255, 188, 207, 0.05)) 0px, transparent 2px, transparent 8px);
+    repeating-linear-gradient(45deg, rgba(var(--bp-accent-rgb, 255, 205, 219), 0.06) 0px, transparent 2px, transparent 8px),
+    repeating-linear-gradient(-45deg, rgba(var(--bp-accent-rgb, 255, 188, 207), 0.05) 0px, transparent 2px, transparent 8px);
 }
 .float-element { position: absolute; pointer-events: none; z-index: 0; }
 .float-star {
