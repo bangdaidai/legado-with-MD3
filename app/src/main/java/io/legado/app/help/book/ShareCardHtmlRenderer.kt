@@ -21,6 +21,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
+import androidx.compose.ui.graphics.Color as ComposeColor
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamicColorScheme
+import io.legado.app.ui.theme.ThemeColorSpec
+import io.legado.app.ui.theme.ThemeResolver
 
 /**
  * 分享卡片 HTML→Bitmap 离屏渲染器。
@@ -165,49 +170,67 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 由用户选中的单个主题色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
-     * 变量含义：
+     * 由用户选中的主题色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
+     *
+     * 关键修复：背景直接使用用户所选颜色（选什么色就是什么色），并依据 accent 的感知
+     * 亮度自动在「浅色方案 / 深色方案」间切换，而不是把所有模板强制压成深色：
+     * - accent 亮度高（浅色） → 浅色背景 + 深色文字
+     * - accent 亮度低（深色） → 深色背景 + 浅色文字
+     * 这样无论选浅色还是深色，卡片都保持可读，且模板原有的深浅设计不会被破坏。
+     *
+     * 变量含义（模板通过 `var(--bp-*, 默认)` 引用，未注入时走默认色）：
      * - `--bp-accent`        主题色（原样）
      * - `--bp-accent-light`  提亮版（用于渐变另一端、浅色强调）
      * - `--bp-accent-fade`   主题色半透明（用于浅色块背景、分隔线）
-     * - `--bp-bg`            由主题色压暗生成的深色背景
-     * - `--bp-surface`       比背景略亮的卡片表面
-     * - `--bp-text`          正文色（深色背景上的浅色文字）
-     * - `--bp-text-muted`    副文色（正文的半透明）
-     * - `--bp-divider`       分隔线（低透明度前景色）
-     * 模板通过 `var(--bp-accent, 默认色)` 引用，未注入时走默认色，兼容老模板。
+     * - `--bp-bg`            用户所选颜色本身（纯色，渐变感由模板默认值决定）
+     * - `--bp-surface`       卡片表面（浅色方案偏白、深色方案比背景略亮）
+     * - `--bp-text`          正文色（随方案切换深/浅）
+     * - `--bp-text-muted`    副文色
+     * - `--bp-divider`       分隔线
      */
     private fun injectAccentVariables(html: String, @ColorInt accent: Int): String {
-        val accentLight = ColorUtils.blendARGB(accent, 0xFFFFFFFF.toInt(), 0.35f)
-        val bg = deriveBackground(accent)
-        val surface = ColorUtils.blendARGB(bg, 0xFFFFFFFF.toInt(), 0.06f)
-        val text = 0xFFECECEC.toInt()
+        // 用户所选颜色 = 卡片背景（纯色），同时作为主题系统的「种子色（seed）」。
+        // 背景直接用用户色本身（选什么色背景就是什么色，不再被 M3 固定 tone 抹平）；
+        // 文字/表面/分隔线这一套才交给 dynamicColorScheme 生成协调配色，
+        // isDark 依据用户色感知亮度，保证浅色背景配深文字、深色背景配浅文字。
+        val isDark = ColorUtils.calculateLuminance(accent) <= 0.5
+        val scheme = dynamicColorScheme(
+            seedColor = ComposeColor(accent),
+            isDark = isDark,
+            isAmoled = false,
+            style = PaletteStyle.Fidelity,
+            contrastLevel = ThemeResolver.resolveContrastLevel(),
+            specVersion = ThemeResolver.resolveColorSpecVersion(ThemeColorSpec.SPEC_2021),
+        )
+        val white = 0xFFFFFFFF.toInt()
+        // 强调色取自主题系统生成的 scheme.primary：与背景（用户纯色）拉开 tone，避免同色融合；
+        // accent-light/fade 在 primary 上做提亮与淡化
+        val primary = scheme.primary.value.toInt()
+        val accentLight = ColorUtils.blendARGB(primary, white, 0.3f)
+        val accentFade = cssRgba(primary, 0.18f)
+        // 背景：用户所选纯色（选什么色背景就是什么色，不被 M3 固定 tone 抹平）
+        val bg = cssRgba(accent, 1f)
+        // 文字/表面/分隔线：取自主题系统生成的协调配色（随种子色变化，对比由 scheme 保证）
+        val surface = cssRgba(scheme.surface.value.toInt(), 1f)
+        val text = cssRgba(scheme.onBackground.value.toInt(), 1f)
+        val textMuted = cssRgba(scheme.onSurfaceVariant.value.toInt(), 1f)
+        val divider = cssRgba(scheme.outline.value.toInt(), 1f)
         val vars = buildString {
             append(":root{")
-            append("--bp-accent:").append(cssRgba(accent, 1f)).append(';')
+            append("--bp-accent:").append(cssRgba(primary, 1f)).append(';')
             append("--bp-accent-light:").append(cssRgba(accentLight, 1f)).append(';')
-            append("--bp-accent-fade:").append(cssRgba(accent, 0.15f)).append(';')
-            append("--bp-bg:").append(cssRgba(bg, 1f)).append(';')
-            append("--bp-surface:").append(cssRgba(surface, 1f)).append(';')
-            append("--bp-text:").append(cssRgba(text, 1f)).append(';')
-            append("--bp-text-muted:").append(cssRgba(text, 0.6f)).append(';')
-            append("--bp-divider:").append(cssRgba(text, 0.12f)).append(';')
+            append("--bp-accent-fade:").append(accentFade).append(';')
+            append("--bp-bg:").append(bg).append(';')
+            append("--bp-surface:").append(surface).append(';')
+            append("--bp-text:").append(text).append(';')
+            append("--bp-text-muted:").append(textMuted).append(';')
+            append("--bp-divider:").append(divider).append(';')
             append('}')
         }
         val styleTag = "<style>$vars</style>"
         return if (HEAD_TAG_REGEX.containsMatchIn(html))
             HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$styleTag\n")
         else "$styleTag\n$html"
-    }
-
-    /** 把主题色压成一个足够深、仍带色相的背景色，保证浅色文字可读 */
-    @ColorInt
-    private fun deriveBackground(@ColorInt accent: Int): Int {
-        val hsl = FloatArray(3)
-        ColorUtils.colorToHSL(accent, hsl)
-        hsl[1] = (hsl[1] * 0.6f).coerceIn(0f, 1f)
-        hsl[2] = 0.12f
-        return ColorUtils.HSLToColor(hsl)
     }
 
     private fun cssRgba(@ColorInt color: Int, alpha: Float): String {
