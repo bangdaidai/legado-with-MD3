@@ -55,7 +55,6 @@ import io.legado.app.domain.usecase.VerifyBookmarkTargetUseCase
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ShareCardDataBuilder
-import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isLocal
@@ -267,7 +266,6 @@ class ReadBookViewModel(
             it.copy(
                 showShareCard = true,
                 shareCardLoading = true,
-                shareCardBitmap = null,
                 shareCardData = null,
                 activeSheet = null,
             )
@@ -279,12 +277,10 @@ class ReadBookViewModel(
                 marking.bookAuthor,
             )
             val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
-            val bitmap = ShareCardGenerator.generate(context, data)
             _uiState.update {
                 it.copy(
                     shareCardData = data,
                     shareCardLoading = false,
-                    shareCardBitmap = bitmap,
                 )
             }
         }
@@ -1489,7 +1485,6 @@ class ReadBookViewModel(
                 _uiState.update {
                     it.copy(
                         showShareCard = false,
-                        shareCardBitmap = null,
                         shareCardData = null,
                     )
                 }

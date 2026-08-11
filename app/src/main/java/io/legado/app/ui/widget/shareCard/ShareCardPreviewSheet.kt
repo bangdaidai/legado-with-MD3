@@ -1,17 +1,17 @@
 package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.Image
+import android.view.ViewGroup
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
@@ -23,17 +23,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.repository.ShareCardRepository
@@ -48,7 +46,6 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
@@ -66,39 +63,42 @@ private val ACCENT_PRESETS = listOf(
 fun ShareCardPreviewSheet(
     show: Boolean,
     data: ShareCardData?,
-    initialBitmap: Bitmap?,
     loading: Boolean,
     onDismissRequest: () -> Unit,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val shareCardRepository = koinInject<ShareCardRepository>()
 
     var templates by remember { mutableStateOf<List<ShareCardTemplate>>(emptyList()) }
     var selectedTemplateId by remember { mutableLongStateOf(0L) }
-    var currentBitmap by remember { mutableStateOf(initialBitmap) }
-    var rendering by remember { mutableStateOf(false) }
     var showTemplateMenu by remember { mutableStateOf(false) }
     // 临时主题色：null = 用模板自身配色，不写库、关闭后不保留
     var accentColor by remember { mutableStateOf<Int?>(null) }
     var showPaletteMenu by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
-    // 方案覆盖：null=自动（按所选色明度判定），false=强制亮，true=强制暗。便于预览另一种效果。
+    // 方案覆盖：null=自动（按所选色明度判定），false=强制亮，true=强制暗。
     var schemeOverride by remember { mutableStateOf<Boolean?>(null) }
 
-    LaunchedEffect(initialBitmap) { currentBitmap = initialBitmap }
+    // 实时预览 WebView 实例和初始化 HTML（加载一次，换色只注入 JS）
+    var previewWebView by remember { mutableStateOf<WebView?>(null) }
+    var htmlReady by remember { mutableStateOf(false) }
+    // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
+    var previewFailed by remember { mutableStateOf(false) }
+    // 长按保存：置位后由下面的 LaunchedEffect 走离屏渲染出完整长图再存相册
+    var saveRequested by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
     LaunchedEffect(show) {
         if (show) {
             accentColor = null
             schemeOverride = null
+            htmlReady = false
+            previewFailed = false
             val loaded = withContext(Dispatchers.IO) {
                 ShareCardGenerator.getOrCreateBuiltinTemplates()
                 shareCardRepository.getAll()
             }
             templates = loaded
-            // 每次打开都按已保存的模板 id 同步，保证 selectedTemplateId 与 initialBitmap
-            // 所用模板一致——否则用户长按换色时可能用错模板重渲染。
             val saved = withContext(Dispatchers.IO) {
                 AppConfigStore.getLong(ShareCardGenerator.SELECTED_TEMPLATE_KEY) ?: 0L
             }
@@ -111,15 +111,36 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    fun rerender(templateId: Long, accent: Int?, forceDark: Boolean? = schemeOverride) {
-        if (data == null) return
-        val tpl = templates.firstOrNull { it.id == templateId } ?: return
-        scope.launch {
-            rendering = true
-            currentBitmap = ShareCardHtmlRenderer.render(context, tpl, data, accent, forceDark)
-            rendering = false
+    // WebView 就位或模板切换时加载 HTML（onPageFinished 里翻转 htmlReady 让菊花消失）
+    LaunchedEffect(show, selectedTemplateId, previewWebView) {
+        if (!show || data == null || selectedTemplateId == 0L) return@LaunchedEffect
+        val wv = previewWebView ?: return@LaunchedEffect
+        val tpl = templates.firstOrNull { it.id == selectedTemplateId } ?: return@LaunchedEffect
+        htmlReady = false
+        previewFailed = false
+        val html = ShareCardHtmlRenderer.buildPreviewHtml(context, tpl, data)
+        if (html.isBlank()) {
+            previewFailed = true
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.Main) {
+            wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
         }
     }
+
+    // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
+    // 这是"瞬间切换"的关键——不 reload、不重建 WebView、不出图。
+    LaunchedEffect(htmlReady, accentColor, schemeOverride) {
+        if (!htmlReady) return@LaunchedEffect
+        val wv = previewWebView ?: return@LaunchedEffect
+        wv.evaluateJavascript(
+            ShareCardHtmlRenderer.accentApplyJs(accentColor, schemeOverride),
+            null,
+        )
+    }
+
+    // 换色 / 切亮暗只需改 accentColor / schemeOverride 状态，
+    // 由上面的 LaunchedEffect 统一注入 JS，无需在各处手动触发。
 
     AppModalBottomSheet(
         show = show,
@@ -129,8 +150,8 @@ fun ShareCardPreviewSheet(
             Box {
                 MediumTonalButton(
                     onClick = { showTemplateMenu = true },
-                    onLongClick = { if (templates.isNotEmpty() && !rendering && !loading) showPaletteMenu = true },
-                    enabled = templates.isNotEmpty() && !rendering && !loading,
+                    onLongClick = { if (templates.isNotEmpty() && !loading) showPaletteMenu = true },
+                    enabled = templates.isNotEmpty() && !loading,
                     icon = Icons.Default.SwapHoriz,
                     contentDescription = "切换模板（长按换色）",
                 )
@@ -146,7 +167,7 @@ fun ShareCardPreviewSheet(
                                 dismiss()
                                 if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
                                 selectedTemplateId = tpl.id
-                                rerender(tpl.id, accentColor)
+                                // HTML 重新加载由 LaunchedEffect(selectedTemplateId) 驱动
                             },
                         )
                     }
@@ -163,7 +184,6 @@ fun ShareCardPreviewSheet(
                             if (accentColor == null) return@RoundDropdownMenuItem
                             accentColor = null
                             schemeOverride = null
-                            rerender(selectedTemplateId, null)
                         },
                     )
                     ACCENT_PRESETS.forEach { (label, argb) ->
@@ -175,7 +195,6 @@ fun ShareCardPreviewSheet(
                                 dismiss()
                                 if (accentColor == argb) return@RoundDropdownMenuItem
                                 accentColor = argb
-                                rerender(selectedTemplateId, argb)
                             },
                         )
                     }
@@ -191,8 +210,6 @@ fun ShareCardPreviewSheet(
             }
         },
         endAction = {
-            // 亮/暗切换（太阳/月亮图标）：仅在已选主题色时生效（accentColor=null 不注入变量，无意义）。
-            // 点击在当前亮/暗之间翻转。图标显示当前方案，长按图片则自动保存到相册。
             val accent = accentColor
             val effectiveDark = if (accent == null) {
                 null
@@ -201,62 +218,79 @@ fun ShareCardPreviewSheet(
             }
             MediumTonalButton(
                 onClick = {
-                    val next = if (effectiveDark == true) false else true
+                    val next = effectiveDark != true
                     schemeOverride = next
-                    rerender(selectedTemplateId, accentColor, next)
                 },
-                enabled = accentColor != null && !rendering && !loading,
+                enabled = accentColor != null && !loading,
                 selected = schemeOverride != null,
                 icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                 contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
             )
         },
     ) {
-        // Preview image only
-        when {
-            rendering || loading -> {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+        val previewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(previewHeight),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (data != null) {
+                // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
+                // 必须无条件挂载（不能被 htmlReady 门控），否则 WebView 建不起来、HTML 无从加载。
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
+                                setSupportZoom(false)
+                                builtInZoomControls = false
+                                blockNetworkLoads = false
+                                blockNetworkImage = false
+                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            }
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    htmlReady = true
+                                }
+                            }
+                            // 长按保存到相册（走离屏渲染出完整长图，比截当前视口更完整）
+                            setOnLongClickListener {
+                                saveRequested = true
+                                true
+                            }
+                            previewWebView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    onRelease = {
+                        it.stopLoading()
+                        it.destroy()
+                        previewWebView = null
+                    },
+                )
             }
-            currentBitmap != null -> {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.85f).dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    Image(
-                        bitmap = currentBitmap!!.asImageBitmap(),
-                        contentDescription = "分享卡片",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                enabled = !rendering && !loading,
-                                onClick = {},
-                                onLongClick = { currentBitmap?.let { saveToGallery(context, it) } },
-                            ),
-                        contentScale = ContentScale.FillWidth,
-                    )
-                }
+            // 首帧加载中 / 保存中：盖一层进度指示。换色不会走到这里，所以不再"转圈"。
+            if (loading || saving || (data != null && !htmlReady && !previewFailed)) {
+                CircularProgressIndicator()
             }
-            else -> {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppText("生成失败")
-                }
+            if (previewFailed) {
+                AppText("预览失败")
+            }
+            if (data == null && !loading) {
+                AppText("生成失败")
             }
         }
     }
+
 
     ColorPickerSheet(
         show = showColorPicker,
@@ -266,10 +300,26 @@ fun ShareCardPreviewSheet(
             showColorPicker = false
             if (accentColor != picked) {
                 accentColor = picked
-                rerender(selectedTemplateId, picked)
             }
         },
     )
+
+    // 长按保存：通过离屏渲染生成完整长图（跟当前所选 accent/scheme 一致）
+    LaunchedEffect(saveRequested) {
+        if (!saveRequested || data == null) return@LaunchedEffect
+        saveRequested = false
+        saving = true
+        val tpl = templates.firstOrNull { it.id == selectedTemplateId }
+        if (tpl != null) {
+            val bitmap = ShareCardHtmlRenderer.render(context, tpl, data, accentColor, schemeOverride)
+            if (bitmap != null) {
+                saveToGallery(context, bitmap)
+            } else {
+                context.toastOnUi("保存失败")
+            }
+        }
+        saving = false
+    }
 }
 
 @Composable
@@ -282,30 +332,31 @@ private fun ColorSwatch(argb: Int) {
     )
 }
 
-private fun saveToGallery(context: android.content.Context, bitmap: Bitmap) {
-    try {
-        val values = android.content.ContentValues().apply {
-            put(
-                android.provider.MediaStore.Images.Media.DISPLAY_NAME,
-                "shareCard_${System.currentTimeMillis()}.png",
-            )
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Legado")
-        }
-        val uri = context.contentResolver.insert(
-            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            values,
-        )
-        if (uri != null) {
+private suspend fun saveToGallery(context: android.content.Context, bitmap: Bitmap) {
+    // PNG 压缩长图很耗时，必须挪到 IO 线程，否则主线程卡顿甚至 ANR。
+    // 返回 null 表示成功，非 null 是失败原因后缀。
+    val error = withContext(Dispatchers.IO) {
+        try {
+            val values = android.content.ContentValues().apply {
+                put(
+                    android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                    "shareCard_${System.currentTimeMillis()}.png",
+                )
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Legado")
+            }
+            val uri = context.contentResolver.insert(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                values,
+            ) ?: return@withContext "：无法创建相册文件"
             context.contentResolver.openOutputStream(uri)?.use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
-            context.toastOnUi("已保存到相册")
-        } else {
-            context.toastOnUi("保存失败")
+            } ?: return@withContext "：无法写入相册文件"
+            null
+        } catch (e: Exception) {
+            "：${e.message}"
         }
-    } catch (e: Exception) {
-        context.toastOnUi("保存失败: ${e.message}")
     }
+    context.toastOnUi(if (error == null) "已保存到相册" else "保存失败$error")
 }
 

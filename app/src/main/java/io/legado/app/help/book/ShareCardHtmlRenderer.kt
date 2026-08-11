@@ -29,9 +29,16 @@ import java.net.URI
 object ShareCardHtmlRenderer {
 
     private const val RENDER_TIMEOUT_MS = 5000L
+    /** 图片/字体就绪检测最长等待。触发页面 __BpReady=true 后立即结束，无需等满。 */
+    private const val READY_TIMEOUT_MS = 2000L
     private const val MAX_CACHE_SIZE = 8
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
     private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
+    private val HTML_OPEN_TAG_REGEX = Regex("<html([^>]*)>", RegexOption.IGNORE_CASE)
+    private val CLASS_ATTR_REGEX = Regex("""class\s*=\s*["']""", RegexOption.IGNORE_CASE)
+
+    /** 实时预览用：注入的 accent 变量 style 标签 id，供 JS 动态替换内容实现秒切换。 */
+    private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
     private val bitmapCache = object : LinkedHashMap<String, Bitmap>(MAX_CACHE_SIZE, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
@@ -116,33 +123,39 @@ object ShareCardHtmlRenderer {
             wv.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) { pageFinished = true }
             }
-            wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
+            // 注入就绪探针脚本：等 document.fonts.ready + 所有 <img> 完成后设 window.__BpReady = true
+            val htmlWithProbe = injectReadyProbe(html)
+            wv.loadDataWithBaseURL("about:blank", htmlWithProbe, "text/html", "UTF-8", null)
 
             // 等 onPageFinished（最长 RENDER_TIMEOUT_MS）
             withTimeoutOrNull(RENDER_TIMEOUT_MS) {
                 while (!pageFinished) delay(30)
             }
 
-            // 首次测量，读取内容高度
-            delay(100)
-            wv.measure(
-                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            )
-            val contentHeight = wv.measuredHeight
-            if (contentHeight <= 100) return null
+            // 等 __BpReady（字体 + 图片就绪），每 30ms 轮询，最长 READY_TIMEOUT_MS
+            withTimeoutOrNull(READY_TIMEOUT_MS) {
+                while (true) {
+                    val ready = kotlinx.coroutines.suspendCancellableCoroutine<Boolean> { cont ->
+                        wv.evaluateJavascript("(window.__BpReady===true).toString()") { value ->
+                            cont.resumeWith(Result.success(value?.contains("true") == true))
+                        }
+                    }
+                    if (ready) break
+                    delay(30)
+                }
+            }
 
-            // 再等 300ms 让图片/字体加载完成
-            delay(300)
+            // 测量最终内容高度
             wv.measure(
                 View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
             )
-            val finalHeight = wv.measuredHeight.coerceAtLeast(contentHeight)
-            if (finalHeight <= 0) return null
+            val finalHeight = wv.measuredHeight
+            if (finalHeight <= 100) return null
 
             wv.layout(0, 0, width, finalHeight)
-            delay(100)
+            // 一帧（~16ms）让 layout 生效
+            delay(16)
 
             Bitmap.createBitmap(width, finalHeight, Bitmap.Config.ARGB_8888).also {
                 val canvas = Canvas(it)
@@ -153,6 +166,24 @@ object ShareCardHtmlRenderer {
         finally {
             try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * 注入一段 JS 探针：document.fonts.ready + 所有 <img> onload 后设 `window.__BpReady = true`。
+     * 离屏渲染轮询该标志来判断何时截图，取代固定 delay(100+300+100)。
+     * 用 addEventListener 而非 img.onload= 赋值，避免覆盖模板自带的 onerror 兜底（如 `this.style.display='none'`）。
+     */
+    private fun injectReadyProbe(html: String): String {
+        val script = """<script>(function(){function c(){window.__BpReady=true}""" +
+            """var imgs=document.querySelectorAll('img');""" +
+            """var ps=[document.fonts?document.fonts.ready:Promise.resolve()];""" +
+            """imgs.forEach(function(i){if(!i.complete)ps.push(new Promise(function(r){""" +
+            """i.addEventListener('load',r);i.addEventListener('error',r)}))});""" +
+            """Promise.all(ps).then(c).catch(c)})()</script>"""
+        // 插到 </body> 前；没有则追加到末尾
+        val idx = html.lastIndexOf("</body>", ignoreCase = true)
+        return if (idx >= 0) html.substring(0, idx) + script + html.substring(idx)
+        else html + script
     }
 
     private fun getRenderWidth(ctx: Context): Int =
@@ -166,23 +197,6 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 由用户选中的主色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
-     *
-     * 纯派生规则（方案 C）：8 个变量全部从主色衍生，不依赖主题系统、不硬编码黑/白。
-     * 同色系 + 卡片表面始终被「提亮链」拉到近白 → 选浅色不发黑、文字永远压暗保证对比、
-     * 主色只做点缀不大面积铺色 → 怎么选都和谐可读。
-     *
-     * 变量含义（模板通过 `var(--bp-*, 默认)` 引用，未注入时走默认色）：
-     * - `--bp-accent`        主色（用户选色原样）：爱心/星/分割线/进度条核心色
-     * - `--bp-accent-light`  主色提亮+降饱和：背景渐变主力、卡片内装饰
-     * - `--bp-accent-fade`   主色半透明：阴影/光晕/半透明层
-     * - `--bp-bg`            同色系渐变（accent-light 的明暗四段）：整体氛围
-     * - `--bp-surface`       accent-light 再提亮+高透明：卡片本体（毛玻璃）
-     * - `--bp-text`          主色降饱和+压暗：标题/数值（必须可读）
-     * - `--bp-text-muted`    主文字再提亮：作者/标签/时间
-     * - `--bp-divider`       主色低透明：虚线边框/内分割
-     */
-    /**
      * 给定主色，按 HSL 明度阈值 0.55 判定默认走暗方案(true)还是亮方案(false)。
      * 供预览 UI 确定「当前显示的是亮还是暗」，让亮/暗切换按钮能正确翻转。
      */
@@ -194,77 +208,196 @@ object ShareCardHtmlRenderer {
         return lightness < 0.55f
     }
 
+    /**
+     * 由用户选中的主色，派生出一整套 `--bp-*` CSS 变量并注入 HTML。
+     *
+     * 纯派生规则（方案 D）：在 **HSL** 空间用「绝对明度目标」派生，而非 HSV 相对加减。
+     * 关键差别：HSV 的 V 会在接近 1.0 时被 coerceIn 封顶，导致 bg / surface / accent 一起
+     * 塌陷成同一个色（主色 V≥0.80 时必然发生）；HSL 给每个变量钉死绝对 L，背景 / 卡片 /
+     * 次级块三层明度恒定分离，主色无论多深多浅都不可能撞色。饱和度按变量各自缩放，
+     * 色相始终跟随主色，不依赖主题系统、不硬编码黑/白。
+     *
+     * 变量含义（模板通过 `var(--bp-*, 兜底色)` 引用，未注入时走兜底色）：
+     * - `--bp-accent`           归一化主色（亮 L∈[45%,72%]）：爱心/图标/进度条/实心装饰
+     * - `--bp-accent-light`     主色极浅版（亮 92% / 暗 18%）：背景渐变端、外框
+     * - `--bp-accent-rgb`       主色裸三元组 `r,g,b`：配 `rgba(var(--bp-accent-rgb), α)` 自由控透明度
+     * - `--bp-star`             星级/评分色（跟随主色色相，和谐优先）
+     * - `--bp-on-accent`        压在 --bp-accent 之上的文字色（按主色明度自动取深/浅）
+     * - `--bp-bg`               整体背景（亮 94% / 暗 10%）——纯色，渐变交给模板自己拼
+     * - `--bp-surface`          卡片本体（亮 98% / 暗 15%）
+     * - `--bp-surface-rgb`      卡片色裸三元组：毛玻璃半透明卡片用
+     * - `--bp-surface-variant`  卡片内次级块（亮 93% 凹陷 / 暗 20% 凸起）
+     * - `--bp-text`             最深字（亮 22% / 暗 90%）：标题/数值
+     * - `--bp-text-muted`       中等字（亮 42% / 暗 65%）：标签/badge
+     * - `--bp-text-subtle`      最浅字（亮 58% / 暗 48%）：作者/label/底栏
+     * - `--bp-text-rgb`         文字色裸三元组：投影/低透明文字用
+     * - `--bp-divider`          分隔线/边框（带 alpha）
+     *
+     * 暗方案额外给 `<html>` 追加 `class="bp-dark"`，模板可写 `.bp-dark .xxx {}` 做亮暗分支
+     * （CSS 变量无法做条件判断，语义状态色如「在读=绿/读完=蓝」需要这个机制翻色）。
+     *
+     * forceDark=null 时按主色明度自动判定；非 null 时强制亮(false)/暗(true)，供预览切换。
+     */
     private fun injectAccentVariables(html: String, @ColorInt accent: Int, forceDark: Boolean? = null): String {
-        // 8 个变量全部由主色衍生，按【所选色明暗】分两套方案：
-        // - 亮方案（选浅色）：浅表面 + 深字，适合浅色模板（默认）
-        // - 暗方案（选深色）：深表面（近固定深灰带主色相）+ 浅字，保持暗色氛围且可读
-        // 两者都只用纯派生、不依赖主题系统，主色只做点缀不大面积铺色。
-        // 判断「所选色本身是亮是暗」用 HSL 明度 L=(max+min)/2（0–1），比线性加权更贴合人眼。
-        // 阈值取中点附近 0.55：<0.55 走暗方案，否则亮方案。与模板无关，模板只认 8 个变量。
-        // forceDark=null 时自动判定；非 null 时强制亮(false)/暗(true)方案，便于预览另一种效果。
-        val r = (accent shr 16) and 0xFF
-        val g = (accent shr 8) and 0xFF
-        val b = accent and 0xFF
-        val lightness = (maxOf(r, g, b) + minOf(r, g, b)) / 2f / 255f
-        val isDark = forceDark ?: (lightness < 0.55f)
+        val style = buildAccentStyle(accent, forceDark)
+        val styleTag = "<style id=\"$ACCENT_STYLE_ID\">${style.cssVars}</style>"
+        // 暗方案给 <html> 追加 bp-dark class（模板据此写 `.bp-dark .xxx {}` 做亮暗分支）
+        val withClass = if (style.isDark) addDarkClass(html) else html
+        return if (HEAD_TAG_REGEX.containsMatchIn(withClass))
+            HEAD_TAG_REGEX.replaceFirst(withClass, "<head>\n$styleTag\n")
+        else "$styleTag\n$withClass"
+    }
+
+    /** accent 派生结果：`cssVars` 是 `:root{...}` 变量块，`isDark` 决定要不要挂 `bp-dark` class。 */
+    data class AccentStyle(val cssVars: String, val isDark: Boolean)
+
+    /**
+     * 由主色派生出 14 个 `--bp-*` 变量的 CSS 文本。离屏渲染与实时预览共用这一份计算。
+     * 详见 [injectAccentVariables] 的文档。
+     */
+    fun buildAccentStyle(@ColorInt accent: Int, forceDark: Boolean? = null): AccentStyle {
+        // HSL 解析主色
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(accent, hsl)
+        val H = hsl[0]        // 0–360
+        val S = hsl[1]        // 0–1
+        val L = hsl[2]        // 0–1
+
+        // 明度 < 0.55 默认暗方案
+        val isDark = forceDark ?: (L < 0.55f)
+
+        // —— 派生各变量（HSL 绝对目标） ——
         val accentColor: Int
         val accentLight: Int
-        val accentFade: String
-        val bg: String
-        val surface: String
+        val star: Int
+        val onAccent: Int
+        val bg: Int
+        val surface: Int
+        val surfaceVariant: Int
         val text: Int
         val textMuted: Int
+        val textSubtle: Int
         val divider: String
+
         if (!isDark) {
             // —— 亮方案 ——
-            accentColor = accent
-            accentLight = adjust(accent, +0.20f, 0.85f)
-            accentFade = cssRgba(accent, 0.15f)
-            bg = buildString {
-                append("linear-gradient(145deg,")
-                append(cssRgba(adjust(accentLight, +0.04f), 1f)).append(',')
-                append(cssRgba(accentLight, 1f)).append(',')
-                append(cssRgba(adjust(accentLight, -0.04f), 1f)).append(',')
-                append(cssRgba(adjust(accentLight, -0.08f), 1f))
-                append(')')
-            }
-            surface = cssRgba(adjust(accentLight, +0.10f), 0.88f)
-            val textBase = adjust(adjust(accent, satScale = 0.60f), -0.30f)
-            text = if (ColorUtils.calculateLuminance(textBase) > 0.30f) {
-                adjust(textBase, -0.32f)
-            } else {
-                textBase
-            }
-            textMuted = adjust(text, +0.25f)
-            divider = cssRgba(accent, 0.25f)
+            accentColor = hslColor(H, S * 0.95f, L.coerceIn(0.45f, 0.72f))
+            accentLight = hslColor(H, S * 0.35f, 0.92f)
+            star = hslColor(H, S * 0.5f, 0.55f)
+            bg = hslColor(H, S * 0.25f, 0.94f)
+            surface = hslColor(H, S * 0.12f, 0.98f)
+            surfaceVariant = hslColor(H, S * 0.18f, 0.93f)
+            text = hslColor(H, S * 0.30f, 0.22f)
+            textMuted = hslColor(H, S * 0.25f, 0.42f)
+            textSubtle = hslColor(H, S * 0.20f, 0.58f)
+            divider = cssHsla(H, S * 0.30f, 0.45f, 0.40f)
+            // on-accent：accent L > 60% 则深字，否则浅字
+            val accentL = L.coerceIn(0.45f, 0.72f)
+            onAccent = if (accentL > 0.60f) hslColor(H, S * 0.30f, 0.15f) else hslColor(H, S * 0.10f, 0.96f)
         } else {
-            // —— 暗方案 ——（深表面 + 浅字，保持暗色氛围）
-            accentColor = tone(accent, 0.78f, 0.70f)        // 主色提亮发光（暗底上可见）
-            accentLight = tone(accent, 0.23f, 0.30f)        // 主色压暗成深薄荷灰（装饰浅块）
-            accentFade = cssRgba(accentColor, 0.12f)        // 发光色低透明（阴影/光晕在暗底可见）
-            bg = cssRgba(tone(accent, 0.086f, 0.25f), 1f)   // 深灰带主色相（整体氛围）
-            surface = cssRgba(tone(accent, 0.13f, 0.30f), 0.92f) // 深灰半透明（毛玻璃）
-            text = tone(accent, 0.90f, 0.12f)               // 灰白（必须可读）
-            textMuted = tone(accent, 0.68f, 0.25f)          // 中灰（弱化信息）
-            divider = "rgba(255,255,255,0.08)"              // 白透明（关键：暗底上可见，accent 派生会消失）
+            // —— 暗方案 ——
+            val darkAccentL = (L + 0.18f).coerceIn(0.55f, 0.88f)
+            accentColor = hslColor(H, S * 0.90f, darkAccentL)
+            accentLight = hslColor(H, S * 0.25f, 0.18f)
+            star = hslColor(H, S * 0.60f, (L + 0.20f).coerceIn(0.58f, 0.88f))
+            bg = hslColor(H, S * 0.20f, 0.10f)
+            surface = hslColor(H, S * 0.18f, 0.15f)
+            surfaceVariant = hslColor(H, S * 0.22f, 0.20f)
+            text = hslColor(H, S * 0.15f, 0.90f)
+            textMuted = hslColor(H, S * 0.15f, 0.65f)
+            textSubtle = hslColor(H, S * 0.12f, 0.48f)
+            divider = "rgba(255,255,255,0.08)"
+            // on-accent：暗方案 accent 已提亮，L > 60% 则深字
+            onAccent = if (darkAccentL > 0.60f) hslColor(H, S * 0.30f, 0.15f) else hslColor(H, S * 0.10f, 0.96f)
         }
+
+        // 构建 CSS :root 变量块
         val vars = buildString {
             append(":root{")
-            append("--bp-accent:").append(cssRgba(accentColor, 1f)).append(';')
-            append("--bp-accent-light:").append(cssRgba(accentLight, 1f)).append(';')
-            append("--bp-accent-fade:").append(accentFade).append(';')
-            append("--bp-bg:").append(bg).append(';')
-            append("--bp-surface:").append(surface).append(';')
-            append("--bp-text:").append(cssRgba(text, 1f)).append(';')
-            append("--bp-text-muted:").append(cssRgba(textMuted, 1f)).append(';')
+            append("--bp-accent:").append(cssRgb(accentColor)).append(';')
+            append("--bp-accent-light:").append(cssRgb(accentLight)).append(';')
+            append("--bp-accent-rgb:").append(rgbTriple(accentColor)).append(';')
+            // 旧模板兼容：--bp-accent-fade（主色 15% 透明淡色），新模板请用 rgba(var(--bp-accent-rgb), α)
+            append("--bp-accent-fade:rgba(").append(rgbTriple(accentColor)).append(",0.15);")
+            append("--bp-star:").append(cssRgb(star)).append(';')
+            append("--bp-on-accent:").append(cssRgb(onAccent)).append(';')
+            append("--bp-bg:").append(cssRgb(bg)).append(';')
+            append("--bp-surface:").append(cssRgb(surface)).append(';')
+            append("--bp-surface-rgb:").append(rgbTriple(surface)).append(';')
+            append("--bp-surface-variant:").append(cssRgb(surfaceVariant)).append(';')
+            append("--bp-text:").append(cssRgb(text)).append(';')
+            append("--bp-text-muted:").append(cssRgb(textMuted)).append(';')
+            append("--bp-text-subtle:").append(cssRgb(textSubtle)).append(';')
+            append("--bp-text-rgb:").append(rgbTriple(text)).append(';')
             append("--bp-divider:").append(divider).append(';')
             append('}')
         }
-        val styleTag = "<style>$vars</style>"
-        return if (HEAD_TAG_REGEX.containsMatchIn(html))
-            HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$styleTag\n")
-        else "$styleTag\n$html"
+        return AccentStyle(vars, isDark)
     }
+
+    /** 给 `<html>` 开标签加上 `bp-dark` class；已有 class 属性时合并进去。 */
+    private fun addDarkClass(html: String): String {
+        val match = HTML_OPEN_TAG_REGEX.find(html) ?: return html
+        val attrs = match.groupValues[1]
+        val newTag = when {
+            CLASS_ATTR_REGEX.containsMatchIn(attrs) ->
+                "<html" + CLASS_ATTR_REGEX.replaceFirst(attrs) { "${it.value}bp-dark " } + ">"
+            else -> "<html class=\"bp-dark\"$attrs>"
+        }
+        return html.replaceRange(match.range, newTag)
+    }
+
+    // ==================== 实时预览（避免每次换色都重跑离屏截图） ====================
+
+    /**
+     * 构建可直接喂给「实时预览 WebView」的 HTML：变量已替换、封面转 data URI、
+     * 带一个空的 accent style 占位（id=[ACCENT_STYLE_ID]），后续换色只需 JS 改这个标签的内容。
+     *
+     * 与 [render] 的区别：不烘焙 accent、不锁定缩放（交给 WebView 的 loadWithOverviewMode
+     * 缩放到控件宽度），因此**一次加载、无限次换色**，换色不再重新解析 HTML。
+     */
+    suspend fun buildPreviewHtml(
+        ctx: Context,
+        template: ShareCardTemplate,
+        data: ShareCardData,
+    ): String = withContext(Dispatchers.IO) {
+        val coverDataUri = coverUrlToDataUri(data.coverUrl)
+        val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
+        val html = replaceVariables(template.htmlContent, resolvedData)
+        if (html.isBlank()) return@withContext ""
+        val w = getRenderWidth(ctx)
+        // 预览用 viewport：只给固定宽度，不锁 scale，让 WebView 自适应缩放到控件宽度
+        val head = """<meta name="viewport" content="width=$w"><style id="$ACCENT_STYLE_ID"></style>"""
+        if (HEAD_TAG_REGEX.containsMatchIn(html))
+            HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
+        else "$head\n$html"
+    }
+
+    /**
+     * 生成一段 JS：把 [ACCENT_STYLE_ID] 这个 style 的内容换成新的变量块，并同步 `bp-dark` class。
+     * 页面原地重绘，无需 reload —— 这是「换色瞬间生效」的关键。
+     * @param accent null 表示清空变量，回到模板自带配色。
+     */
+    fun accentApplyJs(@ColorInt accent: Int?, forceDark: Boolean? = null): String {
+        val css: String
+        val dark: Boolean
+        if (accent == null) {
+            css = ""
+            dark = false
+        } else {
+            val style = buildAccentStyle(accent, forceDark)
+            css = jsEscape(style.cssVars)
+            dark = style.isDark
+        }
+        return "(function(){var s=document.getElementById('$ACCENT_STYLE_ID');" +
+            "if(!s){s=document.createElement('style');s.id='$ACCENT_STYLE_ID';document.head.appendChild(s);}" +
+            "s.textContent='$css';" +
+            "document.documentElement.classList.toggle('bp-dark',$dark);})();"
+    }
+
+    private fun jsEscape(s: String): String =
+        s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
+
 
     private fun cssRgba(@ColorInt color: Int, alpha: Float): String {
         val r = (color shr 16) and 0xFF
@@ -273,24 +406,30 @@ object ShareCardHtmlRenderer {
         return "rgba($r,$g,$b,${alpha.coerceIn(0f, 1f)})"
     }
 
-    // HSV 工具：从主色纯派生同色系变体。保持色相不变，只调明度与饱和度。
-    // valueDelta 正=提亮 / 负=压暗（绝对值加减），satScale<1=降饱和。
-    private fun adjust(@ColorInt color: Int, valueDelta: Float = 0f, satScale: Float = 1f): Int {
-        val hsv = FloatArray(3)
-        Color.RGBToHSV((color shr 16) and 0xFF, (color shr 8) and 0xFF, color and 0xFF, hsv)
-        hsv[2] = (hsv[2] + valueDelta).coerceIn(0f, 1f)
-        hsv[1] = (hsv[1] * satScale).coerceIn(0f, 1f)
-        return Color.HSVToColor(hsv)
-    }
+    // —— HSL 派生工具 ——
+    // 保持主色色相不变，按【绝对明度目标】+【饱和度缩放】派生同色系变体。
+    // 用 HSL 而非 HSV：HSL 的 L 单调可控（L=94% 无论什么色相都是接近白的浅色），
+    // 而 HSV 的 V 在接近 1.0 时会被封顶，导致多个变量塌陷成同一个色。
+    private fun hslColor(hue: Float, sat: Float, lightness: Float): Int =
+        ColorUtils.HSLToColor(
+            floatArrayOf(
+                hue.coerceIn(0f, 360f),
+                sat.coerceIn(0f, 1f),
+                lightness.coerceIn(0f, 1f),
+            )
+        )
 
-    // 保留主色色相，绝对设定明度(value)与饱和度：用于暗方案里「近固定深灰/灰白带主色相」的变量。
-    private fun tone(@ColorInt color: Int, value: Float, satScale: Float): Int {
-        val hsv = FloatArray(3)
-        Color.RGBToHSV((color shr 16) and 0xFF, (color shr 8) and 0xFF, color and 0xFF, hsv)
-        hsv[2] = value.coerceIn(0f, 1f)
-        hsv[1] = (hsv[1] * satScale).coerceIn(0f, 1f)
-        return Color.HSVToColor(hsv)
-    }
+    /** 实心色输出为 `rgb(r,g,b)`。 */
+    private fun cssRgb(@ColorInt color: Int): String =
+        "rgb(${(color shr 16) and 0xFF},${(color shr 8) and 0xFF},${color and 0xFF})"
+
+    /** 裸三元组 `r,g,b`，供模板写 `rgba(var(--bp-xxx-rgb), 0.06)` 自由控透明度。 */
+    private fun rgbTriple(@ColorInt color: Int): String =
+        "${(color shr 16) and 0xFF},${(color shr 8) and 0xFF},${color and 0xFF}"
+
+    /** HSL 直接输出带 alpha 的 CSS 色。 */
+    private fun cssHsla(hue: Float, sat: Float, lightness: Float, alpha: Float): String =
+        cssRgba(hslColor(hue, sat, lightness), alpha)
 
 
     private fun replaceVariables(html: String, data: ShareCardData): String {

@@ -52,7 +52,6 @@ data class ReadingMemoryDetailUiState(
     val totalChapterCount: Int = 0,
     val durChapterIndex: Int = 0,
     val bookshelfTagBorder: Boolean = false,
-    val shareCardBitmap: android.graphics.Bitmap? = null,
     val shareCardLoading: Boolean = false,
     val showShareCard: Boolean = false,
     val shareCardData: io.legado.app.data.entities.ShareCardData? = null,

@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.readingmemory.detail
 
-import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Book
@@ -8,7 +7,6 @@ import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
-import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,7 +21,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
-import splitties.init.appCtx
 
 class ReadingMemoryDetailViewModel(
     private val bookUrl: String,
@@ -43,7 +40,6 @@ class ReadingMemoryDetailViewModel(
     private val _showTagPicker = MutableStateFlow(false)
 
     // 分享卡片生成状态：由 GenerateShareCard / DismissShareCard 驱动
-    private val _shareCardBitmap = MutableStateFlow<Bitmap?>(null)
     private val _shareCardLoading = MutableStateFlow(false)
     private val _showShareCard = MutableStateFlow(false)
     private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
@@ -170,13 +166,11 @@ class ReadingMemoryDetailViewModel(
     /** 在基础状态之上叠加分享卡片预览状态，避免生成分享卡片时重跑全部数据库查询 */
     val detailState = combine(
         baseDetailState,
-        _shareCardBitmap,
         _shareCardLoading,
         _showShareCard,
         _shareCardData,
-    ) { base, bitmap, shareCardLoading, showShareCard, shareCardData ->
+    ) { base, shareCardLoading, showShareCard, shareCardData ->
         base.copy(
-            shareCardBitmap = bitmap,
             shareCardLoading = shareCardLoading,
             showShareCard = showShareCard,
             shareCardData = shareCardData,
@@ -290,7 +284,6 @@ class ReadingMemoryDetailViewModel(
                         }
                         is ReadingMemoryDetailIntent.DismissShareCard -> {
                             _showShareCard.value = false
-                            _shareCardBitmap.value = null
                             _shareCardData.value = null
                         }
                     }
@@ -307,15 +300,12 @@ class ReadingMemoryDetailViewModel(
     private fun generateShareCard() {
         _showShareCard.value = true
         _shareCardLoading.value = true
-        _shareCardBitmap.value = null
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
             val data = memory?.let { io.legado.app.help.book.ShareCardDataBuilder.build(it) }
             _shareCardData.value = data
-            val bitmap = memory?.let { ShareCardGenerator.generate(appCtx, it) }
             _shareCardLoading.value = false
-            _shareCardBitmap.value = bitmap
         }
     }
 
@@ -323,15 +313,12 @@ class ReadingMemoryDetailViewModel(
     private fun generateShareCardFromMarking(marking: io.legado.app.data.entities.BookMarking) {
         _showShareCard.value = true
         _shareCardLoading.value = true
-        _shareCardBitmap.value = null
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
             val data = io.legado.app.help.book.ShareCardDataBuilder.buildFromMarking(marking, memory)
             _shareCardData.value = data
-            val bitmap = ShareCardGenerator.generate(appCtx, data)
             _shareCardLoading.value = false
-            _shareCardBitmap.value = bitmap
         }
     }
 

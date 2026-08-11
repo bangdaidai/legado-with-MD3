@@ -10,7 +10,6 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.help.book.ShareCardDataBuilder
-import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -65,7 +64,6 @@ data class BookmarkUiState(
     val error: Throwable? = null,
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
-    val shareCardBitmap: android.graphics.Bitmap? = null,
     val shareCardLoading: Boolean = false,
     val showShareCard: Boolean = false,
     val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
@@ -100,7 +98,6 @@ class AllBookmarkViewModel(
     val effects = _effects.asSharedFlow()
 
     // 分享卡片（分享卡片）生成状态：由 GenerateShareCard / DismissShareCard 驱动
-    private val _shareCardBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
     private val _shareCardLoading = MutableStateFlow(false)
     private val _showShareCard = MutableStateFlow(false)
     private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
@@ -157,13 +154,11 @@ class AllBookmarkViewModel(
     /** 在基础状态之上叠加分享卡片预览状态，避免生成时重跑书签查询 */
     val uiState: StateFlow<BookmarkUiState> = combine(
         baseUiState,
-        _shareCardBitmap,
         _shareCardLoading,
         _showShareCard,
         _shareCardData,
-    ) { base, bitmap, loading, show, shareCardData ->
+    ) { base, loading, show, shareCardData ->
         base.copy(
-            shareCardBitmap = bitmap,
             shareCardLoading = loading,
             showShareCard = show,
             shareCardData = shareCardData,
@@ -185,7 +180,6 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.GenerateShareCard -> generateShareCard(intent.bookmark)
             AllBookmarkIntent.DismissShareCard -> {
                 _showShareCard.value = false
-                _shareCardBitmap.value = null
                 _shareCardData.value = null
             }
             AllBookmarkIntent.ClearAll -> clearAllBookmarks()
@@ -195,15 +189,12 @@ class AllBookmarkViewModel(
     private fun generateShareCard(bookmark: Bookmark) {
         _showShareCard.value = true
         _shareCardLoading.value = true
-        _shareCardBitmap.value = null
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = readingMemoryRepository.getByNameAuthor(bookmark.bookName, bookmark.bookAuthor)
             val data = ShareCardDataBuilder.buildFromBookmark(bookmark, memory)
             _shareCardData.value = data
-            val bitmap = ShareCardGenerator.generate(splitties.init.appCtx, data)
             _shareCardLoading.value = false
-            _shareCardBitmap.value = bitmap
         }
     }
 

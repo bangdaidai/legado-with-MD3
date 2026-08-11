@@ -299,7 +299,6 @@ data class ReadBookUiState(
     // AI 域状态见 ReadAiUiState —— 由 ReadAiDelegate 独立持有
     val eyeProtection: EyeProtectionUiState = EyeProtectionUiState(),
     // ShareCard preview (for generating shareCard from marking)
-    val shareCardBitmap: android.graphics.Bitmap? = null,
     val shareCardLoading: Boolean = false,
     val showShareCard: Boolean = false,
     val shareCardData: io.legado.app.data.entities.ShareCardData? = null,

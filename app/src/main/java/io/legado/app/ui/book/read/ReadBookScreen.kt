@@ -427,7 +427,6 @@ fun ReadBookScreen(
     ShareCardPreviewSheet(
         show = state.showShareCard,
         data = state.shareCardData,
-        initialBitmap = state.shareCardBitmap,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(ReadBookIntent.DismissShareCard) },
     )

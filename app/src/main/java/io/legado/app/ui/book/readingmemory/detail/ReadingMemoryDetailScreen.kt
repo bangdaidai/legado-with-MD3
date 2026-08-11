@@ -202,7 +202,6 @@ fun ReadingMemoryDetailScreen(
     ShareCardPreviewSheet(
         show = state.showShareCard,
         data = state.shareCardData,
-        initialBitmap = state.shareCardBitmap,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissShareCard) },
     )

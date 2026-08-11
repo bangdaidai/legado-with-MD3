@@ -322,18 +322,72 @@ private val ShareCardHelpMarkdown = """
 
 模板要用变量引用颜色才能被换色。语法是 `var(--变量名, 兜底色)`——兜底色是没有选颜色时的默认色，兼容旧模板。
 
-**可用变量：**
+**可用变量（14 个）：**
+
+主色相关：
 
 | 变量 | 用途 | 建议兜底色 |
 |---|---|---|
-| `--bp-bg` | 整体背景 | 原深色渐变 |
-| `--bp-surface` | 卡片 / 高亮块背景 | `rgba(255,255,255,0.05)` |
-| `--bp-accent` | 主色（进度条、边框、强调线） | 你原来的强调色 |
-| `--bp-accent-light` | 主色提亮版（渐变另一端、副强调） | 你原来的浅强调色 |
-| `--bp-accent-fade` | 主色 15% 透明（浅色块底色） | `rgba(255,255,255,0.08)` |
-| `--bp-text` | 正文 | `#fff` 或 `#e0e0e0` |
-| `--bp-text-muted` | 副文（作者 / 标签 / 时间） | `#aaa` 或 `#888` |
-| `--bp-divider` | 分隔线 / 边框 | `rgba(255,255,255,0.1)` |
+| `--bp-accent` | 主色（爱心 / 图标 / 进度条 / 实心装饰） | 你原来的强调色 |
+| `--bp-accent-light` | 主色极浅版（背景渐变端、外框） | 你原来的浅强调色 |
+| `--bp-accent-rgb` | 主色**裸三元组** `r,g,b` — 见下方「自由控透明度」 | — |
+| `--bp-star` | 星级 / 评分色 | `#ffd700` |
+| `--bp-on-accent` | 压在 `--bp-accent` 之上的文字色（自动取深/浅） | `#fff` |
+
+背景与表面（三层明度恒定分离，永不撞色）：
+
+| 变量 | 用途 | 建议兜底色 |
+|---|---|---|
+| `--bp-bg` | 整体背景（**纯色**，渐变请自己拼） | 原深色 |
+| `--bp-surface` | 卡片本体 | `rgba(255,255,255,0.05)` |
+| `--bp-surface-rgb` | 卡片色裸三元组（毛玻璃半透明卡片用） | — |
+| `--bp-surface-variant` | 卡片内次级块（亮色凹陷 / 暗色凸起） | `rgba(255,255,255,0.08)` |
+
+文字三档 + 分隔线：
+
+| 变量 | 用途 | 建议兜底色 |
+|---|---|---|
+| `--bp-text` | 最深字：标题 / 数值 | `#fff` 或 `#e0e0e0` |
+| `--bp-text-muted` | 中等字：标签 / badge | `#aaa` |
+| `--bp-text-subtle` | 最浅字：作者 / label / 底栏 | `#888` 或 `#666` |
+| `--bp-text-rgb` | 文字色裸三元组（投影 / 极低透明文字） | — |
+| `--bp-divider` | 分隔线 / 边框（自带 alpha） | `rgba(255,255,255,0.1)` |
+
+### 自由控透明度（`*-rgb` 三元组）
+
+CSS 没法给一个 `var()` 改 alpha。所以额外提供三个**裸三元组**（值形如 `250,170,185`），配 `rgba()` 用，想要多少透明度都行：
+
+```css
+/* 极淡斜纹底 */
+background: rgba(var(--bp-accent-rgb), 0.06);
+/* 虚线边框 */
+border: 1.5px dashed rgba(var(--bp-accent-rgb), 0.22);
+/* 毛玻璃卡片 */
+background: rgba(var(--bp-surface-rgb), 0.88);
+/* 柔和投影 */
+box-shadow: 0 4px 20px rgba(var(--bp-text-rgb), 0.08);
+```
+
+### 自己拼渐变
+
+`--bp-bg` 是**纯色**，不再是渐变。想要渐变自己组合，灵活度更高：
+
+```css
+body {
+  background:
+    radial-gradient(ellipse at 10% 20%, rgba(var(--bp-accent-rgb), 0.12), transparent 55%),
+    linear-gradient(145deg, var(--bp-surface), var(--bp-bg), var(--bp-accent-light));
+}
+```
+
+### 亮 / 暗分支（`.bp-dark`）
+
+暗色方案下，渲染器会给 `<html>` 加上 `class="bp-dark"`。**语义色**（比如「在读=绿、读完=蓝」这种不该跟着主色变的信息色）就用它翻色：
+
+```css
+.status-tag.在读 { background: #dbedd5; color: #41663b; }
+.bp-dark .status-tag.在读 { background: #22331e; color: #a8d49a; }
+```
 
 **改造旧模板：** 把 CSS 里写死的十六进制颜色改成 `var(...)` 形式即可。示例：
 
@@ -346,10 +400,12 @@ private val ShareCardHelpMarkdown = """
 /* 改后 */
 .title { color: var(--bp-text, #fff); }
 .section { color: var(--bp-accent, #4a9eff); }
-.card { background: var(--bp-bg, #1a1a2e); border: 1px solid var(--bp-divider, rgba(255,255,255,.1)); }
+.card { background: var(--bp-surface, #1a1a2e); border: 1px solid var(--bp-divider, rgba(255,255,255,.1)); }
 ```
 
-改不改都行——不改的模板不会坏，只是长按选色对它没效果。想固定不参与换色的元素（比如封面图圆角、评分星星金色）**保留原色**即可。
+改不改都行——不改的模板不会坏，只是长按选色对它没效果。想固定不参与换色的元素（比如封面图圆角、语义状态色）**保留原色**即可。
+
+> 旧模板用过的 `--bp-accent-fade` 仍然会派生（主色 15% 透明版），向后兼容不用改。新模板推荐用 `rgba(var(--bp-accent-rgb), α)` 自选透明度，更灵活。
 
 ## 基本信息
 | 字段 | 说明 |

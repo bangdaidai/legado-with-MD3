@@ -1,44 +1,20 @@
 package io.legado.app.help.book
 
-import android.content.Context
-import android.graphics.Bitmap
 import io.legado.app.data.appDb
-import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
-import io.legado.app.data.entities.ReadingMemory
-import io.legado.app.help.config.AppConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * 分享卡片生成入口。
  * - 管理内置模板的创建与恢复
- * - 提供从 ReadingMemory 生成 Bitmap 的统一入口
+ *
+ * 出图不再从这里走：预览由 [ShareCardHtmlRenderer.buildPreviewHtml] 喂给实时 WebView，
+ * 保存时才调 [ShareCardHtmlRenderer.render] 做一次离屏渲染。
  */
 object ShareCardGenerator {
 
     const val SELECTED_TEMPLATE_KEY = "selectedShareCardTemplateId"
-
-    /**
-     * 从阅读记忆生成分享卡片
-     */
-    suspend fun generate(context: Context, memory: ReadingMemory): Bitmap? = withContext(Dispatchers.IO) {
-        val data = ShareCardDataBuilder.build(memory)
-        val template = resolveTemplate() ?: getOrCreateBuiltinTemplates().firstOrNull() ?: return@withContext null
-        ShareCardHtmlRenderer.render(context, template, data)
-    }
-
-    /**
-     * 从自定义 ShareCardData 生成（供外部调用传入已组装好的数据）
-     */
-    suspend fun generate(context: Context, data: ShareCardData, templateId: Long = 0): Bitmap? = withContext(Dispatchers.IO) {
-        val template = if (templateId > 0) {
-            appDb.shareCardTemplateDao.getById(templateId)
-        } else {
-            resolveTemplate() ?: getOrCreateBuiltinTemplates().firstOrNull()
-        } ?: return@withContext null
-        ShareCardHtmlRenderer.render(context, template, data)
-    }
 
     /**
      * 确保内置模板存在（App 冷启动 / 清除数据后调用）
@@ -61,13 +37,7 @@ object ShareCardGenerator {
         appDb.shareCardTemplateDao.getBuiltinsByGroupName(ShareCardTemplate.DEFAULT_GROUP_BOOK)
     }
 
-    private suspend fun resolveTemplate(): ShareCardTemplate? {
-        val savedId = AppConfigStore.getLong(SELECTED_TEMPLATE_KEY) ?: 0L
-        if (savedId > 0L) {
-            appDb.shareCardTemplateDao.getById(savedId)?.let { return it }
-        }
-        return appDb.shareCardTemplateDao.getBuiltinsByGroupName(ShareCardTemplate.DEFAULT_GROUP_BOOK).firstOrNull()
-    }
+
 
     /** 默认内置 HTML 模板 — 尽可能覆盖大部分可用字段，起到示范作用 */
     private val DEFAULT_TEMPLATE_HTML = """
@@ -83,27 +53,27 @@ body { font-family: -apple-system, "Noto Sans SC", sans-serif; background: var(-
 .cover { width: 90px; height: 130px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
 .info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .title { font-size: 20px; font-weight: 700; color: var(--bp-text, #fff); margin-bottom: 4px; }
-.author { font-size: 13px; color: var(--bp-text-muted, #aaa); margin-bottom: 6px; }
-.kind { font-size: 11px; color: var(--bp-text-muted, #888); margin-bottom: 4px; }
+.author { font-size: 13px; color: var(--bp-text-subtle, #aaa); margin-bottom: 6px; }
+.kind { font-size: 11px; color: var(--bp-text-subtle, #888); margin-bottom: 4px; }
 .tags { font-size: 11px; color: var(--bp-accent-light, #6ec6ff); }
-.rating { font-size: 16px; color: #ffd700; margin-bottom: 12px; }
+.rating { font-size: 16px; color: var(--bp-star, #ffd700); margin-bottom: 12px; }
 .intro { font-size: 12px; color: var(--bp-text-muted, #bbb); line-height: 1.5; margin-bottom: 14px; max-height: 60px; overflow: hidden; text-overflow: ellipsis; }
 .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-.meta-item { background: var(--bp-accent-fade, rgba(255,255,255,0.08)); padding: 8px 10px; border-radius: 8px; }
+.meta-item { background: var(--bp-surface-variant, rgba(255,255,255,0.08)); padding: 8px 10px; border-radius: 8px; }
 .meta-label { font-size: 10px; color: var(--bp-text-muted, #888); }
 .meta-value { font-size: 13px; color: var(--bp-text, #fff); margin-top: 2px; }
 .section-title { font-size: 12px; color: var(--bp-accent-light, #6ec6ff); margin-bottom: 6px; font-weight: 600; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-.stat-item { background: var(--bp-accent-fade, rgba(255,255,255,0.06)); padding: 6px 10px; border-radius: 6px; }
+.stat-item { background: var(--bp-surface-variant, rgba(255,255,255,0.06)); padding: 6px 10px; border-radius: 6px; }
 .stat-label { font-size: 10px; color: var(--bp-text-muted, #888); }
 .stat-value { font-size: 12px; color: var(--bp-text, #ddd); margin-top: 1px; }
 .review { font-size: 12px; color: var(--bp-text, #ccc); line-height: 1.6; margin-bottom: 12px; padding: 10px; background: var(--bp-surface, rgba(255,255,255,0.05)); border-radius: 8px; border-left: 3px solid var(--bp-accent, #4a9eff); }
-.annotation { font-size: 11px; color: var(--bp-text-muted, #bbb); line-height: 1.5; margin-bottom: 12px; padding: 10px; background: var(--bp-surface, rgba(255,255,255,0.04)); border-radius: 8px; border-left: 3px solid #ffd700; }
+.annotation { font-size: 11px; color: var(--bp-text-muted, #bbb); line-height: 1.5; margin-bottom: 12px; padding: 10px; background: var(--bp-surface, rgba(255,255,255,0.04)); border-radius: 8px; border-left: 3px solid var(--bp-star, #ffd700); }
 .annotation-chapter { font-size: 10px; color: var(--bp-text-muted, #888); margin-top: 4px; }
 .progress-bar { height: 4px; background: var(--bp-divider, rgba(255,255,255,0.1)); border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, var(--bp-accent, #4a9eff), var(--bp-accent-light, #6ec6ff)); border-radius: 2px; }
-.footer { font-size: 10px; color: var(--bp-text-muted, #666); text-align: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--bp-divider, rgba(255,255,255,0.06)); }
-.footer-source { font-size: 10px; color: var(--bp-text-muted, #555); }
+.footer { font-size: 10px; color: var(--bp-text-subtle, #666); text-align: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--bp-divider, rgba(255,255,255,0.06)); }
+.footer-source { font-size: 10px; color: var(--bp-text-subtle, #555); }
 </style>
 </head>
 <body>

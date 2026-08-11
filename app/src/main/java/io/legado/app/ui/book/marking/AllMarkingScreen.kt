@@ -357,7 +357,6 @@ fun AllMarkingScreen(
     ShareCardPreviewSheet(
         show = state.showShareCard,
         data = state.shareCardData,
-        initialBitmap = state.shareCardBitmap,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(AllMarkingIntent.DismissShareCard) },
     )

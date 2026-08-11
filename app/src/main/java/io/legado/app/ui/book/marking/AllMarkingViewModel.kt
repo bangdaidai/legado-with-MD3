@@ -9,7 +9,6 @@ import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.help.book.ShareCardDataBuilder
-import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -35,7 +34,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import splitties.init.appCtx
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -66,7 +64,6 @@ data class MarkingUiState(
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
     val editing: BookMarking? = null,
-    val shareCardBitmap: android.graphics.Bitmap? = null,
     val shareCardLoading: Boolean = false,
     val showShareCard: Boolean = false,
     val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
@@ -103,7 +100,6 @@ class AllMarkingViewModel(
     private val _editing = MutableStateFlow<BookMarking?>(null)
 
     // 分享卡片生成状态：由 GenerateShareCard / DismissShareCard 驱动
-    private val _shareCardBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
     private val _shareCardLoading = MutableStateFlow(false)
     private val _showShareCard = MutableStateFlow(false)
     private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
@@ -156,15 +152,13 @@ class AllMarkingViewModel(
         baseUiState,
         _editing,
         combine(
-            _shareCardBitmap,
             _shareCardLoading,
             _showShareCard,
             _shareCardData,
-        ) { bitmap, loading, show, data -> ShareCardOverlay(bitmap, loading, show, data) },
+        ) { loading, show, data -> ShareCardOverlay(loading, show, data) },
     ) { base, editing, overlay ->
         base.copy(
             editing = editing,
-            shareCardBitmap = overlay.bitmap,
             shareCardLoading = overlay.loading,
             showShareCard = overlay.show,
             shareCardData = overlay.data,
@@ -188,7 +182,6 @@ class AllMarkingViewModel(
             is AllMarkingIntent.GenerateShareCard -> generateShareCard(intent.marking)
             is AllMarkingIntent.DismissShareCard -> {
                 _showShareCard.value = false
-                _shareCardBitmap.value = null
                 _shareCardData.value = null
             }
         }
@@ -288,11 +281,10 @@ class AllMarkingViewModel(
         _editing.value = null
     }
 
-    /** 从划线笔记生成分享卡片并就地展示在预览弹窗中。 */
+    /** 从划线笔记生成分享卡片数据并就地展示在预览弹窗中（图由弹窗里的 WebView 实时渲染）。 */
     private fun generateShareCard(marking: BookMarking) {
         _showShareCard.value = true
         _shareCardLoading.value = true
-        _shareCardBitmap.value = null
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = readingMemoryRepository.getByNameAuthor(
@@ -301,15 +293,12 @@ class AllMarkingViewModel(
             )
             val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
             _shareCardData.value = data
-            val bitmap = ShareCardGenerator.generate(appCtx, data)
             _shareCardLoading.value = false
-            _shareCardBitmap.value = bitmap
         }
     }
 
-    /** 4 路分享卡片状态先合成一组，外层 combine 才不超过 5 路上限。 */
+    /** 分享卡片状态先合成一组，外层 combine 才不超过 5 路上限。 */
     private data class ShareCardOverlay(
-        val bitmap: android.graphics.Bitmap?,
         val loading: Boolean,
         val show: Boolean,
         val data: io.legado.app.data.entities.ShareCardData?,

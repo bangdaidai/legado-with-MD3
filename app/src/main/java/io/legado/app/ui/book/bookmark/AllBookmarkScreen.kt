@@ -421,7 +421,6 @@ fun AllBookmarkScreen(
     ShareCardPreviewSheet(
         show = state.showShareCard,
         data = state.shareCardData,
-        initialBitmap = state.shareCardBitmap,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(AllBookmarkIntent.DismissShareCard) },
     )
