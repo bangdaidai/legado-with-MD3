@@ -312,8 +312,10 @@ object ShareCardHtmlRenderer {
         val match = HTML_OPEN_TAG_REGEX.find(html) ?: return html
         val attrs = match.groupValues[1]
         val newTag = when {
+            // 注意用 replace 而非 replaceFirst：Regex.replaceFirst 只有 (input, replacement: String)
+            // 这一个重载，没有 transform lambda 版。一个开标签里最多一个 class 属性，二者等价。
             CLASS_ATTR_REGEX.containsMatchIn(attrs) ->
-                "<html" + CLASS_ATTR_REGEX.replaceFirst(attrs) { "${it.value}bp-dark " } + ">"
+                "<html" + CLASS_ATTR_REGEX.replace(attrs) { "${it.value}bp-dark " } + ">"
             else -> "<html class=\"bp-dark\"$attrs>"
         }
         return html.replaceRange(match.range, newTag)
