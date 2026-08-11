@@ -169,10 +169,10 @@ object ShareCardHtmlRenderer {
      * - `--bp-accent-rgb`       主色裸三元组 `r,g,b`：配 `rgba(var(--bp-accent-rgb), α)` 自由控透明度
      * - `--bp-star`             星级/评分色（跟随主色色相，和谐优先）
      * - `--bp-on-accent`        压在 --bp-accent 之上的文字色（按主色明度自动取深/浅）
-     * - `--bp-bg`               整体背景（亮 94% / 暗 10%）——纯色，渐变交给模板自己拼
-     * - `--bp-surface`          卡片本体（亮 98% / 暗 15%）
+     * - `--bp-bg`               整体背景（亮 L85%彩色底 / 暗 10%）——外层彩底，渐变交给模板自己拼
+     * - `--bp-surface`          卡片本体（亮 98%近白 / 暗 15%）——内层白卡，保障文字可读
      * - `--bp-surface-rgb`      卡片色裸三元组：毛玻璃半透明卡片用
-     * - `--bp-surface-variant`  卡片内次级块（亮 93% 凹陷 / 暗 20% 凸起）
+     * - `--bp-surface-variant`  卡片内次级块（亮 90%带色凹陷 / 暗 20% 凸起）
      * - `--bp-text`             最深字（亮 22% / 暗 90%）：标题/数值
      * - `--bp-text-muted`       中等字（亮 42% / 暗 65%）：标签/badge
      * - `--bp-text-subtle`      最浅字（亮 58% / 暗 48%）：作者/label/底栏
@@ -227,12 +227,13 @@ object ShareCardHtmlRenderer {
 
         if (!isDark) {
             // —— 亮方案 ——
+            // 背景带明显色彩（外层彩底），卡片内部保持近白（内层白卡 + 可读性）
             accentColor = hslColor(H, S * 0.95f, L.coerceIn(0.45f, 0.72f))
             accentLight = hslColor(H, S * 0.35f, 0.92f)
             star = hslColor(H, S * 0.5f, 0.55f)
-            bg = hslColor(H, S * 0.25f, 0.94f)
-            surface = hslColor(H, S * 0.12f, 0.98f)
-            surfaceVariant = hslColor(H, S * 0.18f, 0.93f)
+            bg = hslColor(H, S * 0.75f, 0.85f)
+            surface = hslColor(H, S * 0.08f, 0.98f)
+            surfaceVariant = hslColor(H, S * 0.55f, 0.90f)
             text = hslColor(H, S * 0.30f, 0.22f)
             textMuted = hslColor(H, S * 0.25f, 0.42f)
             textSubtle = hslColor(H, S * 0.20f, 0.58f)
