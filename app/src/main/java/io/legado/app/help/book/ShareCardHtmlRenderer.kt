@@ -31,7 +31,6 @@ object ShareCardHtmlRenderer {
     private const val RENDER_TIMEOUT_MS = 5000L
     /** 图片/字体就绪检测最长等待。触发页面 __BpReady=true 后立即结束，无需等满。 */
     private const val READY_TIMEOUT_MS = 2000L
-    private const val MAX_CACHE_SIZE = 8
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
     private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
     private val HTML_OPEN_TAG_REGEX = Regex("<html([^>]*)>", RegexOption.IGNORE_CASE)
@@ -40,20 +39,11 @@ object ShareCardHtmlRenderer {
     /** 实时预览用：注入的 accent 变量 style 标签 id，供 JS 动态替换内容实现秒切换。 */
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
-    private val bitmapCache = object : LinkedHashMap<String, Bitmap>(MAX_CACHE_SIZE, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
-            val shouldRemove = size > MAX_CACHE_SIZE
-            if (shouldRemove && eldest != null) eldest.value.recycle()
-            return shouldRemove
-        }
-    }
-
-    fun clearCache() {
-        synchronized(bitmapCache) { bitmapCache.values.forEach { it.recycle() }; bitmapCache.clear() }
-    }
-
     /**
-     * 渲染分享卡片
+     * 渲染分享卡片为 Bitmap —— 只用于「长按保存到相册」这一条路径。
+     * 预览走 [buildPreviewHtml] 喂实时 WebView，不再出图，所以这里不做缓存：
+     * 同一张卡片重复保存的收益远低于常驻多张全尺寸 bitmap 的内存代价。
+     *
      * @param accentColor 用户临时选择的主题色（ARGB int）。非 null 时会向 HTML 注入
      *        一组 `--bp-*` CSS 变量，模板中用 `var(--bp-accent, 默认色)` 等即可整体换色。
      *        为 null 时不注入，模板走自身默认配色。
@@ -67,32 +57,14 @@ object ShareCardHtmlRenderer {
         forceDark: Boolean? = null,
     ): Bitmap? {
         val w = getRenderWidth(ctx)
-        val key = "${data.bookName}_${data.author}_${template.id}_${template.htmlContent.hashCode()}_${accentColor ?: 0}_${forceDark ?: "auto"}_$w"
-        synchronized(bitmapCache) { bitmapCache[key]?.takeIf { !it.isRecycled }?.let { return it } }
-
         return withContext(Dispatchers.Main) {
             val coverDataUri = coverUrlToDataUri(data.coverUrl)
             val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
             val html = replaceVariables(template.htmlContent, resolvedData)
             if (html.isBlank()) return@withContext null
             val themed = if (accentColor != null) injectAccentVariables(html, accentColor, forceDark) else html
-            val finalHtml = ensureViewportMeta(themed, w)
-            renderHtml(ctx, finalHtml, w)?.also {
-                synchronized(bitmapCache) { bitmapCache[key] = it }
-            }
+            renderHtml(ctx, ensureViewportMeta(themed, w), w)
         }
-    }
-
-    /**
-     * 自定义 HTML 渲染（供模板预览）
-     */
-    suspend fun renderCustom(ctx: Context, htmlContent: String, variables: Map<String, String> = emptyMap()): Bitmap? {
-        val w = getRenderWidth(ctx)
-        val defaultVars = buildVariableMap(ShareCardData())
-        val merged = defaultVars + variables
-        val html = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
-        if (html.isBlank()) return null
-        return withContext(Dispatchers.Main) { renderHtml(ctx, ensureViewportMeta(html, w), w) }
     }
 
     private suspend fun renderHtml(ctx: Context, html: String, width: Int): Bitmap? {
@@ -363,12 +335,29 @@ object ShareCardHtmlRenderer {
     ): String = withContext(Dispatchers.IO) {
         val coverDataUri = coverUrlToDataUri(data.coverUrl)
         val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
-        val html = replaceVariables(template.htmlContent, resolvedData)
-        if (html.isBlank()) return@withContext ""
+        injectPreviewHead(ctx, replaceVariables(template.htmlContent, resolvedData))
+    }
+
+    /**
+     * 同 [buildPreviewHtml]，但吃「裸 HTML + 变量表」——供模板管理页用示例数据预览未保存的模板。
+     */
+    suspend fun buildCustomPreviewHtml(
+        ctx: Context,
+        htmlContent: String,
+        variables: Map<String, String> = emptyMap(),
+    ): String = withContext(Dispatchers.IO) {
+        val merged = buildVariableMap(ShareCardData()) + variables
+        val html = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
+        injectPreviewHead(ctx, html)
+    }
+
+    /** 给预览 HTML 加固定宽度 viewport + 空的 accent style 占位；HTML 为空则返回 ""。 */
+    private fun injectPreviewHead(ctx: Context, html: String): String {
+        if (html.isBlank()) return ""
         val w = getRenderWidth(ctx)
         // 预览用 viewport：只给固定宽度，不锁 scale，让 WebView 自适应缩放到控件宽度
         val head = """<meta name="viewport" content="width=$w"><style id="$ACCENT_STYLE_ID"></style>"""
-        if (HEAD_TAG_REGEX.containsMatchIn(html))
+        return if (HEAD_TAG_REGEX.containsMatchIn(html))
             HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
         else "$head\n$html"
     }
