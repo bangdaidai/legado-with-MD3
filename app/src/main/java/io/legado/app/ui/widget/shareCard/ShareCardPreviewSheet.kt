@@ -1,17 +1,22 @@
 package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
@@ -20,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +52,7 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
@@ -84,7 +91,10 @@ fun ShareCardPreviewSheet(
     var htmlReady by remember { mutableStateOf(false) }
     // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
     var previewFailed by remember { mutableStateOf(false) }
-    // 长按保存：置位后由下面的 LaunchedEffect 走离屏渲染出完整长图再存相册
+    // 页面完整内容高度（CSS px）。WebView 按这个高度布局，背景就只覆盖卡片本身，
+    // 不会像固定高度框那样被 body 背景填满空白；截图也自然是完整长图。
+    var contentCssHeight by remember { mutableFloatStateOf(0f) }
+    // 长按保存：置位后由下面的 LaunchedEffect 直接截当前预览 WebView
     var saveRequested by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
 
@@ -94,6 +104,7 @@ fun ShareCardPreviewSheet(
             schemeOverride = null
             htmlReady = false
             previewFailed = false
+            contentCssHeight = 0f
             saveRequested = false
             saving = false
             val loaded = withContext(Dispatchers.IO) {
@@ -120,7 +131,8 @@ fun ShareCardPreviewSheet(
         val tpl = templates.firstOrNull { it.id == selectedTemplateId } ?: return@LaunchedEffect
         htmlReady = false
         previewFailed = false
-        val html = ShareCardHtmlRenderer.buildPreviewHtml(context, tpl, data)
+        contentCssHeight = 0f
+        val html = ShareCardHtmlRenderer.buildPreviewHtml(tpl, data)
         if (html.isBlank()) {
             previewFailed = true
             return@LaunchedEffect
@@ -132,13 +144,17 @@ fun ShareCardPreviewSheet(
 
     // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
     // 这是"瞬间切换"的关键——不 reload、不重建 WebView、不出图。
+    // 注入后再问一次内容高度：换色可能改变行高之类的排版。
     LaunchedEffect(htmlReady, accentColor, schemeOverride) {
         if (!htmlReady) return@LaunchedEffect
         val wv = previewWebView ?: return@LaunchedEffect
-        wv.evaluateJavascript(
-            ShareCardHtmlRenderer.accentApplyJs(accentColor, schemeOverride),
-            null,
-        )
+        wv.evaluateJavascript(ShareCardHtmlRenderer.accentApplyJs(accentColor, schemeOverride), null)
+        // 等图片/字体把高度撑稳再量，量到 0 说明页面还没铺开，用兜底比例
+        delay(120)
+        wv.evaluateJavascript(ShareCardHtmlRenderer.CONTENT_HEIGHT_JS) { value ->
+            val h = value?.trim('"')?.toFloatOrNull() ?: 0f
+            if (h > 0f) contentCssHeight = h
+        }
     }
 
     // 换色 / 切亮暗只需改 accentColor / schemeOverride 状态，
@@ -230,65 +246,87 @@ fun ShareCardPreviewSheet(
             )
         },
     ) {
-        val previewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
-        Box(
+        // 尺寸契约：模板按 CARD_CSS_WIDTH 这个固定 CSS 宽度排版，WebView 再等比缩放贴合容器宽度。
+        // 所以「内容 CSS 高度 → 显示 dp 高度」的换算就是同一个缩放比：
+        //     heightDp = contentCssHeight × (容器宽度dp / CARD_CSS_WIDTH)
+        // 把 WebView 高度设成这个值，卡片就恰好铺满 WebView：不留空白（body 背景不会漏出来）、
+        // 也不裁切。保存时直接 draw 整个 WebView，出图 == 预览。
+        // 内容高度量到之前用 0.85 屏高兜底，避免首帧 WebView 高度为 0 而永远不渲染。
+        val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+        BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
-                .height(previewHeight),
-            contentAlignment = Alignment.Center,
+                .heightIn(max = maxPreviewHeight)
+                .verticalScroll(rememberScrollState()),
         ) {
-            if (data != null) {
-                // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
-                // 必须无条件挂载（不能被 htmlReady 门控），否则 WebView 建不起来、HTML 无从加载。
-                AndroidView(
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                                setSupportZoom(false)
-                                builtInZoomControls = false
-                                blockNetworkLoads = false
-                                blockNetworkImage = false
-                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            }
-                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    htmlReady = true
+            val previewHeight = if (contentCssHeight > 0f) {
+                (contentCssHeight * (maxWidth.value / ShareCardHtmlRenderer.CARD_CSS_WIDTH)).dp
+            } else {
+                maxPreviewHeight
+            }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(previewHeight),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (data != null) {
+                    // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
+                    // 必须无条件挂载（不能被 htmlReady 门控），否则 WebView 建不起来、HTML 无从加载。
+                    AndroidView(
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                )
+                                settings.apply {
+                                    javaScriptEnabled = true
+                                    domStorageEnabled = true
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                    setSupportZoom(false)
+                                    builtInZoomControls = false
+                                    blockNetworkLoads = false
+                                    blockNetworkImage = false
+                                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                 }
+                                // WebView 自身不滚动：高度已经等于内容高度，滚动交给外层 Compose，
+                                // 否则截图时 draw() 会带上滚动偏移，出图和预览错位。
+                                isVerticalScrollBarEnabled = false
+                                overScrollMode = WebView.OVER_SCROLL_NEVER
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        htmlReady = true
+                                    }
+                                }
+                                // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
+                                setOnLongClickListener {
+                                    saveRequested = true
+                                    true
+                                }
+                                previewWebView = this
                             }
-                            // 长按保存到相册（走离屏渲染出完整长图，比截当前视口更完整）
-                            setOnLongClickListener {
-                                saveRequested = true
-                                true
-                            }
-                            previewWebView = this
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    onRelease = {
-                        it.stopLoading()
-                        it.destroy()
-                        previewWebView = null
-                    },
-                )
-            }
-            // 首帧加载中 / 保存中：盖一层进度指示。换色不会走到这里，所以不再"转圈"。
-            if (loading || saving || (data != null && !htmlReady && !previewFailed)) {
-                CircularProgressIndicator()
-            }
-            if (previewFailed) {
-                AppText("预览失败")
-            }
-            if (data == null && !loading) {
-                AppText("生成失败")
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        onRelease = {
+                            it.stopLoading()
+                            it.destroy()
+                            previewWebView = null
+                        },
+                    )
+                }
+                // 首帧加载中 / 保存中：盖一层进度指示。换色不会走到这里，所以不再"转圈"。
+                if (loading || saving || (data != null && !htmlReady && !previewFailed)) {
+                    CircularProgressIndicator()
+                }
+                if (previewFailed) {
+                    AppText("预览失败")
+                }
+                if (data == null && !loading) {
+                    AppText("生成失败")
+                }
             }
         }
     }
@@ -306,22 +344,27 @@ fun ShareCardPreviewSheet(
         },
     )
 
-    // 长按保存：通过离屏渲染生成完整长图（跟当前所选 accent/scheme 一致）
-    // try/finally 保证 saving 一定复位；否则 render() 抛异常或被父作用域取消时，
-    // 菊花会永久卡住——即便切换模板、退出重进也停不下来（saving 状态在 sheet 内被 remember）。
+    // 长按保存：直接把预览 WebView 画到 Bitmap。
+    // 不再走离屏渲染——那条路要重建 WebView、重跑一遍 HTML、还得猜什么时候渲染完（所以以前会
+    // 永久转圈），而且 viewport 和预览不同，出图和预览必然不一致。
+    // 现在 WebView 高度已经等于内容高度、也不滚动，draw() 出来就是完整卡片，逐像素等于预览。
+    // try/finally 保证 saving 一定复位（协程被取消时也不会留下卡死的菊花）。
     LaunchedEffect(saveRequested) {
         if (!saveRequested || data == null) return@LaunchedEffect
         saveRequested = false
         saving = true
         try {
-            val tpl = templates.firstOrNull { it.id == selectedTemplateId }
-                ?: return@LaunchedEffect
-            val bitmap = ShareCardHtmlRenderer.render(context, tpl, data, accentColor, schemeOverride)
-            if (bitmap != null) {
-                saveToGallery(context, bitmap)
-            } else {
-                context.toastOnUi("保存失败")
+            val wv = previewWebView
+            val w = wv?.width ?: 0
+            val h = wv?.height ?: 0
+            if (wv == null || w <= 0 || h <= 0) {
+                context.toastOnUi("保存失败：预览未就绪")
+                return@LaunchedEffect
             }
+            // draw() 必须在主线程；LaunchedEffect 本身就跑在主线程，无需切换
+            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            wv.draw(Canvas(bitmap))
+            saveToGallery(context, bitmap)
         } finally {
             saving = false
         }

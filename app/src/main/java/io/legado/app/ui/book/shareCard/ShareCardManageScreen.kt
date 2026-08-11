@@ -256,7 +256,7 @@ fun ShareCardManageScreen(
             htmlReady = false
             renderFailed = false
             val html = ShareCardHtmlRenderer.buildCustomPreviewHtml(
-                context, template.htmlContent, PreviewVariables,
+                template.htmlContent, PreviewVariables,
             )
             if (html.isBlank()) {
                 renderFailed = true

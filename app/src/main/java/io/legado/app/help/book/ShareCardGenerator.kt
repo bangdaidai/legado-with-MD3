@@ -9,8 +9,8 @@ import kotlinx.coroutines.withContext
  * 分享卡片生成入口。
  * - 管理内置模板的创建与恢复
  *
- * 出图不再从这里走：预览由 [ShareCardHtmlRenderer.buildPreviewHtml] 喂给实时 WebView，
- * 保存时才调 [ShareCardHtmlRenderer.render] 做一次离屏渲染。
+ * 出图不再从这里走：预览和保存共用一份 [ShareCardHtmlRenderer.buildPreviewHtml] 喂给实时
+ * WebView，保存时直接 `draw()` 那个 WebView 截图，保证预览 == 保存。
  */
 object ShareCardGenerator {
 
