@@ -190,10 +190,13 @@ object ShareCardHtmlRenderer {
      */
     private fun injectAccentVariables(html: String, @ColorInt accent: Int): String {
         // 用户所选颜色 = 卡片背景（纯色），同时作为主题系统的「种子色（seed）」。
-        // 背景直接用用户色本身（选什么色背景就是什么色，不再被 M3 固定 tone 抹平）；
-        // 文字/表面/分隔线这一套才交给 dynamicColorScheme 生成协调配色，
-        // isDark 依据用户色感知亮度，保证浅色背景配深文字、深色背景配浅文字。
-        val isDark = ColorUtils.calculateLuminance(accent) <= 0.5
+        // 关键：卡片表面（--bp-surface）直接等于用户所选纯色，不再用 scheme.surface——
+        // 因为 scheme.surface 对同一颗种子只可能是「近白或近黑」两块面板，不是用户选的色，
+        // 用它会让卡片和你选的色脱节。所以整张卡片（背景+面板）都是你选的那个色，选啥就是啥。
+        // dynamicColorScheme 对同一种子永远生成「浅色系 + 深色系」两套，必须传 isDark 选其一。
+        // 这里 isDark 的唯一依据就是【你选的底色明暗】：底色亮→浅色系（深字），底色暗→深色系（浅字），
+        // 正好让文字/强调与你选的底色协调对比——这就是「适配背景色」，文字全是 scheme 的 on 协调色，非硬编码黑/白。
+        val isDark = ColorUtils.calculateLuminance(accent) < 0.5
         val scheme = dynamicColorScheme(
             seedColor = ComposeColor(accent),
             isDark = isDark,
@@ -208,13 +211,16 @@ object ShareCardHtmlRenderer {
         val primary = scheme.primary.value.toInt()
         val accentLight = ColorUtils.blendARGB(primary, white, 0.3f)
         val accentFade = cssRgba(primary, 0.18f)
-        // 背景：用户所选纯色（选什么色背景就是什么色，不被 M3 固定 tone 抹平）
+        // 背景 + 卡片面板：都是用户所选纯色（选什么色卡片就是什么色，不被 M3 固定 tone 抹平）
         val bg = cssRgba(accent, 1f)
-        // 文字/表面/分隔线：取自主题系统生成的协调配色（随种子色变化，对比由 scheme 保证）
-        val surface = cssRgba(scheme.surface.value.toInt(), 1f)
-        val text = cssRgba(scheme.onBackground.value.toInt(), 1f)
-        val textMuted = cssRgba(scheme.onSurfaceVariant.value.toInt(), 1f)
-        val divider = cssRgba(scheme.outline.value.toInt(), 1f)
+        // 表面（卡片面板）：从种子色派生的同色系「容器色」——保持色相、降饱和、明度相对底色偏移，
+        // 与背景同色系但可区分（亮底压暗、暗底提亮），随选色变化，不用 scheme.surface 的中性灰面板。
+        val surface = cssRgba(deriveSurfaceColor(accent, isDark), 1f)
+        // 文字/分隔线：从用户所选色同色相派生，真正随选色变化（非主题系统中性灰黑、非硬编码黑/白）。
+        // 亮底→压暗成深字，暗底→提亮成浅字；次要文字降对比、分隔线更低对比。
+        val text = cssRgba(deriveOnColor(accent, isDark, if (isDark) 0.85f else 0.22f, 0.55f), 1f)
+        val textMuted = cssRgba(deriveOnColor(accent, isDark, if (isDark) 0.72f else 0.40f, 0.40f), 1f)
+        val divider = cssRgba(deriveOnColor(accent, isDark, if (isDark) 0.70f else 0.45f, 0.35f), 0.5f)
         val vars = buildString {
             append(":root{")
             append("--bp-accent:").append(cssRgba(primary, 1f)).append(';')
@@ -238,6 +244,28 @@ object ShareCardHtmlRenderer {
         val g = (color shr 8) and 0xFF
         val b = color and 0xFF
         return "rgba($r,$g,$b,${alpha.coerceIn(0f, 1f)})"
+    }
+
+    // 从底色同色相派生「压在上面的文字/分隔线色」：保持色相与饱和度，只调明度与饱和，
+    // 让文字真正随用户所选颜色变化（而非主题系统的中性灰黑）。
+    // 亮底(isDark=false)→压暗成深字，暗底(isDark=true)→提亮成浅字。
+    private fun deriveOnColor(@ColorInt base: Int, isDark: Boolean, targetValue: Float, satScale: Float): Int {
+        val hsv = FloatArray(3)
+        Color.RGBToHSV((base shr 16) and 0xFF, (base shr 8) and 0xFF, base and 0xFF, hsv)
+        hsv[2] = targetValue
+        hsv[1] = (hsv[1] * satScale).coerceIn(0f, 1f)
+        return Color.HSVToColor(hsv)
+    }
+
+    // 从种子色派生「卡片面板容器色」：保持色相，降低饱和，明度相对底色偏移形成层次
+    // （亮底压暗一档、暗底提亮一档），让卡片与背景同色系但可区分，且随选色变化（非中性灰面板）。
+    private fun deriveSurfaceColor(@ColorInt base: Int, isDark: Boolean): Int {
+        val hsv = FloatArray(3)
+        Color.RGBToHSV((base shr 16) and 0xFF, (base shr 8) and 0xFF, base and 0xFF, hsv)
+        hsv[1] = (hsv[1] * 0.7f).coerceIn(0f, 1f)
+        val delta = if (isDark) 0.10f else -0.10f
+        hsv[2] = (hsv[2] + delta).coerceIn(0.10f, 0.95f)
+        return Color.HSVToColor(hsv)
     }
 
 
