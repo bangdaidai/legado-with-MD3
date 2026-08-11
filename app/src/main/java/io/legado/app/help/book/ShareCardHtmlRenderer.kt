@@ -337,7 +337,7 @@ object ShareCardHtmlRenderer {
     ): String = withContext(Dispatchers.IO) {
         val coverDataUri = coverUrlToDataUri(data.coverUrl)
         val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
-        injectPreviewHead(ctx, replaceVariables(template.htmlContent, resolvedData))
+        injectPreviewHead(replaceVariables(template.htmlContent, resolvedData))
     }
 
     /**
@@ -350,15 +350,21 @@ object ShareCardHtmlRenderer {
     ): String = withContext(Dispatchers.IO) {
         val merged = buildVariableMap(ShareCardData()) + variables
         val html = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
-        injectPreviewHead(ctx, html)
+        injectPreviewHead(html)
     }
 
-    /** 给预览 HTML 加固定宽度 viewport + 空的 accent style 占位；HTML 为空则返回 ""。 */
-    private fun injectPreviewHead(ctx: Context, html: String): String {
+    /**
+     * 给预览 HTML 加标准响应式 viewport + 空的 accent style 占位；HTML 为空则返回 ""。
+     *
+     * 注意：预览用 `width=device-width` 而非固定像素。live WebView 开了 `useWideViewPort`，
+     * 会把 viewport meta 的 width **当作 CSS 像素**——如果给物理像素（如 993），layout viewport
+     * 会被撑到 993 CSS px，模板里 20px padding 会变成极小的 ~7dp，卡片看上去像宽屏。
+     * device-width 让 layout viewport 等于设备 dp 宽度（~360），模板按手机尺寸渲染。
+     * 保存出图走 [render] 的另一条路径，用固定物理像素 viewport，不受影响。
+     */
+    private fun injectPreviewHead(html: String): String {
         if (html.isBlank()) return ""
-        val w = getRenderWidth(ctx)
-        // 预览用 viewport：只给固定宽度，不锁 scale，让 WebView 自适应缩放到控件宽度
-        val head = """<meta name="viewport" content="width=$w"><style id="$ACCENT_STYLE_ID"></style>"""
+        val head = """<meta name="viewport" content="width=device-width, initial-scale=1.0"><style id="$ACCENT_STYLE_ID"></style>"""
         return if (HEAD_TAG_REGEX.containsMatchIn(html))
             HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
         else "$head\n$html"
