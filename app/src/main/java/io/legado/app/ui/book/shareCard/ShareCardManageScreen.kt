@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.legado.app.help.book.ShareCardHtmlRenderer
@@ -272,7 +273,7 @@ fun ShareCardManageScreen(
                 bitmap != null -> Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp)
+                        .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.85f).dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
                     Image(

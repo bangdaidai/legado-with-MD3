@@ -216,11 +216,16 @@ object ShareCardHtmlRenderer {
         // 表面（卡片面板）：从种子色派生的同色系「容器色」——保持色相、降饱和、明度相对底色偏移，
         // 与背景同色系但可区分（亮底压暗、暗底提亮），随选色变化，不用 scheme.surface 的中性灰面板。
         val surface = cssRgba(deriveSurfaceColor(accent, isDark), 1f)
-        // 文字/分隔线：从用户所选色同色相派生，真正随选色变化（非主题系统中性灰黑、非硬编码黑/白）。
-        // 亮底→压暗成深字，暗底→提亮成浅字；次要文字降对比、分隔线更低对比。
-        val text = cssRgba(deriveOnColor(accent, isDark, if (isDark) 0.85f else 0.22f, 0.55f), 1f)
-        val textMuted = cssRgba(deriveOnColor(accent, isDark, if (isDark) 0.72f else 0.40f, 0.40f), 1f)
-        val divider = cssRgba(deriveOnColor(accent, isDark, if (isDark) 0.70f else 0.45f, 0.35f), 0.5f)
+        // 关键修复：文字必须与「表面」明度相反，否则表面亮→文字也亮、表面暗→文字也暗，对比崩溃看不清。
+        // 旧逻辑让 text 跟随 isDark 与 surface 同向变化，是切换颜色后文字糊掉的根因。
+        // 这里以「表面实际明度」为准反向取字色：表面暗→用亮字，表面亮→用暗字。
+        val surfaceLum = ColorUtils.calculateLuminance(surface)
+        val textOnDarkSurface = surfaceLum < 0.5f
+        // 文字/副文/分隔线：从表面同色相派生，保证随选色变化且始终与表面对比（非硬编码黑/白）。
+        // 次要文字降对比、分隔线更低对比。
+        val text = cssRgba(deriveOnColor(surface, textOnDarkSurface, if (textOnDarkSurface) 0.90f else 0.16f, 0.85f), 1f)
+        val textMuted = cssRgba(deriveOnColor(surface, textOnDarkSurface, if (textOnDarkSurface) 0.72f else 0.34f, 0.60f), 1f)
+        val divider = cssRgba(deriveOnColor(surface, textOnDarkSurface, if (textOnDarkSurface) 0.66f else 0.42f, 0.50f), 0.5f)
         val vars = buildString {
             append(":root{")
             append("--bp-accent:").append(cssRgba(primary, 1f)).append(';')
