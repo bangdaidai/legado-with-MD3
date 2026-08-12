@@ -370,7 +370,7 @@ body::before {
   <div class="float-element fe-9"><div class="float-circle" style="width:24px;height:24px;"></div></div>
   <div class="float-element fe-10"><div class="float-heart" style="width:20px;height:18px;transform:rotate(40deg);opacity:0.3;"></div></div>
   <div class="float-element fe-11"><div class="float-star" style="width:18px;height:18px;opacity:0.35;"></div></div>
-  <div class="card-wrap">
+  <div class="card-wrap" data-bp-capture>
     <div class="card-outer-glow">
       <div class="card">
         <div class="inner-border-pattern"></div>

@@ -180,20 +180,26 @@ object ShareCardHtmlRenderer {
 
     // ==================== 离屏出图（预览 + 保存共用一张 Bitmap） ====================
 
-    /** 页面内 JS → Kotlin 的内容高度回调桥（CSS px；useWideViewPort=false 下 1 CSS px == 1 dp）。 */
-    private class HeightSink {
+    /**
+     * 页面内 JS → Kotlin 的量高/裁图回调桥。
+     *
+     * 全部单位是 CSS px（`useWideViewPort=false` 下 1 CSS px == 1 dp）。
+     * `w<=0` 表示模板没标 `[data-bp-capture]`，走"整幅 body、不裁"的兼容路径。
+     */
+    private class MeasureSink {
         private val handler = Handler(Looper.getMainLooper())
         @Volatile
-        var callback: ((Int) -> Unit)? = null
+        var callback: ((docHeight: Int, x: Int, y: Int, w: Int, h: Int) -> Unit)? = null
 
         @JavascriptInterface
-        fun onHeight(cssPx: Int) {
-            if (cssPx <= 0) return
-            handler.post { callback?.invoke(cssPx) }
+        fun onMeasured(docHeight: Int, x: Int, y: Int, w: Int, h: Int) {
+            if (docHeight <= 0) return
+            handler.post { callback?.invoke(docHeight, x, y, w, h) }
         }
     }
 
-    private val heightSink = HeightSink()
+    private val measureSink = MeasureSink()
+
 
     /** 常驻热 WebView：只建一次反复用，省掉每次建 WebView 的开销。仅主线程访问。 */
     private var warmWebView: WebView? = null
@@ -240,10 +246,12 @@ object ShareCardHtmlRenderer {
                     .toInt().coerceAtLeast(360)
                 val wv = ensureWebView(context)
 
-                // 用 JS 桥拿"渲染完成 + 内容高度"，不再靠固定 delay 猜。超时兜底防永久挂起。
-                val cssHeight = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                // 用 JS 桥拿"渲染完成 + 内容高度 + 裁图区域"，不再靠固定 delay 猜。超时兜底防永久挂起。
+                val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
                     suspendCancellableCoroutine { cont ->
-                        heightSink.callback = { h -> if (cont.isActive) cont.resume(h) }
+                        measureSink.callback = { docH, x, y, w, h ->
+                            if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
+                        }
                         wv.webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 view?.evaluateJavascript(MEASURE_JS, null)
@@ -258,24 +266,47 @@ object ShareCardHtmlRenderer {
                         wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
                     }
                 }
-                heightSink.callback = null
-                if (cssHeight == null || cssHeight <= 0) return@withContext null
+                measureSink.callback = null
+                if (m == null || m[0] <= 0) return@withContext null
 
-                val heightPx = (cssHeight * density).roundToInt().coerceAtLeast(1)
+                val docHCss = m[0]
+                val capXCss = m[1]
+                val capYCss = m[2]
+                val capWCss = m[3]
+                val capHCss = m[4]
+                // 先把 WebView layout 到整份文档高度，保证裁图区域内的内容全部已排版渲染。
+                val fullHeightPx = ((maxOf(docHCss, capYCss + capHCss)) * density)
+                    .roundToInt().coerceAtLeast(1)
                 wv.measure(
                     View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(fullHeightPx, View.MeasureSpec.EXACTLY),
                 )
-                wv.layout(0, 0, widthPx, heightPx)
+                wv.layout(0, 0, widthPx, fullHeightPx)
+
+                // capWCss<=0 表示模板没标 [data-bp-capture]，退回"整幅不裁"。
+                val cropped = capWCss > 0 && capHCss > 0
+                val outX = if (cropped) (capXCss * density).roundToInt() else 0
+                val outY = if (cropped) (capYCss * density).roundToInt() else 0
+                val outW = if (cropped) {
+                    (capWCss * density).roundToInt().coerceIn(1, widthPx - outX)
+                } else widthPx
+                val outH = if (cropped) {
+                    (capHCss * density).roundToInt().coerceIn(1, fullHeightPx - outY)
+                } else fullHeightPx
+
                 try {
-                    Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888).also { bmp ->
-                        wv.draw(Canvas(bmp))
+                    Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888).also { bmp ->
+                        val canvas = Canvas(bmp)
+                        // 平移画布把裁图区域挪到原点，一次 draw 直接出裁好的图，不建大中间位图。
+                        if (outX != 0 || outY != 0) canvas.translate(-outX.toFloat(), -outY.toFloat())
+                        wv.draw(canvas)
                     }
                 } catch (_: Throwable) {
                     null
                 }
             }
         }
+
 
     /** 主线程创建/复用常驻 WebView。 */
     private fun ensureWebView(context: Context): WebView {
@@ -293,7 +324,7 @@ object ShareCardHtmlRenderer {
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             }
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            addJavascriptInterface(heightSink, HEIGHT_BRIDGE)
+            addJavascriptInterface(measureSink, HEIGHT_BRIDGE)
             warmWebView = this
         }
     }
@@ -317,21 +348,36 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 内容高度上报脚本：定义 `window.__bpMeasure__()`，由 Kotlin 侧在 onPageFinished 后
-     * evaluateJavascript 主动调用（此时宽度已就绪）。给 html/body 钉 `height:auto!important`
-     * 切断对宿主框高的依赖，量 `document.body.scrollHeight`（只由内容决定，不被视口污染）。
+     * 量高/裁图脚本：定义 `window.__bpMeasure__()`，由 Kotlin 侧在 onPageFinished 后
+     * evaluateJavascript 主动调用（此时宽度已就绪）。
+     *
+     * 裁图区域由模板标注的 `[data-bp-capture]`（海报根节点）决定：
+     * **横向取满宽、纵向取「卡片上留白 + 卡片 + 等量下留白」**。
+     * 这样 body 上的渐变彩底和浮动装饰照样保留（它们是设计的一部分），
+     * 但总高度被钉在卡片实际高度上，不会再被 `body.scrollHeight`（min-height:100vh、
+     * 绝对定位装饰溢出）带出上下一大截空背景。
+     *
+     * 没标 `[data-bp-capture]` 的用户模板 fallback 到 `body.scrollHeight` 整幅不裁。
      */
     private fun heightReportScript(): String =
         "<style>html,body{height:auto!important;min-height:0!important;overflow:visible!important;}</style>" +
             "<script>(function(){" +
             "window.__bpMeasure__=function(){" +
-            "var b=window.$HEIGHT_BRIDGE,d=document.body;if(!b||!d)return;" +
-            "var h=Math.ceil(d.scrollHeight);" +
-            "if(h>0)b.onHeight(h);};" +
+            "var b=window.$HEIGHT_BRIDGE;if(!b)return;" +
+            "var d=document.body;if(!d)return;" +
+            "var doc=Math.ceil(d.scrollHeight);" +
+            "var t=document.querySelector('[data-bp-capture]');" +
+            "if(t){var r=t.getBoundingClientRect();" +
+            "var w=Math.ceil(document.documentElement.clientWidth||d.clientWidth);" +
+            "var h=Math.ceil(r.top+r.bottom);" +
+            "if(w>0&&h>0){b.onMeasured(Math.max(doc,h),0,0,w,h);return;}}" +
+            "if(doc>0)b.onMeasured(doc,0,0,0,0);" +
+            "};" +
             "})();</script>"
 
     /** 由 Kotlin 侧在 onPageFinished 后 evaluateJavascript 调用，触发一次量高。 */
     private const val MEASURE_JS = "if(window.__bpMeasure__)window.__bpMeasure__();"
+
 
 
 
