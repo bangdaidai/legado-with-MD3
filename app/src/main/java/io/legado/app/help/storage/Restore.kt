@@ -38,6 +38,7 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.TxtTocRule
+import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
@@ -282,6 +283,19 @@ object Restore : KoinComponent {
         if (BackupConfig.dbIsNotIgnored("tagGroupRule")) {
             fileToListT<TagGroupRule>(path, "tagGroupRule.json")?.let {
                 appDb.tagGroupRuleDao.replaceAll(it)
+            }
+        }
+        // 分享模板：内置模板(isBuiltin=true)由代码版本控制，不覆盖；只恢复用户自定义模板。
+        // 复制时置 id=0 让其重新分配，避免与当前设备已有模板的主键冲突或覆盖内置模板。
+        if (BackupConfig.dbIsNotIgnored("shareCardTemplate")) {
+            fileToListT<ShareCardTemplate>(path, "shareCardTemplate.json")?.let { list ->
+                val userTemplates = list.filter { !it.isBuiltin }.map { it.copy(id = 0) }
+                if (userTemplates.isNotEmpty()) {
+                    appDb.runInTransaction {
+                        appDb.shareCardTemplateDao.deleteUserTemplates()
+                        appDb.shareCardTemplateDao.insertAll(*userTemplates.toTypedArray())
+                    }
+                }
             }
         }
         if (BackupConfig.dbIsNotIgnored("bookTag")) {

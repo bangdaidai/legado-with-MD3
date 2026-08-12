@@ -15,6 +15,12 @@ interface ShareCardTemplateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(template: ShareCardTemplate): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(vararg templates: ShareCardTemplate): List<Long>
+
+    @Query("DELETE FROM shareCardTemplates WHERE isBuiltin = 0")
+    suspend fun deleteUserTemplates()
+
     @Update
     suspend fun update(template: ShareCardTemplate)
 

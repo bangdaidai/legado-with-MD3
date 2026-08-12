@@ -86,6 +86,9 @@ fun ShareCardPreviewSheet(
     var htmlReady by remember { mutableStateOf(false) }
     // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
     var previewFailed by remember { mutableStateOf(false) }
+    // 由 JS 量出的 WebView 内容真实高度(dp)。WebView 用固定高度而非 WRAP_CONTENT，
+    // 否则 onPageFinished 后图片/字体等异步资源继续加载会反复 requestLayout 引发布局抖动（卡顿）。
+    var contentHeightDp by remember { mutableStateOf<Float?>(null) }
     // 长按保存：置位后由下面的 LaunchedEffect 直接截当前预览 WebView
     var saveRequested by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -96,6 +99,7 @@ fun ShareCardPreviewSheet(
             schemeOverride = null
             htmlReady = false
             previewFailed = false
+            contentHeightDp = null
             saveRequested = false
             saving = false
             val loaded = withContext(Dispatchers.IO) {
@@ -126,7 +130,14 @@ fun ShareCardPreviewSheet(
     }
 
     // WebView 就位或模板切换时加载 HTML（onPageFinished 里翻转 htmlReady 让菊花消失）
-    LaunchedEffect(show, selectedTemplateId, previewWebView) {
+    // 注意 key 必须含 data：data 由调用方 ViewModel 异步产出（shareCardData 先 null 后非 null），
+    // 若不放进 key，data 就位时本 effect 不会重跑，HTML 永远不加载，htmlReady 永远 false，
+    // 菊花就一直转（有时 data 比 selectedTemplateId 早到则碰巧正常，时序不定表现为"偶尔卡死"）。
+    // WebView 就位或模板切换时加载 HTML（onPageFinished 里翻转 htmlReady 让菊花消失）
+    // 注意 key 必须含 data：data 由调用方 ViewModel 异步产出（shareCardData 先 null 后非 null），
+    // 若不放进 key，data 就位时本 effect 不会重跑，HTML 永远不加载，htmlReady 永远 false，
+    // 菊花就一直转（有时 data 比 selectedTemplateId 早到则碰巧正常，时序不定表现为"偶尔卡死"）。
+    LaunchedEffect(show, selectedTemplateId, previewWebView, data) {
         if (!show || data == null || selectedTemplateId == 0L) return@LaunchedEffect
         val wv = previewWebView ?: return@LaunchedEffect
         val tpl = templates.firstOrNull { it.id == selectedTemplateId } ?: return@LaunchedEffect
@@ -241,7 +252,7 @@ fun ShareCardPreviewSheet(
         },
     ) {
         // 宽度由 WebView 自身钉死（useWideViewPort=false → layout viewport == 控件宽度），
-        // 高度自适应：矮图矮、高图交给外层 verticalScroll 滚动。
+        // 高度用 JS 量出的 contentHeightDp 固定（矮图矮、高图交给外层 verticalScroll 滚动）。
         // 关键：WebView 必须在弹窗一打开就无条件挂载（不能被 data 门控），让 WebView 的创建开销
         // 与入场动画重叠；否则会先弹一个小加载圈、等数据 IO 完才挂载 WebView 并撑高到全高，
         // 二次撑高落在入场动画里就成了"先出来一点、卡顿、再整个弹出"。
@@ -254,8 +265,7 @@ fun ShareCardPreviewSheet(
         ) {
             Box(
                 Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 240.dp),
+                    .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
                 // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
@@ -288,6 +298,16 @@ fun ShareCardPreviewSheet(
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     htmlReady = true
+                                    // 量出内容真实高度并固定 WebView 高度，避免 WRAP_CONTENT 反复重测抖动
+                                    view?.evaluateJavascript(
+                                        "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)",
+                                    ) { raw ->
+                                        val px = raw?.trim('"')?.toFloatOrNull()
+                                        if (px != null) {
+                                            val density = view.context.resources.displayMetrics.density
+                                            contentHeightDp = px / density
+                                        }
+                                    }
                                 }
                             }
                             // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
@@ -298,7 +318,9 @@ fun ShareCardPreviewSheet(
                             previewWebView = this
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((contentHeightDp ?: 240f).dp),
                     onRelease = {
                         it.stopLoading()
                         it.destroy()

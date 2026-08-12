@@ -91,6 +91,7 @@ object Backup {
             "readingMemory.json",
             "bookCharacterProfile.json",
             "servers.json",
+            "shareCardTemplate.json",
             DirectLinkUpload.ruleFileName,
             ReadBookConfig.configFileName,
             ReadBookConfig.shareConfigFileName,
@@ -219,6 +220,9 @@ object Backup {
         }
         if (BackupConfig.dbIsNotIgnored("tagGroupRule", true)) {
             writeListToJson(appDb.tagGroupRuleDao.getAll(), "tagGroupRule.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("shareCardTemplate", true)) {
+            writeListToJson(appDb.shareCardTemplateDao.getAll(), "shareCardTemplate.json", backupPath)
         }
         if (BackupConfig.dbIsNotIgnored("bookTag", true)) {
             writeListToJson(appDb.bookTagDao.getAllSync(), "bookTag.json", backupPath)

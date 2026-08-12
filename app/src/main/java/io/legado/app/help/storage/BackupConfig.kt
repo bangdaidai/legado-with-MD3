@@ -83,13 +83,15 @@ object BackupConfig {
     private const val dbKeyHighlightTagRule = "highlightTagRule"
     private const val dbKeyTagGroupRule = "tagGroupRule"
     private const val dbKeyServer = "server"
+    private const val dbKeyShareCardTemplate = "shareCardTemplate"
 
     val dbIgnoreKeys = arrayOf(
         dbKeyBookmark, dbKeyBookGroup, dbKeyBookSource, dbKeyRssSource,
         dbKeyRssStar, dbKeyReplaceRule, dbKeyReadRecord, dbKeySearchHistory,
         dbKeySourceSub, dbKeyTxtTocRule, dbKeyHttpTts, dbKeyKeyboardAssists,
         dbKeyDictRule, dbKeyHomepageModules, dbKeyHomepageCustomSets,
-        dbKeyHighlightRule, dbKeyHighlightTagRule, dbKeyTagGroupRule, dbKeyServer
+        dbKeyHighlightRule, dbKeyHighlightTagRule, dbKeyTagGroupRule, dbKeyServer,
+        dbKeyShareCardTemplate
     )
 
     val dbIgnoreTitle = arrayOf(
@@ -111,7 +113,8 @@ object BackupConfig {
         appCtx.getString(R.string.highlight_rule_config),
         appCtx.getString(R.string.highlight_tag_config),
         appCtx.getString(R.string.tag_group_rules),
-        appCtx.getString(R.string.server_config)
+        appCtx.getString(R.string.server_config),
+        appCtx.getString(R.string.share_card_template)
     )
 
     val backupDbIgnoreKeys = dbIgnoreKeys

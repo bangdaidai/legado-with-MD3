@@ -251,13 +251,20 @@ fun ShareCardManageScreen(
 
     // 预览模板 Sheet（实时 WebView，与分享卡片预览面板同一套方案）
     state.previewTemplate?.let { template ->
-        var previewWebView by remember(template.id) { mutableStateOf<WebView?>(null) }
-        var htmlReady by remember(template.id) { mutableStateOf(false) }
-        var renderFailed by remember(template.id) { mutableStateOf(false) }
+        // 注意：这里不能用 remember(template.id)。template.id 变化时 remember 会重算并把
+        // previewWebView 复位成 null，但 AndroidView 的 factory 不会因 template.id 变化重建，
+        // 于是 previewWebView 永远拿不到新实例、LaunchedEffect 里 previewWebView?:return 永久返回，
+        // 切换模板后就会一直转圈。改用无 key 的 remember，切模板时复用同一个 WebView 重新 loadData。
+        var previewWebView by remember { mutableStateOf<WebView?>(null) }
+        var htmlReady by remember { mutableStateOf(false) }
+        var renderFailed by remember { mutableStateOf(false) }
+        // 由 JS 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
+        var contentHeightDp by remember { mutableStateOf<Float?>(null) }
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
             htmlReady = false
             renderFailed = false
+            contentHeightDp = null
             val html = ShareCardHtmlRenderer.buildCustomPreviewHtml(
                 template.htmlContent, PreviewVariables,
             )
@@ -273,8 +280,8 @@ fun ShareCardManageScreen(
             title = "预览：${template.name.ifBlank { "未命名" }}",
         ) {
             // 宽度交给 WebView 自身钉死（useWideViewPort=false → 1 CSS px == 1 dp），
-            // 高度自适应：矮图矮、高图交给外层 verticalScroll 滚动。配置与书籍页分享预览
-            // （ShareCardPreviewSheet）一致，避免误缩放成一小块、也避免固定高度矮图留白。
+            // 高度用 JS 量出的 contentHeightDp 固定（矮图矮、高图交给外层 verticalScroll 滚动）。
+            // 配置与书籍页分享预览（ShareCardPreviewSheet）一致，避免误缩放成一小块、也避免固定高度矮图留白。
             val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
             Box(
                 Modifier
@@ -284,8 +291,7 @@ fun ShareCardManageScreen(
             ) {
                 Box(
                     Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 240.dp),
+                        .fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
                     // WebView 必须无条件挂载，否则实例建不起来、HTML 无从加载
@@ -316,12 +322,24 @@ fun ShareCardManageScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         htmlReady = true
+                                        // 量出内容真实高度并固定 WebView 高度，避免 WRAP_CONTENT 反复重测抖动
+                                        view?.evaluateJavascript(
+                                            "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)",
+                                        ) { raw ->
+                                            val px = raw?.trim('"')?.toFloatOrNull()
+                                            if (px != null) {
+                                                val density = view.context.resources.displayMetrics.density
+                                                contentHeightDp = px / density
+                                            }
+                                        }
                                     }
                                 }
                                 previewWebView = this
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height((contentHeightDp ?: 240f).dp),
                         onRelease = {
                             it.stopLoading()
                             it.destroy()
