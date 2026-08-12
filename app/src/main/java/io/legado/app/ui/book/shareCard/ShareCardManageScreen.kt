@@ -3,6 +3,8 @@ package io.legado.app.ui.book.shareCard
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
+
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -259,15 +261,19 @@ fun ShareCardManageScreen(
         var previewWebView by remember { mutableStateOf<WebView?>(null) }
         var renderFailed by remember { mutableStateOf(false) }
         // 内容真实高度(dp)，由页面内 JS 通过 ShareCardHtmlRenderer.HEIGHT_BRIDGE 上报。
-        // 详细原理见 ShareCardPreviewSheet.kt 中 contentCssHeight 的说明——两处同构，同一套方案。
+        // 只认每次加载的第一次上报——避免"盒子撑开→视口变高→重排量更大→再撑开"的反馈环。
+        // 详细原理见 ShareCardPreviewSheet.kt 中 contentCssHeight / heightBridge 的说明。
         var contentHeightDp by remember { mutableStateOf<Float?>(null) }
         var contentStable by remember { mutableStateOf(false) }
         val heightBridge = remember {
             ShareCardHeightBridge { cssPx ->
-                contentHeightDp = cssPx.toFloat()
-                contentStable = true
+                if (!contentStable) {
+                    contentHeightDp = cssPx.toFloat()
+                    contentStable = true
+                }
             }
         }
+
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
             renderFailed = false
@@ -332,9 +338,15 @@ fun ShareCardManageScreen(
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 // 页面内 JS 通过这个桥把内容高度报回来（不再用 View.measure 猜排版时机）。
                                 addJavascriptInterface(heightBridge, ShareCardHtmlRenderer.HEIGHT_BRIDGE)
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        view?.evaluateJavascript(ShareCardHtmlRenderer.MEASURE_JS, null)
+                                    }
+                                }
                                 previewWebView = this
                             }
                         },
+
                         // 高度就绪前 height=0 不可见（避免 240 兜底高度造成的二段）；就绪后用真实高度。WebView 始终挂载以便加载 HTML。
                         modifier = Modifier
                             .fillMaxWidth()

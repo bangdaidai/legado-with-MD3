@@ -112,12 +112,21 @@ fun ShareCardPreviewSheet(
 
     // JS 报 CSS px；控件用 `useWideViewPort=false`，layout viewport 宽度 == 控件宽度(dp)，
     // 因此 1 CSS px == 1 dp，直接当 dp 用。
+    //
+    // 关键：只认每次加载的**第一次**上报，之后忽略（直到下次 loadDataWithBaseURL 前复位）。
+    // 否则会形成反馈环：第一次量出 H1 → 外层盒撑到 H1 → WebView 视口变高 → 百分比定位/
+    // vh 类元素按新视口重排 → 第二次量出 H2 > H1 → 盒子再撑…就是"一会儿多出一大截背景、
+    // 一会儿又是对的"的随机跳动。第一次量高时外层盒还是 0（配合 CSS 里
+    // height:auto!important 让 body 不看视口），拿到的才是纯粹的内容高度。
     val heightBridge = remember {
         ShareCardHeightBridge { cssPx ->
-            contentCssHeight = cssPx.toFloat()
-            contentStable = true
+            if (!contentStable) {
+                contentCssHeight = cssPx.toFloat()
+                contentStable = true
+            }
         }
     }
+
 
 
 
@@ -336,10 +345,16 @@ fun ShareCardPreviewSheet(
                             addJavascriptInterface(heightBridge, ShareCardHtmlRenderer.HEIGHT_BRIDGE)
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
-                                    // 只翻转 htmlReady 让换色 JS 可以注入；高度由页面内 JS 上报，此处不量。
                                     htmlReady = true
+                                    // 量高由这里主动触发一次，且只认第一次结果（见 contentStable 处的
+                                    // 反馈环说明）。不让页面自己在 DOMContentLoaded / load 各报一次——
+                                    // 那样第二次上报会落在"外层盒已按第一次结果撑开"之后，
+                                    // 百分比定位的装饰元素按新视口重算 → 量出更大的值 → 盒子再撑大…
+                                    // 就是"一会儿多出一大截背景、一会儿又是对的"的随机跳动来源。
+                                    view?.evaluateJavascript(ShareCardHtmlRenderer.MEASURE_JS, null)
                                 }
                             }
+
 
                             // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
                             setOnLongClickListener {

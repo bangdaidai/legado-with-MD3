@@ -214,25 +214,38 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 内容高度上报脚本：DOM 就绪后调 `window.[HEIGHT_BRIDGE].onHeight(高度CSS px)`，
-     * 由 Kotlin 侧一次性拿到最终高度（页面自包含：图片固定盒、封面内联 data URI、
-     * 仅系统字体，无异步资源改高，故 DOMContentLoaded 时点即最终高度）。
+     * 内容高度上报脚本。
      *
-     * 量 `document.body` 而不是 `documentElement`：`documentElement.scrollHeight` 是
-     * `max(视口高, 内容高)`，会被宿主 WebView 的控件高度污染（框比内容高时量出的是框高，
-     * 就是"长模板切短模板高度不缩、残留大片背景"）；body 高度是 auto，只由内容决定，
-     * 与视口无关。取 scrollHeight / offsetHeight / 包围盒三者最大值兜住溢出的绝对定位装饰元素。
+     * 核心难点：WebView 控件高度为 0（Compose 侧测准前的初始状态）时，body/documentElement
+     * 的 scrollHeight 可能被 0 高视口影响而错误折叠为 0 或极小值。
      *
-     * DOMContentLoaded 与 window.load 各报一次覆盖时序差异，Kotlin 侧幂等接收、以最后一次为准。
-     * 读 scrollHeight 会强制同步 reflow，所以拿到的一定是结算后的最终值，不需要 rAF 或延时。
+     * 解法：
+     * 1. 给 html/body 钉死 `height:auto!important;overflow:visible!important`，
+     *    切断 body 高度对宿主框高的依赖——无论宿主给了 0、1000 还是 MATCH_PARENT，body
+     *    都只按自己内容排。
+     * 2. 量 `document.body.scrollHeight`（auto 高度,只由内容决定,不会像
+     *    documentElement.scrollHeight 那样取 max(视口高, 内容高) 被框高污染）。
+     * 3. **不在脚本 inline 自动报**(那时控件可能还是 0 高,reflow 结果不可信)，改成
+     *    **定义一个全局函数** `window.__bpMeasure__()`，由 Kotlin 侧在 `onPageFinished`
+     *    之后通过 `evaluateJavascript` 主动调用。此时 WebView 宽度已就绪（MATCH_PARENT
+     *    钉宽），高度虽然是 0，但因为有 `height:auto!important`，body 不看视口高度,
+     *    reflow 结果稳定。
      */
     private fun heightReportScript(): String =
+        "<style>html,body{height:auto!important;min-height:0!important;overflow:visible!important;}</style>" +
         "<script>(function(){" +
-            "function r(){var b=window.$HEIGHT_BRIDGE,d=document.body;if(!b||!d)return;" +
-            "var h=Math.ceil(Math.max(d.scrollHeight,d.offsetHeight,d.getBoundingClientRect().height));" +
-            "if(h>0)b.onHeight(h);}" +
-            "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',r);else r();" +
-            "window.addEventListener('load',r);})();</script>"
+            "window.__bpMeasure__=function(){" +
+            "var b=window.$HEIGHT_BRIDGE,d=document.body;if(!b||!d)return;" +
+            "var h=Math.ceil(d.scrollHeight);" +
+            "if(h>0)b.onHeight(h);};" +
+            "})();</script>"
+
+    /**
+     * 由 Kotlin 侧在 onPageFinished 后 evaluateJavascript 调用,触发一次量高。
+     * 比注入脚本自动触发更可靠——此时 WebView 宽度确定已就绪。
+     */
+    const val MEASURE_JS = "if(window.__bpMeasure__)window.__bpMeasure__();"
+
 
 
 
