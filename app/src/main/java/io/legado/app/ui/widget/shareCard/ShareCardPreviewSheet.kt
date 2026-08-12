@@ -91,14 +91,22 @@ fun ShareCardPreviewSheet(
     var previewFailed by remember { mutableStateOf(false) }
     // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。
     // 必须用 UNSPECIFIED：WebView 被 MATCH_PARENT 钉在高容器里时，contentHeight / scrollHeight 量到的是
-    // “视口高度”而非内容高度，内容比框矮时永远不往下缩（长模板切短模板残留大片背景）；
-    // UNSPECIFIED 是“别限高、按内容量”，所以既能缩也能长。量在 onPageFinished（此时 wv.width 已就绪，
-    // 不会因 width==0 退回兜底），并等布局稳定（图片异步加载会改变高度）后才展示，避免“先矮后高”两段跳。
-    // 量不出只用小兜底、不撑屏。
+    // "视口高度"而非内容高度，内容比框矮时永远不往下缩（长模板切短模板残留大片背景）；
+    // UNSPECIFIED 是"别限高、按内容量"，所以既能缩也能长。
+    // 注意：封面是固定尺寸盒子（如 88×118、object-fit:cover），图片加载与否都不改盒子大小，
+    // 因此封面图异步加载【不会】撑高/改变高度——有封面和没封面的书高度一致（无封面只是占位）。
+    // 量高放在 onPageFinished（此时 wv.width 已就绪，不会因 width==0 退回兜底），
+    // 再等布局稳定后才展示，主要是为了在 MATCH_PARENT 下拿到正确内容高度、并兜住字体/其它异步资源落定，
+    // 避免"先矮后高"两段跳。量不出只用小兜底、不撑屏。
     var contentCssHeight by remember { mutableStateOf<Float?>(null) }
-    // 内容高度是否已稳定：图片异步加载会使布局高度变化，稳定后才把 WebView 亮出来，
-    // 否则会看到容器先矮、图片加载完再撑高，即用户说的“二段”。
+    // 内容高度是否已稳定：封面是固定盒、不随图片加载变化；这里主要兜字体/其它异步资源落定，
+    // 稳定后才把 WebView 亮出来，避免容器先矮、资源落定后再变高导致的"二段"跳变。
     var contentStable by remember { mutableStateOf(false) }
+    // 布局监听 + 悬挂延时 token：必须在 factory/onRelease 之外用 remember 持有，
+    // 否则 onRelease 拿不到（作用域只在 factory 的 apply 块内），会导致 Unresolved reference 编译失败。
+    // 切模板重加载时移除旧监听 + 取消旧 token，避免误触发。
+    var pendingToken by remember { mutableStateOf<Runnable?>(null) }
+    var activeListener by remember { mutableStateOf<ViewTreeObserver.OnGlobalLayoutListener?>(null) }
     // 长按保存：置位后由下面的 LaunchedEffect 直接截当前预览 WebView
     var saveRequested by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -164,8 +172,8 @@ fun ShareCardPreviewSheet(
 
     // 量高在 onPageFinished 里用 View.measure(UNSPECIFIED) 直接量（见下方 webViewClient）。
     // UNSPECIFIED 不限高，故既能缩也能长（修复长模板切短模板高度不缩、残留大片背景）。
-    // 关键：图片异步加载会使布局高度变化，这里用布局监听 + 150ms 稳定判定，
-    // 等高度不再变化才展示 WebView（contentStable=true），避免“先矮后高”两段跳。
+    // 封面盒固定尺寸，图片加载不改变高度；这里的布局监听 + 150ms 稳定判定
+    // 主要兜字体/异步资源落定，等高度不再变化才展示 WebView（contentStable=true），避免"二段"跳变。
 
     // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
     // 这是"瞬间切换"的关键——不 reload、不重建 WebView、不出图。换色不改高度，无需重测。
@@ -319,16 +327,17 @@ fun ShareCardPreviewSheet(
                             overScrollMode = WebView.OVER_SCROLL_NEVER
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             // 切模板重加载时，移除上一次可能残留的布局监听 + 取消悬挂的延时 token，避免旧监听/旧 token 误触发。
-                            var activeListener: ViewTreeObserver.OnGlobalLayoutListener? = null
-                            var pendingToken: Runnable? = null
+                            // activeListener / pendingToken 在外层 remember 持有（见 contentStable 下方），此处直接复用。
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     htmlReady = true
                                     val v = view ?: return
                                     activeListener?.let { v.viewTreeObserver.removeOnGlobalLayoutListener(it) }
                                     pendingToken?.let { v.removeCallbacks(it) }
-                                    // UNSPECIFIED 不限高，量出真实内容高度；图片异步加载会改变高度，
-                                    // 用布局监听 + 150ms 稳定判定，等不再变化才展示，杜绝“先矮后高”两段跳。
+                                    // UNSPECIFIED 不限高，量出真实内容高度。
+                                    // 封面盒固定尺寸、图片加载不改高度（有/无封面高度一致）；
+                                    // 这里用布局监听 + 150ms 稳定判定主要兜字体/异步资源落定，
+                                    // 等不再变化才展示，避免"先矮后高"两段跳。
                                     val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
                                         private var lastH = -1
                                         override fun onGlobalLayout() {
@@ -374,15 +383,18 @@ fun ShareCardPreviewSheet(
                     modifier = Modifier
                         .fillMaxWidth(),
                     onRelease = {
-                        pendingToken?.let { it.removeCallbacks(it) }
-                        activeListener?.let { it.viewTreeObserver.removeOnGlobalLayoutListener(it) }
+                        pendingToken?.let { tk -> it.removeCallbacks(tk) }
+                        pendingToken = null
+                        activeListener?.let { lst -> it.viewTreeObserver.removeOnGlobalLayoutListener(lst) }
+                        activeListener = null
                         it.stopLoading()
                         it.destroy()
                         previewWebView = null
                     },
                 )
-                // 高度稳定前（图片可能仍在加载）盖进度圈：稳定后才把 WebView 亮出来，避免“先矮后高”两段跳。
-                // 换色不改高度、不会走到这里，所以不再“转圈”。
+                // 高度稳定前盖进度圈：等 onPageFinished 用 UNSPECIFIED 量到正确内容高度、并兜住字体/布局落定后，
+                // 才把 WebView 亮出来，避免容器"先矮后高"的跳变。封面是固定盒、图片加载不影响高度，与此无关。
+                // 换色不改高度、不会走到这里，所以不再"转圈"。
                 if (previewFailed) {
                     AppText("预览失败")
                 } else if (data == null && !loading) {

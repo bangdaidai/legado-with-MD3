@@ -261,8 +261,13 @@ fun ShareCardManageScreen(
         var renderFailed by remember { mutableStateOf(false) }
         // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
         var contentHeightDp by remember { mutableStateOf<Float?>(null) }
-        // 高度稳定后才展示 WebView，避免图片异步加载导致“先矮后高”两段跳。
+        // 高度稳定后才展示 WebView，避免容器先矮、资源落定后再变高导致的“两段跳”。
         var contentStable by remember { mutableStateOf(false) }
+        // 布局监听 + 悬挂延时 token：必须在 factory/onRelease 之外用 remember 持有，
+        // 否则 onRelease 拿不到（作用域只在 factory 的 apply 块内），会导致 Unresolved reference 编译失败。
+        // 切模板重加载时移除旧监听 + 取消旧 token，避免误触发。
+        var pendingToken by remember { mutableStateOf<Runnable?>(null) }
+        var activeListener by remember { mutableStateOf<ViewTreeObserver.OnGlobalLayoutListener?>(null) }
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
             renderFailed = false
@@ -323,15 +328,15 @@ fun ShareCardManageScreen(
                                 overScrollMode = WebView.OVER_SCROLL_NEVER
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 // 切模板重加载时，移除上一次可能残留的布局监听 + 取消悬挂的延时 token，避免旧监听/旧 token 误触发。
-                                var activeListener: ViewTreeObserver.OnGlobalLayoutListener? = null
-                                var pendingToken: Runnable? = null
+                                // activeListener / pendingToken 在外层 remember 持有（见 contentStable 下方），此处直接复用。
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         val v = view ?: return
                                         activeListener?.let { v.viewTreeObserver.removeOnGlobalLayoutListener(it) }
                                         pendingToken?.let { v.removeCallbacks(it) }
                                         // UNSPECIFIED 不限高量内容高度：能缩能长（修复长模板切短模板高度不缩、残留背景）。
-                                        // 图片异步加载会改变高度，用布局监听 + 150ms 稳定判定，等不再变化才展示，杜绝两段跳。
+                                        // 封面盒固定尺寸、图片加载不改高度（有/无封面高度一致）；
+                                        // 这里用布局监听 + 150ms 稳定判定主要兜字体/异步资源落定，等不再变化才展示，避免两段跳。
                                         val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
                                             private var lastH = -1
                                             override fun onGlobalLayout() {
@@ -373,8 +378,10 @@ fun ShareCardManageScreen(
                             .fillMaxWidth()
                             .height((contentHeightDp ?: 240f).dp),
                         onRelease = {
-                            pendingToken?.let { it.removeCallbacks(it) }
-                            activeListener?.let { it.viewTreeObserver.removeOnGlobalLayoutListener(it) }
+                            pendingToken?.let { tk -> it.removeCallbacks(tk) }
+                            pendingToken = null
+                            activeListener?.let { lst -> it.viewTreeObserver.removeOnGlobalLayoutListener(lst) }
+                            activeListener = null
                             it.stopLoading()
                             it.destroy()
                             previewWebView = null
