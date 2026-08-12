@@ -291,10 +291,11 @@ object Restore : KoinComponent {
             fileToListT<ShareCardTemplate>(path, "shareCardTemplate.json")?.let { list ->
                 val userTemplates = list.filter { !it.isBuiltin }.map { it.copy(id = 0) }
                 if (userTemplates.isNotEmpty()) {
-                    appDb.runInTransaction {
-                        appDb.shareCardTemplateDao.deleteUserTemplates()
-                        appDb.shareCardTemplateDao.insertAll(*userTemplates.toTypedArray())
-                    }
+                    // 内置模板(isBuiltin=true)由代码版本控制，不覆盖；只恢复用户自定义模板。
+                    // deleteUserTemplates / insertAll 均为 suspend，与同文件其它 insertAll 直接调用风格一致
+                    // （Restore 整体运行在 suspend 上下文，勿用同步的 runInTransaction 包裹）。
+                    appDb.shareCardTemplateDao.deleteUserTemplates()
+                    appDb.shareCardTemplateDao.insertAll(*userTemplates.toTypedArray())
                 }
             }
         }
