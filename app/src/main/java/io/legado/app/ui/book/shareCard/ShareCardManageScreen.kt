@@ -261,12 +261,11 @@ fun ShareCardManageScreen(
         var renderFailed by remember { mutableStateOf(false) }
         // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
         var contentHeightDp by remember { mutableStateOf<Float?>(null) }
-        // 高度稳定后才展示 WebView，避免容器先矮、资源落定后再变高导致的“两段跳”。
+        // 内容高度是否已测得：onPageFinished 后首帧即量准并提交，无 150ms 稳定等待
+        // （CSS 只用系统字体、无异步资源改变高度，首帧即最终布局）。测准后才亮出 WebView，避免二段跳。
         var contentStable by remember { mutableStateOf(false) }
-        // 布局监听 + 悬挂延时 token：必须在 factory/onRelease 之外用 remember 持有，
-        // 否则 onRelease 拿不到（作用域只在 factory 的 apply 块内），会导致 Unresolved reference 编译失败。
-        // 切模板重加载时移除旧监听 + 取消旧 token，避免误触发。
-        var pendingToken by remember { mutableStateOf<Runnable?>(null) }
+        // 布局监听：必须在 factory/onRelease 之外用 remember 持有，否则 onRelease 拿不到。
+        // 切模板重加载时移除旧监听，避免误触发。
         var activeListener by remember { mutableStateOf<ViewTreeObserver.OnGlobalLayoutListener?>(null) }
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
@@ -291,6 +290,9 @@ fun ShareCardManageScreen(
             // 高度用 measure(UNSPECIFIED) 量出的 contentHeightDp 固定（矮图矮、高图交给外层 verticalScroll 滚动）。
             // 配置与书籍页分享预览（ShareCardPreviewSheet）一致，避免误缩放成一小块、也避免固定高度矮图留白。
             val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+            // 测准前不显示卡片：WebView 高度置 0（不可见、不占空间），只在外层放进度圈占位；
+            // 测准（contentStable）后才一次性用真实高度撑开，消除“先弹一半 / 切模板变短再变长”的二段跳。
+            val measured = contentStable && (contentHeightDp ?: 0f) > 0f
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -327,18 +329,16 @@ fun ShareCardManageScreen(
                                 isVerticalScrollBarEnabled = false
                                 overScrollMode = WebView.OVER_SCROLL_NEVER
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                // 切模板重加载时，移除上一次可能残留的布局监听 + 取消悬挂的延时 token，避免旧监听/旧 token 误触发。
-                                // activeListener / pendingToken 在外层 remember 持有（见 contentStable 下方），此处直接复用。
+                                // 切模板重加载时，移除上一次可能残留的布局监听，避免旧监听误触发。
+                                // activeListener 在外层 remember 持有（见 contentStable 下方），此处直接复用。
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         val v = view ?: return
                                         activeListener?.let { v.viewTreeObserver.removeOnGlobalLayoutListener(it) }
-                                        pendingToken?.let { v.removeCallbacks(it) }
                                         // UNSPECIFIED 不限高量内容高度：能缩能长（修复长模板切短模板高度不缩、残留背景）。
-                                        // 封面盒固定尺寸、图片加载不改高度（有/无封面高度一致）；
-                                        // 这里用布局监听 + 150ms 稳定判定主要兜字体/异步资源落定，等不再变化才展示，避免两段跳。
+                                        // 封面是空（预览用占位变量），CSS 只用系统字体，无异步资源改变高度，
+                                        // 故 onPageFinished 后首帧量准即提交（contentStable=true），无需 150ms 等待。
                                         val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
-                                            private var lastH = -1
                                             override fun onGlobalLayout() {
                                                 val self = this
                                                 val width = v.width
@@ -349,22 +349,11 @@ fun ShareCardManageScreen(
                                                 )
                                                 val h = v.measuredHeight
                                                 if (h <= 0) return
-                                                if (h != lastH) {
-                                                    lastH = h
-                                                    // 高度还在变：推迟 150ms 再判定（期间若又变则本次 onGlobalLayout 自然再推）。
-                                                    pendingToken?.let { v.removeCallbacks(it) }
-                                                    pendingToken = Runnable {
-                                                        pendingToken = null
-                                                        if (!v.isAttachedToWindow) return@Runnable
-                                                        val density = v.resources.displayMetrics.density
-                                                        // 先移除监听，再提交高度：否则下面设高度会触发新的 onGlobalLayout，
-                                                        // 若取整差 1px 又会取消本 token 重排，造成反复抖动。
-                                                        v.viewTreeObserver.removeOnGlobalLayoutListener(self)
-                                                        contentHeightDp = h.toFloat() / density
-                                                        contentStable = true
-                                                    }
-                                                    v.postDelayed(pendingToken, 150L)
-                                                }
+                                                // 首帧量准即提交：无异步资源改变高度，无需稳定判定。
+                                                val density = v.resources.displayMetrics.density
+                                                v.viewTreeObserver.removeOnGlobalLayoutListener(self)
+                                                contentHeightDp = h.toFloat() / density
+                                                contentStable = true
                                             }
                                         }
                                         activeListener = listener
@@ -375,12 +364,11 @@ fun ShareCardManageScreen(
                                 previewWebView = this
                             }
                         },
+                        // 测准前 height=0 不可见（避免 240 兜底高度造成的二段）；测准后用真实高度。WebView 始终挂载以便测量。
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height((contentHeightDp ?: 240f).dp),
+                            .height(if (measured) contentHeightDp!!.dp else 0.dp),
                         onRelease = {
-                            pendingToken?.let { tk -> it.removeCallbacks(tk) }
-                            pendingToken = null
                             activeListener?.let { lst -> it.viewTreeObserver.removeOnGlobalLayoutListener(lst) }
                             activeListener = null
                             it.stopLoading()
@@ -388,10 +376,20 @@ fun ShareCardManageScreen(
                             previewWebView = null
                         },
                     )
-                    if (renderFailed) {
-                        AppText("渲染失败")
-                    } else if (!contentStable) {
-                        CircularProgressIndicator()
+                    // 测准前（!measured）占位：仅放进度圈 / 失败提示，固定 240 高，不渲染卡片，消除二段跳。
+                    if (!measured) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(240.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (renderFailed) {
+                                AppText("渲染失败")
+                            } else {
+                                CircularProgressIndicator()
+                            }
+                        }
                     }
                 }
             }
