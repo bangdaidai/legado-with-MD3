@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.shareCard
 
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -257,15 +258,16 @@ fun ShareCardManageScreen(
         // 于是 previewWebView 永远拿不到新实例、LaunchedEffect 里 previewWebView?:return 永久返回，
         // 切换模板后就会一直转圈。改用无 key 的 remember，切模板时复用同一个 WebView 重新 loadData。
         var previewWebView by remember { mutableStateOf<WebView?>(null) }
-        var htmlReady by remember { mutableStateOf(false) }
         var renderFailed by remember { mutableStateOf(false) }
         // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
         var contentHeightDp by remember { mutableStateOf<Float?>(null) }
+        // 高度稳定后才展示 WebView，避免图片异步加载导致“先矮后高”两段跳。
+        var contentStable by remember { mutableStateOf(false) }
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
-            htmlReady = false
             renderFailed = false
             contentHeightDp = null
+            contentStable = false
             val html = ShareCardHtmlRenderer.buildCustomPreviewHtml(
                 template.htmlContent, PreviewVariables,
             )
@@ -301,7 +303,7 @@ fun ShareCardManageScreen(
                             WebView(ctx).apply {
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
                                 )
                                 settings.apply {
                                     javaScriptEnabled = true
@@ -320,31 +322,48 @@ fun ShareCardManageScreen(
                                 isVerticalScrollBarEnabled = false
                                 overScrollMode = WebView.OVER_SCROLL_NEVER
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                // 切模板重加载时，移除上一次可能残留的布局监听 + 取消悬挂的延时 token，避免旧监听/旧 token 误触发。
+                                var activeListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+                                var pendingToken: Runnable? = null
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
-                                        htmlReady = true
-                                        // UNSPECIFIED 不限高量内容高度：能缩能长，修复长模板切短模板高度不缩、残留背景。
-                                        fun remeasure(v: WebView) {
-                                            val width = v.width
-                                            if (width <= 0) return
-                                            v.measure(
-                                                View.MeasureSpec.makeMeasureSpec(
-                                                    width,
-                                                    View.MeasureSpec.EXACTLY,
-                                                ),
-                                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                                            )
-                                            val h = v.measuredHeight
-                                            if (h > 0) {
-                                                val density = v.resources.displayMetrics.density
-                                                contentHeightDp = h.toFloat() / density
+                                        val v = view ?: return
+                                        activeListener?.let { v.viewTreeObserver.removeOnGlobalLayoutListener(it) }
+                                        pendingToken?.let { v.removeCallbacks(it) }
+                                        // UNSPECIFIED 不限高量内容高度：能缩能长（修复长模板切短模板高度不缩、残留背景）。
+                                        // 图片异步加载会改变高度，用布局监听 + 150ms 稳定判定，等不再变化才展示，杜绝两段跳。
+                                        val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
+                                            private var lastH = -1
+                                            override fun onGlobalLayout() {
+                                                val width = v.width
+                                                if (width <= 0) return
+                                                v.measure(
+                                                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                                                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                                                )
+                                                val h = v.measuredHeight
+                                                if (h <= 0) return
+                                                if (h != lastH) {
+                                                    lastH = h
+                                                    // 高度还在变：推迟 150ms 再判定（期间若又变则本次 onGlobalLayout 自然再推）。
+                                                    pendingToken?.let { v.removeCallbacks(it) }
+                                                    pendingToken = Runnable {
+                                                        pendingToken = null
+                                                        if (!v.isAttachedToWindow) return@Runnable
+                                                        val density = v.resources.displayMetrics.density
+                                                        // 先移除监听，再提交高度：否则下面设高度会触发新的 onGlobalLayout，
+                                                        // 若取整差 1px 又会取消本 token 重排，造成反复抖动。
+                                                        v.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+                                                        contentHeightDp = h.toFloat() / density
+                                                        contentStable = true
+                                                    }
+                                                    v.postDelayed(pendingToken, 150L)
+                                                }
                                             }
                                         }
-                                        view?.let { v ->
-                                            remeasure(v)
-                                            // 图片异步加载后高度可能变化，延时再量一次兜底。
-                                            v.postDelayed({ remeasure(v) }, 200L)
-                                        }
+                                        activeListener = listener
+                                        listener.onGlobalLayout()
+                                        v.viewTreeObserver.addOnGlobalLayoutListener(listener)
                                     }
                                 }
                                 previewWebView = this
@@ -354,16 +373,17 @@ fun ShareCardManageScreen(
                             .fillMaxWidth()
                             .height((contentHeightDp ?: 240f).dp),
                         onRelease = {
+                            pendingToken?.let { it.removeCallbacks(it) }
+                            activeListener?.let { it.viewTreeObserver.removeOnGlobalLayoutListener(it) }
                             it.stopLoading()
                             it.destroy()
                             previewWebView = null
                         },
                     )
-                    if (!htmlReady && !renderFailed) {
-                        CircularProgressIndicator()
-                    }
                     if (renderFailed) {
                         AppText("渲染失败")
+                    } else if (!contentStable) {
+                        CircularProgressIndicator()
                     }
                 }
             }
