@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -269,52 +272,68 @@ fun ShareCardManageScreen(
             onDismissRequest = { onIntent(ShareCardManageIntent.DismissPreview) },
             title = "预览：${template.name.ifBlank { "未命名" }}",
         ) {
+            // 宽度交给 WebView 自身钉死（useWideViewPort=false → 1 CSS px == 1 dp），
+            // 高度自适应：矮图矮、高图交给外层 verticalScroll 滚动。配置与书籍页分享预览
+            // （ShareCardPreviewSheet）一致，避免误缩放成一小块、也避免固定高度矮图留白。
+            val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
             Box(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
-                    .height((LocalConfiguration.current.screenHeightDp * 0.85f).dp),
-                contentAlignment = Alignment.Center,
+                    .heightIn(max = maxPreviewHeight)
+                    .verticalScroll(rememberScrollState()),
             ) {
-                // WebView 必须无条件挂载，否则实例建不起来、HTML 无从加载
-                AndroidView(
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                                setSupportZoom(false)
-                                builtInZoomControls = false
-                                blockNetworkLoads = false
-                                blockNetworkImage = false
-                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            }
-                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    htmlReady = true
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 240.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // WebView 必须无条件挂载，否则实例建不起来、HTML 无从加载
+                    AndroidView(
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                                )
+                                settings.apply {
+                                    javaScriptEnabled = true
+                                    domStorageEnabled = true
+                                    // 宽度交给控件 MATCH_PARENT / EXACTLY，viewport meta 一律忽略，
+                                    // 保证 1 CSS px == 1 dp，模板按控件宽度渲染、不横滑、不缩放。
+                                    useWideViewPort = false
+                                    loadWithOverviewMode = false
+                                    setSupportZoom(false)
+                                    builtInZoomControls = false
+                                    blockNetworkLoads = false
+                                    blockNetworkImage = false
+                                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                 }
+                                // WebView 自身不滚动：高度已等于内容高度，滚动交给外层 Compose
+                                isVerticalScrollBarEnabled = false
+                                overScrollMode = WebView.OVER_SCROLL_NEVER
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        htmlReady = true
+                                    }
+                                }
+                                previewWebView = this
                             }
-                            previewWebView = this
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    onRelease = {
-                        it.stopLoading()
-                        it.destroy()
-                        previewWebView = null
-                    },
-                )
-                if (!htmlReady && !renderFailed) {
-                    CircularProgressIndicator()
-                }
-                if (renderFailed) {
-                    AppText("渲染失败")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        onRelease = {
+                            it.stopLoading()
+                            it.destroy()
+                            previewWebView = null
+                        },
+                    )
+                    if (!htmlReady && !renderFailed) {
+                        CircularProgressIndicator()
+                    }
+                    if (renderFailed) {
+                        AppText("渲染失败")
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))

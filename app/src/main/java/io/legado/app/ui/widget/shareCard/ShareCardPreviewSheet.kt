@@ -115,6 +115,16 @@ fun ShareCardPreviewSheet(
         }
     }
 
+    // 切换模板时复位临时配色：注入的 #accent-style 标签是跨模板持久残留的，
+    // 不在这里清掉的话，新模板加载完仍会被换色 effect 重新染上上一个模板的颜色。
+    // 复位后新模板用自身默认色起手，用户再手动切色才会注入。
+    LaunchedEffect(show, selectedTemplateId) {
+        if (show && selectedTemplateId != 0L) {
+            accentColor = null
+            schemeOverride = null
+        }
+    }
+
     // WebView 就位或模板切换时加载 HTML（onPageFinished 里翻转 htmlReady 让菊花消失）
     LaunchedEffect(show, selectedTemplateId, previewWebView) {
         if (!show || data == null || selectedTemplateId == 0L) return@LaunchedEffect
@@ -231,8 +241,10 @@ fun ShareCardPreviewSheet(
         },
     ) {
         // 宽度由 WebView 自身钉死（useWideViewPort=false → layout viewport == 控件宽度），
-        // 高度让 WebView 按 WRAP_CONTENT 自己量出内容真高，Compose 不参与换算。
-        // 上下滚动交给外层 verticalScroll，WebView 自身不滚。
+        // 高度自适应：矮图矮、高图交给外层 verticalScroll 滚动。
+        // 关键：WebView 必须在弹窗一打开就无条件挂载（不能被 data 门控），让 WebView 的创建开销
+        // 与入场动画重叠；否则会先弹一个小加载圈、等数据 IO 完才挂载 WebView 并撑高到全高，
+        // 二次撑高落在入场动画里就成了"先出来一点、卡顿、再整个弹出"。
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
         Box(
             Modifier
@@ -246,55 +258,53 @@ fun ShareCardPreviewSheet(
                     .heightIn(min = 240.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                if (data != null) {
-                    // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
-                    // 必须无条件挂载（不能被 htmlReady 门控），否则 WebView 建不起来、HTML 无从加载。
-                    AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                                )
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    // 宽度交给控件 MATCH_PARENT / EXACTLY，viewport meta 一律忽略，
-                                    // 保证 1 CSS px == 1 dp，模板按控件宽度渲染、不横滑、不留白。
-                                    useWideViewPort = false
-                                    loadWithOverviewMode = false
-                                    setSupportZoom(false)
-                                    builtInZoomControls = false
-                                    blockNetworkLoads = false
-                                    blockNetworkImage = false
-                                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                }
-                                // WebView 自身不滚动：高度已经等于内容高度，滚动交给外层 Compose，
-                                // 否则截图时 draw() 会带上滚动偏移，出图和预览错位。
-                                isVerticalScrollBarEnabled = false
-                                overScrollMode = WebView.OVER_SCROLL_NEVER
-                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        htmlReady = true
-                                    }
-                                }
-                                // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
-                                setOnLongClickListener {
-                                    saveRequested = true
-                                    true
-                                }
-                                previewWebView = this
+                // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
+                // 无条件挂载（不能被 htmlReady / data 门控），否则 WebView 建不起来、HTML 无从加载。
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            )
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                // 宽度交给控件 MATCH_PARENT / EXACTLY，viewport meta 一律忽略，
+                                // 保证 1 CSS px == 1 dp，模板按控件宽度渲染、不横滑、不留白。
+                                useWideViewPort = false
+                                loadWithOverviewMode = false
+                                setSupportZoom(false)
+                                builtInZoomControls = false
+                                blockNetworkLoads = false
+                                blockNetworkImage = false
+                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        onRelease = {
-                            it.stopLoading()
-                            it.destroy()
-                            previewWebView = null
-                        },
-                    )
-                }
+                            // WebView 自身不滚动：高度已经等于内容高度，滚动交给外层 Compose，
+                            // 否则截图时 draw() 会带上滚动偏移，出图和预览错位。
+                            isVerticalScrollBarEnabled = false
+                            overScrollMode = WebView.OVER_SCROLL_NEVER
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    htmlReady = true
+                                }
+                            }
+                            // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
+                            setOnLongClickListener {
+                                saveRequested = true
+                                true
+                            }
+                            previewWebView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    onRelease = {
+                        it.stopLoading()
+                        it.destroy()
+                        previewWebView = null
+                    },
+                )
                 // 首帧加载中 / 保存中：盖一层进度指示。换色不会走到这里，所以不再"转圈"。
                 if (loading || saving || (data != null && !htmlReady && !previewFailed)) {
                     CircularProgressIndicator()
@@ -328,8 +338,15 @@ fun ShareCardPreviewSheet(
     // 现在 WebView 高度已经等于内容高度、也不滚动，draw() 出来就是完整卡片，逐像素等于预览。
     // try/finally 保证 saving 一定复位（协程被取消时也不会留下卡死的菊花）。
     LaunchedEffect(saveRequested) {
-        if (!saveRequested || data == null) return@LaunchedEffect
-        saveRequested = false
+        if (!saveRequested) return@LaunchedEffect
+        // 注意：saveRequested 必须等到保存结束（finally）再复位，不能在开头复位。
+        // 否则 LaunchedEffect 的 key 在 effect 刚开始就变回 false，Compose 会取消协程；
+        // saveToGallery 里的 withContext(Dispatchers.IO) 是首个挂起点，协程在这里被取消，
+        // 文件其实已写完（所以"保存成功"），但 withContext 之后的成功 toast 永远执行不到。
+        if (data == null) {
+            saveRequested = false
+            return@LaunchedEffect
+        }
         saving = true
         try {
             val wv = previewWebView
@@ -345,6 +362,7 @@ fun ShareCardPreviewSheet(
             saveToGallery(context, bitmap)
         } finally {
             saving = false
+            saveRequested = false
         }
     }
 }
