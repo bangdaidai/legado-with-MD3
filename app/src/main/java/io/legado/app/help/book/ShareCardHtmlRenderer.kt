@@ -28,6 +28,20 @@ object ShareCardHtmlRenderer {
     /** 实时预览用：注入的 accent 变量 style 标签 id，供 JS 动态替换内容实现秒切换。 */
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
+    /**
+     * 量高桥接对象名：Kotlin 侧用 `addJavascriptInterface(..., HEIGHT_BRIDGE)` 注册，
+     * 注入脚本调 `window.<HEIGHT_BRIDGE>.onHeight(cssPx)` 把内容高度报回来。
+     *
+     * 为什么由 JS 报高度、而不是 Kotlin 侧 `View.measure()`：
+     * WebView 的 HTML 排版是引擎内部异步完成的，**排版完成不会触发宿主 View 的 layout pass**
+     * （控件是 MATCH_PARENT，尺寸没变）。所以 Kotlin 侧无论用 `contentHeight`、`scrollHeight`
+     * 还是 `measure(UNSPECIFIED)`，都只能靠 `OnGlobalLayoutListener` / `post` 去"猜"排版好了没：
+     * 猜早了量到半截（→ 先出一小截再出一大截的二段跳），猜晚了白等（→ 卡顿）。
+     * 只有页面内的 JS 知道排版何时结算完毕，让它主动报一次，一次即准。
+     */
+    const val HEIGHT_BRIDGE = "__bpHeightBridge__"
+
+
 
     /** 主色 HSL 明度 < 0.55 时走暗方案。供预览 UI 判断亮/暗切换按钮当前朝向。 */
     fun isDarkByDefault(@ColorInt accent: Int): Boolean {
@@ -192,11 +206,35 @@ object ShareCardHtmlRenderer {
         if (html.isBlank()) return ""
         val head =
             """<style>html,body{overflow-x:hidden;}</style>""" +
-                """<style id="$ACCENT_STYLE_ID"></style>"""
+                """<style id="$ACCENT_STYLE_ID"></style>""" +
+                heightReportScript()
         return if (HEAD_TAG_REGEX.containsMatchIn(html))
             HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
         else "$head\n$html"
     }
+
+    /**
+     * 内容高度上报脚本：DOM 就绪后调 `window.[HEIGHT_BRIDGE].onHeight(高度CSS px)`，
+     * 由 Kotlin 侧一次性拿到最终高度（页面自包含：图片固定盒、封面内联 data URI、
+     * 仅系统字体，无异步资源改高，故 DOMContentLoaded 时点即最终高度）。
+     *
+     * 量 `document.body` 而不是 `documentElement`：`documentElement.scrollHeight` 是
+     * `max(视口高, 内容高)`，会被宿主 WebView 的控件高度污染（框比内容高时量出的是框高，
+     * 就是"长模板切短模板高度不缩、残留大片背景"）；body 高度是 auto，只由内容决定，
+     * 与视口无关。取 scrollHeight / offsetHeight / 包围盒三者最大值兜住溢出的绝对定位装饰元素。
+     *
+     * DOMContentLoaded 与 window.load 各报一次覆盖时序差异，Kotlin 侧幂等接收、以最后一次为准。
+     * 读 scrollHeight 会强制同步 reflow，所以拿到的一定是结算后的最终值，不需要 rAF 或延时。
+     */
+    private fun heightReportScript(): String =
+        "<script>(function(){" +
+            "function r(){var b=window.$HEIGHT_BRIDGE,d=document.body;if(!b||!d)return;" +
+            "var h=Math.ceil(Math.max(d.scrollHeight,d.offsetHeight,d.getBoundingClientRect().height));" +
+            "if(h>0)b.onHeight(h);}" +
+            "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',r);else r();" +
+            "window.addEventListener('load',r);})();</script>"
+
+
 
     /**
      * 生成一段 JS：把 [ACCENT_STYLE_ID] 这个 style 的内容换成新的变量块，并同步 `bp-dark` class。

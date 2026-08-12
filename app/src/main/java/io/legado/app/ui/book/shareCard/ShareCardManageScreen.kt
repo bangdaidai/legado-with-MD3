@@ -1,11 +1,9 @@
 package io.legado.app.ui.book.shareCard
 
-import android.view.View
-import android.view.ViewTreeObserver
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +61,7 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import io.legado.app.ui.widget.shareCard.ShareCardHeightBridge
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -259,14 +258,16 @@ fun ShareCardManageScreen(
         // 切换模板后就会一直转圈。改用无 key 的 remember，切模板时复用同一个 WebView 重新 loadData。
         var previewWebView by remember { mutableStateOf<WebView?>(null) }
         var renderFailed by remember { mutableStateOf(false) }
-        // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
+        // 内容真实高度(dp)，由页面内 JS 通过 ShareCardHtmlRenderer.HEIGHT_BRIDGE 上报。
+        // 详细原理见 ShareCardPreviewSheet.kt 中 contentCssHeight 的说明——两处同构，同一套方案。
         var contentHeightDp by remember { mutableStateOf<Float?>(null) }
-        // 内容高度是否已测得：onPageFinished 后首帧即量准并提交，无 150ms 稳定等待
-        // （CSS 只用系统字体、无异步资源改变高度，首帧即最终布局）。测准后才亮出 WebView，避免二段跳。
         var contentStable by remember { mutableStateOf(false) }
-        // 布局监听：必须在 factory/onRelease 之外用 remember 持有，否则 onRelease 拿不到。
-        // 切模板重加载时移除旧监听，避免误触发。
-        var activeListener by remember { mutableStateOf<ViewTreeObserver.OnGlobalLayoutListener?>(null) }
+        val heightBridge = remember {
+            ShareCardHeightBridge { cssPx ->
+                contentHeightDp = cssPx.toFloat()
+                contentStable = true
+            }
+        }
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
             renderFailed = false
@@ -329,54 +330,23 @@ fun ShareCardManageScreen(
                                 isVerticalScrollBarEnabled = false
                                 overScrollMode = WebView.OVER_SCROLL_NEVER
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                // 切模板重加载时，移除上一次可能残留的布局监听，避免旧监听误触发。
-                                // activeListener 在外层 remember 持有（见 contentStable 下方），此处直接复用。
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        val v = view ?: return
-                                        activeListener?.let { v.viewTreeObserver.removeOnGlobalLayoutListener(it) }
-                                        // UNSPECIFIED 不限高量内容高度：能缩能长（修复长模板切短模板高度不缩、残留背景）。
-                                        // 封面是空（预览用占位变量），CSS 只用系统字体，无异步资源改变高度，
-                                        // 故 onPageFinished 后首帧量准即提交（contentStable=true），无需 150ms 等待。
-                                        val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
-                                            override fun onGlobalLayout() {
-                                                val self = this
-                                                val width = v.width
-                                                if (width <= 0) return
-                                                v.measure(
-                                                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                                                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                                                )
-                                                val h = v.measuredHeight
-                                                if (h <= 0) return
-                                                // 首帧量准即提交：无异步资源改变高度，无需稳定判定。
-                                                val density = v.resources.displayMetrics.density
-                                                v.viewTreeObserver.removeOnGlobalLayoutListener(self)
-                                                contentHeightDp = h.toFloat() / density
-                                                contentStable = true
-                                            }
-                                        }
-                                        activeListener = listener
-                                        listener.onGlobalLayout()
-                                        v.viewTreeObserver.addOnGlobalLayoutListener(listener)
-                                    }
-                                }
+                                // 页面内 JS 通过这个桥把内容高度报回来（不再用 View.measure 猜排版时机）。
+                                addJavascriptInterface(heightBridge, ShareCardHtmlRenderer.HEIGHT_BRIDGE)
                                 previewWebView = this
                             }
                         },
-                        // 测准前 height=0 不可见（避免 240 兜底高度造成的二段）；测准后用真实高度。WebView 始终挂载以便测量。
+                        // 高度就绪前 height=0 不可见（避免 240 兜底高度造成的二段）；就绪后用真实高度。WebView 始终挂载以便加载 HTML。
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(if (measured) contentHeightDp!!.dp else 0.dp),
                         onRelease = {
-                            activeListener?.let { lst -> it.viewTreeObserver.removeOnGlobalLayoutListener(lst) }
-                            activeListener = null
+                            it.removeJavascriptInterface(ShareCardHtmlRenderer.HEIGHT_BRIDGE)
                             it.stopLoading()
                             it.destroy()
                             previewWebView = null
                         },
                     )
-                    // 测准前（!measured）占位：仅放进度圈 / 失败提示，固定 240 高，不渲染卡片，消除二段跳。
+                    // 高度就绪前（!measured）占位：仅放进度圈 / 失败提示，固定 240 高，不渲染卡片，消除二段跳。
                     if (!measured) {
                         Box(
                             Modifier

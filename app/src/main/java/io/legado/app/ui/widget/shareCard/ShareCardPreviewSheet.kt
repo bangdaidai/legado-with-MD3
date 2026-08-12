@@ -2,9 +2,10 @@ package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.view.View
-import android.view.ViewTreeObserver
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -89,26 +90,36 @@ fun ShareCardPreviewSheet(
     var htmlReady by remember { mutableStateOf(false) }
     // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
     var previewFailed by remember { mutableStateOf(false) }
-    // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。
-    // 必须用 UNSPECIFIED：WebView 被 MATCH_PARENT 钉在高容器里时，contentHeight / scrollHeight 量到的是
-    // "视口高度"而非内容高度，内容比框矮时永远不往下缩（长模板切短模板残留大片背景）；
-    // UNSPECIFIED 是"别限高、按内容量"，所以既能缩也能长。
-    // 注意：封面是固定尺寸盒子（如 88×118、object-fit:cover），图片加载与否都不改盒子大小，
-    // 因此封面图异步加载【不会】撑高/改变高度——有封面和没封面的书高度一致（无封面只是占位）。
-    // 量高放在 onPageFinished（此时 wv.width 已就绪，不会因 width==0 退回兜底），
-    // 首帧布局即用 measure(UNSPECIFIED) 量准并提交，无需等稳定——
-    // CSS 只用系统字体、封面是内联 data URI 固定盒，无异步资源改变高度，首帧即最终布局。
+    // 内容真实高度(dp)，由页面内 JS 通过 ShareCardHtmlRenderer.HEIGHT_BRIDGE 主动上报。
+    //
+    // 为什么不再用 Kotlin 侧量高（contentHeight / scrollHeight / measure(UNSPECIFIED) +
+    // OnGlobalLayoutListener）：WebView 的 HTML 排版由引擎内部异步完成，排版结束**不会**触发宿主
+    // View 的 layout pass（控件是 MATCH_PARENT，View 尺寸压根没变），所以 Kotlin 侧只能靠布局回调
+    // 或 post 去猜"排版好了没"——猜早了量到半截（就是"先出来一小截再出来一大截"的二段跳），
+    // 猜晚了纯白等（就是卡顿）。而且外层盒测准前高度是 0，WebView 不再产生新的 layout pass，
+    // 布局回调可能根本不再来，于是永远测不出、菊花转到死。
+    //
+    // 改由页面内 JS 在 DOMContentLoaded 时读 documentElement.scrollHeight 报回来：JS 是唯一知道
+    // 排版何时结算完的一方，读 scrollHeight 会强制同步 reflow，拿到的就是最终高度，一次即准、
+    // 不猜时机、不轮询。页面自包含（封面是固定尺寸盒 + 内联 data URI、只用系统字体、无网络资源），
+    // 故首次上报即最终值；window.load 会再报一次做幂等兜底。
     var contentCssHeight by remember { mutableStateOf<Float?>(null) }
-    // 内容高度是否已测得：onPageFinished 后首帧即用 measure(UNSPECIFIED) 量准并提交，
-    // 无 150ms 稳定等待（那只是多余的人工延时，正是卡顿来源）。测准后才把 WebView 亮出来、
-    // 按真实高度撑开（书摘长短不一也能自然撑高/变矮），避免"先弹一半/切模板变短再变长"的二段跳。
+    // 高度是否已就绪：就绪后才把 WebView 亮出来并按真实高度撑开，消除二段跳。
     var contentStable by remember { mutableStateOf(false) }
-    // 布局监听：必须在 factory/onRelease 之外用 remember 持有，否则 onRelease 拿不到。
-    // 切模板重加载时移除旧监听，避免误触发。
-    var activeListener by remember { mutableStateOf<ViewTreeObserver.OnGlobalLayoutListener?>(null) }
     // 长按保存：置位后由下面的 LaunchedEffect 直接截当前预览 WebView
     var saveRequested by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+
+    // JS 报 CSS px；控件用 `useWideViewPort=false`，layout viewport 宽度 == 控件宽度(dp)，
+    // 因此 1 CSS px == 1 dp，直接当 dp 用。
+    val heightBridge = remember {
+        ShareCardHeightBridge { cssPx ->
+            contentCssHeight = cssPx.toFloat()
+            contentStable = true
+        }
+    }
+
+
 
     LaunchedEffect(show) {
         if (show) {
@@ -169,10 +180,9 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    // 量高在 onPageFinished 里用 View.measure(UNSPECIFIED) 直接量（见下方 webViewClient）。
-    // UNSPECIFIED 不限高，故既能缩也能长（修复长模板切短模板高度不缩、残留大片背景）。
-    // 封面盒固定尺寸、封面是内联 data URI，图片加载不改变高度；CSS 只用系统字体，
-    // 无异步资源改变布局高度，故 onPageFinished 后首帧量准即提交（contentStable=true），无需 150ms 等待。
+    // 量高由页面内 JS 主动上报（见 contentCssHeight 处的说明与 ShareCardHtmlRenderer.HEIGHT_BRIDGE），
+    // 不再依赖 View.measure + OnGlobalLayoutListener 去猜排版时机。
+
 
     // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
     // 这是"瞬间切换"的关键——不 reload、不重建 WebView、不出图。换色不改高度，无需重测。
@@ -322,39 +332,15 @@ fun ShareCardPreviewSheet(
                             isVerticalScrollBarEnabled = false
                             overScrollMode = WebView.OVER_SCROLL_NEVER
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            // 切模板重加载时，移除上一次可能残留的布局监听，避免旧监听误触发。
-                            // activeListener 在外层 remember 持有（见 contentStable 下方），此处直接复用。
+                            // 页面内 JS 通过这个桥把内容高度报回来（见 contentCssHeight 处说明）。
+                            addJavascriptInterface(heightBridge, ShareCardHtmlRenderer.HEIGHT_BRIDGE)
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
+                                    // 只翻转 htmlReady 让换色 JS 可以注入；高度由页面内 JS 上报，此处不量。
                                     htmlReady = true
-                                    val v = view ?: return
-                                    activeListener?.let { v.viewTreeObserver.removeOnGlobalLayoutListener(it) }
-                                    // UNSPECIFIED 不限高，量出真实内容高度（首帧即提交，无 150ms 等待）。
-                                    // CSS 只用系统字体、封面是内联 data URI 固定盒，无任何异步资源改变布局高度，
-                                    // onPageFinished 后的首帧布局即为最终布局，量准即亮出 WebView。
-                                    val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
-                                        override fun onGlobalLayout() {
-                                            val self = this
-                                            val width = v.width
-                                            if (width <= 0) return
-                                            v.measure(
-                                                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                                            )
-                                            val h = v.measuredHeight
-                                            if (h <= 0) return
-                                            // 首帧量准即提交：无异步资源改变高度，无需稳定判定。
-                                            val density = v.resources.displayMetrics.density
-                                            v.viewTreeObserver.removeOnGlobalLayoutListener(self)
-                                            contentCssHeight = h.toFloat() / density
-                                            contentStable = true
-                                        }
-                                    }
-                                    activeListener = listener
-                                    listener.onGlobalLayout()
-                                    v.viewTreeObserver.addOnGlobalLayoutListener(listener)
                                 }
                             }
+
                             // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
                             setOnLongClickListener {
                                 saveRequested = true
@@ -366,8 +352,7 @@ fun ShareCardPreviewSheet(
                     modifier = Modifier
                         .fillMaxWidth(),
                     onRelease = {
-                        activeListener?.let { lst -> it.viewTreeObserver.removeOnGlobalLayoutListener(lst) }
-                        activeListener = null
+                        it.removeJavascriptInterface(ShareCardHtmlRenderer.HEIGHT_BRIDGE)
                         it.stopLoading()
                         it.destroy()
                         previewWebView = null
@@ -480,4 +465,26 @@ private suspend fun saveToGallery(context: android.content.Context, bitmap: Bitm
     }
     context.toastOnUi(if (error == null) "已保存到相册" else "保存失败$error")
 }
+
+/**
+ * 页面内 JS → Kotlin 的内容高度回调桥（预览面板与模板管理页预览共用）。
+ *
+ * 注册名见 [ShareCardHtmlRenderer.HEIGHT_BRIDGE]，上报脚本由
+ * `ShareCardHtmlRenderer.injectPreviewHead` 注入。参数是 CSS px，控件设了
+ * `useWideViewPort=false`，layout viewport 宽度 == 控件宽度(dp)，故 1 CSS px == 1 dp。
+ *
+ * `@JavascriptInterface` 方法跑在 WebView 的 JS Binder 线程，必须 post 回主线程再写 Compose 状态。
+ * 同一份 HTML 会被上报多次（DOMContentLoaded + load），[onHeight] 幂等，以最后一次为准。
+ */
+internal class ShareCardHeightBridge(private val onHeightDp: (Int) -> Unit) {
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun onHeight(cssPx: Int) {
+        if (cssPx <= 0) return
+        mainHandler.post { onHeightDp(cssPx) }
+    }
+}
+
 
