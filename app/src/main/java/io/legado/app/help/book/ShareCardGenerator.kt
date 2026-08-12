@@ -356,27 +356,6 @@ body::before {
   padding: 3px 14px; border-radius: 57px;
   border: 1px solid var(--bp-divider, rgba(214, 175, 189, 0.2));
 }
-/* 默认配色（模板自带，= 原兜底色聚合）。未选色时即显示此色；选色时由运行时注入的
-   #__bpAccentVars__（在模板 style 之后，优先级更高）覆盖。
-   关键：--bp-accent-rgb 必须在此有值，否则 background 里 `rgba(var(--bp-accent-rgb), α)`
-   的兜底（裸三元组嵌在 rgba 中）会被部分 WebView 解析失败、整条 background 变透明。 */
-:root{
-  --bp-accent:#fbc4d6;
-  --bp-accent-light:#fcd1e0;
-  --bp-accent-rgb:251,196,214;
-  --bp-accent-fade:rgba(253,227,237,0.25);
-  --bp-star:#fddaac;
-  --bp-on-accent:#5a2f3c;
-  --bp-bg:#fdd6e2;
-  --bp-surface:#fff8fb;
-  --bp-surface-rgb:255,248,251;
-  --bp-surface-variant:rgba(255,238,243,0.45);
-  --bp-text:#4d2e3a;
-  --bp-text-muted:#a37183;
-  --bp-text-subtle:#b68896;
-  --bp-text-rgb:77,46,58;
-  --bp-divider:rgba(255,228,231,0.6);
-}
 </style>
 </head>
 <body>

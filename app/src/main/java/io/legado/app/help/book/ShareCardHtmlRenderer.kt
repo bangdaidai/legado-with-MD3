@@ -28,13 +28,6 @@ object ShareCardHtmlRenderer {
     /** 实时预览用：注入的 accent 变量 style 标签 id，供 JS 动态替换内容实现秒切换。 */
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
-    /**
-     * 匹配 `</head>`，用于把 accent 占位 style 插到模板自身 `<style>` **之后**——
-     * 这样「默认态（占位空）」不会覆盖模板自带的 `:root{}` 默认值（=模板原配色），
-     * 而「切色态」注入的变量因在模板 style 之后、优先级更高，可正确覆盖。
-     */
-    private val HEAD_CLOSE_REGEX = Regex("</head>", RegexOption.IGNORE_CASE)
-
 
     /** 主色 HSL 明度 < 0.55 时走暗方案。供预览 UI 判断亮/暗切换按钮当前朝向。 */
     fun isDarkByDefault(@ColorInt accent: Int): Boolean {
@@ -197,31 +190,18 @@ object ShareCardHtmlRenderer {
      */
     private fun injectPreviewHead(html: String): String {
         if (html.isBlank()) return ""
-        // 占位 style 放在 </head> 之前（即模板自身 <style> 之后）：
-        // - 默认态：#__bpAccentVars__ 为空，模板自带 :root{} 默认值生效（=模板原配色），
-        //   且 background 里 `rgba(var(--bp-accent-rgb), α)` 因 --bp-accent-rgb 有定义而正常解析，
-        //   不再整条失效变透明；
-        // - 切色态：accentApplyJs 改写 #__bpAccentVars__ 内容，它在模板 style 之后、优先级更高，
-        //   可正确覆盖模板默认值。
-        // 默认态「不注入」任何 --bp-*，绝不强制统一成某个预设色——尊重模板自带配色。
-        val placeholder =
+        val head =
             """<style>html,body{overflow-x:hidden;}</style>""" +
                 """<style id="$ACCENT_STYLE_ID"></style>"""
-        return when {
-            HEAD_CLOSE_REGEX.containsMatchIn(html) ->
-                HEAD_CLOSE_REGEX.replaceFirst(html, "$placeholder\n</head>")
-            HEAD_TAG_REGEX.containsMatchIn(html) ->
-                HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$placeholder\n")
-            else ->
-                "$placeholder\n$html"
-        }
+        return if (HEAD_TAG_REGEX.containsMatchIn(html))
+            HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
+        else "$head\n$html"
     }
 
     /**
      * 生成一段 JS：把 [ACCENT_STYLE_ID] 这个 style 的内容换成新的变量块，并同步 `bp-dark` class。
      * 页面原地重绘，无需 reload —— 这是「换色瞬间生效」的关键。
-     * @param accent null 表示「默认（模板自带）」：清空占位，让模板自己的 `:root{}` 默认值生效，
-     *               回到模板初始配色（不强制套用任何预设色）。
+     * @param accent null 表示清空变量，回到模板自带配色。
      */
     fun accentApplyJs(@ColorInt accent: Int?, forceDark: Boolean? = null): String {
         val css: String
