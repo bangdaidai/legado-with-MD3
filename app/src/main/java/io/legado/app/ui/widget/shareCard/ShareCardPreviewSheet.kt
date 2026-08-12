@@ -2,7 +2,6 @@ package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -34,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.data.entities.ShareCardData
@@ -90,7 +88,7 @@ fun ShareCardPreviewSheet(
     var htmlReady by remember { mutableStateOf(false) }
     // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
     var previewFailed by remember { mutableStateOf(false) }
-    // 由 measure 量出的 WebView 内容真实高度(原始 px)。WebView 用 MATCH_PARENT 填满内层固定高度的 Box，
+    // 由 contentHeight 量出的 WebView 内容真实高度(CSS px，即 dp)。WebView 用 MATCH_PARENT 填满内层固定高度的 Box，
     // 固定高度由量出的真实值决定（矮图矮、高图高），量不出只用小兜底、不撑屏。
     // 不在 onPageFinished 里立即量：那时图片/字体未加载，量到的是偏小的初始值且不再更新。
     var contentCssHeight by remember { mutableStateOf<Float?>(null) }
@@ -158,21 +156,15 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    // 量真实内容高度：用 View.measure() 量出 WebView 完整内容高度，替代 evaluateJavascript，
-    // 免去 JS 执行时机/字符串解析的不确定性。等 htmlReady 翻转 + delay 等图片/字体撑稳后再量。
-    // 矮图量到矮、高图量到高；量不出(width 未就绪/为0)不兜底整屏，仅用小框，避免矮图被撑出大段背景。
-    // measure 出来的 measuredHeight 是原始 px，和下方 contentCssHeight/density 转 dp 的口径一致。
+    // 量真实内容高度：用 WebView.contentHeight 原生属性直接读（CSS px），替代 evaluateJavascript，
+    // 也避开了 View.measure(UNSPECIFIED) 在 WebView 上量不出完整内容高度的坑。
+    // useWideViewPort=false → 1 CSS px == 1 dp，contentHeight 即 dp 高度，下方直接用 .dp、不再除 density。
+    // 矮图量到矮、高图量到高；量不出(为0)不兜底整屏，仅用小框，避免矮图被撑出大段背景。
     LaunchedEffect(htmlReady, accentColor, schemeOverride, previewWebView) {
         val wv = previewWebView ?: return@LaunchedEffect
         if (!htmlReady) return@LaunchedEffect
-        if (wv.width <= 0) return@LaunchedEffect
         delay(120)
-        wv.measure(
-            View.MeasureSpec.makeMeasureSpec(wv.width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-        )
-        val px = wv.measuredHeight
-        contentCssHeight = if (px > 0) px.toFloat() else null
+        contentCssHeight = wv.contentHeight.takeIf { it > 0 }?.toFloat()
     }
 
     // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
@@ -274,17 +266,17 @@ fun ShareCardPreviewSheet(
         },
     ) {
         // 宽度由 WebView 自身钉死（useWideViewPort=false → layout viewport == 控件宽度），
-        // 高度用 measure 量出的 contentCssHeight 决定：矮图矮、高图高；量不出只用小兜底、不撑屏。
+        // 高度用 contentHeight 量出的 contentCssHeight 决定：矮图矮、高图高；量不出只用小兜底、不撑屏。
         // WebView 用 MATCH_PARENT 填满内层固定高度的 Box（不靠 WRAP_CONTENT），避免资源异步加载
         // 后反复 requestLayout 的布局抖动（卡顿）；固定高度由 Compose 侧定死，Web 框不抖。
         // 关键：WebView 必须在弹窗一打开就无条件挂载（不能被 data 门控），让 WebView 的创建开销
         // 与入场动画重叠；否则会先弹一个小加载圈、等数据 IO 完才挂载 WebView 并撑高到全高，
         // 二次撑高落在入场动画里就成了"先出来一点、卡顿、再整个弹出"。
-        val density = LocalDensity.current.density
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
-        // 内容高(dp)：量出用真实值；量不出用小兜底(240dp)，绝不兜底整屏（否则矮图被撑出大段背景）。
+        // 内容高(dp)：contentHeight 量出真实值（CSS px==dp，不再除 density）；量不出用小兜底(240dp)，
+        // 绝不兜底整屏（否则矮图被撑出大段背景）。
         val contentDp = if (contentCssHeight != null && contentCssHeight!! > 0f) {
-            (contentCssHeight!! / density).dp
+            contentCssHeight!!.dp
         } else {
             240.dp
         }
