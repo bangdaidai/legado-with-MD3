@@ -1,45 +1,61 @@
 package io.legado.app.help.book
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
+import android.view.View
+import android.webkit.JavascriptInterface
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
+import kotlin.math.roundToInt
 
 /**
- * 分享卡片渲染契约（**唯一一条**）。
+ * 分享卡片渲染器：HTML → Bitmap 离屏出图。
  *
- * 预览和保存共用同一个实时 WebView 实例、同一份 HTML、同一个 layout viewport。
- * 保存不再走离屏 WebView 重跑一遍——直接从预览 WebView `draw()` 截图。
- * 因此预览显示什么，导出的图就是什么，逐像素一致。
+ * 预览显示的是**已渲好的一张 Bitmap**（不是活的 WebView），所以没有测量、没有二段跳、
+ * 没有 Sheet 重排。慢的老问题（每次重建 WebView + 固定 delay 猜完成 + 封面每次重解码）
+ * 三处都拔掉了：
+ * - 复用一个常驻热 WebView（[warmWebView]），只建一次
+ * - 用页面内 JS 桥（[HEIGHT_BRIDGE] / [MEASURE_JS]）拿"渲染完成 + 内容高度"信号，
+ *   渲染一完成立刻出图，不再干等固定 delay
+ * - 封面 data URI 缓存（[coverCache]），同一本书只解码一次
  */
 object ShareCardHtmlRenderer {
 
+    private const val RENDER_TIMEOUT_MS = 4000L
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
     private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
 
-    /** 实时预览用：注入的 accent 变量 style 标签 id，供 JS 动态替换内容实现秒切换。 */
+    /** 换色注入的 accent 变量 style 标签 id。 */
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
     /**
-     * 量高桥接对象名：Kotlin 侧用 `addJavascriptInterface(..., HEIGHT_BRIDGE)` 注册，
-     * 注入脚本调 `window.<HEIGHT_BRIDGE>.onHeight(cssPx)` 把内容高度报回来。
-     *
-     * 为什么由 JS 报高度、而不是 Kotlin 侧 `View.measure()`：
-     * WebView 的 HTML 排版是引擎内部异步完成的，**排版完成不会触发宿主 View 的 layout pass**
-     * （控件是 MATCH_PARENT，尺寸没变）。所以 Kotlin 侧无论用 `contentHeight`、`scrollHeight`
-     * 还是 `measure(UNSPECIFIED)`，都只能靠 `OnGlobalLayoutListener` / `post` 去"猜"排版好了没：
-     * 猜早了量到半截（→ 先出一小截再出一大截的二段跳），猜晚了白等（→ 卡顿）。
-     * 只有页面内的 JS 知道排版何时结算完毕，让它主动报一次，一次即准。
+     * 量高桥接对象名：注入脚本调 `window.<HEIGHT_BRIDGE>.onHeight(cssPx)` 把内容高度报回来。
+     * 由页面内 JS 报高度、而不是 Kotlin 侧 View.measure——只有页面内的 JS 知道排版何时结算完，
+     * 让它主动报一次，一次即准，不猜时机、不轮询。
      */
     const val HEIGHT_BRIDGE = "__bpHeightBridge__"
+
 
 
 
@@ -162,51 +178,138 @@ object ShareCardHtmlRenderer {
         return AccentStyle(vars, isDark)
     }
 
-    // ==================== 实时预览 HTML（预览 + 保存共用） ====================
+    // ==================== 离屏出图（预览 + 保存共用一张 Bitmap） ====================
+
+    /** 页面内 JS → Kotlin 的内容高度回调桥（CSS px；useWideViewPort=false 下 1 CSS px == 1 dp）。 */
+    private class HeightSink {
+        private val handler = Handler(Looper.getMainLooper())
+        @Volatile
+        var callback: ((Int) -> Unit)? = null
+
+        @JavascriptInterface
+        fun onHeight(cssPx: Int) {
+            if (cssPx <= 0) return
+            handler.post { callback?.invoke(cssPx) }
+        }
+    }
+
+    private val heightSink = HeightSink()
+
+    /** 常驻热 WebView：只建一次反复用，省掉每次建 WebView 的开销。仅主线程访问。 */
+    private var warmWebView: WebView? = null
+
+    /** 串行化渲染，避免快速切模板/换色时并发用同一个 WebView。 */
+    private val renderMutex = Mutex()
 
     /**
-     * 构建喂给「预览/保存 WebView」的 HTML：变量已替换、封面转 data URI、
-     * 带一个空的 accent style 占位（id=[ACCENT_STYLE_ID]），后续换色只需 JS 改这个标签的内容。
-     *
-     * 保存不再单独跑一遍——直接从这个已渲染好的 WebView `draw()` 截图，保证预览 == 保存。
+     * 渲染真实数据的分享卡片为 Bitmap。
+     * @param accent 用户临时选择的主题色（ARGB）。非 null 时注入一整套 `--bp-*` HSL 变量。
+     * @param forceDark null=按主色明度自动判定；非 null=强制亮(false)/暗(true)。
      */
-    suspend fun buildPreviewHtml(
+    suspend fun render(
+        context: Context,
         template: ShareCardTemplate,
         data: ShareCardData,
-    ): String = withContext(Dispatchers.IO) {
-        val coverDataUri = coverUrlToDataUri(data.coverUrl)
-        val resolvedData = if (coverDataUri != null) data.copy(coverUrl = coverDataUri) else data
-        injectPreviewHead(replaceVariables(template.htmlContent, resolvedData))
+        accent: Int? = null,
+        forceDark: Boolean? = null,
+    ): Bitmap? {
+        val coverUri = coverUrlToDataUri(data.coverUrl)
+        val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
+        val body = replaceVariables(template.htmlContent, resolved)
+        if (body.isBlank()) return null
+        return renderHtmlToBitmap(context, injectRenderHead(body, accent, forceDark))
     }
 
-    /**
-     * 同 [buildPreviewHtml]，但吃「裸 HTML + 变量表」——供模板管理页用示例数据预览未保存的模板。
-     */
-    suspend fun buildCustomPreviewHtml(
+    /** 渲染裸 HTML + 变量表为 Bitmap（供模板管理页用示例数据预览未保存的模板）。 */
+    suspend fun renderCustom(
+        context: Context,
         htmlContent: String,
         variables: Map<String, String> = emptyMap(),
-    ): String = withContext(Dispatchers.IO) {
+    ): Bitmap? {
         val merged = buildVariableMap(ShareCardData()) + variables
-        val html = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
-        injectPreviewHead(html)
+        val body = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
+        if (body.isBlank()) return null
+        return renderHtmlToBitmap(context, injectRenderHead(body, null, null))
+    }
+
+    private suspend fun renderHtmlToBitmap(context: Context, html: String): Bitmap? =
+        renderMutex.withLock {
+            withContext(Dispatchers.Main.immediate) {
+                val density = context.resources.displayMetrics.density
+                val widthPx = (context.resources.displayMetrics.widthPixels * 0.92f)
+                    .toInt().coerceAtLeast(360)
+                val wv = ensureWebView(context)
+
+                // 用 JS 桥拿"渲染完成 + 内容高度"，不再靠固定 delay 猜。超时兜底防永久挂起。
+                val cssHeight = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                    suspendCancellableCoroutine { cont ->
+                        heightSink.callback = { h -> if (cont.isActive) cont.resume(h) }
+                        wv.webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                view?.evaluateJavascript(MEASURE_JS, null)
+                            }
+                        }
+                        // 先按目标宽度 layout，让 loadDataWithBaseURL 的 layout viewport 宽度就绪。
+                        wv.measure(
+                            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                        )
+                        wv.layout(0, 0, widthPx, wv.measuredHeight.coerceAtLeast(1))
+                        wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
+                    }
+                }
+                heightSink.callback = null
+                if (cssHeight == null || cssHeight <= 0) return@withContext null
+
+                val heightPx = (cssHeight * density).roundToInt().coerceAtLeast(1)
+                wv.measure(
+                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY),
+                )
+                wv.layout(0, 0, widthPx, heightPx)
+                try {
+                    Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888).also { bmp ->
+                        wv.draw(Canvas(bmp))
+                    }
+                } catch (_: Throwable) {
+                    null
+                }
+            }
+        }
+
+    /** 主线程创建/复用常驻 WebView。 */
+    private fun ensureWebView(context: Context): WebView {
+        warmWebView?.let { return it }
+        return WebView(context.applicationContext).apply {
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                useWideViewPort = false
+                loadWithOverviewMode = false
+                setSupportZoom(false)
+                builtInZoomControls = false
+                blockNetworkLoads = false
+                blockNetworkImage = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            }
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            addJavascriptInterface(heightSink, HEIGHT_BRIDGE)
+            warmWebView = this
+        }
     }
 
     /**
-     * 给预览 HTML 注入空的 accent style 占位 + 横向溢出兜底；HTML 为空则返回 ""。
-     *
-     * 宽度 / 高度的正确性由 WebView 自身设置保证（`useWideViewPort=false`，Kotlin 用
-     * `MeasureSpec.EXACTLY` 钉死宽度），不依赖 viewport meta。viewport meta 不注入——
-     * 否则模板里自己的 viewport 可能覆盖它、或它落在 `<!DOCTYPE>` 之前变成无效标记，
-     * 都会让 WebView 的行为变得不可控。
-     *
-     * 注入 `html,body{overflow-x:hidden}` 是因为活 WebView 不像 Image 那样天然裁掉越界内容，
-     * 绝对定位装饰元素（`left:89%` 之类）会撑大可滚动区域导致横滑；这里统一兜住。
+     * 给出图 HTML 注入 head：横向溢出兜底 + accent 变量（若有）+ 量高脚本。
+     * accent 直接烘进 HTML（一次性出图，无需 JS 动态切换），复用 [accentApplyJs] 的注入逻辑。
      */
-    private fun injectPreviewHead(html: String): String {
+    private fun injectRenderHead(html: String, accent: Int?, forceDark: Boolean?): String {
         if (html.isBlank()) return ""
+        val accentScript =
+            if (accent != null) "<script>${accentApplyJs(accent, forceDark)}</script>" else ""
         val head =
             """<style>html,body{overflow-x:hidden;}</style>""" +
                 """<style id="$ACCENT_STYLE_ID"></style>""" +
+                accentScript +
                 heightReportScript()
         return if (HEAD_TAG_REGEX.containsMatchIn(html))
             HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
@@ -214,37 +317,22 @@ object ShareCardHtmlRenderer {
     }
 
     /**
-     * 内容高度上报脚本。
-     *
-     * 核心难点：WebView 控件高度为 0（Compose 侧测准前的初始状态）时，body/documentElement
-     * 的 scrollHeight 可能被 0 高视口影响而错误折叠为 0 或极小值。
-     *
-     * 解法：
-     * 1. 给 html/body 钉死 `height:auto!important;overflow:visible!important`，
-     *    切断 body 高度对宿主框高的依赖——无论宿主给了 0、1000 还是 MATCH_PARENT，body
-     *    都只按自己内容排。
-     * 2. 量 `document.body.scrollHeight`（auto 高度,只由内容决定,不会像
-     *    documentElement.scrollHeight 那样取 max(视口高, 内容高) 被框高污染）。
-     * 3. **不在脚本 inline 自动报**(那时控件可能还是 0 高,reflow 结果不可信)，改成
-     *    **定义一个全局函数** `window.__bpMeasure__()`，由 Kotlin 侧在 `onPageFinished`
-     *    之后通过 `evaluateJavascript` 主动调用。此时 WebView 宽度已就绪（MATCH_PARENT
-     *    钉宽），高度虽然是 0，但因为有 `height:auto!important`，body 不看视口高度,
-     *    reflow 结果稳定。
+     * 内容高度上报脚本：定义 `window.__bpMeasure__()`，由 Kotlin 侧在 onPageFinished 后
+     * evaluateJavascript 主动调用（此时宽度已就绪）。给 html/body 钉 `height:auto!important`
+     * 切断对宿主框高的依赖，量 `document.body.scrollHeight`（只由内容决定，不被视口污染）。
      */
     private fun heightReportScript(): String =
         "<style>html,body{height:auto!important;min-height:0!important;overflow:visible!important;}</style>" +
-        "<script>(function(){" +
+            "<script>(function(){" +
             "window.__bpMeasure__=function(){" +
             "var b=window.$HEIGHT_BRIDGE,d=document.body;if(!b||!d)return;" +
             "var h=Math.ceil(d.scrollHeight);" +
             "if(h>0)b.onHeight(h);};" +
             "})();</script>"
 
-    /**
-     * 由 Kotlin 侧在 onPageFinished 后 evaluateJavascript 调用,触发一次量高。
-     * 比注入脚本自动触发更可靠——此时 WebView 宽度确定已就绪。
-     */
-    const val MEASURE_JS = "if(window.__bpMeasure__)window.__bpMeasure__();"
+    /** 由 Kotlin 侧在 onPageFinished 后 evaluateJavascript 调用，触发一次量高。 */
+    private const val MEASURE_JS = "if(window.__bpMeasure__)window.__bpMeasure__();"
+
 
 
 
@@ -331,8 +419,16 @@ object ShareCardHtmlRenderer {
         return sb.toString()
     }
 
+    // ==================== 封面 data URI 缓存 ====================
+
+    private val coverCache = ConcurrentHashMap<String, String>(8)
+
+    fun clearCoverCache() = coverCache.clear()
+
     private fun coverUrlToDataUri(url: String): String? {
         if (url.isBlank() || url.startsWith("http") || url.startsWith("data:")) return url.ifBlank { null }
+        coverCache[url]?.let { return it }
+
         return try {
             val f = if (url.startsWith("file://")) File(URI(url)) else File(url)
             if (f.exists()) {
@@ -340,7 +436,10 @@ object ShareCardHtmlRenderer {
                 BitmapFactory.decodeFile(f.absolutePath)?.let {
                     it.compress(Bitmap.CompressFormat.JPEG, 80, baos)
                     it.recycle()
-                    "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+                    val dataUri = "data:image/jpeg;base64," +
+                        Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+                    coverCache[url] = dataUri
+                    dataUri
                 }
             } else null
         } catch (_: Exception) { null }

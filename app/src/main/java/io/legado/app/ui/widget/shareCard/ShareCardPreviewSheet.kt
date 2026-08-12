@@ -1,15 +1,9 @@
 package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.os.Handler
-import android.os.Looper
-import android.view.ViewGroup
-import android.webkit.JavascriptInterface
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,21 +17,24 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.repository.ShareCardRepository
@@ -52,6 +49,7 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
@@ -65,6 +63,13 @@ private val ACCENT_PRESETS = listOf(
     "石墨灰" to 0xFF6B737D.toInt(),
 )
 
+/**
+ * 分享卡片预览面板。
+ *
+ * 预览显示的是**离屏渲好的一张 Bitmap**，不是活的 WebView——Bitmap 尺寸自带，
+ * 所以没有测量、没有二段跳、Sheet 打开后内容大小再也不变。
+ * 切模板/换色时旧图留在屏幕上、顶部走一条细进度条，新图好了一帧换掉，不闪空菊花。
+ */
 @Composable
 fun ShareCardPreviewSheet(
     show: Boolean,
@@ -73,6 +78,7 @@ fun ShareCardPreviewSheet(
     onDismissRequest: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val shareCardRepository = koinInject<ShareCardRepository>()
 
     var templates by remember { mutableStateOf<List<ShareCardTemplate>>(emptyList()) }
@@ -85,60 +91,34 @@ fun ShareCardPreviewSheet(
     // 方案覆盖：null=自动（按所选色明度判定），false=强制亮，true=强制暗。
     var schemeOverride by remember { mutableStateOf<Boolean?>(null) }
 
-    // 实时预览 WebView 实例和初始化 HTML（加载一次，换色只注入 JS）
-    var previewWebView by remember { mutableStateOf<WebView?>(null) }
-    var htmlReady by remember { mutableStateOf(false) }
-    // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
-    var previewFailed by remember { mutableStateOf(false) }
-    // 内容真实高度(dp)，由页面内 JS 通过 ShareCardHtmlRenderer.HEIGHT_BRIDGE 主动上报。
-    //
-    // 为什么不再用 Kotlin 侧量高（contentHeight / scrollHeight / measure(UNSPECIFIED) +
-    // OnGlobalLayoutListener）：WebView 的 HTML 排版由引擎内部异步完成，排版结束**不会**触发宿主
-    // View 的 layout pass（控件是 MATCH_PARENT，View 尺寸压根没变），所以 Kotlin 侧只能靠布局回调
-    // 或 post 去猜"排版好了没"——猜早了量到半截（就是"先出来一小截再出来一大截"的二段跳），
-    // 猜晚了纯白等（就是卡顿）。而且外层盒测准前高度是 0，WebView 不再产生新的 layout pass，
-    // 布局回调可能根本不再来，于是永远测不出、菊花转到死。
-    //
-    // 改由页面内 JS 在 DOMContentLoaded 时读 documentElement.scrollHeight 报回来：JS 是唯一知道
-    // 排版何时结算完的一方，读 scrollHeight 会强制同步 reflow，拿到的就是最终高度，一次即准、
-    // 不猜时机、不轮询。页面自包含（封面是固定尺寸盒 + 内联 data URI、只用系统字体、无网络资源），
-    // 故首次上报即最终值；window.load 会再报一次做幂等兜底。
-    var contentCssHeight by remember { mutableStateOf<Float?>(null) }
-    // 高度是否已就绪：就绪后才把 WebView 亮出来并按真实高度撑开，消除二段跳。
-    var contentStable by remember { mutableStateOf(false) }
-    // 长按保存：置位后由下面的 LaunchedEffect 直接截当前预览 WebView
-    var saveRequested by remember { mutableStateOf(false) }
+    // 当前显示的卡片图。重渲期间保持旧图不动，新图就绪才替换。
+    var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var rendering by remember { mutableStateOf(false) }
+    var renderFailed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
 
-    // JS 报 CSS px；控件用 `useWideViewPort=false`，layout viewport 宽度 == 控件宽度(dp)，
-    // 因此 1 CSS px == 1 dp，直接当 dp 用。
-    //
-    // 关键：只认每次加载的**第一次**上报，之后忽略（直到下次 loadDataWithBaseURL 前复位）。
-    // 否则会形成反馈环：第一次量出 H1 → 外层盒撑到 H1 → WebView 视口变高 → 百分比定位/
-    // vh 类元素按新视口重排 → 第二次量出 H2 > H1 → 盒子再撑…就是"一会儿多出一大截背景、
-    // 一会儿又是对的"的随机跳动。第一次量高时外层盒还是 0（配合 CSS 里
-    // height:auto!important 让 body 不看视口），拿到的才是纯粹的内容高度。
-    val heightBridge = remember {
-        ShareCardHeightBridge { cssPx ->
-            if (!contentStable) {
-                contentCssHeight = cssPx.toFloat()
-                contentStable = true
+    fun rerender(templateId: Long, accent: Int?, forceDark: Boolean?) {
+        val d = data ?: return
+        val tpl = templates.firstOrNull { it.id == templateId } ?: return
+        scope.launch {
+            rendering = true
+            val bmp = ShareCardHtmlRenderer.render(context, tpl, d, accent, forceDark)
+            if (bmp != null) {
+                currentBitmap = bmp
+                renderFailed = false
+            } else if (currentBitmap == null) {
+                renderFailed = true
             }
+            rendering = false
         }
     }
-
-
-
 
     LaunchedEffect(show) {
         if (show) {
             accentColor = null
             schemeOverride = null
-            htmlReady = false
-            previewFailed = false
-            contentCssHeight = null
-            contentStable = false
-            saveRequested = false
+            currentBitmap = null
+            renderFailed = false
             saving = false
             val loaded = withContext(Dispatchers.IO) {
                 ShareCardGenerator.getOrCreateBuiltinTemplates()
@@ -157,52 +137,16 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    // 切换模板时复位临时配色：注入的 #accent-style 标签是跨模板持久残留的，
-    // 不在这里清掉的话，新模板加载完仍会被换色 effect 重新染上上一个模板的颜色。
-    // 复位后新模板用自身默认色起手，用户再手动切色才会注入。
-    LaunchedEffect(show, selectedTemplateId) {
-        if (show && selectedTemplateId != 0L) {
-            accentColor = null
-            schemeOverride = null
-        }
-    }
-
-    // WebView 就位或模板切换时加载 HTML（onPageFinished 里翻转 htmlReady 让菊花消失）
-    // 注意 key 必须含 data：data 由调用方 ViewModel 异步产出（shareCardData 先 null 后非 null），
-    // 若不放进 key，data 就位时本 effect 不会重跑，HTML 永远不加载，htmlReady 永远 false，
-    // 菊花就一直转（有时 data 比 selectedTemplateId 早到则碰巧正常，时序不定表现为"偶尔卡死"）。
-    LaunchedEffect(show, selectedTemplateId, previewWebView, data) {
-        if (!show || data == null || selectedTemplateId == 0L) return@LaunchedEffect
-        val wv = previewWebView ?: return@LaunchedEffect
-        val tpl = templates.firstOrNull { it.id == selectedTemplateId } ?: return@LaunchedEffect
-        htmlReady = false
-        previewFailed = false
-        contentCssHeight = null
-        contentStable = false
-        val html = ShareCardHtmlRenderer.buildPreviewHtml(tpl, data)
-        if (html.isBlank()) {
-            previewFailed = true
+    // 首图：数据与模板都就绪就立刻出图。渲染跑在面板滑入动画那几百毫秒里，
+    // 图往往在动画结束前就备好了，用户看不到菊花。
+    LaunchedEffect(show, selectedTemplateId, data, templates) {
+        if (!show || data == null || selectedTemplateId == 0L || templates.isEmpty()) {
             return@LaunchedEffect
         }
-        withContext(Dispatchers.Main) {
-            wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
+        if (currentBitmap == null && !rendering) {
+            rerender(selectedTemplateId, accentColor, schemeOverride)
         }
     }
-
-    // 量高由页面内 JS 主动上报（见 contentCssHeight 处的说明与 ShareCardHtmlRenderer.HEIGHT_BRIDGE），
-    // 不再依赖 View.measure + OnGlobalLayoutListener 去猜排版时机。
-
-
-    // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
-    // 这是"瞬间切换"的关键——不 reload、不重建 WebView、不出图。换色不改高度，无需重测。
-    LaunchedEffect(htmlReady, accentColor, schemeOverride) {
-        if (!htmlReady) return@LaunchedEffect
-        val wv = previewWebView ?: return@LaunchedEffect
-        wv.evaluateJavascript(ShareCardHtmlRenderer.accentApplyJs(accentColor, schemeOverride), null)
-    }
-
-    // 换色 / 切亮暗只需改 accentColor / schemeOverride 状态，
-    // 由上面的 LaunchedEffect 统一注入 JS，无需在各处手动触发。
 
     AppModalBottomSheet(
         show = show,
@@ -212,8 +156,10 @@ fun ShareCardPreviewSheet(
             Box {
                 MediumTonalButton(
                     onClick = { showTemplateMenu = true },
-                    onLongClick = { if (templates.isNotEmpty() && !loading) showPaletteMenu = true },
-                    enabled = templates.isNotEmpty() && !loading,
+                    onLongClick = {
+                        if (templates.isNotEmpty() && !rendering && !loading) showPaletteMenu = true
+                    },
+                    enabled = templates.isNotEmpty() && !rendering && !loading,
                     icon = Icons.Default.SwapHoriz,
                     contentDescription = "切换模板（长按换色）",
                 )
@@ -229,7 +175,10 @@ fun ShareCardPreviewSheet(
                                 dismiss()
                                 if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
                                 selectedTemplateId = tpl.id
-                                // HTML 重新加载由 LaunchedEffect(selectedTemplateId) 驱动
+                                // 切模板复位临时配色，新模板用自身默认色起手
+                                accentColor = null
+                                schemeOverride = null
+                                rerender(tpl.id, null, null)
                             },
                         )
                     }
@@ -246,6 +195,7 @@ fun ShareCardPreviewSheet(
                             if (accentColor == null) return@RoundDropdownMenuItem
                             accentColor = null
                             schemeOverride = null
+                            rerender(selectedTemplateId, null, null)
                         },
                     )
                     ACCENT_PRESETS.forEach { (label, argb) ->
@@ -257,12 +207,14 @@ fun ShareCardPreviewSheet(
                                 dismiss()
                                 if (accentColor == argb) return@RoundDropdownMenuItem
                                 accentColor = argb
+                                rerender(selectedTemplateId, argb, schemeOverride)
                             },
                         )
                     }
                     RoundDropdownMenuItem(
                         text = "自定义…",
-                        isSelected = accentColor != null && ACCENT_PRESETS.none { it.second == accentColor },
+                        isSelected = accentColor != null &&
+                            ACCENT_PRESETS.none { it.second == accentColor },
                         onClick = {
                             dismiss()
                             showColorPicker = true
@@ -282,119 +234,74 @@ fun ShareCardPreviewSheet(
                 onClick = {
                     val next = effectiveDark != true
                     schemeOverride = next
+                    rerender(selectedTemplateId, accentColor, next)
                 },
-                enabled = accentColor != null && !loading,
+                enabled = accentColor != null && !rendering && !loading,
                 selected = schemeOverride != null,
                 icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                 contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
             )
         },
     ) {
-        // 宽度由 WebView 自身钉死（useWideViewPort=false → layout viewport == 控件宽度），
-        // 高度用 measure(UNSPECIFIED) 量出的 contentCssHeight 决定：矮图矮、高图高；量不出只用小兜底、不撑屏。
-        // WebView 用 MATCH_PARENT 填满内层固定高度的 Box（不靠 WRAP_CONTENT），避免资源异步加载
-        // 后反复 requestLayout 的布局抖动（卡顿）；固定高度由 Compose 侧定死，Web 框不抖。
-        // 关键：WebView 必须在弹窗一打开就无条件挂载（不能被 data 门控），让 WebView 的创建开销
-        // 与入场动画重叠；否则会先弹一个小加载圈、等数据 IO 完才挂载 WebView 并撑高到全高，
-        // 二次撑高落在入场动画里就成了"先出来一点、卡顿、再整个弹出"。
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
-        // 测准前不显示卡片：WebView 盒高度置 0（不占空间、不可见），只在外层放进度圈占位；
-        // 测准（contentStable）后才一次性用真实高度撑开，消除“先弹一半 / 切模板变短再变长”的二段跳。
-        val measured = contentStable && (contentCssHeight ?: 0f) > 0f
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = maxPreviewHeight)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            // WebView 始终挂载（创建开销与入场动画重叠、且测量依赖实例）；测准前 height=0 不可见，避免 240 兜底高度造成的二段。
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(if (measured) contentCssHeight!!.dp else 0.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
-                // 无条件挂载（不能被 htmlReady / data 门控），否则 WebView 建不起来、HTML 无从加载。
-                AndroidView(
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                // 宽度交给控件 MATCH_PARENT / EXACTLY，viewport meta 一律忽略，
-                                // 保证 1 CSS px == 1 dp，模板按控件宽度渲染、不横滑、不留白。
-                                useWideViewPort = false
-                                loadWithOverviewMode = false
-                                setSupportZoom(false)
-                                builtInZoomControls = false
-                                blockNetworkLoads = false
-                                blockNetworkImage = false
-                                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            }
-                            // WebView 自身不滚动：高度已经等于内容高度，滚动交给外层 Compose，
-                            // 否则截图时 draw() 会带上滚动偏移，出图和预览错位。
-                            isVerticalScrollBarEnabled = false
-                            overScrollMode = WebView.OVER_SCROLL_NEVER
-                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            // 页面内 JS 通过这个桥把内容高度报回来（见 contentCssHeight 处说明）。
-                            addJavascriptInterface(heightBridge, ShareCardHtmlRenderer.HEIGHT_BRIDGE)
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    htmlReady = true
-                                    // 量高由这里主动触发一次，且只认第一次结果（见 contentStable 处的
-                                    // 反馈环说明）。不让页面自己在 DOMContentLoaded / load 各报一次——
-                                    // 那样第二次上报会落在"外层盒已按第一次结果撑开"之后，
-                                    // 百分比定位的装饰元素按新视口重算 → 量出更大的值 → 盒子再撑大…
-                                    // 就是"一会儿多出一大截背景、一会儿又是对的"的随机跳动来源。
-                                    view?.evaluateJavascript(ShareCardHtmlRenderer.MEASURE_JS, null)
-                                }
-                            }
-
-
-                            // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
-                            setOnLongClickListener {
-                                saveRequested = true
-                                true
-                            }
-                            previewWebView = this
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    onRelease = {
-                        it.removeJavascriptInterface(ShareCardHtmlRenderer.HEIGHT_BRIDGE)
-                        it.stopLoading()
-                        it.destroy()
-                        previewWebView = null
-                    },
-                )
-                // 测准前（!measured）占位：仅放进度圈 / 失败提示，固定 240 高，不渲染卡片，
-                // 避免 240 兜底高度造成的“先弹一半 / 切模板变短再变长”二段。测准后此块不显示，WebView 盒接管。
-                if (!measured) {
+        val bmp = currentBitmap
+        Box(Modifier.fillMaxWidth()) {
+            when {
+                bmp != null -> {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxPreviewHeight)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "分享卡片",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    enabled = !rendering && !saving,
+                                    onClick = {},
+                                    onLongClick = {
+                                        scope.launch {
+                                            saving = true
+                                            try {
+                                                saveToGallery(context, bmp)
+                                            } finally {
+                                                saving = false
+                                            }
+                                        }
+                                    },
+                                ),
+                            contentScale = ContentScale.FillWidth,
+                        )
+                    }
+                }
+                else -> {
                     Box(
                         Modifier
                             .fillMaxWidth()
                             .height(240.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (previewFailed) {
-                            AppText("预览失败")
-                        } else if (data == null && !loading) {
-                            AppText("生成失败")
-                        } else {
-                            CircularProgressIndicator()
+                        when {
+                            renderFailed -> AppText("预览失败")
+                            data == null && !loading -> AppText("生成失败")
+                            else -> CircularProgressIndicator()
                         }
                     }
                 }
             }
+            // 重渲期间只在顶部走一条细进度条，旧图继续显示，不清空、不闪菊花
+            if (rendering && bmp != null) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter),
+                )
+            }
         }
     }
-
 
     ColorPickerSheet(
         show = showColorPicker,
@@ -404,43 +311,10 @@ fun ShareCardPreviewSheet(
             showColorPicker = false
             if (accentColor != picked) {
                 accentColor = picked
+                rerender(selectedTemplateId, picked, schemeOverride)
             }
         },
     )
-
-    // 长按保存：直接把预览 WebView 画到 Bitmap。
-    // 不再走离屏渲染——那条路要重建 WebView、重跑一遍 HTML、还得猜什么时候渲染完（所以以前会
-    // 永久转圈），而且 viewport 和预览不同，出图和预览必然不一致。
-    // 现在 WebView 高度已经等于内容高度、也不滚动，draw() 出来就是完整卡片，逐像素等于预览。
-    // try/finally 保证 saving 一定复位（协程被取消时也不会留下卡死的菊花）。
-    LaunchedEffect(saveRequested) {
-        if (!saveRequested) return@LaunchedEffect
-        // 注意：saveRequested 必须等到保存结束（finally）再复位，不能在开头复位。
-        // 否则 LaunchedEffect 的 key 在 effect 刚开始就变回 false，Compose 会取消协程；
-        // saveToGallery 里的 withContext(Dispatchers.IO) 是首个挂起点，协程在这里被取消，
-        // 文件其实已写完（所以"保存成功"），但 withContext 之后的成功 toast 永远执行不到。
-        if (data == null) {
-            saveRequested = false
-            return@LaunchedEffect
-        }
-        saving = true
-        try {
-            val wv = previewWebView
-            val w = wv?.width ?: 0
-            val h = wv?.height ?: 0
-            if (wv == null || w <= 0 || h <= 0) {
-                context.toastOnUi("保存失败：预览未就绪")
-                return@LaunchedEffect
-            }
-            // draw() 必须在主线程；LaunchedEffect 本身就跑在主线程，无需切换
-            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            wv.draw(Canvas(bitmap))
-            saveToGallery(context, bitmap)
-        } finally {
-            saving = false
-            saveRequested = false
-        }
-    }
 }
 
 @Composable
@@ -480,26 +354,3 @@ private suspend fun saveToGallery(context: android.content.Context, bitmap: Bitm
     }
     context.toastOnUi(if (error == null) "已保存到相册" else "保存失败$error")
 }
-
-/**
- * 页面内 JS → Kotlin 的内容高度回调桥（预览面板与模板管理页预览共用）。
- *
- * 注册名见 [ShareCardHtmlRenderer.HEIGHT_BRIDGE]，上报脚本由
- * `ShareCardHtmlRenderer.injectPreviewHead` 注入。参数是 CSS px，控件设了
- * `useWideViewPort=false`，layout viewport 宽度 == 控件宽度(dp)，故 1 CSS px == 1 dp。
- *
- * `@JavascriptInterface` 方法跑在 WebView 的 JS Binder 线程，必须 post 回主线程再写 Compose 状态。
- * 同一份 HTML 会被上报多次（DOMContentLoaded + load），[onHeight] 幂等，以最后一次为准。
- */
-internal class ShareCardHeightBridge(private val onHeightDp: (Int) -> Unit) {
-
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    @JavascriptInterface
-    fun onHeight(cssPx: Int) {
-        if (cssPx <= 0) return
-        mainHandler.post { onHeightDp(cssPx) }
-    }
-}
-
-

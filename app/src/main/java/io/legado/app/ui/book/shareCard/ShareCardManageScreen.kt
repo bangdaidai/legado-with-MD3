@@ -1,11 +1,5 @@
 package io.legado.app.ui.book.shareCard
 
-import android.view.ViewGroup
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,11 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.help.book.ShareCardHtmlRenderer
 import io.legado.app.ui.about.MarkdownSheet
 import io.legado.app.ui.theme.LegadoTheme
@@ -63,7 +57,6 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
-import io.legado.app.ui.widget.shareCard.ShareCardHeightBridge
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -252,25 +245,103 @@ fun ShareCardManageScreen(
         onDismissRequest = { onIntent(ShareCardManageIntent.DismissHelp) },
     )
 
-    // 预览模板 Sheet（实时 WebView，与分享卡片预览面板同一套方案）
+    // 预览模板 Sheet（离屏出图，与分享卡片预览面板同一套方案）
     state.previewTemplate?.let { template ->
-        // 注意：这里不能用 remember(template.id)。template.id 变化时 remember 会重算并把
-        // previewWebView 复位成 null，但 AndroidView 的 factory 不会因 template.id 变化重建，
-        // 于是 previewWebView 永远拿不到新实例、LaunchedEffect 里 previewWebView?:return 永久返回，
-        // 切换模板后就会一直转圈。改用无 key 的 remember，切模板时复用同一个 WebView 重新 loadData。
-        var previewWebView by remember { mutableStateOf<WebView?>(null) }
+        var previewBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
         var renderFailed by remember { mutableStateOf(false) }
-        // 内容真实高度(dp)，由页面内 JS 通过 ShareCardHtmlRenderer.HEIGHT_BRIDGE 上报。
-        // 只认每次加载的第一次上报——避免"盒子撑开→视口变高→重排量更大→再撑开"的反馈环。
-        // 详细原理见 ShareCardPreviewSheet.kt 中 contentCssHeight / heightBridge 的说明。
-        var contentHeightDp by remember { mutableStateOf<Float?>(null) }
-        var contentStable by remember { mutableStateOf(false) }
-        val heightBridge = remember {
-            ShareCardHeightBridge { cssPx ->
-                if (!contentStable) {
-                    contentHeightDp = cssPx.toFloat()
-                    contentStable = true
+        LaunchedEffect(template.id) {
+            previewBitmap = null
+            renderFailed = false
+            val bmp = ShareCardHtmlRenderer.renderCustom(context, template.htmlContent, PreviewVariables)
+            if (bmp != null) {
+                previewBitmap = bmp
+            } else {
+                renderFailed = true
+            }
+        }
+        AppModalBottomSheet(
+            show = true,
+            onDismissRequest = { onIntent(ShareCardManageIntent.DismissPreview) },
+            title = "预览：${template.name.ifBlank { "未命名" }}",
+        ) {
+            val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+            val bmp = previewBitmap
+            when {
+                bmp != null -> {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxPreviewHeight)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "模板预览",
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                        )
+                    }
                 }
+                else -> {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (renderFailed) {
+                            AppText("渲染失败")
+                        } else {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+        }
+        AppModalBottomSheet(
+            show = true,
+            onDismissRequest = { onIntent(ShareCardManageIntent.DismissPreview) },
+            title = "预览：${template.name.ifBlank { "未命名" }}",
+        ) {
+            val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+            val bmp = previewBitmap
+            when {
+                bmp != null -> {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxPreviewHeight)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "模板预览",
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                        )
+                    }
+                }
+                else -> {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (renderFailed) {
+                            AppText("渲染失败")
+                        } else {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+
             }
         }
 
