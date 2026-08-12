@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.data.entities.ShareCardData
@@ -87,9 +88,10 @@ fun ShareCardPreviewSheet(
     var htmlReady by remember { mutableStateOf(false) }
     // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
     var previewFailed by remember { mutableStateOf(false) }
-    // 由 JS 量出的 WebView 内容真实高度(dp)。WebView 用固定高度而非 WRAP_CONTENT，
-    // 否则 onPageFinished 后图片/字体等异步资源继续加载会反复 requestLayout 引发布局抖动（卡顿）。
-    var contentHeightDp by remember { mutableStateOf<Float?>(null) }
+    // 由 JS 量出的 WebView 内容真实高度(CSS px)。WebView 用 MATCH_PARENT 填满内层固定高度的 Box，
+    // 固定高度由量出的真实值决定（矮图矮、高图高），量不出只用小兜底、不撑屏。
+    // 不在 onPageFinished 里立即量：那时图片/字体未加载，量到的是偏小的初始值且不再更新。
+    var contentCssHeight by remember { mutableStateOf<Float?>(null) }
     // 长按保存：置位后由下面的 LaunchedEffect 直接截当前预览 WebView
     var saveRequested by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -100,7 +102,7 @@ fun ShareCardPreviewSheet(
             schemeOverride = null
             htmlReady = false
             previewFailed = false
-            contentHeightDp = null
+            contentCssHeight = null
             saveRequested = false
             saving = false
             val loaded = withContext(Dispatchers.IO) {
@@ -154,9 +156,21 @@ fun ShareCardPreviewSheet(
         }
     }
 
+    // 量真实内容高度：等 htmlReady 翻转 + delay 等图片/字体撑稳后再量，否则量到初始小值且不再更新。
+    // 矮图量到矮、高图量到高；量不出(null/0)不兜底整屏，仅用小框，避免矮图被撑出大段背景。
+    LaunchedEffect(htmlReady, accentColor, schemeOverride, previewWebView) {
+        val wv = previewWebView ?: return@LaunchedEffect
+        if (!htmlReady) return@LaunchedEffect
+        delay(120)
+        wv.evaluateJavascript("document.body.scrollHeight") { raw ->
+            val px = raw?.trim('"')?.toFloatOrNull()
+            contentCssHeight = if (px != null && px > 0f) px else null
+        }
+    }
+
     // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
     // 这是"瞬间切换"的关键——不 reload、不重建 WebView、不出图。
-    // 高度不需要在这里量：WebView 是 WRAP_CONTENT，排版一变它自己 requestLayout。
+    // 换色后内容高度理论不变（只改色），但为稳妥仍会在上面 effect 里重新量一次。
     LaunchedEffect(htmlReady, accentColor, schemeOverride) {
         if (!htmlReady) return@LaunchedEffect
         val wv = previewWebView ?: return@LaunchedEffect
@@ -253,11 +267,20 @@ fun ShareCardPreviewSheet(
         },
     ) {
         // 宽度由 WebView 自身钉死（useWideViewPort=false → layout viewport == 控件宽度），
-        // 高度用 JS 量出的 contentHeightDp 固定（矮图矮、高图交给外层 verticalScroll 滚动）。
+        // 高度用 JS 量出的 contentCssHeight 决定：矮图矮、高图高；量不出只用小兜底、不撑屏。
+        // WebView 用 MATCH_PARENT 填满内层固定高度的 Box（不靠 WRAP_CONTENT），避免资源异步加载
+        // 后反复 requestLayout 的布局抖动（卡顿）；固定高度由 Compose 侧定死，Web 框不抖。
         // 关键：WebView 必须在弹窗一打开就无条件挂载（不能被 data 门控），让 WebView 的创建开销
         // 与入场动画重叠；否则会先弹一个小加载圈、等数据 IO 完才挂载 WebView 并撑高到全高，
         // 二次撑高落在入场动画里就成了"先出来一点、卡顿、再整个弹出"。
+        val density = LocalDensity.current.density
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+        // 内容高(dp)：量出用真实值；量不出用小兜底(240dp)，绝不兜底整屏（否则矮图被撑出大段背景）。
+        val contentDp = if (contentCssHeight != null && contentCssHeight!! > 0f) {
+            (contentCssHeight!! / density).dp
+        } else {
+            240.dp
+        }
         Box(
             Modifier
                 .fillMaxWidth()
@@ -266,7 +289,8 @@ fun ShareCardPreviewSheet(
         ) {
             Box(
                 Modifier
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .height(contentDp),
                 contentAlignment = Alignment.Center,
             ) {
                 // 实时 WebView 预览：HTML 只加载一次，换色靠 JS 注入原地重绘。
@@ -276,7 +300,7 @@ fun ShareCardPreviewSheet(
                         WebView(ctx).apply {
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
                             )
                             settings.apply {
                                 javaScriptEnabled = true
@@ -299,16 +323,8 @@ fun ShareCardPreviewSheet(
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     htmlReady = true
-                                    // 量出内容真实高度并固定 WebView 高度，避免 WRAP_CONTENT 反复重测抖动
-                                    view?.evaluateJavascript(
-                                        "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)",
-                                    ) { raw ->
-                                        val px = raw?.trim('"')?.toFloatOrNull()
-                                        if (px != null) {
-                                            val density = view.context.resources.displayMetrics.density
-                                            contentHeightDp = px / density
-                                        }
-                                    }
+                                    // 真实高度由独立 LaunchedEffect 在 delay 等图片撑稳后量，
+                                    // 不在这里立即量（那时资源未加载，量到偏小值且不再更新）。
                                 }
                             }
                             // 长按直接截这个 WebView 存相册——和预览同一个实例，逐像素一致
@@ -320,8 +336,7 @@ fun ShareCardPreviewSheet(
                         }
                     },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height((contentHeightDp ?: 240f).dp),
+                        .fillMaxWidth(),
                     onRelease = {
                         it.stopLoading()
                         it.destroy()
