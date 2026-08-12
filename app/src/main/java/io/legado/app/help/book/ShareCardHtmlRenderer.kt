@@ -29,14 +29,11 @@ object ShareCardHtmlRenderer {
     private const val ACCENT_STYLE_ID = "__bpAccentVars__"
 
     /**
-     * 默认主色：内置粉色模板的设计主色（约 #fbc4d6）。
-     * 未选色时注入这套 --bp-*，保证所有模板（含管理页预览，它根本不调用 accentApplyJs）
-     * 在「默认态」也有完整配色，不依赖 CSS 的 var() 兜底。
-     * 部分 WebView 对 `rgba(var(--bp-accent-rgb, 251,200,216), 0.45)` 这类「带逗号 fallback
-     * 嵌套在 rgba() 里」的写法解析失败，会让整条 background 声明失效、卡片背景变透明；
-     * 直接注入变量可彻底绕开它。
+     * 匹配 `</head>`，用于把 accent 占位 style 插到模板自身 `<style>` **之后**——
+     * 这样「默认态（占位空）」不会覆盖模板自带的 `:root{}` 默认值（=模板原配色），
+     * 而「切色态」注入的变量因在模板 style 之后、优先级更高，可正确覆盖。
      */
-    private const val DEFAULT_ACCENT = 0xFFFBC4D6.toInt()
+    private val HEAD_CLOSE_REGEX = Regex("</head>", RegexOption.IGNORE_CASE)
 
 
     /** 主色 HSL 明度 < 0.55 时走暗方案。供预览 UI 判断亮/暗切换按钮当前朝向。 */
@@ -200,33 +197,43 @@ object ShareCardHtmlRenderer {
      */
     private fun injectPreviewHead(html: String): String {
         if (html.isBlank()) return ""
-        // 默认就注入一份主色变量（DEFAULT_ACCENT），让所有模板在「未选色」时也有完整 --bp-*
-        // 配色，不依赖 CSS 的 var() 兜底（部分 WebView 对 rgba(var(--x, a,b,c), d) 这类带逗号
-        // fallback 的写法解析失败，会导致整条 background 声明失效、卡片背景变透明）。
-        // 选色时由 accentApplyJs 用同一套变量覆盖这里。
-        val defaultAccentVars = buildAccentStyle(DEFAULT_ACCENT).cssVars
-        val head =
+        // 占位 style 放在 </head> 之前（即模板自身 <style> 之后）：
+        // - 默认态：#__bpAccentVars__ 为空，模板自带 :root{} 默认值生效（=模板原配色），
+        //   且 background 里 `rgba(var(--bp-accent-rgb), α)` 因 --bp-accent-rgb 有定义而正常解析，
+        //   不再整条失效变透明；
+        // - 切色态：accentApplyJs 改写 #__bpAccentVars__ 内容，它在模板 style 之后、优先级更高，
+        //   可正确覆盖模板默认值。
+        // 默认态「不注入」任何 --bp-*，绝不强制统一成某个预设色——尊重模板自带配色。
+        val placeholder =
             """<style>html,body{overflow-x:hidden;}</style>""" +
-                """<style id="$ACCENT_STYLE_ID">$defaultAccentVars</style>"""
-        return if (HEAD_TAG_REGEX.containsMatchIn(html))
-            HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$head\n")
-        else "$head\n$html"
+                """<style id="$ACCENT_STYLE_ID"></style>"""
+        return when {
+            HEAD_CLOSE_REGEX.containsMatchIn(html) ->
+                HEAD_CLOSE_REGEX.replaceFirst(html, "$placeholder\n</head>")
+            HEAD_TAG_REGEX.containsMatchIn(html) ->
+                HEAD_TAG_REGEX.replaceFirst(html, "<head>\n$placeholder\n")
+            else ->
+                "$placeholder\n$html"
+        }
     }
 
     /**
      * 生成一段 JS：把 [ACCENT_STYLE_ID] 这个 style 的内容换成新的变量块，并同步 `bp-dark` class。
      * 页面原地重绘，无需 reload —— 这是「换色瞬间生效」的关键。
-     * @param accent null 表示「默认（模板自带）」：注入 [DEFAULT_ACCENT] 派生变量，回到初始配色，
-     *               而不是清空（清空会让 var() fallback 在某些 WebView 失效、背景透明）。
+     * @param accent null 表示「默认（模板自带）」：清空占位，让模板自己的 `:root{}` 默认值生效，
+     *               回到模板初始配色（不强制套用任何预设色）。
      */
     fun accentApplyJs(@ColorInt accent: Int?, forceDark: Boolean? = null): String {
-        // accent == null → 用默认主色派生，保证「默认态」也有完整 --bp-*；
-        // 否则才套用用户选的主色 + 强制亮暗。
-        val effectiveAccent = accent ?: DEFAULT_ACCENT
-        val effectiveForceDark = if (accent == null) null else forceDark
-        val style = buildAccentStyle(effectiveAccent, effectiveForceDark)
-        val css = jsEscape(style.cssVars)
-        val dark = style.isDark
+        val css: String
+        val dark: Boolean
+        if (accent == null) {
+            css = ""
+            dark = false
+        } else {
+            val style = buildAccentStyle(accent, forceDark)
+            css = jsEscape(style.cssVars)
+            dark = style.isDark
+        }
         return "(function(){var s=document.getElementById('$ACCENT_STYLE_ID');" +
             "if(!s){s=document.createElement('style');s.id='$ACCENT_STYLE_ID';document.head.appendChild(s);}" +
             "s.textContent='$css';" +
