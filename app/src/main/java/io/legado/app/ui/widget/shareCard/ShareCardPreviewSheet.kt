@@ -341,6 +341,7 @@ fun ShareCardPreviewSheet(
                                     val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
                                         private var lastH = -1
                                         override fun onGlobalLayout() {
+                                            val self = this
                                             val width = v.width
                                             if (width <= 0) return
                                             v.measure(
@@ -359,7 +360,7 @@ fun ShareCardPreviewSheet(
                                                     val density = v.resources.displayMetrics.density
                                                     // 先移除监听，再提交高度：否则下面设高度会触发新的 onGlobalLayout，
                                                     // 若取整差 1px 又会取消本 token 重排，造成反复抖动。
-                                                    v.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+                                                    v.viewTreeObserver.removeOnGlobalLayoutListener(self)
                                                     contentCssHeight = h.toFloat() / density
                                                     contentStable = true
                                                 }
