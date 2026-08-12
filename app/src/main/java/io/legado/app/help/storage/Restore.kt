@@ -30,6 +30,7 @@ import io.legado.app.data.entities.RssStar
 import io.legado.app.data.entities.RuleSub
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.data.entities.Server
+import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.entities.TagGroupRule
 import io.legado.app.data.entities.BookTag
 import io.legado.app.data.entities.BookTagGroup
@@ -384,6 +385,16 @@ object Restore : KoinComponent {
                 }
             }?.onFailure {
                 AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it)
+            }
+        }
+        if (BackupConfig.dbIsNotIgnored("shareCardTemplate")) {
+            fileToListT<ShareCardTemplate>(path, "shareCardTemplate.json")?.let {
+                it.forEach { template ->
+                    try {
+                        appDb.shareCardTemplateDao.insert(template)
+                    } catch (_: SQLiteConstraintException) {
+                    }
+                }
             }
         }
         File(path, DirectLinkUpload.ruleFileName).takeIf {

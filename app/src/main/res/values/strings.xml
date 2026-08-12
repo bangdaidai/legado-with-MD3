@@ -844,6 +844,7 @@
     <string name="chapter_rule">Chapter Regex</string>
     <string name="volume_rule">Volume Regex</string>
     <string name="highlight_rule_config">Highlight Rules</string>
+    <string name="share_card_template">Share Card Templates</string>
     <string name="new_rule">New Rule</string>
     <string name="edit_rule">Edit Rule</string>
     <string name="rule_info">Rule Info</string>

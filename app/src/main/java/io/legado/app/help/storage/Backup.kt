@@ -96,6 +96,7 @@ object Backup {
             ReadBookConfig.shareConfigFileName,
             ThemeConfigStore.configFileName,
             BookCover.configFileName,
+            "shareCardTemplate.json",
             "config.xml"
         )
     }
@@ -283,6 +284,9 @@ object Backup {
                         .writeText(it)
                 }
             }
+        }
+        if (BackupConfig.dbIsNotIgnored("shareCardTemplate", true)) {
+            writeListToJson(appDb.shareCardTemplateDao.getAll(), "shareCardTemplate.json", backupPath)
         }
         currentCoroutineContext().ensureActive()
         if (!BackupConfig.backupIgnoreReadConfig) {
