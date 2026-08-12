@@ -2,6 +2,7 @@ package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -88,7 +89,7 @@ fun ShareCardPreviewSheet(
     var htmlReady by remember { mutableStateOf(false) }
     // 模板缺失 / HTML 渲染为空时置位，避免菊花无限转
     var previewFailed by remember { mutableStateOf(false) }
-    // 由 JS 量出的 WebView 内容真实高度(CSS px)。WebView 用 MATCH_PARENT 填满内层固定高度的 Box，
+    // 由 measure 量出的 WebView 内容真实高度(原始 px)。WebView 用 MATCH_PARENT 填满内层固定高度的 Box，
     // 固定高度由量出的真实值决定（矮图矮、高图高），量不出只用小兜底、不撑屏。
     // 不在 onPageFinished 里立即量：那时图片/字体未加载，量到的是偏小的初始值且不再更新。
     var contentCssHeight by remember { mutableStateOf<Float?>(null) }
@@ -156,16 +157,21 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    // 量真实内容高度：等 htmlReady 翻转 + delay 等图片/字体撑稳后再量，否则量到初始小值且不再更新。
-    // 矮图量到矮、高图量到高；量不出(null/0)不兜底整屏，仅用小框，避免矮图被撑出大段背景。
+    // 量真实内容高度：用 View.measure() 量出 WebView 完整内容高度，替代 evaluateJavascript，
+    // 免去 JS 执行时机/字符串解析的不确定性。等 htmlReady 翻转 + delay 等图片/字体撑稳后再量。
+    // 矮图量到矮、高图量到高；量不出(width 未就绪/为0)不兜底整屏，仅用小框，避免矮图被撑出大段背景。
+    // measure 出来的 measuredHeight 是原始 px，和下方 contentCssHeight/density 转 dp 的口径一致。
     LaunchedEffect(htmlReady, accentColor, schemeOverride, previewWebView) {
         val wv = previewWebView ?: return@LaunchedEffect
         if (!htmlReady) return@LaunchedEffect
+        if (wv.width <= 0) return@LaunchedEffect
         delay(120)
-        wv.evaluateJavascript("document.body.scrollHeight") { raw ->
-            val px = raw?.trim('"')?.toFloatOrNull()
-            contentCssHeight = if (px != null && px > 0f) px else null
-        }
+        wv.measure(
+            View.MeasureSpec.makeMeasureSpec(wv.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        val px = wv.measuredHeight
+        contentCssHeight = if (px > 0) px.toFloat() else null
     }
 
     // 换色 / 切亮暗 / 页面就绪：只注入一段 JS 改 style 标签内容，页面原地重绘。
@@ -267,7 +273,7 @@ fun ShareCardPreviewSheet(
         },
     ) {
         // 宽度由 WebView 自身钉死（useWideViewPort=false → layout viewport == 控件宽度），
-        // 高度用 JS 量出的 contentCssHeight 决定：矮图矮、高图高；量不出只用小兜底、不撑屏。
+        // 高度用 measure 量出的 contentCssHeight 决定：矮图矮、高图高；量不出只用小兜底、不撑屏。
         // WebView 用 MATCH_PARENT 填满内层固定高度的 Box（不靠 WRAP_CONTENT），避免资源异步加载
         // 后反复 requestLayout 的布局抖动（卡顿）；固定高度由 Compose 侧定死，Web 框不抖。
         // 关键：WebView 必须在弹窗一打开就无条件挂载（不能被 data 门控），让 WebView 的创建开销
