@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.shareCard
 
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -258,7 +259,7 @@ fun ShareCardManageScreen(
         var previewWebView by remember { mutableStateOf<WebView?>(null) }
         var htmlReady by remember { mutableStateOf(false) }
         var renderFailed by remember { mutableStateOf(false) }
-        // 由 JS 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
+        // 由 View.measure(UNSPECIFIED) 量出的 WebView 内容真实高度(dp)。固定高度避免 WRAP_CONTENT 反复重测抖动（卡顿）。
         var contentHeightDp by remember { mutableStateOf<Float?>(null) }
         LaunchedEffect(template.id, previewWebView) {
             val wv = previewWebView ?: return@LaunchedEffect
@@ -280,7 +281,7 @@ fun ShareCardManageScreen(
             title = "预览：${template.name.ifBlank { "未命名" }}",
         ) {
             // 宽度交给 WebView 自身钉死（useWideViewPort=false → 1 CSS px == 1 dp），
-            // 高度用 JS 量出的 contentHeightDp 固定（矮图矮、高图交给外层 verticalScroll 滚动）。
+            // 高度用 measure(UNSPECIFIED) 量出的 contentHeightDp 固定（矮图矮、高图交给外层 verticalScroll 滚动）。
             // 配置与书籍页分享预览（ShareCardPreviewSheet）一致，避免误缩放成一小块、也避免固定高度矮图留白。
             val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
             Box(
@@ -322,15 +323,27 @@ fun ShareCardManageScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         htmlReady = true
-                                        // 量出内容真实高度并固定 WebView 高度，避免 WRAP_CONTENT 反复重测抖动
-                                        view?.evaluateJavascript(
-                                            "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)",
-                                        ) { raw ->
-                                            val px = raw?.trim('"')?.toFloatOrNull()
-                                            if (px != null) {
-                                                val density = view.context.resources.displayMetrics.density
-                                                contentHeightDp = px / density
+                                        // UNSPECIFIED 不限高量内容高度：能缩能长，修复长模板切短模板高度不缩、残留背景。
+                                        fun remeasure(v: WebView) {
+                                            val width = v.width
+                                            if (width <= 0) return
+                                            v.measure(
+                                                View.MeasureSpec.makeMeasureSpec(
+                                                    width,
+                                                    View.MeasureSpec.EXACTLY,
+                                                ),
+                                                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                                            )
+                                            val h = v.measuredHeight
+                                            if (h > 0) {
+                                                val density = v.resources.displayMetrics.density
+                                                contentHeightDp = h.toFloat() / density
                                             }
+                                        }
+                                        view?.let { v ->
+                                            remeasure(v)
+                                            // 图片异步加载后高度可能变化，延时再量一次兜底。
+                                            v.postDelayed({ remeasure(v) }, 200L)
                                         }
                                     }
                                 }
