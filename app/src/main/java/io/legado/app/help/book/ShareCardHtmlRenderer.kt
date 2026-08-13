@@ -43,6 +43,19 @@ import kotlin.math.roundToInt
 object ShareCardHtmlRenderer {
 
     private const val RENDER_TIMEOUT_MS = 4000L
+
+    /**
+     * 出图逻辑宽度（CSS px）。钉死不跟屏幕宽走，保证同一模板在任何机型上排版一致
+     * （原来按 `屏幕宽 * 0.92` 算，1080p 得 361 CSS px、720p 只有 331 CSS px，排版会飘）。
+     */
+    private const val CSS_WIDTH = 375
+
+    /** 目标「物理像素 / CSS px」。4 表示 375 CSS px 出 1500px 宽的图，够朋友圈级别清晰度。 */
+    private const val TARGET_PX_PER_CSS = 4f
+
+    /** 超采样后的像素上限（约 48MB ARGB_8888）。超了按比例降倍数，防超长图 OOM。 */
+    private const val MAX_OUTPUT_PIXELS = 12_000_000f
+
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
     private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
 
@@ -219,7 +232,8 @@ object ShareCardHtmlRenderer {
         accent: Int? = null,
         forceDark: Boolean? = null,
     ): Bitmap? {
-        val coverUri = coverUrlToDataUri(data.coverUrl)
+        // 封面解码（decodeFile + JPEG.compress）挪到 IO，避免首次未命中缓存时阻塞主线程。
+        val coverUri = withContext(Dispatchers.IO) { coverUrlToDataUri(data.coverUrl) }
         val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
         val body = replaceVariables(template.htmlContent, resolved)
         if (body.isBlank()) return null
@@ -242,8 +256,9 @@ object ShareCardHtmlRenderer {
         renderMutex.withLock {
             withContext(Dispatchers.Main.immediate) {
                 val density = context.resources.displayMetrics.density
-                val widthPx = (context.resources.displayMetrics.widthPixels * 0.92f)
-                    .toInt().coerceAtLeast(360)
+                // layout 宽度按 density 反推，让 CSS viewport 正好是 CSS_WIDTH
+                // （useWideViewPort=false 下 1 CSS px == 1 dp），排版结果与屏幕宽度无关。
+                val widthPx = (CSS_WIDTH * density).roundToInt().coerceAtLeast(360)
                 val wv = ensureWebView(context)
 
                 // 用 JS 桥拿"渲染完成 + 内容高度 + 裁图区域"，不再靠固定 delay 猜。超时兜底防永久挂起。
@@ -294,9 +309,22 @@ object ShareCardHtmlRenderer {
                     (capHCss * density).roundToInt().coerceIn(1, fullHeightPx - outY)
                 } else fullHeightPx
 
+                // 超采样：把 layout 出的图（1 CSS px == density 物理像素）放大到 TARGET_PX_PER_CSS，
+                // canvas.scale 让 WebView.draw 直接以更高分辨率光栅化文字/矢量，成图更清晰。
+                // 超长图会触顶 MAX_OUTPUT_PIXELS，按比例回退倍数防 OOM。
+                var superScale = TARGET_PX_PER_CSS / density
+                val finalWf = outW * superScale
+                val finalHf = outH * superScale
+                if (finalWf * finalHf > MAX_OUTPUT_PIXELS) {
+                    superScale *= kotlin.math.sqrt(MAX_OUTPUT_PIXELS / (finalWf * finalHf))
+                }
+                val finalW = (outW * superScale).roundToInt().coerceAtLeast(1)
+                val finalH = (outH * superScale).roundToInt().coerceAtLeast(1)
+
                 try {
-                    Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888).also { bmp ->
+                    Bitmap.createBitmap(finalW, finalH, Bitmap.Config.ARGB_8888).also { bmp ->
                         val canvas = Canvas(bmp)
+                        canvas.scale(superScale, superScale)
                         // 平移画布把裁图区域挪到原点，一次 draw 直接出裁好的图，不建大中间位图。
                         if (outX != 0 || outY != 0) canvas.translate(-outX.toFloat(), -outY.toFloat())
                         wv.draw(canvas)
@@ -357,21 +385,33 @@ object ShareCardHtmlRenderer {
      * 但总高度被钉在卡片实际高度上，不会再被 `body.scrollHeight`（min-height:100vh、
      * 绝对定位装饰溢出）带出上下一大截空背景。
      *
-     * 没标 `[data-bp-capture]` 的用户模板 fallback 到 `body.scrollHeight` 整幅不裁。
+     * 没标 `[data-bp-capture]` 的用户模板 fallback 到「内容并集高度」整幅不裁。
+     *
+     * 内容高度一律走**可见后代 rect 的包围盒下边 + body 下内/外边距**，不用 `scrollHeight`：
+     * 后者会把 `min-height`、0 尺寸的绝对定位空节点、浮动装饰的溢出统统算进去，
+     * 尾巴上拖出一大截空背景（这套 bug 反复修过好几轮）。
      */
     private fun heightReportScript(): String =
         "<style>html,body{height:auto!important;min-height:0!important;overflow:visible!important;}</style>" +
             "<script>(function(){" +
+            "function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}" +
             "window.__bpMeasure__=function(){" +
             "var b=window.$HEIGHT_BRIDGE;if(!b)return;" +
             "var d=document.body;if(!d)return;" +
-            "var doc=Math.ceil(d.scrollHeight);" +
+            "var bs=window.getComputedStyle(d);" +
+            // body 自身 rect 已含 padding；只有子元素溢出到 padding 之外时才需要把下内边距补回来
+            "var bodyBottom=d.getBoundingClientRect().bottom,kid=-Infinity;" +
+            "var all=d.querySelectorAll('*');" +
+            "for(var i=0;i<all.length;i++){var kr=all[i].getBoundingClientRect();" +
+            "if(kr.width>0&&kr.height>0&&kr.bottom>kid)kid=kr.bottom;}" +
+            "var doc=Math.max(1,Math.ceil(" +
+            "Math.max(bodyBottom,kid+num(bs.paddingBottom))+num(bs.marginBottom)));" +
             "var t=document.querySelector('[data-bp-capture]');" +
             "if(t){var r=t.getBoundingClientRect();" +
             "var w=Math.ceil(document.documentElement.clientWidth||d.clientWidth);" +
             "var h=Math.ceil(r.top+r.bottom);" +
             "if(w>0&&h>0){b.onMeasured(Math.max(doc,h),0,0,w,h);return;}}" +
-            "if(doc>0)b.onMeasured(doc,0,0,0,0);" +
+            "b.onMeasured(doc,0,0,0,0);" +
             "};" +
             "})();</script>"
 
