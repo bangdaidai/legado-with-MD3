@@ -231,6 +231,13 @@ object ShareCardHtmlRenderer {
     private val renderMutex = Mutex()
 
     /**
+     * 已 loadData 进 warmWebView 的「不含 accent 的 body」哈希。用于判断换色/日夜时能否走
+     * [recolorInPlace] 增量路径（复用同一 WebView，不重新解析 HTML）。null 表示当前内容未知，
+     * 下次渲染必走完整 [loadAndRender]。
+     */
+    private var currentContentKey: Int? = null
+
+    /**
      * 出图结果缓存：key 由「最终 HTML + 主题色 + 明暗」决定，对相同输入稳定命中，
      * 开门即秒出、不碰 WebView。有界 LRU（最多 6 张），防止长列表切模板撑爆内存。
      */
@@ -255,17 +262,6 @@ object ShareCardHtmlRenderer {
         previewCache[key] = bmp
     }
 
-    /** 主动预热缓存（不返回 Bitmap），开门时命中即零等待。主线程调用。 */
-    suspend fun prewarm(
-        context: Context,
-        template: ShareCardTemplate,
-        data: ShareCardData,
-        accent: Int? = null,
-        forceDark: Boolean? = null,
-    ) {
-        render(context, template, data, accent, forceDark)
-    }
-
     /**
      * 渲染真实数据的分享卡片为 Bitmap。
      * @param accent 用户临时选择的主题色（ARGB）。非 null 时注入一整套 `--bp-*` HSL 变量。
@@ -282,10 +278,25 @@ object ShareCardHtmlRenderer {
         val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
         val body = replaceVariables(template.htmlContent, resolved)
         if (body.isBlank()) return null
-        val finalHtml = injectRenderHead(body, accent, forceDark)
-        val key = cacheKeyOf(finalHtml, accent, forceDark)
+        // contentKey 只看「模板正文 + 数据」，不含 accent/明暗——同内容换色时保持一致，
+        // 从而走 recolorInPlace 增量路径（不重新 loadData）。
+        val contentKey = body.hashCode()
+        val key = cacheKeyOf(injectRenderHead(body, accent, forceDark), accent, forceDark)
         getCached(key)?.let { return it }
-        val bmp = renderHtmlToBitmap(context, finalHtml)
+
+        val sameContent = warmWebView != null &&
+            currentContentKey != null && currentContentKey == contentKey
+        val bmp = if (sameContent) {
+            recolorInPlace(accent, forceDark)
+        } else {
+            currentContentKey = null
+            loadAndRender(context, injectRenderHead(body, null, null), accent, forceDark)
+        }
+        if (bmp == null) {
+            currentContentKey = null
+        } else if (!sameContent) {
+            currentContentKey = contentKey
+        }
         if (bmp != null) putCached(key, bmp)
         return bmp
     }
@@ -302,75 +313,125 @@ object ShareCardHtmlRenderer {
         val finalHtml = injectRenderHead(body, null, null)
         val key = cacheKeyOf(finalHtml, null, null)
         getCached(key)?.let { return it }
-        val bmp = renderHtmlToBitmap(context, finalHtml)
+        val bmp = loadAndRender(context, finalHtml, null, null)
+        // 模板管理页内容与预览 body 不同，打破 currentContentKey，避免预览误走增量路径
+        currentContentKey = null
         if (bmp != null) putCached(key, bmp)
         return bmp
     }
 
-    private suspend fun renderHtmlToBitmap(context: Context, html: String): Bitmap? =
-        renderMutex.withLock {
-            withContext(Dispatchers.Main.immediate) {
-                val density = context.resources.displayMetrics.density
-                val widthPx = (context.resources.displayMetrics.widthPixels * 0.92f)
-                    .toInt().coerceAtLeast(360)
-                val wv = ensureWebView(context)
+    /**
+     * 完整渲染：loadData 加载（不含 accent 的）HTML，onPageFinished 后再注入 accent 变量，
+     * 再量高 + draw。accent 不烘进 HTML，统一走 [accentApplyJs] 注入，
+     * 以便后续同内容换色/日夜走 [recolorInPlace] 增量路径（不重新 loadData，主线程占用小、不卡）。
+     */
+    private suspend fun loadAndRender(
+        context: Context,
+        htmlNoAccent: String,
+        accent: Int?,
+        forceDark: Boolean?,
+    ): Bitmap? = renderMutex.withLock {
+        withContext(Dispatchers.Main.immediate) {
+            val density = context.resources.displayMetrics.density
+            val widthPx = (context.resources.displayMetrics.widthPixels * 0.92f)
+                .toInt().coerceAtLeast(360)
+            val wv = ensureWebView(context)
 
-                // 用 JS 桥拿"渲染完成 + 内容高度 + 裁图区域"，不再靠固定 delay 猜。超时兜底防永久挂起。
-                val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
-                    suspendCancellableCoroutine { cont ->
-                        measureSink.callback = { docH, x, y, w, h ->
-                            if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
-                        }
-                        wv.webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                view?.evaluateJavascript(MEASURE_JS, null)
+            // 用 JS 桥拿"渲染完成 + 内容高度 + 裁图区域"，不再靠固定 delay 猜。超时兜底防永久挂起。
+            val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                suspendCancellableCoroutine { cont ->
+                    measureSink.callback = { docH, x, y, w, h ->
+                        if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
+                    }
+                    wv.webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            // accent 烘进页面（若有），再量高；accent=null 时模板自带配色已正确
+                            if (accent != null) {
+                                view?.evaluateJavascript(accentApplyJs(accent, forceDark), null)
                             }
+                            view?.evaluateJavascript(MEASURE_JS, null)
                         }
-                        // 先按目标宽度 layout，让 loadDataWithBaseURL 的 layout viewport 宽度就绪。
-                        wv.measure(
-                            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                        )
-                        wv.layout(0, 0, widthPx, wv.measuredHeight.coerceAtLeast(1))
-                        wv.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
                     }
-                }
-                measureSink.callback = null
-                if (m == null || m[0] <= 0) return@withContext null
-
-                val docHCss = m[0]
-                val capHCss = m[4]
-                // 满幅输出：横向取满宽，纵向取「文档高度 与 捕获节点底边」的较大值，
-                // 保证 body 彩底 + 卡片 + 底部留白全部进图，且不会被绝对定位装饰带出多余空白。
-                val fullHeightPx = (maxOf(docHCss, capHCss) * density)
-                    .roundToInt().coerceAtLeast(1)
-                wv.measure(
-                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(fullHeightPx, View.MeasureSpec.EXACTLY),
-                )
-                wv.layout(0, 0, widthPx, fullHeightPx)
-
-                // 阶段二：WebView 改了高度后必须等它真正重排 + 画出一帧再 draw，
-                // 否则截到的是旧高度 / 半渲染帧（底部缺一节、只有背景）。
-                withTimeoutOrNull(RENDER_TIMEOUT_MS) {
-                    suspendCancellableCoroutine { cont ->
-                        measureSink.drawReadyCallback = { if (cont.isActive) cont.resume(Unit) }
-                        wv.evaluateJavascript(DRAW_READY_JS, null)
-                    }
-                }
-                measureSink.drawReadyCallback = null
-
-                try {
-                    Bitmap.createBitmap(widthPx, fullHeightPx, Bitmap.Config.ARGB_8888).also { bmp ->
-                        val canvas = Canvas(bmp)
-                        wv.invalidate()
-                        wv.draw(canvas)
-                    }
-                } catch (_: Throwable) {
-                    null
+                    // 先按目标宽度 layout，让 loadDataWithBaseURL 的 layout viewport 宽度就绪。
+                    wv.measure(
+                        View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    )
+                    wv.layout(0, 0, widthPx, wv.measuredHeight.coerceAtLeast(1))
+                    wv.loadDataWithBaseURL("about:blank", htmlNoAccent, "text/html", "UTF-8", null)
                 }
             }
+            measureSink.callback = null
+            if (m == null || m[0] <= 0) return@withContext null
+            captureAfterMeasure(wv, density, widthPx, m)
         }
+    }
+
+    /**
+     * 增量换色/日夜：复用已 loadData 的同内容 WebView，只 [accentApplyJs] 改 CSS 变量，
+     * 不重新解析 HTML、不重新全量布局，主线程只做"改样式 + 重绘 + draw"，丝滑不卡。
+     * 前置：调用方（[render]）已确认 warmWebView 当前内容正是同一 body（currentContentKey 匹配）。
+     */
+    private suspend fun recolorInPlace(accent: Int?, forceDark: Boolean?): Bitmap? = renderMutex.withLock {
+        withContext(Dispatchers.Main.immediate) {
+            val wv = warmWebView ?: return@withContext null
+            wv.evaluateJavascript(accentApplyJs(accent, forceDark), null)
+            val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                suspendCancellableCoroutine { cont ->
+                    measureSink.callback = { docH, x, y, w, h ->
+                        if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
+                    }
+                    wv.evaluateJavascript(MEASURE_JS, null)
+                }
+            }
+            measureSink.callback = null
+            if (m == null || m[0] <= 0) return@withContext null
+            val density = wv.context.resources.displayMetrics.density
+            val widthPx = (wv.context.resources.displayMetrics.widthPixels * 0.92f)
+                .toInt().coerceAtLeast(360)
+            captureAfterMeasure(wv, density, widthPx, m)
+        }
+    }
+
+    /** 阶段二（改高度后等重排 + 画出一帧）并截图。loadAndRender / recolorInPlace 共用。 */
+    private suspend fun captureAfterMeasure(
+        wv: WebView,
+        density: Float,
+        widthPx: Int,
+        m: IntArray,
+    ): Bitmap? {
+        val docHCss = m[0]
+        val capHCss = m[4]
+        // 满幅输出：横向取满宽，纵向取「文档高度 与 捕获节点底边」的较大值，
+        // 保证 body 彩底 + 卡片 + 底部留白全部进图，且不会被绝对定位装饰带出多余空白。
+        val fullHeightPx = (maxOf(docHCss, capHCss) * density)
+            .roundToInt().coerceAtLeast(1)
+        wv.measure(
+            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(fullHeightPx, View.MeasureSpec.EXACTLY),
+        )
+        wv.layout(0, 0, widthPx, fullHeightPx)
+
+        // 阶段二：WebView 改了高度后必须等它真正重排 + 画出一帧再 draw，
+        // 否则截到的是旧高度 / 半渲染帧（底部缺一节、只有背景）。
+        withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+            suspendCancellableCoroutine { cont ->
+                measureSink.drawReadyCallback = { if (cont.isActive) cont.resume(Unit) }
+                wv.evaluateJavascript(DRAW_READY_JS, null)
+            }
+        }
+        measureSink.drawReadyCallback = null
+
+        return try {
+            Bitmap.createBitmap(widthPx, fullHeightPx, Bitmap.Config.ARGB_8888).also { bmp ->
+                val canvas = Canvas(bmp)
+                wv.invalidate()
+                wv.draw(canvas)
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
 
 
     /** 主线程创建/复用常驻 WebView。 */

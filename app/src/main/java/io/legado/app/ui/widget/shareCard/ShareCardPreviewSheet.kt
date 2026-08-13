@@ -95,11 +95,12 @@ fun ShareCardPreviewSheet(
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
     // 当前图对应的模板 id：开门时据此判断是否需要重渲，避免显示错模板的图。
     var currentTemplateId by remember { mutableLongStateOf(0L) }
+    // 当前图对应的数据：与 currentTemplateId 一起标记「当前图是否就是这份 data + 所选模板」，
+    // 命中则不再重渲，避免开门/切模板时的重复渲染与跳变。
+    var currentData by remember { mutableStateOf<ShareCardData?>(null) }
     var rendering by remember { mutableStateOf(false) }
     var renderFailed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    // 已为哪份数据预渲染过默认模板，避免 data 不变时反复预渲染。
-    var prerenderedData by remember { mutableStateOf<ShareCardData?>(null) }
 
     fun rerender(templateId: Long, accent: Int?, forceDark: Boolean?) {
         val d = data ?: return
@@ -110,6 +111,7 @@ fun ShareCardPreviewSheet(
             if (bmp != null) {
                 currentBitmap = bmp
                 currentTemplateId = templateId
+                currentData = d
                 renderFailed = false
             } else if (currentBitmap == null) {
                 renderFailed = true
@@ -118,67 +120,47 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    LaunchedEffect(show) {
-        if (show) {
-            // 面板一弹出就预热常驻 WebView（主线程），渲染时不再现建，图更快出来
-            ShareCardHtmlRenderer.warm(context)
-            accentColor = null
-            schemeOverride = null
-            // 注意：不再清空 currentBitmap——data 就绪时已在后台预渲染好默认模板，
-            // 开门直接命中，零转圈。仅复位失败/保存这类瞬时态。
-            renderFailed = false
-            saving = false
-            val loaded = withContext(Dispatchers.IO) {
-                ShareCardGenerator.getOrCreateBuiltinTemplates()
-                shareCardRepository.getAll()
-            }
-            templates = loaded
+    // 进页面就把模板列表加载好（IO），开门时零等待、不再因模板查询而空白。
+    LaunchedEffect(Unit) {
+        templates = withContext(Dispatchers.IO) {
+            ShareCardGenerator.getOrCreateBuiltinTemplates()
+            shareCardRepository.getAll()
+        }
+    }
+
+    // 开门：预热 WebView + 复位瞬时态；selectedTemplateId 为 0（未选）时按已保存/默认解析一次。
+    // 模板已在进页面时加载，此处不再做 IO，开局即渲染用户模板、不跳变。
+    LaunchedEffect(show, templates) {
+        if (!show || templates.isEmpty()) return@LaunchedEffect
+        ShareCardHtmlRenderer.warm(context)
+        accentColor = null
+        schemeOverride = null
+        renderFailed = false
+        saving = false
+        if (selectedTemplateId == 0L) {
             val saved = withContext(Dispatchers.IO) {
                 AppConfigStore.getLong(ShareCardGenerator.SELECTED_TEMPLATE_KEY) ?: 0L
             }
-            selectedTemplateId = loaded.firstOrNull { it.id == saved }?.id
-                ?: loaded.firstOrNull {
+            selectedTemplateId = templates.firstOrNull { it.id == saved }?.id
+                ?: templates.firstOrNull {
                     it.isBuiltin && it.groupName == ShareCardTemplate.DEFAULT_GROUP_BOOK
                 }?.id
-                ?: loaded.firstOrNull()?.id
+                ?: templates.firstOrNull()?.id
                 ?: 0L
         }
     }
 
-    // 后台预渲染：data 一就绪就（趁弹窗还没开）把默认模板渲进缓存并先存好图，
-    // 开门即命中，根本不出现转圈——对齐 Reeden「开门前图已备好」的丝滑观感。
-    LaunchedEffect(data) {
-        val d = data ?: return@LaunchedEffect
-        if (prerenderedData == d) return@LaunchedEffect
-        val loaded = withContext(Dispatchers.IO) {
-            ShareCardGenerator.getOrCreateBuiltinTemplates()
-            shareCardRepository.getAll()
-        }
-        val defaultId = loaded.firstOrNull {
-            it.isBuiltin && it.groupName == ShareCardTemplate.DEFAULT_GROUP_BOOK
-        }?.id ?: loaded.firstOrNull()?.id ?: 0L
-        val tpl = loaded.firstOrNull { it.id == defaultId } ?: return@LaunchedEffect
-        ShareCardHtmlRenderer.prewarm(context, tpl, d, null, null)
-        // 若此时还没开门（currentBitmap 仍是这份默认模板的图），直接存好，开门零等待
-        if (currentTemplateId == 0L || currentTemplateId == defaultId) {
-            val bmp = ShareCardHtmlRenderer.render(context, tpl, d, null, null)
-            if (bmp != null) {
-                currentBitmap = bmp
-                currentTemplateId = defaultId
-                prerenderedData = d
-            }
-        }
-    }
-
-    // 开门/切模板：仅在「还没图」或「当前图不是所选模板」时才重渲。
-    // 默认模板已被预渲染命中，开门即显示旧图、不转圈；切到未渲染过的模板才走顶部细进度条。
+    // 渲染协调：开门/切模板时，仅当「当前图不是这份 data 的所选模板」才重渲。
+    // 命中（currentData==data 且 currentTemplateId==selectedTemplateId）则不动，避免重复渲染与跳变；
+    // 旧图在重渲期间保留、顶部走细进度条，不闪空白。
     LaunchedEffect(show, selectedTemplateId, data, templates) {
         if (!show || data == null || selectedTemplateId == 0L || templates.isEmpty()) {
             return@LaunchedEffect
         }
-        if (currentBitmap == null || currentTemplateId != selectedTemplateId) {
-            if (!rendering) rerender(selectedTemplateId, accentColor, schemeOverride)
+        if (currentData == data && currentTemplateId == selectedTemplateId) {
+            return@LaunchedEffect
         }
+        if (!rendering) rerender(selectedTemplateId, accentColor, schemeOverride)
     }
 
     AppModalBottomSheet(
@@ -208,10 +190,10 @@ fun ShareCardPreviewSheet(
                                 dismiss()
                                 if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
                                 selectedTemplateId = tpl.id
-                                // 切模板复位临时配色，新模板用自身默认色起手
+                                // 切模板复位临时配色，新模板用自身默认色起手；
+                                // 实际渲染交由下方协调 effect（selectedTemplateId 变化触发）
                                 accentColor = null
                                 schemeOverride = null
-                                rerender(tpl.id, null, null)
                             },
                         )
                     }
@@ -320,9 +302,8 @@ fun ShareCardPreviewSheet(
                         when {
                             renderFailed -> AppText("预览失败")
                             data == null && !loading -> AppText("生成失败")
-                            // 渲染中但还没有旧图可留：保持与弹窗同色空白占位，不转圈，
-                            // 预渲染命中后下一帧直接出图，观感是「开门即图」而非「先转圈」。
-                            else -> if (!rendering && !loading) CircularProgressIndicator()
+                            // 没有旧图可留时（首渲/数据生成中）显示转圈，比空白诚实
+                            else -> CircularProgressIndicator()
                         }
                     }
                 }

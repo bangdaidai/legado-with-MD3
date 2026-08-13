@@ -262,11 +262,10 @@ class ReadBookViewModel(
      */
     private fun generateShareCardFromMarking() {
         val marking = markingState.value.editing ?: return
+        // 先生成数据，再开门：开门时 shareCardData 已就绪，预览页开门即渲染、不再空白/转圈。
         _uiState.update {
             it.copy(
-                showShareCard = true,
                 shareCardLoading = true,
-                shareCardData = null,
                 activeSheet = null,
             )
         }
@@ -279,6 +278,7 @@ class ReadBookViewModel(
             val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
             _uiState.update {
                 it.copy(
+                    showShareCard = true,
                     shareCardData = data,
                     shareCardLoading = false,
                 )
