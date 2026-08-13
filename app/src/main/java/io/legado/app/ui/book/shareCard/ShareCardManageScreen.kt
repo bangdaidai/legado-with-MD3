@@ -58,7 +58,6 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 
@@ -251,9 +250,10 @@ fun ShareCardManageScreen(
         var previewBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
         var renderFailed by remember { mutableStateOf(false) }
         LaunchedEffect(template.id) {
+            // WebView 已预热（与分享面板共用常驻实例），直接出图，无需等动画或现建
+            ShareCardHtmlRenderer.warm(context)
             previewBitmap = null
             renderFailed = false
-            delay(120) // 先让预览 Sheet 进场动画播完，避免离屏渲染卡主线程打断动画
             val bmp = ShareCardHtmlRenderer.renderCustom(context, template.htmlContent, PreviewVariables)
             if (bmp != null) {
                 previewBitmap = bmp

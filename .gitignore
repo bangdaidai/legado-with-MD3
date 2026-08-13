@@ -24,3 +24,6 @@ __pycache__/
 build_log.txt
 /.comate
 /_bak_inspect
+commit_msg_tmp.txt
+ver_a.txt
+ver_b.txt

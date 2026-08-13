@@ -215,12 +215,56 @@ object ShareCardHtmlRenderer {
 
     private val measureSink = MeasureSink()
 
+    /**
+     * 预热常驻 WebView（必须在主线程调用）。分享面板/预览刚弹出时就建好，
+     * 真正渲染时不再现建，少一次 ~80ms 的卡顿，图更快出来（对齐 Reeden 的常驻预热思路）。
+     */
+    fun warm(context: Context) {
+        ensureWebView(context)
+    }
+
 
     /** 常驻热 WebView：只建一次反复用，省掉每次建 WebView 的开销。仅主线程访问。 */
     private var warmWebView: WebView? = null
 
     /** 串行化渲染，避免快速切模板/换色时并发用同一个 WebView。 */
     private val renderMutex = Mutex()
+
+    /**
+     * 出图结果缓存：key 由「最终 HTML + 主题色 + 明暗」决定，对相同输入稳定命中，
+     * 开门即秒出、不碰 WebView。有界 LRU（最多 6 张），防止长列表切模板撑爆内存。
+     */
+    private val previewCache = LinkedHashMap<Int, Bitmap>(6, 0.75f, true)
+    private val cacheLock = Any()
+
+    private fun cacheKeyOf(html: String, accent: Int?, forceDark: Boolean?): Int {
+        var h = html.hashCode()
+        h = 31 * h + (accent ?: 0)
+        h = 31 * h + (forceDark?.hashCode() ?: 0)
+        return h
+    }
+
+    private fun getCached(key: Int): Bitmap? = synchronized(cacheLock) {
+        previewCache[key]?.takeIf { !it.isRecycled }
+    }
+
+    private fun putCached(key: Int, bmp: Bitmap) = synchronized(cacheLock) {
+        while (previewCache.size >= 6) {
+            previewCache.keys.firstOrNull()?.let { previewCache.remove(it) }
+        }
+        previewCache[key] = bmp
+    }
+
+    /** 主动预热缓存（不返回 Bitmap），开门时命中即零等待。主线程调用。 */
+    suspend fun prewarm(
+        context: Context,
+        template: ShareCardTemplate,
+        data: ShareCardData,
+        accent: Int? = null,
+        forceDark: Boolean? = null,
+    ) {
+        render(context, template, data, accent, forceDark)
+    }
 
     /**
      * 渲染真实数据的分享卡片为 Bitmap。
@@ -238,7 +282,12 @@ object ShareCardHtmlRenderer {
         val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
         val body = replaceVariables(template.htmlContent, resolved)
         if (body.isBlank()) return null
-        return renderHtmlToBitmap(context, injectRenderHead(body, accent, forceDark))
+        val finalHtml = injectRenderHead(body, accent, forceDark)
+        val key = cacheKeyOf(finalHtml, accent, forceDark)
+        getCached(key)?.let { return it }
+        val bmp = renderHtmlToBitmap(context, finalHtml)
+        if (bmp != null) putCached(key, bmp)
+        return bmp
     }
 
     /** 渲染裸 HTML + 变量表为 Bitmap（供模板管理页用示例数据预览未保存的模板）。 */
@@ -250,7 +299,12 @@ object ShareCardHtmlRenderer {
         val merged = buildVariableMap(ShareCardData()) + variables
         val body = VARIABLE_REGEX.replace(htmlContent) { merged[it.groupValues[1]] ?: it.value }
         if (body.isBlank()) return null
-        return renderHtmlToBitmap(context, injectRenderHead(body, null, null))
+        val finalHtml = injectRenderHead(body, null, null)
+        val key = cacheKeyOf(finalHtml, null, null)
+        getCached(key)?.let { return it }
+        val bmp = renderHtmlToBitmap(context, finalHtml)
+        if (bmp != null) putCached(key, bmp)
+        return bmp
     }
 
     private suspend fun renderHtmlToBitmap(context: Context, html: String): Bitmap? =
@@ -395,7 +449,7 @@ object ShareCardHtmlRenderer {
             " for(var i=0;i<imgs.length;i++){ if(!imgs[i].complete||imgs[i].naturalWidth===0) pending++; }" +
             " var done=false;" +
             " var proceed=function(){ if(done)return; done=true;" +
-            "   var afterFonts=function(){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); };" +
+            "   var afterFonts=function(){ requestAnimationFrame(cb); };" +
             "   if(document.fonts&&document.fonts.ready&&document.fonts.ready.then){ document.fonts.ready.then(afterFonts,afterFonts); } else { afterFonts(); } };" +
             " if(pending===0){ proceed(); return; }" +
             " var to=setTimeout(proceed,1500);" +
@@ -417,7 +471,7 @@ object ShareCardHtmlRenderer {
      */
     private const val DRAW_READY_JS =
         "(function(){var b=window.$HEIGHT_BRIDGE;if(!b)return;" +
-            "requestAnimationFrame(function(){requestAnimationFrame(function(){b.onReadyToDraw();});});})();"
+            "requestAnimationFrame(function(){b.onReadyToDraw();});})();"
 
 
 

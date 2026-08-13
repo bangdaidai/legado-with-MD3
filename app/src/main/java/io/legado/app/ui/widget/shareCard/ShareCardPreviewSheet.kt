@@ -49,7 +49,6 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -94,9 +93,13 @@ fun ShareCardPreviewSheet(
 
     // 当前显示的卡片图。重渲期间保持旧图不动，新图就绪才替换。
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    // 当前图对应的模板 id：开门时据此判断是否需要重渲，避免显示错模板的图。
+    var currentTemplateId by remember { mutableLongStateOf(0L) }
     var rendering by remember { mutableStateOf(false) }
     var renderFailed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // 已为哪份数据预渲染过默认模板，避免 data 不变时反复预渲染。
+    var prerenderedData by remember { mutableStateOf<ShareCardData?>(null) }
 
     fun rerender(templateId: Long, accent: Int?, forceDark: Boolean?) {
         val d = data ?: return
@@ -106,6 +109,7 @@ fun ShareCardPreviewSheet(
             val bmp = ShareCardHtmlRenderer.render(context, tpl, d, accent, forceDark)
             if (bmp != null) {
                 currentBitmap = bmp
+                currentTemplateId = templateId
                 renderFailed = false
             } else if (currentBitmap == null) {
                 renderFailed = true
@@ -116,9 +120,12 @@ fun ShareCardPreviewSheet(
 
     LaunchedEffect(show) {
         if (show) {
+            // 面板一弹出就预热常驻 WebView（主线程），渲染时不再现建，图更快出来
+            ShareCardHtmlRenderer.warm(context)
             accentColor = null
             schemeOverride = null
-            currentBitmap = null
+            // 注意：不再清空 currentBitmap——data 就绪时已在后台预渲染好默认模板，
+            // 开门直接命中，零转圈。仅复位失败/保存这类瞬时态。
             renderFailed = false
             saving = false
             val loaded = withContext(Dispatchers.IO) {
@@ -138,19 +145,39 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    // 首图：数据与模板都就绪就立刻出图。渲染跑在面板滑入动画那几百毫秒里，
-    // 图往往在动画结束前就备好了，用户看不到菊花。
+    // 后台预渲染：data 一就绪就（趁弹窗还没开）把默认模板渲进缓存并先存好图，
+    // 开门即命中，根本不出现转圈——对齐 Reeden「开门前图已备好」的丝滑观感。
+    LaunchedEffect(data) {
+        val d = data ?: return@LaunchedEffect
+        if (prerenderedData == d) return@LaunchedEffect
+        val loaded = withContext(Dispatchers.IO) {
+            ShareCardGenerator.getOrCreateBuiltinTemplates()
+            shareCardRepository.getAll()
+        }
+        val defaultId = loaded.firstOrNull {
+            it.isBuiltin && it.groupName == ShareCardTemplate.DEFAULT_GROUP_BOOK
+        }?.id ?: loaded.firstOrNull()?.id ?: 0L
+        val tpl = loaded.firstOrNull { it.id == defaultId } ?: return@LaunchedEffect
+        ShareCardHtmlRenderer.prewarm(context, tpl, d, null, null)
+        // 若此时还没开门（currentBitmap 仍是这份默认模板的图），直接存好，开门零等待
+        if (currentTemplateId == 0L || currentTemplateId == defaultId) {
+            val bmp = ShareCardHtmlRenderer.render(context, tpl, d, null, null)
+            if (bmp != null) {
+                currentBitmap = bmp
+                currentTemplateId = defaultId
+                prerenderedData = d
+            }
+        }
+    }
+
+    // 开门/切模板：仅在「还没图」或「当前图不是所选模板」时才重渲。
+    // 默认模板已被预渲染命中，开门即显示旧图、不转圈；切到未渲染过的模板才走顶部细进度条。
     LaunchedEffect(show, selectedTemplateId, data, templates) {
         if (!show || data == null || selectedTemplateId == 0L || templates.isEmpty()) {
             return@LaunchedEffect
         }
-        if (currentBitmap == null && !rendering) {
-            // 让底部弹窗的进场动画先走完，再开始主线程上的离屏渲染，
-            // 否则渲染卡住主线程会把“先出一点、再全出”的跳变放大。
-            scope.launch {
-                delay(120)
-                rerender(selectedTemplateId, accentColor, schemeOverride)
-            }
+        if (currentBitmap == null || currentTemplateId != selectedTemplateId) {
+            if (!rendering) rerender(selectedTemplateId, accentColor, schemeOverride)
         }
     }
 
@@ -293,7 +320,9 @@ fun ShareCardPreviewSheet(
                         when {
                             renderFailed -> AppText("预览失败")
                             data == null && !loading -> AppText("生成失败")
-                            else -> CircularProgressIndicator()
+                            // 渲染中但还没有旧图可留：保持与弹窗同色空白占位，不转圈，
+                            // 预渲染命中后下一帧直接出图，观感是「开门即图」而非「先转圈」。
+                            else -> if (!rendering && !loading) CircularProgressIndicator()
                         }
                     }
                 }
