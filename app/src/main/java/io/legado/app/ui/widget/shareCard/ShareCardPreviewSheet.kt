@@ -49,6 +49,7 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -144,7 +145,12 @@ fun ShareCardPreviewSheet(
             return@LaunchedEffect
         }
         if (currentBitmap == null && !rendering) {
-            rerender(selectedTemplateId, accentColor, schemeOverride)
+            // 让底部弹窗的进场动画先走完，再开始主线程上的离屏渲染，
+            // 否则渲染卡住主线程会把“先出一点、再全出”的跳变放大。
+            scope.launch {
+                delay(120)
+                rerender(selectedTemplateId, accentColor, schemeOverride)
+            }
         }
     }
 
@@ -281,7 +287,7 @@ fun ShareCardPreviewSheet(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .height(240.dp),
+                            .height(maxPreviewHeight),
                         contentAlignment = Alignment.Center,
                     ) {
                         when {

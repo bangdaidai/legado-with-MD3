@@ -16,6 +16,8 @@ import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
+import io.legado.app.help.http.newCallResponseBody
+import io.legado.app.help.http.okHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -36,8 +38,9 @@ import kotlin.math.roundToInt
  * 没有 Sheet 重排。慢的老问题（每次重建 WebView + 固定 delay 猜完成 + 封面每次重解码）
  * 三处都拔掉了：
  * - 复用一个常驻热 WebView（[warmWebView]），只建一次
- * - 用页面内 JS 桥（[HEIGHT_BRIDGE] / [MEASURE_JS]）拿"渲染完成 + 内容高度"信号，
- *   渲染一完成立刻出图，不再干等固定 delay
+ * - 用页面内 JS 桥（[HEIGHT_BRIDGE] / [MEASURE_JS] / [DRAW_READY_JS]）分两阶段拿信号：
+ *   先等「封面解码 + 字体就绪 + 布局落定」量出真实高度，再把 WebView 撑到满高、等它
+ *   真正重绘一帧后才 draw，因此不会只截到背景、底部缺一节或高度忽高忽低
  * - 封面 data URI 缓存（[coverCache]），同一本书只解码一次
  */
 object ShareCardHtmlRenderer {
@@ -190,11 +193,23 @@ object ShareCardHtmlRenderer {
         private val handler = Handler(Looper.getMainLooper())
         @Volatile
         var callback: ((docHeight: Int, x: Int, y: Int, w: Int, h: Int) -> Unit)? = null
+        @Volatile
+        var drawReadyCallback: (() -> Unit)? = null
 
         @JavascriptInterface
         fun onMeasured(docHeight: Int, x: Int, y: Int, w: Int, h: Int) {
             if (docHeight <= 0) return
             handler.post { callback?.invoke(docHeight, x, y, w, h) }
+        }
+
+        /**
+         * 第二阶段信号：WebView 改完高度并重排、画出一帧后由页面内 JS 调它。
+         * Kotlin 侧收到后才真正 [WebView.draw]，避免截到旧高度 / 半渲染帧
+         * （底部缺一节、只有背景）。
+         */
+        @JavascriptInterface
+        fun onReadyToDraw() {
+            handler.post { drawReadyCallback?.invoke() }
         }
     }
 
@@ -270,12 +285,10 @@ object ShareCardHtmlRenderer {
                 if (m == null || m[0] <= 0) return@withContext null
 
                 val docHCss = m[0]
-                val capXCss = m[1]
-                val capYCss = m[2]
-                val capWCss = m[3]
                 val capHCss = m[4]
-                // 先把 WebView layout 到整份文档高度，保证裁图区域内的内容全部已排版渲染。
-                val fullHeightPx = ((maxOf(docHCss, capYCss + capHCss)) * density)
+                // 满幅输出：横向取满宽，纵向取「文档高度 与 捕获节点底边」的较大值，
+                // 保证 body 彩底 + 卡片 + 底部留白全部进图，且不会被绝对定位装饰带出多余空白。
+                val fullHeightPx = (maxOf(docHCss, capHCss) * density)
                     .roundToInt().coerceAtLeast(1)
                 wv.measure(
                     View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
@@ -283,22 +296,20 @@ object ShareCardHtmlRenderer {
                 )
                 wv.layout(0, 0, widthPx, fullHeightPx)
 
-                // capWCss<=0 表示模板没标 [data-bp-capture]，退回"整幅不裁"。
-                val cropped = capWCss > 0 && capHCss > 0
-                val outX = if (cropped) (capXCss * density).roundToInt() else 0
-                val outY = if (cropped) (capYCss * density).roundToInt() else 0
-                val outW = if (cropped) {
-                    (capWCss * density).roundToInt().coerceIn(1, widthPx - outX)
-                } else widthPx
-                val outH = if (cropped) {
-                    (capHCss * density).roundToInt().coerceIn(1, fullHeightPx - outY)
-                } else fullHeightPx
+                // 阶段二：WebView 改了高度后必须等它真正重排 + 画出一帧再 draw，
+                // 否则截到的是旧高度 / 半渲染帧（底部缺一节、只有背景）。
+                withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                    suspendCancellableCoroutine { cont ->
+                        measureSink.drawReadyCallback = { if (cont.isActive) cont.resume(Unit) }
+                        wv.evaluateJavascript(DRAW_READY_JS, null)
+                    }
+                }
+                measureSink.drawReadyCallback = null
 
                 try {
-                    Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888).also { bmp ->
+                    Bitmap.createBitmap(widthPx, fullHeightPx, Bitmap.Config.ARGB_8888).also { bmp ->
                         val canvas = Canvas(bmp)
-                        // 平移画布把裁图区域挪到原点，一次 draw 直接出裁好的图，不建大中间位图。
-                        if (outX != 0 || outY != 0) canvas.translate(-outX.toFloat(), -outY.toFloat())
+                        wv.invalidate()
                         wv.draw(canvas)
                     }
                 } catch (_: Throwable) {
@@ -351,32 +362,62 @@ object ShareCardHtmlRenderer {
      * 量高/裁图脚本：定义 `window.__bpMeasure__()`，由 Kotlin 侧在 onPageFinished 后
      * evaluateJavascript 主动调用（此时宽度已就绪）。
      *
+     * 关键修正（对照 Reeden 的 `window.Reeden.ready()`）：**不再在 onPageFinished 就量高**，
+     * 而是先等「封面图 decode 完 + 字体 ready + 双 rAF」再量。否则封面未解码 / 字体未落定
+     * 时就量高并截图，会出现「只有背景没内容」「底部缺一节」「多次生成高度不一致」。
+     *
      * 裁图区域由模板标注的 `[data-bp-capture]`（海报根节点）决定：
-     * **横向取满宽、纵向取「卡片上留白 + 卡片 + 等量下留白」**。
-     * 这样 body 上的渐变彩底和浮动装饰照样保留（它们是设计的一部分），
-     * 但总高度被钉在卡片实际高度上，不会再被 `body.scrollHeight`（min-height:100vh、
-     * 绝对定位装饰溢出）带出上下一大截空背景。
+     * **横向取满宽、纵向取「文档高度 与 捕获节点底边」的较大值**。
+     * 这样既保留 body 上的渐变彩底和浮动装饰（设计的一部分），又把总高度钉在真实内容上，
+     * 不会被 `body.scrollHeight`（min-height:100vh、绝对定位装饰溢出）带出上下一大截空背景，
+     * 也不会因为旧公式 `r.top + r.bottom` 把上留白翻倍而多出一屏背景。
      *
      * 没标 `[data-bp-capture]` 的用户模板 fallback 到 `body.scrollHeight` 整幅不裁。
      */
     private fun heightReportScript(): String =
         "<style>html,body{height:auto!important;min-height:0!important;overflow:visible!important;}</style>" +
             "<script>(function(){" +
-            "window.__bpMeasure__=function(){" +
-            "var b=window.$HEIGHT_BRIDGE;if(!b)return;" +
-            "var d=document.body;if(!d)return;" +
-            "var doc=Math.ceil(d.scrollHeight);" +
-            "var t=document.querySelector('[data-bp-capture]');" +
-            "if(t){var r=t.getBoundingClientRect();" +
-            "var w=Math.ceil(document.documentElement.clientWidth||d.clientWidth);" +
-            "var h=Math.ceil(r.top+r.bottom);" +
-            "if(w>0&&h>0){b.onMeasured(Math.max(doc,h),0,0,w,h);return;}}" +
-            "if(doc>0)b.onMeasured(doc,0,0,0,0);" +
-            "};" +
+            "var b=window.$HEIGHT_BRIDGE;" +
+            "function report(){" +
+            " if(!b)return;" +
+            " var d=document.body; if(!d)return;" +
+            " var doc=Math.ceil(d.scrollHeight);" +
+            " var t=document.querySelector('[data-bp-capture]');" +
+            " var w=Math.ceil(document.documentElement.clientWidth||d.clientWidth);" +
+            " var h=doc;" +
+            " if(t){var r=t.getBoundingClientRect(); h=Math.ceil(Math.max(doc,r.bottom));}" +
+            " if(w>0&&h>0){b.onMeasured(Math.max(doc,h),0,0,w,h);return;}" +
+            " if(doc>0)b.onMeasured(doc,0,0,0,0);" +
+            "}" +
+            "function whenReady(cb){" +
+            " var imgs=document.images;" +
+            " var pending=0;" +
+            " for(var i=0;i<imgs.length;i++){ if(!imgs[i].complete||imgs[i].naturalWidth===0) pending++; }" +
+            " var done=false;" +
+            " var proceed=function(){ if(done)return; done=true;" +
+            "   var afterFonts=function(){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); };" +
+            "   if(document.fonts&&document.fonts.ready&&document.fonts.ready.then){ document.fonts.ready.then(afterFonts,afterFonts); } else { afterFonts(); } };" +
+            " if(pending===0){ proceed(); return; }" +
+            " var to=setTimeout(proceed,1500);" +
+            " for(var i=0;i<imgs.length;i++){(function(img){ if(img.complete&&img.naturalWidth>0)return;" +
+            "   img.addEventListener('load',function(){ if(--pending<=0){clearTimeout(to);proceed();} });" +
+            "   img.addEventListener('error',function(){ if(--pending<=0){clearTimeout(to);proceed();} });" +
+            " })(imgs[i]); }" +
+            "}" +
+            "window.__bpMeasure__=function(){ whenReady(report); };" +
             "})();</script>"
 
     /** 由 Kotlin 侧在 onPageFinished 后 evaluateJavascript 调用，触发一次量高。 */
     private const val MEASURE_JS = "if(window.__bpMeasure__)window.__bpMeasure__();"
+
+    /**
+     * 第二阶段脚本：WebView 改完高度并重排后，由 Kotlin 侧 evaluateJavascript 调用，
+     * 等双 rAF 保证真正画出一帧，再回调 [MeasureSink.onReadyToDraw] 才执行截图。
+     * 不这样等，截到的是旧高度 / 半渲染帧（底部缺一节、只有背景）。
+     */
+    private const val DRAW_READY_JS =
+        "(function(){var b=window.$HEIGHT_BRIDGE;if(!b)return;" +
+            "requestAnimationFrame(function(){requestAnimationFrame(function(){b.onReadyToDraw();});});})();"
 
 
 
@@ -471,23 +512,58 @@ object ShareCardHtmlRenderer {
 
     fun clearCoverCache() = coverCache.clear()
 
-    private fun coverUrlToDataUri(url: String): String? {
-        if (url.isBlank() || url.startsWith("http") || url.startsWith("data:")) return url.ifBlank { null }
+    /**
+     * 封面 URL → data URI。统一走「Kotlin 侧把字节拿齐再注入」的确定路径：
+     * - `data:` 直接返回；
+     * - 本地文件（file:// 或路径）：解码后转 JPEG base64；
+     * - 网络封面（http/https）：用 App 的 OkHttp 预取字节再转 data URI，
+     *   **WebView 全程零网络**（对齐 Reeden 的 red-resource:// 直供思路），
+     *   消除「WebView 渲染时自行联网」的异步竞态——弱网/离线也稳，不会只截到背景。
+     * 同一 URL 走 [coverCache] 只取/转一次。
+     */
+    private suspend fun coverUrlToDataUri(url: String): String? {
+        if (url.isBlank()) return null
+        if (url.startsWith("data:")) return url
         coverCache[url]?.let { return it }
 
-        return try {
-            val f = if (url.startsWith("file://")) File(URI(url)) else File(url)
-            if (f.exists()) {
-                val baos = ByteArrayOutputStream()
-                BitmapFactory.decodeFile(f.absolutePath)?.let {
-                    it.compress(Bitmap.CompressFormat.JPEG, 80, baos)
-                    it.recycle()
-                    val dataUri = "data:image/jpeg;base64," +
-                        Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
-                    coverCache[url] = dataUri
-                    dataUri
-                }
-            } else null
-        } catch (_: Exception) { null }
+        val result = if (url.startsWith("http")) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val body = okHttpClient.newCallResponseBody { url(url) }
+                    val bytes = body.bytes()
+                    if (bytes.isEmpty()) null else decodeToDataUri(bytes, body.contentType()?.toString())
+                } catch (_: Exception) { null }
+            }
+        } else {
+            try {
+                val f = if (url.startsWith("file://")) File(URI(url)) else File(url)
+                if (f.exists()) {
+                    BitmapFactory.decodeFile(f.absolutePath)?.let { bmp ->
+                        val uri = bitmapToJpegDataUri(bmp)
+                        bmp.recycle()
+                        uri
+                    }
+                } else null
+            } catch (_: Exception) { null }
+        }
+        if (result != null) coverCache[url] = result
+        return result
+    }
+
+    /** 字节解码后转 JPEG base64 data URI；解码失败（SVG/动图等）按原 MIME 透传原始字节。 */
+    private fun decodeToDataUri(bytes: ByteArray, mime: String? = null): String {
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        if (bmp != null) {
+            val uri = bitmapToJpegDataUri(bmp)
+            bmp.recycle()
+            return uri
+        }
+        return "data:${mime ?: "image/*"};base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+
+    private fun bitmapToJpegDataUri(bmp: Bitmap): String {
+        val baos = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 80, baos)
+        return "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
     }
 }
