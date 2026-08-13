@@ -612,38 +612,58 @@ object ShareCardHtmlRenderer {
         return VARIABLE_REGEX.replace(html) { map[it.groupValues[1]] ?: it.value }
     }
 
+    /**
+     * 构造 `{{var}}` 替换表。
+     *
+     * **所有字符串字段一律 [escapeHtml]**：这些值大多来自书源网页抓取，抓取规则稍宽就会带进
+     * HTML 片段。未转义时 WebView 会把它们当标签解析并吞掉，例如章节名 `第一章 <上>` 会只剩
+     * `第一章`。原先只挑了 4 个长文本字段转义，其余字段同样会中招，统一转义最省心。
+     * 数字字段（toString 结果）不含特殊字符，转义等于原样。
+     */
     internal fun buildVariableMap(d: ShareCardData): Map<String, String> = mapOf(
-        "bookName" to d.bookName, "author" to d.author, "coverUrl" to d.coverUrl,
-        "intro" to escapeHtml(d.intro), "kind" to d.kind, "wordCount" to d.wordCount,
-        "originName" to d.originName, "totalChapterNum" to d.totalChapterNum.toString(),
-        "latestChapterTitle" to d.latestChapterTitle, "typeText" to d.typeText, "charset" to d.charset,
-        "readingStatusText" to d.readingStatusText, "readingProgress" to d.readingProgress,
-        "readChapters" to d.readChapters, "unreadChapters" to d.unreadChapters.toString(),
-        "readIteration" to d.readIteration.toString(), "readIterationText" to d.readIterationText,
-        "durChapterTitle" to d.durChapterTitle, "totalReadTime" to d.totalReadTime,
+        "bookName" to escapeHtml(d.bookName), "author" to escapeHtml(d.author),
+        "coverUrl" to escapeHtml(d.coverUrl),
+        "intro" to escapeHtml(d.intro), "kind" to escapeHtml(d.kind),
+        "wordCount" to escapeHtml(d.wordCount),
+        "originName" to escapeHtml(d.originName), "totalChapterNum" to d.totalChapterNum.toString(),
+        "latestChapterTitle" to escapeHtml(d.latestChapterTitle),
+        "typeText" to escapeHtml(d.typeText), "charset" to escapeHtml(d.charset),
+        "readingStatusText" to escapeHtml(d.readingStatusText),
+        "readingProgress" to escapeHtml(d.readingProgress),
+        "readChapters" to escapeHtml(d.readChapters), "unreadChapters" to d.unreadChapters.toString(),
+        "readIteration" to d.readIteration.toString(),
+        "readIterationText" to escapeHtml(d.readIterationText),
+        "durChapterTitle" to escapeHtml(d.durChapterTitle),
+        "totalReadTime" to escapeHtml(d.totalReadTime),
         "totalReadHours" to d.totalReadHours.toString(), "totalReadMinutes" to d.totalReadMinutes.toString(),
-        "readingDays" to d.readingDays.toString(), "maxDayReadTime" to d.maxDayReadTime,
-        "maxDayReadDate" to d.maxDayReadDate, "totalReadWords" to d.totalReadWords,
-        "remainingWords" to d.remainingWords, "firstReadTime" to d.firstReadTime,
-        "lastReadTime" to d.lastReadTime, "finishReadTime" to d.finishReadTime,
-        "addBookshelfTime" to d.addBookshelfTime, "lastCheckTime" to d.lastCheckTime,
-        "lastReadTimeRelative" to d.lastReadTimeRelative, "rating" to d.rating.toString(),
-        "ratingStars" to d.ratingStars, "ratingMax" to d.ratingMax.toString(),
+        "readingDays" to d.readingDays.toString(), "maxDayReadTime" to escapeHtml(d.maxDayReadTime),
+        "maxDayReadDate" to escapeHtml(d.maxDayReadDate), "totalReadWords" to escapeHtml(d.totalReadWords),
+        "remainingWords" to escapeHtml(d.remainingWords), "firstReadTime" to escapeHtml(d.firstReadTime),
+        "lastReadTime" to escapeHtml(d.lastReadTime), "finishReadTime" to escapeHtml(d.finishReadTime),
+        "addBookshelfTime" to escapeHtml(d.addBookshelfTime), "lastCheckTime" to escapeHtml(d.lastCheckTime),
+        "lastReadTimeRelative" to escapeHtml(d.lastReadTimeRelative), "rating" to d.rating.toString(),
+        "ratingStars" to escapeHtml(d.ratingStars), "ratingMax" to d.ratingMax.toString(),
         "reviewContent" to escapeHtml(d.reviewContent), "annotationCount" to d.annotationCount.toString(),
         "thoughtCount" to d.thoughtCount.toString(), "latestAnnotation" to escapeHtml(d.latestAnnotation),
         "latestAnnotationNote" to escapeHtml(d.latestAnnotationNote),
-        "latestAnnotationChapter" to d.latestAnnotationChapter, "protagonists" to d.protagonists,
-        "tags" to d.tags, "tagCount" to d.tagCount.toString(),
-        "bookSourceName" to d.bookSourceName, "bookSourceGroup" to d.bookSourceGroup,
-        "readTimeRank" to d.readTimeRank,
+        "latestAnnotationChapter" to escapeHtml(d.latestAnnotationChapter),
+        "protagonists" to escapeHtml(d.protagonists),
+        "tags" to escapeHtml(d.tags), "tagCount" to d.tagCount.toString(),
+        "bookSourceName" to escapeHtml(d.bookSourceName), "bookSourceGroup" to escapeHtml(d.bookSourceGroup),
+        "readTimeRank" to escapeHtml(d.readTimeRank),
     )
 
+    /**
+     * HTML 文本转义。单引号也要转，模板可能用 `alt='{{intro}}'` 这种单引号属性。
+     * 无需转义时直接返回原串，避免为大字符串（封面 data URI 是几百 KB base64）做无意义的整串复制。
+     */
     private fun escapeHtml(t: String): String {
         if (t.isEmpty()) return t
+        if (t.none { it == '&' || it == '<' || it == '>' || it == '"' || it == '\'' }) return t
         val sb = StringBuilder(t.length + 8)
         for (c in t) when (c) {
             '&' -> sb.append("&amp;"); '<' -> sb.append("&lt;"); '>' -> sb.append("&gt;")
-            '"' -> sb.append("&quot;"); else -> sb.append(c)
+            '"' -> sb.append("&quot;"); '\'' -> sb.append("&#39;"); else -> sb.append(c)
         }
         return sb.toString()
     }
