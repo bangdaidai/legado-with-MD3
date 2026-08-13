@@ -17,6 +17,18 @@ object ColorUtils {
         return ColorUtils.calculateLuminance(color) >= 0.5
     }
 
+    /**
+     * 将前景色 [over]（含 alpha）合成到不透明背景色 [under] 之上，返回合成后的不透明色。
+     * 状态栏透明时，实际露出的是"背景图/主题底色"与盖在其上的顶栏底色的叠加结果，
+     * 只看其中任一层都会判错图标明暗。
+     */
+    @ColorInt
+    fun compositeOnOpaque(@ColorInt over: Int, @ColorInt under: Int): Int {
+        return ColorUtils.compositeColors(over, under)
+    }
+
+
+
     fun intToString(intColor: Int): String {
         return String.format("#%06X", 0xFFFFFF and intColor)
     }

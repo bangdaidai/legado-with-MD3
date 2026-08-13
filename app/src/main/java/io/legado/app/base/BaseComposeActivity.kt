@@ -28,12 +28,15 @@ import io.legado.app.domain.gateway.AppUiConfigurationGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.domain.model.settings.diffFrom
+import io.legado.app.domain.model.settings.hasBackgroundImage
 import io.legado.app.help.config.ThemeConfigStore
 import io.legado.app.ui.book.read.eyeProtectionColorFilter
 import io.legado.app.ui.book.read.rememberEyeProtectionActive
 import io.legado.app.ui.theme.AppTheme
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
+import io.legado.app.utils.BitmapUtils
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.disableAutoFill
 import io.legado.app.utils.isNightMode
@@ -140,12 +143,37 @@ abstract class BaseComposeActivity(
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setStatusBarColorAuto(
-            themeColor(com.google.android.material.R.attr.colorSurface),
+            statusBarUnderlyingColor(),
             true
         )
 
         toggleSystemBar(appUiConfigurationGateway.currentConfiguration.appShell.showStatusBar)
     }
+
+    /**
+     * 状态栏是透明的，底下真正露出的是"背景图顶部"再叠上"顶栏底色"。
+     * 只拿主题 surface 判断会在"整体亮、顶部暗"这类背景图上把图标判成深色而看不清，
+     * 所以这里做一次 alpha 合成后再交给 [setStatusBarColorAuto] 决定图标明暗。
+     *
+     * 顶栏底色近似为 surface 按 topBarOpacity 缩放 alpha：不透明度高时合成结果由顶栏
+     * 主导（与原行为一致），透明时则回落到背景图顶部的实际颜色。
+     */
+    private fun statusBarUnderlyingColor(): Int {
+        val surface = themeColor(com.google.android.material.R.attr.colorSurface)
+        val configuration = appUiConfigurationGateway.currentConfiguration
+        val theme = configuration.theme
+        val isDark = configuration.isDarkTheme
+        val under = if (theme.hasBackgroundImage(isDark)) {
+            val path = if (isDark) theme.backgroundImageDark else theme.backgroundImageLight
+            path?.let { BitmapUtils.topStripAverageColor(it) } ?: surface
+        } else {
+            surface
+        }
+        val topBarAlpha = theme.topBarOpacity.coerceIn(0, 100) / 100f
+        val over = ColorUtils.withAlpha(surface, topBarAlpha)
+        return ColorUtils.compositeOnOpaque(over, under)
+    }
+
 
     open fun upBackgroundImage() {
         try {

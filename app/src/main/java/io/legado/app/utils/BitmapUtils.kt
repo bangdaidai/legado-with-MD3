@@ -30,6 +30,10 @@ import androidx.core.graphics.get
 @Suppress("WeakerAccess", "MemberVisibilityCanBePrivate")
 object BitmapUtils {
 
+    /** 状态栏明暗判断时，顶部采样区域占整图高度的比例 */
+    private const val TOP_STRIP_FRACTION = 0.08f
+
+
     /**
      * 从path中获取图片信息,在通过BitmapFactory.decodeFile(String path)方法将突破转成Bitmap时，
      * 遇到大一些的图片，我们经常会遇到OOM(Out Of Memory)的问题。所以用到了我们上面提到的BitmapFactory.Options这个类。
@@ -53,6 +57,33 @@ object BitmapUtils {
             op.inPreferredColorSpace = ColorSpace.get(ColorSpace.Named.SRGB)
             BitmapFactory.decodeFileDescriptor(fis.fd, null, op)
         }
+    }
+
+    /** [topStripAverageColor] 的缓存，避免每次 setupSystemBar 都重新解码 */
+    private var topStripCache: Pair<String, Int>? = null
+
+    /**
+     * 取图片顶部一条区域的平均色，用于按背景图实际明暗决定状态栏图标颜色。
+     * 按图片自身比例采样，未考虑 ContentScale.Crop 的裁切偏移，作为明暗近似判断足够。
+     */
+    fun topStripAverageColor(path: String): Int? {
+        topStripCache?.let { if (it.first == path) return it.second }
+        val bitmap = runCatching { decodeBitmap(path, 64) }.getOrNull() ?: return null
+        val rows = (bitmap.height * TOP_STRIP_FRACTION).roundToInt().coerceIn(1, bitmap.height)
+        val pixels = IntArray(bitmap.width * rows)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, rows)
+        var r = 0L
+        var g = 0L
+        var b = 0L
+        for (pixel in pixels) {
+            r += (pixel shr 16) and 0xFF
+            g += (pixel shr 8) and 0xFF
+            b += pixel and 0xFF
+        }
+        val count = pixels.size
+        val color = Color.rgb((r / count).toInt(), (g / count).toInt(), (b / count).toInt())
+        topStripCache = path to color
+        return color
     }
 
     /**
