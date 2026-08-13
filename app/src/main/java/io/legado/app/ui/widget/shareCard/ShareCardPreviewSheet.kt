@@ -227,7 +227,10 @@ fun ShareCardPreviewSheet(
                                 dismiss()
                                 if (accentColor == argb) return@RoundDropdownMenuItem
                                 accentColor = argb
-                                rerender(selectedTemplateId, argb, schemeOverride)
+                                // 选色回到「按该色明度自动判明暗」，明暗只由日夜按钮独立控制；
+                                // 不再沿用上一次方案，避免「从暗色切到新色直接是暗」的困惑。
+                                schemeOverride = null
+                                rerender(selectedTemplateId, argb, null)
                             },
                         )
                     }
@@ -332,7 +335,9 @@ fun ShareCardPreviewSheet(
             showColorPicker = false
             if (accentColor != picked) {
                 accentColor = picked
-                rerender(selectedTemplateId, picked, schemeOverride)
+                // 与预设色一致：自定义取色也回到自动明暗，明暗只由日夜按钮控制
+                schemeOverride = null
+                rerender(selectedTemplateId, picked, null)
             }
         },
     )
