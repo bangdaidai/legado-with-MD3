@@ -58,6 +58,7 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 
@@ -252,6 +253,7 @@ fun ShareCardManageScreen(
         LaunchedEffect(template.id) {
             previewBitmap = null
             renderFailed = false
+            delay(120) // 先让预览 Sheet 进场动画播完，避免离屏渲染卡主线程打断动画
             val bmp = ShareCardHtmlRenderer.renderCustom(context, template.htmlContent, PreviewVariables)
             if (bmp != null) {
                 previewBitmap = bmp
@@ -286,7 +288,7 @@ fun ShareCardManageScreen(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .height(240.dp),
+                            .height(maxPreviewHeight),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (renderFailed) {
