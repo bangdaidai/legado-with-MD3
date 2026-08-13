@@ -49,6 +49,7 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -101,11 +102,15 @@ fun ShareCardPreviewSheet(
     var rendering by remember { mutableStateOf(false) }
     var renderFailed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // 当前渲染 Job：连续切色/切日夜时取消上一个，避免旧 render 的 draw 后到、覆盖新图
+    // （表现为「切不回/卡一个颜色」）。
+    var renderJob by remember { mutableStateOf<Job?>(null) }
 
     fun rerender(templateId: Long, accent: Int?, forceDark: Boolean?) {
         val d = data ?: return
         val tpl = templates.firstOrNull { it.id == templateId } ?: return
-        scope.launch {
+        renderJob?.cancel()
+        renderJob = scope.launch {
             rendering = true
             val bmp = ShareCardHtmlRenderer.render(context, tpl, d, accent, forceDark)
             if (bmp != null) {

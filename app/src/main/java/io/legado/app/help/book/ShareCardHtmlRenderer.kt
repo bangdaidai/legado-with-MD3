@@ -195,6 +195,13 @@ object ShareCardHtmlRenderer {
         var callback: ((docHeight: Int, x: Int, y: Int, w: Int, h: Int) -> Unit)? = null
         @Volatile
         var drawReadyCallback: (() -> Unit)? = null
+        /**
+         * 每次「等重绘」的令牌。并发换色/切日夜时，先发的 [recolorInPlace] 会在 suspend 期间释放
+         * renderMutex，后发的会覆盖 [drawReadyCallback]；令牌不匹配的 [onReadyToDraw] 直接丢弃，
+         * 避免先发因回调被覆盖而永远等不到 resume、超时返回 null（表现为「切不回/卡一个颜色」）。
+         */
+        @Volatile
+        var drawToken: Long = 0
 
         @JavascriptInterface
         fun onMeasured(docHeight: Int, x: Int, y: Int, w: Int, h: Int) {
@@ -208,7 +215,8 @@ object ShareCardHtmlRenderer {
          * （底部缺一节、只有背景）。
          */
         @JavascriptInterface
-        fun onReadyToDraw() {
+        fun onReadyToDraw(token: Long) {
+            if (token != drawToken) return
             handler.post { drawReadyCallback?.invoke() }
         }
     }
@@ -431,10 +439,12 @@ object ShareCardHtmlRenderer {
 
         // 阶段二：WebView 改了高度后必须等它真正重排 + 画出一帧再 draw，
         // 否则截到的是旧高度 / 半渲染帧（底部缺一节、只有背景）。
+        // 每次用唯一令牌，并发换色/切日夜时只唤醒本次 continuation（见 [MeasureSink.drawToken]）。
+        val drawToken = ++measureSink.drawToken
         withTimeoutOrNull(RENDER_TIMEOUT_MS) {
             suspendCancellableCoroutine { cont ->
                 measureSink.drawReadyCallback = { if (cont.isActive) cont.resume(Unit) }
-                wv.evaluateJavascript(DRAW_READY_JS, null)
+                wv.evaluateJavascript(DRAW_READY_JS.replace("%TOKEN%", drawToken.toString()), null)
             }
         }
         measureSink.drawReadyCallback = null
@@ -549,7 +559,7 @@ object ShareCardHtmlRenderer {
      */
     private const val DRAW_READY_JS =
         "(function(){var b=window.$HEIGHT_BRIDGE;if(!b)return;" +
-            "requestAnimationFrame(function(){b.onReadyToDraw();});})();"
+            "requestAnimationFrame(function(){requestAnimationFrame(function(){b.onReadyToDraw(%TOKEN%);});});})();"
 
 
 
