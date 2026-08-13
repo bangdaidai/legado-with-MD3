@@ -46,6 +46,14 @@ import kotlin.math.roundToInt
 object ShareCardHtmlRenderer {
 
     private const val RENDER_TIMEOUT_MS = 4000L
+
+    /**
+     * 出图高度上限（CSS px，实际像素按 density 折算）。只为拦住异常值：
+     * 坏模板（`min-height:900vh`、失控的超长文本）会算出巨大高度，不钳制会 OOM，
+     * 或超过设备 GPU 最大纹理尺寸后 Compose 画不出来。正常长图远达不到 4000 CSS px。
+     */
+    private const val MAX_CAPTURE_HEIGHT_CSS = 4000
+
     private val VARIABLE_REGEX = Regex("\\{\\{(\\w+)\\}\\}")
     private val HEAD_TAG_REGEX = Regex("<head>", RegexOption.IGNORE_CASE)
 
@@ -427,8 +435,12 @@ object ShareCardHtmlRenderer {
         val capHCss = m[4]
         // 满幅输出：横向取满宽，纵向取「文档高度 与 捕获节点底边」的较大值，
         // 保证 body 彩底 + 卡片 + 底部留白全部进图，且不会被绝对定位装饰带出多余空白。
+        // 上限按 density 折算成固定 4000 CSS px：坏模板（min-height:900vh、失控超长文本）
+        // 会算出巨大高度，不钳制会 Bitmap.createBitmap OOM，或超过设备 GPU 最大纹理尺寸后画不出。
+        // 超限时截断，宁可少一截也不崩。
+        val maxHeightPx = (MAX_CAPTURE_HEIGHT_CSS * density).roundToInt()
         val fullHeightPx = (maxOf(docHCss, capHCss) * density)
-            .roundToInt().coerceAtLeast(1)
+            .roundToInt().coerceIn(1, maxHeightPx)
         // 记录本次量到的高度，供同内容换色/日夜的增量路径复用，避免重复量高。
         lastCaptureHeightCss = maxOf(docHCss, capHCss)
         wv.measure(
