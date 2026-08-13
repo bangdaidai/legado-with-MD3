@@ -177,9 +177,12 @@ fun ShareCardPreviewSheet(
                 MediumTonalButton(
                     onClick = { showTemplateMenu = true },
                     onLongClick = {
-                        if (templates.isNotEmpty() && !rendering && !loading) showPaletteMenu = true
+                        if (templates.isNotEmpty() && !loading) showPaletteMenu = true
                     },
-                    enabled = templates.isNotEmpty() && !rendering && !loading,
+                    // 不把 rendering 计入 enabled：此按钮只负责「打开模板/色盘菜单」，不直接出图；
+                    // 渲染中开菜单无害，真正选中项时 rerender 已用 renderJob.cancel 串行化。
+                    // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
+                    enabled = templates.isNotEmpty() && !loading,
                     icon = Icons.Default.SwapHoriz,
                     contentDescription = "切换模板（长按换色）",
                 )
@@ -259,7 +262,7 @@ fun ShareCardPreviewSheet(
                     schemeOverride = next
                     rerender(selectedTemplateId, accentColor, next)
                 },
-                enabled = accentColor != null && !rendering && !loading,
+                enabled = accentColor != null && !loading,
                 selected = schemeOverride != null,
                 icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                 contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
