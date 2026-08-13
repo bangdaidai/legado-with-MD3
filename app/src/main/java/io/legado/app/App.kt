@@ -48,6 +48,7 @@ import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ShareCardHtmlRenderer
 import io.legado.app.help.book.TagManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppConfigStore
@@ -243,6 +244,11 @@ class App : Application(), SingletonImageLoader.Factory {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         TextLine.trimCaches(level)
+        // 分享卡片的常驻出图 WebView + Bitmap 缓存占几十 MB，界面不可见时先还给系统，
+        // 下次打开分享面板由 ShareCardHtmlRenderer.warm 重建。
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            ShareCardHtmlRenderer.release()
+        }
     }
 
     /**
