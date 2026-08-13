@@ -13,6 +13,7 @@ import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -36,6 +37,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.FabPosition as MiuixFabPosition
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 
+/**
+ * True once an ancestor [AppScaffold] has already painted the background image.
+ * Nested scaffolds (e.g. per-tab scaffolds inside the main shell) read this to avoid
+ * repainting the image inside a smaller, bar-shrunk container, which would re-crop it.
+ */
+private val LocalBackgroundImageDrawn = compositionLocalOf { false }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppScaffold(
@@ -55,6 +63,10 @@ fun AppScaffold(
     val configuration = LocalAppUiConfiguration.current
     val themeSettings = configuration.theme
     val hasImageBg = themeSettings.hasBackgroundImage(isDark)
+    val bgDrawnByAncestor = LocalBackgroundImageDrawn.current
+    // When blur is on the image doubles as this scaffold's haze source, so it must stay even
+    // when nested; that mode also draws behind the bars, so there is no re-crop to avoid.
+    val drawImageBg = hasImageBg && (themeSettings.enableBlur || !bgDrawnByAncestor)
     val hazeState = remember { HazeState() }
     val liquidGlassEnabled = configuration.theme.topBarButtonStyle == "liquid"
     val composeEngine = LegadoTheme.composeEngine
@@ -86,6 +98,7 @@ fun AppScaffold(
     CompositionLocalProvider(
         LocalHazeState provides if (themeSettings.enableBlur) hazeState else null,
         LocalTopBarBackdrop provides if (liquidGlassEnabled) topBarBackdrop else null,
+        LocalBackgroundImageDrawn provides (bgDrawnByAncestor || hasImageBg),
     ) {
         when {
             ThemeResolver.isMiuixEngine(composeEngine) -> {
@@ -106,7 +119,11 @@ fun AppScaffold(
                                 }
                             )
                     ) {
-                        BackgroundImageContent(isDark = isDark, hazeState = hazeState)
+                        BackgroundImageContent(
+                            isDark = isDark,
+                            hazeState = hazeState,
+                            enabled = drawImageBg
+                        )
                     }
                     MiuixScaffold(
                         modifier = Modifier.fillMaxSize(),
@@ -168,7 +185,11 @@ fun AppScaffold(
                                 }
                             )
                     ) {
-                        BackgroundImageContent(isDark = isDark, hazeState = hazeState)
+                        BackgroundImageContent(
+                            isDark = isDark,
+                            hazeState = hazeState,
+                            enabled = drawImageBg
+                        )
                     }
                     Scaffold(
                         modifier = Modifier.fillMaxSize(),
@@ -225,7 +246,8 @@ fun AppScaffold(
 @Composable
 private fun BackgroundImageContent(
     isDark: Boolean,
-    hazeState: HazeState
+    hazeState: HazeState,
+    enabled: Boolean
 ) {
     val themeSettings = LocalAppUiConfiguration.current.theme
     val hasImageBg = themeSettings.hasBackgroundImage(isDark)
@@ -240,7 +262,7 @@ private fun BackgroundImageContent(
         themeSettings.backgroundImageBlurring
     }
 
-    if (hasImageBg && !bgImagePath.isNullOrBlank()) {
+    if (enabled && hasImageBg && !bgImagePath.isNullOrBlank()) {
         if (themeSettings.enableBlur) {
             AsyncImage(
                 model = bgImagePath,
