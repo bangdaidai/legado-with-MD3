@@ -399,17 +399,6 @@ body {
 .bp-dark .status-tag.在读 { background: #22331e; color: #a8d49a; }
 ```
 
-> **`.bp-dark` 只用来翻颜色，不要写成亮暗两套排版。**
->
-> 卡片高度是量一次存下来复用的（换色、切日夜都不重量），前提就是**明暗两态的布局完全一致**。
-> 如果在 `.bp-dark` 里改了影响布局的属性，切日夜时会按另一套高度出图，表现为**底部缺一节或多一块空白**。
->
-> 可以改：`color`、`background`、`background-color`、`border-color`、`box-shadow`、`text-shadow`、`opacity`、`fill`、`stroke`
->
-> 不要改：`display`、`font-size`、`font-weight`、`letter-spacing`、`line-height`、`padding`、`margin`、`border-width`、`width`、`height`
->
-> `font-weight` 尤其容易踩——它不改字号，但会让文字变宽，卡在折行边界上的标题加粗后会多折一行，高度就变了。
-
 **改造旧模板：** 把 CSS 里写死的十六进制颜色改成 `var(...)` 形式即可。示例：
 
 ```css
