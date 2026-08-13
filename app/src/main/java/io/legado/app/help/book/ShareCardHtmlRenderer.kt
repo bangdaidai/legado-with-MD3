@@ -238,6 +238,13 @@ object ShareCardHtmlRenderer {
     private var currentContentKey: Int? = null
 
     /**
+     * 上一次成功出图的内容高度（CSS px，= max(文档高度, 捕获节点底边)）。换色/日夜时复用，
+     * 跳过重新量高（换色只改 CSS 变量、不改布局），对齐 Reeden「高度算一次存着」。
+     * 仅在 [recolorInPlace] 增量路径使用；完整渲染会刷新它。null 时退回量高一次。
+     */
+    private var lastCaptureHeightCss: Int? = null
+
+    /**
      * 出图结果缓存：key 由「最终 HTML + 主题色 + 明暗」决定，对相同输入稳定命中，
      * 开门即秒出、不碰 WebView。有界 LRU（最多 6 张），防止长列表切模板撑爆内存。
      */
@@ -376,20 +383,28 @@ object ShareCardHtmlRenderer {
         withContext(Dispatchers.Main.immediate) {
             val wv = warmWebView ?: return@withContext null
             wv.evaluateJavascript(accentApplyJs(accent, forceDark), null)
-            val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
-                suspendCancellableCoroutine { cont ->
-                    measureSink.callback = { docH, x, y, w, h ->
-                        if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
-                    }
-                    wv.evaluateJavascript(MEASURE_JS, null)
-                }
-            }
-            measureSink.callback = null
-            if (m == null || m[0] <= 0) return@withContext null
+            // 换色/日夜只改 CSS 变量、不改布局，直接复用上次量好的高度，跳过 MEASURE_JS 重测量
+            // （省掉 whenReady + 字体 + 双 rAF + measure 异步链），对齐 Reeden「高度算一次存着」。
+            // lastCaptureHeightCss 为 null 时（极端兜底）退回量高一次。
             val density = wv.context.resources.displayMetrics.density
             val widthPx = (wv.context.resources.displayMetrics.widthPixels * 0.92f)
                 .toInt().coerceAtLeast(360)
-            captureAfterMeasure(wv, density, widthPx, m)
+            val h = lastCaptureHeightCss ?: run {
+                val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                    suspendCancellableCoroutine { cont ->
+                        measureSink.callback = { docH, x, y, w, h ->
+                            if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
+                        }
+                        wv.evaluateJavascript(MEASURE_JS, null)
+                    }
+                }
+                measureSink.callback = null
+                (m?.let { maxOf(it[0], it[4]) } ?: return@withContext null).also {
+                    lastCaptureHeightCss = it
+                }
+            }
+            // 构造与 captureAfterMeasure 约定一致的量高数组：docH=capH=h（高度已知，无需再量）。
+            captureAfterMeasure(wv, density, widthPx, intArrayOf(h, 0, 0, 0, h))
         }
     }
 
@@ -406,6 +421,8 @@ object ShareCardHtmlRenderer {
         // 保证 body 彩底 + 卡片 + 底部留白全部进图，且不会被绝对定位装饰带出多余空白。
         val fullHeightPx = (maxOf(docHCss, capHCss) * density)
             .roundToInt().coerceAtLeast(1)
+        // 记录本次量到的高度，供同内容换色/日夜的增量路径复用，避免重复量高。
+        lastCaptureHeightCss = maxOf(docHCss, capHCss)
         wv.measure(
             View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(fullHeightPx, View.MeasureSpec.EXACTLY),
