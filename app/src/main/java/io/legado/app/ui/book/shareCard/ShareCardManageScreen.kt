@@ -491,6 +491,62 @@ body {
 | `{{bookSourceName}}` | 书源名称 |
 | `{{bookSourceGroup}}` | 书源分组 |
 | `{{readTimeRank}}` | 阅读时长排名 |
+
+## 完整示例模板
+
+下面是一份**简单但要素完整**的模板，可直接复制使用。它包含：海报根节点 `data-bp-capture`（渲染器据此裁图）、用 `--bp-*` 变量配色（可被换色 / 切日夜影响）、自己拼的渐变背景、封面（带加载失败兜底）、语义色 `.bp-dark` 亮暗分支。
+
+```html
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    padding: 24px 18px;
+    /* 渐变自己拼：--bp-bg 是纯色，用 --bp-accent-rgb 控透明度 */
+    background:
+      radial-gradient(circle at 15% 10%, rgba(var(--bp-accent-rgb, 255,255,255), 0.18), transparent 55%),
+      linear-gradient(160deg, var(--bp-surface, #fff), var(--bp-bg, #eee));
+    font-family: "Noto Sans SC", "PingFang SC", sans-serif;
+    color: var(--bp-text, #333);
+  }
+  .card {
+    max-width: 420px; margin: 0 auto;
+    border-radius: 20px; padding: 20px;
+    background: var(--bp-surface, #fff);
+    border: 1px solid var(--bp-divider, rgba(0,0,0,.1));
+    box-shadow: 0 8px 24px rgba(var(--bp-text-rgb, 0,0,0), 0.08);
+  }
+  .cover {
+    width: 84px; height: 112px; border-radius: 10px; object-fit: cover;
+    background: var(--bp-accent-light, #eee);
+  }
+  .name { font-size: 22px; font-weight: 700; color: var(--bp-text, #222); }
+  .author { font-size: 13px; color: var(--bp-text-muted, #666); }
+  .tag {
+    display: inline-block; padding: 4px 12px; border-radius: 20px;
+    background: var(--bp-accent, #ccc); color: var(--bp-on-accent, #fff);
+  }
+  /* 语义色按亮暗翻色（.bp-dark 由渲染器在暗色方案下加到 <html>） */
+  .tag.在读 { background: #d8efd2; color: #3c6236; }
+  .bp-dark .tag.在读 { background: #2c4227; color: #b6d9ac; }
+  .meta { font-size: 14px; color: var(--bp-text-subtle, #888); margin-top: 6px; }
+</style>
+</head>
+<body>
+  <!-- 海报根节点必须标 data-bp-capture，渲染器据此裁图 -->
+  <div class="card" data-bp-capture>
+    <img class="cover" src="{{coverUrl}}" alt="封面" onerror="this.style.display='none'">
+    <div class="name">{{bookName}}</div>
+    <div class="author">{{author}}</div>
+    <span class="tag {{readingStatusText}}">{{readingStatusText}}</span>
+    <div class="meta">{{readingProgress}} · {{totalReadTime}}</div>
+  </div>
+</body>
+</html>
+```
 """.trimIndent()
 
 @OptIn(ExperimentalMaterial3Api::class)
