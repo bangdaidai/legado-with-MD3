@@ -50,6 +50,7 @@ import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -63,6 +64,9 @@ private val ACCENT_PRESETS = listOf(
     "雾霭紫" to 0xFF9B8BC0.toInt(),
     "石墨灰" to 0xFF6B737D.toInt(),
 )
+
+/** 渲染超过这个时长才显示顶部进度条，避免快路径一闪 */
+private const val PROGRESS_DELAY_MS = 300L
 
 /**
  * 分享卡片预览面板。
@@ -105,6 +109,19 @@ fun ShareCardPreviewSheet(
     // 当前渲染 Job：连续切色/切日夜时取消上一个，避免旧 render 的 draw 后到、覆盖新图
     // （表现为「切不回/卡一个颜色」）。
     var renderJob by remember { mutableStateOf<Job?>(null) }
+    // 进度条延迟显示：缓存命中 / 同内容增量换色只要几十毫秒，rendering 从 true 到 false
+    // 只跨一两帧，进度条一显一隐就是「闪一下」。等够 PROGRESS_DELAY_MS 才显示——
+    // 快路径这期间已经结束、LaunchedEffect 被取消，进度条根本不出现；
+    // 慢路径（换模板全量 loadData）照常提示。
+    var showProgress by remember { mutableStateOf(false) }
+    LaunchedEffect(rendering) {
+        if (!rendering) {
+            showProgress = false
+            return@LaunchedEffect
+        }
+        delay(PROGRESS_DELAY_MS)
+        showProgress = true
+    }
 
     fun rerender(templateId: Long, accent: Int?, forceDark: Boolean?) {
         val d = data ?: return
@@ -319,8 +336,9 @@ fun ShareCardPreviewSheet(
                     }
                 }
             }
-            // 重渲期间只在顶部走一条细进度条，旧图继续显示，不清空、不闪菊花
-            if (rendering && bmp != null) {
+            // 重渲期间只在顶部走一条细进度条，旧图继续显示，不清空、不闪菊花。
+            // showProgress 延迟判定：快路径（缓存/增量换色）几十毫秒内结束，不显示，避免一闪。
+            if (showProgress && bmp != null) {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
