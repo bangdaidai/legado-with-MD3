@@ -68,6 +68,9 @@ private val ACCENT_PRESETS = listOf(
 /** 渲染超过这个时长才显示顶部进度条，避免快路径一闪 */
 private const val PROGRESS_DELAY_MS = 300L
 
+/** 首图迟迟不就绪时的开门兜底时长，避免「点了生成什么都不出现」 */
+private const val OPEN_FAILSAFE_MS = 3000L
+
 /**
  * 分享卡片预览面板。
  *
@@ -185,8 +188,33 @@ fun ShareCardPreviewSheet(
         if (!rendering) rerender(selectedTemplateId, accentColor, schemeOverride)
     }
 
+    // 首图就绪后才真正开门。开门前内容高度是占位框（屏高 0.85），开门后是图片自身高度，
+    // 两者不一致会被 AppModalBottomSheet 的 animateContentSize 弹簧做成「顶高再回弹」的抖动。
+    // 等图好了再开门，弹窗一上来就是最终高度，全程零尺寸变化。
+    // 渲染失败 / 数据生成失败也要开门，否则用户点了没反应。
+    val readyToOpen = (
+        currentBitmap != null &&
+            currentData == data &&
+            currentTemplateId == selectedTemplateId
+        ) || renderFailed || (data == null && !loading)
+    var sheetOpened by remember { mutableStateOf(false) }
+    LaunchedEffect(show, readyToOpen) {
+        if (!show) {
+            sheetOpened = false
+            return@LaunchedEffect
+        }
+        if (readyToOpen) {
+            sheetOpened = true
+            return@LaunchedEffect
+        }
+        // 兜底：模板列表为空等极端情况下渲染既不成功也不置 renderFailed，
+        // 不兜住就会「点了生成什么都不出现」，比抖动更糟。
+        delay(OPEN_FAILSAFE_MS)
+        sheetOpened = true
+    }
+
     AppModalBottomSheet(
-        show = show,
+        show = show && sheetOpened,
         onDismissRequest = onDismissRequest,
         title = "分享卡片",
         startAction = {
