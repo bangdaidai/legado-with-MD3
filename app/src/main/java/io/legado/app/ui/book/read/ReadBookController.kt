@@ -753,6 +753,14 @@ class ReadBookController(
                 return true
             }
 
+            R.id.menu_share_card -> {
+                // 直接用选区造的临时 Bookmark（不落库）出分享卡片，跳过"先存笔记"这一步
+                refs?.readView?.curPage?.createBookmark()?.let {
+                    viewModel.onIntent(ReadBookIntent.GenerateShareCardFromSelection(it))
+                } ?: activity.toastOnUi(R.string.create_bookmark_error)
+                return true
+            }
+
             R.id.menu_edit -> {
                 viewModel.onIntent(ReadBookIntent.OpenContentEdit)
                 return true
@@ -848,6 +856,7 @@ class ReadBookController(
             val items = mutableListOf<ActionMenuItem>()
             items.add(ActionMenuItem(R.id.menu_copy, activity.getString(android.R.string.copy)))
             items.add(ActionMenuItem(R.id.menu_share_str, activity.getString(R.string.share)))
+            items.add(ActionMenuItem(R.id.menu_share_card, activity.getString(R.string.share_card)))
             items.add(ActionMenuItem(R.id.menu_browser, activity.getString(R.string.browser)))
             items.add(ActionMenuItem(R.id.menu_aloud, activity.getString(R.string.read_aloud)))
             items.add(ActionMenuItem(R.id.menu_bookmark, activity.getString(R.string.bookmark)))
@@ -1707,6 +1716,7 @@ data class ActionMenuItem(
             when (id) {
                 R.id.menu_copy -> "menu_copy"
                 R.id.menu_share_str -> "menu_share_str"
+                R.id.menu_share_card -> "menu_share_card"
                 R.id.menu_browser -> "menu_browser"
                 R.id.menu_aloud -> "menu_aloud"
                 R.id.menu_bookmark -> "menu_bookmark"
@@ -1717,6 +1727,7 @@ data class ActionMenuItem(
                 R.id.menu_ai_clean -> "menu_ai_clean"
                 R.id.menu_ai_rewrite -> "menu_ai_rewrite"
                 R.id.menu_search_content -> "menu_search_content"
+                R.id.menu_set_protagonist -> "menu_set_protagonist"
                 else -> id.toString()
             }
         }

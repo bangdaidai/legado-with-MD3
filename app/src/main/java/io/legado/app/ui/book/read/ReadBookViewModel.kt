@@ -15,6 +15,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
+import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
@@ -276,6 +277,35 @@ class ReadBookViewModel(
                 marking.bookAuthor,
             )
             val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
+            _uiState.update {
+                it.copy(
+                    showShareCard = true,
+                    shareCardData = data,
+                    shareCardLoading = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * 直接用当前选区生成分享卡片：不落库、不经过划线笔记编辑弹窗。
+     * [selection] 是 ContentTextView.createBookmark() 造的临时 Bookmark（仅作选区载体，
+     * bookText 是选中文本、content 为空），书的统计信息仍按书名+作者查 ReadingMemory 补全。
+     */
+    private fun generateShareCardFromSelection(selection: Bookmark) {
+        // 与 generateShareCardFromMarking 一致：先备好数据再开门，预览弹窗开门即渲染。
+        _uiState.update {
+            it.copy(
+                shareCardLoading = true,
+                activeSheet = null,
+            )
+        }
+        viewModelScope.launch(IO) {
+            val memory = readingMemoryRepository.getByNameAuthor(
+                selection.bookName,
+                selection.bookAuthor,
+            )
+            val data = ShareCardDataBuilder.buildFromBookmark(selection, memory)
             _uiState.update {
                 it.copy(
                     showShareCard = true,
@@ -1479,6 +1509,10 @@ class ReadBookViewModel(
 
             is ReadBookIntent.GenerateShareCardFromMarking -> {
                 generateShareCardFromMarking()
+            }
+
+            is ReadBookIntent.GenerateShareCardFromSelection -> {
+                generateShareCardFromSelection(intent.selection)
             }
 
             is ReadBookIntent.DismissShareCard -> {

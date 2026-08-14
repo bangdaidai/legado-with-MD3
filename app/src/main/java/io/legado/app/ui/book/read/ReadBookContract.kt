@@ -694,6 +694,12 @@ sealed interface ReadBookIntent {
     data class SaveMarking(val style: TextProcessStyle, val note: String) : ReadBookIntent
     data object DeleteMarking : ReadBookIntent
     data object GenerateShareCardFromMarking : ReadBookIntent
+
+    /**
+     * 直接用当前选区生成分享卡片，不落库、不经过划线笔记编辑弹窗。
+     * [selection] 是 ContentTextView.createBookmark() 造的临时 Bookmark（仅作选区载体）。
+     */
+    data class GenerateShareCardFromSelection(val selection: Bookmark) : ReadBookIntent
     data object DismissShareCard : ReadBookIntent
 
     /** 书签/笔记跳转：先校验定位（源/标题），不通过则弹确认框。 */

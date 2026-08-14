@@ -3199,4 +3199,5 @@
     <string name="manga_reader_no_source">No suitable source</string>
     <string name="manga_reader_auto_source_failed">Automatic source change failed</string>
     <string name="share_card_template">Share Template</string>
+    <string name="share_card">Card</string>
 </resources>

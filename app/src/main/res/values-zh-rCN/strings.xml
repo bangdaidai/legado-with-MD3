@@ -3192,4 +3192,5 @@
     <string name="manga_reader_no_source">没有合适书源</string>
     <string name="manga_reader_auto_source_failed">自动换源失败</string>
     <string name="share_card_template">分享模板</string>
+    <string name="share_card">卡片</string>
 </resources>
