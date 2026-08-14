@@ -14,8 +14,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
+import com.bumptech.glide.Glide
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
+import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
@@ -297,7 +300,7 @@ object ShareCardHtmlRenderer {
         accent: Int? = null,
         forceDark: Boolean? = null,
     ): Bitmap? {
-        val coverUri = coverUrlToDataUri(data.coverUrl)
+        val coverUri = coverUrlToDataUri(context, data.coverUrl)
         val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
         val body = replaceVariables(template.htmlContent, resolved)
         if (body.isBlank()) return null
@@ -563,14 +566,17 @@ object ShareCardHtmlRenderer {
             "function whenReady(cb){" +
             " var imgs=document.images;" +
             " var pending=0;" +
-            " for(var i=0;i<imgs.length;i++){ if(!imgs[i].complete||imgs[i].naturalWidth===0) pending++; }" +
+            // 只按 complete 判定：已 complete 的图（成功/失败/空 src）不会再触发 load/error 事件，
+            // 等它们毫无意义。旧写法把 naturalWidth===0（含加载失败的裂图）也算 pending，
+            // 而失败图永不再有事件 → pending 永不归零 → 必等满 1500ms 白白拖慢出图。
+            " for(var i=0;i<imgs.length;i++){ if(!imgs[i].complete) pending++; }" +
             " var done=false;" +
             " var proceed=function(){ if(done)return; done=true;" +
             "   var afterFonts=function(){ requestAnimationFrame(cb); };" +
             "   if(document.fonts&&document.fonts.ready&&document.fonts.ready.then){ document.fonts.ready.then(afterFonts,afterFonts); } else { afterFonts(); } };" +
             " if(pending===0){ proceed(); return; }" +
             " var to=setTimeout(proceed,1500);" +
-            " for(var i=0;i<imgs.length;i++){(function(img){ if(img.complete&&img.naturalWidth>0)return;" +
+            " for(var i=0;i<imgs.length;i++){(function(img){ if(img.complete)return;" +
             "   img.addEventListener('load',function(){ if(--pending<=0){clearTimeout(to);proceed();} });" +
             "   img.addEventListener('error',function(){ if(--pending<=0){clearTimeout(to);proceed();} });" +
             " })(imgs[i]); }" +
@@ -712,12 +718,28 @@ object ShareCardHtmlRenderer {
      *   消除「WebView 渲染时自行联网」的异步竞态——弱网/离线也稳，不会只截到背景。
      * 同一 URL 走 [coverCache] 只取/转一次。
      */
-    private suspend fun coverUrlToDataUri(url: String): String? {
+    private suspend fun coverUrlToDataUri(context: Context, url: String): String? {
         if (url.isBlank()) return null
         if (url.startsWith("data:")) return url
         coverCache[url]?.let { return it }
 
-        val result = if (url.startsWith("http")) {
+        // 优先走 Glide 缓存：书架/阅读页早已把封面缓存到本地，命中即本地转 data URI，
+        // 又快又不联网，且解码由 Glide 统一处理（对齐 Max 项目 onlyRetrieveFromCache 思路）。
+        // 缓存未命中再退回裸 OkHttp（下方）。
+        val fromCache = withContext(Dispatchers.IO) {
+            try {
+                val isRemote = url.startsWith("http", ignoreCase = true)
+                val target = ImageLoader.loadBitmap(context, url)
+                    .let { if (isRemote) it.onlyRetrieveFromCache(true) else it }
+                    .submit()
+                try {
+                    bitmapToJpegDataUri(target.get(4, TimeUnit.SECONDS))
+                } finally {
+                    Glide.with(context).clear(target)
+                }
+            } catch (_: Throwable) { null }
+        }
+        val result = fromCache ?: if (url.startsWith("http")) {
             withContext(Dispatchers.IO) {
                 try {
                     val body = okHttpClient.newCallResponseBody { url(url) }
