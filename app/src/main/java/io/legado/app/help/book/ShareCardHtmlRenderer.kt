@@ -527,6 +527,9 @@ object ShareCardHtmlRenderer {
      * 也不会因为旧公式 `r.top + r.bottom` 把上留白翻倍而多出一屏背景。
      *
      * 没标 `[data-bp-capture]` 的用户模板 fallback 到 `body.scrollHeight` 整幅不裁。
+     *
+     * 量高前还会对捕获节点做一次**高度归一化**（清 min-height、必要时放开 height），
+     * 防止模板在捕获节点上写 `min-height:100vh` 时继承暖 WebView 里上一个模板的视口高度。
      */
     private fun heightReportScript(): String =
         "<style>html,body{height:auto!important;min-height:0!important;overflow:visible!important;}</style>" +
@@ -535,8 +538,22 @@ object ShareCardHtmlRenderer {
             "function report(){" +
             " if(!b)return;" +
             " var d=document.body; if(!d)return;" +
-            " var doc=Math.ceil(d.scrollHeight);" +
             " var t=document.querySelector('[data-bp-capture]');" +
+            // 捕获节点高度归一化。顶部那条全局 style 只压了 html/body，捕获节点自己写的
+            // min-height:100vh / height:100% 仍会把海报撑到「视口高度」——而暖 WebView 的视口
+            // 正是上一个模板留下的高度，于是换模板时新海报继承旧高度（底部多一块空背景）。
+            // 这里只动捕获节点本身：清掉 min-height；若它被显式高度卡在视口内、内容却已溢出，
+            // 再放开成 auto 让它按内容撑开。不遍历后代节点，避免把 100vh 装饰、
+            // absolute;bottom:0 之类误算进总高（那是之前回退掉的错误做法）。
+            // 刻意设计成固定尺寸+裁切的模板可标 data-bp-fixed-viewport="true" 跳过。
+            " if(t&&t.getAttribute('data-bp-fixed-viewport')!=='true'){" +
+            "  var vh=Math.max(window.innerHeight||document.documentElement.clientHeight||1,1);" +
+            "  var ch=0; try{ch=parseFloat(getComputedStyle(t).height)||0;}catch(e){}" +
+            "  t.style.setProperty('min-height','0','important');" +
+            "  if(ch>0&&ch<=vh+1&&t.scrollHeight>ch+1){t.style.setProperty('height','auto','important');}" +
+            " }" +
+            // doc 必须在归一化之后再读：改了捕获节点高度，body.scrollHeight 也会跟着变。
+            " var doc=Math.ceil(d.scrollHeight);" +
             " var w=Math.ceil(document.documentElement.clientWidth||d.clientWidth);" +
             " var h=doc;" +
             " if(t){var r=t.getBoundingClientRect(); h=Math.ceil(Math.max(doc,r.bottom));}" +
