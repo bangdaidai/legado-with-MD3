@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Base64
 import android.view.View
 import android.webkit.JavascriptInterface
@@ -15,6 +16,7 @@ import android.webkit.WebViewClient
 import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import com.bumptech.glide.Glide
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.help.glide.ImageLoader
@@ -29,7 +31,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
@@ -300,7 +301,11 @@ object ShareCardHtmlRenderer {
         accent: Int? = null,
         forceDark: Boolean? = null,
     ): Bitmap? {
+        // 临时计时：拆分 封面解析 / 走的哪条路径 / 总耗时。定位「转两圈」到底慢在哪，
+        // 量完即删。写进 AppLog，直接在 App 内「日志」面板看，不用连 adb。
+        val t0 = SystemClock.elapsedRealtime()
         val coverUri = coverUrlToDataUri(context, data.coverUrl)
+        val tCover = SystemClock.elapsedRealtime()
         val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
         val body = replaceVariables(template.htmlContent, resolved)
         if (body.isBlank()) return null
@@ -308,7 +313,13 @@ object ShareCardHtmlRenderer {
         // 从而走 recolorInPlace 增量路径（不重新 loadData）。
         val contentKey = body.hashCode()
         val key = cacheKeyOf(injectRenderHead(body, accent, forceDark), accent, forceDark)
-        getCached(key)?.let { return it }
+        getCached(key)?.let {
+            AppLog.put(
+                "卡片计时 path=CACHE cover=${tCover - t0}ms " +
+                    "total=${SystemClock.elapsedRealtime() - t0}ms",
+            )
+            return it
+        }
 
         val sameContent = warmWebView != null &&
             currentContentKey != null && currentContentKey == contentKey
@@ -324,6 +335,11 @@ object ShareCardHtmlRenderer {
             currentContentKey = contentKey
         }
         if (bmp != null) putCached(key, bmp)
+        AppLog.put(
+            "卡片计时 path=${if (sameContent) "RECOLOR" else "FULL"} " +
+                "cover=${tCover - t0}ms render=${SystemClock.elapsedRealtime() - tCover}ms " +
+                "total=${SystemClock.elapsedRealtime() - t0}ms",
+        )
         return bmp
     }
 
@@ -356,40 +372,51 @@ object ShareCardHtmlRenderer {
         htmlNoAccent: String,
         accent: Int?,
         forceDark: Boolean?,
-    ): Bitmap? = renderMutex.withLock {
-        withContext(Dispatchers.Main.immediate) {
-            val density = context.resources.displayMetrics.density
-            val widthPx = (context.resources.displayMetrics.widthPixels * 0.92f)
-                .toInt().coerceAtLeast(360)
-            val wv = ensureWebView(context)
+    ): Bitmap? {
+        val tEnter = SystemClock.elapsedRealtime()
+        return renderMutex.withLock {
+            val tLock = SystemClock.elapsedRealtime()
+            withContext(Dispatchers.Main.immediate) {
+                val density = context.resources.displayMetrics.density
+                val widthPx = (context.resources.displayMetrics.widthPixels * 0.92f)
+                    .toInt().coerceAtLeast(360)
+                val wv = ensureWebView(context)
+                val tWebView = SystemClock.elapsedRealtime()
 
-            // 用 JS 桥拿"渲染完成 + 内容高度 + 裁图区域"，不再靠固定 delay 猜。超时兜底防永久挂起。
-            val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
-                suspendCancellableCoroutine { cont ->
-                    measureSink.callback = { docH, x, y, w, h ->
-                        if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
-                    }
-                    wv.webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            // accent 烘进页面（若有），再量高；accent=null 时模板自带配色已正确
-                            if (accent != null) {
-                                view?.evaluateJavascript(accentApplyJs(accent, forceDark), null)
-                            }
-                            view?.evaluateJavascript(MEASURE_JS, null)
+                // 用 JS 桥拿"渲染完成 + 内容高度 + 裁图区域"，不再靠固定 delay 猜。超时兜底防永久挂起。
+                val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                    suspendCancellableCoroutine { cont ->
+                        measureSink.callback = { docH, x, y, w, h ->
+                            if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
                         }
+                        wv.webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                // accent 烘进页面（若有），再量高；accent=null 时模板自带配色已正确
+                                if (accent != null) {
+                                    view?.evaluateJavascript(accentApplyJs(accent, forceDark), null)
+                                }
+                                view?.evaluateJavascript(MEASURE_JS, null)
+                            }
+                        }
+                        // 先按目标宽度 layout，让 loadDataWithBaseURL 的 layout viewport 宽度就绪。
+                        wv.measure(
+                            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                        )
+                        wv.layout(0, 0, widthPx, wv.measuredHeight.coerceAtLeast(1))
+                        wv.loadDataWithBaseURL("about:blank", htmlNoAccent, "text/html", "UTF-8", null)
                     }
-                    // 先按目标宽度 layout，让 loadDataWithBaseURL 的 layout viewport 宽度就绪。
-                    wv.measure(
-                        View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                    )
-                    wv.layout(0, 0, widthPx, wv.measuredHeight.coerceAtLeast(1))
-                    wv.loadDataWithBaseURL("about:blank", htmlNoAccent, "text/html", "UTF-8", null)
                 }
+                val tMeasure = SystemClock.elapsedRealtime()
+                measureSink.callback = null
+                // 临时计时：lock=等互斥锁 newWebView=首次建 WebView loadMeasure=加载+量高（含等图/字体）
+                AppLog.put(
+                    "卡片计时   FULL lock=${tLock - tEnter}ms newWebView=${tWebView - tLock}ms " +
+                        "loadMeasure=${tMeasure - tWebView}ms h=${m?.let { maxOf(it[0], it[4]) }}css",
+                )
+                if (m == null || m[0] <= 0) return@withContext null
+                captureAfterMeasure(wv, density, widthPx, m)
             }
-            measureSink.callback = null
-            if (m == null || m[0] <= 0) return@withContext null
-            captureAfterMeasure(wv, density, widthPx, m)
         }
     }
 
@@ -398,32 +425,41 @@ object ShareCardHtmlRenderer {
      * 不重新解析 HTML、不重新全量布局，主线程只做"改样式 + 重绘 + draw"，丝滑不卡。
      * 前置：调用方（[render]）已确认 warmWebView 当前内容正是同一 body（currentContentKey 匹配）。
      */
-    private suspend fun recolorInPlace(accent: Int?, forceDark: Boolean?): Bitmap? = renderMutex.withLock {
-        withContext(Dispatchers.Main.immediate) {
-            val wv = warmWebView ?: return@withContext null
-            wv.evaluateJavascript(accentApplyJs(accent, forceDark), null)
-            // 换色/日夜只改 CSS 变量、不改布局，直接复用上次量好的高度，跳过 MEASURE_JS 重测量
-            // （省掉 whenReady + 字体 + 双 rAF + measure 异步链），对齐 Reeden「高度算一次存着」。
-            // lastCaptureHeightCss 为 null 时（极端兜底）退回量高一次。
-            val density = wv.context.resources.displayMetrics.density
-            val widthPx = (wv.context.resources.displayMetrics.widthPixels * 0.92f)
-                .toInt().coerceAtLeast(360)
-            val h = lastCaptureHeightCss ?: run {
-                val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
-                    suspendCancellableCoroutine { cont ->
-                        measureSink.callback = { docH, x, y, w, h ->
-                            if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
+    private suspend fun recolorInPlace(accent: Int?, forceDark: Boolean?): Bitmap? {
+        val tEnter = SystemClock.elapsedRealtime()
+        return renderMutex.withLock {
+            val tLock = SystemClock.elapsedRealtime()
+            withContext(Dispatchers.Main.immediate) {
+                val wv = warmWebView ?: return@withContext null
+                wv.evaluateJavascript(accentApplyJs(accent, forceDark), null)
+                // 换色/日夜只改 CSS 变量、不改布局，直接复用上次量好的高度，跳过 MEASURE_JS 重测量
+                // （省掉 whenReady + 字体 + 双 rAF + measure 异步链），对齐 Reeden「高度算一次存着」。
+                // lastCaptureHeightCss 为 null 时（极端兜底）退回量高一次。
+                val density = wv.context.resources.displayMetrics.density
+                val widthPx = (wv.context.resources.displayMetrics.widthPixels * 0.92f)
+                    .toInt().coerceAtLeast(360)
+                val h = lastCaptureHeightCss ?: run {
+                    val m = withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                        suspendCancellableCoroutine { cont ->
+                            measureSink.callback = { docH, x, y, w, h ->
+                                if (cont.isActive) cont.resume(intArrayOf(docH, x, y, w, h))
+                            }
+                            wv.evaluateJavascript(MEASURE_JS, null)
                         }
-                        wv.evaluateJavascript(MEASURE_JS, null)
+                    }
+                    measureSink.callback = null
+                    (m?.let { maxOf(it[0], it[4]) } ?: return@withContext null).also {
+                        lastCaptureHeightCss = it
                     }
                 }
-                measureSink.callback = null
-                (m?.let { maxOf(it[0], it[4]) } ?: return@withContext null).also {
-                    lastCaptureHeightCss = it
-                }
+                // 临时计时：reHeight>0 说明没命中缓存高度、白量了一次
+                AppLog.put(
+                    "卡片计时   RECOLOR lock=${tLock - tEnter}ms " +
+                        "reHeight=${SystemClock.elapsedRealtime() - tLock}ms",
+                )
+                // 构造与 captureAfterMeasure 约定一致的量高数组：docH=capH=h（高度已知，无需再量）。
+                captureAfterMeasure(wv, density, widthPx, intArrayOf(h, 0, 0, 0, h))
             }
-            // 构造与 captureAfterMeasure 约定一致的量高数组：docH=capH=h（高度已知，无需再量）。
-            captureAfterMeasure(wv, density, widthPx, intArrayOf(h, 0, 0, 0, h))
         }
     }
 
@@ -434,6 +470,7 @@ object ShareCardHtmlRenderer {
         widthPx: Int,
         m: IntArray,
     ): Bitmap? {
+        val tIn = SystemClock.elapsedRealtime()
         val docHCss = m[0]
         val capHCss = m[4]
         // 满幅输出：横向取满宽，纵向取「文档高度 与 捕获节点底边」的较大值，
@@ -451,6 +488,7 @@ object ShareCardHtmlRenderer {
             View.MeasureSpec.makeMeasureSpec(fullHeightPx, View.MeasureSpec.EXACTLY),
         )
         wv.layout(0, 0, widthPx, fullHeightPx)
+        val tResize = SystemClock.elapsedRealtime()
 
         // 阶段二：WebView 改了高度后必须等它真正重排 + 画出一帧再 draw，
         // 否则截到的是旧高度 / 半渲染帧（底部缺一节、只有背景）。
@@ -463,16 +501,24 @@ object ShareCardHtmlRenderer {
             }
         }
         measureSink.drawReadyCallback = null
+        val tReady = SystemClock.elapsedRealtime()
 
-        return try {
-            Bitmap.createBitmap(widthPx, fullHeightPx, Bitmap.Config.ARGB_8888).also { bmp ->
-                val canvas = Canvas(bmp)
+        val bmp = try {
+            Bitmap.createBitmap(widthPx, fullHeightPx, Bitmap.Config.ARGB_8888).also { out ->
+                val canvas = Canvas(out)
                 wv.invalidate()
                 wv.draw(canvas)
             }
         } catch (_: Throwable) {
             null
         }
+        // 临时计时：resize=撑高 measure/layout drawReady=等重排+一帧 draw=软件光栅化整张长图
+        AppLog.put(
+            "卡片计时   CAPTURE resize=${tResize - tIn}ms drawReady=${tReady - tResize}ms " +
+                "draw=${SystemClock.elapsedRealtime() - tReady}ms " +
+                "size=${widthPx}x$fullHeightPx ok=${bmp != null}",
+        )
+        return bmp
     }
 
 
@@ -705,9 +751,21 @@ object ShareCardHtmlRenderer {
 
     // ==================== 封面 data URI 缓存 ====================
 
-    private val coverCache = ConcurrentHashMap<String, String>(8)
+    /**
+     * 封面 data URI 单条缓存：`url to dataUri`。
+     *
+     * 一次预览会话只围绕一本书，而换模板/换色会反复调 [coverUrlToDataUri]（[render] 必须先把封面
+     * 解析成 data URI 才能拼出 body、算出缓存 key），缓存这一条就免掉了重复的
+     * 「解码 + JPEG 压缩 + base64」。存多条没有收益，只会让几十 KB 的 base64 字符串按书数量常驻堆上。
+     *
+     * 整体替换一个不可变 Pair，[Volatile] 保证并发读到的 url 与 dataUri 永远是配对的。
+     */
+    @Volatile
+    private var coverCache: Pair<String, String>? = null
 
-    fun clearCoverCache() = coverCache.clear()
+    fun clearCoverCache() {
+        coverCache = null
+    }
 
     /**
      * 封面 URL → data URI。统一走「Kotlin 侧把字节拿齐再注入」的确定路径：
@@ -721,11 +779,12 @@ object ShareCardHtmlRenderer {
     private suspend fun coverUrlToDataUri(context: Context, url: String): String? {
         if (url.isBlank()) return null
         if (url.startsWith("data:")) return url
-        coverCache[url]?.let { return it }
+        coverCache?.let { (cachedUrl, cachedUri) -> if (cachedUrl == url) return cachedUri }
 
         // 优先走 Glide 缓存：书架/阅读页早已把封面缓存到本地，命中即本地转 data URI，
         // 又快又不联网，且解码由 Glide 统一处理（对齐 Max 项目 onlyRetrieveFromCache 思路）。
         // 缓存未命中再退回裸 OkHttp（下方）。
+        val tGlideStart = SystemClock.elapsedRealtime()
         val fromCache = withContext(Dispatchers.IO) {
             try {
                 val isRemote = url.startsWith("http", ignoreCase = true)
@@ -739,6 +798,7 @@ object ShareCardHtmlRenderer {
                 }
             } catch (_: Throwable) { null }
         }
+        val tGlideEnd = SystemClock.elapsedRealtime()
         val result = fromCache ?: if (url.startsWith("http")) {
             withContext(Dispatchers.IO) {
                 try {
@@ -759,7 +819,12 @@ object ShareCardHtmlRenderer {
                 } else null
             } catch (_: Exception) { null }
         }
-        if (result != null) coverCache[url] = result
+        if (result != null) coverCache = url to result
+        // 临时计时：glide=Glide 缓存尝试 hit=是否命中 fallback=未命中后裸 OkHttp/File 兜底耗时
+        AppLog.put(
+            "卡片计时   COVER glide=${tGlideEnd - tGlideStart}ms hit=${fromCache != null} " +
+                "fallback=${SystemClock.elapsedRealtime() - tGlideEnd}ms ok=${result != null}",
+        )
         return result
     }
 
