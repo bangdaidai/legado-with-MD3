@@ -262,7 +262,12 @@ fun ShareCardManageScreen(
             }
         }
         AppModalBottomSheet(
-            show = true,
+            // 等首图就绪才开门。开门前内容是占位框（屏高 0.85）、开门后是图片自身高度，
+            // 两者不一致会被 AppModalBottomSheet 的 animateContentSize 弹簧做成「顶高再回弹」。
+            // 等图好了再开门，弹窗一上来就是最终高度，全程零尺寸变化。
+            // 不需要额外超时兜底：renderCustom 内部已有 RENDER_TIMEOUT_MS 上限，
+            // 必然落到 bitmap 或 renderFailed 之一，状态机一定收敛、不会「点了没反应」。
+            show = previewBitmap != null || renderFailed,
             onDismissRequest = { onIntent(ShareCardManageIntent.DismissPreview) },
             title = "预览：${template.name.ifBlank { "未命名" }}",
         ) {

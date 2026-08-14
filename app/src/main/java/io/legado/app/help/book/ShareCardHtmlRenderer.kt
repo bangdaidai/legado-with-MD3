@@ -16,6 +16,9 @@ import android.webkit.WebViewClient
 import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.DecodeFormat
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy
+import com.bumptech.glide.request.RequestOptions
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
@@ -782,15 +785,25 @@ object ShareCardHtmlRenderer {
         coverCache?.let { (cachedUrl, cachedUri) -> if (cachedUrl == url) return cachedUri }
 
         // 优先走 Glide 缓存：书架/阅读页早已把封面缓存到本地，命中即本地转 data URI，
-        // 又快又不联网，且解码由 Glide 统一处理（对齐 Max 项目 onlyRetrieveFromCache 思路）。
-        // 缓存未命中再退回裸 OkHttp（下方）。
+        // 又快又不联网，且解码由 Glide 统一处理。缓存未命中再退回 OkHttp / File（下方）。
+        //
+        // 必须显式给尺寸 + 解码选项（对齐 Legado_Max 的 resolveImageDataUrl）：
+        // 原来用无参 submit()（等于 SIZE_ORIGINAL）时 onlyRetrieveFromCache 一直 miss，
+        // 而 Max 只用 Glide、没有任何兜底却能稳定命中，两边唯一的差别就是这里。
+        // 顺带降采样到 640x900：封面在卡片里最多占几百像素宽，小图解码快、
+        // JPEG 编码快、base64 字符串也短得多。
         val tGlideStart = SystemClock.elapsedRealtime()
         val fromCache = withContext(Dispatchers.IO) {
             try {
                 val isRemote = url.startsWith("http", ignoreCase = true)
+                val options = RequestOptions()
+                    .format(DecodeFormat.PREFER_ARGB_8888)
+                    .disallowHardwareConfig()
+                    .downsample(DownsampleStrategy.CENTER_INSIDE)
                 val target = ImageLoader.loadBitmap(context, url)
+                    .apply(options)
                     .let { if (isRemote) it.onlyRetrieveFromCache(true) else it }
-                    .submit()
+                    .submit(640, 900)
                 try {
                     bitmapToJpegDataUri(target.get(4, TimeUnit.SECONDS))
                 } finally {
