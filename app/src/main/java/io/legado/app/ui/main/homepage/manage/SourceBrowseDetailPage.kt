@@ -397,6 +397,10 @@ fun SourceBrowseDetailPage(
                                     kinds.map { it.title },
                                     kinds.map { it.url }
                                 )
+                                // 选择分类确认后直接弹出模块命名对话框，无需再次确认
+                                if (kinds.isNotEmpty()) {
+                                    onShowAddKindGroupDialog()
+                                }
                             } else {
                                 kinds.firstOrNull()?.let { kind ->
                                     onAddDialogPrefill(

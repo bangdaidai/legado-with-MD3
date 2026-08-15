@@ -509,7 +509,6 @@ fun <T> HomepageModuleManageSheet(
                 }
                 selectedKindTitles = emptyList()
                 selectedKindUrls = emptyList()
-                selectedKindUrls = emptyList()
                 showAddKindGroupDialog = false
             },
             confirmText = stringResource(R.string.dialog_confirm),
