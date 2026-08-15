@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.read.sheet
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +39,6 @@ import io.legado.app.domain.model.MarkingEffect
 import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.HighlightRuleConfigUiState
 import io.legado.app.ui.book.read.ReadBookIntent
-import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.TinySwitch
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
@@ -53,7 +51,6 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.reorderAccessibility
 import io.legado.app.ui.widget.components.settingItem.TinySettingItem
-import io.legado.app.ui.widget.components.text.AppText
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -189,30 +186,22 @@ fun HighlightRuleConfigSheet(
             // 笔记默认样式：点「笔记」直接套用的独立默认，不是下面这些正则自动高亮规则
             var showDefaultMarkingStyle by remember { mutableStateOf(false) }
             var defaultMarkingStyle by remember { mutableStateOf(DefaultMarkingStyle.get()) }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showDefaultMarkingStyle = true }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    AppText(text = stringResource(R.string.default_marking_style))
-                    AppText(
-                        text = stringResource(
-                            MarkingEffect.fromStyle(defaultMarkingStyle).labelRes()
-                        ),
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+            // 与下面的规则项同样用 TinySettingItem，保持卡片外观一致
+            TinySettingItem(
+                title = stringResource(R.string.default_marking_style),
+                description = stringResource(
+                    MarkingEffect.fromStyle(defaultMarkingStyle).labelRes()
+                ),
+                onClick = { showDefaultMarkingStyle = true },
+                trailingContent = {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color(MarkingEffect.colorOf(defaultMarkingStyle)))
                     )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color(MarkingEffect.colorOf(defaultMarkingStyle)))
-                )
-            }
+                },
+            )
             DefaultMarkingStyleSheet(
                 show = showDefaultMarkingStyle,
                 initialStyle = defaultMarkingStyle,

@@ -27,6 +27,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.repository.HighlightRuleRepository
 import io.legado.app.domain.model.BookContentProcessEngine
+import io.legado.app.domain.model.MarkingEffect
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.help.book.BookContent
@@ -1757,6 +1758,9 @@ class TextChapterLayout(
         underlineWidth = underlineWidth,
         underlineOffset = underlineOffset,
         underlineSvgPath = underlineSvgPath.orEmpty(),
+        // 荧光笔的色带走文字下层，让文字压在色带上面（真荧光笔就是涂在印好的字上）。
+        // 其余下划线效果保持画在文字上层，行为不变。
+        underlineBelowText = MarkingEffect.fromStyle(this) == MarkingEffect.HIGHLIGHTER,
         markingId = markingId,
     )
 

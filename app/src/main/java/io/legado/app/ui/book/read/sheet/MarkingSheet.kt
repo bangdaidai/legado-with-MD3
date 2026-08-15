@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -24,7 +24,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -36,6 +40,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.data.entities.HighlightRule
@@ -347,54 +355,57 @@ private fun MarkingColorSwatch(
     }
 }
 
-/** 5x1 效果格：单实线 / 波浪线 / 虚线 / 背景色 / 字体色。 */
+/**
+ * 5 选 1 效果组：单实线 / 波浪线 / 虚线 / 背景色 / 字体色。
+ *
+ * 用 M3 连接式 ToggleButton 组（首尾圆角、中间方角连成一体），与主题设置里的
+ * ThemeModeSelector 同一形态；语义按 RadioButton，读屏能识别成单选。
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MarkingEffectGrid(
     selectedEffect: MarkingEffect,
     onEffectSelected: (MarkingEffect) -> Unit,
 ) {
+    val entries = MarkingEffect.entries
     Row(
-        modifier = Modifier
-            .fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
     ) {
-        MarkingEffect.entries.forEach { entry ->
-            val selected = entry == selectedEffect
-            Box(
+        entries.forEachIndexed { index, entry ->
+            ToggleButton(
+                checked = entry == selectedEffect,
+                onCheckedChange = { onEffectSelected(entry) },
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (selected) {
-                            LegadoTheme.colorScheme.secondaryContainer
-                        } else {
-                            LegadoTheme.colorScheme.surfaceContainer
-                        }
-                    )
-                    .clickable { onEffectSelected(entry) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
+                    .semantics { role = Role.RadioButton },
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    entries.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+                // 默认内边距是给单个按钮设计的，五等分时会把三字标签挤成省略号，这里收窄
+                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
             ) {
-                AppText(
+                // 用 M3 Text 而非 AppText：选中/未选中的文字色由 ToggleButton 通过
+                // LocalContentColor 下发，AppText 不读 LocalContentColor，会固定成 onSurface。
+                Text(
                     text = stringResource(entry.labelRes()),
                     style = LegadoTheme.typography.labelMediumEmphasized,
-                    color = if (selected) {
-                        LegadoTheme.colorScheme.onSecondaryContainer
-                    } else {
-                        LegadoTheme.colorScheme.onSurface
-                    },
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
     }
 }
 
-/** 效果标签：供 MarkingSheet 5x1 效果格与目录 Sheet 笔记项共用。 */
+/** 效果标签：供 [MarkingEffectGrid] 与目录 Sheet 笔记项共用。 */
 internal fun MarkingEffect.labelRes(): Int = when (this) {
     MarkingEffect.SOLID -> R.string.bookmark_mark_effect_solid
     MarkingEffect.WAVE -> R.string.bookmark_mark_effect_wave
     MarkingEffect.DASHED -> R.string.bookmark_mark_effect_dash
+    MarkingEffect.HIGHLIGHTER -> R.string.bookmark_mark_effect_highlighter
     MarkingEffect.BG -> R.string.bookmark_mark_effect_bg
     MarkingEffect.TEXT -> R.string.bookmark_mark_effect_text
 }

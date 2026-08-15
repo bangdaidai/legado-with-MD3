@@ -391,12 +391,13 @@
     <string name="bookmark_mark_effect_dash">Dash</string>
     <string name="bookmark_mark_effect_bg">Bg</string>
     <string name="bookmark_mark_effect_text">Text</string>
+    <string name="bookmark_mark_effect_highlighter">Marker</string>
     <string name="bookmark_mark_custom_color">Custom color</string>
     <string name="bookmark_mark_note">Note</string>
     <string name="bookmark_mark_note_hint">Write a note…</string>
     <string name="bookmark_mark_editing">Existing mark — saving will update it</string>
     <string name="default_marking_style">Default note style</string>
-    <string name="default_marking_style_hint">Tapping Note applies this style directly. Tap an existing mark to change its style or add a note.</string>
+    <string name="default_marking_style_preview">Sample text for previewing the mark</string>
     <string name="content_process_ai_section">AI edits</string>
     <string name="marks">Marks</string>
     <string name="marks_empty">No marks yet</string>

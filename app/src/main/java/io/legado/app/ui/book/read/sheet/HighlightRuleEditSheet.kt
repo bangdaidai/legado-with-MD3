@@ -1052,7 +1052,7 @@ fun HighlightRuleEditSheet(
 private const val PREVIEW_BASE_FONT_SIZE = 16
 
 @Composable
-private fun HighlightRulePreview(
+internal fun HighlightRulePreview(
     label: String,
     sampleText: String,
     pattern: String,
