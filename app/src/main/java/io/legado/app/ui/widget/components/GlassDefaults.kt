@@ -26,7 +26,10 @@ object GlassDefaults {
     fun secondaryColorOr(fallback: @Composable () -> Color): Color {
         val themeSettings = LocalAppUiConfiguration.current.theme
         val secondaryColor = themeSettings.customColors(LegadoTheme.isDark).secondary
-        return if (themeSettings.enableDeepPersonalization && secondaryColor != 0) {
+        return if (themeSettings.appTheme == "12" &&
+            themeSettings.enableDeepPersonalization &&
+            secondaryColor != 0
+        ) {
             Color(secondaryColor)
         } else {
             fallback()
