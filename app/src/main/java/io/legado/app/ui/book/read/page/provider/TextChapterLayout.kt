@@ -1513,6 +1513,8 @@ class TextChapterLayout(
                     underlineOffset = style?.underlineOffset ?: 2f,
                     underlineSvgPath = style?.underlineSvgPath ?: "",
                     underlineRoundCap = style?.underlineRoundCap ?: false,
+                    // 荧光笔要画在文字层之下（toCharStyle 已算好），漏传会退化成默认 false、画到文字上面
+                    underlineBelowText = style?.underlineBelowText ?: false,
                     underlineFeather = style?.underlineFeather ?: 0f,
                     underlineDashLen = style?.underlineDashLen ?: 8f,
                     underlineDashGap = style?.underlineDashGap ?: 5f,
