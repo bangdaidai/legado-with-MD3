@@ -24,7 +24,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import io.legado.app.R
-import io.legado.app.constant.AppLog
 import io.legado.app.utils.HtmlFormatter
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
@@ -63,7 +62,6 @@ fun ReadingMemoryScreen(
     onIntent: (ReadingMemoryIntent) -> Unit,
     onBack: () -> Unit,
 ) {
-    AppLog.put("[阅读记忆] MemoryScreen 渲染 items=${uiState.items.size} sortBy=${uiState.sortBy.label} groupBy=${uiState.groupBy.label}")
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()

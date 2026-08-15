@@ -235,7 +235,6 @@ class BookInfoViewModel(
         origin: String? = null,
         coverPath: String? = null
     ) {
-        AppLog.put("[阅读记忆][BookInfo] initData 调用 bookUrl=$bookUrl name=$name author=$author currentBook已存在=${currentBook != null}")
         val current = currentBook
         if (current != null) return
         currentBook = if (!name.isNullOrBlank() && !author.isNullOrBlank()) {
@@ -251,7 +250,6 @@ class BookInfoViewModel(
         } else {
             null
         }
-        AppLog.put("[阅读记忆][BookInfo] initData 临时 currentBook=${currentBook?.bookUrl ?: "null(无name/author,等待execute)"}")
         clearReadRecordObserve()
         relatedBooksLoadJob?.cancel()
         characterLoadJob?.cancel()
@@ -271,7 +269,6 @@ class BookInfoViewModel(
                 }
             }
         }.onSuccess { book ->
-            AppLog.put("[阅读记忆][BookInfo] initData onSuccess book=${book.name} url=${book.bookUrl} inBookshelf=$inBookshelf")
             // 如果从数据库/搜索中拿到的书没有封面，但我们有传入的封面，则保留传入的封面
             if (book.coverUrl.isNullOrBlank() && !coverPath.isNullOrBlank()) {
                 book.coverUrl = coverPath
@@ -283,7 +280,6 @@ class BookInfoViewModel(
             }
             upBook(book, source)
         }.onError {
-            AppLog.put("[阅读记忆][BookInfo] initData onError: ${it.localizedMessage ?: "未找到书籍"}", it)
             showMessage(it.localizedMessage ?: "未找到书籍")
             emitEffect(BookInfoEffect.Finish(afterTransition = true))
         }
@@ -1309,10 +1305,7 @@ class BookInfoViewModel(
             BookInfoMenuAction.ReadingMemory -> {
                 val url = currentBook?.bookUrl
                 if (url != null) {
-                    AppLog.put("[阅读记忆][BookInfo] 点击阅读记忆 -> 导航 bookUrl=$url (currentBook=${currentBook?.name})")
                     emitEffect(BookInfoEffect.NavigateToReadingMemory(bookUrl = url))
-                } else {
-                    AppLog.put("[阅读记忆][BookInfo] 点击阅读记忆 被阻止: currentBook==null （initData 未完成入库存书，或书籍未入库）")
                 }
             }
         }

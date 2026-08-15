@@ -21,10 +21,8 @@ import io.legado.app.help.book.TagManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import java.util.Calendar
 import java.util.UUID
-import io.legado.app.constant.AppLog
 
 class ReadingMemoryRepository(
     private val dao: ReadingMemoryDao,
@@ -56,9 +54,7 @@ class ReadingMemoryRepository(
 
 
     fun observeByBookUrl(bookUrl: String): Flow<ReadingMemory?> =
-        dao.getByBookUrl(bookUrl).onEach {
-            AppLog.put("[阅读记忆] observeByBookUrl bookUrl=$bookUrl result=${it?.bookName ?: "null(无记忆行)"}")
-        }
+        dao.getByBookUrl(bookUrl)
 
     suspend fun getByBookUrl(bookUrl: String): ReadingMemory? = dao.getByBookUrlSync(bookUrl)
 
@@ -308,7 +304,6 @@ class ReadingMemoryRepository(
 
     suspend fun computeStatistics(bookUrl: String): ReadingStatistics {
         val book = bookDao.getBook(bookUrl)
-        AppLog.put("[阅读记忆] computeStatistics bookUrl=$bookUrl book=${book?.name ?: "null(书籍不在库)"}")
         if (book == null) return ReadingStatistics(0L, 0, 0L, null, 0L)
         return computeStatistics(book)
     }
