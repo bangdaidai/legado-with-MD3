@@ -16,7 +16,7 @@ import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
-import io.legado.app.help.http.newCallResponseBody
+import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import kotlinx.coroutines.Dispatchers
@@ -298,7 +298,9 @@ object ShareCardHtmlRenderer {
         forceDark: Boolean? = null,
     ): Bitmap? {
         val coverUri = coverUrlToDataUri(data.coverUrl)
-        val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
+        // 取不到封面时给空串而不是留着原地址：留着原地址等于把网络加载甩回 WebView，
+        // 既违背「WebView 全程零网络」的前提，又只能得到一个裂图；给空串让模板走自己的无封面样式。
+        val resolved = data.copy(coverUrl = coverUri.orEmpty())
         val body = replaceVariables(template.htmlContent, resolved)
         if (body.isBlank()) return null
         // contentKey 只看「模板正文 + 数据」，不含 accent/明暗——同内容换色时保持一致，
@@ -747,12 +749,22 @@ object ShareCardHtmlRenderer {
                     // 2. 少了 referer 等头，晋江这类站点直接 403；
                     // 3. OkHttp 缓存是按拆解后的地址存的，拿原始串永远查不中。
                     val (realUrl, headers) = AnalyzeUrl(url).getUrlAndHeaders()
-                    val body = okHttpClient.newCallResponseBody {
+                    val response = okHttpClient.newCallResponse {
                         url(realUrl)
                         headers.forEach { (k, v) -> addHeader(k, v) }
                     }
-                    val bytes = body.bytes()
-                    if (bytes.isEmpty()) null else decodeToDataUri(bytes, body.contentType()?.toString())
+                    // newCallResponse 失败时也会把最后一个响应交回来，不判状态码的话
+                    // 403 的 HTML 错误页会被 decodeToDataUri 当成「解码失败」按原 MIME 透传，
+                    // 变成 data:text/html 塞进 <img>，在图里就是一个裂图占位。
+                    response.use { resp ->
+                        if (!resp.isSuccessful) {
+                            null
+                        } else {
+                            val mime = resp.body.contentType()?.toString()
+                            val bytes = resp.body.bytes()
+                            if (bytes.isEmpty()) null else decodeToDataUri(bytes, mime)
+                        }
+                    }
                 } catch (_: Exception) { null }
             }
         } else {
