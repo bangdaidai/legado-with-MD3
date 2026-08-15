@@ -18,6 +18,7 @@ import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.model.analyzeRule.AnalyzeUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -739,7 +740,17 @@ object ShareCardHtmlRenderer {
         val result = if (url.startsWith("http")) {
             withContext(Dispatchers.IO) {
                 try {
-                    val body = okHttpClient.newCallResponseBody { url(url) }
+                    // 封面地址可能是 Legado 的「地址 + 选项」格式：`真实地址,{"headers":{...}}`。
+                    // 必须先用 AnalyzeUrl 拆出干净 URL 和 headers（对齐正常显示封面的
+                    // CoverInterceptor → CoverFetcher 那条路），否则：
+                    // 1. 带着 `,{...}` 去请求，路径被百分号编码进去，服务器只能 404；
+                    // 2. 少了 referer 等头，晋江这类站点直接 403；
+                    // 3. OkHttp 缓存是按拆解后的地址存的，拿原始串永远查不中。
+                    val (realUrl, headers) = AnalyzeUrl(url).getUrlAndHeaders()
+                    val body = okHttpClient.newCallResponseBody {
+                        url(realUrl)
+                        headers.forEach { (k, v) -> addHeader(k, v) }
+                    }
                     val bytes = body.bytes()
                     if (bytes.isEmpty()) null else decodeToDataUri(bytes, body.contentType()?.toString())
                 } catch (_: Exception) { null }
