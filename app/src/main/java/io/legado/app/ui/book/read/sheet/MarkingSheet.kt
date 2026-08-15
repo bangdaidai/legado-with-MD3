@@ -260,13 +260,15 @@ fun MarkingSheet(
             )
 
             if (onGenerateShareCard != null) {
-                Spacer(modifier = Modifier.height(12.dp))
+                // 外层 Column 的 spacedBy(4dp) 在 Spacer 上下各加一次，
+                // 所以补 4dp 凑成 12dp；收尾补 8dp 同样凑成 12dp。
+                Spacer(modifier = Modifier.height(4.dp))
                 MediumTonalButton(
                     onClick = onGenerateShareCard,
                     modifier = Modifier.fillMaxWidth(),
                     text = stringResource(R.string.generate_share_card),
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
