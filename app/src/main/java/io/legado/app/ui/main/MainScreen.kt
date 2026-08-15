@@ -36,6 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailItem
@@ -55,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -825,10 +827,14 @@ private fun NavigationIcon(
     modifier: Modifier = Modifier
 ) {
     if (customIconPath.isNotEmpty()) {
+        // SVG 是矢量单色图标，跟随导航项内容色着色；位图（PNG 等）保留原始色彩
         AsyncImage(
             model = customIconPath,
             contentDescription = null,
-            modifier = modifier.size(40.dp)
+            modifier = modifier.size(40.dp),
+            colorFilter = if (customIconPath.endsWith(".svg", ignoreCase = true)) {
+                ColorFilter.tint(LocalContentColor.current)
+            } else null
         )
     } else {
         val icon = AppIcons.mainDestination(destination, selected)
