@@ -1481,10 +1481,8 @@ class ReadBookViewModel(
             is ReadBookIntent.TextActionBookmark -> bookmarkDelegate.openEditor(intent.bookmark)
 
             is ReadBookIntent.OpenMarking -> {
-                // 从划词菜单新建：无原 sheet 可回
-                markingReturnSheet = null
-                markingDelegate.open(intent.selection)
-                _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
+                // 点「笔记」直接用默认样式落库、不弹样式 Sheet；想改样式/加备注点正文里那条划线。
+                markingDelegate.quickSaveWithDefaultStyle(intent.selection)
             }
 
             is ReadBookIntent.EditMarking -> {

@@ -14,6 +14,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.Bookmark
@@ -329,6 +330,10 @@ object Restore : KoinComponent {
                 appDb.readingMemoryDao.insertAll(it)
             }
         }
+        // 划线笔记（book_marks）。无忽略开关，与备份侧对应。
+        fileToListT<BookMarking>(path, "bookMarking.json")?.let {
+            appDb.bookMarkingDao.insertAll(it)
+        }
         log("BackupConfig.dbIsNotIgnored(readRecord) = ${BackupConfig.dbIsNotIgnored("readRecord")}")
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
             // readRecord.json 走兼容 DTO：md 自己的备份字段名是 bookAuthor，r 项目 (readdai) 是 author，
@@ -419,6 +424,7 @@ object Restore : KoinComponent {
             }?.onFailure {
                 AppLog.put("恢复主题出错\n${it.localizedMessage}", it)
             }
+            restoreAssetDirs(path, Backup.themeAssetDirs(appCtx))
         }
         File(path, BookCover.configFileName).takeIf {
             it.exists() && !BackupConfig.ignoreCoverConfig
@@ -429,6 +435,9 @@ object Restore : KoinComponent {
             AppLog.put("恢复封面规则出错\n${it.localizedMessage}", it)
         }
         if (!BackupConfig.ignoreReadConfig) {
+            // 背景图先落盘再恢复配置：下面的 refresh / 配置总线会去解析背景路径，
+            // 图片不先到位就会解析成空背景。
+            restoreAssetDirs(path, listOf(Backup.readBgDir(appCtx)))
             //恢复阅读界面配置
             File(path, ReadBookConfig.configFileName).takeIf {
                 it.exists()
@@ -573,6 +582,27 @@ object Restore : KoinComponent {
         // 恢复完成提示前等待落盘，dataStore.edit 返回即持久化完成
         SettingsWriter.awaitPendingWrites()
     }
+
+    /**
+     * 恢复备份里的资源实体目录（主题包 saved_themes、导航图标 nav_icons、字体 fonts、
+     * 主题背景/容器图 theme_assets、阅读页背景图 bg）。备份按目录名把它们打进 ZIP，
+     * 解压后落在 [path] 下，这里按 [targets] 给出的原位定义拷回。绝对路径在同一
+     * applicationId 下跨设备一致，配置里存的引用路径恢复后即可命中。
+     * overwrite 合并式覆盖，不清空目标，避免误删非备份来源的现有资源。
+     */
+    private fun restoreAssetDirs(path: String, targets: List<File>) {
+        targets.forEach { target ->
+            val source = File(path, target.name)
+            if (!source.isDirectory) return@forEach
+            runCatching {
+                target.mkdirs()
+                source.copyRecursively(target, overwrite = true)
+            }.onFailure {
+                AppLog.put("恢复资源目录 ${target.name} 出错\n${it.localizedMessage}", it)
+            }
+        }
+    }
+
 
     private fun readXmlToMap(file: File): Map<String, Any?> {
         val map = mutableMapOf<String, Any?>()

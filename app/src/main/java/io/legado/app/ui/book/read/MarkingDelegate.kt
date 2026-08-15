@@ -113,6 +113,40 @@ class MarkingDelegate(
         }
     }
 
+    /**
+     * 划词菜单点「笔记」的快捷路径：直接用 [DefaultMarkingStyle] 落库，不开 Sheet、不录备注。
+     *
+     * 不经过 [open]/[save] 的会话状态，因此不依赖 _uiState；同一段文字重复划线时由
+     * [SaveMarkingUseCase.save] 按锚点归并（不会堆出重复笔记，只是把样式刷成默认）。
+     * 想补备注或改样式，点正文里那条划线走 [openForEdit]。
+     */
+    fun quickSaveWithDefaultStyle(selection: Bookmark) {
+        val book = ReadBook.book ?: return
+        val style = DefaultMarkingStyle.get()
+        scope.launch(IO) {
+            runCatching {
+                val (contextBefore, contextAfter) = selectionContext(selection)
+                saveMarkingUseCase.save(
+                    bookName = book.name,
+                    bookAuthor = book.author,
+                    bookUrl = book.bookUrl,
+                    chapterIndex = selection.chapterIndex,
+                    chapterPosition = selection.chapterPos,
+                    selectedText = selection.bookText,
+                    style = style,
+                    contextBefore = contextBefore,
+                    contextAfter = contextAfter,
+                    chapterName = selection.chapterName,
+                    note = "",
+                )
+            }.onSuccess {
+                host.reloadCurrentChapter()
+            }.onFailure { error ->
+                host.showToast(error.localizedMessage ?: context.getString(R.string.error))
+            }
+        }
+    }
+
     fun save(style: TextProcessStyle, note: String) {
         val current = _uiState.value
         val book = ReadBook.book ?: return

@@ -89,6 +89,7 @@ object Backup {
             "excludedTag.json",
             "tagMapping.json",
             "readingMemory.json",
+            "bookMarking.json",
             "bookCharacterProfile.json",
             "servers.json",
             "shareCardTemplate.json",
@@ -100,6 +101,27 @@ object Backup {
             "config.xml"
         )
     }
+
+    /**
+     * 主题落在磁盘上的资源目录：已保存主题包、导航图标、字体、主题包解压出的背景/容器图。
+     * config.xml 里存的只是指向这些文件的绝对路径，目录不一起打包，恢复后路径就是悬空的
+     * （主题色能回来但背景、底栏图标是空的），已保存的主题也会整个丢失。
+     * 恢复时按目录名回原位，所以备份与恢复两侧必须共用这份定义。
+     */
+    internal fun themeAssetDirs(context: Context): List<File> = listOf(
+        File(context.filesDir, "saved_themes"),
+        File(context.filesDir, "nav_icons"),
+        File(context.filesDir, "fonts"),
+        File(context.externalFiles, "theme_assets"),
+    )
+
+    /**
+     * 阅读页背景图目录。用户导入的图片实体存在这里，阅读配置里存的只是文件名或路径。
+     * 原先只有 [AppWebDav.upBgs] 把它们单独传到 WebDAV，本地备份包里没有，
+     * 纯本地恢复背景图就丢了；现在一并打进 ZIP。
+     */
+    internal fun readBgDir(context: Context): File = File(context.externalFiles, "bg")
+
 
     private fun getNowZipFileName(): String {
         val backupDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -242,42 +264,8 @@ object Backup {
         if (BackupConfig.dbIsNotIgnored("readingMemory", true)) {
             writeListToJson(appDb.readingMemoryDao.getAllSync(), "readingMemory.json", backupPath)
         }
-        if (BackupConfig.dbIsNotIgnored("bookTag", true)) {
-            writeListToJson(appDb.bookTagDao.getAllSync(), "bookTag.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("bookTagGroup", true)) {
-            writeListToJson(appDb.bookTagGroupDao.getAllSorted(), "bookTagGroup.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("bookTagRelation", true)) {
-            writeListToJson(appDb.bookTagRelationDao.getAllSync(), "bookTagRelation.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("excludedTag", true)) {
-            writeListToJson(appDb.excludedTagDao.getAllSync(), "excludedTag.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("tagMapping", true)) {
-            writeListToJson(appDb.tagMappingDao.getAll(), "tagMapping.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("readingMemory", true)) {
-            writeListToJson(appDb.readingMemoryDao.getAllSync(), "readingMemory.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("bookTag", true)) {
-            writeListToJson(appDb.bookTagDao.getAllSync(), "bookTag.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("bookTagGroup", true)) {
-            writeListToJson(appDb.bookTagGroupDao.getAllSorted(), "bookTagGroup.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("bookTagRelation", true)) {
-            writeListToJson(appDb.bookTagRelationDao.getAllSync(), "bookTagRelation.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("excludedTag", true)) {
-            writeListToJson(appDb.excludedTagDao.getAllSync(), "excludedTag.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("tagMapping", true)) {
-            writeListToJson(appDb.tagMappingDao.getAll(), "tagMapping.json", backupPath)
-        }
-        if (BackupConfig.dbIsNotIgnored("readingMemory", true)) {
-            writeListToJson(appDb.readingMemoryDao.getAllSync(), "readingMemory.json", backupPath)
-        }
+        // 划线笔记（book_marks）。无忽略开关，随备份无条件导出。
+        writeListToJson(appDb.bookMarkingDao.getAllSync(), "bookMarking.json", backupPath)
         if (BackupConfig.dbIsNotIgnored("server", true)) {
             GSON.toJson(appDb.serverDao.all).let { json ->
                 aes.runCatching {
@@ -346,6 +334,19 @@ object Backup {
             .map { File(backupPath, it) }
             .filter(File::isFile)
             .map(File::getAbsolutePath)
+            .toMutableList()
+        // 资源实体目录直接从原位打包（zipFile 递归目录，条目以目录名为前缀）。
+        // 配置里存的只是指向这些文件的路径，不一起打包恢复后就是悬空的。
+        // 各自跟随对应的忽略开关：主题资源跟主题配置，背景图跟阅读配置。
+        val assetDirs = buildList {
+            if (!BackupConfig.backupIgnoreThemeConfig) addAll(themeAssetDirs(context))
+            if (!BackupConfig.backupIgnoreReadConfig) add(readBgDir(context))
+        }
+        assetDirs.forEach { dir ->
+            if (dir.isDirectory && !dir.listFiles().isNullOrEmpty()) {
+                paths.add(dir.absolutePath)
+            }
+        }
         FileUtils.delete(zipFilePath)
         FileUtils.delete(zipFilePath.replace("tmp_", ""))
         val backupFileName = if (AppConfig.onlyLatestBackup) {

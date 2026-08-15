@@ -52,6 +52,11 @@ interface BookMarkingDao {
     @Query("select * from book_marks order by updatedAt desc")
     fun flowAll(): Flow<List<BookMarking>>
 
+    /** 全量取出，供备份导出（Flow 不适用于一次性导出）。 */
+    @Query("select * from book_marks order by createdAt")
+    suspend fun getAllSync(): List<BookMarking>
+
+
     /** 单本书的笔记数，供阅读记忆 annotationCount 统计。 */
     @Query("select count(*) from book_marks where bookName = :bookName and bookAuthor = :bookAuthor")
     suspend fun countByBook(bookName: String, bookAuthor: String): Int
@@ -66,6 +71,11 @@ interface BookMarkingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(bookMarking: BookMarking)
+
+    /** 批量写入，供备份恢复；主键冲突按 REPLACE，重复恢复不会产生重复笔记。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(bookMarkings: List<BookMarking>)
+
 
     @Query("update book_marks set enabled = :enabled, updatedAt = :updatedAt where id = :id")
     suspend fun setEnabled(

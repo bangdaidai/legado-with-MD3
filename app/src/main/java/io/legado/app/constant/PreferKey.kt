@@ -110,6 +110,13 @@ object PreferKey {
     const val highlightRuleBookTitle = "highlightRuleBookTitle"
     const val highlightRuleBracketNote = "highlightRuleBracketNote"
     const val highlightRulesInitialized = "highlightRulesInitialized"
+
+    /**
+     * 笔记（book_marks）专属的默认划线样式，存 TextProcessStyle 的 JSON。
+     * 与 highlightRule* 那套「正则自动高亮」无关；空值时回落内置默认（实线 + 绿色）。
+     */
+    const val defaultMarkingStyle = "defaultMarkingStyle"
+
     const val adaptSpecialStyle = "adaptSpecialStyle"
     const val autoClearExpired = "autoClearExpired"
     const val autoChangeSource = "autoChangeSource"

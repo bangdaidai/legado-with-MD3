@@ -365,6 +365,8 @@
     <string name="bookmark_mark_note">备注</string>
     <string name="bookmark_mark_note_hint">输入备注…</string>
     <string name="bookmark_mark_editing">已有标记，保存将更新</string>
+    <string name="default_marking_style">笔记默认样式</string>
+    <string name="default_marking_style_hint">点「笔记」直接套用这个样式。想改样式或加备注，点正文里已有的划线。</string>
     <string name="content_process_ai_section">AI 改写</string>
     <string name="marks">笔记</string>
     <string name="marks_empty">暂无划线笔记</string>

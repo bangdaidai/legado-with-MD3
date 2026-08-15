@@ -282,7 +282,7 @@ fun MarkingSheet(
 
 /** 自定义样式区：预设颜色行（尾部为自定义颜色，打开取色器）。 */
 @Composable
-private fun MarkingColorRow(
+internal fun MarkingColorRow(
     selectedColor: Int,
     onColorSelected: (Int) -> Unit,
     onCustomColorClick: () -> Unit,
@@ -349,7 +349,7 @@ private fun MarkingColorSwatch(
 
 /** 5x1 效果格：单实线 / 波浪线 / 虚线 / 背景色 / 字体色。 */
 @Composable
-private fun MarkingEffectGrid(
+internal fun MarkingEffectGrid(
     selectedEffect: MarkingEffect,
     onEffectSelected: (MarkingEffect) -> Unit,
 ) {

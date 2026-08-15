@@ -1,14 +1,18 @@
 package io.legado.app.ui.book.read.sheet
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -22,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -30,8 +36,11 @@ import androidx.compose.ui.zIndex
 import io.legado.app.R
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.repository.configNames
+import io.legado.app.domain.model.MarkingEffect
+import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.HighlightRuleConfigUiState
 import io.legado.app.ui.book.read.ReadBookIntent
+import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.TinySwitch
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
@@ -44,6 +53,7 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.reorderAccessibility
 import io.legado.app.ui.widget.components.settingItem.TinySettingItem
+import io.legado.app.ui.widget.components.text.AppText
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -176,6 +186,43 @@ fun HighlightRuleConfigSheet(
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
         ) {
+            // 笔记默认样式：点「笔记」直接套用的独立默认，不是下面这些正则自动高亮规则
+            var showDefaultMarkingStyle by remember { mutableStateOf(false) }
+            var defaultMarkingStyle by remember { mutableStateOf(DefaultMarkingStyle.get()) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDefaultMarkingStyle = true }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(text = stringResource(R.string.default_marking_style))
+                    AppText(
+                        text = stringResource(
+                            MarkingEffect.fromStyle(defaultMarkingStyle).labelRes()
+                        ),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(MarkingEffect.colorOf(defaultMarkingStyle)))
+                )
+            }
+            DefaultMarkingStyleSheet(
+                show = showDefaultMarkingStyle,
+                initialStyle = defaultMarkingStyle,
+                onDismissRequest = { showDefaultMarkingStyle = false },
+                onSave = { style ->
+                    DefaultMarkingStyle.set(style)
+                    defaultMarkingStyle = style
+                    showDefaultMarkingStyle = false
+                },
+            )
             LazyColumn(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),

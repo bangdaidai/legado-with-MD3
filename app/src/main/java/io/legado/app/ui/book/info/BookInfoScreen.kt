@@ -275,7 +275,6 @@ private fun BookInfoScreenContent(
                     book = book,
                     style = resolvedBackdropStyle,
                     usesDefaultCover = usesDefaultCover,
-                    onNetworkCoverLoadError = onNetworkCoverLoadError,
                 )
                 AppPullToRefresh(
                     modifier = Modifier.fillMaxSize(),
@@ -696,7 +695,6 @@ private fun BookInfoBackdrop(
     book: BookInfoBookUi,
     style: BookInfoBackdropStyle,
     usesDefaultCover: Boolean,
-    onNetworkCoverLoadError: (String?) -> Unit,
 ) {
     val backdropState = remember(
         book.name,
@@ -748,7 +746,6 @@ private fun BookInfoBackdrop(
                         ),
                     contentScale = ContentScale.Crop,
                     showLoadingPlaceholder = false,
-                    onError = { onNetworkCoverLoadError(currentBook.coverPath) },
                     requestBuilder = {
                         size(Size(384, 384))
                     }

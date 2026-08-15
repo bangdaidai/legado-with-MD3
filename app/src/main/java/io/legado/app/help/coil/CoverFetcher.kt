@@ -11,6 +11,7 @@ import coil3.request.Options
 import io.legado.app.model.ReadManga
 import io.legado.app.utils.ImageUtils
 import io.legado.app.utils.isWifiConnect
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.CacheControl
@@ -122,6 +123,9 @@ class CoverFetcher(
                     body.use { it.bytes() }
                 }
             }
+        } catch (e: CancellationException) {
+            // 滚动书架时 Coil 会取消在途请求，取消不代表这个封面地址有问题，不能拉黑
+            throw e
         } catch (e: Exception) {
             markFailed(url)
             throw e
