@@ -92,6 +92,10 @@ object Backup {
             "bookMarking.json",
             "bookCharacterProfile.json",
             "servers.json",
+            "aiProviders.json",
+            "aiModels.json",
+            "aiTaskPresets.json",
+            "aiPromptPresets.json",
             "shareCardTemplate.json",
             DirectLinkUpload.ruleFileName,
             ReadBookConfig.configFileName,
@@ -275,6 +279,21 @@ object Backup {
                         .writeText(it)
                 }
             }
+        }
+        // AI 设置：服务商/模型/任务预设/提示词预设四张表。
+        // 服务商行里 apiKey 是明文存的，和 servers.json 一样先加密再落盘；其余三张表无密钥。
+        if (BackupConfig.dbIsNotIgnored("aiConfig", true)) {
+            GSON.toJson(appDb.aiProfileDao.getAllProviders()).let { json ->
+                aes.runCatching {
+                    encryptBase64(json)
+                }.getOrDefault(json).let {
+                    FileUtils.createFileIfNotExist(backupPath + File.separator + "aiProviders.json")
+                        .writeText(it)
+                }
+            }
+            writeListToJson(appDb.aiProfileDao.getAllModels(), "aiModels.json", backupPath)
+            writeListToJson(appDb.aiProfileDao.getAllPresets(), "aiTaskPresets.json", backupPath)
+            writeListToJson(appDb.aiPromptPresetDao.getAll(), "aiPromptPresets.json", backupPath)
         }
         currentCoroutineContext().ensureActive()
         if (!BackupConfig.backupIgnoreReadConfig) {

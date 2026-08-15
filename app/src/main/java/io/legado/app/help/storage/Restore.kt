@@ -12,6 +12,10 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.AiModelProfile
+import io.legado.app.data.entities.AiPromptPreset
+import io.legado.app.data.entities.AiProviderProfile
+import io.legado.app.data.entities.AiTaskPreset
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookMarking
@@ -404,6 +408,31 @@ object Restore : KoinComponent {
                 }
             }?.onFailure {
                 AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it)
+            }
+        }
+        // AI 设置：与备份侧对应，aiProviders.json 走加密（兼容早期未加密的明文数组）。
+        if (BackupConfig.dbIsNotIgnored("aiConfig")) {
+            File(path, "aiProviders.json").takeIf {
+                it.exists()
+            }?.runCatching {
+                var json = readText()
+                if (!json.isJsonArray()) {
+                    json = aes.decryptStr(json)
+                }
+                GSON.fromJsonArray<AiProviderProfile>(json).getOrNull()?.let {
+                    appDb.aiProfileDao.insertProviders(it)
+                }
+            }?.onFailure {
+                AppLog.put("恢复AI服务商出错\n${it.localizedMessage}", it)
+            }
+            fileToListT<AiModelProfile>(path, "aiModels.json")?.let {
+                appDb.aiProfileDao.insertModels(it)
+            }
+            fileToListT<AiTaskPreset>(path, "aiTaskPresets.json")?.let {
+                appDb.aiProfileDao.insertPresets(it)
+            }
+            fileToListT<AiPromptPreset>(path, "aiPromptPresets.json")?.let {
+                appDb.aiPromptPresetDao.upsertAll(it)
             }
         }
         File(path, DirectLinkUpload.ruleFileName).takeIf {

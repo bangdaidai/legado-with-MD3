@@ -18,6 +18,9 @@ interface AiPromptPresetDao {
     )
     fun getEnabledByTaskType(taskType: String): List<AiPromptPreset>
 
+    @Query("select * from ai_prompt_presets")
+    suspend fun getAll(): List<AiPromptPreset>
+
     @Query("select count(*) from ai_prompt_presets where taskType = :taskType")
     suspend fun countByTaskType(taskType: String): Int
 

@@ -23,6 +23,15 @@ interface AiProfileDao {
     @Query("select * from ai_task_presets order by taskType, sortNumber, createdAt")
     fun observePresets(): Flow<List<AiTaskPreset>>
 
+    @Query("select * from ai_provider_profiles")
+    suspend fun getAllProviders(): List<AiProviderProfile>
+
+    @Query("select * from ai_model_profiles")
+    suspend fun getAllModels(): List<AiModelProfile>
+
+    @Query("select * from ai_task_presets")
+    suspend fun getAllPresets(): List<AiTaskPreset>
+
     @Query("select * from ai_provider_profiles where id = :id")
     suspend fun getProvider(id: String): AiProviderProfile?
 
@@ -49,6 +58,15 @@ interface AiProfileDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPreset(preset: AiTaskPreset)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertProviders(providers: List<AiProviderProfile>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertModels(models: List<AiModelProfile>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPresets(presets: List<AiTaskPreset>)
 
     @Update(onConflict = OnConflictStrategy.REPLACE)
     suspend fun updateProvider(provider: AiProviderProfile)
