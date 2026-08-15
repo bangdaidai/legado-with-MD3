@@ -17,6 +17,7 @@ import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DecodeFormat
+import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy
 import com.bumptech.glide.request.RequestOptions
 import io.legado.app.constant.AppLog
@@ -34,6 +35,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
@@ -292,6 +294,29 @@ object ShareCardHtmlRenderer {
         previewCache[key] = bmp
     }
 
+    // ==================== 临时计时探针（量完即删） ====================
+    // 一次出图的各段耗时先攒进 timingProbe，由 render() 结束时一次性写进 AppLog，
+    // 保证「一次生成 = 一条日志」，不再散成四条。
+    // 渲染由 render() 单入口 + renderMutex 串行化，正常不会有两次出图交错；
+    // 极端并发下最多是日志串行度不准，不影响功能。
+    private val timingProbe = StringBuilder()
+
+    private fun probe(segment: String) {
+        timingProbe.append(segment)
+    }
+
+    /** 把 Glide 的失败原因摊平成可读文本：FutureTarget.get() 会把 GlideException 包进 ExecutionException。 */
+    private fun describeGlideError(e: Throwable): String {
+        val real = (e as? ExecutionException)?.cause ?: e
+        if (real is GlideException) {
+            val roots = real.rootCauses.joinToString(" / ") { c ->
+                "${c.javaClass.simpleName}(${c.message})"
+            }
+            return "GlideException(${real.message}) roots=[$roots]"
+        }
+        return "${real.javaClass.simpleName}(${real.message})"
+    }
+
     /**
      * 渲染真实数据的分享卡片为 Bitmap。
      * @param accent 用户临时选择的主题色（ARGB）。非 null 时注入一整套 `--bp-*` HSL 变量。
@@ -307,6 +332,7 @@ object ShareCardHtmlRenderer {
         // 临时计时：拆分 封面解析 / 走的哪条路径 / 总耗时。定位「转两圈」到底慢在哪，
         // 量完即删。写进 AppLog，直接在 App 内「日志」面板看，不用连 adb。
         val t0 = SystemClock.elapsedRealtime()
+        timingProbe.setLength(0)
         val coverUri = coverUrlToDataUri(context, data.coverUrl)
         val tCover = SystemClock.elapsedRealtime()
         val resolved = if (coverUri != null) data.copy(coverUrl = coverUri) else data
@@ -319,7 +345,7 @@ object ShareCardHtmlRenderer {
         getCached(key)?.let {
             AppLog.put(
                 "卡片计时 path=CACHE cover=${tCover - t0}ms " +
-                    "total=${SystemClock.elapsedRealtime() - t0}ms",
+                    "total=${SystemClock.elapsedRealtime() - t0}ms" + timingProbe,
             )
             return it
         }
@@ -341,7 +367,7 @@ object ShareCardHtmlRenderer {
         AppLog.put(
             "卡片计时 path=${if (sameContent) "RECOLOR" else "FULL"} " +
                 "cover=${tCover - t0}ms render=${SystemClock.elapsedRealtime() - tCover}ms " +
-                "total=${SystemClock.elapsedRealtime() - t0}ms",
+                "total=${SystemClock.elapsedRealtime() - t0}ms ok=${bmp != null}" + timingProbe,
         )
         return bmp
     }
@@ -358,10 +384,17 @@ object ShareCardHtmlRenderer {
         val finalHtml = injectRenderHead(body, null, null)
         val key = cacheKeyOf(finalHtml, null, null)
         getCached(key)?.let { return it }
+        // 临时探针：与 render() 一样先清零，出图后一次性写日志，避免这段耗时残留污染下次 render()
+        timingProbe.setLength(0)
+        val t0 = SystemClock.elapsedRealtime()
         val bmp = loadAndRender(context, finalHtml, null, null)
         // 模板管理页内容与预览 body 不同，打破 currentContentKey，避免预览误走增量路径
         currentContentKey = null
         if (bmp != null) putCached(key, bmp)
+        AppLog.put(
+            "卡片计时 path=CUSTOM(管理页预览) total=${SystemClock.elapsedRealtime() - t0}ms " +
+                "ok=${bmp != null}" + timingProbe,
+        )
         return bmp
     }
 
@@ -413,8 +446,8 @@ object ShareCardHtmlRenderer {
                 val tMeasure = SystemClock.elapsedRealtime()
                 measureSink.callback = null
                 // 临时计时：lock=等互斥锁 newWebView=首次建 WebView loadMeasure=加载+量高（含等图/字体）
-                AppLog.put(
-                    "卡片计时   FULL lock=${tLock - tEnter}ms newWebView=${tWebView - tLock}ms " +
+                probe(
+                    "\n  FULL lock=${tLock - tEnter}ms newWebView=${tWebView - tLock}ms " +
                         "loadMeasure=${tMeasure - tWebView}ms h=${m?.let { maxOf(it[0], it[4]) }}css",
                 )
                 if (m == null || m[0] <= 0) return@withContext null
@@ -456,8 +489,8 @@ object ShareCardHtmlRenderer {
                     }
                 }
                 // 临时计时：reHeight>0 说明没命中缓存高度、白量了一次
-                AppLog.put(
-                    "卡片计时   RECOLOR lock=${tLock - tEnter}ms " +
+                probe(
+                    "\n  RECOLOR lock=${tLock - tEnter}ms " +
                         "reHeight=${SystemClock.elapsedRealtime() - tLock}ms",
                 )
                 // 构造与 captureAfterMeasure 约定一致的量高数组：docH=capH=h（高度已知，无需再量）。
@@ -516,8 +549,8 @@ object ShareCardHtmlRenderer {
             null
         }
         // 临时计时：resize=撑高 measure/layout drawReady=等重排+一帧 draw=软件光栅化整张长图
-        AppLog.put(
-            "卡片计时   CAPTURE resize=${tResize - tIn}ms drawReady=${tReady - tResize}ms " +
+        probe(
+            "\n  CAPTURE resize=${tResize - tIn}ms drawReady=${tReady - tResize}ms " +
                 "draw=${SystemClock.elapsedRealtime() - tReady}ms " +
                 "size=${widthPx}x$fullHeightPx ok=${bmp != null}",
         )
@@ -793,6 +826,7 @@ object ShareCardHtmlRenderer {
         // 顺带降采样到 640x900：封面在卡片里最多占几百像素宽，小图解码快、
         // JPEG 编码快、base64 字符串也短得多。
         val tGlideStart = SystemClock.elapsedRealtime()
+        var glideErr: String? = null
         val fromCache = withContext(Dispatchers.IO) {
             try {
                 val isRemote = url.startsWith("http", ignoreCase = true)
@@ -809,7 +843,11 @@ object ShareCardHtmlRenderer {
                 } finally {
                     Glide.with(context).clear(target)
                 }
-            } catch (_: Throwable) { null }
+            } catch (e: Throwable) {
+                // 临时探针：把 Glide miss 的真实原因摊平（get() 会把 GlideException 包进 ExecutionException）
+                glideErr = describeGlideError(e)
+                null
+            }
         }
         val tGlideEnd = SystemClock.elapsedRealtime()
         val result = fromCache ?: if (url.startsWith("http")) {
@@ -833,10 +871,14 @@ object ShareCardHtmlRenderer {
             } catch (_: Exception) { null }
         }
         if (result != null) coverCache = url to result
-        // 临时计时：glide=Glide 缓存尝试 hit=是否命中 fallback=未命中后裸 OkHttp/File 兜底耗时
-        AppLog.put(
-            "卡片计时   COVER glide=${tGlideEnd - tGlideStart}ms hit=${fromCache != null} " +
-                "fallback=${SystemClock.elapsedRealtime() - tGlideEnd}ms ok=${result != null}",
+        // 临时探针：glide=Glide 缓存尝试耗时 hit=是否命中 fallback=未命中后 OkHttp/File 兜底耗时
+        // glideErr=Glide 失败的真实原因（含 GlideException 的 rootCauses），用来定位为什么一直 miss
+        probe(
+            "\n  COVER glide=${tGlideEnd - tGlideStart}ms hit=${fromCache != null} " +
+                "fallback=${SystemClock.elapsedRealtime() - tGlideEnd}ms ok=${result != null} " +
+                "remote=${url.startsWith("http", ignoreCase = true)}" +
+                "\n    url=${url.take(160)}" +
+                (glideErr?.let { "\n    glideErr=$it" } ?: ""),
         )
         return result
     }
