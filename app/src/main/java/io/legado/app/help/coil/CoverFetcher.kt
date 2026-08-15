@@ -12,7 +12,11 @@ import io.legado.app.model.ReadManga
 import io.legado.app.utils.ImageUtils
 import io.legado.app.utils.isWifiConnect
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import okhttp3.CacheControl
 import okhttp3.Call
@@ -35,27 +39,45 @@ class CoverFetcher(
         /** Tag applied to cover requests so [cacheControlInterceptor] can identify them. */
         val COVER_REQUEST_TAG = Unit
 
-        private const val FAIL_CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+        /** 4xx（如 404 死链、403 鉴权失败）：地址大概率长期不可用，拉黑久一点省得反复打。 */
+        private const val FAIL_TTL_CLIENT_MS = 5 * 60 * 1000L // 5 minutes
+        /** 超时 / 网络抖动 / 5xx：临时性问题，很快就能重试，只短暂拉黑避免瞬时风暴。 */
+        private const val FAIL_TTL_TRANSIENT_MS = 30 * 1000L // 30 seconds
 
-        /** URL -> failure timestamp. Prevents infinite retries for permanently broken URLs. */
+        /** URL -> 拉黑到期时间戳。到期即视为可重试。 */
         private val failCache = ConcurrentHashMap<String, Long>()
 
         fun isFailed(url: String): Boolean {
-            val ts = failCache[url] ?: return false
-            if (System.currentTimeMillis() - ts > FAIL_CACHE_TTL_MS) {
+            val deadline = failCache[url] ?: return false
+            if (System.currentTimeMillis() > deadline) {
                 failCache.remove(url)
                 return false
             }
             return true
         }
 
-        fun markFailed(url: String) {
-            failCache[url] = System.currentTimeMillis()
+        fun markFailed(url: String, ttlMs: Long) {
+            failCache[url] = System.currentTimeMillis() + ttlMs
         }
 
         fun clearFailCache() {
             failCache.clear()
         }
+
+        /**
+         * 在途下载去重：key 为 "$url|$isManga"，value 为共享的下载任务。
+         *
+         * 同一张封面会被多处同时请求（详情页主封面与背景大图用不同的 memoryCacheKey，
+         * 内存都 miss 时并发打同一个 URL），而 OkHttp 不做在途请求合并，结果同一张图
+         * 下载两遍。这里按地址合流，只下载一次。
+         */
+        private val inFlight = ConcurrentHashMap<String, Deferred<Pair<ByteArray, Boolean>>>()
+
+        /**
+         * 下载跑在这个独立作用域里，而不是调用方的协程里：某个调用方被取消（封面滑出
+         * 屏幕）不应该连带取消其它等待者的下载。SupervisorJob 保证单次失败不影响后续。
+         */
+        private val fetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
     override suspend fun fetch(): FetchResult {
@@ -86,48 +108,21 @@ class CoverFetcher(
             throw IOException("URL previously failed, skipping: $url")
         }
 
-        // Try OkHttp HTTP cache: FORCE_CACHE serves from cache or returns 504 on miss
         val requestHeaders = options.extras[CoverExtras.Headers]
-        val cacheRequest = Request.Builder()
-            .url(url)
-            .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
-            .cacheControl(CacheControl.FORCE_CACHE)
-            .build()
-
-        var fromCache = false
-        val rawBytes = try {
-            withContext(Dispatchers.IO) {
-                val cacheResponse = callFactory.newCall(cacheRequest).execute()
-                if (cacheResponse.isSuccessful) {
-                    fromCache = true
-                    cacheResponse.body.use { it.bytes() }
-                } else {
-                    cacheResponse.close()
-                    // Cache miss, fetch from network
-                    val networkRequest = Request.Builder()
-                        .url(url)
-                        .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
-                        .tag(COVER_REQUEST_TAG)
-                        .cacheControl(
-                            CacheControl.Builder()
-                                .maxAge(30, TimeUnit.DAYS)
-                                .build()
-                        )
-                        .build()
-                    val networkResponse = callFactory.newCall(networkRequest).execute()
-                    val body = networkResponse.body
-                    if (!networkResponse.isSuccessful) {
-                        body.close()
-                        throw IOException("HTTP ${networkResponse.code}")
-                    }
-                    body.use { it.bytes() }
-                }
-            }
+        val (rawBytes, fromCache) = try {
+            awaitSharedDownload(url, isManga, requestHeaders)
         } catch (e: CancellationException) {
             // 滚动书架时 Coil 会取消在途请求，取消不代表这个封面地址有问题，不能拉黑
             throw e
         } catch (e: Exception) {
-            markFailed(url)
+            markFailed(
+                url,
+                if (e is CoverHttpException && e.code in 400..499) {
+                    FAIL_TTL_CLIENT_MS
+                } else {
+                    FAIL_TTL_TRANSIENT_MS
+                }
+            )
             throw e
         }
 
@@ -135,11 +130,14 @@ class CoverFetcher(
         val decodedBytes = if (ImageUtils.skipDecode(source, !isManga)) {
             rawBytes
         } else {
+            // rawBytes 可能被多个等待者共享，解密规则是用户 JS，不能保证不原地改数组，
+            // 所以这里传副本。
+            val ownBytes = rawBytes.copyOf()
             withContext(Dispatchers.IO) {
                 if (isManga) {
-                    ImageUtils.decode(url, rawBytes, false, source, ReadManga.book)
+                    ImageUtils.decode(url, ownBytes, false, source, ReadManga.book)
                 } else {
-                    ImageUtils.decode(url, rawBytes, true, source)
+                    ImageUtils.decode(url, ownBytes, true, source)
                 }
             } ?: throw IOException("图片解密失败")
         }
@@ -153,6 +151,61 @@ class CoverFetcher(
             dataSource = if (fromCache) DataSource.DISK else DataSource.NETWORK
         )
     }
+
+    /** 取得该地址的共享下载任务并等待结果，没有在途任务时才真正发起下载。 */
+    private suspend fun awaitSharedDownload(
+        url: String,
+        isManga: Boolean,
+        requestHeaders: Map<String, String>?,
+    ): Pair<ByteArray, Boolean> {
+        val key = "$url|$isManga"
+        val deferred = inFlight.computeIfAbsent(key) {
+            fetchScope.async { download(url, requestHeaders) }
+        }
+        // 任务结束即从表中摘除，后续请求走 OkHttp 缓存或重新发起。
+        // 注册在 computeIfAbsent 之外，避免回调在 ConcurrentHashMap 计算过程中改表。
+        deferred.invokeOnCompletion { inFlight.remove(key, deferred) }
+        return deferred.await()
+    }
+
+    /** 先探 OkHttp 缓存（FORCE_CACHE 命中即返回，miss 返回 504），未命中再走网络。 */
+    private suspend fun download(
+        url: String,
+        requestHeaders: Map<String, String>?,
+    ): Pair<ByteArray, Boolean> = withContext(Dispatchers.IO) {
+        val cacheRequest = Request.Builder()
+            .url(url)
+            .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
+            .cacheControl(CacheControl.FORCE_CACHE)
+            .build()
+        val cacheResponse = callFactory.newCall(cacheRequest).execute()
+        if (cacheResponse.isSuccessful) {
+            cacheResponse.body.use { it.bytes() } to true
+        } else {
+            cacheResponse.close()
+            // Cache miss, fetch from network
+            val networkRequest = Request.Builder()
+                .url(url)
+                .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
+                .tag(COVER_REQUEST_TAG)
+                .cacheControl(
+                    CacheControl.Builder()
+                        .maxAge(30, TimeUnit.DAYS)
+                        .build()
+                )
+                .build()
+            val networkResponse = callFactory.newCall(networkRequest).execute()
+            val body = networkResponse.body
+            if (!networkResponse.isSuccessful) {
+                body.close()
+                throw CoverHttpException(networkResponse.code)
+            }
+            body.use { it.bytes() } to false
+        }
+    }
+
+    /** 带状态码的失败，供上层区分「地址坏了」和「网络抖动」以决定拉黑时长。 */
+    private class CoverHttpException(val code: Int) : IOException("HTTP $code")
 
     class Factory(
         private val okHttpClient: OkHttpClient,

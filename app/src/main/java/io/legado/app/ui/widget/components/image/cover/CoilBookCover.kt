@@ -160,10 +160,9 @@ fun BookCoverImage(
                     sourceOrigin = sourceOrigin,
                     loadOnlyWifi = coverSettings.loadOnlyOnWifi,
                     crossfade = showLoadingPlaceholder,
-                    // 按封面地址统一缓存，书架/搜索/信息页主封面共用同一份位图，
-                    // 避免换页面就得重新拉一次。需要独立分辨率的调用方（如信息页背景大图）
-                    // 自行传 memoryCacheKey 区分。
-                    memoryCacheKey = memoryCacheKey ?: finalPath,
+                    memoryCacheKey = sharedCoverKey?.let {
+                        "$it:cover:${memoryCacheKey ?: finalPath}"
+                    } ?: memoryCacheKey ?: finalPath,
                     configure = requestBuilder,
                 ),
                 contentDescription = null,

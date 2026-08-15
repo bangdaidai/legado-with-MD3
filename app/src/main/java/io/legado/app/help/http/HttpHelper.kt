@@ -165,8 +165,19 @@ val okHttpClientManga by lazy {
 }
 
 enum class HttpCacheType(val dirName: String, val maxSize: Long) {
-    COVER("http_cache", 100L * 1024 * 1024),
+    COVER("cover_cache", 100L * 1024 * 1024),
     MANGA("manga_cache", 100L * 1024 * 1024),
+}
+
+/**
+ * 封面专用客户端：独立缓存目录 [HttpCacheType.COVER]，不和正文/书源/RSS 共用 [okHttpClient]
+ * 的 http_cache，避免正文请求把封面条目挤出去导致滚动书架反复重新下载。
+ * 其余配置（超时、UA、Cronet、强制缓存拦截器等）沿用 okHttpClient。
+ */
+val okHttpClientCover by lazy {
+    okHttpClient.newBuilder()
+        .cache(Cache(File(appCtx.cacheDir, HttpCacheType.COVER.dirName), HttpCacheType.COVER.maxSize))
+        .build()
 }
 
 fun getHttpCacheSize(type: HttpCacheType): Long {
@@ -177,7 +188,7 @@ fun getHttpCacheSize(type: HttpCacheType): Long {
 
 fun clearHttpCache(type: HttpCacheType) {
     when (type) {
-        HttpCacheType.COVER -> okHttpClient.cache?.delete()
+        HttpCacheType.COVER -> okHttpClientCover.cache?.delete()
         HttpCacheType.MANGA -> okHttpClientManga.cache?.delete()
     }
 }

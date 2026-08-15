@@ -212,7 +212,7 @@ import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
 import io.legado.app.help.coil.CoverFetcher
 import io.legado.app.help.coil.CoverInterceptor
 import io.legado.app.help.config.ThemePackageManager
-import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.http.okHttpClientCover
 import io.legado.app.help.http.okHttpClientManga
 import io.legado.app.model.LegacyReaderSession
 import io.legado.app.model.ReadAloudSessionStore
@@ -525,7 +525,7 @@ val appModule = module {
                 }
                 add(SvgDecoder.Factory())
                 add(CoverInterceptor())
-                add(CoverFetcher.Factory(okHttpClient, okHttpClientManga))
+                add(CoverFetcher.Factory(okHttpClientCover, okHttpClientManga))
             }
             .crossfade(true)
             .build()
