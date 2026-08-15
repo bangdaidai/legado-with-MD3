@@ -120,6 +120,8 @@ class ChangeBookSourceUseCase(
             if (oldBookUrl != newBook.bookUrl) {
                 database.readingMemoryDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
                 database.readingMemoryDao.deleteMigrated(oldBookUrl)
+                // 笔记高亮的渲染查询按 bookUrl 过滤，不跟着搬就会静默画不出来
+                database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
             }
         }
         // 换源后重建新书的标签关联，并清理旧 bookUrl 上的孤儿关联，避免标签丢失

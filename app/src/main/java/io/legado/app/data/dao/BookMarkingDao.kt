@@ -86,4 +86,16 @@ interface BookMarkingDao {
 
     @Query("delete from book_marks where id = :id")
     suspend fun delete(id: String)
+
+    /**
+     * 换源后把标记挪到新 bookUrl。
+     *
+     * 渲染查询 [getForChapterSync] 按 bookUrl 过滤，不迁移的话换源后会出现
+     * 「列表里笔记还在、计数也对，正文一条高亮都画不出来」且无任何提示。
+     * 主键是 id，直接 update 即可，不像 readingMemory 那样要先复制再删旧行。
+     * 不动 updatedAt：这是换源引起的搬迁，不是用户编辑，改了会把笔记顶到
+     * 「最近更新」最前面（[flowAll] 按 updatedAt 排序）。
+     */
+    @Query("update book_marks set bookUrl = :newBookUrl where bookUrl = :oldBookUrl")
+    suspend fun migrateToNewBookUrl(oldBookUrl: String, newBookUrl: String)
 }
