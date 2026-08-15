@@ -38,6 +38,7 @@ import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.paramPattern
+import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextPage
@@ -1752,19 +1753,33 @@ class TextChapterLayout(
         return styles
     }
 
-    private fun TextProcessStyle.toCharStyle(markingId: String? = null): CharStyle = CharStyle(
-        textColor = textColor,
-        bgColor = bgColor,
-        underlineMode = underlineMode,
-        underlineColor = underlineColor ?: textColor ?: 0xFF63C37D.toInt(),
-        underlineWidth = underlineWidth,
-        underlineOffset = underlineOffset,
-        underlineSvgPath = underlineSvgPath.orEmpty(),
-        // 荧光笔的色带走文字下层，让文字压在色带上面（真荧光笔就是涂在印好的字上）。
-        // 其余下划线效果保持画在文字上层，行为不变。
-        underlineBelowText = MarkingEffect.fromStyle(this) == MarkingEffect.HIGHLIGHTER,
-        markingId = markingId,
-    )
+    private fun TextProcessStyle.toCharStyle(markingId: String? = null): CharStyle {
+        // 荧光笔：色带的粗细/高度是全局设置（DefaultMarkingStyle），不认每条笔记存的那份，
+        // 这样改一次所有荧光笔标记一起变；效果判定必须用原始样式，因为 fromStyle 靠线宽区分
+        // 荧光笔与普通单实线，先覆盖再判会自我循环。
+        val isHighlighter = MarkingEffect.fromStyle(this) == MarkingEffect.HIGHLIGHTER
+        return CharStyle(
+            textColor = textColor,
+            bgColor = bgColor,
+            underlineMode = underlineMode,
+            underlineColor = underlineColor ?: textColor ?: 0xFF63C37D.toInt(),
+            underlineWidth = if (isHighlighter) {
+                DefaultMarkingStyle.highlighterWidth
+            } else {
+                underlineWidth
+            },
+            underlineOffset = if (isHighlighter) {
+                DefaultMarkingStyle.highlighterOffset
+            } else {
+                underlineOffset
+            },
+            underlineSvgPath = underlineSvgPath.orEmpty(),
+            // 荧光笔的色带走文字下层，让文字压在色带上面（真荧光笔就是涂在印好的字上）。
+            // 其余下划线效果保持画在文字上层，行为不变。
+            underlineBelowText = isHighlighter,
+            markingId = markingId,
+        )
+    }
 
     private fun BookContentProcess.isUserMarking(): Boolean =
         kind == BookContentProcess.KIND_USER_UNDERLINE ||

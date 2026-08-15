@@ -117,6 +117,17 @@ object PreferKey {
      */
     const val defaultMarkingStyle = "defaultMarkingStyle"
 
+    /**
+     * 荧光笔的线宽 / 纵向偏移（dp，Float）。
+     *
+     * 与 [defaultMarkingStyle] 分开存：这两个值是全局的，所有荧光笔标记共用一套，
+     * 改了立刻对已有标记生效（渲染时统一覆盖，见 TextChapterLayout.toCharStyle），
+     * 不像颜色和效果那样逐条记在 book_marks.styleJson 里。
+     */
+    const val highlighterWidth = "highlighterWidth"
+    const val highlighterOffset = "highlighterOffset"
+
+
     const val adaptSpecialStyle = "adaptSpecialStyle"
     const val autoClearExpired = "autoClearExpired"
     const val autoChangeSource = "autoChangeSource"

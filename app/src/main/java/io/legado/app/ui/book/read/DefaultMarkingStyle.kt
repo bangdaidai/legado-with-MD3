@@ -31,4 +31,28 @@ object DefaultMarkingStyle {
     fun set(style: TextProcessStyle) {
         AppConfigStore.putString(PreferKey.defaultMarkingStyle, GSON.toJson(style))
     }
+
+    /**
+     * 荧光笔线宽（dp）。全局值：所有荧光笔标记共用，改了对已有标记一起生效。
+     *
+     * 之所以不跟颜色、效果一起记进每条 book_marks 的 styleJson：色带的粗细和高度是
+     * 「这支笔长什么样」，不是某一条笔记的属性，逐条存会出现同一本书里粗细不一。
+     * 渲染时由 TextChapterLayout.toCharStyle 统一覆盖成这里的值。
+     *
+     * 下限不能低于 [MarkingEffect.HIGHLIGHTER_WIDTH_MIN]，否则存下的样式会被
+     * [MarkingEffect.fromStyle] 反推成普通单实线（两者同为 underlineMode=1，靠线宽区分）。
+     */
+    var highlighterWidth: Float
+        get() = AppConfigStore.getFloat(PreferKey.highlighterWidth)
+            ?: MarkingEffect.HIGHLIGHTER_WIDTH
+        set(value) = AppConfigStore.putFloat(
+            PreferKey.highlighterWidth,
+            value.coerceAtLeast(MarkingEffect.HIGHLIGHTER_WIDTH_MIN),
+        )
+
+    /** 荧光笔纵向偏移（dp）。全局值，负数把色带从行底抬进文字里；见 [highlighterWidth]。 */
+    var highlighterOffset: Float
+        get() = AppConfigStore.getFloat(PreferKey.highlighterOffset)
+            ?: MarkingEffect.HIGHLIGHTER_OFFSET
+        set(value) = AppConfigStore.putFloat(PreferKey.highlighterOffset, value)
 }
