@@ -7,7 +7,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -24,11 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -249,7 +245,7 @@ fun MarkingSheet(
                     )
                 }
 
-                Spacer(Modifier.padding(top = 16.dp))
+                Spacer(Modifier.height(4.dp))
             }
 
             // 备注（笔记）
@@ -356,12 +352,13 @@ private fun MarkingColorSwatch(
 }
 
 /**
- * 5 选 1 效果组：单实线 / 波浪线 / 虚线 / 背景色 / 字体色。
+ * 6 选 1 效果组：单实线 / 波浪线 / 虚线 / 荧光笔 / 背景色 / 字体色。
  *
- * 用 M3 连接式 ToggleButton 组（首尾圆角、中间方角连成一体），与主题设置里的
- * ThemeModeSelector 同一形态；语义按 RadioButton，读屏能识别成单选。
+ * 连接式外观（首尾大圆角、中间小圆角、间隔 2dp 连成一体），但容器色自己给：
+ * M3 ToggleButton 未选中态用的是 surface 系颜色，和 AppModalBottomSheet 的底色撞车，
+ * 未选中的按钮会整个隐形、只看得见选中那一个。
+ * 语义按 RadioButton，读屏能识别成单选。
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MarkingEffectGrid(
     selectedEffect: MarkingEffect,
@@ -370,28 +367,50 @@ internal fun MarkingEffectGrid(
     val entries = MarkingEffect.entries
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         entries.forEachIndexed { index, entry ->
-            ToggleButton(
-                checked = entry == selectedEffect,
-                onCheckedChange = { onEffectSelected(entry) },
+            val selected = entry == selectedEffect
+            val shape = when (index) {
+                0 -> RoundedCornerShape(
+                    topStart = 12.dp, bottomStart = 12.dp,
+                    topEnd = 4.dp, bottomEnd = 4.dp,
+                )
+
+                entries.lastIndex -> RoundedCornerShape(
+                    topStart = 4.dp, bottomStart = 4.dp,
+                    topEnd = 12.dp, bottomEnd = 12.dp,
+                )
+
+                else -> RoundedCornerShape(4.dp)
+            }
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .semantics { role = Role.RadioButton },
-                shapes = when (index) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    entries.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                },
-                // 默认内边距是给单个按钮设计的，五等分时会把三字标签挤成省略号，这里收窄
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
+                    // 32dp：M3 XSmall 按钮的容器高度，也是这个组件最初的实际高度
+                    // （labelMedium 行高 16sp + 上下各 8dp）。定死避免随文字撑高。
+                    .height(32.dp)
+                    .clip(shape)
+                    .background(
+                        if (selected) {
+                            LegadoTheme.colorScheme.secondaryContainer
+                        } else {
+                            LegadoTheme.colorScheme.surfaceContainerLow
+                        }
+                    )
+                    .clickable { onEffectSelected(entry) }
+                    .semantics { role = Role.RadioButton }
+                    .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                // 用 M3 Text 而非 AppText：选中/未选中的文字色由 ToggleButton 通过
-                // LocalContentColor 下发，AppText 不读 LocalContentColor，会固定成 onSurface。
-                Text(
+                AppText(
                     text = stringResource(entry.labelRes()),
                     style = LegadoTheme.typography.labelMediumEmphasized,
+                    color = if (selected) {
+                        LegadoTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        LegadoTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

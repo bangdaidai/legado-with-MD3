@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -22,9 +23,10 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 
 /**
- * 「笔记默认样式」编辑 Sheet：预览 + 颜色行 + 5x1 效果格，
+ * 「笔记默认样式」编辑 Sheet：颜色行 + 效果格 + 预览，选中荧光笔时多出粗细/偏移滑块，
  * 复用 [MarkingColorRow] / [MarkingEffectGrid] 与高亮规则的 [HighlightRulePreview]，
  * 不含备注、不含规则复用——这就是点「笔记」时直接套用的独立默认样式。
  */
@@ -39,17 +41,37 @@ fun DefaultMarkingStyleSheet(
     var markColor by remember(show) { mutableStateOf(MarkingEffect.colorOf(initialStyle)) }
     var showColorPicker by remember(show) { mutableStateOf(false) }
 
+    // 荧光笔的粗细/偏移可调：已存的就是荧光笔时接着上次的值，否则从效果默认值起步
+    val savedHighlighter = MarkingEffect.fromStyle(initialStyle) == MarkingEffect.HIGHLIGHTER
+    var highlighterWidth by remember(show) {
+        mutableFloatStateOf(
+            if (savedHighlighter) initialStyle.underlineWidth else MarkingEffect.HIGHLIGHTER_WIDTH
+        )
+    }
+    var highlighterOffset by remember(show) {
+        mutableFloatStateOf(
+            if (savedHighlighter) initialStyle.underlineOffset else MarkingEffect.HIGHLIGHTER_OFFSET
+        )
+    }
+
     // 当前编辑中的样式：预览与保存共用同一份，避免两处推导不一致
-    val editingStyle = remember(effect, markColor, initialStyle) {
+    val editingStyle = remember(
+        effect, markColor, initialStyle, highlighterWidth, highlighterOffset
+    ) {
         val base = effect.toStyle(markColor)
-        if (effect.isUnderline) {
-            base.copy(
+        when {
+            effect.isUnderline -> base.copy(
                 underlineWidth = initialStyle.underlineWidth,
                 underlineOffset = initialStyle.underlineOffset,
                 underlineSvgPath = initialStyle.underlineSvgPath,
             )
-        } else {
-            base
+
+            effect == MarkingEffect.HIGHLIGHTER -> base.copy(
+                underlineWidth = highlighterWidth,
+                underlineOffset = highlighterOffset,
+            )
+
+            else -> base
         }
     }
 
@@ -67,7 +89,9 @@ fun DefaultMarkingStyleSheet(
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            // 颜色行自带 8dp 纵向内边距，这里用 4dp 行距凑成 12dp；
+            // 效果格没有自带边距，到预览之间另补 8dp，保持三段间距一致
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             MarkingColorRow(
                 selectedColor = markColor,
@@ -78,6 +102,28 @@ fun DefaultMarkingStyleSheet(
                 selectedEffect = effect,
                 onEffectSelected = { effect = it },
             )
+            // 只有荧光笔露出粗细/偏移滑块：其余效果的线宽线偏移沿用旧样式，没有可调项
+            if (effect == MarkingEffect.HIGHLIGHTER) {
+                TinySliderSettingItem(
+                    title = stringResource(R.string.underline_width),
+                    value = highlighterWidth,
+                    // 下限贴着荧光笔判定阈值，再细保存后会被反推成普通实线
+                    valueRange = MarkingEffect.HIGHLIGHTER_WIDTH_MIN..24f,
+                    description = String.format("%.1f dp", highlighterWidth),
+                    onValueChange = { highlighterWidth = (it * 10).toInt() / 10f },
+                    onReset = { highlighterWidth = MarkingEffect.HIGHLIGHTER_WIDTH },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.underline_offset),
+                    value = highlighterOffset,
+                    // 负值才是荧光笔：把色带从行底抬进文字里
+                    valueRange = -20f..0f,
+                    description = String.format("%+.1f dp", highlighterOffset),
+                    onValueChange = { highlighterOffset = (it * 10).toInt() / 10f },
+                    onReset = { highlighterOffset = MarkingEffect.HIGHLIGHTER_OFFSET },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             // 预览卡片放在样式下方。与高亮规则编辑页同一个组件；
             // 笔记没有正则，pattern 用 ".+" 让整段示例都命中。
             HighlightRulePreview(

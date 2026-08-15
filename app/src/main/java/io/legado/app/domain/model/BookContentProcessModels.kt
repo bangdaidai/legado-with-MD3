@@ -61,9 +61,9 @@ enum class MarkingEffect {
     /**
      * 是否沿用上一次的线宽/线偏移/SVG 路径（编辑时不被重置）。
      *
-     * [HIGHLIGHTER] 虽然也走 underlineMode=1 渲染，但它的粗细与偏移是效果本身的定义
-     * （见 [HIGHLIGHTER_WIDTH] / [HIGHLIGHTER_OFFSET]），必须由 [toStyle] 说了算，
-     * 所以不算在内，否则会被旧样式的 1dp/2dp 覆盖、退化成普通细实线。
+     * [HIGHLIGHTER] 不算在内：它与单实线同为 underlineMode=1，若沿用旧样式的 1dp/2dp
+     * 就会退化成普通细实线。它的粗细/偏移由 [toStyle] 给默认值（见 [HIGHLIGHTER_WIDTH] /
+     * [HIGHLIGHTER_OFFSET]），调用方要让用户微调时自行 copy 覆盖这两项。
      */
     val isUnderline: Boolean
         get() = this == SOLID || this == WAVE || this == DASHED
@@ -95,17 +95,20 @@ enum class MarkingEffect {
         /** 标记默认颜色（绿色）。 */
         const val DEFAULT_COLOR = 0xFF63C37D.toInt()
 
-        /** 荧光笔线宽（dp）：要足够粗才盖得住半截文字。 */
-        const val HIGHLIGHTER_WIDTH = 11f
+        /** 荧光笔线宽（dp）默认值：要足够粗才盖得住半截文字，可在默认样式里用滑块改。 */
+        const val HIGHLIGHTER_WIDTH = 9f
 
-        /** 荧光笔纵向偏移（dp）：负值把线从行底抬进文字里。 */
+        /** 荧光笔纵向偏移（dp）默认值：负值把线从行底抬进文字里，可在默认样式里用滑块改。 */
         const val HIGHLIGHTER_OFFSET = -7f
 
         /** 荧光笔 alpha（约 35%）：压在文字上还能看清字。 */
         const val HIGHLIGHTER_ALPHA = 0x59000000
 
-        /** 判定荧光笔的线宽下限：普通实线是 1dp 量级，不会误判。 */
-        private const val HIGHLIGHTER_WIDTH_MIN = 8f
+        /**
+         * 判定荧光笔的线宽下限：普通实线是 1dp 量级，不会误判。
+         * 线宽滑块的下限也必须取这个值——再细就会被 [fromStyle] 反推成普通实线。
+         */
+        const val HIGHLIGHTER_WIDTH_MIN = 8f
 
         /**
          * 从样式反推效果：编辑已有标记时预填效果格。未知下划线模式回退单实线。
