@@ -830,20 +830,25 @@ private fun NavigationIcon(
     customIconPath: String,
     modifier: Modifier = Modifier
 ) {
+    // 选中态统一变色：选中用指示器上的前景色，未选中用次级前景色。
+    // 内置 ImageVector 与自定义 SVG 共用同一套取色，位图（PNG 等）保留原始色彩。
+    val iconTint = if (selected) {
+        LegadoTheme.colorScheme.onSecondaryContainer
+    } else {
+        LegadoTheme.colorScheme.onSurfaceVariant
+    }
     if (customIconPath.isNotEmpty()) {
-        // SVG 是矢量单色图标，用与 AppIcon 相同的默认色着色，与内置图标保持一致；
-        // 位图（PNG 等）保留原始色彩
         val iconSize = LocalAppUiConfiguration.current.appShell.navIconSize
         AsyncImage(
             model = customIconPath,
             contentDescription = null,
             modifier = modifier.size(iconSize.dp),
             colorFilter = if (customIconPath.endsWith(".svg", ignoreCase = true)) {
-                ColorFilter.tint(LegadoTheme.colorScheme.onSurface)
+                ColorFilter.tint(iconTint)
             } else null
         )
     } else {
         val icon = AppIcons.mainDestination(destination, selected)
-        AppIcon(icon, contentDescription = null, modifier = modifier)
+        AppIcon(icon, contentDescription = null, modifier = modifier, tint = iconTint)
     }
 }
