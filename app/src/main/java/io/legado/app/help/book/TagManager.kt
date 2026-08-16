@@ -78,6 +78,8 @@ object TagManager {
         val mappings: List<TagMapping>,
         val idToTag: Map<Long, BookTag>,
         val nameToTag: Map<String, BookTag>,
+        /** 分组 id -> 分组管理里的排序位次，未分组/已删除分组的标签排在最后。 */
+        val groupRank: Map<Long, Int>,
     )
 
     @Volatile
@@ -88,11 +90,13 @@ object TagManager {
         val excluded = appDb.excludedTagDao.getAllSync()
         val mappings = appDb.tagMappingDao.getAll()
         val tags = appDb.bookTagDao.getAllSync()
+        val groups = appDb.bookTagGroupDao.getAllSorted()
         val cfg = TagConfig(
             excluded = excluded,
             mappings = mappings,
             idToTag = tags.associateBy { it.id },
             nameToTag = tags.associateBy { it.name },
+            groupRank = groups.withIndex().associate { (index, group) -> group.id to index },
         )
         configCache = cfg
         return cfg
@@ -113,7 +117,8 @@ object TagManager {
 
     /**
      * 一本书「最终展示标签」的统一数据源（SSOT = [Book.kind] + [Book.customTag]）。
-     * 拆分 customTag 与 kind，按排除规则过滤，按标签映射异名归一为规范名后去重。
+     * 拆分 customTag 与 kind，按排除规则过滤，按标签映射异名归一为规范名后去重，
+     * 最后按标签所属分组在「分组管理」里的顺序排序。
      * 书架 / 书籍信息 / 阅读记忆三处统一调用此函数，保证标签集合一致。
      */
     suspend fun bookDisplayTags(kind: String?, customTag: String?): List<String> {
@@ -145,7 +150,10 @@ object TagManager {
             }
             result.add(target)
         }
+        // 按标签所属分组在「分组管理」里的拖拽顺序排序；同组内保持原有出现顺序（稳定排序），
+        // 未分组或分组已删除的标签排在最后。
         return result.distinctBy { it.name }
+            .sortedBy { cfg.groupRank[it.groupId] ?: Int.MAX_VALUE }
     }
 
     /** 预置排除规则（仅首次启动播种一次，用户可自由编辑/删除）：

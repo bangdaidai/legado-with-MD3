@@ -26,6 +26,7 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.book.TagManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.CacheBook
@@ -174,6 +175,10 @@ class BookshelfViewModel(
         appDb.excludedTagDao.observeAll()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** 标签配置（分组顺序、映射、排除等）变更版本号，驱动书架重算 displayTags。 */
+    private val tagConfigVersionFlow = MutableStateFlow(0)
+
+
     private val hideEmptyGroupsFlow: StateFlow<Boolean> = bookshelfSettings
         .map { it.hideEmptyGroups }
         .distinctUntilChanged()
@@ -282,8 +287,9 @@ class BookshelfViewModel(
             combine(
                 bookRepository.flowBookShelfByGroup(groupId),
                 groupsFlow,
-                sortConfigFlow
-            ) { list, groups, sortConfig ->
+                sortConfigFlow,
+                tagConfigVersionFlow
+            ) { list, groups, sortConfig, _ ->
                 SelectedGroupBooksState(
                     groupId = groupId,
                     books = bookshelfRepository.sortBooks(
@@ -305,7 +311,7 @@ class BookshelfViewModel(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val allGroupBooksImmutableFlow: Flow<ImmutableMap<Long, ImmutableList<BookUiItem>>> =
-        combine(groupsFlow, sortConfigFlow) { groups, sortConfig ->
+        combine(groupsFlow, sortConfigFlow, tagConfigVersionFlow) { groups, sortConfig, _ ->
             groups to sortConfig
         }.flatMapLatest { (groups, sortConfig) ->
             if (groups.isEmpty()) {
@@ -639,6 +645,15 @@ class BookshelfViewModel(
                 upAllBookToc()
             }
         }
+        // 标签/分组配置变更（含分组管理里的拖拽排序）后重算书架标签，
+        // 先失效 TagManager 缓存再递增版本号，保证重算读到的是最新配置。
+        viewModelScope.launch {
+            FlowEventBus.with<Any>(EventBus.TAGS_UPDATED).collect {
+                TagManager.invalidateTagConfig()
+                tagConfigVersionFlow.value += 1
+            }
+        }
+
         viewModelScope.launch {
             bookshelfSettings.collect { settings ->
                 if (groupIdFlow.value != settings.saveTabPosition) {

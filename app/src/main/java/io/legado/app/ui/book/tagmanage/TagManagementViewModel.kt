@@ -64,6 +64,7 @@ class TagManagementViewModel(
             is TagManagementIntent.DeleteTag -> viewModelScope.launch { deleteTag(intent.tag) }
             is TagManagementIntent.SaveGroup -> viewModelScope.launch { saveGroup(intent) }
             is TagManagementIntent.DeleteGroup -> viewModelScope.launch { deleteGroup(intent.group) }
+            is TagManagementIntent.ReorderGroups -> viewModelScope.launch { reorderGroups(intent.groups) }
             is TagManagementIntent.DeleteMapping -> viewModelScope.launch { deleteMapping(intent.mapping) }
             is TagManagementIntent.ExcludeTag -> viewModelScope.launch { excludeTag(intent) }
         }
@@ -215,6 +216,17 @@ class TagManagementViewModel(
         loadDataBody()
         FlowEventBus.post(EventBus.TAGS_UPDATED, group.id)
     }
+
+    private suspend fun reorderGroups(groups: List<BookTagGroup>) {
+        groups.forEachIndexed { index, group ->
+            if (group.sortOrder != index) {
+                appDb.bookTagGroupDao.update(group.copy(sortOrder = index))
+            }
+        }
+        loadDataBody()
+        FlowEventBus.post(EventBus.TAGS_UPDATED, 0L)
+    }
+
 
     private suspend fun deleteMapping(mapping: TagMapping) {
         appDb.tagMappingDao.deleteById(mapping.id)

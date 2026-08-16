@@ -37,6 +37,9 @@ sealed interface TagManagementIntent {
     data class SaveGroup(val id: Long, val name: String) : TagManagementIntent
     data class DeleteGroup(val group: BookTagGroup) : TagManagementIntent
 
+    /** 拖拽排序后的分组顺序，按列表下标写入 sortOrder */
+    data class ReorderGroups(val groups: List<BookTagGroup>) : TagManagementIntent
+
     data class DeleteMapping(val mapping: TagMapping) : TagManagementIntent
 
     data class ExcludeTag(val name: String) : TagManagementIntent

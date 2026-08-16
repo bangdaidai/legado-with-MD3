@@ -186,6 +186,7 @@ fun TagManagementScreen(
             onIntent(TagManagementIntent.SaveGroup(group.id, newName.trim()))
         },
         onDelete = { onIntent(TagManagementIntent.DeleteGroup(it)) },
+        onReorder = { onIntent(TagManagementIntent.ReorderGroups(it)) },
     )
     GroupEditSheet(
         data = groupEdit,

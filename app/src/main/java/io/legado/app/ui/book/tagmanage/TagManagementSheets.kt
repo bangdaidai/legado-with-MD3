@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 
@@ -41,6 +44,8 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+
+
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,7 +77,13 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.R
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.SelectionItemCard
+import io.legado.app.ui.widget.components.reorderAccessibility
 import io.legado.app.ui.widget.components.settingItem.SettingItem
+import io.legado.app.utils.move
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+
+
 
 /* ---------------- 标签编辑（受控组件） ---------------- */
 
@@ -274,7 +285,32 @@ fun GroupManageSheet(
     onAdd: () -> Unit,
     onUpdateGroup: (BookTagGroup, String) -> Unit,
     onDelete: (BookTagGroup) -> Unit,
+    onReorder: (List<BookTagGroup>) -> Unit,
 ) {
+    var listData by remember { mutableStateOf(groups) }
+    var dragged by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        dragged = true
+        listData = listData.toMutableList().apply {
+            move(from.index, to.index)
+        }
+    }
+
+    LaunchedEffect(groups) {
+        if (!reorderableState.isAnyItemDragging) {
+            listData = groups
+        }
+    }
+
+    // 拖拽结束后按当前顺序写回 sortOrder
+    LaunchedEffect(reorderableState.isAnyItemDragging) {
+        if (!reorderableState.isAnyItemDragging && dragged) {
+            dragged = false
+            onReorder(listData)
+        }
+    }
+
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
@@ -282,20 +318,37 @@ fun GroupManageSheet(
         endAction = { SmallPlainButton(text = "新增", icon = Icons.Default.Add, onClick = onAdd) },
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(groups, key = { it.id }) { group ->
-                TagGroupItem(
-                    group = group,
-                    tagCount = tagCounts[group.id] ?: 0,
-                    onUpdateGroup = onUpdateGroup,
-                    onDeleteGroup = onDelete,
-                )
+            itemsIndexed(listData, key = { _, group -> group.id }) { index, group ->
+                ReorderableItem(reorderableState, key = group.id) {
+                    TagGroupItem(
+                        group = group,
+                        tagCount = tagCounts[group.id] ?: 0,
+                        onUpdateGroup = onUpdateGroup,
+                        onDeleteGroup = onDelete,
+                        dragHandleModifier = Modifier
+                            .reorderAccessibility(
+                                index = index,
+                                itemCount = listData.size,
+                                description = stringResource(
+                                    R.string.a11y_reorder_named,
+                                    group.name,
+                                ),
+                            ) { from, to ->
+                                listData = listData.toMutableList().apply { move(from, to) }
+                                onReorder(listData)
+                            }
+                            .draggableHandle(),
+                    )
+                }
             }
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -304,6 +357,7 @@ private fun TagGroupItem(
     tagCount: Int,
     onUpdateGroup: (BookTagGroup, String) -> Unit,
     onDeleteGroup: (BookTagGroup) -> Unit,
+    dragHandleModifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val state = rememberTextFieldState(initialText = group.name)
@@ -324,7 +378,7 @@ private fun TagGroupItem(
         color = MaterialTheme.colorScheme.surface,
         onExpandChange = { expanded = it },
         trailingContent = {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         Icons.Default.Edit,
@@ -335,6 +389,18 @@ private fun TagGroupItem(
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = stringResource(id = R.string.delete)
+                    )
+                }
+                // 拖拽手柄：只有按住这个图标才能排序，避免与整行点击展开编辑冲突
+                Box(
+                    modifier = dragHandleModifier.size(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.Menu,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
