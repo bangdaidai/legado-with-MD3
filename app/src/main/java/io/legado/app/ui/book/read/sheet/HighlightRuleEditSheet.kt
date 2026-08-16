@@ -50,6 +50,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.rememberAsyncImagePainter
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.HighlightRule
@@ -70,6 +73,7 @@ import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FontFolderState
@@ -838,6 +842,18 @@ fun HighlightRuleEditSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // 预览页面底色跟随「应用排版」绑定的排版；「全局」没绑定具体排版，用当前正在用的那份
+            val previewConfig = remember(configNames) {
+                configNames.firstNotNullOfOrNull { ReadBookConfig.configByName(it) }
+                    ?: ReadBookConfig.durConfig
+            }
+            val previewDayBgImage = pageBgImagePathOf(previewConfig.bgType, previewConfig.bgStr)
+            val previewDayBgColor = if (previewDayBgImage == null) {
+                previewConfig.bgStr.toPreviewColor(0xFFEEEEEE.toInt())
+            } else {
+                0xFFEEEEEE.toInt()
+            }
+
             HighlightRulePreview(
                 label = stringResource(R.string.day),
                 sampleText = sampleText,
@@ -851,10 +867,9 @@ fun HighlightRuleEditSheet(
                 underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
                 underlineWidth = underlineWidth,
                 underlineOffset = underlineOffset,
-                pageBgColor = runCatching {
-                    android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStr)
-                }.getOrDefault(0xFFEEEEEE.toInt()),
-                pageTextColor = ReadBookConfig.textColor,
+                pageBgColor = previewDayBgColor,
+                pageTextColor = previewConfig.getTextColor().toPreviewColor(0xFF3E3D3B.toInt()),
+                pageBgImagePath = previewDayBgImage,
                 npLeft = npLeft,
                 npRight = npRight,
                 npTop = npTop,
@@ -888,6 +903,14 @@ fun HighlightRuleEditSheet(
                     (bgColorNight ?: ColorUtils.flipLightness(bgColor)) else null
                 val nightUnderlineColor = if (hasUnderlineColor && hasUnderline)
                     (underlineColorNight ?: ColorUtils.flipLightness(underlineColor)) else null
+                val previewNightBgImage = pageBgImagePathOf(
+                    previewConfig.bgTypeNight, previewConfig.bgStrNight
+                )
+                val previewNightBgColor = if (previewNightBgImage == null) {
+                    previewConfig.bgStrNight.toPreviewColor(0xFF000000.toInt())
+                } else {
+                    0xFF000000.toInt()
+                }
                 HighlightRulePreview(
                     label = stringResource(R.string.night),
                     sampleText = sampleText,
@@ -901,10 +924,10 @@ fun HighlightRuleEditSheet(
                     underlineColor = nightUnderlineColor,
                     underlineWidth = underlineWidth,
                     underlineOffset = underlineOffset,
-                    pageBgColor = runCatching {
-                        android.graphics.Color.parseColor(ReadBookConfig.durConfig.bgStrNight)
-                    }.getOrDefault(0xFF000000.toInt()),
-                    pageTextColor = ReadBookConfig.textColorNight,
+                    pageBgColor = previewNightBgColor,
+                    pageTextColor = previewConfig.getTextColorNight()
+                        .toPreviewColor(0xFFADADAD.toInt()),
+                    pageBgImagePath = previewNightBgImage,
                     npLeft = npLeft,
                     npRight = npRight,
                     npTop = npTop,
@@ -1051,6 +1074,17 @@ fun HighlightRuleEditSheet(
 
 private const val PREVIEW_BASE_FONT_SIZE = 16
 
+/** 排版背景图的加载地址；bgType 0 是纯色，1 是 assets 内置图，2 是外部图片 */
+private fun pageBgImagePathOf(bgType: Int, bgStr: String): String? = when (bgType) {
+    1 -> "file:///android_asset/bg/$bgStr"
+    2 -> ReadStyleResolver.backgroundPath(bgType, bgStr)
+    else -> null
+}
+
+/** 颜色字符串解析不出来（比如 bgStr 存的是图片文件名）时退回 fallback */
+private fun String?.toPreviewColor(fallback: Int): Int =
+    this?.let { runCatching { android.graphics.Color.parseColor(it) }.getOrNull() } ?: fallback
+
 @Composable
 internal fun HighlightRulePreview(
     label: String,
@@ -1067,6 +1101,8 @@ internal fun HighlightRulePreview(
     underlineOffset: Float,
     pageBgColor: Int,
     pageTextColor: Int,
+    /** 排版背景是图片时的加载地址，为 null 表示纯色背景 */
+    pageBgImagePath: String? = null,
     npLeft: Float = 0.5f,
     npRight: Float = 0.5f,
     npTop: Float = 0.5f,
@@ -1160,6 +1196,12 @@ internal fun HighlightRulePreview(
     } else {
         Color(0x99FFFFFF)
     }
+    // 排版背景是图片时铺在卡片上，纯色时该 painter 为 null
+    val pageBgPainter = if (pageBgImagePath != null) {
+        rememberAsyncImagePainter(pageBgImagePath)
+    } else {
+        null
+    }
     NormalCard(
         modifier = modifier,
         cornerRadius = 12.dp,
@@ -1168,6 +1210,17 @@ internal fun HighlightRulePreview(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(
+                    if (pageBgPainter != null) {
+                        Modifier.paint(
+                            pageBgPainter,
+                            sizeToIntrinsics = false,
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             AppText(

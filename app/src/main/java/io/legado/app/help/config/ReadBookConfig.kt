@@ -193,6 +193,10 @@ object ReadBookConfig {
 
     val config get() = if (shareLayout) shareConfig else durConfig
 
+    /** 按名字取排版；「应用排版」绑定按名字存，预览要据此查背景。找不到返回 null。 */
+    fun configByName(name: String): Config? =
+        configStore.configsSnapshot().firstOrNull { it.name == name }
+
     val bgAlpha: Int
         get() = config.bgAlpha
 
