@@ -39,6 +39,7 @@ fun TextCard(
     textStyle: TextStyle = LegadoTheme.typography.labelSmallEmphasized,
     border: BorderStroke? = null,
     horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    maxLines: Int = 2,
 ) {
     val defaultBackground = LegadoTheme.colorScheme.surfaceContainer
     val defaultContent = LegadoTheme.colorScheme.onSurface
@@ -80,7 +81,7 @@ fun TextCard(
                     text = it,
                     style = textStyle,
                     color = finalContentColor,
-                    maxLines = 2,
+                    maxLines = maxLines,
                     overflow = TextOverflow.Ellipsis
                 )
             }

@@ -123,14 +123,20 @@ private fun TimelineSessionRow(
             )
         }
         if (showChapterInfo && session.chapterTitle.isNotBlank()) {
-            TextCard(
-                text = session.chapterTitle,
-                textStyle = LegadoTheme.typography.labelSmall,
-                backgroundColor = LegadoTheme.colorScheme.secondaryContainer,
+            // 章节名胶囊贴右：外层占满剩余宽度，胶囊按内容靠右；过长时单行省略
+            Box(
                 modifier = Modifier
-                    .weight(1f, fill = false)
-                    .padding(start = 8.dp)
-            )
+                    .weight(1f)
+                    .padding(start = 8.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                TextCard(
+                    text = session.chapterTitle,
+                    textStyle = LegadoTheme.typography.labelSmall,
+                    backgroundColor = LegadoTheme.colorScheme.secondaryContainer,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
