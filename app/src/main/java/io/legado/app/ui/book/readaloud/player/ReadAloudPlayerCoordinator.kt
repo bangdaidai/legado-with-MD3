@@ -6,6 +6,7 @@ import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.constant.EventBus
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
+import io.legado.app.domain.model.PlaybackTimer
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadAloudSessionStore
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlin.math.roundToInt
 
 /** Compatibility boundary between the Compose player and the legacy reader/service state. */
 class ReadAloudPlayerCoordinator(
@@ -69,7 +71,8 @@ class ReadAloudPlayerCoordinator(
     val state: Flow<ReadAloudPlayerSourceState> = combine(
         sessionStore.state,
         bookWithChapters,
-    ) { session, (book, chapters) ->
+        readAloudSettingsGateway.settings,
+    ) { session, (book, chapters), settings ->
         val playback = session.playback
         ReadAloudPlayerSourceState(
             bookUrl = book.bookUrl,
@@ -90,6 +93,7 @@ class ReadAloudPlayerCoordinator(
             isPaused = session.status != ReadAloudSessionStatus.Playing,
             speed = ReadConfig.ttsSpeechRate,
             timerMinutes = session.timerMinutes,
+            finishCurrentChapterAfterTimer = settings.finishCurrentChapterAfterTimer,
         )
     }
 
@@ -116,6 +120,8 @@ class ReadAloudPlayerCoordinator(
             isPaused = session.status != ReadAloudSessionStatus.Playing,
             speed = ReadConfig.ttsSpeechRate,
             timerMinutes = session.timerMinutes,
+            finishCurrentChapterAfterTimer =
+                readAloudSettingsGateway.currentSettings.finishCurrentChapterAfterTimer,
         )
     }
 
@@ -159,11 +165,19 @@ class ReadAloudPlayerCoordinator(
     fun selectChapter(index: Int) = ReadBook.openChapter(index, durChapterPos = 0)
 
     suspend fun setSpeed(value: Int) {
-        readAloudSettingsGateway.update { it.copy(ttsSpeechRate = value.coerceIn(0, 80)) }
+        readAloudSettingsGateway.update { it.copy(ttsSpeechRate = coerceReadAloudSpeed(value)) }
         ReadAloud.upTtsSpeechRate(application)
     }
 
-    fun setTimer(minutes: Int) = ReadAloud.setTimer(application, minutes)
+    suspend fun setTimer(minutes: Int) {
+        val timer = PlaybackTimer.normalize(minutes)
+        readAloudSettingsGateway.update { it.copy(ttsTimer = timer) }
+        ReadAloud.setTimer(application, timer)
+    }
+
+    suspend fun setFinishCurrentChapterAfterTimer(value: Boolean) {
+        readAloudSettingsGateway.update { it.copy(finishCurrentChapterAfterTimer = value) }
+    }
 
     fun seekTo(chapterPosition: Int, chapterLength: Int) {
         val chapter = ReadBook.curTextChapter ?: return
@@ -222,4 +236,22 @@ data class ReadAloudPlayerSourceState(
     val isPaused: Boolean,
     val speed: Int,
     val timerMinutes: Int,
+    val finishCurrentChapterAfterTimer: Boolean,
 )
+
+/** 语速调节范围，与经典朗读控制（ReadAloudScreen 的 valueRange = 0f..80f）保持一致。 */
+internal const val READ_ALOUD_SPEED_MIN = 0
+internal const val READ_ALOUD_SPEED_MAX = 80
+
+internal fun coerceReadAloudSpeed(value: Int): Int =
+    value.coerceIn(READ_ALOUD_SPEED_MIN, READ_ALOUD_SPEED_MAX)
+
+/** 语速显示文本，如 20 -> "2.0"、15 -> "1.5"，与播放器 valueLabel 格式化一致。 */
+internal fun formatReadAloudSpeedLabel(speed: Int): String {
+    val display = speed / 10f
+    return if (display == display.roundToInt().toFloat()) {
+        "${display.roundToInt()}.0"
+    } else {
+        String.format("%.1f", display)
+    }
+}

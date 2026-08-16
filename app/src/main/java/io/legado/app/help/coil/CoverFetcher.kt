@@ -8,7 +8,8 @@ import coil3.fetch.FetchResult
 import coil3.fetch.Fetcher
 import coil3.fetch.SourceFetchResult
 import coil3.request.Options
-import io.legado.app.model.ReadManga
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.utils.ImageUtils
 import io.legado.app.utils.isWifiConnect
 import kotlinx.coroutines.CancellationException
@@ -60,6 +61,10 @@ class CoverFetcher(
             failCache[url] = System.currentTimeMillis() + ttlMs
         }
 
+        fun clearFailure(url: String) {
+            failCache.remove(url)
+        }
+
         fun clearFailCache() {
             failCache.clear()
         }
@@ -83,6 +88,8 @@ class CoverFetcher(
     override suspend fun fetch(): FetchResult {
         val source = options.extras[CoverExtras.Source]
         val isManga = options.extras[CoverExtras.Manga] == true
+        val mangaBook = options.extras[CoverExtras.MangaBookUrl]
+            ?.let { bookUrl -> withContext(Dispatchers.IO) { appDb.bookDao.getBook(bookUrl) } }
 
         if (url.startsWith("data:", true)) {
             val base64Data = url.substringAfter("base64,", "")
@@ -110,7 +117,7 @@ class CoverFetcher(
 
         val requestHeaders = options.extras[CoverExtras.Headers]
         val (rawBytes, fromCache) = try {
-            awaitSharedDownload(url, isManga, requestHeaders)
+            awaitSharedDownload(url, isManga, source, requestHeaders)
         } catch (e: CancellationException) {
             // 滚动书架时 Coil 会取消在途请求，取消不代表这个封面地址有问题，不能拉黑
             throw e
@@ -135,13 +142,14 @@ class CoverFetcher(
             val ownBytes = rawBytes.copyOf()
             withContext(Dispatchers.IO) {
                 if (isManga) {
-                    ImageUtils.decode(url, ownBytes, false, source, ReadManga.book)
+                    ImageUtils.decode(url, ownBytes, false, source, mangaBook)
                 } else {
                     ImageUtils.decode(url, ownBytes, true, source)
                 }
             } ?: throw IOException("图片解密失败")
         }
 
+        clearFailure(url)
         return SourceFetchResult(
             source = ImageSource(
                 source = Buffer().write(decodedBytes),
@@ -156,11 +164,12 @@ class CoverFetcher(
     private suspend fun awaitSharedDownload(
         url: String,
         isManga: Boolean,
+        source: BaseSource?,
         requestHeaders: Map<String, String>?,
     ): Pair<ByteArray, Boolean> {
         val key = "$url|$isManga"
         val deferred = inFlight.computeIfAbsent(key) {
-            fetchScope.async { download(url, requestHeaders) }
+            fetchScope.async { download(url, source, requestHeaders) }
         }
         // 任务结束即从表中摘除，后续请求走 OkHttp 缓存或重新发起。
         // 注册在 computeIfAbsent 之外，避免回调在 ConcurrentHashMap 计算过程中改表。
@@ -171,10 +180,12 @@ class CoverFetcher(
     /** 先探 OkHttp 缓存（FORCE_CACHE 命中即返回，miss 返回 504），未命中再走网络。 */
     private suspend fun download(
         url: String,
+        source: BaseSource?,
         requestHeaders: Map<String, String>?,
     ): Pair<ByteArray, Boolean> = withContext(Dispatchers.IO) {
         val cacheRequest = Request.Builder()
             .url(url)
+            .tag(BaseSource::class.java, source)
             .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
             .cacheControl(CacheControl.FORCE_CACHE)
             .build()
@@ -186,6 +197,7 @@ class CoverFetcher(
             // Cache miss, fetch from network
             val networkRequest = Request.Builder()
                 .url(url)
+                .tag(BaseSource::class.java, source)
                 .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
                 .tag(COVER_REQUEST_TAG)
                 .cacheControl(

@@ -2,12 +2,13 @@ package io.legado.app.ui.book.manga
 
 import android.view.KeyEvent
 import android.view.WindowManager
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
+import dev.chrisbanes.haze.HazeState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -40,7 +41,7 @@ fun MangaReaderRouteScreen(
         sourceType: Int?,
     ) -> Unit,
 ) {
-    val activity = LocalContext.current as MainActivity
+    val activity = LocalActivity.current as MainActivity
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val networkChangedListener = remember(activity) { NetworkChangedListener(activity) }
@@ -160,12 +161,22 @@ fun MangaReaderRouteScreen(
         }
     }
 
-    MangaReaderScreen(state = state, onIntent = viewModel::onIntent)
+    val menuHazeState = remember { HazeState() }
+    val useMenuHaze = state.settings.menuBottomBarBlur ||
+            (!state.settings.menuBottomBarFloating &&
+                    state.settings.menuBottomBarLiquidGlass &&
+                    state.settingsCategory != null)
+    MangaReaderScreen(
+        state = state,
+        onIntent = viewModel::onIntent,
+        hazeState = if (useMenuHaze) menuHazeState else null,
+    )
     if (state.activeSheet == MangaReaderSheet.Catalog && state.bookUrl.isNotEmpty()) {
         ReaderBookSheetRoute(
             show = true,
             bookUrl = state.bookUrl,
             initialTab = ReaderBookSheetTab.Toc,
+            currentChapterIndex = state.pendingChapterIndex ?: state.chapterIndex,
             onDismissRequest = { viewModel.onIntent(MangaReaderIntent.DismissSheet) },
             onChapterClick = { chapterIndex, pageIndex ->
                 viewModel.onIntent(MangaReaderIntent.DismissSheet)

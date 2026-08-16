@@ -115,6 +115,16 @@ abstract class BaseReadAloudService : BaseService(),
         }
 
         private const val TAG = "BaseReadAloudService"
+        private const val ACTION_ADD_TIMER = "io.legado.app.action.ADD_READ_ALOUD_TIMER"
+        private const val MEDIA_PROGRESS_DURATION_MS = 100_000L
+
+        private const val READ_ALOUD_MEDIA_SESSION_ACTIONS =
+            (PlaybackStateCompat.ACTION_PLAY
+                    or PlaybackStateCompat.ACTION_PAUSE
+                    or PlaybackStateCompat.ACTION_PLAY_PAUSE
+                    or PlaybackStateCompat.ACTION_STOP
+                    or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                    or PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
 
     }
 
@@ -158,7 +168,14 @@ abstract class BaseReadAloudService : BaseService(),
     private var needResumeOnCallStateIdle = false
     private var registeredPhoneStateListener = false
     private var dsJob: Job? = null
-    private var upNotificationJob: Coroutine<*>? = null
+    private var upNotificationJob: Job? = null
+    @Volatile
+    private var systemMediaCompatibilityEnabled =
+        ReadConfig.systemMediaControlCompatibilityChange
+    @Volatile
+    private var androidMediaControlEnabled = ReadConfig.androidMediaControlEnabled
+    private val finishChapterTimerLock = Any()
+    private var finishChapterAtIndex = NO_FINISH_CHAPTER
     private var prepareReadAloudJob: Coroutine<*>? = null
     private var prepareReadAloudGeneration = 0L
     private var cover: Bitmap =
@@ -187,6 +204,7 @@ abstract class BaseReadAloudService : BaseService(),
         pause = false
         observeLiveBus()
         initMediaSession()
+        observeMediaControlSettings()
         initBroadcastReceiver()
         initPhoneStateListener()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
@@ -244,6 +262,9 @@ abstract class BaseReadAloudService : BaseService(),
         postEvent(EventBus.ALOUD_STATE, Status.STOP)
         notificationManager.cancel(NotificationId.ReadAloudService)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
+        systemMediaCompatibilityEnabled = false
+        androidMediaControlEnabled = false
+        mediaSessionCompat.isActive = false
         mediaSessionCompat.release()
         ReadBook.uploadProgress()
         unregisterPhoneStateListener(phoneStateListener)
@@ -280,6 +301,7 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private fun newReadAloud(play: Boolean, pageIndex: Int, startPos: Int) {
+        clearFinishChapterTimerIfChapterChanged(ReadBook.durChapterIndex)
         val generation = ++prepareReadAloudGeneration
         prepareReadAloudJob?.cancel()
         prepareReadAloudJob = execute(executeContext = IO) {
@@ -403,6 +425,7 @@ abstract class BaseReadAloudService : BaseService(),
         pause = false
         needResumeOnAudioFocusGain = false
         needResumeOnCallStateIdle = false
+        upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
         upReadAloudNotification()
         sessionStore.setStatus(ReadAloudSessionStatus.Playing)
         postEvent(EventBus.ALOUD_STATE, Status.PLAY)
@@ -473,6 +496,7 @@ abstract class BaseReadAloudService : BaseService(),
                     text = contentList.getOrNull(nowSpeak).orEmpty(),
                 )
             )
+            refreshMediaSessionPlaybackState()
         }
         updateReadAloudProgressSnapshot(progress)
         postEvent(EventBus.TTS_PROGRESS, progress)
@@ -634,14 +658,17 @@ abstract class BaseReadAloudService : BaseService(),
             characterName = speechPlan.getOrNull(cursor.cueIndex)?.segment?.characterName.orEmpty(),
             roleType = cue.roleType,
         ))
+        refreshMediaSessionPlaybackState()
     }
 
     private fun setTimer(minute: Int) {
+        clearFinishChapterTimer()
         timeMinute = minute
         doDs()
     }
 
     private fun addTimer() {
+        clearFinishChapterTimer()
         timeMinute = PlaybackTimer.addIncrement(timeMinute)
         doDs()
     }
@@ -662,11 +689,24 @@ abstract class BaseReadAloudService : BaseService(),
                 delay(60000)
                 if (timeMinute == PlaybackTimer.MIN_MINUTES) break
                 if (!pause) {
-                    timeMinute--
+                    val finishChapter = synchronized(finishChapterTimerLock) {
+                        timeMinute--
+                        if (timeMinute == PlaybackTimer.MIN_MINUTES &&
+                            ReadConfig.finishCurrentChapterAfterTimer
+                        ) {
+                            finishChapterAtIndex = ReadBook.durChapterIndex
+                            finishChapterAtIndex != NO_FINISH_CHAPTER
+                        } else {
+                            false
+                        }
+                    }
                     if (timeMinute == PlaybackTimer.MIN_MINUTES) {
-                        ReadAloud.stop(this@BaseReadAloudService)
+                        if (!finishChapter) {
+                            ReadAloud.stop(this@BaseReadAloudService)
+                        }
                         sessionStore.updateTimer(timeMinute)
                         postEvent(EventBus.READ_ALOUD_DS, timeMinute)
+                        upReadAloudNotification()
                         break
                     }
                 }
@@ -704,19 +744,45 @@ abstract class BaseReadAloudService : BaseService(),
      * 更新媒体状态
      */
     private fun upMediaSessionPlaybackState(state: Int) {
-        mediaSessionCompat.setPlaybackState(
-            PlaybackStateCompat.Builder()
-                .setActions(MediaHelp.MEDIA_SESSION_ACTIONS)
-                .setState(state, nowSpeak.toLong(), 1f)
-                // 为系统媒体控件添加定时按钮
-//                .addCustomAction(
-//                    PlaybackStateCompat.CustomAction.Builder(
-//                        "ACTION_ADD_TIMER",
-//                        getString(R.string.set_timer),
-//                        R.drawable.ic_time_add_24dp
-//                    ).build()
-//                )
-                .build()
+        val playbackState = PlaybackStateCompat.Builder()
+            .setActions(
+                if (androidMediaControlEnabled) {
+                    READ_ALOUD_MEDIA_SESSION_ACTIONS
+                } else {
+                    // 老的"使用媒体通道"路径保持原有行为，避免锁屏媒体控件功能变化。
+                    MediaHelp.MEDIA_SESSION_ACTIONS
+                }
+            )
+            // This is a normalized chapter-percentage scale, not a real time axis.
+            .setState(
+                state,
+                mediaProgressPositionMs(),
+                if (state == PlaybackStateCompat.STATE_PLAYING) 1f else 0f,
+            )
+        if (androidMediaControlEnabled) {
+            playbackState.addCustomAction(
+                PlaybackStateCompat.CustomAction.Builder(
+                    ACTION_ADD_TIMER,
+                    getString(R.string.set_timer),
+                    R.drawable.ic_time_add_24dp,
+                ).build()
+            )
+        }
+        mediaSessionCompat.setPlaybackState(playbackState.build())
+    }
+
+    private fun refreshMediaSessionPlaybackState() {
+        upMediaSessionPlaybackState(
+            if (pause) PlaybackStateCompat.STATE_PAUSED else PlaybackStateCompat.STATE_PLAYING
+        )
+    }
+
+    private fun mediaProgressPositionMs(): Long {
+        val playback = sessionStore.state.value.playback
+        return normalizedMediaProgressMs(
+            chapterPosition = playback.chapterPosition,
+            chapterLength = playback.chapterLength,
+            durationMs = MEDIA_PROGRESS_DURATION_MS,
         )
     }
 
@@ -736,6 +802,7 @@ abstract class BaseReadAloudService : BaseService(),
             .putText(MediaMetadataCompat.METADATA_KEY_ARTIST, textChapter?.title ?: "")
             .putText(MediaMetadataCompat.METADATA_KEY_ALBUM, ReadBook.book?.author ?: "")
             .putText(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentContent ?: "")
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, MEDIA_PROGRESS_DURATION_MS)
             .build()
         mediaSessionCompat.setMetadata(metadata)
     }
@@ -743,60 +810,105 @@ abstract class BaseReadAloudService : BaseService(),
     /**
      * 初始化MediaSession, 注册多媒体按钮
      */
-    /**
-     * 初始化MediaSession, 注册多媒体按钮
-     */
     @SuppressLint("UnspecifiedImmutableFlag")
     private fun initMediaSession() {
-        if (ReadConfig.systemMediaControlCompatibilityChange) {
-            mediaSessionCompat.setCallback(object : MediaSessionCompat.Callback() {
-                override fun onPlay() {
-                    resumeReadAloud()
-                }
+        mediaSessionCompat.setSessionActivity(readAloudActivityPendingIntent())
+        mediaSessionCompat.setCallback(object : MediaSessionCompat.Callback() {
+            override fun onPlay() {
+                resumeReadAloud()
+            }
 
-                override fun onPause() {
-                    pauseReadAloud()
-                }
+            override fun onPause() {
+                pauseReadAloud()
+            }
 
-                override fun onSkipToNext() {
-                    if (ReadConfig.mediaButtonPerNext) {
-                        nextChapter()
-                    } else {
-                        nextP()
-                    }
+            override fun onSkipToNext() {
+                if (ReadConfig.mediaButtonPerNext) {
+                    nextChapter()
+                } else {
+                    nextP()
                 }
+            }
 
-                override fun onSkipToPrevious() {
-                    if (ReadConfig.mediaButtonPerNext) {
-                        prevChapter()
-                    } else {
-                        prevP()
-                    }
+            override fun onSkipToPrevious() {
+                if (ReadConfig.mediaButtonPerNext) {
+                    prevChapter()
+                } else {
+                    prevP()
                 }
+            }
 
-                override fun onStop() {
-                    stopSelf()
-                }
+            override fun onStop() {
+                stopSelf()
+            }
 
-                override fun onCustomAction(action: String, extras: Bundle?) {
-                    if (action == "ACTION_ADD_TIMER") addTimer()
-                }
+            override fun onCustomAction(action: String, extras: Bundle?) {
+                if (action == ACTION_ADD_TIMER) addTimer()
+            }
 
-                override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
-                    return MediaButtonReceiver.handleIntent(
-                        this@BaseReadAloudService, mediaButtonEvent
-                    )
-                }
-            })
-        } else {
-            mediaSessionCompat.setCallback(object : MediaSessionCompat.Callback() {
-                override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
-                    return MediaButtonReceiver.handleIntent(
-                        this@BaseReadAloudService, mediaButtonEvent
-                    )
-                }
-            })
+            override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
+                return MediaButtonReceiver.handleIntent(
+                    this@BaseReadAloudService, mediaButtonEvent
+                )
+            }
+        })
+        updateMediaSessionActivation()
+    }
+
+    private fun observeMediaControlSettings() {
+        lifecycleScope.launch {
+            AppConfigStore.observeBoolean(PreferKey.readAloudAndroidMediaControl).collect {
+                setAndroidMediaControlEnabled(it == true)
+            }
         }
+        lifecycleScope.launch {
+            AppConfigStore.observeBoolean(
+                PreferKey.systemMediaControlCompatibilityChange
+            ).collect {
+                setSystemMediaCompatibilityEnabled(it ?: true)
+            }
+        }
+        lifecycleScope.launch {
+            AppConfigStore.observeBoolean(PreferKey.mediaButtonPerNext)
+                .drop(1)
+                .collect { upReadAloudNotification() }
+        }
+        lifecycleScope.launch {
+            AppConfigStore.observeBoolean(PreferKey.finishCurrentChapterAfterTimer)
+                .drop(1)
+                .collect { enabled ->
+                    if (enabled != true) clearFinishChapterTimer()
+                }
+        }
+    }
+
+    private fun setAndroidMediaControlEnabled(enabled: Boolean) {
+        val changed = androidMediaControlEnabled != enabled
+        androidMediaControlEnabled = enabled
+        updateMediaSessionActivation()
+        if (enabled) {
+            upMediaMetadata()
+        }
+        refreshMediaSessionPlaybackState()
+        if (changed || enabled) {
+            upReadAloudNotification()
+        }
+    }
+
+    private fun setSystemMediaCompatibilityEnabled(enabled: Boolean) {
+        if (systemMediaCompatibilityEnabled == enabled) {
+            updateMediaSessionActivation()
+            return
+        }
+        systemMediaCompatibilityEnabled = enabled
+        updateMediaSessionActivation()
+        refreshMediaSessionPlaybackState()
+        upReadAloudNotification()
+    }
+
+    private fun updateMediaSessionActivation() {
+        mediaSessionCompat.isActive =
+            systemMediaCompatibilityEnabled || androidMediaControlEnabled
     }
 
     /**
@@ -846,9 +958,9 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private fun upReadAloudNotification() {
-        upNotificationJob = execute {
+        upNotificationJob = lifecycleScope.launch(Main.immediate) {
             try {
-                val notification = createNotification()
+                val notification = createForegroundNotification()
                 notificationManager.notify(NotificationId.ReadAloudService, notification.build())
             } catch (e: Exception) {
                 AppLog.put("创建朗读通知出错,${e.localizedMessage}", e, true)
@@ -859,8 +971,7 @@ abstract class BaseReadAloudService : BaseService(),
     private fun choiceMediaStyle(): androidx.media.app.NotificationCompat.MediaStyle {
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
             .setShowActionsInCompactView(1, 2, 4)
-        if (ReadConfig.systemMediaControlCompatibilityChange) {
-            //fix #4090 android 14 can not show play control in lock screen
+        if (systemMediaCompatibilityEnabled && !androidMediaControlEnabled) {
             mediaStyle.setMediaSession(mediaSessionCompat.sessionToken)
         }
         return mediaStyle
@@ -891,12 +1002,7 @@ abstract class BaseReadAloudService : BaseService(),
             .setOnlyAlertOnce(true)
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
-            .setContentIntent(
-                activityPendingIntent(
-                    MainActivity.createReadBookIntent(this, readAloud = true),
-                    "activity"
-                )
-            )
+            .setContentIntent(readAloudActivityPendingIntent())
             .setVibrate(null)
             .setSound(null)
             .setLights(0, 0, 0)
@@ -939,25 +1045,97 @@ abstract class BaseReadAloudService : BaseService(),
         return builder
     }
 
+    private fun createForegroundNotification(): NotificationCompat.Builder =
+        if (androidMediaControlEnabled) {
+            createAndroidMediaControlNotification()
+        } else {
+            createNotification()
+        }
+
+    private fun createAndroidMediaControlNotification(): NotificationCompat.Builder {
+        val navigateByChapter = ReadConfig.mediaButtonPerNext
+        val previousAction = if (navigateByChapter) {
+            IntentAction.prev
+        } else {
+            IntentAction.prevParagraph
+        }
+        val nextAction = if (navigateByChapter) IntentAction.next else IntentAction.nextParagraph
+        val previousLabel = getString(
+            if (navigateByChapter) R.string.previous_chapter else R.string.prev_sentence
+        )
+        val nextLabel = getString(
+            if (navigateByChapter) R.string.next_chapter else R.string.next_sentence
+        )
+        val chapterTitle = ReadBook.curTextChapter?.title
+            ?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.read_aloud_s)
+        return NotificationCompat.Builder(this, AppConst.channelIdReadAloud)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setSmallIcon(R.drawable.ic_volume_up)
+            .setSubText(ReadBook.book?.author ?: getString(R.string.read_aloud))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentTitle(ReadBook.book?.name ?: getString(R.string.read_aloud))
+            .setContentText(chapterTitle)
+            .setContentIntent(readAloudActivityPendingIntent())
+            .setLargeIcon(cover)
+            .setVibrate(null)
+            .setSound(null)
+            .setLights(0, 0, 0)
+            .addAction(
+                R.drawable.ic_skip_previous,
+                previousLabel,
+                aloudServicePendingIntent(previousAction),
+            )
+            .addAction(
+                if (pause) R.drawable.ic_play else R.drawable.ic_pause,
+                getString(if (pause) R.string.resume else R.string.pause),
+                aloudServicePendingIntent(
+                    if (pause) IntentAction.resume else IntentAction.pause
+                ),
+            )
+            .addAction(
+                R.drawable.ic_skip_next,
+                nextLabel,
+                aloudServicePendingIntent(nextAction),
+            )
+            .addAction(
+                R.drawable.ic_time_add_24dp,
+                getString(R.string.set_timer),
+                aloudServicePendingIntent(IntentAction.addTimer),
+            )
+            .setStyle(
+                androidx.media.app.NotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSessionCompat.sessionToken)
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
+    }
+
+    private fun readAloudActivityPendingIntent(): PendingIntent? = activityPendingIntent(
+        MainActivity.createReadBookIntent(this, readAloud = true),
+        "activity",
+    )
+
     /**
      * 更新通知
      */
     override fun startForegroundNotification() {
-        execute {
-            try {
-                val notification = createNotification()
-                startForeground(NotificationId.ReadAloudService, notification.build())
-            } catch (e: Exception) {
-                AppLog.put("创建朗读通知出错,${e.localizedMessage}", e, true)
-                //创建通知出错不结束服务就会崩溃,服务必须绑定通知
-                stopSelf()
-            }
+        try {
+            val notification = createForegroundNotification()
+            startForeground(NotificationId.ReadAloudService, notification.build())
+        } catch (e: Exception) {
+            AppLog.put("创建朗读通知出错,${e.localizedMessage}", e, true)
+            //创建通知出错不结束服务就会崩溃,服务必须绑定通知
+            stopSelf()
         }
     }
 
     abstract fun aloudServicePendingIntent(actionStr: String): PendingIntent?
 
     open fun prevChapter() {
+        clearFinishChapterTimer()
         ReadBook.upReadTime()
         toLast = false
         resumeReadAloudInternal()
@@ -965,11 +1143,57 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     open fun nextChapter() {
+        clearFinishChapterTimer()
         ReadBook.upReadTime()
         AppLog.putDebug("${ReadBook.curTextChapter?.chapter?.title} 朗读结束跳转下一章并朗读")
         resumeReadAloudInternal()
         if (!ReadBook.moveToNextChapter(true)) {
             stopSelf()
+        }
+    }
+
+    /** Handles a playback engine's natural chapter boundary atomically with timer expiry. */
+    protected fun completeCurrentChapter() {
+        synchronized(finishChapterTimerLock) {
+            val chapterIndex = textChapter?.chapter?.index ?: currentChapterIndex
+            val decision = decideChapterCompletion(
+                durChapterIndex = ReadBook.durChapterIndex,
+                finishedChapterIndex = chapterIndex,
+                finishChapterAtIndex = finishChapterAtIndex,
+                finishChapterSettingEnabled = ReadConfig.finishCurrentChapterAfterTimer,
+            )
+            if (decision.clearTimer) {
+                finishChapterAtIndex = NO_FINISH_CHAPTER
+            }
+            when (decision.action) {
+                ChapterCompletionAction.STOP -> {
+                    pause = true
+                    stopSelf()
+                }
+
+                ChapterCompletionAction.ADVANCE -> {
+                    // synchronized is reentrant, so nextChapter() may clear the same state safely.
+                    nextChapter()
+                }
+
+                ChapterCompletionAction.SKIP -> Unit
+            }
+        }
+    }
+
+    private fun clearFinishChapterTimer() {
+        synchronized(finishChapterTimerLock) {
+            finishChapterAtIndex = NO_FINISH_CHAPTER
+        }
+    }
+
+    private fun clearFinishChapterTimerIfChapterChanged(chapterIndex: Int) {
+        synchronized(finishChapterTimerLock) {
+            if (finishChapterAtIndex != NO_FINISH_CHAPTER &&
+                finishChapterAtIndex != chapterIndex
+            ) {
+                finishChapterAtIndex = NO_FINISH_CHAPTER
+            }
         }
     }
 
@@ -1050,6 +1274,60 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
+}
+
+internal fun normalizedMediaProgressMs(
+    chapterPosition: Int,
+    chapterLength: Int,
+    durationMs: Long,
+): Long {
+    if (chapterLength <= 0 || durationMs <= 0) return 0L
+    val position = chapterPosition.coerceIn(0, chapterLength)
+    return position.toLong() * durationMs / chapterLength
+}
+
+/** Sentinel for "finish current chapter" timer not being armed. */
+internal const val NO_FINISH_CHAPTER = -1
+
+internal enum class ChapterCompletionAction {
+    /** Timer expired during this chapter — stop read-aloud now. */
+    STOP,
+    /** No finish-chapter intent — continue to the next chapter. */
+    ADVANCE,
+    /** The chapter already advanced concurrently — do nothing. */
+    SKIP,
+}
+
+internal data class ChapterCompletionDecision(
+    val action: ChapterCompletionAction,
+    val clearTimer: Boolean,
+)
+
+/**
+ * Decides what a natural chapter boundary should do against the "finish current
+ * chapter after timer" state. Pure and thread-free so it can be unit tested.
+ */
+internal fun decideChapterCompletion(
+    durChapterIndex: Int,
+    finishedChapterIndex: Int,
+    finishChapterAtIndex: Int,
+    finishChapterSettingEnabled: Boolean,
+): ChapterCompletionDecision {
+    if (durChapterIndex != finishedChapterIndex) {
+        // The chapter already advanced (race) — only clear a stale arm for the finished chapter.
+        return ChapterCompletionDecision(
+            action = ChapterCompletionAction.SKIP,
+            clearTimer = finishChapterAtIndex == finishedChapterIndex,
+        )
+    }
+    return when {
+        finishChapterAtIndex == NO_FINISH_CHAPTER ->
+            ChapterCompletionDecision(ChapterCompletionAction.ADVANCE, clearTimer = false)
+        finishChapterAtIndex != finishedChapterIndex || !finishChapterSettingEnabled ->
+            ChapterCompletionDecision(ChapterCompletionAction.ADVANCE, clearTimer = true)
+        else ->
+            ChapterCompletionDecision(ChapterCompletionAction.STOP, clearTimer = true)
+    }
 }
 
 internal inline fun findReadAloudPageIndex(
