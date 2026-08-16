@@ -534,6 +534,7 @@
     <string name="fattening_book">Awaiting more chapters books</string>
     <string name="finish_book">Finished books</string>
     <string name="local_book">Local Books</string>
+    <string name="add_local_file">Add local file</string>
     <string name="manga_config">Manga Settings</string>
     <string name="status_bar_immersion">The status bar color becomes transparent</string>
     <string name="imm_navigation_bar">immersion navigation bar</string>
@@ -872,7 +873,7 @@
     <string name="underline_feather">Blur Radius</string>
     <string name="underline_dash_len">Dash Length</string>
     <string name="underline_dash_gap">Dash Gap</string>
-    <string name="use_protagonist">Follow Protagonist</string>
+    <string name="use_protagonist">Follow Characters</string>
     <string name="character_role_filter">Character Role</string>
     <string name="character_role_all">All Protagonists</string>
     <string name="character_role_male_lead">Male Lead</string>

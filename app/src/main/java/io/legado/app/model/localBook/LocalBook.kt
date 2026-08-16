@@ -276,6 +276,28 @@ object LocalBook {
         return book
     }
 
+    /**
+     * 换源到本地文件专用：导入并解析目录。
+     * 目录解析失败（不支持的类型/压缩包/空目录）时，回滚本次新导入的书，避免书架残留一本读不了的坏书。
+     * 若该文件此前已在库中（重新导入），则不删除。
+     */
+    fun importFileForChangeSource(uri: Uri): Pair<Book, ArrayList<BookChapter>> {
+        val bookUrl = FileDoc.fromUri(uri, false).toString()
+        val existed = appDb.bookDao.getBook(bookUrl) != null
+        val book = importFile(uri)
+        return try {
+            book to getChapterList(book)
+        } catch (e: Exception) {
+            if (!existed) {
+                // deleteBook 只清缓存和封面，书架里的记录要另外删
+                deleteBook(book, false)
+                appDb.bookChapterDao.delByBook(book.bookUrl)
+                appDb.bookDao.delete(book)
+            }
+            throw e
+        }
+    }
+
     fun upBookInfo(book: Book) {
         when {
             book.isEpub -> EpubFile.upBookInfo(book)

@@ -532,7 +532,6 @@ class ReadingMemoryRepository(
                     bookUrl = bookUrl,
                     name = name,
                     isProtagonist = true,
-                    role = "主角",
                 )
             )
         } else if (existing.status == BookCharacterProfile.STATUS_DELETED) {
@@ -546,7 +545,7 @@ class ReadingMemoryRepository(
                 )
             )
         } else {
-            bookKnowledgeDao.setProtagonist(name, bookUrl, isProtagonist, System.currentTimeMillis())
+            bookKnowledgeDao.setProtagonist(bookUrl, name, isProtagonist, System.currentTimeMillis())
         }
     }
 

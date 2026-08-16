@@ -344,6 +344,11 @@ class BookInfoViewModel(
                 }
             }
 
+            is BookInfoIntent.ReplaceWithLocalBook -> {
+                dismissSheet()
+                changeTo(null, intent.book, intent.toc, intent.options)
+            }
+
             is BookInfoIntent.ReplaceConflictingBook -> {
                 dismissSheet()
                 changeTo(
@@ -880,7 +885,7 @@ class BookInfoViewModel(
         }
     }
     fun changeTo(
-        source: BookSource,
+        source: BookSource?,
         book: Book,
         toc: List<BookChapter>,
         options: ChangeSourceMigrationOptions,

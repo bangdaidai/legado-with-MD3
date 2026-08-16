@@ -25,6 +25,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +45,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.settings.WordCountThresholdSuggestions
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
+import io.legado.app.model.localBook.LocalBook
 import io.legado.app.ui.book.changesource.ChangeBookSourceComposeViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceEffect
 import io.legado.app.ui.book.changesource.ChangeSourceMigrationOptionsSheet
@@ -63,8 +65,12 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.utils.takePersistablePermissionSafely
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
 @Stable
@@ -86,6 +92,7 @@ fun ChangeSourceSheet(
     onReplace: (BookSource, Book, List<BookChapter>, ChangeSourceMigrationOptions) -> Unit,
     onReplaceBook: ((Book) -> Unit)? = null,
     onAddAsNew: (Book, List<BookChapter>) -> Unit,
+    onReplaceLocal: ((Book, List<BookChapter>, ChangeSourceMigrationOptions) -> Unit)? = null,
     onReplaceConflict: ((
         Book,
         BookSource,
@@ -127,6 +134,29 @@ fun ChangeSourceSheet(
         val origin = it.data?.getStringExtra("origin") ?: return@rememberLauncherForActivityResult
         viewModel.startSearch(origin)
     }
+
+    val scope = rememberCoroutineScope()
+    val pickLocalFileResult =
+        rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            // bookUrl 就是这个 uri，不持久化授权重启后就读不到文件了
+            uri.takePersistablePermissionSafely(context)
+            loadingAction = true
+            scope.launch {
+                try {
+                    val (localBook, toc) = withContext(Dispatchers.IO) {
+                        LocalBook.importFileForChangeSource(uri)
+                    }
+                    loadingAction = false
+                    onReplaceLocal?.invoke(localBook, toc, settings.migrationOptions())
+                    onDismissRequest()
+                } catch (e: Exception) {
+                    loadingAction = false
+                    AppLog.put("导入本地文件出错\n${e.localizedMessage}", e)
+                    context.toastOnUi("导入本地文件出错\n${e.localizedMessage}")
+                }
+            }
+        }
 
     LaunchedEffect(oldBook.bookUrl, fromReadBookActivity) {
         viewModel.initData(oldBook.name, oldBook.author, oldBook, fromReadBookActivity)
@@ -290,6 +320,15 @@ fun ChangeSourceSheet(
                                 dismiss()
                             }
                         )
+                        if (onReplaceLocal != null) {
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.add_local_file),
+                                onClick = {
+                                    dismiss()
+                                    pickLocalFileResult.launch(arrayOf("*/*"))
+                                }
+                            )
+                        }
                     }
                 }
                 MediumTonalButton(

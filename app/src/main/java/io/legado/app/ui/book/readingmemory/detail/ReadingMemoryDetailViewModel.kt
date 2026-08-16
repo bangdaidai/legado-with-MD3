@@ -8,6 +8,7 @@ import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.help.book.TagManager
+import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -254,10 +255,12 @@ class ReadingMemoryDetailViewModel(
                         }
                         is ReadingMemoryDetailIntent.AddProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, true)
+                            TextChapterLayout.invalidateRegexCache()
                             protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.RemoveProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, false)
+                            TextChapterLayout.invalidateRegexCache()
                             protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.DeleteReview -> {

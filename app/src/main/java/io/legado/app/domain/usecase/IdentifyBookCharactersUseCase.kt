@@ -210,6 +210,9 @@ class IdentifyBookCharactersUseCase(
                     voiceAgeBand = candidate.voiceAgeBand,
                     personality = candidate.personality,
                     summary = candidate.summary,
+                    // 男主/女主自动成为主角；已手动标记过的不因重新识别而丢失
+                    isProtagonist = existing?.isProtagonist == true ||
+                            candidate.role in BookCharacterProfile.LEAD_ROLES,
                     source = BookCharacterProfile.SOURCE_AI,
                     confidence = candidate.confidence,
                     createdAt = existing?.createdAt ?: System.currentTimeMillis(),

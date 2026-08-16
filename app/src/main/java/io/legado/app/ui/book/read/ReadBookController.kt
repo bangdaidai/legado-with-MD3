@@ -50,6 +50,7 @@ import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.entities.TextPos
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.ui.book.read.page.provider.TextPageFactory
 import io.legado.app.ui.book.read.page.provider.TipStyleProvider
 import io.legado.app.ui.config.readConfig.ReadConfig
@@ -834,11 +835,15 @@ class ReadBookController(
                     bookUrl = book.bookUrl,
                     name = name,
                     isProtagonist = true,
-                    role = "主角"
                 )
                 dao.upsertCharacterProfile(newProfile)
             }
             withContext(Dispatchers.Main) {
+                // 主角名单变了，跟随主角的高亮正则缓存必须失效后重排
+                TextChapterLayout.invalidateRegexCache()
+                if (viewModel.isInitFinish) {
+                    ReadBook.loadContent(resetPageOffset = false)
+                }
                 activity.toastOnUi("已将「$name」设为主角")
             }
         }

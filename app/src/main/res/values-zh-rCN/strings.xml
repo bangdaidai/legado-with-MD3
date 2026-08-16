@@ -504,6 +504,7 @@
     <string name="fattening_book">养肥书籍</string>
     <string name="finish_book">完结书籍</string>
     <string name="local_book">本地书籍</string>
+    <string name="add_local_file">添加本地文件</string>
     <string name="manga_config">漫画设置</string>
     <string name="status_bar_immersion">状态栏颜色透明</string>
     <string name="imm_navigation_bar">沉浸式导航栏</string>
@@ -841,7 +842,7 @@
     <string name="underline_feather">模糊半径</string>
     <string name="underline_dash_len">虚线段长</string>
     <string name="underline_dash_gap">虚线间隔</string>
-    <string name="use_protagonist">跟随主角</string>
+    <string name="use_protagonist">跟随人物</string>
     <string name="character_role_filter">角色筛选</string>
     <string name="character_role_all">全部主角</string>
     <string name="character_role_male_lead">男主</string>

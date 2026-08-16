@@ -186,18 +186,20 @@ interface BookKnowledgeDao {
     )
     suspend fun getProtagonists(bookUrl: String): List<BookCharacterProfile>
 
-    /** 按角色类型获取主角（role 为 null 时等价于 getProtagonists） */
+    /**
+     * 按角色分类获取人物，不要求是主角。
+     * 高亮规则指定「角色筛选」时用这个：配角按定义不是主角，若再 AND isProtagonist 会永远查不到。
+     */
     @Query(
         """
         select * from book_character_profiles
         where bookUrl = :bookUrl
-          and isProtagonist = 1
           and role = :role
           and status != ${BookCharacterProfile.STATUS_DELETED}
         order by updatedAt desc
         """
     )
-    suspend fun getProtagonistsByRole(bookUrl: String, role: String): List<BookCharacterProfile>
+    suspend fun getCharactersByRole(bookUrl: String, role: String): List<BookCharacterProfile>
 
     /** 备份用：全量人物档案（含已删除，保证恢复后状态一致） */
     @Query("select * from book_character_profiles")

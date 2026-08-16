@@ -436,6 +436,7 @@
     <string name="fattening_book">養肥書籍</string>
     <string name="finish_book">完結書籍</string>
     <string name="local_book">本地書籍</string>
+    <string name="add_local_file">添加本地檔案</string>
     <string name="manga_config">漫畫設置</string>
     <string name="status_bar_immersion">狀態欄顏色透明</string>
     <string name="imm_navigation_bar">沉浸式导航栏</string>

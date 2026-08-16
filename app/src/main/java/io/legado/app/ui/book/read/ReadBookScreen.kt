@@ -675,6 +675,9 @@ fun ReadBookScreen(
                         onIntent(ReadBookIntent.DismissSheet)
                         onIntent(ReadBookIntent.AddSourceAsNewBook(newBook, toc))
                     },
+                    onReplaceLocal = { localBook, toc, _ ->
+                        onIntent(ReadBookIntent.ChangeSource(localBook, toc))
+                    },
                 )
             }
         }

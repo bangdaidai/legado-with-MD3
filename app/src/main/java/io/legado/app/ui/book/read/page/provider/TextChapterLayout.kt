@@ -138,9 +138,11 @@ class TextChapterLayout(
         val bookKnowledgeDao: io.legado.app.data.dao.BookKnowledgeDao = GlobalContext.get().get()
         val names = kotlinx.coroutines.runBlocking {
             if (role.isNullOrBlank()) {
+                // 未筛选：跟随主角标记
                 bookKnowledgeDao.getProtagonists(book.bookUrl)
             } else {
-                bookKnowledgeDao.getProtagonistsByRole(book.bookUrl, role)
+                // 指定了角色分类：按 role 取人，配角也算
+                bookKnowledgeDao.getCharactersByRole(book.bookUrl, role)
             }.map { it.name }
         }
         if (names.isEmpty()) return null

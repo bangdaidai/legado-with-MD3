@@ -169,8 +169,9 @@ data class TextChapter(
      */
     fun getContent(): String {
         val stringBuilder = StringBuilder()
-        pages.forEach {
-            stringBuilder.append(it.text)
+        // 排版协程会边排边往 textPages 里追加页, 用下标遍历避免迭代器抛 ConcurrentModificationException
+        for (index in 0 until pages.size) {
+            stringBuilder.append(pages[index].text)
         }
         return stringBuilder.toString()
     }

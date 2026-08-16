@@ -424,6 +424,9 @@ private fun BookInfoScreenContent(
                 onAddAsNew = { newBook, toc ->
                     onIntent(BookInfoIntent.AddSourceAsNewBook(newBook, toc))
                 },
+                onReplaceLocal = { localBook, toc, options ->
+                    onIntent(BookInfoIntent.ReplaceWithLocalBook(localBook, toc, options))
+                },
                 onReplaceConflict = { oldBook, source, newBook, toc, options ->
                     onIntent(
                         BookInfoIntent.ReplaceConflictingBook(

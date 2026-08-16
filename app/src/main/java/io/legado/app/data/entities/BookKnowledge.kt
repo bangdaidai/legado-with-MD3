@@ -53,6 +53,9 @@ data class BookCharacterProfile(
         val ALL_ROLES =
             listOf(ROLE_MALE_LEAD, ROLE_FEMALE_LEAD, ROLE_MALE_SUPPORTING, ROLE_FEMALE_SUPPORTING)
 
+        /** 男主/女主：被识别为这两类时自动置 isProtagonist */
+        val LEAD_ROLES = setOf(ROLE_MALE_LEAD, ROLE_FEMALE_LEAD)
+
         const val VOICE_GENDER_MALE = "male"
         const val VOICE_GENDER_FEMALE = "female"
         const val VOICE_GENDER_UNKNOWN = "unknown"

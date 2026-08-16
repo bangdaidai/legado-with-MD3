@@ -40,7 +40,8 @@ data class HighlightRule(
     var npBottom: Float = 0.5f,
     @ColumnInfo(defaultValue = "0")
     var useProtagonist: Boolean = false,
-    // 角色筛选：null=全部主角，或指定角色如 "male_lead"/"female_lead"/"male_supporting"/"female_supporting"
+    // 角色筛选：null=按主角标记取人；指定 "male_lead"/"female_lead"/"male_supporting"/"female_supporting"
+    // 时按 role 取人（配角也算，不再要求是主角）
     var characterRole: String? = null,
     // 内边距：文字在背景图内部的边距（背景图相对文字四周向外扩多少 dp）
     @ColumnInfo(defaultValue = "0")
@@ -81,7 +82,7 @@ data class HighlightRule(
         val parts = ArrayList<String>(4)
         parts.add(targetScopeLabel())
         if (useProtagonist) {
-            parts.add("跟随主角")
+            parts.add("跟随人物")
         }
         textColor?.let {
             parts.add("字色 ${it.toHexColor()}")
@@ -144,7 +145,7 @@ data class HighlightRule(
     }
 
     fun displayPattern(): String {
-        if (useProtagonist) return "(跟随主角名称)"
+        if (useProtagonist) return "(跟随人物名称)"
         return pattern.ifBlank { ".*" }
     }
 

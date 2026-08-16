@@ -104,8 +104,15 @@ class ChangeBookSourceUseCase(
         options: ChangeSourceMigrationOptions,
     ): ChangeBookSourceResult {
         val oldBookUrl = oldBook.bookUrl
-        applyMigration(oldBook, newBook, chapters, options)
-        if (options.deleteDownloadedChapters) {
+        // 换源到本地文件：目录只存在于文件本身，不落库就没有章节；旧源的章节缓存会被
+        // BookHelp.getContent 优先命中，搬过来会顶掉本地文件的正文，所以直接清掉
+        val effectiveOptions = if (newBook.isLocal) {
+            options.copy(migrateChapters = true, deleteDownloadedChapters = true)
+        } else {
+            options
+        }
+        applyMigration(oldBook, newBook, chapters, effectiveOptions)
+        if (effectiveOptions.deleteDownloadedChapters) {
             BookHelp.clearCache(oldBook)
         } else if (oldBook.bookUrl != newBook.bookUrl) {
             BookHelp.updateCacheFolder(oldBook, newBook)
@@ -114,7 +121,7 @@ class ChangeBookSourceUseCase(
             bookChapterDao.delByBook(oldBook.bookUrl)
             bookDao.delete(oldBook)
             bookDao.insert(newBook)
-            if (options.migrateChapters) {
+            if (effectiveOptions.migrateChapters) {
                 bookChapterDao.insert(*chapters.toTypedArray())
             }
             if (oldBookUrl != newBook.bookUrl) {
@@ -129,7 +136,7 @@ class ChangeBookSourceUseCase(
             database.bookTagRelationDao.deleteByBookUrl(oldBookUrl)
         }
         TagManager.generateTagsFromKind(newBook)
-        if (options.migrateChapters) {
+        if (effectiveOptions.migrateChapters) {
             ReadBook.onChapterListUpdated(newBook)
         }
         return ChangeBookSourceResult(oldBookUrl, newBook)
@@ -305,7 +312,8 @@ class ChangeBookSourceUseCase(
             newBook.remark = remark
         }
         newBook.canUpdate = canUpdate
-        if (config.fixedType) {
+        // 换源到本地文件时不能套用旧书的固定类型，否则会盖掉 local 类型位，isLocal 失效读不出正文
+        if (config.fixedType && !newBook.isLocal) {
             newBook.type = type
         }
         if (options.migrateReadConfig) {

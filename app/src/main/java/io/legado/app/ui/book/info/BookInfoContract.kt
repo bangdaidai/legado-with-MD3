@@ -195,6 +195,13 @@ sealed interface BookInfoIntent {
         val toc: List<BookChapter>,
     ) : BookInfoIntent
 
+    /** 换源到本地文件，本地书没有书源 */
+    data class ReplaceWithLocalBook(
+        val book: Book,
+        val toc: List<BookChapter>,
+        val options: ChangeSourceMigrationOptions,
+    ) : BookInfoIntent
+
     data class ReplaceConflictingBook(
         val oldBook: Book,
         val source: BookSource,
