@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.google.gson.JsonArray
+import com.google.gson.JsonNull
 import com.google.gson.JsonParser
 import io.legado.app.R
 import io.legado.app.data.entities.rule.ExploreKind
@@ -104,6 +106,43 @@ private fun reconstructSelectedKinds(
         return listOf(ExploreKind(title = prefillTitle, url = prefillUrl.ifBlank { null }))
     }
     return emptyList()
+}
+
+/**
+ * 把已选分类写回 args。args 才是真正持久化并被 HomepageViewModel 读取的字段，
+ * 只改 selectedKinds 不同步 args 的话，删掉的分类保存后还会回来。
+ * 保持原 JSON 形状：对象(排行分组 kindTitles/kindUrls)或数组(按钮组只有标题)。
+ */
+private fun syncArgsWithKinds(currentArgs: String, kinds: List<ExploreKind>): String {
+    if (currentArgs.isBlank()) return currentArgs
+    return runCatching {
+        val root = JsonParser.parseString(currentArgs)
+        when {
+            root.isJsonObject -> {
+                val obj = root.asJsonObject
+                val titlesKey = when {
+                    obj.has("kindTitles") -> "kindTitles"
+                    obj.has("a") -> "a"
+                    else -> return currentArgs
+                }
+                val urlsKey = when {
+                    obj.has("kindUrls") -> "kindUrls"
+                    obj.has("b") -> "b"
+                    else -> null
+                }
+                obj.add(titlesKey, JsonArray().apply { kinds.forEach { add(it.title) } })
+                urlsKey?.let { key ->
+                    obj.add(key, JsonArray().apply {
+                        kinds.forEach { k -> k.url?.let { add(it) } ?: add(JsonNull.INSTANCE) }
+                    })
+                }
+                obj.toString()
+            }
+
+            root.isJsonArray -> JsonArray().apply { kinds.forEach { add(it.title) } }.toString()
+            else -> currentArgs
+        }
+    }.getOrDefault(currentArgs)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -247,6 +286,7 @@ fun <T> AddCustomModuleDialog(
                                             selectedKinds = selectedKinds
                                                 .toMutableList()
                                                 .apply { removeAt(index) }
+                                            args = syncArgsWithKinds(args, selectedKinds)
                                         },
                                         modifier = Modifier.size(20.dp),
                                     ) {
@@ -336,6 +376,7 @@ fun <T> AddCustomModuleDialog(
             initialSelectedUrls = selectedKinds.map { it.url },
             onSelected = { kinds ->
                 selectedKinds = kinds
+                args = syncArgsWithKinds(args, kinds)
                 if (kinds.size >= 2) {
                     title = kinds.joinToString("·") { it.title }
                 } else if (kinds.size == 1) {
