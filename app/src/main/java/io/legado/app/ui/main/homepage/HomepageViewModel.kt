@@ -771,6 +771,10 @@ class HomepageViewModel(
                     )
                 )
             )
+            // 分类/参数变了, 旧内容必须作废, 否则卡片会一直显示改动前的数据直到手动刷新。
+            // 先取消在跑的加载, 再清掉缓存, 让状态回到 Loading 触发按新 args 重新加载。
+            loadJobs.remove(globalId)?.cancel()
+            _moduleContentStates.update { it - globalId }
             notifyConfigChanged()
         }
     }
