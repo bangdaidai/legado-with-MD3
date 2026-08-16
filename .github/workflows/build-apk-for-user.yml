@@ -39,13 +39,26 @@ jobs:
         run: |
           sed -i '/maven.aliyun.com/d' settings.gradle
 
+      - name: Resolve version name
+        id: appversion
+        run: |
+          BASE=$(grep -oP 'VERSION_MAJOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_MINOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_PATCH=\K[0-9]+' app/version.properties)
+          SUFFIX=$(grep -oP 'VERSION_SUFFIX=\K[0-9]+' app/version.properties)
+          if [ "$SUFFIX" = "1" ]; then
+            BASE="${BASE}-beta"
+          fi
+          # 与 build.yml 一致：版本号后追加 run_number 与 UTC 日期
+          NAME="${BASE}.${{ github.run_number }}-$(date -u '+%Y%m%d')"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "构建版本号: $NAME"
+
       - name: Build Debug APK
         run: |
           chmod +x gradlew
           ./gradlew assembleAppDebug -PenableAbiSplits=false --no-daemon --no-configuration-cache
         env:
           COMMIT_NUMBER: ${{ github.run_number }}
-          APP_VERSION_NAME: debug-${{ github.run_number }}
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
 
       - name: Check Build Output
         run: |
@@ -59,16 +72,20 @@ jobs:
           fi
 
       - name: Rename APK Files
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/debug"
           cd "$APK_PATH"
-          mv -- *.apk "legado-debug-${GITHUB_RUN_NUMBER}-universal.apk"
+          mv -- *.apk "legado-debug-${APP_VERSION_NAME}-universal.apk"
           ls -la
 
       - name: Create ZIP Archive
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/debug"
-          ZIP_NAME="legado-debug-apks-${GITHUB_RUN_NUMBER}.zip"
+          ZIP_NAME="legado-debug-apks-${APP_VERSION_NAME}.zip"
           cd "$APK_PATH"
           zip "$GITHUB_WORKSPACE/$ZIP_NAME" *.apk
           echo "ZIP 文件已创建: $ZIP_NAME"
@@ -77,11 +94,11 @@ jobs:
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: legado-apks-${{ github.run_number }}
+          name: legado-apks-${{ steps.appversion.outputs.name }}
           path: app/build/outputs/apk/app/debug/*.apk
 
       - name: Upload ZIP Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: legado-apks-zip-${{ github.run_number }}
+          name: legado-apks-zip-${{ steps.appversion.outputs.name }}
           path: legado-debug-apks-*.zip

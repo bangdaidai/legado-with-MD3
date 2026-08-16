@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.appversion.outputs.name }}
     steps:
       - uses: actions/checkout@v5
 
@@ -110,8 +112,8 @@ jobs:
           if [ "$SUFFIX" = "1" ]; then
             BASE="${BASE}-beta"
           fi
-          # 云端构建在现有版本号后追加 run_number 作为构建后缀，保证每次构建版本唯一
-          NAME="${BASE}.${{ github.run_number }}"
+          # 云端构建在现有版本号后追加 run_number 与 UTC 日期，保证每次构建版本唯一且可追溯
+          NAME="${BASE}.${{ github.run_number }}-$(date -u '+%Y%m%d')"
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "APP_VERSION_NAME=$NAME" >> $GITHUB_ENV
           echo "构建版本号: $NAME"
@@ -149,6 +151,17 @@ jobs:
           find app/build/outputs -name "*.apk" -type f
           echo ""
           ls -la app/build/outputs/apk/app/*/ || echo "Release 目录不存在"
+
+      - name: Rename APK Files
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
+        run: |
+          APK_DIR=app/build/outputs/apk/app/release
+          for f in "$APK_DIR"/*.apk; do
+            abi=$(basename "$f" | sed -n 's/.*\(armeabi-v7a\|arm64-v8a\|universal\).*/-\1/p')
+            mv -- "$f" "$APK_DIR/legado-${APP_VERSION_NAME}${abi}.apk"
+          done
+          ls -la "$APK_DIR"
 
       - name: Verify APK Signature
         run: |
@@ -240,14 +253,8 @@ jobs:
       - name: Get version info
         id: version
         run: |
-          VERSION=$(grep -oP 'VERSION_MAJOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_MINOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_PATCH=\K[0-9]+' app/version.properties)
-          SUFFIX=$(grep -oP 'VERSION_SUFFIX=\K[0-9]+' app/version.properties)
-          if [ "$SUFFIX" = "1" ]; then
-            VERSION="${VERSION}-beta"
-          fi
-          # 与 build job 保持一致：追加 run_number 构建后缀
-          VERSION="${VERSION}.${{ github.run_number }}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # 直接复用 build job 解析好的版本号，保证日期与 APK 内版本完全一致
+          echo "version=${{ needs.build.outputs.version }}" >> $GITHUB_OUTPUT
           
       - name: Generate Release Notes
         run: |

@@ -50,7 +50,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.draw.paint
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
@@ -1212,11 +1216,26 @@ internal fun HighlightRulePreview(
                 .fillMaxWidth()
                 .then(
                     if (pageBgPainter != null) {
-                        Modifier.paint(
-                            pageBgPainter,
-                            sizeToIntrinsics = false,
-                            contentScale = ContentScale.Crop,
-                        )
+                        // 不用 Modifier.paint：它在高度无界的滚动容器里会拿图片固有尺寸
+                        // 反算 minHeight，把卡片撑成整张图那么高（sizeToIntrinsics=false 也挡不住，
+                        // 那个分支还要求宽高都有界）。drawBehind 只画不测量，尺寸仍由文字决定。
+                        Modifier.drawBehind {
+                            val src = pageBgPainter.intrinsicSize
+                            if (!src.isSpecified || src.width <= 0f || src.height <= 0f) {
+                                return@drawBehind
+                            }
+                            // 等比放大到铺满后居中裁切，等价于 ContentScale.Crop
+                            val factor = ContentScale.Crop.computeScaleFactor(src, size)
+                            val dst = Size(src.width * factor.scaleX, src.height * factor.scaleY)
+                            clipRect {
+                                translate(
+                                    (size.width - dst.width) / 2f,
+                                    (size.height - dst.height) / 2f,
+                                ) {
+                                    with(pageBgPainter) { draw(dst) }
+                                }
+                            }
+                        }
                     } else {
                         Modifier
                     }
