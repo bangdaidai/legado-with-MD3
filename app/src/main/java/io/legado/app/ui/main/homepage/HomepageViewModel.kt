@@ -655,6 +655,12 @@ class HomepageViewModel(
 
     fun setModuleVisible(id: String, visible: Boolean) {
         _pendingEnabled.update { it + (id to visible) }
+        if (!visible) {
+            // 关闭要和删除一样立刻停掉正在跑的加载, 否则已经发出的请求(例如卡在
+            // getVerificationCode 验证对话框上的那种)会继续执行, 表现为"关了还在用"。
+            loadJobs.remove(id)?.cancel()
+            _moduleContentStates.update { it - id }
+        }
         viewModelScope.launch {
             if (gateway.getById(id) != null) gateway.setEnabled(id, visible)
             else {
