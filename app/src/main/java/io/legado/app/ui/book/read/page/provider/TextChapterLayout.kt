@@ -359,10 +359,12 @@ class TextChapterLayout(
                 }
 
                 val srcList = LinkedList<String>()
+                val clickList = LinkedList<String?>()
                 val reviewImg = bookChapter.reviewImg
                 var reviewTxt = ""
                 if (index == allTitleSegments.lastIndex && reviewImg != null) {
                     srcList.add(reviewImg)
+                    clickList.add(parseImgClick(reviewImg))
                     reviewTxt = if (reviewImg.contains("TEXT")) reviewChar else srcReplaceChar
                 }
 
@@ -375,6 +377,7 @@ class TextChapterLayout(
                     fontMetrics = currentMetrics,
                     imageStyle = imageStyle,
                     srcList = srcList.ifEmpty { null },
+                    clickList = clickList.ifEmpty { null },
                     isTitle = true,
                     emptyContent = contents.isEmpty(),
                     isVolumeTitle = bookChapter.isVolume,
@@ -424,11 +427,13 @@ class TextChapterLayout(
             if (isTextImageStyle) {
                 //图片样式为文字嵌入类型
                 val srcList = LinkedList<String>()
+                val clickList = LinkedList<String?>()
                 sb.setLength(0)
                 val matcher = AppPattern.imgPattern.matcher(text)
                 while (matcher.find()) {
                     matcher.group(1)?.let { src ->
                         srcList.add(src)
+                        clickList.add(parseImgClick(src))
                         matcher.appendReplacement(sb, srcReplaceChar)
                     }
                 }
@@ -443,6 +448,7 @@ class TextChapterLayout(
                     contentPaintFontMetrics,
                     imageStyle,
                     srcList = srcList,
+                    clickList = clickList,
                     offset = bodyHighlightOffset
                 )
                 bodyHighlightOffset += text.length
@@ -584,6 +590,16 @@ class TextChapterLayout(
     }
 
     /**
+     * 提取图片链接选项中的click键值
+     */
+    private fun parseImgClick(imgSrc: String): String? {
+        val urlMatcher = paramPattern.matcher(imgSrc)
+        if (!urlMatcher.find()) return null
+        val urlOptionStr = imgSrc.substring(urlMatcher.end())
+        return GSON.fromJsonObject<Map<String, String>>(urlOptionStr).getOrNull()?.get("click")
+    }
+
+    /**
      * 排版图片
      */
     private suspend fun setTypeImage(
@@ -664,6 +680,7 @@ class TextChapterLayout(
                     end = absStartX + end.toFloat(),
                     src = src,
                     book = book,
+                    click = click
                 )
             )
             calcTextLinePosition(textPages, textLine, stringBuilder.length)
