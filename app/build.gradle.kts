@@ -1,4 +1,6 @@
 import java.io.FileInputStream
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.Properties
 
 plugins {
@@ -64,7 +66,12 @@ android {
         applicationId = "io.legato.kazusa.q"
         minSdk = 26
         targetSdk = 37
-        versionCode = System.getenv("COMMIT_NUMBER")?.toInt()?.let { 10000 + it } ?: 32640
+        // versionCode 由 UTC 日期编码（YYYYMMDD），随日期单调递增，
+        // 不依赖 CI 运行计数，避免跨 workflow 计数不连续导致无法覆盖安装（-25）
+        versionCode = LocalDate.now(ZoneOffset.UTC)
+            .toString()
+            .filter(Char::isDigit)
+            .toInt()
         versionName = System.getenv("APP_VERSION_NAME") ?: projectVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

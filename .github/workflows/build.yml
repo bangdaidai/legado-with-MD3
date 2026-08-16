@@ -121,7 +121,6 @@ jobs:
       - name: Build Release APK
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
-          COMMIT_NUMBER: ${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew assembleAppRelease -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log

@@ -57,7 +57,6 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleAppDebug -PenableAbiSplits=false --no-daemon --no-configuration-cache
         env:
-          COMMIT_NUMBER: ${{ github.run_number }}
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
 
       - name: Check Build Output
