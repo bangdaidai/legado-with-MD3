@@ -334,5 +334,15 @@ class ChangeBookSourceUseCase(
                 newBook.intro = intro
             }
         }
+        // 换源到本地文件后，刷新会走 LocalBook.upBookInfo 重新解析文件，把 intro/coverUrl 覆盖成文件自带的。
+        // 把迁移过来的简介和封面固化到 custom 字段：显示走 getDisplayIntro()/getDisplayCover()，重新解析盖不掉。
+        if (newBook.isLocal) {
+            if (newBook.customIntro.isNullOrBlank() && !newBook.intro.isNullOrBlank()) {
+                newBook.customIntro = newBook.intro
+            }
+            if (newBook.customCoverUrl.isNullOrBlank() && !newBook.coverUrl.isNullOrBlank()) {
+                newBook.customCoverUrl = newBook.coverUrl
+            }
+        }
     }
 }
