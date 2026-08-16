@@ -76,6 +76,7 @@ sealed interface ThemeConfigIntent {
     data class SelectLauncherIcon(val value: String) : ThemeConfigIntent
     data class SelectNavigationIcon(val destination: String, val path: String) : ThemeConfigIntent
     data class RequestNavigationIcon(val destination: String) : ThemeConfigIntent
+    data class SetNavIconSize(val value: Int) : ThemeConfigIntent
     data class RequestBackgroundImage(val dark: Boolean) : ThemeConfigIntent
     data class SelectBackground(val uri: String, val dark: Boolean) : ThemeConfigIntent
     data class RemoveBackground(val dark: Boolean) : ThemeConfigIntent

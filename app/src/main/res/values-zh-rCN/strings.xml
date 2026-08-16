@@ -1648,6 +1648,7 @@
     <string name="theme_config_add_nav_icon">添加%1$s图标</string>
     <string name="theme_config_nav_icon_unselected">未选中</string>
     <string name="theme_config_nav_icon_selected">已选中</string>
+    <string name="theme_config_nav_icon_size">自定义图标大小</string>
     <string name="theme_config_replace_nav_icon">更换图片</string>
     <string name="theme_config_no_font_files">没有字体文件</string>
     <string name="theme_config_reset_defaults">恢复默认主题配置</string>

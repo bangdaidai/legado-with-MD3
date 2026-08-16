@@ -869,6 +869,7 @@ fun ThemeConfigScreen(
         onSetDefault = { onIntent(ThemeConfigIntent.SetDefaultHomePage(it)) },
         onRequestNavigationIcon = { onIntent(ThemeConfigIntent.RequestNavigationIcon(it)) },
         onClearNavigationIcon = { onIntent(ThemeConfigIntent.SelectNavigationIcon(it, "")) },
+        onSetNavIconSize = { onIntent(ThemeConfigIntent.SetNavIconSize(it)) },
         onSetLabelVisibilityMode = {
             onIntent(ThemeConfigIntent.SetLabelVisibilityMode(it))
         },

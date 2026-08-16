@@ -146,6 +146,9 @@ class ThemeConfigViewModel(
             is ThemeConfigIntent.RequestNavigationIcon -> _effects.tryEmit(
                 ThemeConfigEffect.OpenNavigationIcon(intent.destination)
             )
+            is ThemeConfigIntent.SetNavIconSize -> updateAppShell {
+                it.copy(navIconSize = intent.value)
+            }
             is ThemeConfigIntent.RequestBackgroundImage -> _effects.tryEmit(
                 ThemeConfigEffect.OpenBackgroundImage(intent.dark)
             )

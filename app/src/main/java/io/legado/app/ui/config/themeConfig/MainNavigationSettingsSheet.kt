@@ -2,7 +2,6 @@ package io.legado.app.ui.config.themeConfig
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -40,6 +39,7 @@ fun MainNavigationSettingsSheet(
     onSetDefault: (String) -> Unit,
     onRequestNavigationIcon: (String) -> Unit,
     onClearNavigationIcon: (String) -> Unit,
+    onSetNavIconSize: (Int) -> Unit,
     onSetLabelVisibilityMode: (String) -> Unit,
 ) {
     var showNavigationIcons by remember(show) { mutableStateOf(false) }
@@ -93,7 +93,7 @@ fun MainNavigationSettingsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             CompactDropdownSettingItem(
                 title = stringResource(R.string.default_home_page),
@@ -109,7 +109,6 @@ fun MainNavigationSettingsSheet(
                 entryValues = stringArrayResource(R.array.label_vis_mode_value),
                 onValueChange = onSetLabelVisibilityMode,
             )
-            Spacer(modifier = Modifier.padding(bottom = 4.dp))
             val customIconCount = listOf(
                 settings.navIconHome,
                 settings.navIconBookshelf,
@@ -131,7 +130,6 @@ fun MainNavigationSettingsSheet(
                 },
                 onClick = { showNavigationIcons = true },
             )
-            Spacer(modifier = Modifier.padding(bottom = 4.dp))
             LazyColumn(
                 state = navigationListState,
                 modifier = Modifier
@@ -192,5 +190,6 @@ fun MainNavigationSettingsSheet(
         onDismissRequest = { showNavigationIcons = false },
         onSelectIcon = onRequestNavigationIcon,
         onClearIcon = onClearNavigationIcon,
+        onSetIconSize = onSetNavIconSize,
     )
 }

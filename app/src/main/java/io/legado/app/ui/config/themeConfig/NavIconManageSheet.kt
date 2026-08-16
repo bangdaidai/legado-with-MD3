@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,11 +25,13 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import coil3.compose.AsyncImage
 import io.legado.app.R
 import io.legado.app.domain.model.settings.AppShellSettings
 import io.legado.app.ui.main.MainDestination
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.widget.components.AppSlider
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -52,6 +55,7 @@ fun NavIconManageSheet(
     onDismissRequest: () -> Unit,
     onSelectIcon: (String) -> Unit,
     onClearIcon: (String) -> Unit,
+    onSetIconSize: (Int) -> Unit,
 ) {
     val destinations = listOf(
         NavIconDestination(
@@ -75,6 +79,10 @@ fun NavIconManageSheet(
         NavIconDestination("rss", R.string.rss, settings.navIconRss, settings.navIconRssSelected),
         NavIconDestination("my", R.string.my, settings.navIconMy, settings.navIconMySelected),
     )
+
+    var iconSize by remember(settings.navIconSize) {
+        mutableFloatStateOf(settings.navIconSize.toFloat())
+    }
 
     AppModalBottomSheet(
         show = show,
@@ -137,6 +145,40 @@ fun NavIconManageSheet(
                             onClear = { onClearIcon("${destination.key}:selected") },
                         )
                     }
+                }
+            }
+            NormalCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 16.dp,
+                containerColor = LegadoTheme.colorScheme.onSheetContent,
+            ) {
+                Column(
+                    modifier = Modifier.padding(all = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppText(
+                            text = stringResource(R.string.theme_config_nav_icon_size),
+                            style = LegadoTheme.typography.labelMediumEmphasized,
+                        )
+                        AppText(
+                            text = "${iconSize.toInt()} dp",
+                            style = LegadoTheme.typography.labelMediumEmphasized,
+                        )
+                    }
+                    AppSlider(
+                        value = iconSize,
+                        onValueChange = { iconSize = it },
+                        onValueChangeFinished = { onSetIconSize(iconSize.roundToInt()) },
+                        valueRange = 20f..56f,
+                        steps = 35,
+                        accessibilityLabel = stringResource(R.string.theme_config_nav_icon_size),
+                        accessibilityValue = "${iconSize.toInt()} dp",
+                    )
                 }
             }
         }

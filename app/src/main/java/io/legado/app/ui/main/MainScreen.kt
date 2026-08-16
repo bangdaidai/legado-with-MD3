@@ -86,6 +86,7 @@ import io.legado.app.ui.main.my.MyRouteScreen
 import io.legado.app.ui.main.my.PrefClickEvent
 import io.legado.app.ui.main.rss.RssRouteScreen
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.FloatingBottomBar
@@ -832,10 +833,11 @@ private fun NavigationIcon(
     if (customIconPath.isNotEmpty()) {
         // SVG 是矢量单色图标，用与 AppIcon 相同的默认色着色，与内置图标保持一致；
         // 位图（PNG 等）保留原始色彩
+        val iconSize = LocalAppUiConfiguration.current.appShell.navIconSize
         AsyncImage(
             model = customIconPath,
             contentDescription = null,
-            modifier = modifier.size(40.dp),
+            modifier = modifier.size(iconSize.dp),
             colorFilter = if (customIconPath.endsWith(".svg", ignoreCase = true)) {
                 ColorFilter.tint(LegadoTheme.colorScheme.onSurface)
             } else null

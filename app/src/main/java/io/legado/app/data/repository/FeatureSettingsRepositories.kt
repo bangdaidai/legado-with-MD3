@@ -307,6 +307,7 @@ internal fun Preferences.toAppShellSettings(): AppShellSettings = AppShellSettin
     navIconExploreSelected = compatDsString(PreferKey.navIconExploreSelected) ?: "",
     navIconRssSelected = compatDsString(PreferKey.navIconRssSelected) ?: "",
     navIconMySelected = compatDsString(PreferKey.navIconMySelected) ?: "",
+    navIconSize = compatDsInt(PreferKey.navIconSize) ?: 40,
     launcherIcon = compatDsString(PreferKey.launcherIcon) ?: "ic_launcher",
 )
 
@@ -338,6 +339,7 @@ internal fun AppShellSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.navIconExploreSelected to navIconExploreSelected,
     PreferKey.navIconRssSelected to navIconRssSelected,
     PreferKey.navIconMySelected to navIconMySelected,
+    PreferKey.navIconSize to navIconSize,
     PreferKey.launcherIcon to launcherIcon,
 )
 
