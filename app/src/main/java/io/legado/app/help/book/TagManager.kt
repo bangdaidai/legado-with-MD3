@@ -402,6 +402,15 @@ object TagManager {
         return appDb.bookTagGroupDao.getAllSorted()
     }
 
+    /** 按列表下标写入分组 sortOrder（拖拽排序），只更新位次变化的分组。 */
+    suspend fun reorderGroups(groups: List<BookTagGroup>) {
+        groups.forEachIndexed { index, group ->
+            if (group.sortOrder != index) {
+                appDb.bookTagGroupDao.update(group.copy(sortOrder = index))
+            }
+        }
+    }
+
     /** 判断正则是否合法（供 UI 校验）。 */
     fun isValidRegex(pattern: String): Boolean {
         return try {

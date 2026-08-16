@@ -218,11 +218,7 @@ class TagManagementViewModel(
     }
 
     private suspend fun reorderGroups(groups: List<BookTagGroup>) {
-        groups.forEachIndexed { index, group ->
-            if (group.sortOrder != index) {
-                appDb.bookTagGroupDao.update(group.copy(sortOrder = index))
-            }
-        }
+        TagManager.reorderGroups(groups)
         loadDataBody()
         FlowEventBus.post(EventBus.TAGS_UPDATED, 0L)
     }
