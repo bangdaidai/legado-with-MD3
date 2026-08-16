@@ -1166,8 +1166,6 @@ private fun MarkingListContent(
                             text = marking.note,
                             style = LegadoTheme.typography.bodyMedium,
                             color = LegadoTheme.colorScheme.primary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }

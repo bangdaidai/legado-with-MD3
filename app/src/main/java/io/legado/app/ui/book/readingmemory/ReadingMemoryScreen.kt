@@ -582,8 +582,6 @@ private fun MemoryBookCard(
                     text = memory.review.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 )
             }
@@ -615,8 +613,6 @@ private fun MemoryBookCard(
                                 text = memory.review.orEmpty(),
                                 style = LegadoTheme.typography.bodySmall,
                                 color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth()
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                             )

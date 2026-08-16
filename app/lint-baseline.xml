@@ -3110,16 +3110,6 @@
             column="5"/>
     </issue>
 
-    <issue
-        id="Overdraw"
-        message="Possible overdraw: Root element paints background `?attr/selectableItemBackground` with a theme that also paints a background (inferred theme is `@style/Base.AppTheme`)"
-        errorLine1="    android:background=&quot;?attr/selectableItemBackground&quot;>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/item_bookmark.xml"
-            line="10"
-            column="5"/>
-    </issue>
 
     <issue
         id="Overdraw"

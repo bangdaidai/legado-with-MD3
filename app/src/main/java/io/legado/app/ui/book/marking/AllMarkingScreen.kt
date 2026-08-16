@@ -397,8 +397,6 @@ private fun MarkingRow(
                 text = it,
                 style = LegadoTheme.typography.bodyMedium,
                 color = LegadoTheme.colorScheme.primary,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }

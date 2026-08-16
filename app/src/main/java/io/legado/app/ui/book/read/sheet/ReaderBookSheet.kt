@@ -1301,8 +1301,6 @@ private fun ReaderSheetBookmarkItem(
                     text = item.content,
                     style = LegadoTheme.typography.labelMedium,
                     color = LegadoTheme.colorScheme.primary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -1437,8 +1435,6 @@ private fun ReaderSheetMarkingItem(
                     text = item.note,
                     style = LegadoTheme.typography.labelMedium,
                     color = LegadoTheme.colorScheme.primary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

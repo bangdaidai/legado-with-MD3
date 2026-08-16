@@ -682,6 +682,7 @@ private fun ExcerptSection(
                 if (index > 0) {
                     TicketNotchDivider(
                         modifier = Modifier.padding(vertical = 10.dp),
+                        notchRadius = 0.dp,
                         color = ticketBorderColor,
                         strokeWidth = ticketStrokeWidth,
                     )
@@ -708,8 +709,6 @@ private fun ExcerptSection(
                         style = LegadoTheme.typography.labelLarge,
                         fontWeight = FontWeight.Normal,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
