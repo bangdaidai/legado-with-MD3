@@ -103,9 +103,9 @@ class ReadingMemoryDetailViewModel(
                     customTag = customTagSource,
                 )
                 val intro = if (book != null && memory?.userModifiedIntro != true) {
-                    book.intro ?: memory?.intro ?: ""
+                    book.getDisplayIntro() ?: memory?.intro ?: ""
                 } else {
-                    memory?.intro ?: book?.intro ?: ""
+                    memory?.intro ?: book?.getDisplayIntro() ?: ""
                 }
                 val firstReadDate = readRecordTimelineDays.firstOrNull()?.date
                 val totalBookWords = parseTotalWords(book?.wordCount ?: memory?.wordCount)

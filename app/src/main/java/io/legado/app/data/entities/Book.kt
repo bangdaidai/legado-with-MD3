@@ -173,6 +173,12 @@ data class Book(
 
     fun getDisplayIntro() = if (customIntro.isNullOrEmpty()) intro else customIntro
 
+    /**
+     * 书架/列表用的简介，优先级与 BookDao 书架查询里的
+     * ifnull(customIntro, ifnull(listIntro, intro)) 保持一致（只判 null，不判空串）。
+     */
+    fun getListDisplayIntro() = customIntro ?: listIntro ?: intro
+
     //自定义简介有自动更新的需求时，可通过更新intro再调用upCustomIntro()完成
     @Suppress("unused")
     fun upCustomIntro() {
