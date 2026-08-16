@@ -131,11 +131,13 @@ class ChangeBookSourceUseCase(
                 database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
             }
         }
-        // 换源后重建新书的标签关联，并清理旧 bookUrl 上的孤儿关联，避免标签丢失
+        // 换源后重建新书的标签关联，并清理旧 bookUrl 上的孤儿关联，避免标签丢失。
+        // generateTagsFromKind 是纯追加（已存在的关联会被跳过），所以新 bookUrl 上的旧关联
+        // 必须先删掉：同 url 换源、或该 url 曾在书架上出现过时，上一个源的标签会残留并混进新 kind。
         if (oldBookUrl != newBook.bookUrl) {
             database.bookTagRelationDao.deleteByBookUrl(oldBookUrl)
         }
-        TagManager.generateTagsFromKind(newBook)
+        TagManager.updateTagsOnSourceChange(newBook)
         if (effectiveOptions.migrateChapters) {
             ReadBook.onChapterListUpdated(newBook)
         }
