@@ -55,6 +55,17 @@ interface ReadAloudVoiceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertBinding(binding: BookVoiceBindingEntity)
 
+    /** 备份用：全量音色绑定 */
+    @Query("select * from book_voice_bindings")
+    suspend fun getAllBindings(): List<BookVoiceBindingEntity>
+
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertVoices(voices: List<ReadAloudVoiceEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBindings(bindings: List<BookVoiceBindingEntity>)
+
     @Delete
     suspend fun deleteBinding(binding: BookVoiceBindingEntity)
 }

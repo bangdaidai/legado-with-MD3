@@ -46,8 +46,16 @@ interface BookContentProcessDao {
     @Query("select coalesce(max(sortOrder), 0) from book_content_processes where bookUrl = :bookUrl")
     suspend fun maxOrder(bookUrl: String): Int
 
+    /** 备份用：全量净化规则（含已标记删除，保证恢复后状态一致） */
+    @Query("select * from book_content_processes")
+    suspend fun getAll(): List<BookContentProcess>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(process: BookContentProcess)
+
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(processes: List<BookContentProcess>)
 
     @Query("update book_content_processes set enabled = :enabled, updatedAt = :updatedAt where id = :id")
     suspend fun setEnabled(id: String, enabled: Boolean, updatedAt: Long = System.currentTimeMillis())

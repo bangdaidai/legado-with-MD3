@@ -91,6 +91,21 @@ object Backup {
             "readingMemory.json",
             "bookMarking.json",
             "bookCharacterProfile.json",
+            "bookCharacterEvents.json",
+            "bookCharacterRelations.json",
+            "bookKnowledgeEntries.json",
+            "bookOutlineNodes.json",
+            "bookContentProcesses.json",
+            "readAloudVoices.json",
+            "bookVoiceBindings.json",
+            "aiChatConversations.json",
+            "aiChatMessages.json",
+            "aiMemory.json",
+            "aiArtifacts.json",
+            "removedAutoTags.json",
+            "cloudTtsEngines.json",
+            "title_bar_icons.xml",
+            "tool_button_config.xml",
             "servers.json",
             "aiProviders.json",
             "aiModels.json",
@@ -125,6 +140,41 @@ object Backup {
      * 纯本地恢复背景图就丢了；现在一并打进 ZIP。
      */
     internal fun readBgDir(context: Context): File = File(context.externalFiles, "bg")
+
+    /**
+     * 其余用户资源实体目录：自定义封面、封面相册（含 albums.json 索引）、阅读字体、
+     * 高亮规则背景图、阅读菜单/浮动图标自定义图标、人物头像。
+     * 这些目录里的文件被数据库行或 config.xml 里的绝对路径引用，不打包恢复后引用就是悬空的。
+     * 恢复时按目录名回原位（叶子名互不重复，与 [themeAssetDirs]/[readBgDir] 也不冲突），
+     * 所以备份与恢复两侧必须共用这份定义。
+     */
+    internal fun userAssetDirs(context: Context): List<File> = listOf(
+        File(context.externalFiles, "covers"),
+        File(context.externalFiles, "cover_albums"),
+        File(context.externalFiles, "font"),
+        File(context.filesDir, "bg_images"),
+        File(context.filesDir, "read_menu_icons"),
+        File(context.filesDir, "title_bar_icons"),
+        File(context.filesDir, "character_avatars"),
+    )
+
+    /**
+     * 阅读页按钮/浮动图标配置存在两个独立的 SharedPreferences 里（不在 AppConfigStore，
+     * 所以 config.xml 抓不到）。名称与 key 定义在 ReadButtonConfigDelegate，这里按同样的
+     * 文件名把 xml 原样打包，恢复时拷回 shared_prefs。
+     * 注意：SharedPreferences 实例是进程级缓存的，恢复后需重启应用才会读到新值。
+     */
+    internal val buttonConfigPrefsFileNames = listOf("title_bar_icons.xml", "tool_button_config.xml")
+
+    internal fun sharedPrefsDir(context: Context): File = File(context.filesDir.parentFile, "shared_prefs")
+
+    /**
+     * 书签角标图片。用户选的图按原扩展名存成 filesDir/bookmark_badge.<ext>，
+     * 阅读配置里存的是它的绝对路径，扩展名不固定所以按前缀匹配。
+     */
+    internal fun bookmarkBadgeFiles(dir: File): List<File> =
+        dir.listFiles { f: File -> f.isFile && f.name.startsWith("bookmark_badge.") }?.toList().orEmpty()
+
 
 
     private fun getNowZipFileName(): String {
@@ -270,6 +320,61 @@ object Backup {
         }
         // 划线笔记（book_marks）。无忽略开关，随备份无条件导出。
         writeListToJson(appDb.bookMarkingDao.getAllSync(), "bookMarking.json", backupPath)
+        // 以下几张表同样无忽略开关，随备份无条件导出。
+        // 人物图谱剩余四张表（人物档案已在上面单独导出）
+        writeListToJson(
+            appDb.bookKnowledgeDao.getAllCharacterEventsSync(),
+            "bookCharacterEvents.json",
+            backupPath,
+        )
+        writeListToJson(
+            appDb.bookKnowledgeDao.getAllCharacterRelationsSync(),
+            "bookCharacterRelations.json",
+            backupPath,
+        )
+        writeListToJson(
+            appDb.bookKnowledgeDao.getAllKnowledgeEntriesSync(),
+            "bookKnowledgeEntries.json",
+            backupPath,
+        )
+        writeListToJson(
+            appDb.bookKnowledgeDao.getAllOutlineNodesSync(),
+            "bookOutlineNodes.json",
+            backupPath,
+        )
+        // 书籍净化/内容处理规则
+        writeListToJson(appDb.bookContentProcessDao.getAll(), "bookContentProcesses.json", backupPath)
+        // 朗读音色与按书绑定
+        writeListToJson(appDb.readAloudVoiceDao.getVoices(), "readAloudVoices.json", backupPath)
+        writeListToJson(appDb.readAloudVoiceDao.getAllBindings(), "bookVoiceBindings.json", backupPath)
+        // AI 对话记录、记忆、产物
+        writeListToJson(appDb.aiChatDao.getAllConversations(), "aiChatConversations.json", backupPath)
+        writeListToJson(appDb.aiChatDao.getAllMessages(), "aiChatMessages.json", backupPath)
+        writeListToJson(appDb.aiMemoryDao.getAll(), "aiMemory.json", backupPath)
+        writeListToJson(appDb.aiArtifactDao.getAll(), "aiArtifacts.json", backupPath)
+        // 被用户移除的自动标签（不导出就会在恢复后重新被自动打上）
+        writeListToJson(appDb.removedAutoTagDao.getAll(), "removedAutoTags.json", backupPath)
+        // 云端 TTS 引擎行里 apiKey/secretKey 是明文存的，和 servers.json 一样先加密再落盘。
+        GSON.toJson(appDb.cloudTtsEngineDao.getAll()).let { json ->
+            aes.runCatching {
+                encryptBase64(json)
+            }.getOrDefault(json).let {
+                FileUtils.createFileIfNotExist(backupPath + File.separator + "cloudTtsEngines.json")
+                    .writeText(it)
+            }
+        }
+        // 阅读页按钮/浮动图标配置的两个独立 SharedPreferences，原样拷贝 xml
+        buttonConfigPrefsFileNames.forEach { name ->
+            val source = File(sharedPrefsDir(context), name)
+            if (source.isFile) {
+                runCatching {
+                    source.copyTo(File(backupPath, name), overwrite = true)
+                }.onFailure {
+                    AppLog.put("备份 $name 出错\n${it.localizedMessage}", it)
+                }
+            }
+        }
+
         if (BackupConfig.dbIsNotIgnored("server", true)) {
             GSON.toJson(appDb.serverDao.all).let { json ->
                 aes.runCatching {
@@ -360,12 +465,17 @@ object Backup {
         val assetDirs = buildList {
             if (!BackupConfig.backupIgnoreThemeConfig) addAll(themeAssetDirs(context))
             if (!BackupConfig.backupIgnoreReadConfig) add(readBgDir(context))
+            // 封面/相册/字体/背景图/自定义图标/头像不归属主题或阅读配置，无条件打包
+            addAll(userAssetDirs(context))
         }
         assetDirs.forEach { dir ->
             if (dir.isDirectory && !dir.listFiles().isNullOrEmpty()) {
                 paths.add(dir.absolutePath)
             }
         }
+        // 书签角标图片是 filesDir 下的单个文件，按前缀取到后直接以文件名进 ZIP 根目录
+        bookmarkBadgeFiles(context.filesDir).forEach { paths.add(it.absolutePath) }
+
         FileUtils.delete(zipFilePath)
         FileUtils.delete(zipFilePath.replace("tmp_", ""))
         val backupFileName = if (AppConfig.onlyLatestBackup) {

@@ -12,6 +12,10 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.AiArtifact
+import io.legado.app.data.entities.AiChatConversation
+import io.legado.app.data.entities.AiChatMessage
+import io.legado.app.data.entities.AiMemory
 import io.legado.app.data.entities.AiModelProfile
 import io.legado.app.data.entities.AiPromptPreset
 import io.legado.app.data.entities.AiProviderProfile
@@ -19,10 +23,19 @@ import io.legado.app.data.entities.AiTaskPreset
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookMarking
+import io.legado.app.data.entities.BookCharacterEvent
 import io.legado.app.data.entities.BookCharacterProfile
+import io.legado.app.data.entities.BookCharacterRelation
+import io.legado.app.data.entities.BookContentProcess
+import io.legado.app.data.entities.BookKnowledgeEntry
+import io.legado.app.data.entities.BookOutlineNode
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookVoiceBindingEntity
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.CloudTtsEngineEntity
 import io.legado.app.data.entities.DictRule
+import io.legado.app.data.entities.ReadAloudVoiceEntity
+import io.legado.app.data.entities.RemovedAutoTag
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.entities.HighlightTagRule
 import io.legado.app.data.entities.HomepageCustomSet
@@ -338,6 +351,58 @@ object Restore : KoinComponent {
         fileToListT<BookMarking>(path, "bookMarking.json")?.let {
             appDb.bookMarkingDao.insertAll(it)
         }
+        // 以下几张表同样无忽略开关，与备份侧对应。
+        fileToListT<BookCharacterEvent>(path, "bookCharacterEvents.json")?.let {
+            appDb.bookKnowledgeDao.insertCharacterEvents(it)
+        }
+        fileToListT<BookCharacterRelation>(path, "bookCharacterRelations.json")?.let {
+            appDb.bookKnowledgeDao.insertCharacterRelations(it)
+        }
+        fileToListT<BookKnowledgeEntry>(path, "bookKnowledgeEntries.json")?.let {
+            appDb.bookKnowledgeDao.insertKnowledgeEntries(it)
+        }
+        fileToListT<BookOutlineNode>(path, "bookOutlineNodes.json")?.let {
+            appDb.bookKnowledgeDao.insertOutlineNodes(it)
+        }
+        fileToListT<BookContentProcess>(path, "bookContentProcesses.json")?.let {
+            appDb.bookContentProcessDao.insertAll(it)
+        }
+        fileToListT<ReadAloudVoiceEntity>(path, "readAloudVoices.json")?.let {
+            appDb.readAloudVoiceDao.insertVoices(it)
+        }
+        fileToListT<BookVoiceBindingEntity>(path, "bookVoiceBindings.json")?.let {
+            appDb.readAloudVoiceDao.insertBindings(it)
+        }
+        fileToListT<AiChatConversation>(path, "aiChatConversations.json")?.let {
+            appDb.aiChatDao.insertConversations(it)
+        }
+        fileToListT<AiChatMessage>(path, "aiChatMessages.json")?.let {
+            appDb.aiChatDao.insertMessages(it)
+        }
+        fileToListT<AiMemory>(path, "aiMemory.json")?.let {
+            appDb.aiMemoryDao.insertAll(it)
+        }
+        fileToListT<AiArtifact>(path, "aiArtifacts.json")?.let {
+            appDb.aiArtifactDao.insertAll(it)
+        }
+        fileToListT<RemovedAutoTag>(path, "removedAutoTags.json")?.let {
+            appDb.removedAutoTagDao.insertAll(it)
+        }
+        // 云端 TTS 引擎：与备份侧对应，走加密（兼容早期未加密的明文数组）
+        File(path, "cloudTtsEngines.json").takeIf {
+            it.exists()
+        }?.runCatching {
+            var json = readText()
+            if (!json.isJsonArray()) {
+                json = aes.decryptStr(json)
+            }
+            GSON.fromJsonArray<CloudTtsEngineEntity>(json).getOrNull()?.let {
+                appDb.cloudTtsEngineDao.insertAll(it)
+            }
+        }?.onFailure {
+            AppLog.put("恢复云端TTS引擎出错\n${it.localizedMessage}", it)
+        }
+
         log("BackupConfig.dbIsNotIgnored(readRecord) = ${BackupConfig.dbIsNotIgnored("readRecord")}")
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
             // readRecord.json 走兼容 DTO：md 自己的备份字段名是 bookAuthor，r 项目 (readdai) 是 author，
@@ -497,6 +562,11 @@ object Restore : KoinComponent {
                 )
             )
         }
+        // 封面/相册/字体/背景图/自定义图标/头像：不归属主题或阅读配置，与备份侧一样无条件恢复。
+        // 放在 config.xml 之前，配置里存的绝对路径回灌时文件已就位。
+        restoreAssetDirs(path, Backup.userAssetDirs(appCtx))
+        restoreBookmarkBadge(path)
+        restoreButtonConfigPrefs(path)
         // 恢复配置文件 (手动解析 XML，替代反射逻辑)
         val configFile = File(path, "config.xml")
         if (configFile.exists()) {
@@ -509,6 +579,7 @@ object Restore : KoinComponent {
                 AppLog.put("恢复配置 XML 出错\n${e.localizedMessage}", e)
             }
         }
+
 
         appCtx.toastOnUi(R.string.restore_success)
         withContext(Main) {
@@ -632,6 +703,38 @@ object Restore : KoinComponent {
         }
     }
 
+
+    /**
+     * 书签角标图片：备份按 `bookmark_badge.<ext>` 原名进 ZIP 根目录，这里按前缀找回并拷进
+     * filesDir。阅读配置里存的是它的绝对路径，同 applicationId 下跨设备一致，拷回即命中。
+     */
+    private fun restoreBookmarkBadge(path: String) {
+        Backup.bookmarkBadgeFiles(File(path)).forEach { source ->
+            runCatching {
+                source.copyTo(File(appCtx.filesDir, source.name), overwrite = true)
+            }.onFailure {
+                AppLog.put("恢复书签角标 ${source.name} 出错\n${it.localizedMessage}", it)
+            }
+        }
+    }
+
+    /**
+     * 阅读页按钮/浮动图标配置的两个独立 SharedPreferences，xml 原样拷回 shared_prefs。
+     * SharedPreferences 实例是进程级缓存的，本次会话若已读过旧值不会立刻变，重启应用后生效。
+     */
+    private fun restoreButtonConfigPrefs(path: String) {
+        val targetDir = Backup.sharedPrefsDir(appCtx)
+        Backup.buttonConfigPrefsFileNames.forEach { name ->
+            val source = File(path, name)
+            if (!source.isFile) return@forEach
+            runCatching {
+                targetDir.mkdirs()
+                source.copyTo(File(targetDir, name), overwrite = true)
+            }.onFailure {
+                AppLog.put("恢复 $name 出错\n${it.localizedMessage}", it)
+            }
+        }
+    }
 
     private fun readXmlToMap(file: File): Map<String, Any?> {
         val map = mutableMapOf<String, Any?>()

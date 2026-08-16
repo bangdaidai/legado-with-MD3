@@ -73,8 +73,16 @@ interface AiArtifactDao {
         limit: Int
     ): List<AiArtifact>
 
+    /** 备份用：全量产物 */
+    @Query("select * from ai_artifacts")
+    suspend fun getAll(): List<AiArtifact>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(artifact: AiArtifact)
+
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(artifacts: List<AiArtifact>)
 
     @Query("delete from ai_artifacts where bookUrl = :bookUrl and taskType = :taskType")
     suspend fun deleteBookArtifacts(bookUrl: String, taskType: String)

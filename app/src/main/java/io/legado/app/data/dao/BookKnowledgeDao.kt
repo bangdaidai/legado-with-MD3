@@ -207,6 +207,38 @@ interface BookKnowledgeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertCharacterProfiles(profiles: List<BookCharacterProfile>)
 
+    /** 备份用：全量人物事件 */
+    @Query("select * from book_character_events")
+    fun getAllCharacterEventsSync(): List<BookCharacterEvent>
+
+    /** 恢复用：批量写入人物事件 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertCharacterEvents(events: List<BookCharacterEvent>)
+
+    /** 备份用：全量人物关系（含已删除） */
+    @Query("select * from book_character_relations")
+    fun getAllCharacterRelationsSync(): List<BookCharacterRelation>
+
+    /** 恢复用：批量写入人物关系 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertCharacterRelations(relations: List<BookCharacterRelation>)
+
+    /** 备份用：全量知识条目 */
+    @Query("select * from book_knowledge_entries")
+    fun getAllKnowledgeEntriesSync(): List<BookKnowledgeEntry>
+
+    /** 恢复用：批量写入知识条目 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertKnowledgeEntries(entries: List<BookKnowledgeEntry>)
+
+    /** 备份用：全量大纲节点 */
+    @Query("select * from book_outline_nodes")
+    fun getAllOutlineNodesSync(): List<BookOutlineNode>
+
+    /** 恢复用：批量写入大纲节点 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertOutlineNodes(nodes: List<BookOutlineNode>)
+
     /** 按书+名查主角（用于去重检查） */
     @Query(
         """

@@ -18,6 +18,10 @@ interface RemovedAutoTagDao {
     @Query("SELECT * FROM removedAutoTags")
     suspend fun getAll(): List<RemovedAutoTag>
 
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(removedAutoTags: List<RemovedAutoTag>)
+
     @Query("DELETE FROM removedAutoTags WHERE tagName = :tagName")
     suspend fun deleteByTagName(tagName: String)
 

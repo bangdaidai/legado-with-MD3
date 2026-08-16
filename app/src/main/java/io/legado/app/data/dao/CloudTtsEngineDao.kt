@@ -22,6 +22,10 @@ interface CloudTtsEngineDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(engine: CloudTtsEngineEntity)
 
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(engines: List<CloudTtsEngineEntity>)
+
     @Delete
     suspend fun delete(engine: CloudTtsEngineEntity)
 }

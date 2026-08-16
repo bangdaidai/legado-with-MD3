@@ -56,11 +56,25 @@ interface AiChatDao {
     @Query("SELECT * FROM ai_chat_messages WHERE id = :id")
     suspend fun getMessage(id: String): AiChatMessage?
 
+    /** 备份用：全量会话/消息 */
+    @Query("SELECT * FROM ai_chat_conversations")
+    suspend fun getAllConversations(): List<AiChatConversation>
+
+    @Query("SELECT * FROM ai_chat_messages")
+    suspend fun getAllMessages(): List<AiChatMessage>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversation(conversation: AiChatConversation)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: AiChatMessage)
+
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertConversations(conversations: List<AiChatConversation>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessages(messages: List<AiChatMessage>)
 
     @Query("UPDATE ai_chat_conversations SET title = :title, updatedAt = :updatedAt WHERE id = :conversationId")
     suspend fun updateConversationTitle(conversationId: String, title: String, updatedAt: Long)

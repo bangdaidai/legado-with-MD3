@@ -22,8 +22,16 @@ interface AiMemoryDao {
     @Query("SELECT * FROM ai_memory WHERE conversationId = ''")
     suspend fun getGlobal(): List<AiMemory>
 
+    /** 备份用：全量记忆 */
+    @Query("SELECT * FROM ai_memory")
+    suspend fun getAll(): List<AiMemory>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(memory: AiMemory)
+
+    /** 恢复用：批量写入 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(memories: List<AiMemory>)
 
     @Query("DELETE FROM ai_memory WHERE conversationId = :conversationId AND `key` = :key")
     suspend fun delete(conversationId: String, key: String)
