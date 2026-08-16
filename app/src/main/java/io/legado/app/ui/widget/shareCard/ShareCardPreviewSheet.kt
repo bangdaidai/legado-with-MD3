@@ -4,7 +4,9 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -15,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,7 +58,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
-/** 长按换色可选的预设主题色，最后一项走取色器自定义 */
+/** 换色可选的预设主题色，最后一项走取色器自定义 */
 private val ACCENT_PRESETS = listOf(
     "薄荷绿" to 0xFF6BCBB1.toInt(),
     "樱花粉" to 0xFFF4A9B6.toInt(),
@@ -218,79 +221,87 @@ fun ShareCardPreviewSheet(
         onDismissRequest = onDismissRequest,
         title = "分享卡片",
         startAction = {
-            Box {
-                MediumTonalButton(
-                    onClick = { showTemplateMenu = true },
-                    onLongClick = {
-                        if (templates.isNotEmpty() && !loading) showPaletteMenu = true
-                    },
-                    // 不把 rendering 计入 enabled：此按钮只负责「打开模板/色盘菜单」，不直接出图；
-                    // 渲染中开菜单无害，真正选中项时 rerender 已用 renderJob.cancel 串行化。
-                    // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
-                    enabled = templates.isNotEmpty() && !loading,
-                    icon = Icons.Default.SwapHoriz,
-                    contentDescription = "切换模板（长按换色）",
-                )
-                RoundDropdownMenu(
-                    expanded = showTemplateMenu,
-                    onDismissRequest = { showTemplateMenu = false },
-                ) { dismiss ->
-                    templates.forEach { tpl ->
-                        RoundDropdownMenuItem(
-                            text = tpl.name.ifBlank { "未命名" },
-                            isSelected = tpl.id == selectedTemplateId,
-                            onClick = {
-                                dismiss()
-                                if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
-                                selectedTemplateId = tpl.id
-                                // 切模板复位临时配色，新模板用自身默认色起手；
-                                // 实际渲染交由下方协调 effect（selectedTemplateId 变化触发）
-                                accentColor = null
-                                schemeOverride = null
-                            },
-                        )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box {
+                    MediumTonalButton(
+                        onClick = { showTemplateMenu = true },
+                        // 不把 rendering 计入 enabled：这两个按钮只负责「打开模板/色盘菜单」，不直接出图；
+                        // 渲染中开菜单无害，真正选中项时 rerender 已用 renderJob.cancel 串行化。
+                        // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
+                        enabled = templates.isNotEmpty() && !loading,
+                        icon = Icons.Default.SwapHoriz,
+                        contentDescription = "切换模板",
+                    )
+                    RoundDropdownMenu(
+                        expanded = showTemplateMenu,
+                        onDismissRequest = { showTemplateMenu = false },
+                    ) { dismiss ->
+                        templates.forEach { tpl ->
+                            RoundDropdownMenuItem(
+                                text = tpl.name.ifBlank { "未命名" },
+                                isSelected = tpl.id == selectedTemplateId,
+                                onClick = {
+                                    dismiss()
+                                    if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
+                                    selectedTemplateId = tpl.id
+                                    // 切模板复位临时配色，新模板用自身默认色起手；
+                                    // 实际渲染交由下方协调 effect（selectedTemplateId 变化触发）
+                                    accentColor = null
+                                    schemeOverride = null
+                                },
+                            )
+                        }
                     }
                 }
-                RoundDropdownMenu(
-                    expanded = showPaletteMenu,
-                    onDismissRequest = { showPaletteMenu = false },
-                ) { dismiss ->
-                    RoundDropdownMenuItem(
-                        text = "默认（模板自带）",
-                        isSelected = accentColor == null,
-                        onClick = {
-                            dismiss()
-                            if (accentColor == null) return@RoundDropdownMenuItem
-                            accentColor = null
-                            schemeOverride = null
-                            rerender(selectedTemplateId, null, null)
-                        },
+                Box {
+                    MediumTonalButton(
+                        onClick = { showPaletteMenu = true },
+                        enabled = templates.isNotEmpty() && !loading,
+                        selected = accentColor != null,
+                        icon = Icons.Default.Palette,
+                        contentDescription = "切换颜色",
                     )
-                    ACCENT_PRESETS.forEach { (label, argb) ->
+                    RoundDropdownMenu(
+                        expanded = showPaletteMenu,
+                        onDismissRequest = { showPaletteMenu = false },
+                    ) { dismiss ->
                         RoundDropdownMenuItem(
-                            text = label,
-                            isSelected = accentColor == argb,
-                            leadingIcon = { ColorSwatch(argb) },
+                            text = "默认（模板自带）",
+                            isSelected = accentColor == null,
                             onClick = {
                                 dismiss()
-                                if (accentColor == argb) return@RoundDropdownMenuItem
-                                accentColor = argb
-                                // 选色回到「按该色明度自动判明暗」，明暗只由日夜按钮独立控制；
-                                // 不再沿用上一次方案，避免「从暗色切到新色直接是暗」的困惑。
+                                if (accentColor == null) return@RoundDropdownMenuItem
+                                accentColor = null
                                 schemeOverride = null
-                                rerender(selectedTemplateId, argb, null)
+                                rerender(selectedTemplateId, null, null)
+                            },
+                        )
+                        ACCENT_PRESETS.forEach { (label, argb) ->
+                            RoundDropdownMenuItem(
+                                text = label,
+                                isSelected = accentColor == argb,
+                                leadingIcon = { ColorSwatch(argb) },
+                                onClick = {
+                                    dismiss()
+                                    if (accentColor == argb) return@RoundDropdownMenuItem
+                                    accentColor = argb
+                                    // 选色回到「按该色明度自动判明暗」，明暗只由日夜按钮独立控制；
+                                    // 不再沿用上一次方案，避免「从暗色切到新色直接是暗」的困惑。
+                                    schemeOverride = null
+                                    rerender(selectedTemplateId, argb, null)
+                                },
+                            )
+                        }
+                        RoundDropdownMenuItem(
+                            text = "自定义…",
+                            isSelected = accentColor != null &&
+                                ACCENT_PRESETS.none { it.second == accentColor },
+                            onClick = {
+                                dismiss()
+                                showColorPicker = true
                             },
                         )
                     }
-                    RoundDropdownMenuItem(
-                        text = "自定义…",
-                        isSelected = accentColor != null &&
-                            ACCENT_PRESETS.none { it.second == accentColor },
-                        onClick = {
-                            dismiss()
-                            showColorPicker = true
-                        },
-                    )
                 }
             }
         },
