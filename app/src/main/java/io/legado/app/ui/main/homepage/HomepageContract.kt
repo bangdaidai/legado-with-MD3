@@ -62,6 +62,8 @@ data class HomepageFeedActions(
     val onBookClick: (SearchBook, String?) -> Unit,
     val onKindUrlClick: (String, String, String) -> Unit,
     val onRefreshButtonGroup: (String) -> Unit,
+    /** 长按标题栏"更多"按钮, 直接打开该模块的编辑对话框 */
+    val onModuleHeaderLongClick: (String) -> Unit = {},
 )
 
 @Stable

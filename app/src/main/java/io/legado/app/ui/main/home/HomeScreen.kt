@@ -102,6 +102,7 @@ import io.legado.app.ui.main.homepage.HomepageModuleFeed
 import io.legado.app.ui.main.homepage.HomepageModuleManageSheet
 import io.legado.app.ui.main.homepage.HomepageUiState
 import io.legado.app.ui.main.homepage.HomepageViewModel
+import io.legado.app.ui.main.homepage.manage.AddCustomModuleDialog
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
@@ -164,6 +165,8 @@ fun HomeRouteScreen(
     val homepageState by homepageViewModel.uiState.collectAsStateWithLifecycle()
     var previewBook by remember { mutableStateOf<SearchBook?>(null) }
     var previewSharedCoverKey by remember { mutableStateOf<String?>(null) }
+    // 长按模块标题栏的"更多"按钮时要编辑的模块 id
+    var editingModuleId by remember { mutableStateOf<String?>(null) }
 
     val feedActions = remember(homepageViewModel, onNavigateToBookInfo, onOpenExploreShow) {
         HomepageFeedActions(
@@ -184,6 +187,7 @@ fun HomeRouteScreen(
             },
             onKindUrlClick = homepageViewModel::onKindUrlClick,
             onRefreshButtonGroup = homepageViewModel::refreshButtonGroup,
+            onModuleHeaderLongClick = { globalId -> editingModuleId = globalId },
         )
     }
     val manageActions = remember(homepageViewModel) {
@@ -372,6 +376,28 @@ fun HomeRouteScreen(
         onAddToShelf = { book ->
             homepageViewModel.onAddToShelf(book)
         },
+    )
+
+    // 长按模块"更多"按钮打开的编辑对话框, 复用管理面板里的同一个对话框
+    val editingModule = remember(editingModuleId, homepageState.manageState.allJoinedModules) {
+        editingModuleId?.let { id ->
+            homepageState.manageState.allJoinedModules.firstOrNull { it.id == id }
+        }
+    }
+    AddCustomModuleDialog(
+        data = editingModule,
+        sourceUrl = editingModule?.sourceUrl ?: "",
+        targetSetId = editingModule?.customSetId ?: "",
+        prefillTitle = editingModule?.title ?: "",
+        prefillUrl = editingModule?.url ?: "",
+        prefillType = editingModule?.type ?: "card",
+        prefillArgs = editingModule?.args ?: "",
+        prefillLayoutConfig = editingModule?.layoutConfig ?: "",
+        onDismissRequest = { editingModuleId = null },
+        onConfirm = { def ->
+            editingModule?.let { manageActions.onUpdateModule(it.id, def) }
+            editingModuleId = null
+        }
     )
 }
 

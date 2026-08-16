@@ -166,6 +166,7 @@ fun HomepageModuleFeed(
                                 )
                             }
                         },
+                        onNavigateLongClick = { actions.onModuleHeaderLongClick(moduleUi.globalId) },
                     )
                 }
 
@@ -513,6 +514,7 @@ private fun ModuleHeader(
     selectedSourceKey: String?,
     onSourceSelected: (String, String?) -> Unit,
     onNavigate: (() -> Unit)? = null,
+    onNavigateLongClick: (() -> Unit)? = null,
 ) {
     val sourceTabItems = sourceTabs.orEmpty()
     val hasSourceTabs = sourceTabItems.size > 1
@@ -554,6 +556,7 @@ private fun ModuleHeader(
         if (onNavigate != null) {
             SmallTonalButton(
                 onClick = onNavigate,
+                onLongClick = onNavigateLongClick,
                 icon = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = stringResource(R.string.homepage_show_all),
             )
