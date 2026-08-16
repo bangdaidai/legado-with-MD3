@@ -108,7 +108,8 @@ private fun TimelineSessionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        // 时间与时长按内容宽度测量，章节名只占剩余空间，避免长章节名挤压时长
+        Column {
             AppText(
                 text = DateUtil.format(Date(session.endTime), "HH:mm"),
                 style = LegadoTheme.typography.bodyMedium,
@@ -117,7 +118,8 @@ private fun TimelineSessionRow(
             AppText(
                 text = formatReadDuration(duration),
                 style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
         if (showChapterInfo && session.chapterTitle.isNotBlank()) {
@@ -125,7 +127,9 @@ private fun TimelineSessionRow(
                 text = session.chapterTitle,
                 textStyle = LegadoTheme.typography.labelSmall,
                 backgroundColor = LegadoTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .padding(start = 8.dp)
             )
         }
     }
