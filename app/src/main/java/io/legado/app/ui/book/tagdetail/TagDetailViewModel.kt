@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class TagDetailViewModel(private val tagId: Long) : ViewModel() {
@@ -39,14 +40,15 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
 
     fun sendEvent(intent: TagDetailIntent) {
         when (intent) {
-            is TagDetailIntent.Save -> viewModelScope.launch { save(intent) }
-            TagDetailIntent.Delete -> viewModelScope.launch { delete() }
+            // 改名/归并要遍历整个书架改写 kind，读写库一律离开主线程
+            is TagDetailIntent.Save -> viewModelScope.launch(Dispatchers.IO) { save(intent) }
+            TagDetailIntent.Delete -> viewModelScope.launch(Dispatchers.IO) { delete() }
             TagDetailIntent.Refresh -> load()
             is TagDetailIntent.OpenBook ->
                 viewModelScope.launch { _effect.emit(TagDetailEffect.NavigateToBook(intent.bookUrl)) }
-            is TagDetailIntent.SetStandard -> viewModelScope.launch { setStandard(intent) }
-            is TagDetailIntent.RemoveAlias -> viewModelScope.launch { removeAlias(intent) }
-            is TagDetailIntent.Exclude -> viewModelScope.launch { exclude(intent) }
+            is TagDetailIntent.SetStandard -> viewModelScope.launch(Dispatchers.IO) { setStandard(intent) }
+            is TagDetailIntent.RemoveAlias -> viewModelScope.launch(Dispatchers.IO) { removeAlias(intent) }
+            is TagDetailIntent.Exclude -> viewModelScope.launch(Dispatchers.IO) { exclude(intent) }
         }
     }
 
@@ -67,14 +69,16 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
                 kotlinx.collections.immutable.persistentListOf()
             }
             val mappings = appDb.tagMappingDao.getByNewTagId(tagId).toImmutableList()
-            _uiState.value = _uiState.value.copy(
-                version = System.currentTimeMillis(),
-                tag = tag,
-                groupName = groupName,
-                groups = groups,
-                books = books,
-                mappings = mappings,
-            )
+            _uiState.update {
+                it.copy(
+                    version = System.currentTimeMillis(),
+                    tag = tag,
+                    groupName = groupName,
+                    groups = groups,
+                    books = books,
+                    mappings = mappings,
+                )
+            }
         }
     }
 

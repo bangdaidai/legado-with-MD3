@@ -98,6 +98,7 @@ class SearchViewModel(
     private var lastInitializedScopeRaw: String? = null
     private var hasInitialized = false
     private var searchJob: Job? = null
+    private var expandedSourceJob: Job? = null
     private var currentSearchPage = 1
     private var resultCountBeforeCurrentPage = 0
     private var wasSearching = false
@@ -831,7 +832,9 @@ class SearchViewModel(
     }
 
     private fun loadExpandedSourcePage(sourceUrl: String, page: Int) {
-        viewModelScope.launch {
+        // 换源展开/加载更多可能连着触发：不取消上一次请求，旧结果会追加进新列表
+        expandedSourceJob?.cancel()
+        expandedSourceJob = viewModelScope.launch {
             val keyword = _uiState.value.committedQuery
             try {
                 val result = exploreBooksUseCase.execute(
@@ -850,6 +853,8 @@ class SearchViewModel(
                         expandedSourcePage = page + 1,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

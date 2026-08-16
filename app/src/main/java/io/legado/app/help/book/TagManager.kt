@@ -12,6 +12,7 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.splitNotBlank
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -195,11 +196,11 @@ object TagManager {
      * 使书架、阅读记忆页与标签管理保持一致。
      * 本地 kind 不会被刷新覆盖，因此改名后「重刷不会变回去」。
      */
-    suspend fun rewriteTagInBooks(oldName: String, newName: String) {
-        if (oldName.isBlank()) return
+    suspend fun rewriteTagInBooks(oldName: String, newName: String) = withContext(Dispatchers.IO) {
+        if (oldName.isBlank()) return@withContext
         val old = oldName.trim()
         val new = newName.trim()
-        if (old == new) return
+        if (old == new) return@withContext
         val books = appDb.bookDao.getAll()
         val memMap = appDb.readingMemoryDao.getAll().first().associateBy { it.bookUrl }
         for (book in books) {
@@ -237,7 +238,7 @@ object TagManager {
     /** 排除规则变更后的统一对账：先按当前规则移除命中的现有标签，
      *  再从所有书籍 kind 重新生成标签，自动恢复因规则被删除/缩小而不再被排除的标签。
      *  全程自动（无需手动重新同步书架），返回移除/恢复数量。 */
-    suspend fun reconcileTagsWithExclusion(): ReconcileResult {
+    suspend fun reconcileTagsWithExclusion(): ReconcileResult = withContext(Dispatchers.IO) {
         val excludedTags = appDb.excludedTagDao.getAllSync()
         val allTags = appDb.bookTagDao.getAllSync()
         val toRemove = allTags.filter { isExcluded(it.name, excludedTags) }
@@ -251,13 +252,15 @@ object TagManager {
             for (book in books) {
                 generateTagsFromKind(book, postEvent = false)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             // 重新生成失败不影响已完成的移除与刷新
         }
         val afterNames = appDb.bookTagDao.getAllSync().map { it.name }.toSet()
         val restored = toRemove.count { it.name in afterNames }
         FlowEventBus.post(EventBus.TAGS_UPDATED, "exclusion_reconcile")
-        return ReconcileResult(removed = toRemove.size, restored = restored)
+        ReconcileResult(removed = toRemove.size, restored = restored)
     }
 
     data class ReconcileResult(val removed: Int, val restored: Int)
@@ -273,16 +276,17 @@ object TagManager {
 
         val excludedTags = appDb.excludedTagDao.getAllSync()
         val tagMappings = appDb.tagMappingDao.getAll()
-        val mappingByOldName = tagMappings.associateBy { it.oldTagName }
+        // 键按 lowercase+trim 归一：展示路径用 equals(ignoreCase) 查映射，这里若按原始名建索引
+        // 再拿归一后的名字去查，只有存量名本身是小写时才命中，两条路径的结果会分叉。
+        val mappingByOldName = tagMappings.associateBy { it.oldTagName.lowercase().trim() }
 
         // 第一遍：解析出最终标签（可能含未持久化的新标签 id=0）
         val resolvedTargets = mutableListOf<BookTag>()
         val newTagNames = linkedSetOf<String>()
         for (candidate in candidates) {
-            val normalized = candidate.lowercase().trim()
             if (isExcluded(candidate, excludedTags)) continue
 
-            val mapping = mappingByOldName[normalized] ?: mappingByOldName[candidate]
+            val mapping = mappingByOldName[candidate.lowercase().trim()]
             val targetTag = if (mapping != null) {
                 appDb.bookTagDao.getByIds(listOf(mapping.newTagId)).firstOrNull()
                     ?: createNewTag(candidate)
@@ -409,6 +413,9 @@ object TagManager {
                 appDb.bookTagGroupDao.update(group.copy(sortOrder = index))
             }
         }
+        // groupRank 缓存直接派生自分组顺序，写完立刻失效；只靠 TAGS_UPDATED 异步清会有
+        // 「顺序已落库、缓存还是旧的」的窗口，此时读到的展示标签顺序是错的。
+        invalidateTagConfig()
     }
 
     /** 判断正则是否合法（供 UI 校验）。 */

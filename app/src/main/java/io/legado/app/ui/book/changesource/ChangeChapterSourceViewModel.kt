@@ -14,6 +14,7 @@ import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.ui.book.search.SearchScope
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -493,6 +494,8 @@ class ChangeChapterSourceViewModel(
                 _uiState.update { it.copy(isLoadingToc = false) }
                 _effects.tryEmit(ChangeChapterSourceEffect.ReplaceContent(content))
                 _effects.tryEmit(ChangeChapterSourceEffect.Dismiss)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoadingToc = false) }
                 _effects.tryEmit(

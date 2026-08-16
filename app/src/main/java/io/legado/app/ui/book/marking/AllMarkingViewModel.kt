@@ -287,13 +287,16 @@ class AllMarkingViewModel(
         _shareCardLoading.value = true
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
-            val memory = readingMemoryRepository.getByNameAuthor(
-                marking.bookName,
-                marking.bookAuthor,
-            )
-            val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
-            _shareCardData.value = data
-            _shareCardLoading.value = false
+            try {
+                val memory = readingMemoryRepository.getByNameAuthor(
+                    marking.bookName,
+                    marking.bookAuthor,
+                )
+                _shareCardData.value = ShareCardDataBuilder.buildFromMarking(marking, memory)
+            } finally {
+                // 构建失败也要收掉转圈，否则预览弹窗会一直停在加载态
+                _shareCardLoading.value = false
+            }
         }
     }
 

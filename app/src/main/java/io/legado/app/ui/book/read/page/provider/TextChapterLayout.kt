@@ -90,15 +90,16 @@ class TextChapterLayout(
 ) {
 
     companion object {
-        @Volatile
-        private var cachedHighlightRules: List<CompiledHighlightRule>? = null
+        private class HighlightRuleCache(
+            val key: String,
+            val rules: List<CompiledHighlightRule>,
+        )
 
         @Volatile
-        private var cachedHighlightRulesConfigName: String? = null
+        private var highlightRuleCache: HighlightRuleCache? = null
 
         fun invalidateRegexCache() {
-            cachedHighlightRules = null
-            cachedHighlightRulesConfigName = null
+            highlightRuleCache = null
         }
     }
 
@@ -107,9 +108,7 @@ class TextChapterLayout(
             val configName = ReadBookConfig.durConfig.name
             val isNight = ReadStyleResolver.isNightTheme()
             val cacheKey = "$configName|${book.bookUrl}|${if (isNight) 1 else 0}"
-            cachedHighlightRules?.takeIf {
-                cachedHighlightRulesConfigName == cacheKey
-            }?.let { return it }
+            highlightRuleCache?.takeIf { it.key == cacheKey }?.let { return it.rules }
             val protagonistPatternCache = HashMap<String?, String?>()
             return highlightRuleRepository.loadEnabled(configName).mapNotNull { rule ->
                 runCatching {
@@ -126,8 +125,8 @@ class TextChapterLayout(
                     )
                 }.getOrNull()
             }.also {
-                cachedHighlightRulesConfigName = cacheKey
-                cachedHighlightRules = it
+                // 键与值合并进单个 volatile 引用一次发布，避免读端拿到 A 的规则却通过 B 的键校验
+                highlightRuleCache = HighlightRuleCache(cacheKey, it)
             }
         }
 

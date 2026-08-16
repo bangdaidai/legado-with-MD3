@@ -13,12 +13,14 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -41,9 +43,9 @@ class TagManagementViewModel(
         }
         viewModelScope.launch {
             bookshelfSettingsGateway.settings.collect { settings ->
-                _uiState.value = _uiState.value.copy(
-                    bookshelfTagBorder = settings.bookshelfTagBorder,
-                )
+                _uiState.update {
+                    it.copy(bookshelfTagBorder = settings.bookshelfTagBorder)
+                }
             }
         }
     }
@@ -51,7 +53,7 @@ class TagManagementViewModel(
     fun sendEvent(intent: TagManagementIntent) {
         when (intent) {
             is TagManagementIntent.Search ->
-                _uiState.value = _uiState.value.copy(searchQuery = intent.q)
+                _uiState.update { it.copy(searchQuery = intent.q) }
 
             TagManagementIntent.Refresh -> loadData()
 
@@ -60,13 +62,14 @@ class TagManagementViewModel(
                     _effect.emit(TagManagementEffect.NavigateToTagDetail(intent.tagId))
                 }
 
-            is TagManagementIntent.SaveTag -> viewModelScope.launch { saveTag(intent) }
-            is TagManagementIntent.DeleteTag -> viewModelScope.launch { deleteTag(intent.tag) }
-            is TagManagementIntent.SaveGroup -> viewModelScope.launch { saveGroup(intent) }
-            is TagManagementIntent.DeleteGroup -> viewModelScope.launch { deleteGroup(intent.group) }
-            is TagManagementIntent.ReorderGroups -> viewModelScope.launch { reorderGroups(intent.groups) }
-            is TagManagementIntent.DeleteMapping -> viewModelScope.launch { deleteMapping(intent.mapping) }
-            is TagManagementIntent.ExcludeTag -> viewModelScope.launch { excludeTag(intent) }
+            // 以下分支都要读写库（改名还要遍历整个书架改写 kind），必须离开主线程
+            is TagManagementIntent.SaveTag -> viewModelScope.launch(Dispatchers.IO) { saveTag(intent) }
+            is TagManagementIntent.DeleteTag -> viewModelScope.launch(Dispatchers.IO) { deleteTag(intent.tag) }
+            is TagManagementIntent.SaveGroup -> viewModelScope.launch(Dispatchers.IO) { saveGroup(intent) }
+            is TagManagementIntent.DeleteGroup -> viewModelScope.launch(Dispatchers.IO) { deleteGroup(intent.group) }
+            is TagManagementIntent.ReorderGroups -> viewModelScope.launch(Dispatchers.IO) { reorderGroups(intent.groups) }
+            is TagManagementIntent.DeleteMapping -> viewModelScope.launch(Dispatchers.IO) { deleteMapping(intent.mapping) }
+            is TagManagementIntent.ExcludeTag -> viewModelScope.launch(Dispatchers.IO) { excludeTag(intent) }
         }
     }
 
@@ -80,6 +83,8 @@ class TagManagementViewModel(
             for (book in books) {
                 TagManager.generateTagsFromKind(book, postEvent = false)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             // 自动从书籍分类生成标签失败不影响标签读取
         }
@@ -99,14 +104,16 @@ class TagManagementViewModel(
             val groupTagCounts = tags.groupingBy { it.groupId }.eachCount()
             val groups = appDb.bookTagGroupDao.getAllSorted()
             val mappings = appDb.tagMappingDao.getAll()
-            _uiState.value = _uiState.value.copy(
-                version = System.currentTimeMillis(),
-                tags = tags.toImmutableList(),
-                tagCounts = tagCounts,
-                groupTagCounts = groupTagCounts,
-                groups = groups.toImmutableList(),
-                mappings = mappings.toImmutableList(),
-            )
+            _uiState.update {
+                it.copy(
+                    version = System.currentTimeMillis(),
+                    tags = tags.toImmutableList(),
+                    tagCounts = tagCounts,
+                    groupTagCounts = groupTagCounts,
+                    groups = groups.toImmutableList(),
+                    mappings = mappings.toImmutableList(),
+                )
+            }
         }
 
     private suspend fun saveTag(intent: TagManagementIntent.SaveTag) {

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ExcludedTagViewModel(
@@ -29,9 +30,9 @@ class ExcludedTagViewModel(
         loadData()
         viewModelScope.launch {
             bookshelfSettingsGateway.settings.collect { settings ->
-                _uiState.value = _uiState.value.copy(
-                    bookshelfTagBorder = settings.bookshelfTagBorder,
-                )
+                _uiState.update {
+                    it.copy(bookshelfTagBorder = settings.bookshelfTagBorder)
+                }
             }
         }
     }
@@ -39,7 +40,7 @@ class ExcludedTagViewModel(
     fun sendEvent(intent: ExcludedTagIntent) {
         when (intent) {
             is ExcludedTagIntent.Search ->
-                _uiState.value = _uiState.value.copy(searchQuery = intent.q)
+                _uiState.update { it.copy(searchQuery = intent.q) }
 
             ExcludedTagIntent.Refresh -> loadData()
 
@@ -51,10 +52,12 @@ class ExcludedTagViewModel(
     private fun loadData() {
         viewModelScope.launch(Dispatchers.IO) {
             val list = appDb.excludedTagDao.getAllSync()
-            _uiState.value = _uiState.value.copy(
-                version = System.currentTimeMillis(),
-                excludedTags = list.toImmutableList(),
-            )
+            _uiState.update {
+                it.copy(
+                    version = System.currentTimeMillis(),
+                    excludedTags = list.toImmutableList(),
+                )
+            }
         }
     }
 
