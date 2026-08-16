@@ -36,7 +36,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailItem
@@ -671,8 +670,8 @@ fun MainScreen(
                             tabsCount = destinations.size,
                             isBlurEnabled = useLiquidGlass,
                             hasCustomIcons = destinations.any { dest ->
-                                mainUiState.customIconPath(dest).isNotEmpty() ||
-                                        mainUiState.selectedCustomIconPath(dest).isNotEmpty()
+                                mainUiState.customIconPath(dest).isBitmapIcon() ||
+                                        mainUiState.selectedCustomIconPath(dest).isBitmapIcon()
                             }
                         ) {
                             destinations.forEachIndexed { index, destination ->
@@ -819,6 +818,10 @@ private fun BookshelfRailGroupMenu(
     }
 }
 
+/** SVG 会跟随主题着色，不计入"自定义图标"，以便保留悬浮底栏整体的 accent 着色 */
+private fun String.isBitmapIcon(): Boolean =
+    isNotEmpty() && !endsWith(".svg", ignoreCase = true)
+
 @Composable
 private fun NavigationIcon(
     destination: MainDestination,
@@ -827,13 +830,14 @@ private fun NavigationIcon(
     modifier: Modifier = Modifier
 ) {
     if (customIconPath.isNotEmpty()) {
-        // SVG 是矢量单色图标，跟随导航项内容色着色；位图（PNG 等）保留原始色彩
+        // SVG 是矢量单色图标，用与 AppIcon 相同的默认色着色，与内置图标保持一致；
+        // 位图（PNG 等）保留原始色彩
         AsyncImage(
             model = customIconPath,
             contentDescription = null,
             modifier = modifier.size(40.dp),
             colorFilter = if (customIconPath.endsWith(".svg", ignoreCase = true)) {
-                ColorFilter.tint(LocalContentColor.current)
+                ColorFilter.tint(LegadoTheme.colorScheme.onSurface)
             } else null
         )
     } else {
