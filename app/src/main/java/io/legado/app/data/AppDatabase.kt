@@ -353,6 +353,13 @@ abstract class AppDatabase : RoomDatabase() {
                 """.trimIndent()
                 db.execSQL(insertGroupReadFinishedComplete)
                 @Language("sql")
+                val insertGroupReadFinishedPit = """
+                    insert into book_groups(groupId, groupName, 'order', show) 
+                    select ${BookGroup.IdReadFinishedPit}, '坑书已读', -25, 1
+                    where not exists (select * from book_groups where groupId = ${BookGroup.IdReadFinishedPit})
+                """.trimIndent()
+                db.execSQL(insertGroupReadFinishedPit)
+                @Language("sql")
                 val insertBookGroupNetNoneGroupSql = """
                     insert into book_groups(groupId, groupName, 'order', show) 
                     select ${BookGroup.IdNetNone}, '网络未分组', -7, 1

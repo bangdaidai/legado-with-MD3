@@ -1894,6 +1894,7 @@
     <string name="is_read_finished">已讀完</string>
     <string name="is_read_finished_complete">已讀完（完結）</string>
     <string name="is_read_finished_update">已讀完（連載）</string>
+    <string name="is_read_finished_pit">坑書已讀</string>
     <string name="is_reading">閲讀中</string>
     <string name="is_unread">未讀</string>
     <string name="js_disabled">JS 已禁用</string>

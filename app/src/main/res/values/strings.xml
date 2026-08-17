@@ -1926,6 +1926,7 @@
     <string name="is_read_finished">Finished</string>
     <string name="is_read_finished_update">Finished (Serial)</string>
     <string name="is_read_finished_complete">Finished (Completed)</string>
+    <string name="is_read_finished_pit">Finished (Dropped)</string>
     <string name="manga">Manga</string>
     <string name="noval">Novel</string>
     <string name="cover_show_shadow">Show Font Shadow</string>

@@ -31,6 +31,17 @@ private const val PUBLIC_GROUP_MASK =
 private const val PUBLIC_BOOK_FILTER =
     "(`group` = 0 OR (`group` & $PRIVATE_GROUP_MASK) = 0)"
 
+private const val TAG_FINISHED = "完结"
+private const val TAG_PIT = "坑"
+
+private const val HAS_FINISHED_TAG =
+    "EXISTS (SELECT 1 FROM bookTagRelations r INNER JOIN bookTags t ON r.tagId = t.id " +
+        "WHERE r.bookUrl = books.bookUrl AND t.name = '$TAG_FINISHED')"
+
+private const val HAS_PIT_TAG =
+    "EXISTS (SELECT 1 FROM bookTagRelations r INNER JOIN bookTags t ON r.tagId = t.id " +
+        "WHERE r.bookUrl = books.bookUrl AND t.name = '$TAG_PIT')"
+
 @Dao
 interface BookDao {
 
@@ -51,6 +62,7 @@ interface BookDao {
             BookGroup.IdReadFinished -> flowReadFinished()
             BookGroup.IdReadFinishedUpdate -> flowReadFinishedUpdate()
             BookGroup.IdReadFinishedComplete -> flowReadFinishedComplete()
+            BookGroup.IdReadFinishedPit -> flowReadFinishedPit()
             else -> flowByUserGroup(groupId)
         }.map { list ->
             list.filterNot { it.isNotShelf }
@@ -74,6 +86,7 @@ interface BookDao {
             BookGroup.IdReadFinished -> flowBookShelfReadFinished()
             BookGroup.IdReadFinishedUpdate -> flowBookShelfReadFinishedUpdate()
             BookGroup.IdReadFinishedComplete -> flowBookShelfReadFinishedComplete()
+            BookGroup.IdReadFinishedPit -> flowBookShelfReadFinishedPit()
             else -> flowBookShelfByUserGroup(groupId)
         }.map { list ->
             list.filterNot { it.isNotShelf }
@@ -566,7 +579,7 @@ FROM books
     fun flowBookShelfReadFinished(): Flow<List<BookShelfItem>>
 
     @Query(
-        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1"""
+        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG"""
     )
     fun flowReadFinishedUpdate(): Flow<List<Book>>
 
@@ -599,14 +612,14 @@ FROM books
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
     FROM books
 
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG
         AND $PUBLIC_BOOK_FILTER
         """
     )
     fun flowBookShelfReadFinishedUpdate(): Flow<List<BookShelfItem>>
 
     @Query(
-        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0"""
+        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG"""
     )
     fun flowReadFinishedComplete(): Flow<List<Book>>
 
@@ -639,11 +652,51 @@ FROM books
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
     FROM books
 
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG
         AND $PUBLIC_BOOK_FILTER
         """
     )
     fun flowBookShelfReadFinishedComplete(): Flow<List<BookShelfItem>>
+
+    @Query(
+        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG"""
+    )
+    fun flowReadFinishedPit(): Flow<List<Book>>
+
+    @Query(
+        """
+        SELECT 
+            books.bookUrl,
+            name,
+            author,
+            origin,
+            originName,
+            coverUrl,
+            customCoverUrl,
+            durChapterTitle,
+            durChapterTime,
+            durChapterPos,
+            latestChapterTitle,
+            latestChapterTime,
+            lastCheckCount,
+            totalChapterNum,
+            durChapterIndex,
+            type,
+            `group`,
+            `order`,
+            canUpdate,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro,
+            kind,
+            customTag,
+            wordCount,
+            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+    FROM books
+
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG
+        AND $PUBLIC_BOOK_FILTER
+        """
+    )
+    fun flowBookShelfReadFinishedPit(): Flow<List<BookShelfItem>>
 
     @Query("""SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1""")
     fun flowReading(): Flow<List<Book>>
@@ -952,8 +1005,9 @@ FROM books
         UNION ALL SELECT ${BookGroup.IdUnread}, COUNT(*) FROM books WHERE durChapterIndex = 0 AND durChapterPos = 0 AND $PUBLIC_BOOK_FILTER
         UNION ALL SELECT ${BookGroup.IdReading}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1 AND $PUBLIC_BOOK_FILTER
         UNION ALL SELECT ${BookGroup.IdReadFinished}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $PUBLIC_BOOK_FILTER
-        UNION ALL SELECT ${BookGroup.IdReadFinishedUpdate}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1 AND $PUBLIC_BOOK_FILTER
-        UNION ALL SELECT ${BookGroup.IdReadFinishedComplete}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0 AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdReadFinishedUpdate}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdReadFinishedComplete}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdReadFinishedPit}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG AND $PUBLIC_BOOK_FILTER
         """
     )
     fun flowSystemGroupCounts(): Flow<List<GroupBookCount>>
@@ -984,6 +1038,7 @@ FROM books
             BookGroup.IdReadFinished -> flowBookShelfReadFinishedPreview()
             BookGroup.IdReadFinishedUpdate -> flowBookShelfReadFinishedUpdatePreview()
             BookGroup.IdReadFinishedComplete -> flowBookShelfReadFinishedCompletePreview()
+            BookGroup.IdReadFinishedPit -> flowBookShelfReadFinishedPitPreview()
             else -> flowBookShelfPreviewByUserGroup(groupId)
         }.map { list ->
             list.filterNot { it.isNotShelf }
@@ -1237,7 +1292,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
         FROM books
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 1
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
@@ -1255,13 +1310,31 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
         FROM books
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND canUpdate = 0
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
         """
     )
     fun flowBookShelfReadFinishedCompletePreview(): Flow<List<BookShelfItem>>
+
+    @Query(
+        """
+        SELECT books.bookUrl, name, author, origin, originName,
+            coverUrl, customCoverUrl, durChapterTitle, durChapterTime,
+            durChapterPos, latestChapterTitle, latestChapterTime,
+            lastCheckCount, totalChapterNum, durChapterIndex,
+            type, `group`, `order`, canUpdate,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+        FROM books
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG
+            AND $PUBLIC_BOOK_FILTER
+        ORDER BY durChapterTime DESC
+        LIMIT 10
+        """
+    )
+    fun flowBookShelfReadFinishedPitPreview(): Flow<List<BookShelfItem>>
 
     @Query(
         """

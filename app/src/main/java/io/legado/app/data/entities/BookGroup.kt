@@ -43,6 +43,7 @@ data class BookGroup(
         const val IdReadFinished = -22L
         const val IdReadFinishedUpdate = -23L
         const val IdReadFinishedComplete = -24L
+        const val IdReadFinishedPit = -25L
     }
 
     data class GroupNameInfo(
@@ -66,6 +67,7 @@ data class BookGroup(
             IdReadFinished -> GroupNameInfo(groupName, context.getString(R.string.is_read_finished))
             IdReadFinishedUpdate -> GroupNameInfo(groupName, context.getString(R.string.is_read_finished_update))
             IdReadFinishedComplete -> GroupNameInfo(groupName, context.getString(R.string.is_read_finished_complete))
+            IdReadFinishedPit -> GroupNameInfo(groupName, context.getString(R.string.is_read_finished_pit))
             else -> GroupNameInfo(groupName)
         }
     }
