@@ -459,6 +459,7 @@ FROM books
         WHERE (name like '%'||:key||'%' or author like '%'||:key||'%' or originName like '%'||:key||'%'
             or kind like '%'||:key||'%' or customTag like '%'||:key||'%')
         AND $PUBLIC_BOOK_FILTER
+        AND type & ${BookType.notShelf} = 0
         """
     )
     fun flowBookShelfSearch(key: String): Flow<List<BookShelfItem>>

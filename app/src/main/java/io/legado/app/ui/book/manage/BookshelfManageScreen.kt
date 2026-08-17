@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -90,6 +89,7 @@ import io.legado.app.ui.widget.components.AppFloatingActionButtonMenu
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FabMenuItem
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.alert.BookDeleteConfirmDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
@@ -170,8 +170,6 @@ private fun BookshelfManageScreen(
     var showLogSheet by remember { mutableStateOf(false) }
     var showGroupSelectSheet by remember { mutableStateOf(false) }
     var showDeleteBookConfirmDialog by remember { mutableStateOf(false) }
-    var showAbandonedDeleteDialog by remember { mutableStateOf(false) }
-    var pendingAbandonedDelete by remember { mutableStateOf(false) }
     var showCustomExportDialog by remember { mutableStateOf(false) }
     var showBatchSourcePickerSheet by remember { mutableStateOf(false) }
     var pendingBatchSources by remember { mutableStateOf<List<BookSource>>(emptyList()) }
@@ -443,7 +441,7 @@ private fun BookshelfManageScreen(
             if (selectedBookUrls.isNotEmpty()) {
                 pendingDeleteBookUrls = selectedBookUrls
                 deleteOriginalBookFile = state.deleteBookOriginal
-                showAbandonedDeleteDialog = true
+                showDeleteBookConfirmDialog = true
             }
         }
     )
@@ -734,7 +732,7 @@ private fun BookshelfManageScreen(
                                             onClick = {
                                                 pendingDeleteBookUrls = setOf(book.bookUrl)
                                                 deleteOriginalBookFile = state.deleteBookOriginal
-                                                showAbandonedDeleteDialog = true
+                                                showDeleteBookConfirmDialog = true
                                                 dismiss()
                                             }
                                         )
@@ -938,69 +936,35 @@ private fun BookshelfManageScreen(
         onDismiss = { showBatchDownloadConfirmDialog = false }
     )
 
-    // 弃文确认 dialog（删除前先询问）
-    AppAlertDialog(
-        show = showAbandonedDeleteDialog,
-        onDismissRequest = { showAbandonedDeleteDialog = false },
-        title = stringResource(R.string.draw),
-        content = {
-            AppText(text = "这本书是否已经放弃了？\n弃文标记后，阅读记录仍会保留。")
-        },
-        confirmText = "已弃文",
-        onConfirm = {
-            showAbandonedDeleteDialog = false
-            pendingAbandonedDelete = true
-            showDeleteBookConfirmDialog = true
-        },
-        dismissText = "仅仅删除",
-        onDismiss = {
-            showAbandonedDeleteDialog = false
-            pendingAbandonedDelete = false
-            showDeleteBookConfirmDialog = true
-        }
-    )
-
-    AppAlertDialog(
+    BookDeleteConfirmDialog(
         show = showDeleteBookConfirmDialog,
+        isLocal = hasLocalBookInDeleteTarget,
+        initialDeleteOriginal = deleteOriginalBookFile,
         onDismissRequest = { showDeleteBookConfirmDialog = false },
-        title = stringResource(R.string.draw),
-        content = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AppText(text = stringResource(R.string.sure_del))
-                if (hasLocalBookInDeleteTarget) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        Checkbox(
-                            checked = deleteOriginalBookFile,
-                            onCheckedChange = { checked ->
-                                deleteOriginalBookFile = checked
-                            }
-                        )
-                        AppText(
-                            text = stringResource(R.string.delete_book_file),
-                            modifier = Modifier.padding(top = 12.dp)
-                        )
-                    }
-                }
-            }
-        },
-        confirmText = stringResource(android.R.string.ok),
-        onConfirm = {
+        onDelete = { deleteOriginal ->
             showDeleteBookConfirmDialog = false
             viewModel.dispatch(
                 BookshelfManageScreenIntent.DeleteBooks(
                     bookUrls = pendingDeleteBookUrls,
-                    deleteOriginal = deleteOriginalBookFile,
-                    abandoned = pendingAbandonedDelete
+                    deleteOriginal = deleteOriginal,
+                    abandoned = false
                 )
             )
             pendingDeleteBookUrls = emptySet()
             clearSelection()
         },
-        dismissText = stringResource(android.R.string.cancel),
-        onDismiss = { showDeleteBookConfirmDialog = false }
+        onDeleteAndAbandon = { deleteOriginal ->
+            showDeleteBookConfirmDialog = false
+            viewModel.dispatch(
+                BookshelfManageScreenIntent.DeleteBooks(
+                    bookUrls = pendingDeleteBookUrls,
+                    deleteOriginal = deleteOriginal,
+                    abandoned = true
+                )
+            )
+            pendingDeleteBookUrls = emptySet()
+            clearSelection()
+        }
     )
 
     GroupSelectSheet(

@@ -1,6 +1,7 @@
 package io.legado.app.data.repository
 
 import android.database.sqlite.SQLiteConstraintException
+import androidx.room.withTransaction
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookKnowledgeDao
@@ -18,6 +19,7 @@ import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.help.book.ProtagonistExtractor
 import io.legado.app.help.book.TagManager
+import io.legado.app.help.book.isNotShelf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -208,7 +210,7 @@ class ReadingMemoryRepository(
      * 列表/详情打开时调用，保证「打开即有数据」。
      */
     suspend fun ensureAllMemories() {
-        val books = bookDao.all
+        val books = bookDao.all.filterNot { it.isNotShelf }
         for (book in books) {
             generateMemory(book)
         }
@@ -555,9 +557,19 @@ class ReadingMemoryRepository(
 
     /**
      * 删除指定书籍的阅读记忆。
+     * 若该书已从书架下架（notShelf），则连同 books 行、章节、标签关联一起物理删除，彻底移除、不再自动重建；
+     * 阅读记录与书摘按书名+作者关联，保留。
      */
     suspend fun deleteMemory(bookUrl: String) {
-        dao.deleteByBookUrl(bookUrl)
+        val book = bookDao.getBook(bookUrl)
+        database.withTransaction {
+            dao.deleteByBookUrl(bookUrl)
+            if (book != null && book.isNotShelf) {
+                bookDao.delete(book)
+                database.bookChapterDao.delByBook(bookUrl)
+                database.bookTagRelationDao.deleteByBookUrl(bookUrl)
+            }
+        }
     }
 
     /**

@@ -103,6 +103,7 @@ import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.alert.BookDeleteConfirmDialog
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.HighlightTagRow
@@ -1257,33 +1258,17 @@ private fun BookInfoDialogs(
     var deleteOriginal by remember(dialog, state.deleteOriginal) { mutableStateOf(state.deleteOriginal) }
     var remarkText by remember(dialog) { mutableStateOf((dialog as? BookInfoDialog.EditRemark)?.remark.orEmpty()) }
 
-    AppAlertDialog(
-        data = dialog as? BookInfoDialog.DeleteBook,
+    BookDeleteConfirmDialog(
+        show = dialog is BookInfoDialog.DeleteBook,
+        isLocal = (dialog as? BookInfoDialog.DeleteBook)?.isLocal == true,
+        initialDeleteOriginal = deleteOriginal,
         onDismissRequest = { onIntent(BookInfoIntent.DismissDialog) },
-        title = stringResource(R.string.draw),
-        text = stringResource(R.string.sure_del),
-        confirmText = stringResource(android.R.string.ok),
-        onConfirm = {
+        onDelete = { deleteOriginal ->
             onIntent(BookInfoIntent.ConfirmDelete(deleteOriginal))
         },
-        dismissText = stringResource(android.R.string.cancel),
-        onDismiss = { onIntent(BookInfoIntent.DismissDialog) },
-        content = { d ->
-            if (d.isLocal) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(
-                        checked = deleteOriginal,
-                        onCheckedChange = { deleteOriginal = it },
-                        colors = androidx.compose.material3.CheckboxDefaults.colors(
-                            checkedColor = LegadoTheme.colorScheme.primary,
-                            checkmarkColor = LegadoTheme.colorScheme.onPrimary,
-                            uncheckedColor = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                    )
-                    Text(text = stringResource(R.string.delete_book_file))
-                }
-            }
-        }
+        onDeleteAndAbandon = { deleteOriginal ->
+            onIntent(BookInfoIntent.ConfirmDelete(deleteOriginal, abandoned = true))
+        },
     )
 
     AppAlertDialog(

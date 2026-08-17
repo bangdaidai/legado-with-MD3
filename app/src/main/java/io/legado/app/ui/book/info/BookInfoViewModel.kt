@@ -27,6 +27,7 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.HighlightTagRuleRepository
 import io.legado.app.data.repository.ReadRecordRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.data.repository.RemoteBookRepository
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.gateway.BookKnowledgeGateway
@@ -118,6 +119,7 @@ class BookInfoViewModel(
     private val coverSettingsGateway: CoverSettingsGateway,
     private val otherSettingsGateway: OtherSettingsGateway,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+    private val readingMemoryRepository: ReadingMemoryRepository,
 ) : BaseViewModel(application) {
 
     val allGroups = bookGroupRepository.flowSelect().map { it.toImmutableList() }
@@ -315,7 +317,7 @@ class BookInfoViewModel(
             }
             is BookInfoIntent.ConfirmDelete -> {
                 dismissDialog()
-                deleteBook(intent.deleteOriginal)
+                deleteBook(intent.deleteOriginal, intent.abandoned)
             }
 
             is BookInfoIntent.UpdateRemark -> {
@@ -795,9 +797,13 @@ class BookInfoViewModel(
         }
     }
 
-    fun delBook(deleteOriginal: Boolean = false, success: (() -> Unit)? = null) {
+    fun delBook(deleteOriginal: Boolean = false, abandoned: Boolean = false, success: (() -> Unit)? = null) {
         val book = currentBook ?: return
         execute {
+            if (abandoned) {
+                readingMemoryRepository.ensureMemory(book.bookUrl)
+                readingMemoryRepository.markAbandoned(book.bookUrl)
+            }
             inBookshelf = false
             if (book.isLocal) {
                 LocalBook.deleteBook(book, deleteOriginal)
@@ -1162,12 +1168,12 @@ class BookInfoViewModel(
             }
         }
     }
-    private fun deleteBook(deleteOriginal: Boolean) {
+    private fun deleteBook(deleteOriginal: Boolean, abandoned: Boolean = false) {
         currentBook?.let { book ->
             LocalConfig.deleteBookOriginal = deleteOriginal
             _screenState.update { it.copy(deleteOriginal = deleteOriginal) }
             SourceCallBack.callBackBook(SourceCallBack.DEL_BOOK_SHELF, bookSource, book)
-            delBook(deleteOriginal) {
+            delBook(deleteOriginal, abandoned) {
                 emitEffect(BookInfoEffect.Finish(resultCode = RESULT_OK))
             }
         }
