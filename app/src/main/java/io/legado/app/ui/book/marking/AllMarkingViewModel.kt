@@ -292,7 +292,8 @@ class AllMarkingViewModel(
                     marking.bookName,
                     marking.bookAuthor,
                 )
-                _shareCardData.value = ShareCardDataBuilder.buildFromMarking(marking, memory)
+                val book = readingMemoryRepository.getBook(marking.bookUrl)
+                _shareCardData.value = ShareCardDataBuilder.buildFromMarking(marking, memory, book)
             } finally {
                 // 构建失败也要收掉转圈，否则预览弹窗会一直停在加载态
                 _shareCardLoading.value = false

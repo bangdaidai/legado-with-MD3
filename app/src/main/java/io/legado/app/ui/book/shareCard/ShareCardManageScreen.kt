@@ -326,6 +326,8 @@ private val PreviewVariables = mapOf(
     "intro" to "这是一本示例书籍的简介。",
     "kind" to "示例分类",
     "wordCount" to "10万字",
+    "tags" to "玄幻、热血、冒险",
+    "tagCount" to "3",
 )
 
 /** 帮助内容（Markdown 格式，供 MarkdownSheet 渲染）。 */
@@ -444,8 +446,8 @@ body {
 | `{{readingProgress}}` | 阅读进度（如 42%） |
 | `{{readChapters}}` | 已读章节 |
 | `{{unreadChapters}}` | 未读章节数 |
-| `{{readIteration}}` | 重读次数 |
-| `{{readIterationText}}` | 重读次数（文本） |
+| `{{readIteration}}` | 重读次数（暂未提供数据） |
+| `{{readIterationText}}` | 重读次数（文本）（暂未提供数据） |
 | `{{durChapterTitle}}` | 当前章节标题 |
 
 ## 阅读统计
@@ -466,7 +468,7 @@ body {
 | `{{firstReadTime}}` | 首次阅读时间 |
 | `{{lastReadTime}}` | 最近阅读时间 |
 | `{{finishReadTime}}` | 读完时间 |
-| `{{addBookshelfTime}}` | 加入书架时间 |
+| `{{addBookshelfTime}}` | 加入书架时间（暂未提供数据） |
 | `{{lastCheckTime}}` | 最近检查更新时间 |
 | `{{lastReadTimeRelative}}` | 最近阅读（相对时间） |
 
@@ -482,7 +484,7 @@ body {
 | 字段 | 说明 |
 |---|---|
 | `{{annotationCount}}` | 书摘总数 |
-| `{{thoughtCount}}` | 想法总数 |
+| `{{thoughtCount}}` | 想法总数（暂未提供数据） |
 | `{{latestAnnotation}}` | 最新书摘 |
 | `{{latestAnnotationNote}}` | 最新书摘备注 |
 | `{{latestAnnotationChapter}}` | 最新书摘所在章节 |
@@ -494,8 +496,8 @@ body {
 | `{{tags}}` | 标签 |
 | `{{tagCount}}` | 标签数 |
 | `{{bookSourceName}}` | 书源名称 |
-| `{{bookSourceGroup}}` | 书源分组 |
-| `{{readTimeRank}}` | 阅读时长排名 |
+| `{{bookSourceGroup}}` | 书源分组（暂未提供数据） |
+| `{{readTimeRank}}` | 阅读时长排名（暂未提供数据） |
 
 ## 完整示例模板
 

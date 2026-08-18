@@ -192,7 +192,8 @@ class AllBookmarkViewModel(
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = readingMemoryRepository.getByNameAuthor(bookmark.bookName, bookmark.bookAuthor)
-            val data = ShareCardDataBuilder.buildFromBookmark(bookmark, memory)
+            val book = readingMemoryRepository.getBook(bookmark.bookUrl)
+            val data = ShareCardDataBuilder.buildFromBookmark(bookmark, memory, book)
             _shareCardData.value = data
             _shareCardLoading.value = false
         }

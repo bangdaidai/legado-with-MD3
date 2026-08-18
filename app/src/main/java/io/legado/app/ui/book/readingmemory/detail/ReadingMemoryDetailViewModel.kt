@@ -306,7 +306,8 @@ class ReadingMemoryDetailViewModel(
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
-            val data = memory?.let { io.legado.app.help.book.ShareCardDataBuilder.build(it) }
+            val book = repository.getBook(bookUrl)
+            val data = memory?.let { io.legado.app.help.book.ShareCardDataBuilder.build(it, book) }
             _shareCardData.value = data
             _shareCardLoading.value = false
         }
@@ -319,7 +320,8 @@ class ReadingMemoryDetailViewModel(
         _shareCardData.value = null
         viewModelScope.launch(Dispatchers.IO) {
             val memory = repository.getByBookUrl(bookUrl)
-            val data = io.legado.app.help.book.ShareCardDataBuilder.buildFromMarking(marking, memory)
+            val book = repository.getBook(bookUrl)
+            val data = io.legado.app.help.book.ShareCardDataBuilder.buildFromMarking(marking, memory, book)
             _shareCardData.value = data
             _shareCardLoading.value = false
         }
