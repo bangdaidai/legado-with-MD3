@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.os.Environment
 import androidx.annotation.Keep
+import androidx.room.withTransaction
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.BuildConfig
@@ -60,6 +61,8 @@ import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
+import io.legado.app.data.entities.readRecord.ReadRecordIdentity
+import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.domain.gateway.AppLocaleGateway
 import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.ui.book.read.ConfigUpdateAction
@@ -105,6 +108,9 @@ import java.io.FileInputStream
 object Restore : KoinComponent {
 
     private const val TAG = "Restore"
+    // 阅读器当前只使用本地记录分区。旧版备份可能保留设备 Android ID，
+    // 恢复时须归一化，否则同一本书会因 deviceId 不同而显示为两条记录。
+    private const val LOCAL_READ_RECORD_DEVICE_ID = ""
 
     suspend fun restore(context: Context, uri: Uri) {
         BackupRestoreLock.withLock {
@@ -405,57 +411,63 @@ object Restore : KoinComponent {
 
         log("BackupConfig.dbIsNotIgnored(readRecord) = ${BackupConfig.dbIsNotIgnored("readRecord")}")
         if (BackupConfig.dbIsNotIgnored("readRecord")) {
-            // readRecord.json 走兼容 DTO：md 自己的备份字段名是 bookAuthor，r 项目 (readdai) 是 author，
-            // 且 r 的备份不含 deviceId。用 DTO 统一接收，兼容两边字段名，deviceId 缺失时补空串，
-            // 避免 md 原实体反序列化时因 deviceId=null 触发 NOT NULL 约束、整表恢复失败。
-            fileToListT<RReadRecordDto>(path, "readRecord.json")?.let {
-                log("恢复阅读记录 readRecord.json: ${it.size} 条")
-                it.forEach { dto ->
+            appDb.withTransaction {
+                // readRecord.json 走兼容 DTO：md 自己的备份字段名是 bookAuthor，r 项目 (readdai) 是 author，
+                // 且 r 的备份不含 deviceId。用 DTO 统一接收，兼容两边字段名，deviceId 缺失时补空串，
+                // 避免 md 原实体反序列化时因 deviceId=null 触发 NOT NULL 约束、整表恢复失败。
+                fileToListT<RReadRecordDto>(path, "readRecord.json")?.let {
+                    log("恢复阅读记录 readRecord.json: ${it.size} 条")
+                    it.forEach { dto ->
+                        try {
+                            restoreReadRecord(dto.toReadRecord())
+                        } catch (_: SQLiteConstraintException) {
+                        }
+                    }
+                }
+                fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
+                    it.forEach { detail ->
+                        try {
+                            restoreReadRecordDetail(detail)
+                        } catch (_: SQLiteConstraintException) {
+                        }
+                    }
+                }
+                fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
+                    it.forEach { session ->
+                        try {
+                            restoreReadRecordSession(session)
+                        } catch (_: SQLiteConstraintException) {
+                        }
+                    }
+                }
+                // r 项目备份特征：单表 readSession.json 存原始会话流，没有 readRecordDetail/Session.json。
+                // 检测到 readSession.json 就额外拆分成 md 的 detail/session 两张表填充汇总/时间线视图；
+                // 用 Throwable 兜底，任何异常都不阻断后续恢复步骤。md 自身备份不产 readSession.json，不会误触。
+                val hasRSession = File(path, "readSession.json").exists()
+                log("readSession.json 存在=$hasRSession")
+                if (hasRSession) {
                     try {
-                        restoreReadRecord(dto.toReadRecord())
-                    } catch (_: SQLiteConstraintException) {
+                        val sessions = FileInputStream(File(path, "readSession.json")).use {
+                            GSON.fromJsonArray<RReadSessionDto>(it)
+                        }.onFailure {
+                            log("readSession.json 解析异常: ${it.javaClass.simpleName} ${it.localizedMessage}")
+                        }.getOrNull()
+                        if (sessions == null) {
+                            log("r 项目 readSession.json 解析失败")
+                        } else {
+                            log("恢复 r 项目 readSession.json: ${sessions.size} 条")
+                            restoreFromRReadSessions(sessions, ::log)
+                        }
+                    } catch (t: Throwable) {
+                        log("恢复 r 项目 readSession.json 兼容失败: ${t.javaClass.simpleName} ${t.localizedMessage}")
+                        AppLog.put("恢复 r 项目 readSession.json 兼容失败", t)
                     }
                 }
             }
-            fileToListT<ReadRecordDetail>(path, "readRecordDetail.json")?.let {
-                it.forEach { detail ->
-                    try {
-                        restoreReadRecordDetail(detail)
-                    } catch (_: SQLiteConstraintException) {
-                    }
-                }
-            }
-            fileToListT<ReadRecordSession>(path, "readRecordSession.json")?.let {
-                it.forEach { session ->
-                    try {
-                        restoreReadRecordSession(session)
-                    } catch (_: SQLiteConstraintException) {
-                    }
-                }
-            }
-            // r 项目备份特征：单表 readSession.json 存原始会话流，没有 readRecordDetail/Session.json。
-            // 检测到 readSession.json 就额外拆分成 md 的 detail/session 两张表填充汇总/时间线视图；
-            // 用 Throwable 兜底，任何异常都不阻断后续恢复步骤。md 自身备份不产 readSession.json，不会误触。
-            val hasRSession = File(path, "readSession.json").exists()
-            log("readSession.json 存在=$hasRSession")
-            if (hasRSession) {
-                try {
-                    val sessions = FileInputStream(File(path, "readSession.json")).use {
-                        GSON.fromJsonArray<RReadSessionDto>(it)
-                    }.onFailure {
-                        log("readSession.json 解析异常: ${it.javaClass.simpleName} ${it.localizedMessage}")
-                    }.getOrNull()
-                    if (sessions == null) {
-                        log("r 项目 readSession.json 解析失败")
-                    } else {
-                        log("恢复 r 项目 readSession.json: ${sessions.size} 条")
-                        restoreFromRReadSessions(sessions, ::log)
-                    }
-                } catch (t: Throwable) {
-                    log("恢复 r 项目 readSession.json 兼容失败: ${t.javaClass.simpleName} ${t.localizedMessage}")
-                    AppLog.put("恢复 r 项目 readSession.json 兼容失败", t)
-                }
-            }
+            reconcileReadRecordAliases()
+            // 会话导入按身份去重（幂等），汇总/明细取较大值后按会话重算，
+            // 避免同一备份重复导入导致阅读时长翻倍。
+            get<ReadRecordRepository>().reconcileReadRecordTotalsFromSessions()
         }
         if (BackupConfig.dbIsNotIgnored("server")) {
             File(path, "servers.json").takeIf {
@@ -617,48 +629,91 @@ object Restore : KoinComponent {
         }
     }
 
+    /** 导入汇总记录时统一到本地分区，取已有与导入两者中的较大时长，保证重复导入幂等。 */
     private suspend fun restoreReadRecord(readRecord: ReadRecord) {
+        val localRecord = readRecord.copy(
+            deviceId = LOCAL_READ_RECORD_DEVICE_ID,
+            bookName = ReadRecordIdentity.bookName(readRecord.bookName),
+            bookAuthor = ReadRecordIdentity.author(readRecord.bookAuthor)
+        )
         val existing = appDb.readRecordDao.getReadRecord(
-            readRecord.deviceId,
-            readRecord.bookName,
-            readRecord.bookAuthor
+            localRecord.deviceId,
+            localRecord.bookName,
+            localRecord.bookAuthor
         )
         appDb.readRecordDao.insert(
             existing?.copy(
-                readTime = maxOf(existing.readTime, readRecord.readTime),
-                lastRead = maxOf(existing.lastRead, readRecord.lastRead)
-            ) ?: readRecord
+                readTime = maxOf(existing.readTime, localRecord.readTime),
+                lastRead = maxOf(existing.lastRead, localRecord.lastRead)
+            ) ?: localRecord
         )
     }
 
+    /** 导入每日详情时统一到本地分区，取已有与导入两者中的较大统计值，保证重复导入幂等。 */
     private suspend fun restoreReadRecordDetail(detail: ReadRecordDetail) {
+        val localDetail = detail.copy(
+            deviceId = LOCAL_READ_RECORD_DEVICE_ID,
+            bookName = ReadRecordIdentity.bookName(detail.bookName),
+            bookAuthor = ReadRecordIdentity.author(detail.bookAuthor)
+        )
         val existing = appDb.readRecordDao.getDetail(
-            detail.deviceId,
-            detail.bookName,
-            detail.bookAuthor,
-            detail.date
+            localDetail.deviceId,
+            localDetail.bookName,
+            localDetail.bookAuthor,
+            localDetail.date
         )
         appDb.readRecordDao.insertDetail(
             existing?.copy(
-                readTime = maxOf(existing.readTime, detail.readTime),
-                readWords = maxOf(existing.readWords, detail.readWords),
-                firstReadTime = minPositive(existing.firstReadTime, detail.firstReadTime),
-                lastReadTime = maxOf(existing.lastReadTime, detail.lastReadTime)
-            ) ?: detail
+                readTime = maxOf(existing.readTime, localDetail.readTime),
+                readWords = maxOf(existing.readWords, localDetail.readWords),
+                firstReadTime = minPositive(existing.firstReadTime, localDetail.firstReadTime),
+                lastReadTime = maxOf(existing.lastReadTime, localDetail.lastReadTime)
+            ) ?: localDetail
         )
     }
 
+    /** 导入会话时统一到本地分区，并按完整会话身份跳过已有副本。 */
     private suspend fun restoreReadRecordSession(session: ReadRecordSession) {
+        val localSession = session.copy(
+            deviceId = LOCAL_READ_RECORD_DEVICE_ID,
+            bookName = ReadRecordIdentity.bookName(session.bookName),
+            bookAuthor = ReadRecordIdentity.author(session.bookAuthor)
+        )
         val existing = appDb.readRecordDao.getSession(
-            session.deviceId,
-            session.bookName,
-            session.bookAuthor,
-            session.startTime,
-            session.endTime
+            localSession.deviceId,
+            localSession.bookName,
+            localSession.bookAuthor,
+            localSession.startTime,
+            localSession.endTime,
+            localSession.words
         )
         if (existing == null) {
-            appDb.readRecordDao.insertSession(session)
+            appDb.readRecordDao.insertSession(localSession)
         }
+    }
+
+    /** 导入完成后，将能唯一匹配书架作者的旧空作者记录迁移到规范作者。 */
+    private suspend fun reconcileReadRecordAliases() {
+        val repository = get<ReadRecordRepository>()
+        appDb.readRecordDao.all
+            .filter { it.bookAuthor.isBlank() }
+            .forEach { source ->
+                val authors = appDb.bookDao.findByName(source.bookName)
+                    .asSequence()
+                    .map { it.author.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .toList()
+                val author = authors.singleOrNull() ?: return@forEach
+                repository.mergeReadRecordInto(
+                    targetRecord = ReadRecord(
+                        deviceId = source.deviceId,
+                        bookName = source.bookName,
+                        bookAuthor = ReadRecordIdentity.author(author),
+                    ),
+                    sourceRecords = listOf(source),
+                )
+            }
     }
 
     private fun minPositive(left: Long, right: Long): Long {

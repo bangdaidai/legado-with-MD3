@@ -28,4 +28,9 @@ data class ReadRecordSession(
     // 章节标题（视频为集数名，文本为章节名；冗余存储避免删书后丢失）
     @ColumnInfo(defaultValue = "")
     val chapterTitle: String = ""
-)
+) {
+    /** 跨设备稳定身份，不依赖 Room 自动生成的数据库行 ID。 */
+    val stableFingerprint: String
+        get() = listOf(deviceId, bookName, bookAuthor, startTime, endTime, words)
+            .joinToString("\u0001")
+}

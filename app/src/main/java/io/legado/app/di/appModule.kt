@@ -777,6 +777,7 @@ val appModule = module {
             bookmarkRepository = get(),
             bookRepository = get(),
             readingMemoryRepository = get(),
+            readRecordRepository = get(),
             readerSession = get(),
         )
     }

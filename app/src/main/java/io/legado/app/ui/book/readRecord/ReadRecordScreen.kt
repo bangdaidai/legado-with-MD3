@@ -60,7 +60,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -117,6 +116,9 @@ import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.StringUtils.formatFriendlyDate
 import io.legado.app.utils.formatReadDuration
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.emptyFlow
 import org.koin.androidx.compose.koinViewModel
 import java.time.format.DateTimeFormatter
 import java.util.Date
@@ -144,6 +146,9 @@ fun ReadRecordRouteScreen(
         onBackClick = onBackClick,
         onBookClick = onBookClick,
         onSummaryClick = onSummaryClick,
+        onScanRepair = { viewModel.onIntent(ReadRecordIntent.ScanRepair) },
+        onRepairDatabase = { viewModel.onIntent(ReadRecordIntent.RepairDatabase) },
+        effects = viewModel.effects,
     )
 }
 
@@ -158,10 +163,14 @@ fun ReadRecordScreen(
     onBackClick: () -> Unit,
     onBookClick: (String, String) -> Unit,
     onSummaryClick: () -> Unit,
+    effects: Flow<ReadRecordEffect> = emptyFlow(),
+    onScanRepair: () -> Unit = {},
+    onRepairDatabase: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val noMergeCandidatesMessage = stringResource(R.string.no_merge_candidates)
+    val operationFailedMessage = stringResource(R.string.operation_failed)
 
     val displayMode = state.displayMode
     val readRecordEnabled = state.readRecordEnabled
@@ -173,6 +182,16 @@ fun ReadRecordScreen(
     val listState = rememberLazyListState()
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val inSelectionMode = selectedItemKeys.isNotEmpty()
+
+    LaunchedEffect(Unit) {
+        effects.collectLatest { effect ->
+            when (effect) {
+                is ReadRecordEffect.ShowError -> {
+                    snackbarHostState.showSnackbar(effect.message.ifBlank { operationFailedMessage })
+                }
+            }
+        }
+    }
 
     var skipDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -401,7 +420,7 @@ fun ReadRecordScreen(
                                         val candidates = loadMergeCandidates(record)
                                         if (candidates.isEmpty()) {
                                             snackbarHostState.showSnackbar(
-                                                context.getString(R.string.no_merge_candidates)
+                                                noMergeCandidatesMessage
                                             )
                                         } else {
                                             mergeDialogData = record to candidates
@@ -464,8 +483,26 @@ fun ReadRecordScreen(
                 onIntent(ReadRecordIntent.ClearRecords)
                 selectedItemKeys = emptySet()
             }
-        }
+        },
+        onScanRepair = { showActionsSheet = false; onScanRepair() },
+        onRepairDatabase = { showActionsSheet = false; onRepairDatabase() }
     )
+
+    state.repairReport?.let { report ->
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { onIntent(ReadRecordIntent.DismissRepairReport) },
+            title = stringResource(R.string.read_record_repair_title),
+            text = stringResource(
+                R.string.read_record_repair_message,
+                report.mergedCount,
+                report.exceptionCount,
+                report.duplicateSessionCount,
+            ),
+            confirmText = stringResource(R.string.ok),
+            onConfirm = { onIntent(ReadRecordIntent.DismissRepairReport) },
+        )
+    }
 
     var skipDeleteConfirmTemp by remember(pendingDeleteAction != null) { mutableStateOf(false) }
 
@@ -620,7 +657,9 @@ private fun ReadRecordActionsSheet(
     onToggleCalendar: () -> Unit,
     onTypeFilterSelected: (Int?) -> Unit,
     onReadRecordEnabledChange: (Boolean) -> Unit,
-    onClearReadRecords: () -> Unit
+    onClearReadRecords: () -> Unit,
+    onScanRepair: () -> Unit,
+    onRepairDatabase: () -> Unit,
 ) {
     AppModalBottomSheet(
         show = show,
@@ -650,6 +689,18 @@ private fun ReadRecordActionsSheet(
                 description = stringResource(R.string.enable_read_record_summary),
                 imageVector = Icons.Default.Schedule,
                 onCheckedChange = onReadRecordEnabledChange
+            )
+            CompactClickableSettingItem(
+                title = stringResource(R.string.read_record_scan_issues),
+                description = stringResource(R.string.read_record_scan_issues_summary),
+                imageVector = Icons.Default.Search,
+                onClick = onScanRepair
+            )
+            CompactClickableSettingItem(
+                title = stringResource(R.string.read_record_repair),
+                description = stringResource(R.string.read_record_repair_summary),
+                imageVector = Icons.Default.Merge,
+                onClick = onRepairDatabase
             )
             CompactClickableSettingItem(
                 title = stringResource(R.string.clear_read_records),

@@ -24,6 +24,7 @@ object DatabaseMigrations {
             migration_98_99,
             migration_99_100,
             migration_100_101,
+            migration_102_103,
         )
     }
 
@@ -724,4 +725,122 @@ object DatabaseMigrations {
     }
 
     // endregion
+
+    /**
+     * 新版阅读器统一使用空 deviceId。旧版本数据库中的记录可能仍带有 Android ID，
+     * 需要在覆盖升级时归并到本地分区，否则升级后继续阅读会产生两条记录。
+     * 作者为空且书架中只有一个作者时使用该作者，否则继续保留空作者；冲突行按 SQL
+     * 中的聚合规则合并，以保证主键唯一。
+     */
+    private val migration_102_103 = object : Migration(102, 103) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // 将旧设备分区合并到本地分区；同一本书的旧空作者仅在书架存在唯一作者时归并。
+            // 阅读时段记录按书名、作者和完整时间区间聚合，字段重复的记录只保留一条并取较大的字数。
+            database.execSQL(
+                """
+                CREATE TABLE readRecord_migrated (
+                    deviceId TEXT NOT NULL,
+                    bookName TEXT NOT NULL,
+                    bookAuthor TEXT NOT NULL DEFAULT '',
+                    readTime INTEGER NOT NULL DEFAULT 0,
+                    lastRead INTEGER NOT NULL DEFAULT 0,
+                    bookType INTEGER NOT NULL DEFAULT 8,
+                    PRIMARY KEY(deviceId, bookName, bookAuthor)
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO readRecord_migrated(deviceId, bookName, bookAuthor, readTime, lastRead, bookType)
+                SELECT '', bookName, canonicalAuthor, SUM(readTime), MAX(lastRead), MAX(bookType)
+                FROM (
+                    SELECT rr.bookName, rr.readTime, rr.lastRead, rr.bookType,
+                        CASE WHEN rr.bookAuthor <> '' THEN rr.bookAuthor ELSE COALESCE((
+                            SELECT CASE WHEN COUNT(DISTINCT b.author) = 1 THEN MAX(b.author) ELSE '' END
+                            FROM books b WHERE b.name = rr.bookName
+                        ), '') END AS canonicalAuthor
+                    FROM readRecord rr
+                )
+                GROUP BY bookName, canonicalAuthor
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE readRecord")
+            database.execSQL("ALTER TABLE readRecord_migrated RENAME TO readRecord")
+
+            database.execSQL(
+                """
+                CREATE TABLE readRecordDetail_migrated (
+                    deviceId TEXT NOT NULL,
+                    bookName TEXT NOT NULL,
+                    bookAuthor TEXT NOT NULL DEFAULT '',
+                    date TEXT NOT NULL,
+                    readTime INTEGER NOT NULL DEFAULT 0,
+                    readWords INTEGER NOT NULL DEFAULT 0,
+                    firstReadTime INTEGER NOT NULL DEFAULT 0,
+                    lastReadTime INTEGER NOT NULL DEFAULT 0,
+                    bookType INTEGER NOT NULL DEFAULT 8,
+                    PRIMARY KEY(deviceId, bookName, bookAuthor, date)
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO readRecordDetail_migrated(
+                    deviceId, bookName, bookAuthor, date, readTime, readWords,
+                    firstReadTime, lastReadTime, bookType
+                )
+                SELECT '', bookName, canonicalAuthor, date, SUM(readTime), SUM(readWords),
+                    COALESCE(MIN(CASE WHEN firstReadTime > 0 THEN firstReadTime ELSE NULL END), 0),
+                    MAX(lastReadTime), MAX(bookType)
+                FROM (
+                    SELECT rd.bookName, rd.date, rd.readTime, rd.readWords,
+                        rd.firstReadTime, rd.lastReadTime, rd.bookType,
+                        CASE WHEN rd.bookAuthor <> '' THEN rd.bookAuthor ELSE COALESCE((
+                            SELECT CASE WHEN COUNT(DISTINCT b.author) = 1 THEN MAX(b.author) ELSE '' END
+                            FROM books b WHERE b.name = rd.bookName
+                        ), '') END AS canonicalAuthor
+                    FROM readRecordDetail rd
+                )
+                GROUP BY bookName, canonicalAuthor, date
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE readRecordDetail")
+            database.execSQL("ALTER TABLE readRecordDetail_migrated RENAME TO readRecordDetail")
+
+            database.execSQL(
+                """
+                CREATE TABLE readRecordSession_migrated (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    deviceId TEXT NOT NULL,
+                    bookName TEXT NOT NULL,
+                    bookAuthor TEXT NOT NULL DEFAULT '',
+                    startTime INTEGER NOT NULL,
+                    endTime INTEGER NOT NULL,
+                    words INTEGER NOT NULL,
+                    bookType INTEGER NOT NULL DEFAULT 8,
+                    chapterTitle TEXT NOT NULL DEFAULT ''
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO readRecordSession_migrated(
+                    deviceId, bookName, bookAuthor, startTime, endTime, words, bookType, chapterTitle
+                )
+                SELECT '', bookName, canonicalAuthor, startTime, endTime, MAX(words), MAX(bookType), MAX(chapterTitle)
+                FROM (
+                    SELECT rs.bookName, rs.startTime, rs.endTime, rs.words, rs.bookType, rs.chapterTitle,
+                        CASE WHEN rs.bookAuthor <> '' THEN rs.bookAuthor ELSE COALESCE((
+                            SELECT CASE WHEN COUNT(DISTINCT b.author) = 1 THEN MAX(b.author) ELSE '' END
+                            FROM books b WHERE b.name = rs.bookName
+                        ), '') END AS canonicalAuthor
+                    FROM readRecordSession rs
+                )
+                GROUP BY bookName, canonicalAuthor, startTime, endTime
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE readRecordSession")
+            database.execSQL("ALTER TABLE readRecordSession_migrated RENAME TO readRecordSession")
+        }
+    }
 }
