@@ -606,7 +606,10 @@ fun ReadRecordScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                LazyColumn(modifier = Modifier.height(320.dp)) {
+                LazyColumn(
+                    modifier = Modifier.height(320.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     items(candidates, key = { it.mergeKey() }) { candidate ->
                         val author = candidate.bookAuthor.ifBlank { unknownAuthor }
                         val candidateKey = candidate.mergeKey()
