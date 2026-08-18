@@ -347,7 +347,7 @@ fun ExploreShowScreen(
                 )
 
                 Column(
-                    modifier = Modifier.padding(bottom = 6.dp),
+                    modifier = Modifier.padding(top = 6.dp, bottom = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (state.kindGroups.isNotEmpty()) {

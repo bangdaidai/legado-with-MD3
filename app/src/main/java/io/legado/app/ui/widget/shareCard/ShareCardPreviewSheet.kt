@@ -3,7 +3,6 @@ package io.legado.app.ui.widget.shareCard
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -18,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -145,6 +145,18 @@ fun ShareCardPreviewSheet(
                 renderFailed = true
             }
             rendering = false
+        }
+    }
+
+    fun saveCurrentBitmap() {
+        val bmp = currentBitmap ?: return
+        scope.launch {
+            saving = true
+            try {
+                saveToGallery(context, bmp)
+            } finally {
+                saving = false
+            }
         }
     }
 
@@ -312,17 +324,25 @@ fun ShareCardPreviewSheet(
             } else {
                 schemeOverride ?: ShareCardHtmlRenderer.isDarkByDefault(accent)
             }
-            MediumTonalButton(
-                onClick = {
-                    val next = effectiveDark != true
-                    schemeOverride = next
-                    rerender(selectedTemplateId, accentColor, next)
-                },
-                enabled = accentColor != null && !loading,
-                selected = schemeOverride != null,
-                icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
-                contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MediumTonalButton(
+                    onClick = {
+                        val next = effectiveDark != true
+                        schemeOverride = next
+                        rerender(selectedTemplateId, accentColor, next)
+                    },
+                    enabled = accentColor != null && !loading,
+                    selected = schemeOverride != null,
+                    icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
+                    contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
+                )
+                MediumTonalButton(
+                    onClick = { saveCurrentBitmap() },
+                    enabled = currentBitmap != null && !rendering && !saving,
+                    icon = Icons.Default.Save,
+                    contentDescription = "保存卡片",
+                )
+            }
         },
     ) {
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
@@ -339,22 +359,7 @@ fun ShareCardPreviewSheet(
                         Image(
                             bitmap = bmp.asImageBitmap(),
                             contentDescription = "分享卡片",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(
-                                    enabled = !rendering && !saving,
-                                    onClick = {},
-                                    onLongClick = {
-                                        scope.launch {
-                                            saving = true
-                                            try {
-                                                saveToGallery(context, bmp)
-                                            } finally {
-                                                saving = false
-                                            }
-                                        }
-                                    },
-                                ),
+                            modifier = Modifier.fillMaxWidth(),
                             contentScale = ContentScale.FillWidth,
                         )
                     }
