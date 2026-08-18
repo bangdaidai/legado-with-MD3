@@ -331,14 +331,17 @@ fun ShareCardPreviewSheet(
                         schemeOverride = next
                         rerender(selectedTemplateId, accentColor, next)
                     },
-                    enabled = accentColor != null && !loading,
+                    // 只去掉初始灰色：点击逻辑与之前完全一致，accentColor 为空时切换本身无效果
+                    enabled = !loading,
                     selected = schemeOverride != null,
                     icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                     contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
                 )
                 MediumTonalButton(
                     onClick = { saveCurrentBitmap() },
-                    enabled = currentBitmap != null && !rendering && !saving,
+                    // 不把 rendering 计入 enabled：保存的是当前已渲染好的旧图，重渲期间仍可保存；
+                    // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
+                    enabled = currentBitmap != null && !saving,
                     icon = Icons.Default.Save,
                     contentDescription = "保存卡片",
                 )

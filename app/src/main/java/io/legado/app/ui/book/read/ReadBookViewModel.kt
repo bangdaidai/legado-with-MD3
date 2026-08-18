@@ -276,7 +276,8 @@ class ReadBookViewModel(
                 marking.bookName,
                 marking.bookAuthor,
             )
-            val data = ShareCardDataBuilder.buildFromMarking(marking, memory)
+            val book = bookRepository.getBook(marking.bookUrl)
+            val data = ShareCardDataBuilder.buildFromMarking(marking, memory, book)
             _uiState.update {
                 it.copy(
                     showShareCard = true,
@@ -305,7 +306,8 @@ class ReadBookViewModel(
                 selection.bookName,
                 selection.bookAuthor,
             )
-            val data = ShareCardDataBuilder.buildFromBookmark(selection, memory)
+            val book = bookRepository.getBook(selection.bookUrl)
+            val data = ShareCardDataBuilder.buildFromBookmark(selection, memory, book)
             _uiState.update {
                 it.copy(
                     showShareCard = true,
