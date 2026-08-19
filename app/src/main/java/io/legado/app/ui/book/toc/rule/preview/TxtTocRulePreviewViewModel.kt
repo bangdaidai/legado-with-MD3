@@ -29,7 +29,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.coroutines.coroutineContext
 
@@ -381,7 +380,7 @@ class TxtTocRulePreviewViewModel(
         if (book == null) return TocRulePreviewItem(rule = tocRule)
         return try {
             val pattern = try {
-                tocRule.chapterRule.toPattern(Pattern.MULTILINE)
+                Regex(tocRule.chapterRule, RegexOption.MULTILINE)
             } catch (e: PatternSyntaxException) {
                 return TocRulePreviewItem(rule = tocRule, totalCount = 0)
             }
@@ -404,7 +403,7 @@ class TxtTocRulePreviewViewModel(
             _uiState.update { it.copy(editingRule = null) }
             return
         }
-        if (runCatching { updatedRule.chapterRule.toPattern(Pattern.MULTILINE) }.isFailure) {
+        if (runCatching { Regex(updatedRule.chapterRule, RegexOption.MULTILINE) }.isFailure) {
             _effects.tryEmit(TxtTocRulePreviewEffect.ShowToast(context.getString(R.string.invalid_format)))
             _uiState.update { it.copy(editingRule = null) }
             return
@@ -463,7 +462,7 @@ class TxtTocRulePreviewViewModel(
         return rules.filter { it.chapterRule.isNotBlank() }.sortedBy { it.serialNumber }
     }
 
-    private suspend fun analyzeWithPattern(book: Book, pattern: Pattern): Pair<List<String>, Int> {
+    private suspend fun analyzeWithPattern(book: Book, pattern: Regex): Pair<List<String>, Int> {
         val chapters = mutableListOf<String>()
         var totalCount = 0
         val charset = book.fileCharset()
@@ -494,11 +493,10 @@ class TxtTocRulePreviewViewModel(
                     buffer.copyInto(buffer, 0, end, bufferStart + length)
                     bufferStart = bufferStart + length - end
 
-                    val matcher = pattern.matcher(blockContent)
-                    while (matcher.find()) {
+                    for (m in pattern.findAll(blockContent)) {
                         totalCount++
                         if (chapters.size < 500) {
-                            chapters.add(matcher.group())
+                            chapters.add(m.value)
                         }
                     }
                 }
@@ -507,5 +505,3 @@ class TxtTocRulePreviewViewModel(
         return chapters to totalCount
     }
 }
-
-private fun String.toPattern(flags: Int): Pattern = Pattern.compile(this, flags)

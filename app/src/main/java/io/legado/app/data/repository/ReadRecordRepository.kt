@@ -1,8 +1,6 @@
 package io.legado.app.data.repository
 
 import androidx.room.withTransaction
-import cn.hutool.core.date.DatePattern
-import cn.hutool.core.date.DateUtil
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.entities.readRecord.ReadRecord
@@ -17,7 +15,9 @@ import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.util.Date
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlin.math.max
 import kotlin.math.min
 
@@ -63,6 +63,9 @@ class ReadRecordRepository(
         }
         return merged
     }
+
+    private fun Long.toDateString(): String =
+        Instant.fromEpochMilliseconds(this).toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
 
     val readRecordEnabled: Flow<Boolean> =
         localPreferencesRepository.getPreference(LocalPreferencesKeys.ENABLE_READ_RECORD, true)
@@ -174,7 +177,7 @@ class ReadRecordRepository(
 
     fun getBookTimelineDays(bookName: String, bookAuthor: String): Flow<List<ReadRecordTimelineDay>> {
         return getBookSessions(bookName, bookAuthor).map { sessions ->
-            sessions.groupBy { DateUtil.format(Date(it.startTime), "yyyy-MM-dd") }
+            sessions.groupBy { it.startTime.toDateString() }
                 .toSortedMap(compareByDescending { it })
                 .map { (date, daySessions) ->
                     ReadRecordTimelineDay(
@@ -269,8 +272,7 @@ class ReadRecordRepository(
             } else {
                 dao.insertSession(normalizedSession)
             }
-            val dateString =
-                DateUtil.format(Date(normalizedSession.startTime), DatePattern.NORM_DATE_PATTERN)
+            val dateString = normalizedSession.startTime.toDateString()
             updateReadRecordDetail(normalizedSession, segmentDuration, normalizedSession.words, dateString)
             updateReadRecord(normalizedSession, segmentDuration)
         }
@@ -353,7 +355,7 @@ class ReadRecordRepository(
                 .filter {
                     it.bookName == detail.bookName &&
                         it.bookAuthor == detail.bookAuthor &&
-                        DateUtil.format(Date(it.startTime), DatePattern.NORM_DATE_PATTERN) == detail.date
+                        it.startTime.toDateString() == detail.date
                 }
                 .mapTo(linkedSetOf()) { it.deviceId }
                 .apply { addAll(dao.getReadRecordsByName(detail.bookName, detail.bookAuthor).map { it.deviceId }) }
@@ -391,7 +393,7 @@ class ReadRecordRepository(
                 session.endTime,
                 session.words,
             )
-            val dateString = DateUtil.format(Date(session.startTime), "yyyy-MM-dd")
+            val dateString = session.startTime.toDateString()
             affectedDevices.forEach { deviceId ->
                     val record = ReadRecord(
                         deviceId = deviceId,
@@ -709,7 +711,7 @@ class ReadRecordRepository(
             dao.allDetail.forEach { detail ->
                 val sessions = dao.getSessionsByBook(detail.deviceId, detail.bookName, detail.bookAuthor)
                     .filter {
-                        DateUtil.format(Date(it.startTime), DatePattern.NORM_DATE_PATTERN) == detail.date
+                        it.startTime.toDateString() == detail.date
                     }
                 if (sessions.isEmpty()) return@forEach
                 dao.insertDetail(detail.copy(

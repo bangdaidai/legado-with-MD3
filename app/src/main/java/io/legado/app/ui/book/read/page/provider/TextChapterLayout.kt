@@ -430,15 +430,16 @@ class TextChapterLayout(
                 val srcList = LinkedList<String>()
                 val clickList = LinkedList<String?>()
                 sb.setLength(0)
-                val matcher = AppPattern.imgPattern.matcher(text)
-                while (matcher.find()) {
-                    matcher.group(1)?.let { src ->
-                        srcList.add(src)
-                        clickList.add(parseImgClick(src))
-                        matcher.appendReplacement(sb, srcReplaceChar)
-                    }
+                var last = 0
+                for (m in AppPattern.imgPattern.findAll(text)) {
+                    val src = m.groupValues[1]
+                    srcList.add(src)
+                    clickList.add(parseImgClick(src))
+                    sb.append(text, last, m.range.first)
+                    sb.append(srcReplaceChar)
+                    last = m.range.last + 1
                 }
-                matcher.appendTail(sb)
+                sb.append(text, last, text.length)
                 text = sb.toString()
                 wordCount += text.replace(noWordCountRegex,"").length
                 setTypeText(
@@ -464,17 +465,16 @@ class TextChapterLayout(
                 sb.setLength(0)
                 var isFirstLine = true
                 if (content.contains("<img")) {
-                    val matcher = AppPattern.imgPattern.matcher(text)
-                    while (matcher.find()) {
+                    for (m in AppPattern.imgPattern.findAll(text)) {
                         currentCoroutineContext().ensureActive()
-                        val imgSrc = matcher.group(1)!!
+                        val imgSrc = m.groupValues[1]
                         var iStyle: String? = null
                         var click: String? = null
                         var imgSize = ImageProvider.getImageSize(book, imgSrc, bookSource)
-                        val urlMatcher = paramPattern.matcher(imgSrc)
-                        if (urlMatcher.find()) {
+                        val urlMatch = paramPattern.find(imgSrc)
+                        if (urlMatch != null) {
                             var width: String? = null
-                            val urlOptionStr = imgSrc.substring(urlMatcher.end())
+                            val urlOptionStr = imgSrc.substring(urlMatch.range.last + 1)
                             GSON.fromJsonObject<Map<String, String>>(urlOptionStr).getOrNull()
                                 ?.let { map ->
                                     map.forEach { (key, value) ->
@@ -505,8 +505,8 @@ class TextChapterLayout(
                                 if (imgSize.width < 80 && imgSize.height < 80) "text" else imageStyle
                         }
 
-                        if (start < matcher.start()) {
-                            val textPart = text.substring(start, matcher.start())
+                        if (start < m.range.first) {
+                            val textPart = text.substring(start, m.range.first)
                             sb.append(textPart)
                         }
                         if (iStyle == "text" || iStyle == "TEXT") {
@@ -539,7 +539,7 @@ class TextChapterLayout(
                             bodyHighlightOffset += 1
                             isSetTypedImage = true
                         }
-                        start = matcher.end()
+                        start = m.range.last + 1
                     }
                 }
                 if (start < content.length) {
@@ -767,9 +767,9 @@ class TextChapterLayout(
                 spanned.getSpans(charIndex, charIndex + 1, ImageSpan::class.java).firstOrNull()
                     ?.let { span -> //处理图片
                         val source = span.source ?: return@let
-                        val urlMatcher = paramPattern.matcher(source)
-                        if (urlMatcher.find()) {
-                            val urlOptionStr = source.substring(urlMatcher.end())
+                        val urlMatch = paramPattern.find(source)
+                        if (urlMatch != null) {
+                            val urlOptionStr = source.substring(urlMatch.range.last + 1)
                             val style =
                                 GSON.fromJsonObject<Map<String, String>>(urlOptionStr).getOrNull()
                                     ?: return@let
@@ -1836,15 +1836,16 @@ class TextChapterLayout(
     }
 
     private fun String.replaceImagesForHighlight(): String {
-        val matcher = AppPattern.imgPattern.matcher(this)
-        if (!matcher.find()) return this
+        val iterator = AppPattern.imgPattern.findAll(this).iterator()
+        if (!iterator.hasNext()) return this
         return buildString(length) {
             var start = 0
             do {
-                append(this@replaceImagesForHighlight, start, matcher.start())
+                val m = iterator.next()
+                append(this@replaceImagesForHighlight, start, m.range.first)
                 append(srcReplaceChar)
-                start = matcher.end()
-            } while (matcher.find())
+                start = m.range.last + 1
+            } while (iterator.hasNext())
             append(this@replaceImagesForHighlight, start, this@replaceImagesForHighlight.length)
         }
     }

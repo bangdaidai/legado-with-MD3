@@ -384,7 +384,7 @@ Book sources, RSS sources, and HTTP TTS use JavaScript rules. `initRhino()` in `
 ## Important Constraints
 
 - **Do not update jsoup** beyond 1.16.2 — a breaking change in newer versions (see [jsoup#2017](https://github.com/jhy/jsoup/pull/2017)) affects `AnalyzeByJSoup.kt` and the JsoupXpath library
-- **Do not update hutool** beyond 5.8.22 — pinned in `libs.versions.toml:42`
+- **Hutool dependency removed** — crypto/编码/日期工具已替换为 JCA (`javax.crypto`/`java.security`) 与 `java.time`，新增内部工具在 `help/crypto/CryptoUtils.kt`
 - **Database version must stay in sync with upstream** — never increment `AppDatabase.version` beyond the upstream value. Local-only schema changes (new columns, new tables) must be appended to the existing hand-written migration that matches the upstream's latest version (currently `migration_100_101` in `DatabaseMigrations.kt`). When upstream bumps its version (e.g. 101→102), move local additions into the new migration rather than creating a fork-specific version number. This eliminates merge conflicts on the `version =` line and keeps `fallbackToDestructiveMigration` as safety net.
 - Package name discrepancy: code namespace is `io.legado.app` but `applicationId` is `io.legato.kazusa`
 - Min SDK 26, target SDK 37, compile SDK 37

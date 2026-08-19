@@ -11,14 +11,15 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cn.hutool.core.date.DateUtil
 import io.legado.app.data.entities.readRecord.ReadRecordSession
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.formatReadDuration
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * 共用阅读时段时间轴组件。
@@ -111,7 +112,7 @@ private fun TimelineSessionRow(
         // 时间与时长按内容宽度测量，章节名只占剩余空间，避免长章节名挤压时长
         Column {
             AppText(
-                text = DateUtil.format(Date(session.endTime), "HH:mm"),
+                text = Instant.ofEpochMilli(session.endTime).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")),
                 style = LegadoTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold
             )

@@ -75,7 +75,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cn.hutool.core.date.DateUtil
 import io.legado.app.R
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
@@ -120,8 +119,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.emptyFlow
 import org.koin.androidx.compose.koinViewModel
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Date
 
 data class TimelineItem(
     val session: ReadRecordSession,
@@ -1150,7 +1151,9 @@ fun LatestReadItem(
     }
     val unknownAuthor = stringResource(R.string.unknown_author)
     val author = record.bookAuthor.ifBlank { unknownAuthor }
-    val lastReadText = DateUtil.format(Date(record.lastRead), "yyyy-MM-dd HH:mm")
+    val lastReadText = Instant.ofEpochMilli(record.lastRead)
+        .atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
     val itemDescription = stringResource(
         R.string.a11y_read_record_latest_item,
         record.bookName,
@@ -1251,7 +1254,9 @@ fun TimelineSessionItem(
         }
     }
 
-    val endTimeText = DateUtil.format(Date(session.endTime), "HH:mm")
+    val endTimeText = Instant.ofEpochMilli(session.endTime)
+        .atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("HH:mm"))
     val unknownAuthor = stringResource(R.string.unknown_author)
     val author = session.bookAuthor.ifBlank { unknownAuthor }
     val duration = formatDuring(session.endTime - session.startTime)
