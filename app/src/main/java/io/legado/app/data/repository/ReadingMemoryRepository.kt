@@ -557,17 +557,21 @@ class ReadingMemoryRepository(
 
     /**
      * 删除指定书籍的阅读记忆。
-     * 若该书已从书架下架（notShelf），则连同 books 行、章节、标签关联一起物理删除，彻底移除、不再自动重建；
      * 阅读记录与书摘按书名+作者关联，保留。
+     * 若该书已从书架下架（notShelf）且已无任何阅读记录引用，则连同 books 行、章节、标签关联一起物理删除，彻底移除；
+     * 但若仍有阅读记录，则保留 books 行(含封面)作为阅读记录的封面来源，待阅读记录也删除后由 deleteNotShelfBook 周期清理。
      */
     suspend fun deleteMemory(bookUrl: String) {
         val book = bookDao.getBook(bookUrl)
         database.withTransaction {
             dao.deleteByBookUrl(bookUrl)
             if (book != null && book.isNotShelf) {
-                bookDao.delete(book)
-                database.bookChapterDao.delByBook(bookUrl)
-                database.bookTagRelationDao.deleteByBookUrl(bookUrl)
+                val hasReadRecord = readRecordDao.countByBook(book.name, book.author) > 0
+                if (!hasReadRecord) {
+                    bookDao.delete(book)
+                    database.bookChapterDao.delByBook(bookUrl)
+                    database.bookTagRelationDao.deleteByBookUrl(bookUrl)
+                }
             }
         }
     }

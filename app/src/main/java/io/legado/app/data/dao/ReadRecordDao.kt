@@ -252,6 +252,10 @@ interface ReadRecordDao {
     @Query("SELECT * FROM readRecord WHERE bookName = :bookName AND bookAuthor = ''")
     suspend fun getUnknownAuthorRecords(bookName: String): List<ReadRecord>
 
+    /** 统计指定书名+作者的阅读记录条数，用于判断下架书籍是否仍被阅读记录引用(封面来源需保留)。 */
+    @Query("SELECT COUNT(*) FROM readRecord WHERE bookName = :bookName AND bookAuthor = :bookAuthor")
+    suspend fun countByBook(bookName: String, bookAuthor: String): Int
+
     @Query("SELECT * FROM readRecordDetail ORDER BY date DESC, lastReadTime DESC")
     fun getAllDetails(): Flow<List<ReadRecordDetail>>
 
