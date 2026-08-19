@@ -9,10 +9,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
@@ -22,6 +25,8 @@ import io.legado.app.ui.book.read.ReadBookUiState
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerUiState
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.pager.pagerHeight
+import io.legado.app.ui.widget.components.pager.rememberPagerAnimatedHeight
 import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
@@ -39,6 +44,8 @@ fun ReadAloudConfigContent(
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
+    val pageHeights = remember { mutableStateMapOf<Int, Int>() }
+    val animatedHeight by rememberPagerAnimatedHeight(pagerState, pageHeights)
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -58,11 +65,13 @@ fun ReadAloudConfigContent(
             verticalAlignment = Alignment.Top,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f, fill = false),
+                .weight(1f, fill = false)
+                .pagerHeight(animatedHeight),
         ) { page ->
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { size -> pageHeights[page] = size.height }
                     .verticalScroll(rememberScrollState())
                     .padding(top = 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
             ) {
