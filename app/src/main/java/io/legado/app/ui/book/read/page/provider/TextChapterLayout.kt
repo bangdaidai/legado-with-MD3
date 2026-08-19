@@ -594,9 +594,8 @@ class TextChapterLayout(
      * 提取图片链接选项中的click键值
      */
     private fun parseImgClick(imgSrc: String): String? {
-        val urlMatcher = paramPattern.matcher(imgSrc)
-        if (!urlMatcher.find()) return null
-        val urlOptionStr = imgSrc.substring(urlMatcher.end())
+        val urlMatch = paramPattern.find(imgSrc) ?: return null
+        val urlOptionStr = imgSrc.substring(urlMatch.range.last + 1)
         return GSON.fromJsonObject<Map<String, String>>(urlOptionStr).getOrNull()?.get("click")
     }
 

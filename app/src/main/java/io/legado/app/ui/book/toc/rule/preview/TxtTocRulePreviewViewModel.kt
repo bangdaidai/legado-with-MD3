@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.coroutines.coroutineContext
 
