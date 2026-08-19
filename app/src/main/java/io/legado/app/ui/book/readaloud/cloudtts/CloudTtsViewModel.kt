@@ -389,11 +389,12 @@ class CloudTtsViewModel(
                 ))
             }
         }.onSuccess { catalog ->
+            val uniqueCatalog = catalog.distinctBy { it.id }
             _uiState.update { state ->
-                val defaultVoice = catalog.singleOrNull()
+                val defaultVoice = uniqueCatalog.singleOrNull()
                     ?.takeIf { editor.engineType == ReadAloudVoice.ENGINE_HTTP }
                 state.copy(
-                    discoveredVoices = catalog.toImmutableList(),
+                    discoveredVoices = uniqueCatalog.toImmutableList(),
                     voiceEditor = if (defaultVoice == null) state.voiceEditor else {
                         state.voiceEditor?.copy(
                             voiceId = defaultVoice.id,
@@ -402,7 +403,7 @@ class CloudTtsViewModel(
                     },
                 )
             }
-            toast(application.getString(R.string.cloud_tts_voice_count, catalog.size))
+            toast(application.getString(R.string.cloud_tts_voice_count, uniqueCatalog.size))
         }.onFailure { showError(formatError(it)) }
         _uiState.update { it.copy(discovering = false) }
     }
