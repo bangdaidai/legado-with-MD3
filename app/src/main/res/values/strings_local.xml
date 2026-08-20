@@ -22,7 +22,6 @@
     <string name="no_related_books">No related books</string>
     <string name="group_colon_format">Group: %1$s</string>
     <string name="books_count_format">%1$d books</string>
-    <string name="more">More</string>
     <string name="ticket_style">票据样式</string>
     <string name="ticket_dash_style">票据虚线样式</string>
     <string name="ticket_dash_style_dash">段线</string>

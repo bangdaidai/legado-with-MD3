@@ -34,7 +34,6 @@
     <string name="no_related_books">暂无关联书籍</string>
     <string name="group_colon_format">分组：%1$s</string>
     <string name="books_count_format">%1$d 本</string>
-    <string name="more">更多</string>
     <string name="all_marking">笔记</string>
     <string name="generate_share_card">生成分享卡片</string>
     <string name="clear_all_bookmarks">清除所有书签</string>
