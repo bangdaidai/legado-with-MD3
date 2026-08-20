@@ -32,7 +32,7 @@ import io.legado.app.ui.book.readingmemory.ReadingMemoryStatusFilter
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
-import io.legado.app.ui.widget.components.AppText
+import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -82,7 +82,7 @@ private fun AuthorListScreen(
     ) { contentPadding ->
         if (uiState.authors.isEmpty()) {
             EmptyMessage(
-                text = stringResource(R.string.author_management_empty),
+                message = stringResource(R.string.author_management_empty),
                 modifier = Modifier.fillMaxSize().padding(contentPadding),
             )
         } else {

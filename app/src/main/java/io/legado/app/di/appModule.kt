@@ -307,6 +307,7 @@ import io.legado.app.ui.main.explore.ExploreViewModel
 import io.legado.app.ui.main.home.HomeViewModel
 import io.legado.app.ui.main.homepage.HomepageViewModel
 import io.legado.app.ui.main.my.MyViewModel
+import io.legado.app.ui.main.my.authorManage.AuthorManageViewModel
 import io.legado.app.ui.main.rss.RssViewModel
 import io.legado.app.ui.replace.ReplaceEditRoute
 import io.legado.app.ui.replace.ReplaceRuleViewModel

@@ -7,7 +7,7 @@ import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.settings.BookshelfSettings
-import io.legado.app.model.analyzeRule.TagManager
+import io.legado.app.help.book.TagManager
 import io.legado.app.ui.book.readingmemory.ReadingMemoryStatusFilter
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
