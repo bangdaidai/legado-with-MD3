@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import io.legado.app.R
 import io.legado.app.utils.HtmlFormatter
 import io.legado.app.data.entities.ReadingMemory
+import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
@@ -255,9 +256,13 @@ fun ReadingMemoryScreen(
                                         MemoryBookCard(
                                             memory = item.memory,
                                             tags = item.tags,
-                                            uiState = uiState,
-                                            onIntent = onIntent,
-                                            onLongPress = { longPressBookUrl = it },
+                                            settings = uiState.settings,
+                                            tagColorMap = uiState.tagColorMap,
+                                            coverWidth = uiState.coverWidth,
+                                            showIntro = uiState.showIntro,
+                                            showReview = uiState.showReview,
+                                            onBookClick = { onIntent(ReadingMemoryIntent.ClickBook(it)) },
+                                            onBookLongPress = { longPressBookUrl = it },
                                         )
                                     }
                                 }
@@ -436,14 +441,17 @@ private fun GroupHeaderRow(
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun MemoryBookCard(
+internal fun MemoryBookCard(
     memory: ReadingMemory,
     tags: List<String> = emptyList(),
-    uiState: ReadingMemoryUiState,
-    onIntent: (ReadingMemoryIntent) -> Unit,
-    onLongPress: (String) -> Unit,
+    settings: BookshelfSettings,
+    tagColorMap: Map<String, Long>,
+    coverWidth: Int,
+    showIntro: Boolean,
+    showReview: Boolean,
+    onBookClick: (String) -> Unit,
+    onBookLongPress: (String) -> Unit = {},
 ) {
-    val settings = uiState.settings
     val statusText = when {
         memory.abandoned -> "弃文"
         memory.progress >= 1f -> "已读"
@@ -472,9 +480,9 @@ private fun MemoryBookCard(
         formatted.takeIf { it.isNotBlank() }
     }
 
-    val showIntroBelowContent = uiState.showIntro && intro != null
+    val showIntroBelowContent = showIntro && intro != null
         && settings.bookshelfListIntroBelowContent
-    val showReviewBelowContent = uiState.showReview && !memory.review.isNullOrBlank()
+    val showReviewBelowContent = showReview && !memory.review.isNullOrBlank()
         && settings.bookshelfListIntroBelowContent
     val ticketStyle = (showIntroBelowContent || showReviewBelowContent)
         && settings.bookshelfTicketStyle
@@ -520,7 +528,7 @@ private fun MemoryBookCard(
             ) {
                 // 状态标签放最前面
                 val statusThemeSettings = LocalAppUiConfiguration.current.theme
-                val statusBorder = if (uiState.settings.bookshelfTagBorder) {
+                val statusBorder = if (settings.bookshelfTagBorder) {
                     BorderStroke(0.5.dp, statusContent)
                 } else if (statusThemeSettings.overrideBaseCardBorder) {
                     val configuredColor = if (LegadoTheme.isDark) {
@@ -547,18 +555,18 @@ private fun MemoryBookCard(
                     )
                 }
                 tags.forEach { tag ->
-                    val tagColor = uiState.tagColorMap[tag]
+                    val tagColor = tagColorMap[tag]
                     TagChip(
                         tag = tag,
                         color = tagColor,
                         size = TagChipSize.Small,
-                        showColoredBorder = uiState.settings.bookshelfTagBorder,
+                        showColoredBorder = settings.bookshelfTagBorder,
                     )
                 }
             }
-            val showIntroInline = uiState.showIntro && intro != null
+            val showIntroInline = showIntro && intro != null
                 && !showIntroBelowContent
-            val showReviewInline = uiState.showReview && !memory.review.isNullOrBlank()
+            val showReviewInline = showReview && !memory.review.isNullOrBlank()
                 && !showReviewBelowContent
             if (showIntroInline) {
                 AppText(
@@ -635,9 +643,9 @@ private fun MemoryBookCard(
         titleMaxLines = settings.bookshelfTitleMaxLines,
         coverShadow = settings.bookshelfCoverShadow,
         ticketStyle = ticketStyle,
-        coverWidth = uiState.coverWidth,
-        onClick = { onIntent(ReadingMemoryIntent.ClickBook(memory.bookUrl)) },
-        onLongClick = { onLongPress(memory.bookUrl) },
+        coverWidth = coverWidth,
+        onClick = { onBookClick(memory.bookUrl) },
+        onLongClick = { onBookLongPress(memory.bookUrl) },
     )
 }
 

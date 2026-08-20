@@ -245,6 +245,9 @@ data class MainRouteReadingMemoryDetail(
 data object MainRouteTagManagement : MainRoute
 
 @Serializable
+data object MainRouteAuthorManagement : MainRoute
+
+@Serializable
 data class MainRouteTagDetail(val tagId: Long) : MainRoute
 
 @Serializable

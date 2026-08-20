@@ -158,6 +158,7 @@ fun MainScreen(
     onNavigateToReadRecordOverview: () -> Unit,
     onNavigateToHighlightTagRule: () -> Unit,
     onNavigateToTagManagement: () -> Unit,
+    onNavigateToAuthorManagement: () -> Unit,
     onNavigateToAbout: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -627,6 +628,7 @@ fun MainScreen(
                                         PrefClickEvent.OpenReadingMemoryList -> onNavigateToReadingMemoryList()
                                         PrefClickEvent.OpenShareCardManage -> onNavigateToShareCardManage()
                                         PrefClickEvent.OpenTagManagement -> onNavigateToTagManagement()
+                                        PrefClickEvent.OpenAuthorManagement -> onNavigateToAuthorManagement()
                                         else -> onIntent(MainUiIntent.HandlePreferenceClick(event))
                                     }
                                 }

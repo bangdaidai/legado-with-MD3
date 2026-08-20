@@ -48,6 +48,7 @@ import io.legado.app.ui.book.info.BookInfoRouteScreen
 import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.tagdetail.TagDetailRouteScreen
 import io.legado.app.ui.book.tagmanage.TagManagementRouteScreen
+import io.legado.app.ui.main.my.authorManage.AuthorManageRouteScreen
 import io.legado.app.ui.book.tagmanage.ExcludedTagRouteScreen
 import io.legado.app.ui.book.info.BookInfoViewModel
 import io.legado.app.ui.book.knowledge.BookCharacterDetailScreen
@@ -413,6 +414,9 @@ fun MainActivity.mainEntryProvider(
             },
             onNavigateToTagManagement = {
                 onNavigateToRoute(MainRouteTagManagement)
+            },
+            onNavigateToAuthorManagement = {
+                onNavigateToRoute(MainRouteAuthorManagement)
             },
             onNavigateToAbout = {
                 onNavigateToRoute(MainRouteAbout)
@@ -1014,6 +1018,13 @@ fun MainActivity.mainEntryProvider(
             onBack = { onNavigateBack() },
             onOpenTagDetail = { tagId -> onNavigateToRoute(MainRouteTagDetail(tagId)) },
             onNavigateToExcludedTag = { onNavigateToRoute(MainRouteExcludedTag) },
+        )
+    }
+
+    entry<MainRouteAuthorManagement> {
+        AuthorManageRouteScreen(
+            onBack = { onNavigateBack() },
+            onOpenBook = { bookUrl -> onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl)) },
         )
     }
 

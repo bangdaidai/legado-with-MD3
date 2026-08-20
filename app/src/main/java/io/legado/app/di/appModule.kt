@@ -557,6 +557,7 @@ val appModule = module {
     viewModelOf(::HighlightTagRuleViewModel)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)
+    viewModelOf(::AuthorManageViewModel)
     viewModelOf(::ExcludedTagViewModel)
     viewModel { (tagId: Long) ->
         TagDetailViewModel(tagId)

@@ -193,6 +193,11 @@ fun MyScreen(
                     imageVector = Icons.Default.Label,
                     onClick = { onNavigate(PrefClickEvent.OpenTagManagement) }
                 )
+                ClickableSettingItem(
+                    title = stringResource(R.string.author_management),
+                    imageVector = Icons.Default.Person,
+                    onClick = { onNavigate(PrefClickEvent.OpenAuthorManagement) }
+                )
             }
 
             SplicedColumnGroup(

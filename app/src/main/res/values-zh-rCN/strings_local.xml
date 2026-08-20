@@ -3,6 +3,17 @@
     <!-- Local fork strings (keep separate to avoid upstream merge conflicts) -->
     <!-- Tag management -->
     <string name="tag_management">标签管理</string>
+    <string name="author_management">作者管理</string>
+    <string name="author_management_empty">书架中暂无可按作者归类的书籍</string>
+    <string name="author_edit_bio">编辑简介</string>
+    <string name="author_bio_hint">请输入作者简介</string>
+    <string name="author_no_bio">暂无简介</string>
+    <string name="author_read_count">已读 %1$d 本</string>
+    <string name="author_book_count">共 %1$d 本</string>
+    <string name="author_tab_finished">已读</string>
+    <string name="author_tab_reading">在读</string>
+    <string name="author_tab_to_read">未读</string>
+    <string name="author_tab_abandoned">弃读</string>
     <string name="tag_mapping">标签映射</string>
     <string name="excluded_tags">排除标签</string>
     <string name="search_tag">搜索标签</string>

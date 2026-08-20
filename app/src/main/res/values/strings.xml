@@ -2449,6 +2449,17 @@
     <string name="tag_group_sync_complete">Group sync complete</string>
     <string name="import_tag_group_rule">Import Tag Group Rules</string>
     <string name="tag_management">Tag Management</string>
+    <string name="author_management">Author Management</string>
+    <string name="author_management_empty">No books can be grouped by author yet</string>
+    <string name="author_edit_bio">Edit Bio</string>
+    <string name="author_bio_hint">Enter the author\'s bio</string>
+    <string name="author_no_bio">No bio yet</string>
+    <string name="author_read_count">Read %1$d</string>
+    <string name="author_book_count">%1$d books</string>
+    <string name="author_tab_finished">Read</string>
+    <string name="author_tab_reading">Reading</string>
+    <string name="author_tab_to_read">To Read</string>
+    <string name="author_tab_abandoned">Abandoned</string>
 
     <!-- Compose UI extracted strings -->
     <string name="edit_replace_rule">Edit Replace Rule</string>
