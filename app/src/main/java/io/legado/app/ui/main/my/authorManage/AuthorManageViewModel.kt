@@ -8,7 +8,6 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.help.book.TagManager
-import io.legado.app.ui.book.readingmemory.ReadingMemoryStatusFilter
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -36,9 +35,9 @@ class AuthorManageViewModel(
     private val _effects = MutableSharedFlow<AuthorManageEffect>(extraBufferCapacity = 16)
     val effects: SharedFlow<AuthorManageEffect> = _effects.asSharedFlow()
 
-    private val _sortBy = MutableStateFlow(AuthorSort.Rating)
+    private val _sortBy = MutableStateFlow(AuthorSort.BookCount)
     private val _selectedAuthor = MutableStateFlow<String?>(null)
-    private val _detailStatus = MutableStateFlow(ReadingMemoryStatusFilter.Finished)
+    private val _searchQuery = MutableStateFlow("")
     private val _editingBio = MutableStateFlow(false)
 
     private val bookshelfSettings = bookshelfSettingsGateway.settings.stateIn(
@@ -58,7 +57,7 @@ class AuthorManageViewModel(
                     AuthorProfileStore.observeBios(),
                     _sortBy,
                     _selectedAuthor,
-                    _detailStatus,
+                    _searchQuery,
                     _editingBio,
                     bookshelfSettings,
                     tagColorMap,
@@ -68,11 +67,11 @@ class AuthorManageViewModel(
                 val bios = a[1] as Map<String, String>
                 val sortBy = a[2] as AuthorSort
                 val selected = a[3] as String?
-                val detailStatus = a[4] as ReadingMemoryStatusFilter
+                val searchQuery = a[4] as String
                 val editingBio = a[5] as Boolean
                 val settings = a[6] as BookshelfSettings
                 val colorMap = a[7] as Map<String, Long>
-                buildState(memories, bios, sortBy, selected, detailStatus, editingBio, settings, colorMap)
+                buildState(memories, bios, sortBy, selected, searchQuery, editingBio, settings, colorMap)
             }.collect { _uiState.value = it }
         }
     }
@@ -82,7 +81,7 @@ class AuthorManageViewModel(
             is AuthorManageIntent.SetSort -> _sortBy.value = intent.sort
             is AuthorManageIntent.ClickAuthor -> _selectedAuthor.value = intent.name
             AuthorManageIntent.Back -> _selectedAuthor.value = null
-            is AuthorManageIntent.SetDetailStatus -> _detailStatus.value = intent.status
+            is AuthorManageIntent.SetSearchQuery -> _searchQuery.value = intent.query
             is AuthorManageIntent.ToggleEditBio -> _editingBio.value = intent.show
             is AuthorManageIntent.SaveBio -> {
                 AuthorProfileStore.saveBio(intent.name, intent.bio)
@@ -97,18 +96,24 @@ class AuthorManageViewModel(
         bios: Map<String, String>,
         sortBy: AuthorSort,
         selected: String?,
-        detailStatus: ReadingMemoryStatusFilter,
+        searchQuery: String,
         editingBio: Boolean,
         settings: BookshelfSettings,
         colorMap: Map<String, Long>,
     ): AuthorManageUiState {
-        val authors = buildAuthors(memories, bios, sortBy)
+        val allAuthors = buildAuthors(memories, bios, sortBy)
+        val query = searchQuery.trim()
+        val authors = if (query.isBlank()) {
+            allAuthors
+        } else {
+            allAuthors.filter { it.name.contains(query, ignoreCase = true) }.toImmutableList()
+        }
         val detail = if (selected != null) buildDetail(selected, memories, bios) else null
         return AuthorManageUiState(
             authors = authors,
             sortBy = sortBy,
+            searchQuery = searchQuery,
             selectedAuthorName = selected,
-            detailStatus = detailStatus,
             detail = detail,
             editingBio = editingBio,
             bookshelfSettings = settings,
@@ -116,12 +121,8 @@ class AuthorManageViewModel(
         )
     }
 
-    private fun statusOf(m: ReadingMemory): ReadingMemoryStatusFilter = when {
-        m.abandoned -> ReadingMemoryStatusFilter.Abandoned
-        m.progress >= 1f -> ReadingMemoryStatusFilter.Finished
-        m.progress > 0f -> ReadingMemoryStatusFilter.Reading
-        else -> ReadingMemoryStatusFilter.ToRead
-    }
+    private fun statusOf(m: ReadingMemory): Boolean =
+        !m.abandoned && m.progress >= 1f
 
     /** 该作者已读书籍评分的平均分（仅统计有评分的已读书，否则为 0）。 */
     private fun avgRating(mems: List<ReadingMemory>): Float {
@@ -138,7 +139,7 @@ class AuthorManageViewModel(
         val byAuthor = memories.filter { it.bookAuthor.isNotBlank() }
             .groupBy { it.bookAuthor }
         val list = byAuthor.map { (name, mems) ->
-            val finished = mems.filter { statusOf(it) == ReadingMemoryStatusFilter.Finished }
+            val finished = mems.filter { statusOf(it) }
             AuthorItemUi(
                 name = name,
                 bookCount = mems.size,
@@ -148,7 +149,6 @@ class AuthorManageViewModel(
             )
         }
         val sorted = when (sortBy) {
-            AuthorSort.Name -> list.sortedBy { it.name }
             AuthorSort.BookCount -> list.sortedByDescending { it.bookCount }
             AuthorSort.Rating -> list.sortedByDescending { it.avgRating }
         }
@@ -161,21 +161,17 @@ class AuthorManageViewModel(
         bios: Map<String, String>,
     ): AuthorDetailUi {
         val mems = memories.filter { it.bookAuthor == name }
-        val finished = mems.filter { statusOf(it) == ReadingMemoryStatusFilter.Finished }
-        val booksByStatus = ReadingMemoryStatusFilter.entries
-            .filter { it != ReadingMemoryStatusFilter.All }
-            .associateWith { status ->
-                mems.filter { statusOf(it) == status }
-                    .map { AuthorBookItem(it, TagManager.bookDisplayTags(it.kind, it.customTag).toImmutableList()) }
-                    .toImmutableList()
-            }
+        val finished = mems.filter { statusOf(it) }
+        val books = mems
+            .map { AuthorBookItem(it, TagManager.bookDisplayTags(it.kind, it.customTag).toImmutableList()) }
+            .toImmutableList()
         return AuthorDetailUi(
             name = name,
             bio = bios[name] ?: "",
             avgRating = avgRating(finished),
             readBookCount = finished.size,
             bookCount = mems.size,
-            booksByStatus = booksByStatus,
+            books = books,
         )
     }
 }

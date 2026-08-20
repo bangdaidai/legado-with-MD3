@@ -1,24 +1,24 @@
 package io.legado.app.ui.main.my.authorManage
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
-import io.legado.app.ui.book.readingmemory.ReadingMemoryStatusFilter
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
@@ -37,6 +36,7 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 
@@ -69,15 +69,51 @@ private fun AuthorListScreen(
     onIntent: (AuthorManageIntent) -> Unit,
     onBack: () -> Unit,
 ) {
+    var searchActive by rememberSaveable { mutableStateOf(false) }
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
-                GlassMediumFlexibleTopAppBar(
-                    title = stringResource(R.string.author_management),
-                    navigationIcon = { TopBarNavigationButton(onClick = onBack) },
-                )
-                AuthorSortRow(uiState.sortBy) { onIntent(AuthorManageIntent.SetSort(it)) }
-            }
+            GlassMediumFlexibleTopAppBar(
+                title = stringResource(R.string.author_management),
+                scrollBehavior = scrollBehavior,
+                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
+                actions = {
+                    TopBarActionButton(
+                        onClick = { searchActive = !searchActive },
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = stringResource(R.string.search),
+                    )
+                    TopBarActionButton(
+                        onClick = {
+                            onIntent(
+                                AuthorManageIntent.SetSort(
+                                    if (uiState.sortBy == AuthorSort.BookCount) {
+                                        AuthorSort.Rating
+                                    } else {
+                                        AuthorSort.BookCount
+                                    }
+                                )
+                            )
+                        },
+                        imageVector = Icons.Filled.Sort,
+                        contentDescription = stringResource(R.string.sort),
+                    )
+                },
+                bottomContent = if (searchActive) {
+                    {
+                        OutlinedTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = { onIntent(AuthorManageIntent.SetSearchQuery(it)) },
+                            placeholder = { AppText(stringResource(R.string.search)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            singleLine = true,
+                        )
+                    }
+                } else null,
+            )
         },
     ) { contentPadding ->
         if (uiState.authors.isEmpty()) {
@@ -99,28 +135,6 @@ private fun AuthorListScreen(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun AuthorSortRow(
-    sortBy: AuthorSort,
-    onSort: (AuthorSort) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AuthorSort.entries.forEach { sort ->
-            FilterChip(
-                selected = sortBy == sort,
-                onClick = { onSort(sort) },
-                label = { AppText(sort.label) },
-            )
         }
     }
 }
@@ -151,32 +165,23 @@ private fun AuthorCard(
                     modifier = Modifier.weight(1f),
                 )
                 if (author.avgRating > 0f) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ReadingMemoryRatingBar(
-                            rating = author.avgRating,
-                            onRatingChanged = {},
-                            enabled = false,
-                            starSize = 14.dp,
-                        )
-                        AppText(
-                            text = String.format("%.1f", author.avgRating),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    ReadingMemoryRatingBar(
+                        rating = author.avgRating,
+                        onRatingChanged = {},
+                        enabled = false,
+                        starSize = 14.dp,
+                    )
                 }
             }
-            AppText(
-                text = author.bio.ifBlank { stringResource(R.string.author_no_bio) },
-                style = LegadoTheme.typography.bodySmall,
-                color = if (author.bio.isBlank()) {
-                    LegadoTheme.colorScheme.onSurfaceVariant
-                } else {
-                    LegadoTheme.colorScheme.onSurface
-                },
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (author.bio.isNotBlank()) {
+                AppText(
+                    text = author.bio,
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             AppText(
                 text = stringResource(R.string.author_read_count, author.readBookCount)
                         + " · " + stringResource(R.string.author_book_count, author.bookCount),
@@ -195,10 +200,13 @@ private fun AuthorDetailScreen(
     onOpenBook: (String) -> Unit,
 ) {
     val detail = uiState.detail ?: return
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = detail.name,
+                scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onClick = { onIntent(AuthorManageIntent.Back) }) },
                 actions = {
                     TopBarActionButton(
@@ -210,36 +218,32 @@ private fun AuthorDetailScreen(
             )
         },
     ) { contentPadding ->
-        Column(Modifier.fillMaxSize().padding(contentPadding)) {
-            AuthorDetailHeader(
-                detail = detail,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .padding(top = 12.dp),
-            )
-            AuthorDetailTabs(
-                detail = detail,
-                selectedStatus = uiState.detailStatus,
-                onSelect = { onIntent(AuthorManageIntent.SetDetailStatus(it)) },
-            )
-            val books = detail.booksByStatus[uiState.detailStatus] ?: emptyList()
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-            ) {
-                items(books, key = { it.memory.bookUrl }) { item ->
+        LazyColumn(
+            contentPadding = contentPadding,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            item {
+                AuthorDetailHeader(
+                    detail = detail,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .padding(top = 12.dp),
+                )
+            }
+            items(detail.books, key = { it.memory.bookUrl }) { item ->
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                     MemoryBookCard(
                         memory = item.memory,
                         tags = item.tags,
                         settings = uiState.bookshelfSettings,
                         tagColorMap = uiState.tagColorMap,
                         coverWidth = 56,
-                        showIntro = true,
+                        showIntro = false,
                         showReview = true,
+                        showAuthor = false,
+                        ratingInTitle = true,
                         onBookClick = onOpenBook,
                         onBookLongPress = {},
                     )
@@ -267,61 +271,29 @@ private fun AuthorDetailHeader(
                 fontWeight = FontWeight.Bold,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ReadingMemoryRatingBar(
-                    rating = detail.avgRating,
-                    onRatingChanged = {},
-                    enabled = false,
-                    starSize = 16.dp,
-                )
                 if (detail.avgRating > 0f) {
-                    AppText(
-                        text = String.format("%.1f", detail.avgRating),
-                        style = LegadoTheme.typography.labelMedium,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp),
+                    ReadingMemoryRatingBar(
+                        rating = detail.avgRating,
+                        onRatingChanged = {},
+                        enabled = false,
+                        starSize = 16.dp,
                     )
                 }
                 AppText(
-                    text = "  " + stringResource(R.string.author_read_count, detail.readBookCount)
+                    text = stringResource(R.string.author_read_count, detail.readBookCount)
                             + " · " + stringResource(R.string.author_book_count, detail.bookCount),
                     style = LegadoTheme.typography.labelMedium,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = if (detail.avgRating > 0f) 4.dp else 0.dp),
                 )
             }
-            AppText(
-                text = detail.bio.ifBlank { stringResource(R.string.author_no_bio) },
-                style = LegadoTheme.typography.bodySmall,
-                color = if (detail.bio.isBlank()) {
-                    LegadoTheme.colorScheme.onSurfaceVariant
-                } else {
-                    LegadoTheme.colorScheme.onSurface
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun AuthorDetailTabs(
-    detail: AuthorDetailUi,
-    selectedStatus: ReadingMemoryStatusFilter,
-    onSelect: (ReadingMemoryStatusFilter) -> Unit,
-) {
-    val tabs = listOf(
-        ReadingMemoryStatusFilter.Finished to stringResource(R.string.author_tab_finished),
-        ReadingMemoryStatusFilter.Reading to stringResource(R.string.author_tab_reading),
-        ReadingMemoryStatusFilter.ToRead to stringResource(R.string.author_tab_to_read),
-        ReadingMemoryStatusFilter.Abandoned to stringResource(R.string.author_tab_abandoned),
-    )
-    val selectedIndex = tabs.indexOfFirst { it.first == selectedStatus }.coerceAtLeast(0)
-    ScrollableTabRow(selectedTabIndex = selectedIndex) {
-        tabs.forEachIndexed { index, (status, label) ->
-            val count = detail.booksByStatus[status]?.size ?: 0
-            Tab(
-                selected = index == selectedIndex,
-                onClick = { onSelect(status) },
-                text = { AppText("$label $count") },
-            )
+            if (detail.bio.isNotBlank()) {
+                AppText(
+                    text = detail.bio,
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }

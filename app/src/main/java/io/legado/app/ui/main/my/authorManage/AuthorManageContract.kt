@@ -3,13 +3,11 @@ package io.legado.app.ui.main.my.authorManage
 import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.domain.model.settings.BookshelfSettings
-import io.legado.app.ui.book.readingmemory.ReadingMemoryStatusFilter
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
 /** 作者列表排序方式。 */
 enum class AuthorSort(val label: String) {
-    Name("名称"),
     BookCount("书籍数"),
     Rating("评分"),
 }
@@ -33,7 +31,7 @@ data class AuthorBookItem(
     val tags: ImmutableList<String> = persistentListOf(),
 )
 
-/** 作者详情数据：头部信息 + 按阅读状态分组的书籍列表。 */
+/** 作者详情数据：头部信息 + 关联书籍列表。 */
 @Stable
 data class AuthorDetailUi(
     val name: String,
@@ -41,15 +39,15 @@ data class AuthorDetailUi(
     val avgRating: Float,
     val readBookCount: Int,
     val bookCount: Int,
-    val booksByStatus: Map<ReadingMemoryStatusFilter, ImmutableList<AuthorBookItem>>,
+    val books: ImmutableList<AuthorBookItem>,
 )
 
 @Stable
 data class AuthorManageUiState(
     val authors: ImmutableList<AuthorItemUi> = persistentListOf(),
-    val sortBy: AuthorSort = AuthorSort.Rating,
+    val sortBy: AuthorSort = AuthorSort.BookCount,
+    val searchQuery: String = "",
     val selectedAuthorName: String? = null,
-    val detailStatus: ReadingMemoryStatusFilter = ReadingMemoryStatusFilter.Finished,
     val detail: AuthorDetailUi? = null,
     val editingBio: Boolean = false,
     val bookshelfSettings: BookshelfSettings = BookshelfSettings(),
@@ -60,7 +58,7 @@ sealed interface AuthorManageIntent {
     data class SetSort(val sort: AuthorSort) : AuthorManageIntent
     data class ClickAuthor(val name: String) : AuthorManageIntent
     data object Back : AuthorManageIntent
-    data class SetDetailStatus(val status: ReadingMemoryStatusFilter) : AuthorManageIntent
+    data class SetSearchQuery(val query: String) : AuthorManageIntent
     data class ToggleEditBio(val show: Boolean) : AuthorManageIntent
     data class SaveBio(val name: String, val bio: String) : AuthorManageIntent
 }

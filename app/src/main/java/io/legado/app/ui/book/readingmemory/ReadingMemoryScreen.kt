@@ -449,9 +449,12 @@ internal fun MemoryBookCard(
     coverWidth: Int,
     showIntro: Boolean,
     showReview: Boolean,
+    showAuthor: Boolean = true,
+    ratingInTitle: Boolean = false,
     onBookClick: (String) -> Unit,
     onBookLongPress: (String) -> Unit = {},
 ) {
+
     val statusText = when {
         memory.abandoned -> "弃文"
         memory.progress >= 1f -> "已读"
@@ -507,9 +510,18 @@ internal fun MemoryBookCard(
             )
         },
         title = memory.bookName,
-        titleEnd = null,
-        subTitle = memory.bookAuthor,
-        subTitleEnd = if (memory.rating > 0f) {
+        titleEnd = if (ratingInTitle && memory.rating > 0f) {
+            @Composable {
+                ReadingMemoryRatingBar(
+                    rating = memory.rating,
+                    onRatingChanged = {},
+                    enabled = false,
+                    starSize = 12.dp,
+                )
+            }
+        } else null,
+        subTitle = if (showAuthor) memory.bookAuthor else null,
+        subTitleEnd = if (!ratingInTitle && memory.rating > 0f) {
             @Composable {
                 ReadingMemoryRatingBar(
                     rating = memory.rating,
