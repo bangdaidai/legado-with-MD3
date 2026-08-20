@@ -82,6 +82,7 @@ sealed interface ReadingMemoryDetailIntent {
     data class RemoveProtagonist(val name: String) : ReadingMemoryDetailIntent
     data object OpenBookInfo : ReadingMemoryDetailIntent
     data object OpenBookInfoEdit : ReadingMemoryDetailIntent
+    data object OpenBook : ReadingMemoryDetailIntent
     data object DeleteReview : ReadingMemoryDetailIntent
     data class EditMarking(val marking: BookMarking) : ReadingMemoryDetailIntent
     data class DeleteMarking(val id: String) : ReadingMemoryDetailIntent
@@ -103,4 +104,5 @@ sealed interface ReadingMemoryDetailEffect {
         val bookUrl: String,
     ) : ReadingMemoryDetailEffect
     data class OpenBookInfoEdit(val bookUrl: String) : ReadingMemoryDetailEffect
+    data class OpenReadBook(val bookUrl: String) : ReadingMemoryDetailEffect
 }

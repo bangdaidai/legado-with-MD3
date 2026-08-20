@@ -1505,6 +1505,9 @@ fun MainActivity.mainEntryProvider(
                             putExtra("bookUrl", effect.bookUrl)
                         }
                     }
+                    is ReadingMemoryDetailEffect.OpenReadBook -> {
+                        onNavigateToRoute(MainRouteReadBook(bookUrl = effect.bookUrl))
+                    }
                 }
             }
         }

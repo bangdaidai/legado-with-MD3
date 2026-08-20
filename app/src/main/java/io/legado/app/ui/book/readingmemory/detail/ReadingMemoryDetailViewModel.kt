@@ -248,6 +248,9 @@ class ReadingMemoryDetailViewModel(
                                 ),
                             )
                         }
+                        is ReadingMemoryDetailIntent.OpenBook -> {
+                            _effectFlow.tryEmit(ReadingMemoryDetailEffect.OpenReadBook(bookUrl))
+                        }
                         is ReadingMemoryDetailIntent.OpenBookInfoEdit -> {
                             _effectFlow.tryEmit(
                                 ReadingMemoryDetailEffect.OpenBookInfoEdit(bookUrl),

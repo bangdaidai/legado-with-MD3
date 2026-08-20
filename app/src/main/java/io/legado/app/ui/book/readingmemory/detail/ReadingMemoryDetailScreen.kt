@@ -233,7 +233,8 @@ private fun BookInfoSection(
                 modifier = Modifier
                     .width(64.dp)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp)),
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onIntent(ReadingMemoryDetailIntent.OpenBook) },
             )
             Column(
                 modifier = Modifier
