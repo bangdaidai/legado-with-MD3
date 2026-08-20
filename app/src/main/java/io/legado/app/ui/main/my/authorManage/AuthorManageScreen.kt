@@ -7,13 +7,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +34,9 @@ import io.legado.app.R
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -100,19 +106,20 @@ private fun AuthorListScreen(
                         contentDescription = stringResource(R.string.sort),
                     )
                 },
-                bottomContent = if (searchActive) {
-                    {
-                        OutlinedTextField(
-                            value = uiState.searchQuery,
-                            onValueChange = { onIntent(AuthorManageIntent.SetSearchQuery(it)) },
-                            placeholder = { AppText(stringResource(R.string.search)) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            singleLine = true,
+                bottomContent = {
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = searchActive,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SearchBar(
+                            query = uiState.searchQuery,
+                            onQueryChange = { onIntent(AuthorManageIntent.SetSearchQuery(it)) },
+                            placeholder = stringResource(R.string.search),
                         )
                     }
-                } else null,
+                },
             )
         },
     ) { contentPadding ->
