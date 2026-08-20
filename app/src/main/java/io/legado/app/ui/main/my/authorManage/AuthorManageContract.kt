@@ -47,22 +47,27 @@ data class AuthorManageUiState(
     val authors: ImmutableList<AuthorItemUi> = persistentListOf(),
     val sortBy: AuthorSort = AuthorSort.BookCount,
     val searchQuery: String = "",
-    val selectedAuthorName: String? = null,
+)
+
+sealed interface AuthorManageIntent {
+    data class SetSort(val sort: AuthorSort) : AuthorManageIntent
+    data class SetSearchQuery(val query: String) : AuthorManageIntent
+}
+
+@Stable
+data class AuthorDetailUiState(
     val detail: AuthorDetailUi? = null,
     val editingBio: Boolean = false,
     val bookshelfSettings: BookshelfSettings = BookshelfSettings(),
     val tagColorMap: Map<String, Long> = emptyMap(),
 )
 
-sealed interface AuthorManageIntent {
-    data class SetSort(val sort: AuthorSort) : AuthorManageIntent
-    data class ClickAuthor(val name: String) : AuthorManageIntent
-    data object Back : AuthorManageIntent
-    data class SetSearchQuery(val query: String) : AuthorManageIntent
-    data class ToggleEditBio(val show: Boolean) : AuthorManageIntent
-    data class SaveBio(val name: String, val bio: String) : AuthorManageIntent
+sealed interface AuthorDetailIntent {
+    data object ToggleEditBio : AuthorDetailIntent
+    data class SaveBio(val bio: String) : AuthorDetailIntent
+    data object DismissEditBio : AuthorDetailIntent
 }
 
-sealed interface AuthorManageEffect {
-    data class ShowToast(val message: String) : AuthorManageEffect
+sealed interface AuthorDetailEffect {
+    data class ShowToast(val message: String) : AuthorDetailEffect
 }

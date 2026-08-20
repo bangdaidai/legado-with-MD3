@@ -111,7 +111,10 @@ object MainNavigator {
             is MainRouteReadManga -> {
                 if (
                     currentRoute == MainRouteHome ||
-                    currentRoute is MainRouteBookInfo
+                    currentRoute is MainRouteBookInfo ||
+                    currentRoute is MainRouteReadingMemory ||
+                    currentRoute is MainRouteReadingMemoryDetail ||
+                    currentRoute is MainRouteAuthorDetail
                 ) {
                     backStack.add(route)
                 } else {
@@ -150,7 +153,10 @@ object MainNavigator {
                     currentRoute == MainRouteHome ||
                     currentRoute is MainRouteBookInfo ||
                     currentRoute is MainRouteExploreShow ||
-                    currentRoute is MainRouteSearch
+                    currentRoute is MainRouteSearch ||
+                    currentRoute is MainRouteReadingMemory ||
+                    currentRoute is MainRouteReadingMemoryDetail ||
+                    currentRoute is MainRouteAuthorDetail
                 ) {
                     backStack.add(route)
                 } else {
@@ -166,8 +172,10 @@ object MainNavigator {
                     currentRoute is MainRouteSearch ||
                     currentRoute is MainRouteExploreShow ||
                     currentRoute is MainRouteBookInfo ||
+                    currentRoute is MainRouteReadingMemory ||
                     currentRoute is MainRouteReadingMemoryDetail ||
-                    currentRoute is MainRouteReadManga
+                    currentRoute is MainRouteReadManga ||
+                    currentRoute is MainRouteAuthorDetail
                 ) {
                     backStack.add(route)
                 } else {
@@ -215,7 +223,22 @@ object MainNavigator {
                 if (
                     currentRoute is MainRouteBookInfo ||
                     currentRoute is MainRouteReadingMemory ||
-                    currentRoute is MainRouteReadBook
+                    currentRoute is MainRouteReadBook ||
+                    currentRoute == MainRouteAuthorManagement ||
+                    currentRoute is MainRouteAuthorDetail
+                ) {
+                    backStack.add(route)
+                } else {
+                    backStack.clear()
+                    backStack.add(MainRouteHome)
+                    backStack.add(route)
+                }
+            }
+
+            is MainRouteAuthorDetail -> {
+                if (
+                    currentRoute == MainRouteAuthorManagement ||
+                    currentRoute is MainRouteAuthorDetail
                 ) {
                     backStack.add(route)
                 } else {

@@ -308,6 +308,7 @@ import io.legado.app.ui.main.explore.ExploreViewModel
 import io.legado.app.ui.main.home.HomeViewModel
 import io.legado.app.ui.main.homepage.HomepageViewModel
 import io.legado.app.ui.main.my.MyViewModel
+import io.legado.app.ui.main.my.authorManage.AuthorDetailViewModel
 import io.legado.app.ui.main.my.authorManage.AuthorManageViewModel
 import io.legado.app.ui.main.rss.RssViewModel
 import io.legado.app.ui.replace.ReplaceEditRoute
@@ -560,6 +561,14 @@ val appModule = module {
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)
     viewModelOf(::AuthorManageViewModel)
+    viewModel { (name: String) ->
+        AuthorDetailViewModel(
+            name = name,
+            repository = get(),
+            bookshelfSettingsGateway = get(),
+            themeSettingsGateway = get(),
+        )
+    }
     viewModelOf(::ExcludedTagViewModel)
     viewModel { (tagId: Long) ->
         TagDetailViewModel(tagId)

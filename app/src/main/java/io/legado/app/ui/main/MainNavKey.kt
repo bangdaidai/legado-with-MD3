@@ -254,6 +254,11 @@ data object MainRouteTagManagement : MainRoute
 data object MainRouteAuthorManagement : MainRoute
 
 @Serializable
+data class MainRouteAuthorDetail(
+    val name: String,
+) : MainRoute
+
+@Serializable
 data class MainRouteTagDetail(val tagId: Long) : MainRoute
 
 @Serializable
