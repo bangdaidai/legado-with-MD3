@@ -339,6 +339,8 @@ interface JsExtensions : JsEncodeUtils {
 
     fun startBrowser(url: String, title: String, html: String?) {
         rhinoContext.ensureActive()
+        JsProbe.step("startBrowser(不等待)", "$title|${url.take(60)}|html=${html?.length ?: -1}")
+        JsProbe.dump("startBrowser")
         SourceVerificationHelp.startBrowser(getSource(), url, title, html = html)
     }
 
