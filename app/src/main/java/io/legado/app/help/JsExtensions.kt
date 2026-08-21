@@ -385,6 +385,7 @@ interface JsExtensions : JsEncodeUtils {
             "browserResult",
             "len=${body.length} 含已确认=${body.contains("已确认")} url=${url2.take(40)}"
         )
+        JsProbe.dump("browserResult")
         return StrResponse(url2.ifEmpty { url }, body)
     }
 

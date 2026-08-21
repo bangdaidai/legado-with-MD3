@@ -44,7 +44,13 @@ object JsProbe {
         // 书源按异常文本长度循环弹同一条提示，只记一次，别把前面的关键轨迹挤掉
         val entry = "toast=${brief(msg)} ▸ "
         if (!sb.endsWith(entry)) sb.append(entry)
-        if (msg.contains("暂不开放") || msg.contains("未开放")) flush("toast")
+        flush("toast")
+    }
+
+    /** 强制输出当前轨迹，忽略冷却，用于验证网页回传这种必看节点 */
+    fun dump(where: String) {
+        lastFlushAt = 0L
+        flush(where)
     }
 
     private fun flush(where: String) {
