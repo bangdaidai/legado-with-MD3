@@ -52,6 +52,7 @@ class BookVoiceCastingViewModel(
             }
             is BookVoiceCastingIntent.AssignVoice -> assignVoice(intent.voiceId)
             BookVoiceCastingIntent.ClearBinding -> clearBinding()
+            is BookVoiceCastingIntent.PromoteCharacter -> promoteCharacter(intent.subjectId)
         }
     }
 
@@ -61,8 +62,11 @@ class BookVoiceCastingViewModel(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 profiles = withContext(Dispatchers.IO) {
-                    bookKnowledgeGateway.getCharacterProfiles(bookUrl, 200)
-                        .filter { it.status == BookCharacterProfile.STATUS_ACTIVE }
+                    bookKnowledgeGateway.getCharacterProfiles(bookUrl, 200, includeDrafts = true)
+                        .filter {
+                            it.status == BookCharacterProfile.STATUS_ACTIVE ||
+                                it.status == BookCharacterProfile.STATUS_DRAFT
+                        }
                 }
                 combine(
                     voiceGateway.observeVoices(),
@@ -99,7 +103,11 @@ class BookVoiceCastingViewModel(
             VoiceCastingItemUi(
                 subjectType = BookVoiceBinding.SUBJECT_CHARACTER,
                 subjectId = profile.id,
-                kind = CastingSubjectKind.Character,
+                kind = if (profile.status == BookCharacterProfile.STATUS_DRAFT) {
+                    CastingSubjectKind.TemporaryCharacter
+                } else {
+                    CastingSubjectKind.Character
+                },
                 name = profile.name,
                 description = profile.role,
                 avatarUri = profile.avatarUri,
@@ -193,6 +201,39 @@ class BookVoiceCastingViewModel(
                     )
                 )
                 _uiState.update { it.copy(picker = null) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                showSaveError(e)
+            }
+        }
+    }
+
+    /**
+     * 用户点「转正」才把草稿角色卡转成正式角色卡。
+     *
+     * 角色卡 id 不变，所以 [BookVoiceBinding.subjectId] 一个字都不用改，不存在绑定迁移。
+     */
+    private fun promoteCharacter(subjectId: String) {
+        val draft = profiles.firstOrNull {
+            it.id == subjectId && it.status == BookCharacterProfile.STATUS_DRAFT
+        } ?: return
+        viewModelScope.launch {
+            try {
+                val promoted = draft.copy(
+                    status = BookCharacterProfile.STATUS_ACTIVE,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                withContext(Dispatchers.IO) {
+                    bookKnowledgeGateway.upsertCharacterProfile(promoted)
+                }
+                profiles = profiles.map { if (it.id == promoted.id) promoted else it }
+                publishState()
+                _effects.tryEmit(
+                    BookVoiceCastingEffect.ShowToast(
+                        appCtx.getString(R.string.voice_promoted_to_character, promoted.name)
+                    )
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {

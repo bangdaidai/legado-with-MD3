@@ -25,8 +25,9 @@ class BookKnowledgeRepository(
     override suspend fun getCharacterProfiles(
         bookUrl: String,
         limit: Int,
+        includeDrafts: Boolean,
     ): List<BookCharacterProfile> = withContext(Dispatchers.IO) {
-        dao.getCharacterProfiles(bookUrl, limit.coerceIn(1, 80))
+        dao.getCharacterProfiles(bookUrl, limit.coerceIn(1, 80), includeDrafts)
     }
 
     override suspend fun getCharacterProfile(

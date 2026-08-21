@@ -29,18 +29,25 @@ interface BookKnowledgeDao {
         limit: Int,
     ): List<BookCharacterProfile>
 
+    /**
+     * [includeDrafts] 默认不含草稿卡：草稿是 AI 分镜时认出的临时说话人，只有配音页需要看到，
+     * 人物列表 / 关系图 / 事件选人都只认转正后的正式角色。
+     * 排序把草稿压到最后，避免草稿把正式角色挤出 limit。
+     */
     @Query(
         """
         select * from book_character_profiles
         where bookUrl = :bookUrl
           and status != ${BookCharacterProfile.STATUS_DELETED}
-        order by updatedAt desc
+          and (:includeDrafts or status != ${BookCharacterProfile.STATUS_DRAFT})
+        order by status = ${BookCharacterProfile.STATUS_DRAFT}, updatedAt desc
         limit :limit
         """
     )
     suspend fun getCharacterProfiles(
         bookUrl: String,
         limit: Int,
+        includeDrafts: Boolean = false,
     ): List<BookCharacterProfile>
 
     @Query(

@@ -16,6 +16,7 @@ interface BookKnowledgeGateway {
     suspend fun getCharacterProfiles(
         bookUrl: String,
         limit: Int = 30,
+        includeDrafts: Boolean = false,
     ): List<BookCharacterProfile>
 
     suspend fun getCharacterProfile(

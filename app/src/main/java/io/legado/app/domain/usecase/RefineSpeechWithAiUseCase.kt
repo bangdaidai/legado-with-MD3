@@ -26,6 +26,7 @@ import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
+import kotlin.uuid.Uuid
 
 class RefineSpeechWithAiUseCase(
     private val aiProfileGateway: AiProfileGateway,
@@ -37,7 +38,7 @@ class RefineSpeechWithAiUseCase(
     suspend fun resolverVersion(bookUrl: String, mode: SpeechAnalysisMode): String {
         if (mode == SpeechAnalysisMode.Rule) return RuleBasedSpeechSegmenter.VERSION
         val preset = resolvePreset()
-        val profiles = activeProfiles(bookUrl)
+        val profiles = knownProfiles(bookUrl)
         val characterRevision = profiles
             .sortedBy(BookCharacterProfile::id)
             .joinToString("|") { "${it.id}:${it.updatedAt}" }
@@ -64,7 +65,7 @@ class RefineSpeechWithAiUseCase(
             analysisResult.fromCache &&
             analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
         ) return analysisResult
-        val profiles = activeProfiles(analysisResult.analysis.bookUrl)
+        val profiles = knownProfiles(analysisResult.analysis.bookUrl)
         val preset = resolvePreset()
         val refined = when (mode) {
             SpeechAnalysisMode.Rule -> analysisResult.segments
@@ -148,12 +149,20 @@ class RefineSpeechWithAiUseCase(
                 "AI did not return every requested segment"
             }
         }
-        val profilesById = profiles.associateBy(BookCharacterProfile::id)
+        val allProfiles = ensureDraftProfiles(
+            bookUrl = analysisResult.analysis.bookUrl,
+            profiles = profiles,
+            speakers = updates.values.mapNotNull { it.newSpeaker() },
+            now = now,
+        )
+        val profilesById = allProfiles.associateBy(BookCharacterProfile::id)
+        val profilesByName = allProfiles.associateBy { it.name.trim() }
         return analysisResult.segments.map { segment ->
             if (segment !in candidates) return@map segment
             val decision = updates[segment.id]
             val roleType = decision?.roleType ?: segment.roleType
             val character = decision?.characterId?.let(profilesById::get)
+                ?: decision?.speakerName?.trim()?.let(profilesByName::get)
             segment.copy(
                 roleType = roleType,
                 characterId = if (roleType == SpeechRoleType.Narrator) null else character?.id,
@@ -166,6 +175,54 @@ class RefineSpeechWithAiUseCase(
         }
     }
 
+    /** AI 认出的人物声音，但没命中已有角色卡时，返回待建草稿卡的「名字 to 性别」。 */
+    private fun AiSegmentDecision.newSpeaker(): Pair<String, String>? {
+        if (characterId != null) return null
+        if (roleType != SpeechRoleType.Character && roleType != SpeechRoleType.Thought) return null
+        return speakerName?.let { it to speakerGender }
+    }
+
+    private fun AiAtomGroup.newSpeaker(): Pair<String, String>? {
+        if (characterId != null) return null
+        if (roleType != SpeechRoleType.Character && roleType != SpeechRoleType.Thought) return null
+        return speakerName?.let { it to speakerGender }
+    }
+
+    /**
+     * 把 AI 认出但还没进角色卡的说话人落成草稿角色卡（临时说话人）。
+     *
+     * 草稿卡在配音页单独一栏、可以直接绑音色、在朗读里参与路由，但只有用户点「转正」才会变成正式角色卡。
+     * 按名字去重，因为 `book_character_profiles` 对 (bookUrl, name) 有唯一索引。
+     */
+    private suspend fun ensureDraftProfiles(
+        bookUrl: String,
+        profiles: List<BookCharacterProfile>,
+        speakers: List<Pair<String, String>>,
+        now: Long,
+    ): List<BookCharacterProfile> {
+        if (speakers.isEmpty()) return profiles
+        val existingNames = profiles.mapTo(hashSetOf()) { it.name.trim() }
+        val created = mutableListOf<BookCharacterProfile>()
+        speakers.distinctBy { it.first.trim() }.forEach { (name, gender) ->
+            val trimmed = name.trim()
+            if (trimmed.isBlank() || !existingNames.add(trimmed)) return@forEach
+            val profile = BookCharacterProfile(
+                id = Uuid.random().toString(),
+                bookUrl = bookUrl,
+                name = trimmed,
+                voiceGender = gender,
+                status = BookCharacterProfile.STATUS_DRAFT,
+                source = BookCharacterProfile.SOURCE_AI,
+                confidence = DRAFT_SPEAKER_CONFIDENCE,
+                createdAt = now,
+                updatedAt = now,
+            )
+            bookKnowledgeGateway.upsertCharacterProfile(profile)
+            created += profile
+        }
+        return profiles + created
+    }
+
     private suspend fun understandAtoms(
         analysisResult: ChapterSpeechAnalysisResult,
         paragraphs: List<CanonicalSpeechParagraph>,
@@ -175,20 +232,29 @@ class RefineSpeechWithAiUseCase(
     ): List<ChapterSpeechSegment> {
         val atoms = paragraphs.flatMap(AiSpeechAtomizer::atomize)
         if (atoms.isEmpty()) return analysisResult.segments
-        val profilesById = profiles.associateBy(BookCharacterProfile::id)
+        var knownProfiles = profiles
         val result = mutableListOf<ChapterSpeechSegment>()
         atoms.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
             val payload = mapOf(
-                "characters" to profiles.map { it.toPromptMap() },
+                "characters" to knownProfiles.map { it.toPromptMap() },
                 "atoms" to chunk.map { atom ->
                     mapOf("atomId" to atom.id, "text" to atom.text)
                 },
             )
             val groups = parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload))
             validateCoverage(chunk, groups)
+            val knownIds = knownProfiles.mapTo(hashSetOf(), BookCharacterProfile::id)
             require(groups.all { group ->
-                group.characterId == null || profilesById.containsKey(group.characterId)
+                group.characterId == null || group.characterId in knownIds
             }) { "AI returned an unknown characterId" }
+            knownProfiles = ensureDraftProfiles(
+                bookUrl = analysisResult.analysis.bookUrl,
+                profiles = knownProfiles,
+                speakers = groups.mapNotNull { it.newSpeaker() },
+                now = now,
+            )
+            val profilesById = knownProfiles.associateBy(BookCharacterProfile::id)
+            val profilesByName = knownProfiles.associateBy { it.name.trim() }
             val atomsById = chunk.associateBy(AiSpeechAtom::id)
             groups.forEach { group ->
                 val groupedAtoms = group.atomIds.map(atomsById::getValue)
@@ -199,6 +265,7 @@ class RefineSpeechWithAiUseCase(
                 val last = groupedAtoms.last()
                 val paragraph = paragraphs.first { it.index == first.paragraphIndex }
                 val character = group.characterId?.let(profilesById::get)
+                    ?: group.speakerName?.trim()?.let(profilesByName::get)
                 result += ChapterSpeechSegment(
                     id = SpeechIdentity.segmentId(
                         analysisId = analysisResult.analysis.id,
@@ -248,9 +315,17 @@ class RefineSpeechWithAiUseCase(
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: error("No AI model configured for speech analysis")
 
-    private suspend fun activeProfiles(bookUrl: String): List<BookCharacterProfile> =
-        bookKnowledgeGateway.getCharacterProfiles(bookUrl, 200)
-            .filter { it.status == BookCharacterProfile.STATUS_ACTIVE }
+    /**
+     * 正式角色卡 + 草稿角色卡（临时说话人）。
+     *
+     * 草稿也要喂给 AI，否则同一个说话人每章都会被当成新人重新建卡。
+     */
+    private suspend fun knownProfiles(bookUrl: String): List<BookCharacterProfile> =
+        bookKnowledgeGateway.getCharacterProfiles(bookUrl, 200, includeDrafts = true)
+            .filter {
+                it.status == BookCharacterProfile.STATUS_ACTIVE ||
+                    it.status == BookCharacterProfile.STATUS_DRAFT
+            }
 
     private fun systemPrompt(preset: AiTaskPresetConfig, mode: SpeechAnalysisMode): String {
         val custom = preset.promptTemplate.takeIf {
@@ -259,15 +334,18 @@ class RefineSpeechWithAiUseCase(
         return buildString {
             append(custom ?: DEFAULT_PROMPT)
             append("\nReturn only one JSON object. Never rewrite text and never invent IDs.")
+            append(SPEAKER_RULES)
             if (mode == SpeechAnalysisMode.RuleWithAi) {
                 append("\nReturn {\"segments\":[{\"segmentId\":string,\"roleType\":")
                 append("\"narrator|character|thought|unknown\",\"characterId\":string|null,")
+                append("\"speakerName\":string|null,\"speakerGender\":\"male|female|unknown\",")
                 append("\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\",")
                 append("\"confidence\":number}]}. Return one decision for every input segment.")
             } else {
                 append("\nGroup every atom exactly once and in input order. Groups cannot cross paragraphs.")
                 append("\nReturn {\"segments\":[{\"atomIds\":[string],\"roleType\":")
                 append("\"narrator|character|thought|unknown\",\"characterId\":string|null,")
+                append("\"speakerName\":string|null,\"speakerGender\":\"male|female|unknown\",")
                 append("\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\",")
                 append("\"confidence\":number}]}.")
             }
@@ -281,6 +359,8 @@ class RefineSpeechWithAiUseCase(
                 segmentId = item.requiredString("segmentId"),
                 roleType = item.roleType(),
                 characterId = item.optionalString("characterId"),
+                speakerName = item.speakerName(),
+                speakerGender = item.speakerGender(),
                 emotion = item.emotion(),
                 confidence = item.confidence(),
             )
@@ -293,6 +373,8 @@ class RefineSpeechWithAiUseCase(
                 atomIds = item.getAsJsonArray("atomIds").map { it.asString },
                 roleType = item.roleType(),
                 characterId = item.optionalString("characterId"),
+                speakerName = item.speakerName(),
+                speakerGender = item.speakerGender(),
                 emotion = item.emotion(),
                 confidence = item.confidence(),
             )
@@ -315,6 +397,19 @@ class RefineSpeechWithAiUseCase(
 
     private fun JsonObject.emotion(): String =
         SpeechEmotion.fromStorage(optionalString("emotion").orEmpty()).storageValue
+
+    /** 正文给出的稳定称呼；泛称（大汉、老捕头之类）一律当路人，不建卡。 */
+    private fun JsonObject.speakerName(): String? =
+        optionalString("speakerName")?.trim()?.takeIf { it.isNotBlank() && it.length <= 24 }
+
+    private fun JsonObject.speakerGender(): String {
+        val value = optionalString("speakerGender")?.trim().orEmpty()
+        return if (value in BookCharacterProfile.ALL_VOICE_GENDERS) {
+            value
+        } else {
+            BookCharacterProfile.VOICE_GENDER_UNKNOWN
+        }
+    }
 
     private fun JsonObject.confidence(): Float =
         get("confidence")?.takeUnless { it.isJsonNull }?.asFloat?.coerceIn(0f, 1f) ?: 0f
@@ -369,6 +464,8 @@ class RefineSpeechWithAiUseCase(
         val segmentId: String,
         val roleType: SpeechRoleType,
         val characterId: String?,
+        val speakerName: String?,
+        val speakerGender: String,
         val emotion: String,
         val confidence: Float,
     )
@@ -377,17 +474,41 @@ class RefineSpeechWithAiUseCase(
         val atomIds: List<String>,
         val roleType: SpeechRoleType,
         val characterId: String?,
+        val speakerName: String?,
+        val speakerGender: String,
         val emotion: String,
         val confidence: Float,
     )
 
     companion object {
-        const val VERSION = "ai-speech-analysis-v1"
+        const val VERSION = "ai-speech-analysis-v2"
         private const val MAX_CHUNK_CHARS = 6_000
         private const val HYBRID_CONFIDENCE_THRESHOLD = 0.75f
+        private const val DRAFT_SPEAKER_CONFIDENCE = 0.6f
         private const val DEFAULT_PROMPT =
             "Analyze fiction speech for text-to-speech. Distinguish narration, spoken dialogue, " +
                 "internal thought and unknown speech. Resolve speakers only from the supplied " +
                 "character IDs, infer emotion conservatively, and use null when uncertain."
+
+        /**
+         * 说话人归因规则。要点：别名必须映射回已有身份、泛称当路人、性别必须有原文依据。
+         * 允许返回 characterId=null + speakerName，客户端会为它建一张草稿角色卡。
+         */
+        private const val SPEAKER_RULES =
+            "\nSpeaker attribution rules:" +
+                "\n- Prefer an existing characterId. Nicknames, online handles, titles and childhood " +
+                "names are labels of an existing person: if the text maps such a label to a known " +
+                "character, reuse that characterId instead of reporting a new speaker." +
+                "\n- When the speaker is clearly a person but matches no known character, set " +
+                "characterId to null and put the stable name, nickname or unique title in " +
+                "speakerName. The client will create a draft character for it." +
+                "\n- Generic labels such as a big man, a guard, an old constable, or a passer-by are " +
+                "not stable speakers: leave both characterId and speakerName null." +
+                "\n- speakerGender must be backed by explicit wording in the text such as a gendered " +
+                "pronoun or a gendered form of address. Names, surnames, titles and occupations are " +
+                "not gender evidence; return unknown instead of guessing." +
+                "\n- A high confidence value never substitutes for evidence." +
+                "\n- Narration and other non-person voices: characterId null, speakerName null, " +
+                "speakerGender unknown."
     }
 }

@@ -50,6 +50,9 @@ enum class CastingSubjectKind {
     UnknownFemale,
     Unknown,
     Character,
+
+    /** AI 认出但还没转正的说话人，对应草稿角色卡 */
+    TemporaryCharacter,
 }
 
 sealed interface BookVoiceCastingIntent {
@@ -59,6 +62,7 @@ sealed interface BookVoiceCastingIntent {
     data object DismissVoicePicker : BookVoiceCastingIntent
     data class AssignVoice(val voiceId: String) : BookVoiceCastingIntent
     data object ClearBinding : BookVoiceCastingIntent
+    data class PromoteCharacter(val subjectId: String) : BookVoiceCastingIntent
 }
 
 sealed interface BookVoiceCastingEffect {

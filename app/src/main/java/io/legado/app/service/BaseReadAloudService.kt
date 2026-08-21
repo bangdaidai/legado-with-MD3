@@ -412,7 +412,10 @@ abstract class BaseReadAloudService : BaseService(),
         chapterIndex: Int,
         textChapter: TextChapter,
     ): List<SpeechPlanItem> {
-        if (bookUrl.isEmpty() || !ReadConfig.useMultiSpeaker) return emptyList()
+        if (bookUrl.isEmpty() || !ReadConfig.useMultiSpeaker) {
+            AppLog.putDebug("跳过多角色朗读计划 有书=${bookUrl.isNotEmpty()} 多角色开关=${ReadConfig.useMultiSpeaker}")
+            return emptyList()
+        }
         val prepareSpeechPlan: PrepareChapterSpeechPlanUseCase =
             get(PrepareChapterSpeechPlanUseCase::class.java)
         return runCatching {

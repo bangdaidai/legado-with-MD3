@@ -172,6 +172,7 @@ import io.legado.app.domain.usecase.AiToolAwareGenerationUseCase
 import io.legado.app.domain.usecase.AnalyzeChapterSpeechUseCase
 import io.legado.app.domain.usecase.AppStartupMaintenanceUseCase
 import io.legado.app.domain.usecase.ApplyBookshelfAutoGroupPlanUseCase
+import io.legado.app.domain.usecase.AutoAssignVoiceBindingsUseCase
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
@@ -442,6 +443,7 @@ val appModule = module {
     singleOf(::BuildSpeechPlanUseCase)
     singleOf(::AnalyzeChapterSpeechUseCase)
     singleOf(::ResolveLocalSpeakersUseCase)
+    singleOf(::AutoAssignVoiceBindingsUseCase)
     singleOf(::PrepareChapterSpeechPlanUseCase)
     singleOf(::RefineSpeechWithAiUseCase)
     singleOf(::SyncReadAloudVoicesUseCase)

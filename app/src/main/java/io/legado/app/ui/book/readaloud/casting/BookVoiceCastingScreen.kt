@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -130,8 +131,12 @@ private fun VoiceCastingList(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
-    val specialItems = state.items.filter { it.kind != CastingSubjectKind.Character }
+    val specialItems = state.items.filter {
+        it.kind != CastingSubjectKind.Character &&
+            it.kind != CastingSubjectKind.TemporaryCharacter
+    }
     val characters = state.items.filter { it.kind == CastingSubjectKind.Character }
+    val temporaries = state.items.filter { it.kind == CastingSubjectKind.TemporaryCharacter }
     LazyColumn(
         modifier = modifier,
         contentPadding = adaptiveContentPadding(
@@ -187,6 +192,30 @@ private fun VoiceCastingList(
                 VoiceCastingCard(item = item, onIntent = onIntent)
             }
         }
+        if (temporaries.isNotEmpty()) {
+            item(contentType = "section") {
+                AppText(
+                    text = stringResource(R.string.voice_temporary_speakers),
+                    style = LegadoTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+            }
+            item(contentType = "intro") {
+                AppText(
+                    text = stringResource(R.string.voice_temporary_speakers_summary),
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            items(
+                items = temporaries,
+                key = { "${it.subjectType}:${it.subjectId}" },
+                contentType = { "casting" },
+            ) { item ->
+                VoiceCastingCard(item = item, onIntent = onIntent)
+            }
+        }
     }
 }
 
@@ -227,7 +256,8 @@ private fun VoiceCastingCard(
                     AppIcon(
                         imageVector = when (item.kind) {
                             CastingSubjectKind.Narrator -> Icons.AutoMirrored.Filled.MenuBook
-                            CastingSubjectKind.Character -> Icons.Default.Person
+                            CastingSubjectKind.Character,
+                            CastingSubjectKind.TemporaryCharacter -> Icons.Default.Person
                             else -> Icons.Default.RecordVoiceOver
                         },
                         contentDescription = null,
@@ -254,15 +284,34 @@ private fun VoiceCastingCard(
                     )
                 }
             },
-            trailingContent = if (item.hasBinding && !item.voiceAvailable) {
-                {
-                    AppIcon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = stringResource(R.string.voice_unavailable),
-                        tint = LegadoTheme.colorScheme.error,
-                    )
+            trailingContent = when {
+                item.kind == CastingSubjectKind.TemporaryCharacter -> {
+                    {
+                        TextButton(
+                            onClick = {
+                                onIntent(BookVoiceCastingIntent.PromoteCharacter(item.subjectId))
+                            },
+                        ) {
+                            AppText(
+                                text = stringResource(R.string.voice_promote_action),
+                                style = LegadoTheme.typography.labelLarge,
+                            )
+                        }
+                    }
                 }
-            } else null,
+
+                item.hasBinding && !item.voiceAvailable -> {
+                    {
+                        AppIcon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = stringResource(R.string.voice_unavailable),
+                            tint = LegadoTheme.colorScheme.error,
+                        )
+                    }
+                }
+
+                else -> null
+            },
         ) {
             AnimatedTextLine(text = title)
         }
@@ -337,7 +386,8 @@ private fun subjectTitle(kind: CastingSubjectKind, name: String): String = when 
     CastingSubjectKind.UnknownMale -> stringResource(R.string.voice_role_unknown_male)
     CastingSubjectKind.UnknownFemale -> stringResource(R.string.voice_role_unknown_female)
     CastingSubjectKind.Unknown -> stringResource(R.string.voice_role_unknown)
-    CastingSubjectKind.Character -> name
+    CastingSubjectKind.Character,
+    CastingSubjectKind.TemporaryCharacter -> name
 }
 
 @Composable

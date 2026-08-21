@@ -20,6 +20,7 @@ import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.CloudTtsSynthesisRequest
 import io.legado.app.domain.model.readaloud.CloudTtsVoiceCatalogType
 import io.legado.app.domain.model.readaloud.CloudTtsVoiceConfig
+import io.legado.app.domain.model.readaloud.HttpTtsVoice
 import io.legado.app.domain.model.readaloud.ReadAloudEngineSelection
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechIdentity
@@ -31,7 +32,9 @@ import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
 import io.legado.app.help.readaloud.playback.CloudTtsAudioSynthesizer
+import io.legado.app.help.readaloud.playback.HttpTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsVoiceCatalog
 import io.legado.app.lib.dialogs.SelectItem
@@ -380,13 +383,29 @@ class CloudTtsViewModel(
                     )
                 }
             } else {
-                listOf(CloudTtsDiscoveredVoiceUi(
-                    id = DEFAULT_ENGINE_VOICE_ID,
-                    label = application.getString(R.string.cloud_tts_engine_default_voice),
-                    locale = "",
-                    styles = persistentListOf(),
-                    roles = persistentListOf(),
-                ))
+                // jsLib 里定义了 voices() 的引擎，音色由 syncConfiguredTtsVoices 同步进音色表；
+                // 没定义就只有引擎自己的默认音色
+                voices.filter {
+                    it.engineType == ReadAloudVoice.ENGINE_HTTP &&
+                            it.engineId == editor.engineId &&
+                            it.speakerId.isNotBlank()
+                }.map { voice ->
+                    CloudTtsDiscoveredVoiceUi(
+                        id = voice.speakerId,
+                        label = voice.displayName,
+                        locale = "",
+                        styles = persistentListOf(),
+                        roles = persistentListOf(),
+                    )
+                }.ifEmpty {
+                    listOf(CloudTtsDiscoveredVoiceUi(
+                        id = DEFAULT_ENGINE_VOICE_ID,
+                        label = application.getString(R.string.cloud_tts_engine_default_voice),
+                        locale = "",
+                        styles = persistentListOf(),
+                        roles = persistentListOf(),
+                    ))
+                }
             }
         }.onSuccess { catalog ->
             val uniqueCatalog = catalog.distinctBy { it.id }
@@ -475,6 +494,25 @@ class CloudTtsViewModel(
                     output = file,
                     speechRate = editor.speed.toFloatOrNull() ?: 1f,
                 )) { application.getString(R.string.system_tts_preview_failed) }
+            } else if (editor.engineType == ReadAloudVoice.ENGINE_HTTP) {
+                val httpTts = editor.engineId.toLongOrNull()?.let { appDb.httpTTSDao.get(it) }
+                    ?: error(application.getString(R.string.cloud_tts_engine_missing))
+                // 试听固定用正常语速：编辑器里的 speed 是云端引擎的倍率语义，和脚本的 speakSpeed 不通用
+                val previewVoice = if (editor.voiceId == DEFAULT_ENGINE_VOICE_ID) {
+                    null // 脚本没有 voices()，交给脚本自己的默认音色
+                } else {
+                    withContext(Dispatchers.IO) {
+                        HttpTtsVoiceCatalog.getVoices(httpTts)
+                            .firstOrNull { it.id == editor.voiceId }
+                    } ?: HttpTtsVoice(id = editor.voiceId, name = editor.voiceId)
+                }
+                check(HttpTtsFileSynthesizer.synthesize(
+                    httpTts = httpTts,
+                    text = application.getString(R.string.system_tts_preview_text),
+                    output = file,
+                    speechRate = HTTP_PREVIEW_SPEECH_RATE,
+                    voice = previewVoice,
+                )) { application.getString(R.string.cloud_tts_no_audio) }
             } else {
                 val engine = engines.firstOrNull { it.id == editor.engineId }
                     ?: error(application.getString(R.string.cloud_tts_engine_missing))
@@ -1036,3 +1074,6 @@ private fun String.isHttpTtsImportUri(): Boolean {
 }
 
 private const val DEFAULT_ENGINE_VOICE_ID = "__engine_default__"
+
+/** HttpTTS 脚本里 speakSpeed 的正常语速基准值 */
+private const val HTTP_PREVIEW_SPEECH_RATE = 10

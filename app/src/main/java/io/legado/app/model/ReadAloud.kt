@@ -93,12 +93,23 @@ object ReadAloud {
                     it.id in voiceIds && it.engineType in setOf(
                         ReadAloudVoice.ENGINE_HTTP,
                         ReadAloudVoice.ENGINE_CLOUD,
-                    ) &&
-                        it.enabled && it.available
+                    )
                 }
             }
             if (boundVoices.isEmpty()) return@runCatching null
-            boundVoices.firstOrNull { it.engineType == ReadAloudVoice.ENGINE_HTTP }
+            // 只要绑定里出现过 http/cloud 音色就必须走协调器服务：系统服务执行不了它们，
+            // 会把角色音色静默丢成兜底音。音色暂时不可用也照样走协调器，别整本掉回单音色。
+            val unusable = boundVoices.filterNot { it.enabled && it.available }
+            if (unusable.isNotEmpty()) {
+                AppLog.putDebug(
+                    "多角色绑定里有 ${unusable.size} 条音色不可用：" +
+                        unusable.joinToString { voice -> voice.displayName.ifBlank { voice.id } }
+                )
+            }
+            boundVoices
+                .firstOrNull {
+                    it.engineType == ReadAloudVoice.ENGINE_HTTP && it.enabled && it.available
+                }
                 ?.engineId?.toLongOrNull()?.let(appDb.httpTTSDao::get)
                 ?: appDb.httpTTSDao.all.firstOrNull()
                 ?: HttpTTS(id = Long.MIN_VALUE, name = "TTS coordinator")

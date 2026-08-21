@@ -8,12 +8,16 @@ import io.legado.app.domain.model.readaloud.SpeechRoleType
 
 object LocalCharacterSpeakerResolver {
 
-    const val VERSION = "local-character-resolver-v1"
+    const val VERSION = "local-character-resolver-v2"
 
     private const val CONTEXT_LENGTH = 64
+
+    /** 说话动词前常见的短修饰语，如「接着道」「缓缓道」「冷笑道」；不允许跨标点 */
+    private const val VERB_PREFIX = "[^，,。.！!？?；;：:、“”‘’\"'\\s]{0,4}"
     private val speechVerb =
-        "(?:说道|说|问道|问|答道|答|喊道|喊|叫道|叫|喝道|笑道|低声道|沉声道|怒道|开口道)"
-    private val thoughtVerb = "(?:心想|心道|暗道|想道)"
+        "(?:$VERB_PREFIX)?(?:说道|说|问道|问|答道|答|喊道|喊|叫道|叫|喝道|笑道|" +
+            "吼道|叹道|念道|吟道|唱道|回道|应道|续道|道)"
+    private val thoughtVerb = "(?:$VERB_PREFIX)?(?:心想|心道|暗道|想道|默念)"
 
     fun resolve(
         paragraphs: List<CanonicalSpeechParagraph>,

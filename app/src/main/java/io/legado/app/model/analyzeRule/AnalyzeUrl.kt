@@ -13,6 +13,7 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.domain.model.readaloud.HttpTtsVoice
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.ConcurrentRateLimiter
@@ -81,6 +82,8 @@ class AnalyzeUrl(
     private val page: Int? = null,
     private val speakText: String? = null,
     private val speakSpeed: Int? = null,
+    private val speakVoice: HttpTtsVoice? = null,
+    private val speakEmotion: String? = null,
     private var baseUrl: String = "",
     private val source: BaseSource? = null,
     private val ruleData: RuleDataInterface? = null,
@@ -368,6 +371,8 @@ class AnalyzeUrl(
             bindings["key"] = key
             bindings["speakText"] = speakText
             bindings["speakSpeed"] = speakSpeed
+            bindings["voice"] = speakVoice
+            bindings["emotion"] = speakEmotion
             bindings["book"] = ruleData as? Book
             bindings["source"] = source
             bindings["result"] = result

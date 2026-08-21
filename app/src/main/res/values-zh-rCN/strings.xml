@@ -2863,6 +2863,10 @@
     <string name="book_voice_casting_entry_summary">设置旁白和人物使用的声音</string>
     <string name="voice_fallback_roles">旁白与兜底角色</string>
     <string name="voice_role_narrator">旁白</string>
+    <string name="voice_temporary_speakers">临时说话人</string>
+    <string name="voice_temporary_speakers_summary">AI 在分镜里认出、但还没进正式角色卡的说话人。可以直接给它配音色，也可以点「转正」变成正式角色。</string>
+    <string name="voice_promote_action">转正</string>
+    <string name="voice_promoted_to_character">已把「%s」转为正式角色</string>
     <string name="voice_role_unknown_male">未知男性角色</string>
     <string name="voice_role_unknown_female">未知女性角色</string>
     <string name="voice_role_male_lead">男主</string>

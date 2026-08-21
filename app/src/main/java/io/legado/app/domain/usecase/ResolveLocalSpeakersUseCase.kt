@@ -28,8 +28,17 @@ class ResolveLocalSpeakersUseCase(
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         val profiles = withContext(Dispatchers.IO) {
-            bookKnowledgeGateway.getCharacterProfiles(analysisResult.analysis.bookUrl, 200)
-                .filter { it.status == BookCharacterProfile.STATUS_ACTIVE }
+            bookKnowledgeGateway.getCharacterProfiles(
+                bookUrl = analysisResult.analysis.bookUrl,
+                limit = 200,
+                includeDrafts = true,
+            )
+                // 草稿角色卡当「临时说话人」用：人物列表里不混进正式角色，但必须能参与发音路由，
+                // 否则凡是没进正式角色卡的说话人都会掉到旁白兜底音。
+                .filter {
+                    it.status == BookCharacterProfile.STATUS_ACTIVE ||
+                        it.status == BookCharacterProfile.STATUS_DRAFT
+                }
         }
         val characters = profiles.map { profile ->
             SpeakerCharacter(

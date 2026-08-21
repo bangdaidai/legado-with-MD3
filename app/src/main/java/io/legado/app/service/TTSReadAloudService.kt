@@ -58,6 +58,7 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
     private var activeVoiceName = ""
     private var defaultVoiceName = ""
     private var initGeneration = 0
+    private var reportedUnplayableVoice = false
     private val TAG = "TTSReadAloudService"
 
     override fun onCreate() {
@@ -251,11 +252,28 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
             displayName = configured,
         )
         val cue = playbackQueue.cues.getOrNull(nowSpeak) ?: return fallback
+        reportUnplayableVoice(cue.voice)
         return SpeechVoiceRouter.route(
             cue = cue,
             supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_SYSTEM),
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_SYSTEM, configured),
         ).voice ?: fallback
+    }
+
+    /**
+     * 系统朗读服务只能执行系统音色，角色配的 http/cloud 音色会被静默丢成兜底音。
+     * 只提示一次，避免每条 cue 都弹。
+     */
+    private fun reportUnplayableVoice(voice: ReadAloudVoice?) {
+        if (reportedUnplayableVoice) return
+        voice ?: return
+        if (voice.engineType == ReadAloudVoice.ENGINE_SYSTEM) return
+        reportedUnplayableVoice = true
+        AppLog.put(
+            "当前是系统朗读服务，角色音色「${voice.displayName}」(${voice.engineType}) 无法执行，" +
+                "已改用系统兜底音；把朗读引擎切到该音色所属的引擎后重开朗读即可生效",
+            toast = true,
+        )
     }
 
     private fun applyVoice(voiceName: String) {
