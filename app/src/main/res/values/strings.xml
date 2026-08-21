@@ -2463,8 +2463,14 @@
     <string name="tag_management">Tag Management</string>
     <string name="author_management">Author Management</string>
     <string name="author_management_empty">No books can be grouped by author yet</string>
+    <string name="author_search_empty">No matching authors</string>
+    <string name="author_detail_empty">No books for this author yet</string>
     <string name="author_edit_bio">Edit Bio</string>
     <string name="author_bio_hint">Enter the author\'s bio</string>
+    <string name="author_bio_saved">Bio saved</string>
+    <string name="author_sort_book_count">Sort: book count</string>
+    <string name="author_sort_rating">Sort: rating</string>
+    <string name="author_sort_name">Sort: name</string>
     <string name="author_no_bio">No bio yet</string>
     <string name="author_read_count">Read %1$d</string>
     <string name="author_book_count">%1$d books</string>
@@ -2881,6 +2887,10 @@
     <string name="book_voice_casting_entry_summary">Assign narrator and character voices</string>
     <string name="voice_fallback_roles">Narrator and fallback roles</string>
     <string name="voice_role_narrator">Narrator</string>
+    <string name="voice_temporary_speakers">Temporary speakers</string>
+    <string name="voice_temporary_speakers_summary">Speakers the AI recognised while analysing the chapter that are not formal characters yet. You can assign a voice directly, or promote them to a formal character.</string>
+    <string name="voice_promote_action">Promote</string>
+    <string name="voice_promoted_to_character">Promoted %s to a formal character</string>
     <string name="voice_role_unknown_male">Unknown male character</string>
     <string name="voice_role_unknown_female">Unknown female character</string>
     <string name="voice_role_male_lead">Male lead</string>

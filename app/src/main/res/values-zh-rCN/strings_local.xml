@@ -5,8 +5,14 @@
     <string name="tag_management">标签管理</string>
     <string name="author_management">作者管理</string>
     <string name="author_management_empty">书架中暂无可按作者归类的书籍</string>
+    <string name="author_search_empty">未找到匹配的作者</string>
+    <string name="author_detail_empty">该作者名下暂无书籍</string>
     <string name="author_edit_bio">编辑简介</string>
     <string name="author_bio_hint">请输入作者简介</string>
+    <string name="author_bio_saved">简介已保存</string>
+    <string name="author_sort_book_count">排序：书籍数</string>
+    <string name="author_sort_rating">排序：评分</string>
+    <string name="author_sort_name">排序：名称</string>
     <string name="author_no_bio">暂无简介</string>
     <string name="author_read_count">已读 %1$d 本</string>
     <string name="author_book_count">共 %1$d 本</string>

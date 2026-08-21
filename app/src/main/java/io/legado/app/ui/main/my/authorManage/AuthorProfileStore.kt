@@ -3,6 +3,7 @@ package io.legado.app.ui.main.my.authorManage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import io.legado.app.help.config.AppConfigStore
+import io.legado.app.help.config.compatDsString
 import org.json.JSONObject
 
 /**
@@ -14,27 +15,25 @@ object AuthorProfileStore {
 
     private const val KEY = "author_intros"
 
-    fun getBio(name: String): String {
-        val json = AppConfigStore.getString(KEY) ?: return ""
-        return runCatching { JSONObject(json).optString(name, "") }.getOrDefault("")
+    fun observeBios(): Flow<Map<String, String>> =
+        AppConfigStore.observeString(KEY).map { parseBios(it) }
+
+    /** 读改写在 AppConfigStore 的临界区内完成，避免并发保存互相覆盖。 */
+    fun saveBio(name: String, bio: String) {
+        AppConfigStore.atomicUpdate(
+            read = { it.compatDsString(KEY) },
+            toPrefMap = { json -> mapOf(KEY to json) },
+            transform = { json ->
+                val bios = parseBios(json).toMutableMap()
+                if (bio.isBlank()) bios.remove(name) else bios[name] = bio
+                JSONObject(bios).toString()
+            },
+        )
     }
 
-    fun observeBios(): Flow<Map<String, String>> =
-        AppConfigStore.observeString(KEY).map { json ->
-            if (json.isNullOrBlank()) emptyMap()
-            else runCatching { JSONObject(json).toMap() }.getOrDefault(emptyMap())
-        }
-
-    fun saveBio(name: String, bio: String) {
-        val obj = JSONObject()
-        val existing = AppConfigStore.getString(KEY)
-        if (!existing.isNullOrBlank()) {
-            runCatching { JSONObject(existing).toMap() }
-                .getOrDefault(emptyMap())
-                .forEach { (k, v) -> obj.put(k, v) }
-        }
-        obj.put(name, bio)
-        AppConfigStore.putString(KEY, obj.toString())
+    private fun parseBios(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching { JSONObject(json).toMap() }.getOrDefault(emptyMap())
     }
 
     private fun JSONObject.toMap(): Map<String, String> {

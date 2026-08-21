@@ -27,6 +27,7 @@ import io.legado.app.ui.book.readingmemory.MemoryBookCard
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -42,55 +43,75 @@ fun AuthorDetailScreen(
     onBack: () -> Unit,
     onOpenBook: (String) -> Unit,
 ) {
-    val detail = uiState.detail ?: return
+    val detail = uiState.detail
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             GlassMediumFlexibleTopAppBar(
-                title = detail.name,
+                title = detail?.name ?: stringResource(R.string.author_management),
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
-                    TopBarActionButton(
-                        onClick = { onIntent(AuthorDetailIntent.ToggleEditBio) },
-                        imageVector = Icons.Filled.Edit,
-                        contentDescription = stringResource(R.string.author_edit_bio),
-                    )
+                    if (detail != null) {
+                        TopBarActionButton(
+                            onClick = { onIntent(AuthorDetailIntent.ToggleEditBio) },
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = stringResource(R.string.author_edit_bio),
+                        )
+                    }
                 },
             )
         },
     ) { contentPadding ->
-        LazyColumn(
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            item {
-                AuthorDetailHeader(
-                    detail = detail,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .padding(top = 12.dp),
-                )
-            }
-            items(detail.books, key = { it.memory.bookUrl }) { item ->
-                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    MemoryBookCard(
-                        memory = item.memory,
-                        tags = item.tags,
-                        settings = uiState.bookshelfSettings,
-                        tagColorMap = uiState.tagColorMap,
-                        coverWidth = 56,
-                        showIntro = false,
-                        showReview = true,
-                        showAuthor = false,
-                        ratingInTitle = true,
-                        singleLineTags = true,
-                        onBookClick = onOpenBook,
-                        onBookLongPress = {},
+        if (detail == null) {
+            EmptyMessage(
+                message = "",
+                isLoading = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(contentPadding),
+            )
+        } else {
+            LazyColumn(
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                item {
+                    AuthorDetailHeader(
+                        detail = detail,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .padding(top = 12.dp),
                     )
+                }
+                if (detail.books.isEmpty()) {
+                    item {
+                        EmptyMessage(
+                            message = stringResource(R.string.author_detail_empty),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                } else {
+                    items(detail.books, key = { it.memory.bookUrl }) { item ->
+                        Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                            MemoryBookCard(
+                                memory = item.memory,
+                                tags = item.tags,
+                                settings = uiState.bookshelfSettings,
+                                tagColorMap = uiState.tagColorMap,
+                                coverWidth = 56,
+                                showIntro = false,
+                                showReview = true,
+                                showAuthor = false,
+                                ratingInTitle = true,
+                                singleLineTags = true,
+                                onBookClick = onOpenBook,
+                            )
+                        }
+                    }
                 }
             }
         }

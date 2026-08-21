@@ -24,7 +24,7 @@ fun AuthorDetailRouteScreen(
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 is AuthorDetailEffect.ShowToast ->
-                    Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, effect.messageResId, Toast.LENGTH_SHORT).show()
             }
         }
     }

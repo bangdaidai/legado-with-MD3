@@ -2,14 +2,18 @@ package io.legado.app.ui.main.my.authorManage
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.help.book.TagManager
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.flow.Flow
+import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -18,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -40,30 +45,24 @@ class AuthorDetailViewModel(
     private val bookshelfSettings = bookshelfSettingsGateway.settings.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), BookshelfSettings(),
     )
-    private val tagColorMap = combine(
+    private val tagColorMap: StateFlow<ImmutableMap<String, Long>> = combine(
         repository.observeTagColorMap(),
         themeSettingsGateway.settings.map { it.enableCustomTagColors },
-    ) { colors, enabled -> if (enabled) colors else emptyMap() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    ) { colors, enabled ->
+        if (enabled) colors.toImmutableMap() else persistentMapOf()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentMapOf())
 
     init {
         viewModelScope.launch {
             combine(
-                listOf<Flow<Any?>>(
-                    repository.observeAll(),
-                    AuthorProfileStore.observeBios(),
-                    _editingBio,
-                    bookshelfSettings,
-                    tagColorMap,
-                )
-            ) { a ->
-                val memories = a[0] as List<ReadingMemory>
-                val bios = a[1] as Map<String, String>
-                val editingBio = a[2] as Boolean
-                val settings = a[3] as BookshelfSettings
-                val colorMap = a[4] as Map<String, Long>
+                repository.observeAll(),
+                AuthorProfileStore.observeBios(),
+                _editingBio,
+                bookshelfSettings,
+                tagColorMap,
+            ) { memories, bios, editingBio, settings, colorMap ->
                 buildState(memories, bios, editingBio, settings, colorMap)
-            }.collect { _uiState.value = it }
+            }.flowOn(Dispatchers.Default).collect { _uiState.value = it }
         }
     }
 
@@ -74,7 +73,7 @@ class AuthorDetailViewModel(
             is AuthorDetailIntent.SaveBio -> {
                 AuthorProfileStore.saveBio(name, intent.bio)
                 _editingBio.value = false
-                _effects.tryEmit(AuthorDetailEffect.ShowToast("简介已保存"))
+                _effects.tryEmit(AuthorDetailEffect.ShowToast(R.string.author_bio_saved))
             }
         }
     }
@@ -84,10 +83,9 @@ class AuthorDetailViewModel(
         bios: Map<String, String>,
         editingBio: Boolean,
         settings: BookshelfSettings,
-        colorMap: Map<String, Long>,
+        colorMap: ImmutableMap<String, Long>,
     ): AuthorDetailUiState {
-        val mems = memories.filter { it.bookAuthor == name }
-        val finished = mems.filter { isAuthorBookFinished(it) }
+        val mems = memories.filter { it.bookAuthor.trim() == name }
         val books = mems
             .map { AuthorBookItem(it, TagManager.bookDisplayTags(it.kind, it.customTag).toImmutableList()) }
             .toImmutableList()
@@ -95,8 +93,8 @@ class AuthorDetailViewModel(
             detail = AuthorDetailUi(
                 name = name,
                 bio = bios[name] ?: "",
-                avgRating = authorAvgRating(finished),
-                readBookCount = finished.size,
+                avgRating = authorAvgRating(mems),
+                readBookCount = mems.count { isAuthorBookFinished(it) },
                 bookCount = mems.size,
                 books = books,
             ),
