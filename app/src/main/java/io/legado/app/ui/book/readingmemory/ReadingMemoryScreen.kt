@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -451,6 +453,7 @@ internal fun MemoryBookCard(
     showReview: Boolean,
     showAuthor: Boolean = true,
     ratingInTitle: Boolean = false,
+    singleLineTags: Boolean = false,
     onBookClick: (String) -> Unit,
     onBookLongPress: (String) -> Unit = {},
 ) {
@@ -462,15 +465,15 @@ internal fun MemoryBookCard(
         else -> "待看"
     }
     val statusContainer = when {
-        memory.abandoned -> LegadoTheme.colorScheme.errorContainer
-        memory.progress >= 1f -> LegadoTheme.colorScheme.tertiaryContainer
-        memory.progress > 0f -> LegadoTheme.colorScheme.primaryContainer
+        memory.abandoned -> LegadoTheme.colorScheme.error
+        memory.progress >= 1f -> LegadoTheme.colorScheme.tertiary
+        memory.progress > 0f -> LegadoTheme.colorScheme.primary
         else -> LegadoTheme.colorScheme.surfaceVariant
     }
     val statusContent = when {
-        memory.abandoned -> LegadoTheme.colorScheme.onErrorContainer
-        memory.progress >= 1f -> LegadoTheme.colorScheme.onTertiaryContainer
-        memory.progress > 0f -> LegadoTheme.colorScheme.onPrimaryContainer
+        memory.abandoned -> LegadoTheme.colorScheme.onError
+        memory.progress >= 1f -> LegadoTheme.colorScheme.onTertiary
+        memory.progress > 0f -> LegadoTheme.colorScheme.onPrimary
         else -> LegadoTheme.colorScheme.onSurfaceVariant
     }
 
@@ -533,11 +536,7 @@ internal fun MemoryBookCard(
         } else null,
         desc = null,
         columnContent = {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            ) {
+            val tagsContent: @Composable () -> Unit = {
                 // 状态标签放最前面
                 val statusThemeSettings = LocalAppUiConfiguration.current.theme
                 val statusBorder = if (settings.bookshelfTagBorder) {
@@ -575,6 +574,20 @@ internal fun MemoryBookCard(
                         showColoredBorder = settings.bookshelfTagBorder,
                     )
                 }
+            }
+            if (singleLineTags) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                ) { tagsContent() }
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ) { tagsContent() }
             }
             val showIntroInline = showIntro && intro != null
                 && !showIntroBelowContent

@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
@@ -88,6 +87,7 @@ fun AuthorDetailScreen(
                         showReview = true,
                         showAuthor = false,
                         ratingInTitle = true,
+                        singleLineTags = true,
                         onBookClick = onOpenBook,
                         onBookLongPress = {},
                     )
@@ -118,11 +118,6 @@ private fun AuthorDetailHeader(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AppText(
-                text = detail.name,
-                style = LegadoTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (detail.avgRating > 0f) {
                     ReadingMemoryRatingBar(
