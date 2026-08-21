@@ -381,7 +381,10 @@ interface JsExtensions : JsEncodeUtils {
             getSource(), url, title, true, refetchAfterSuccess, html
         )
         val (url2, body) = pair
-        JsProbe.step("browserResult", "bodyLen=${body.length}")
+        JsProbe.step(
+            "browserResult",
+            "len=${body.length} 含已确认=${body.contains("已确认")} url=${url2.take(40)}"
+        )
         return StrResponse(url2.ifEmpty { url }, body)
     }
 

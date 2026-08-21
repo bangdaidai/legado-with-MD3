@@ -40,7 +40,10 @@ object JsProbe {
     /** 书源自己弹提示时说明它已经进了兜底分支，此刻把轨迹倒出来 */
     fun onToast(msg: String?) {
         msg ?: return
-        step("toast", msg)
+        val sb = trace.get() ?: return
+        // 书源按异常文本长度循环弹同一条提示，只记一次，别把前面的关键轨迹挤掉
+        val entry = "toast=${brief(msg)} ▸ "
+        if (!sb.endsWith(entry)) sb.append(entry)
         if (msg.contains("暂不开放") || msg.contains("未开放")) flush("toast")
     }
 
@@ -49,7 +52,7 @@ object JsProbe {
         if (sb.isEmpty()) return
         val now = System.currentTimeMillis()
         if (now - lastFlushAt < FLUSH_COOLDOWN) {
-            sb.setLength(0)
+            // 冷却期内只是不输出，轨迹继续攒着，避免丢掉关键的那几步
             return
         }
         lastFlushAt = now
