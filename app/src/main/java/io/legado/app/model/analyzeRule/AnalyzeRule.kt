@@ -17,7 +17,6 @@ import io.legado.app.data.entities.RssArticle
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
-import io.legado.app.help.JsProbe
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.CookieStore
@@ -285,12 +284,7 @@ class AnalyzeRule(
     fun getString(ruleStr: String?, mContent: Any? = null, isUrl: Boolean = false): String {
         if (TextUtils.isEmpty(ruleStr)) return ""
         val ruleList = splitSourceRuleCacheString(ruleStr)
-        val result = getString(ruleList, mContent, isUrl)
-        // 临时探针：只记短规则，书源判断「已确认」用的就是 #ag1@text 这种
-        if (ruleStr != null && ruleStr.length < 32) {
-            JsProbe.step("gets", "$ruleStr→${result.take(30)}")
-        }
-        return result
+        return getString(ruleList, mContent, isUrl)
     }
 
     fun getString(ruleStr: String?, unescape: Boolean): String {

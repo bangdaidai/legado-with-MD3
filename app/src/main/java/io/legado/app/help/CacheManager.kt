@@ -83,13 +83,6 @@ object CacheManager {
     }
 
     fun get(key: String): String? {
-        // 临时探针：书源在弹提示前最后几步就是 cache.get，需要知道读的是什么、读到没有
-        val value = getInternal(key)
-        JsProbe.step("cache.get", "${key.take(60)}→len=${value?.length ?: -1}")
-        return value
-    }
-
-    private fun getInternal(key: String): String? {
         getFromMemory(key)?.let {
             if (it is String) return it
         }
