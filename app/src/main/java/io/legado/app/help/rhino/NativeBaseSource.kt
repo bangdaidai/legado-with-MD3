@@ -37,7 +37,10 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
         value: Any?
     ) {
         if (name == "variable") {
+            RhinoProbe.onGet("source(写入)", name, value)
             super.put(name, start, value)
+        } else {
+            RhinoProbe.onGet("source(写入被丢弃)", name, value)
         }
     }
 

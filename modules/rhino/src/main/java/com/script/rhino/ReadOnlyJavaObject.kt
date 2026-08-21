@@ -34,7 +34,8 @@ class ReadOnlyJavaObject(scope: Scriptable?, javaObject: Any, staticType: Class<
         start: Scriptable?,
         value: Any?
     ) {
-        // do nothing
+        // 只读包装会静默丢弃写入，这里记一笔，避免书源赋值失败也看不出来
+        RhinoProbe.onGet("${javaObject.javaClass.simpleName}(写入被丢弃)", name ?: "?", value)
     }
 
     companion object {
