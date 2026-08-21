@@ -8,6 +8,7 @@ import io.legado.app.help.crypto.SymmetricCryptoAndroid
 import io.legado.app.help.crypto.digest
 import io.legado.app.help.crypto.hmac
 import io.legado.app.help.crypto.toHexString
+import io.legado.app.help.http.CookieStore
 import io.legado.app.utils.MD5Utils
 
 
@@ -48,6 +49,13 @@ interface JsEncodeUtils {
         key: ByteArray?,
         iv: ByteArray?
     ): SymmetricCryptoAndroid {
+        // 临时探针：书源用 String(cache)/String(cookie) 的字符下标拼方法名与密钥，
+        // fork 只要动了这两个类名就会全线错位，这里一并记进轨迹，定位后删除本段
+        JsProbe.step(
+            "createSymmetricCrypto",
+            "$transformation key=${key?.size}B/${key?.toHexString()?.take(48)} iv=${iv?.size}B" +
+                " cache=$CacheManager cookie=$CookieStore"
+        )
         val symmetricCrypto = SymmetricCryptoAndroid(transformation, key)
         return if (iv != null && iv.isNotEmpty()) symmetricCrypto.setIv(iv) else symmetricCrypto
     }

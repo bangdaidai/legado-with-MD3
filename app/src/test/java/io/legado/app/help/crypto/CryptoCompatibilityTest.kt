@@ -81,6 +81,30 @@ class CryptoCompatibilityTest {
     }
 
     @Test
+    fun `hex 解码兼容空白与奇数长度`() {
+        assertTrue(byteArrayOf(0x0f).contentEquals("f".hexToByteArray()))
+        assertTrue(byteArrayOf(0x01, 0x23).contentEquals(" 01 23 ".hexToByteArray()))
+        assertTrue(byteArrayOf(0x0a, 0xbc.toByte()).contentEquals("abc".hexToByteArray()))
+    }
+
+    @Test
+    fun `base64 解码跳过非法字符且不抛异常`() {
+        val bytes = byteArrayOf(0x00, 0x01, 0x7f, -0x01, 0x41, 0x42)
+        // 夹杂换行、引号等非 base64 字符（Hutool Base64Decoder 会直接跳过）
+        assertTrue(bytes.contentEquals("AAF/\n/0F\"C".base64ToByteArray()))
+        // 密文解密后再 base64 解码的书源校验场景：任意乱码输入也不能抛异常
+        assertEquals(0, "\u0001\u0002\u0003".base64ToByteArray().size)
+    }
+
+    @Test
+    fun `DigestUtil md5 返回 16 字节摘要`() {
+        val md5 = cn.hutool.crypto.digest.DigestUtil.md5("abc".toByteArray())
+        assertEquals(16, md5.size)
+        assertEquals("900150983cd24fb0d6963f7d28e17f72", md5.toHexString())
+        assertEquals("900150983cd24fb0d6963f7d28e17f72", cn.hutool.crypto.digest.DigestUtil.md5Hex("abc"))
+    }
+
+    @Test
     fun `nameUuidFromBytes 与 java UUID v3 一致`() {
         val input = "provider123:model-abc".toByteArray()
         val expected = java.util.UUID.nameUUIDFromBytes(input).toString()

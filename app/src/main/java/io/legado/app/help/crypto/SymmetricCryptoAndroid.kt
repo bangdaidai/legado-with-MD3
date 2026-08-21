@@ -1,6 +1,7 @@
 package io.legado.app.help.crypto
 
 import androidx.annotation.Keep
+import io.legado.app.help.JsProbe
 import io.legado.app.utils.isHex
 import java.io.InputStream
 import java.nio.charset.Charset
@@ -22,13 +23,10 @@ open class SymmetricCryptoAndroid(
     private var iv: ByteArray? = null
 
     private fun normalizedKey(key: ByteArray): ByteArray = when {
+        // 与 Hutool KeyUtil 一致：DES/DESede 走 DESKeySpec/DESedeKeySpec，超长密钥只取前 8/24 字节；
+        // 其余算法（含 AES）原样交给 SecretKeySpec，密钥长度非法时由 provider 抛异常。
         keyAlgorithm.equals("DES", true) && key.size > 8 -> key.copyOf(8)
         keyAlgorithm.equals("DESede", true) && key.size > 24 -> key.copyOf(24)
-        // 部分书源以任意长度字符串（如 9 字节）作为原始密钥传入，
-        // 服务端通常取其 MD5 派生出 16 字节 AES 密钥。这里对齐该约定，
-        // 把非 16/24/32 字节的 AES 密钥归一为 16 字节，避免 InvalidKeyException。
-        keyAlgorithm.equals("AES", true) && key.size !in listOf(16, 24, 32) ->
-            digest("MD5", key)
         else -> key
     }
 
@@ -37,13 +35,19 @@ open class SymmetricCryptoAndroid(
         return this
     }
 
-    private fun cipher(mode: Int): Cipher = Cipher.getInstance(transformation).apply {
-        val iv = this@SymmetricCryptoAndroid.iv
-        if (iv == null || transformation.contains("/ECB/", true)) {
-            init(mode, secretKey)
-        } else {
-            init(mode, secretKey, IvParameterSpec(iv))
+    private fun cipher(mode: Int): Cipher = try {
+        Cipher.getInstance(transformation).apply {
+            val iv = this@SymmetricCryptoAndroid.iv
+            if (iv == null || transformation.contains("/ECB/", true)) {
+                init(mode, secretKey)
+            } else {
+                init(mode, secretKey, IvParameterSpec(iv))
+            }
         }
+    } catch (e: Throwable) {
+        // 临时探针：书源会吞掉这里的异常，定位后删除本 try/catch
+        JsProbe.stepError("cipher($transformation,mode=$mode)", e)
+        throw e
     }
 
     fun encrypt(data: ByteArray): ByteArray = cipher(Cipher.ENCRYPT_MODE).doFinal(data)
@@ -58,7 +62,16 @@ open class SymmetricCryptoAndroid(
 
     fun encrypt(data: InputStream): ByteArray = encrypt(data.readBytes())
 
-    fun decrypt(data: ByteArray): ByteArray = cipher(Cipher.DECRYPT_MODE).doFinal(data)
+    fun decrypt(data: ByteArray): ByteArray {
+        val cipher = cipher(Cipher.DECRYPT_MODE)
+        return try {
+            cipher.doFinal(data)
+        } catch (e: Throwable) {
+            // 临时探针：密钥错误时这里抛 BadPadding，书源同样会吞掉
+            JsProbe.stepError("decryptDoFinal(${data.size}B)", e)
+            throw e
+        }
+    }
 
     fun encryptBase64(data: ByteArray): String {
         return encrypt(data).toBase64()
@@ -81,7 +94,8 @@ open class SymmetricCryptoAndroid(
     }
 
     fun decrypt(data: String): ByteArray {
-        val bytes = if (data.isHex() && data.length % 2 == 0) {
+        // 与 Hutool 一致：全 hex 字符就按 hex 解（奇数长度由 hexToByteArray 补 0），否则按 base64 解
+        val bytes = if (data.isHex()) {
             data.hexToByteArray()
         } else {
             data.base64ToByteArray()

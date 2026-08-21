@@ -2,7 +2,11 @@ package io.legado.app.ui.browser
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
@@ -26,6 +30,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +44,8 @@ import io.legado.app.constant.AppConst
 import io.legado.app.help.http.CookieManager
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.SourceVerificationHelp
+import io.legado.app.help.webView.WebJsExtensions.Companion.basicJs
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameBasic
 import io.legado.app.model.Download
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.rss.read.VisibleWebViewCompose
@@ -95,6 +102,13 @@ fun WebViewRouteScreen(
         val currentWebView = webView ?: return finishScreen()
         viewModel.saveVerificationResult(currentWebView, ::finishScreen)
     }
+
+    // 书源验证页点「已确认」后通常调用 window.close()，需要在关闭前保存验证结果
+    val closeRequest = remember { mutableStateOf<() -> Unit>({}) }
+    SideEffect {
+        closeRequest.value = { if (!cloudflareChallenge) finishWithVerification() }
+    }
+    val basicJsInterface = remember { WebViewBasicJsInterface { closeRequest.value.invoke() } }
 
     BackHandler {
         when {
@@ -180,6 +194,7 @@ fun WebViewRouteScreen(
                                 setAcceptCookie(true)
                                 setAcceptThirdPartyCookies(currentWebView, true)
                             }
+                            addJavascriptInterface(basicJsInterface, nameBasic)
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView,
@@ -221,6 +236,15 @@ fun WebViewRouteScreen(
                                     }
                                 }
 
+                                override fun onPageStarted(
+                                    view: WebView,
+                                    url: String?,
+                                    favicon: Bitmap?
+                                ) {
+                                    super.onPageStarted(view, url, favicon)
+                                    view.evaluateJavascript(basicJs, null)
+                                }
+
                                 override fun onPageFinished(view: WebView, url: String) {
                                     pageTitle = view.title
                                         ?.takeIf { it.isNotBlank() && it != url && it != view.url }
@@ -248,6 +272,10 @@ fun WebViewRouteScreen(
                             webChromeClient = object : WebChromeClient() {
                                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                     progress = newProgress
+                                }
+
+                                override fun onCloseWindow(window: WebView?) {
+                                    closeRequest.value.invoke()
                                 }
                             }
                             setOnLongClickListener {
@@ -319,4 +347,18 @@ fun WebViewRouteScreen(
         }
         if (pendingDownload == download) pendingDownload = null
     }
+}
+
+/** 承接 [basicJs] 注入的 window.close() 与 screen.orientation.lock() 调用 */
+private class WebViewBasicJsInterface(private val onCloseRequest: () -> Unit) {
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun onCloseRequested() {
+        mainHandler.post { onCloseRequest() }
+    }
+
+    /** 本页无全屏模式，仅避免注入脚本调用时抛异常 */
+    @JavascriptInterface
+    fun lockOrientation(orientation: String) = Unit
 }

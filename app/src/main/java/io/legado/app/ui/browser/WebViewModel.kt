@@ -102,21 +102,24 @@ class WebViewModel(
             execute {
                 val url = intent!!.getStringExtra("url")!!
                 val source = bookSourceRepository.getBookSource(sourceOrigin)
-                html = AnalyzeUrl(
-                    url,
-                    headerMapF = headerMap,
-                    source = source,
-                    coroutineContext = coroutineContext
-                ).getStrResponseAwait(useWebView = false).body
-                SourceVerificationHelp.setResult(sourceOrigin, html ?: "")
+                if (html == null) {
+                    html = AnalyzeUrl(
+                        url,
+                        headerMapF = headerMap,
+                        source = source,
+                        coroutineContext = coroutineContext
+                    ).getStrResponseAwait(useWebView = false).body
+                }
+                SourceVerificationHelp.setResult(sourceOrigin, html ?: "", baseUrl)
             }.onSuccess {
                 success.invoke()
             }
         } else {
             webView.evaluateJavascript("document.documentElement.outerHTML") {
+                val pageUrl = webView.url ?: ""
                 execute {
                     html = StringEscapeUtils.unescapeJson(it).trim('"')
-                    SourceVerificationHelp.setResult(sourceOrigin, html ?: "")
+                    SourceVerificationHelp.setResult(sourceOrigin, html ?: "", pageUrl)
                 }.onSuccess {
                     success.invoke()
                 }

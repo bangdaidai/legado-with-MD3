@@ -10,6 +10,7 @@ import io.legado.app.data.entities.rule.RowUi
 import io.legado.app.help.CacheManager
 import io.legado.app.help.ConcurrentRateLimiter.Companion.updateConcurrentRate
 import io.legado.app.help.JsExtensions
+import io.legado.app.help.JsProbe
 import io.legado.app.help.crypto.SymmetricCryptoAndroid
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.clearExploreKindsCache
@@ -264,9 +265,12 @@ interface BaseSource : JsExtensions {
     @JavascriptInterface
     fun getVariable(): String {
         getTemporaryVariable()?.let {
+            JsProbe.step("getVariable(临时)", "len=${it.length}|${it.take(40)}")
             return it
         }
-        return CacheManager.get("sourceVariable_${getKey()}") ?: ""
+        val variable = CacheManager.get("sourceVariable_${getKey()}") ?: ""
+        JsProbe.step("getVariable", "len=${variable.length}|${variable.take(40)}")
+        return variable
     }
 
     fun setTemporaryVariable(variable: String?) {
@@ -281,6 +285,7 @@ interface BaseSource : JsExtensions {
      */
     @JavascriptInterface
     fun put(key: String, value: String): String {
+        JsProbe.step("source.put", "$key=${value.take(40)}")
         CacheManager.put("v_${getKey()}_${key}", value)
         return value
     }
@@ -290,7 +295,9 @@ interface BaseSource : JsExtensions {
      */
     @JavascriptInterface
     fun get(key: String): String {
-        return CacheManager.get("v_${getKey()}_${key}") ?: ""
+        val value = CacheManager.get("v_${getKey()}_${key}") ?: ""
+        JsProbe.step("source.get", "$key=${value.take(40)}")
+        return value
     }
 
     /**

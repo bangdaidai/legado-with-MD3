@@ -119,7 +119,10 @@ interface JsExtensions : JsEncodeUtils {
             analyzeUrl.getStrResponse().body
         }.onFailure {
             rhinoContextOrNull?.ensureActive()
+            JsProbe.step("ajax✗", it)
             AppLog.put("ajax(${urlStr}) error\n${it.localizedMessage}", it)
+        }.onSuccess {
+            JsProbe.step("ajax", "${urlStr.take(60)}→len=${it?.length ?: -1}")
         }.getOrElse {
             it.stackTraceStr
         }
@@ -373,10 +376,12 @@ interface JsExtensions : JsEncodeUtils {
         html: String?
     ): StrResponse {
         rhinoContext.ensureActive()
+        JsProbe.step("startBrowserAwait", "$title|${url.take(60)}")
         val pair = SourceVerificationHelp.getVerificationResult(
             getSource(), url, title, true, refetchAfterSuccess, html
         )
         val (url2, body) = pair
+        JsProbe.step("browserResult", "bodyLen=${body.length}")
         return StrResponse(url2.ifEmpty { url }, body)
     }
 
@@ -616,7 +621,12 @@ interface JsExtensions : JsEncodeUtils {
      */
     @JavascriptInterface
     fun base64Decode(str: String?): String {
-        return str?.let { String(it.base64ToByteArray(), Charsets.UTF_8) } ?: ""
+        return try {
+            str?.let { String(it.base64ToByteArray(), Charsets.UTF_8) } ?: ""
+        } catch (e: Throwable) {
+            JsProbe.stepError("base64Decode(len=${str?.length})", e)
+            throw e
+        }
     }
 
     @JavascriptInterface
@@ -1123,6 +1133,7 @@ interface JsExtensions : JsEncodeUtils {
     fun toast(msg: Any?) {
         rhinoContextOrNull?.ensureActive()
         val text = msg.toString()
+        JsProbe.onToast(text)
         appCtx.toastForJs("${getSource()?.getTag()}: $text")
     }
 
@@ -1131,6 +1142,7 @@ interface JsExtensions : JsEncodeUtils {
      */
     fun longToast(msg: Any?) {
         rhinoContextOrNull?.ensureActive()
+        JsProbe.onToast(msg.toString())
         appCtx.longToastForJs("${getSource()?.getTag()}: ${msg.toString()}")
     }
 
