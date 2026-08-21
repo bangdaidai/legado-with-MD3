@@ -15,6 +15,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,11 +42,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import io.legado.app.R
 import io.legado.app.constant.AppConst
+import io.legado.app.help.WebCacheManager
 import io.legado.app.help.http.CookieManager
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.SourceVerificationHelp
+import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.help.webView.WebJsExtensions.Companion.basicJs
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameBasic
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.model.Download
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.rss.read.VisibleWebViewCompose
@@ -195,6 +200,20 @@ fun WebViewRouteScreen(
                                 setAcceptThirdPartyCookies(currentWebView, true)
                             }
                             addJavascriptInterface(basicJsInterface, nameBasic)
+                            // 书源授权页会用 cache.put 回写授权信息，需要与 R 项目一样注入 java / cache 桥
+                            if (viewModel.localHtml) {
+                                viewModel.source?.let { source ->
+                                    addJavascriptInterface(
+                                        WebJsExtensions(
+                                            source,
+                                            context as? AppCompatActivity,
+                                            currentWebView,
+                                        ),
+                                        nameJava,
+                                    )
+                                }
+                                addJavascriptInterface(WebCacheManager, nameCache)
+                            }
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView,

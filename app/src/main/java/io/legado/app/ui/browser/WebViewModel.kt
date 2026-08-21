@@ -9,11 +9,13 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst.imagePathKey
 import io.legado.app.constant.SourceType
 import io.legado.app.data.repository.BookSourceRepository
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.SourceVerificationHelp
+import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION2
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.ACache
 import io.legado.app.utils.ImageSaveUtils
@@ -35,6 +37,10 @@ class WebViewModel(
     var sourceOrigin: String = ""
     var sourceType = SourceType.book
 
+    /** 本地 html（书源通过 startBrowser 传进来的页面），只有这种页面注入 java/cache 桥 */
+    var localHtml: Boolean = false
+    var source: BaseSource? = null
+
     fun initData(
         intent: Intent,
         success: () -> Unit
@@ -48,8 +54,8 @@ class WebViewModel(
             sourceType = intent.getIntExtra("sourceType", SourceType.book)
             sourceVerificationEnable = intent.getBooleanExtra("sourceVerificationEnable", false)
             refetchAfterSuccess = intent.getBooleanExtra("refetchAfterSuccess", true)
-            html = intent.getStringExtra("html")
-            val source = SourceHelp.getSource(sourceOrigin, sourceType)
+            html = intent.getStringExtra("html")?.let { injectJsBridge(it) }
+            source = SourceHelp.getSource(sourceOrigin, sourceType)
             val analyzeUrl = AnalyzeUrl(url, source = source, coroutineContext = coroutineContext)
             baseUrl = analyzeUrl.url
             headerMap.putAll(analyzeUrl.headerMap)
@@ -62,6 +68,20 @@ class WebViewModel(
             context.toastOnUi("error\n${it.localizedMessage}")
             it.printOnDebug()
         }
+    }
+
+    /**
+     * 与 R 项目一致：本地 html 头部插入 [JS_INJECTION2]，页面里才有 java / cache 对象。
+     * 书源的授权页靠 cache.put 回写授权信息，少了这一步授权就存不下来。
+     */
+    private fun injectJsBridge(html: String): String {
+        localHtml = true
+        val script = "<script>$JS_INJECTION2</script>"
+        val headIndex = html.indexOf("<head", ignoreCase = true)
+        if (headIndex < 0) return "<head>$script</head>$html"
+        val closingHeadIndex = html.indexOf('>', startIndex = headIndex)
+        if (closingHeadIndex < 0) return "<head>$script</head>$html"
+        return StringBuilder(html).insert(closingHeadIndex + 1, script).toString()
     }
 
     fun saveImage(webPic: String?) {
