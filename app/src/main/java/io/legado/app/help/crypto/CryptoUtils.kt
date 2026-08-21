@@ -29,11 +29,27 @@ internal fun ByteArray.toBase64(): String = Base64.Default.encode(this)
 
 internal fun String.base64ToByteArray(): ByteArray {
     val normalized = replace("\\s".toRegex(), "")
-    return try {
-        Base64.Default.decode(normalized)
-    } catch (e: IllegalArgumentException) {
-        Base64.UrlSafe.decode(normalized)
+    if (normalized.isEmpty()) return ByteArray(0)
+    // 兼容书源中常见的非规范 base64 输入：
+    // 1. 缺失 padding（RFC 4648 §3.2 允许省略末尾 '='，解码前按剩余字符数补 1~2 个）
+    // 2. URL-safe 字符集（'-' '_'）与标准字符集混用
+    val stripped = normalized.trimEnd('=')
+    val padded = when (stripped.length % 4) {
+        2 -> "$stripped=="
+        3 -> "$stripped="
+        else -> stripped
     }
+    val candidates = listOf(
+        normalized,                                    // 原样：标准/URL-safe 且 padding 完整
+        padded,                                        // 补 padding 后
+        padded.replace('-', '+').replace('_', '/'),    // URL-safe 字符还原为标准字符
+    )
+    for (base64 in listOf(Base64.Default, Base64.UrlSafe)) {
+        for (candidate in candidates) {
+            runCatching { base64.decode(candidate) }.getOrNull()?.let { return it }
+        }
+    }
+    throw IllegalArgumentException("Invalid base64 input: $normalized")
 }
 
 internal fun digest(algorithm: String, data: ByteArray): ByteArray =
