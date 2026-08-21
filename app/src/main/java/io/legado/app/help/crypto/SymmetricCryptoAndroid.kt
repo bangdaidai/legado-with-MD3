@@ -24,6 +24,11 @@ open class SymmetricCryptoAndroid(
     private fun normalizedKey(key: ByteArray): ByteArray = when {
         keyAlgorithm.equals("DES", true) && key.size > 8 -> key.copyOf(8)
         keyAlgorithm.equals("DESede", true) && key.size > 24 -> key.copyOf(24)
+        // 部分书源以任意长度字符串（如 9 字节）作为原始密钥传入，
+        // 服务端通常取其 MD5 派生出 16 字节 AES 密钥。这里对齐该约定，
+        // 把非 16/24/32 字节的 AES 密钥归一为 16 字节，避免 InvalidKeyException。
+        keyAlgorithm.equals("AES", true) && key.size !in listOf(16, 24, 32) ->
+            digest("MD5", key)
         else -> key
     }
 
