@@ -22,6 +22,9 @@ open class SymmetricCryptoAndroid(
         ?: KeyGenerator.getInstance(keyAlgorithm).generateKey()
     private var iv: ByteArray? = null
 
+    // 临时探针：密钥非法时要看到它到底是什么（疑似 "undefined"），定位后连同下面的 try/catch 一起删
+    private val keyForProbe = key
+
     private fun normalizedKey(key: ByteArray): ByteArray = when {
         // 与 Hutool KeyUtil 一致：DES/DESede 走 DESKeySpec/DESedeKeySpec，超长密钥只取前 8/24 字节；
         // 其余算法（含 AES）原样交给 SecretKeySpec，密钥长度非法时由 provider 抛异常。
@@ -46,8 +49,17 @@ open class SymmetricCryptoAndroid(
         }
     } catch (e: Throwable) {
         // 临时探针：书源会吞掉这里的异常，定位后删除本 try/catch
-        JsProbe.stepError("cipher($transformation,mode=$mode)", e)
+        JsProbe.stepError("cipher($transformation,mode=$mode,key=${probeKey()})", e)
         throw e
+    }
+
+    /** 临时探针：可打印字符原样输出，否则给 hex，最多 32 个字符 */
+    private fun probeKey(): String {
+        val bytes = keyForProbe ?: return "随机"
+        val text = String(bytes, Charsets.UTF_8)
+        val printable = text.none { it.code < 0x20 || it.code == 0x7F }
+        return if (printable) "${bytes.size}B/\"${text.take(32)}\""
+        else "${bytes.size}B/hex:${bytes.take(16).joinToString("") { "%02x".format(it) }}"
     }
 
     fun encrypt(data: ByteArray): ByteArray = cipher(Cipher.ENCRYPT_MODE).doFinal(data)
