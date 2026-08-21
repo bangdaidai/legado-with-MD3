@@ -61,6 +61,8 @@
 -keep class * extends io.legado.app.help.JsExtensions{*;}
 # Rhino JS 引擎：书源通过 Packages.xxx 反射访问这些类，不能被混淆
 -keep class org.mozilla.javascript.** { *; }
+# Hutool 兼容类：书源通过 Packages.cn.hutool.crypto.digest.DigestUtil 调用，不能被混淆
+-keep class cn.hutool.crypto.digest.DigestUtil { *; }
 -keep class com.script.** { *; }
 -keep class io.legado.app.model.SharedJsScope { *; }
 -dontwarn org.mozilla.javascript.**
