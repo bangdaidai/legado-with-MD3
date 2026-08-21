@@ -628,7 +628,9 @@ interface JsExtensions : JsEncodeUtils {
     @JavascriptInterface
     fun base64Decode(str: String?): String {
         return try {
-            str?.let { String(it.base64ToByteArray(), Charsets.UTF_8) } ?: ""
+            val result = str?.let { String(it.base64ToByteArray(), Charsets.UTF_8) } ?: ""
+            JsProbe.step("base64Decode", "in=${str?.length ?: -1}→out=${result.length}")
+            result
         } catch (e: Throwable) {
             JsProbe.stepError("base64Decode(len=${str?.length})", e)
             throw e
