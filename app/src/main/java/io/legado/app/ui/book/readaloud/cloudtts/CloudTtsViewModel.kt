@@ -10,6 +10,7 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
+import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
@@ -70,6 +71,7 @@ class CloudTtsViewModel(
     private val voiceGateway: ReadAloudVoiceGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val uploadRepository: UploadRepository,
+    private val httpTtsRepository: HttpTtsRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CloudTtsUiState())
     val uiState = _uiState.asStateFlow()
@@ -495,7 +497,7 @@ class CloudTtsViewModel(
                     speechRate = editor.speed.toFloatOrNull() ?: 1f,
                 )) { application.getString(R.string.system_tts_preview_failed) }
             } else if (editor.engineType == ReadAloudVoice.ENGINE_HTTP) {
-                val httpTts = editor.engineId.toLongOrNull()?.let { appDb.httpTTSDao.get(it) }
+                val httpTts = editor.engineId.toLongOrNull()?.let { httpTtsRepository.findById(it) }
                     ?: error(application.getString(R.string.cloud_tts_engine_missing))
                 // 试听固定用正常语速：编辑器里的 speed 是云端引擎的倍率语义，和脚本的 speakSpeed 不通用
                 val previewVoice = if (editor.voiceId == DEFAULT_ENGINE_VOICE_ID) {
