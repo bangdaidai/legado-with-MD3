@@ -11,6 +11,8 @@ import io.legado.app.data.entities.ChapterSpeechSegmentEntity
 /** 分镜结果按章聚合的统计行，用于章节列表 */
 data class ChapterSpeechSummaryRow(
     val chapterIndex: Int,
+    /** 目录里的章节标题，目录被清过时为空 */
+    val title: String,
     val segmentCount: Int,
     val characterCount: Int,
     val updatedAt: Long,
@@ -53,9 +55,11 @@ interface ChapterSpeechDao {
     ): List<ChapterSpeechSegmentEntity>
 
     @Query(
-        "select s.chapterIndex as chapterIndex, count(*) as segmentCount, " +
+        "select s.chapterIndex as chapterIndex, ifnull(c.title, '') as title, " +
+            "count(*) as segmentCount, " +
             "count(distinct s.characterId) as characterCount, " +
             "max(s.updatedAt) as updatedAt from chapter_speech_segments s " +
+            "left join chapters c on c.bookUrl = s.bookUrl and c.`index` = s.chapterIndex " +
             "where s.analysisId in (select a.id from chapter_speech_analysis a " +
             "where a.bookUrl = :bookUrl and a.updatedAt = " +
             "(select max(b.updatedAt) from chapter_speech_analysis b " +

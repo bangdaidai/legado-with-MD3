@@ -3,7 +3,6 @@ package io.legado.app.ui.book.readaloud.storyboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
-import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
@@ -42,7 +41,6 @@ class SpeechStoryboardViewModel(
     private val buildSpeechPlan: BuildSpeechPlanUseCase,
     private val chapterSpeechGateway: ChapterSpeechGateway,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
-    private val bookChapterDao: BookChapterDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SpeechStoryboardUiState(bookUrl = bookUrl))
@@ -82,7 +80,7 @@ class SpeechStoryboardViewModel(
                 val analyzed = chapterSpeechGateway.getChapterSummaries(bookUrl).map { summary ->
                     StoryboardChapterUi(
                         chapterIndex = summary.chapterIndex,
-                        title = chapterTitle(summary.chapterIndex),
+                        title = summary.title.ifBlank { fallbackTitle(summary.chapterIndex) },
                         segmentCount = summary.segmentCount,
                         characterCount = summary.characterCount,
                         isCurrent = summary.chapterIndex == current,
@@ -92,7 +90,8 @@ class SpeechStoryboardViewModel(
                 val chapters = if (current != null && analyzed.none { it.chapterIndex == current }) {
                     (analyzed + StoryboardChapterUi(
                         chapterIndex = current,
-                        title = chapterTitle(current),
+                        title = ReadBook.curTextChapter?.title?.takeUnless { it.isBlank() }
+                            ?: fallbackTitle(current),
                         segmentCount = 0,
                         characterCount = 0,
                         isCurrent = true,
@@ -123,8 +122,14 @@ class SpeechStoryboardViewModel(
 
     private fun loadChapter(chapterIndex: Int, reanalyze: Boolean) {
         loadJob?.cancel()
+        val title = _uiState.value.chapters
+            .firstOrNull { it.chapterIndex == chapterIndex }
+            ?.title
+            ?: fallbackTitle(chapterIndex)
         loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, selectedChapterIndex = chapterIndex) }
+            _uiState.update {
+                it.copy(isLoading = true, selectedChapterIndex = chapterIndex, chapterTitle = title)
+            }
             try {
                 val isCurrent = chapterIndex == currentChapterIndex()
                 val plan = if (isCurrent) {
@@ -132,7 +137,6 @@ class SpeechStoryboardViewModel(
                 } else {
                     cachedChapterPlan(chapterIndex)
                 }
-                val title = chapterTitle(chapterIndex)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -212,10 +216,9 @@ class SpeechStoryboardViewModel(
     private fun currentChapterIndex(): Int? = ReadBook.durChapterIndex
         .takeIf { ReadBook.book?.bookUrl == bookUrl && ReadBook.curTextChapter != null }
 
-    private suspend fun chapterTitle(chapterIndex: Int): String = withContext(Dispatchers.IO) {
-        bookChapterDao.getChapterTitleByUrlAndIndex(bookUrl, chapterIndex)
-    }?.takeIf { it.isNotBlank() }
-        ?: appCtx.getString(R.string.speech_storyboard_chapter_number, chapterIndex + 1)
+    /** 目录里没有标题（本地书清过目录）时的兜底名字 */
+    private fun fallbackTitle(chapterIndex: Int): String =
+        appCtx.getString(R.string.speech_storyboard_chapter_number, chapterIndex + 1)
 
     private fun toItemUi(item: SpeechPlanItem): StoryboardItemUi {
         val segment = item.segment

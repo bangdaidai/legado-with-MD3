@@ -117,6 +117,8 @@ data class ChapterSpeechSegment(
 /** 一本书里某一章已存下来的分镜统计，用于分镜章节列表 */
 data class ChapterSpeechSummary(
     val chapterIndex: Int,
+    /** 目录里的章节标题，目录被清过时为空 */
+    val title: String,
     val segmentCount: Int,
     val characterCount: Int,
     val updatedAt: Long,

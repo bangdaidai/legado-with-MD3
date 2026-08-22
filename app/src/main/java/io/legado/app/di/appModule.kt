@@ -750,7 +750,6 @@ val appModule = module {
             buildSpeechPlan = get(),
             chapterSpeechGateway = get(),
             bookKnowledgeGateway = get(),
-            bookChapterDao = get(),
         )
     }
     viewModelOf(::TtsCacheViewModel)

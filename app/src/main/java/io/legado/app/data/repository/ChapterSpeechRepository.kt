@@ -58,6 +58,7 @@ class ChapterSpeechRepository(
             dao.getChapterSummaries(bookUrl).map {
                 ChapterSpeechSummary(
                     chapterIndex = it.chapterIndex,
+                    title = it.title,
                     segmentCount = it.segmentCount,
                     characterCount = it.characterCount,
                     updatedAt = it.updatedAt,

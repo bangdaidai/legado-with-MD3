@@ -30,6 +30,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Remove imports/variables/functions that YOUR changes made unused.
 - Don't remove pre-existing dead code unless asked.
 
+### 架构护栏：UI 层禁止新增 DAO 直连（最常踩的坑）
+
+任何 `:app` 编译任务都会先跑 `verifyConfigArchitecture`（`build.gradle.kts:216`）。它逐文件统计
+`io/legado/app/ui/` 下的 DAO 依赖（`data.dao.XxxDao` 的 import 加 `appDb.xxxDao` 访问），再和
+`daoInjectionBaseline`（文件名含 `ViewModel`）/ `uiDaoAccessBaseline`（其它 UI 文件）基线比对：
+
+- 多一个就失败：`ViewModel 新增了 N 个 DAO 直连` / `UI 层新增了 N 个 DAO 直连`。
+- 少一个也失败：要求把基线数字下调。
+
+**新写的 ViewModel 默认零 DAO**，取数据只走 domain gateway / use case：
+
+1. 先在已有 gateway 上加方法（例如 `ChapterSpeechGateway` + `ChapterSpeechRepository`），没有合适
+   的就新建 gateway；DAO 只允许出现在 `data/repository/` 里。
+2. 需要别的表的字段（典型：章节标题）时，在 DAO 的 `@Query` 里 join 出来跟着聚合行一起返回，
+   不要在 ViewModel 里再补一次查询。
+3. 不要为了让构建通过去改基线表 —— 基线只记录历史遗留文件。
+
 ### Goal-Driven Execution
 
 Transform tasks into verifiable goals:
