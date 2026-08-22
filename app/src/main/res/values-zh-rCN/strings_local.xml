@@ -11,9 +11,6 @@
     <string name="author_bio_hint">请输入作者简介</string>
     <string name="author_bio_saved">简介已保存</string>
     <string name="author_bio_generate">AI 生成</string>
-    <string name="author_bio_generating">生成中…</string>
-    <string name="author_bio_ai_warning">AI 可能写错细节，保存前请自行核对。</string>
-    <string name="author_bio_ai_generated">由 AI 生成</string>
     <string name="author_sort_book_count">排序：书籍数</string>
     <string name="author_sort_rating">排序：评分</string>
     <string name="author_sort_name">排序：名称</string>

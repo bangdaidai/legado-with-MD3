@@ -1,5 +1,7 @@
 package io.legado.app.data.repository.ai
 
+import io.legado.app.domain.model.aiFailureKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.random.Random
@@ -34,7 +36,9 @@ internal class KeyRotator(rawKey: String) {
 
 /**
  * Retry a block with exponential backoff + jitter.
- * Retries on [retryableStatusCodes] (default: 429, 502, 503).
+ * Retries only when [io.legado.app.domain.model.aiFailureKind] classifies the failure as
+ * retryable: rate limit, provider 5xx, timeout and other network IO errors.
+ * Coroutine cancellation is rethrown immediately and never retried.
  * If [keyRotator] is provided and has multiple keys, rotates key on each retry.
  *
  * @param maxAttempts Total attempts (1 = no retry, 2 = one retry, etc.)
@@ -46,7 +50,6 @@ internal suspend fun <T> retryWithBackoff(
     maxAttempts: Int = 3,
     baseDelayMs: Long = 1_000,
     maxDelayMs: Long = 30_000,
-    retryableStatusCodes: Set<Int> = setOf(429, 502, 503),
     keyRotator: KeyRotator? = null,
     onRetry: (suspend (attempt: Int, delayMs: Long, error: Exception) -> Unit)? = null,
     block: suspend () -> T
@@ -55,10 +58,12 @@ internal suspend fun <T> retryWithBackoff(
     for (attempt in 1..maxAttempts) {
         try {
             return block()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             lastException = e
             if (attempt >= maxAttempts) break
-            if (!isRetryable(e, retryableStatusCodes)) break
+            if (!e.aiFailureKind().isRetryable) break
 
             // Rotate key if available
             if (keyRotator != null && keyRotator.hasMultipleKeys) {
@@ -76,11 +81,4 @@ internal suspend fun <T> retryWithBackoff(
         }
     }
     throw lastException ?: Exception("Retry failed after $maxAttempts attempts")
-}
-
-private fun isRetryable(e: Exception, retryableStatusCodes: Set<Int>): Boolean {
-    val message = e.message ?: return false
-    return retryableStatusCodes.any { code ->
-        message.contains("HTTP $code") || message.contains("$code:")
-    }
 }

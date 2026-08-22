@@ -128,6 +128,7 @@ import io.legado.app.ui.config.ai.AiModelEditRouteScreen
 import io.legado.app.ui.config.ai.AiProviderEditRouteScreen
 import io.legado.app.ui.config.ai.prompt.AiPromptConfigRouteScreen
 import io.legado.app.ui.config.ai.summary.AiSummaryConfigRouteScreen
+import io.legado.app.ui.config.ai.websearch.AiWebSearchConfigRouteScreen
 import io.legado.app.ui.config.backupConfig.BackupConfigRouteScreen
 import io.legado.app.ui.config.coverConfig.CoverAlbumManageRouteScreen
 import io.legado.app.ui.config.coverConfig.CoverConfigRouteScreen
@@ -513,7 +514,8 @@ fun MainActivity.mainEntryProvider(
             },
             onNavigateToTranslation = { backStack.add(MainRouteSettingsTranslation) },
             onNavigateToAiSummary = { backStack.add(MainRouteSettingsAiSummary) },
-            onNavigateToAiPrompt = { backStack.add(MainRouteSettingsAiPrompt) }
+            onNavigateToAiPrompt = { backStack.add(MainRouteSettingsAiPrompt) },
+            onNavigateToAiWebSearch = { backStack.add(MainRouteSettingsAiWebSearch) }
         )
     }
 
@@ -523,6 +525,10 @@ fun MainActivity.mainEntryProvider(
 
     entry<MainRouteSettingsAiPrompt> {
         AiPromptConfigRouteScreen(onBackClick = { onNavigateBack() })
+    }
+
+    entry<MainRouteSettingsAiWebSearch> {
+        AiWebSearchConfigRouteScreen(onBackClick = { onNavigateBack() })
     }
 
     entry<MainRouteSettingsAiProviderEdit> { route ->

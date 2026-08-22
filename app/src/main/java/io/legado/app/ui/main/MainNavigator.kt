@@ -93,6 +93,7 @@ object MainNavigator {
             is MainRouteSettingsAiModelEdit,
             MainRouteSettingsAiSummary,
             MainRouteSettingsAiPrompt,
+            MainRouteSettingsAiWebSearch,
             MainRouteSettingsCustomTheme,
             MainRouteSettingsThemeManage,
             MainRouteSettingsDownloadCache,

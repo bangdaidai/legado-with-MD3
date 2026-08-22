@@ -16,10 +16,12 @@ import io.legado.app.data.entities.BookKnowledgeEntry
 import io.legado.app.data.entities.BookOutlineNode
 import io.legado.app.domain.gateway.AiMemoryGateway
 import io.legado.app.domain.gateway.AiToolGateway
+import io.legado.app.domain.gateway.AiWebSearchGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.model.AiToolCall
 import io.legado.app.domain.model.AiToolDefinition
 import io.legado.app.domain.model.AiToolResult
+import io.legado.app.domain.model.AiWebSearchQuery
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.utils.GSON
@@ -36,9 +38,16 @@ class AiToolRepository(
     private val aiArtifactDao: AiArtifactDao,
     private val aiMemoryGateway: AiMemoryGateway,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
+    private val aiWebSearchGateway: AiWebSearchGateway,
 ) : AiToolGateway {
 
-    override fun availableTools(): List<AiToolDefinition> = tools
+    /**
+     * 联网检索只在用户配置好之后才暴露给模型。没配置时不声明这个工具，模型就不会尝试调用，
+     * 也不会因为"有个工具一直失败"而乱重试。
+     */
+    override fun availableTools(): List<AiToolDefinition> {
+        return if (aiWebSearchGateway.isConfigured) tools + webSearchTool else tools
+    }
 
     override fun requiresConfirmation(toolName: String): Boolean {
         return toolName in confirmationRequiredTools
@@ -60,6 +69,7 @@ class AiToolRepository(
             TOOL_GET_CHARACTER_PROFILE -> getCharacterProfile(args)
             TOOL_SEARCH_BOOK_KNOWLEDGE -> searchBookKnowledge(args)
             TOOL_GET_BOOK_OUTLINE -> getBookOutline(args)
+            TOOL_SEARCH_WEB -> searchWeb(args)
             TOOL_SAVE_AI_ARTIFACT -> saveAiArtifact(args)
             TOOL_SAVE_BOOK_CHARACTER_PROFILE -> saveBookCharacterProfile(args)
             TOOL_SAVE_BOOK_CHARACTER_EVENT -> saveBookCharacterEvent(args)
@@ -867,6 +877,43 @@ class AiToolRepository(
         return runCatching { GSON.fromJson(this, JsonObject::class.java) }.getOrNull() ?: JsonObject()
     }
 
+    /**
+     * 唯一会访问外部网络的工具：query 会被发往用户配置的搜索服务。
+     * 其余工具全部只读本地缓存。
+     */
+    private suspend fun searchWeb(args: JsonObject): String {
+        if (!aiWebSearchGateway.isConfigured) {
+            return """{"error":"Web search is not configured. Ask the user to enable it in AI settings."}"""
+        }
+        val query = args.string("query").orEmpty().trim()
+        if (query.isEmpty()) return """{"error":"query is required"}"""
+        val result = aiWebSearchGateway.search(
+            AiWebSearchQuery(
+                query = query,
+                topic = args.string("topic"),
+                searchDepth = args.string("searchDepth"),
+                maxResults = args.int("maxResults", 0).takeIf { it > 0 },
+            )
+        ).getOrElse { error ->
+            return GSON.toJson(mapOf("error" to (error.message ?: "Web search failed")))
+        }
+        return GSON.toJson(
+            mapOf(
+                "query" to result.query,
+                "answer" to result.answer,
+                "results" to result.hits.map { hit ->
+                    mapOf(
+                        "title" to hit.title,
+                        "url" to hit.url,
+                        "content" to hit.content.take(MAX_WEB_SNIPPET_CHARS),
+                        "score" to hit.score,
+                    )
+                }
+            )
+        )
+    }
+
+
     companion object {
         const val TOOL_SEARCH_BOOKS = "search_books"
         const val TOOL_GET_BOOK_DETAIL = "get_book_detail"
@@ -890,6 +937,11 @@ class AiToolRepository(
         const val TOOL_SAVE_MEMORY = "save_memory"
         const val TOOL_RECALL_MEMORY = "recall_memory"
         const val TOOL_DELETE_MEMORY = "delete_memory"
+        const val TOOL_SEARCH_WEB = "search_web"
+
+        /** 检索片段本身很短，这里再兜一层，避免单条结果占满整个工具输出预算。 */
+        private const val MAX_WEB_SNIPPET_CHARS = 1000
+
 
         private val confirmationRequiredTools = setOf(
             TOOL_SAVE_AI_ARTIFACT,
@@ -1179,6 +1231,25 @@ class AiToolRepository(
                 )
             )
         )
+
+        /**
+         * 只在用户配置好联网搜索后才追加到 [availableTools]。所有其它工具都只读本地缓存，
+         * 因此描述里要说清这是唯一能取到应用外信息的途径。
+         */
+        private val webSearchTool = AiToolDefinition(
+            name = TOOL_SEARCH_WEB,
+            description = "Search the public web for information that is not in the local bookshelf, " +
+                "such as a book's reception, an author's background, or recent news. " +
+                "This is the only tool that reaches outside the app; every other tool reads local cache only. " +
+                "Never present search results as certain if the snippets do not support them.",
+            inputSchema = objectSchema(
+                "query" to stringSchema("Search keywords or question."),
+                "topic" to stringSchema("One of general, news, finance. Defaults to the user setting."),
+                "searchDepth" to stringSchema("One of basic, advanced. Defaults to the user setting."),
+                "maxResults" to intSchema("Maximum results to return, 1-10. Defaults to the user setting.")
+            )
+        )
+
 
         private fun objectSchema(vararg properties: Pair<String, Map<String, Any?>>): Map<String, Any?> {
             return mapOf(

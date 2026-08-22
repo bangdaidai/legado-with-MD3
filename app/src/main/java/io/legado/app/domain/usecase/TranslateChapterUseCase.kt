@@ -10,6 +10,7 @@ import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.DictionaryGateway
 import io.legado.app.domain.gateway.TranslationCacheGateway
 import io.legado.app.domain.gateway.TranslationSettingsGateway
+import io.legado.app.domain.model.AiFailureKind
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
@@ -25,6 +26,7 @@ import io.legado.app.domain.model.TranslationConstants
 import io.legado.app.domain.model.TranslationConstants.OUTPUT_FORMAT
 import io.legado.app.domain.model.TranslationDictionaryPolicy
 import io.legado.app.domain.model.TranslationResultPreviewParser
+import io.legado.app.domain.model.aiFailureKind
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
@@ -577,15 +579,22 @@ $terms
             .joinToString("\n")
     }
 
+    /**
+     * 归类上一次失败，供下一轮提示词决定是否追加纠正指令。
+     *
+     * 分类统一走 [aiFailureKind]，与 `retryWithBackoff` 用同一套标准 —— 早先这里自己
+     * 匹配 message 子串，导致 [RetryReason.NETWORK_ERROR] 永远不可能被命中。
+     */
     private fun parseRetryReason(error: Exception?): RetryReason? {
-        val message = error?.message ?: return null
-        return when {
-            message.contains("429") -> RetryReason.RATE_LIMIT
-            message.contains("500") || message.contains("502") || message.contains("503") || message.contains("504") -> RetryReason.SERVER_ERROR
-            message.contains("401") || message.contains("403") -> RetryReason.AUTH_ERROR
-            message.contains("timeout", ignoreCase = true) -> RetryReason.TIMEOUT
-            message.contains("HTTP") -> RetryReason.UNKNOWN
-            else -> null
+        return when (error?.aiFailureKind()) {
+            AiFailureKind.RATE_LIMIT -> RetryReason.RATE_LIMIT
+            AiFailureKind.SERVER_ERROR -> RetryReason.SERVER_ERROR
+            AiFailureKind.TIMEOUT -> RetryReason.TIMEOUT
+            AiFailureKind.NETWORK -> RetryReason.NETWORK_ERROR
+            AiFailureKind.AUTH -> RetryReason.AUTH_ERROR
+            AiFailureKind.CONTEXT_OVERFLOW,
+            AiFailureKind.CLIENT_ERROR -> RetryReason.PERMANENT_FAILURE
+            AiFailureKind.UNKNOWN, null -> null
         }
     }
 }

@@ -2729,7 +2729,6 @@
     <string name="cloud_tts_http_voice_hint">HTTP TTS 的聲音由規則服務決定；可直接儲存為人物配音預設。</string>
     <string name="cloud_tts_preview_generating">試聽產生中…</string>
     <string name="cloud_tts_preview">試聽</string>
-    <string name="cloud_tts_auto_synced_suffix"> · 自動同步</string>
     <string name="cloud_tts_unavailable_suffix"> · 目前無法使用</string>
     <string name="cloud_tts_no_available_engine">請先安裝系統 TTS、新增雲端 TTS 引擎或匯入 HTTP TTS</string>
     <string name="cloud_tts_voice_engine_unavailable">此音色使用的引擎目前無法使用</string>

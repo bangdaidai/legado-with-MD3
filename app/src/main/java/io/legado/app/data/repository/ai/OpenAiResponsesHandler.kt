@@ -6,6 +6,8 @@ import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiCapability
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
+import io.legado.app.domain.model.AiGenerationParams
+import io.legado.app.domain.model.AiHttpException
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiProtocol
@@ -55,6 +57,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
             "input" to request.messages.toOpenAiResponsesInput()
         )
         request.tools.takeIf { it.isNotEmpty() }?.let { body["tools"] = it.toOpenAiResponsesTools() }
+        body.applyResponsesWebSearch(params)
         params.temperature?.let { body["temperature"] = it }
         params.maxOutputTokens?.let { body["max_output_tokens"] = it }
         params.topP?.let { body["top_p"] = it }
@@ -79,7 +82,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
                 )
             }
             if (!response.isSuccessful()) {
-                throw Exception("HTTP ${response.code()}: ${response.message()}")
+                throw AiHttpException(response.code(), response.message(), response.body)
             }
             val root = GSON.fromJson(response.body, JsonObject::class.java)
             val text = root?.getString("output_text") ?: root.extractResponsesOutputText()
@@ -107,6 +110,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
             "stream" to true
         )
         request.tools.takeIf { it.isNotEmpty() }?.let { body["tools"] = it.toOpenAiResponsesTools() }
+        body.applyResponsesWebSearch(params)
         params.temperature?.let { body["temperature"] = it }
         params.maxOutputTokens?.let { body["max_output_tokens"] = it }
         params.topP?.let { body["top_p"] = it }
@@ -131,7 +135,9 @@ class OpenAiResponsesHandler : AiProtocolHandler {
                 )
             }.also {
                 if (!it.isSuccessful) {
-                    throw Exception("HTTP ${it.code}: ${it.message}")
+                    val errorBody = runCatching { it.body.string() }.getOrNull()
+                    it.close()
+                    throw AiHttpException(it.code, it.message, errorBody)
                 }
             }
         }
@@ -245,7 +251,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
                 )
             }
             if (!response.isSuccessful()) {
-                throw Exception("HTTP ${response.code()}: ${response.message()}")
+                throw AiHttpException(response.code(), response.message(), response.body)
             }
             val json = GSON.fromJson(response.body, OpenAiModelsResponse::class.java)
             json?.data.toAvailableModels()
@@ -282,6 +288,17 @@ internal fun List<AiMessage>.toOpenAiResponsesInput(): List<Map<String, Any?>> {
             else -> listOf(mapOf("role" to message.role, "content" to message.content))
         }
     }
+}
+
+/**
+ * Responses 协议的内置联网搜索：`tools` 里加一个 `{"type":"web_search"}` 即可。
+ * OpenAI 官方与阿里百炼的 Responses 端点都是这个形状，所以不按供应商区分；
+ * 只有调用方显式请求联网时才下发，并且追加而不覆盖业务 function tools。
+ * 注意：开启后提示词内容会被送去做网络检索。
+ */
+internal fun MutableMap<String, Any?>.applyResponsesWebSearch(params: AiGenerationParams) {
+    if (!params.webSearch) return
+    appendServerTool(mapOf("type" to "web_search"))
 }
 
 internal fun List<AiToolDefinition>.toOpenAiResponsesTools(): List<Map<String, Any?>> {

@@ -475,6 +475,15 @@ object PreferKey {
     const val llmPrompt = "llmPrompt"
     const val aiRewritePresets = "aiRewritePresets"
 
+    // AI web search (Tavily)
+    const val aiWebSearchEnabled = "aiWebSearchEnabled"
+    const val aiWebSearchApiKey = "aiWebSearchApiKey"
+    const val aiWebSearchBaseUrl = "aiWebSearchBaseUrl"
+    const val aiWebSearchTopic = "aiWebSearchTopic"
+    const val aiWebSearchDepth = "aiWebSearchDepth"
+    const val aiWebSearchMaxResults = "aiWebSearchMaxResults"
+
+
     const val navIconHome = "navIconHome"
 
     // Lab

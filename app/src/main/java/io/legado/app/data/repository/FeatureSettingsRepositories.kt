@@ -11,6 +11,7 @@ import io.legado.app.domain.gateway.LabSettingsGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.TranslationSettingsGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.model.TranslationConstants
 import io.legado.app.domain.model.settings.AppShellSettings
 import io.legado.app.domain.model.settings.BackupSettings
@@ -20,6 +21,7 @@ import io.legado.app.domain.model.settings.LabSettings
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ThemeSettings
 import io.legado.app.domain.model.settings.TranslationSettings
+import io.legado.app.domain.model.settings.WebSearchSettings
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.config.compatDsBoolean
 import io.legado.app.help.config.compatDsFloat
@@ -148,6 +150,23 @@ class BackupSettingsRepository : BackupSettingsGateway {
     }
 }
 
+class WebSearchSettingsRepository : WebSearchSettingsGateway {
+    override val currentSettings: WebSearchSettings
+        get() = AppConfigStore.preferences.toWebSearchSettings()
+
+    override val settings: Flow<WebSearchSettings> = AppConfigStore.preferencesFlow
+        .map { it.toWebSearchSettings() }
+        .distinctUntilChanged()
+
+    override suspend fun update(transform: (WebSearchSettings) -> WebSearchSettings) {
+        AppConfigStore.atomicUpdate(
+            read = Preferences::toWebSearchSettings,
+            toPrefMap = WebSearchSettings::toPrefMap,
+            transform = transform,
+        )
+    }
+}
+
 internal fun Preferences.toDownloadCacheSettings(): DownloadCacheSettings =
     DownloadCacheSettings(
         bitmapCacheSize = compatDsInt(PreferKey.bitmapCacheSize) ?: 50,
@@ -247,6 +266,31 @@ internal fun TranslationSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.llmMaxCharsPerChunk to maxCharsPerChunk,
     PreferKey.llmConcurrentChunks to concurrentChunks,
     PreferKey.llmRetryCount to retryCount,
+)
+
+internal fun Preferences.toWebSearchSettings(): WebSearchSettings = WebSearchSettings(
+    enabled = compatDsBoolean(PreferKey.aiWebSearchEnabled) ?: false,
+    apiKey = compatDsString(PreferKey.aiWebSearchApiKey).orEmpty(),
+    baseUrl = compatDsString(PreferKey.aiWebSearchBaseUrl)
+        ?.takeIf { it.isNotBlank() }
+        ?: WebSearchSettings.DEFAULT_BASE_URL,
+    topic = compatDsString(PreferKey.aiWebSearchTopic)
+        ?.takeIf { it in WebSearchSettings.topics }
+        ?: WebSearchSettings.TOPIC_GENERAL,
+    searchDepth = compatDsString(PreferKey.aiWebSearchDepth)
+        ?.takeIf { it in WebSearchSettings.depths }
+        ?: WebSearchSettings.DEPTH_BASIC,
+    maxResults = (compatDsInt(PreferKey.aiWebSearchMaxResults) ?: 5)
+        .coerceIn(WebSearchSettings.MIN_RESULTS, WebSearchSettings.MAX_RESULTS),
+)
+
+internal fun WebSearchSettings.toPrefMap(): Map<String, Any?> = mapOf(
+    PreferKey.aiWebSearchEnabled to enabled,
+    PreferKey.aiWebSearchApiKey to apiKey,
+    PreferKey.aiWebSearchBaseUrl to baseUrl,
+    PreferKey.aiWebSearchTopic to topic,
+    PreferKey.aiWebSearchDepth to searchDepth,
+    PreferKey.aiWebSearchMaxResults to maxResults,
 )
 
 internal fun Preferences.toBackupSettings(): BackupSettings = BackupSettings(

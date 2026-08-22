@@ -37,6 +37,7 @@ fun AiConfigRouteScreen(
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
     onNavigateToAiPrompt: () -> Unit,
+    onNavigateToAiWebSearch: () -> Unit,
     viewModel: AiConfigViewModel = koinViewModel()
 ) {
     AiConfigScreen(
@@ -48,7 +49,8 @@ fun AiConfigRouteScreen(
         onNavigateToModelEdit = onNavigateToModelEdit,
         onNavigateToTranslation = onNavigateToTranslation,
         onNavigateToAiSummary = onNavigateToAiSummary,
-        onNavigateToAiPrompt = onNavigateToAiPrompt
+        onNavigateToAiPrompt = onNavigateToAiPrompt,
+        onNavigateToAiWebSearch = onNavigateToAiWebSearch
     )
 }
 
@@ -63,7 +65,8 @@ fun AiConfigScreen(
     onNavigateToModelEdit: (providerId: String?, modelProfileId: String?) -> Unit,
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
-    onNavigateToAiPrompt: () -> Unit
+    onNavigateToAiPrompt: () -> Unit,
+    onNavigateToAiWebSearch: () -> Unit
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -143,6 +146,16 @@ fun AiConfigScreen(
                         title = stringResource(R.string.ai_prompt_config),
                         description = stringResource(R.string.ai_prompt_config_desc),
                         onClick = onNavigateToAiPrompt
+                    )
+                }
+            }
+
+            item {
+                SplicedColumnGroup(title = stringResource(R.string.ai_web_search)) {
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_web_search),
+                        description = stringResource(R.string.ai_web_search_desc),
+                        onClick = onNavigateToAiWebSearch
                     )
                 }
             }

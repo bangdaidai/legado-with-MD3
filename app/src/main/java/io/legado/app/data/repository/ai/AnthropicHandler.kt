@@ -7,6 +7,8 @@ import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiCapability
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
+import io.legado.app.domain.model.AiGenerationParams
+import io.legado.app.domain.model.AiHttpException
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiProtocol
@@ -64,6 +66,7 @@ class AnthropicHandler : AiProtocolHandler {
             "max_tokens" to (request.params.maxOutputTokens ?: request.model.maxOutputTokens.takeIf { it > 0 } ?: 2048)
         )
         request.tools.takeIf { it.isNotEmpty() }?.let { body["tools"] = it.toAnthropicTools() }
+        body.applyAnthropicWebSearch(request.params)
         systemPrompt?.let { body["system"] = it }
         // Reasoning config — suppress temperature when thinking is enabled
         val reasoningLevel = request.params.reasoningLevel
@@ -96,7 +99,7 @@ class AnthropicHandler : AiProtocolHandler {
                 )
             }
             if (!response.isSuccessful()) {
-                throw Exception("HTTP ${response.code()}: ${response.message()}")
+                throw AiHttpException(response.code(), response.message(), response.body)
             }
             val json = GSON.fromJson(response.body, AnthropicMessageResponse::class.java)
             val text = json?.content
@@ -132,6 +135,7 @@ class AnthropicHandler : AiProtocolHandler {
             "stream" to true
         )
         request.tools.takeIf { it.isNotEmpty() }?.let { body["tools"] = it.toAnthropicTools() }
+        body.applyAnthropicWebSearch(request.params)
         systemPrompt?.let { body["system"] = it }
         // Reasoning config — suppress temperature when thinking is enabled
         val reasoningLevel = request.params.reasoningLevel
@@ -165,7 +169,9 @@ class AnthropicHandler : AiProtocolHandler {
                 )
             }.also {
                 if (!it.isSuccessful) {
-                    throw Exception("HTTP ${it.code}: ${it.message}")
+                    val errorBody = runCatching { it.body.string() }.getOrNull()
+                    it.close()
+                    throw AiHttpException(it.code, it.message, errorBody)
                 }
             }
         }
@@ -274,7 +280,7 @@ class AnthropicHandler : AiProtocolHandler {
                 )
             }
             if (!response.isSuccessful()) {
-                throw Exception("HTTP ${response.code()}: ${response.message()}")
+                throw AiHttpException(response.code(), response.message(), response.body)
             }
             val json = GSON.fromJson(response.body, AnthropicModelsResponse::class.java)
             json?.data.toAvailableModels()
@@ -321,6 +327,23 @@ internal fun List<AiMessage>.toAnthropicMessages(): List<Map<String, Any?>> {
             )
         }
     }
+}
+
+/**
+ * Anthropic 的服务端联网搜索工具。内置工具用带日期的 `type` 版本号声明，不需要 `input_schema`；
+ * `web_search_20250305` 是所有支持该能力的模型都认的基础版本。
+ * 只在调用方显式请求联网时追加，并且不覆盖业务 function tools。
+ * 注意：开启后提示词内容会被送去做网络检索。
+ */
+internal fun MutableMap<String, Any?>.applyAnthropicWebSearch(params: AiGenerationParams) {
+    if (!params.webSearch) return
+    appendServerTool(
+        mapOf(
+            "type" to "web_search_20250305",
+            "name" to "web_search",
+            "max_uses" to 5
+        )
+    )
 }
 
 internal fun List<AiToolDefinition>.toAnthropicTools(): List<Map<String, Any?>> {
