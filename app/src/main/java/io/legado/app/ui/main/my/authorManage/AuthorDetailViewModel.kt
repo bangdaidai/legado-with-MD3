@@ -185,6 +185,8 @@ class AuthorDetailViewModel(
     ): AuthorDetailUiState {
         val mems = memories.filter { it.bookAuthor.trim() == name }
         val books = mems
+            // 按阅读进度倒序：读完的在最前，待看的沉底；进度相同时保持 DAO 的 updateTime 倒序
+            .sortedByDescending { it.progress }
             .map { AuthorBookItem(it, TagManager.bookDisplayTags(it.kind, it.customTag).toImmutableList()) }
             .toImmutableList()
         val profile = profiles[name]
