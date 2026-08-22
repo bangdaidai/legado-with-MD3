@@ -1,22 +1,20 @@
 package io.legado.app.ui.main.my.authorManage
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -75,16 +73,17 @@ fun AuthorDetailScreen(
         } else {
             LazyColumn(
                 contentPadding = contentPadding,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
             ) {
                 item {
                     AuthorDetailHeader(
                         detail = detail,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .padding(top = 12.dp),
+                            .padding(top = 8.dp, bottom = 4.dp),
                     )
                 }
                 if (detail.books.isEmpty()) {
@@ -96,21 +95,19 @@ fun AuthorDetailScreen(
                     }
                 } else {
                     items(detail.books, key = { it.memory.bookUrl }) { item ->
-                        Box(modifier = Modifier.padding(horizontal = 12.dp)) {
-                            MemoryBookCard(
-                                memory = item.memory,
-                                tags = item.tags,
-                                settings = uiState.bookshelfSettings,
-                                tagColorMap = uiState.tagColorMap,
-                                coverWidth = 56,
-                                showIntro = false,
-                                showReview = true,
-                                showAuthor = false,
-                                ratingInTitle = true,
-                                singleLineTags = true,
-                                onBookClick = onOpenBook,
-                            )
-                        }
+                        MemoryBookCard(
+                            memory = item.memory,
+                            tags = item.tags,
+                            settings = uiState.bookshelfSettings,
+                            tagColorMap = uiState.tagColorMap,
+                            coverWidth = uiState.coverWidth,
+                            showIntro = uiState.showIntro,
+                            showReview = uiState.showReview,
+                            // 作者页不重复显示作者名；评分随之移到标题行，否则会跟着副标题一起消失
+                            showAuthor = false,
+                            ratingInTitle = true,
+                            onBookClick = onOpenBook,
+                        )
                     }
                 }
             }
@@ -119,8 +116,10 @@ fun AuthorDetailScreen(
 
     if (uiState.editingBio && detail != null) {
         BioEditDialog(
-            name = detail.name,
-            initialBio = detail.bio,
+            bio = uiState.bioDraft,
+            generating = uiState.generatingBio,
+            onBioChange = { onIntent(AuthorDetailIntent.UpdateBioDraft(it)) },
+            onGenerate = { onIntent(AuthorDetailIntent.GenerateBio) },
             onDismiss = { onIntent(AuthorDetailIntent.DismissEditBio) },
             onSave = { onIntent(AuthorDetailIntent.SaveBio(it)) },
         )
@@ -162,6 +161,13 @@ private fun AuthorDetailHeader(
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurface,
                 )
+                if (detail.bioIsAi) {
+                    AppText(
+                        text = stringResource(R.string.author_bio_ai_generated),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -169,29 +175,54 @@ private fun AuthorDetailHeader(
 
 @Composable
 private fun BioEditDialog(
-    name: String,
-    initialBio: String,
+    bio: String,
+    generating: Boolean,
+    onBioChange: (String) -> Unit,
+    onGenerate: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
 ) {
-    var text by remember(name) { mutableStateOf(initialBio) }
     AppAlertDialog(
         show = true,
         onDismissRequest = onDismiss,
         title = stringResource(R.string.author_edit_bio),
         confirmText = stringResource(R.string.ok),
-        onConfirm = { onSave(text.trim()) },
+        onConfirm = { onSave(bio.trim()) },
         dismissText = stringResource(R.string.cancel),
         onDismiss = onDismiss,
         content = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { AppText(stringResource(R.string.author_bio_hint)) },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3,
-                singleLine = false,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = bio,
+                    onValueChange = onBioChange,
+                    placeholder = { AppText(stringResource(R.string.author_bio_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    singleLine = false,
+                    enabled = !generating,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = onGenerate, enabled = !generating) {
+                        AppText(
+                            text = stringResource(
+                                if (generating) R.string.author_bio_generating
+                                else R.string.author_bio_generate
+                            )
+                        )
+                    }
+                    if (generating) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                    }
+                }
+                AppText(
+                    text = stringResource(R.string.author_bio_ai_warning),
+                    style = LegadoTheme.typography.labelSmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
     )
 }

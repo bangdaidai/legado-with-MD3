@@ -7,6 +7,7 @@ import io.legado.app.data.dao.AiChatDao
 import io.legado.app.data.dao.AiMemoryDao
 import io.legado.app.data.dao.AiProfileDao
 import io.legado.app.data.dao.AiPromptPresetDao
+import io.legado.app.data.dao.AuthorProfileDao
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookContentProcessDao
 import io.legado.app.data.dao.BookDao
@@ -96,4 +97,5 @@ val appDatabaseModule = module {
     factory<HighlightTagRuleDao> { get<AppDatabase>().highlightTagRuleDao }
     factory<TagGroupRuleDao> { get<AppDatabase>().tagGroupRuleDao }
     factory<ExcludedTagDao> { get<AppDatabase>().excludedTagDao }
+    factory<AuthorProfileDao> { get<AppDatabase>().authorProfileDao }
 }

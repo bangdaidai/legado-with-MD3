@@ -28,6 +28,7 @@ object AiTaskType {
     const val ANALYZE_SPEECH = "analyze_speech"
     const val IDENTIFY_CHARACTERS = "identify_characters"
     const val BOOKSHELF_AUTO_GROUP = "bookshelf_auto_group"
+    const val AUTHOR_BIO = "author_bio"
 }
 
 object AiPromptTemplate {
@@ -268,7 +269,12 @@ data class AiGenerationParams(
     val temperature: Float? = null,
     val maxOutputTokens: Int? = null,
     val topP: Float? = null,
-    val reasoningLevel: AiReasoningLevel = AiReasoningLevel.AUTO
+    val reasoningLevel: AiReasoningLevel = AiReasoningLevel.AUTO,
+    /**
+     * 是否请求供应商自带的联网搜索。仅对支持该能力的供应商生效（见 applyProviderWebSearch），
+     * 由调用方按任务显式开启，默认关闭，避免翻译/摘要等任务无谓联网并外发正文。
+     */
+    val webSearch: Boolean = false
 ) {
     fun mergeWithFallback(
         modelParams: AiGenerationParams,
@@ -312,7 +318,8 @@ data class AiGenerationParams(
             temperature = mergedTemperature,
             maxOutputTokens = mergedMaxTokens,
             topP = mergedTopP,
-            reasoningLevel = mergedReasoningLevel
+            reasoningLevel = mergedReasoningLevel,
+            webSearch = this.webSearch || modelParams.webSearch
         )
     }
 }

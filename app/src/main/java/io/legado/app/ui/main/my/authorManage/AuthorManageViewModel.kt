@@ -2,7 +2,9 @@ package io.legado.app.ui.main.my.authorManage
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.data.entities.AuthorProfile
 import io.legado.app.data.entities.ReadingMemory
+import io.legado.app.data.repository.AuthorProfileRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.utils.cnCompare
 import kotlinx.collections.immutable.ImmutableList
@@ -27,6 +29,7 @@ private data class SortedAuthors(
 @OptIn(FlowPreview::class)
 class AuthorManageViewModel(
     private val repository: ReadingMemoryRepository,
+    private val authorProfileRepository: AuthorProfileRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthorManageUiState(loading = true))
@@ -38,10 +41,10 @@ class AuthorManageViewModel(
     /** 分组与排序只跟随数据和排序方式，搜索单独过滤，避免每敲一个字符就重算全表。 */
     private val sortedAuthors: Flow<SortedAuthors> = combine(
         repository.observeAll(),
-        AuthorProfileStore.observeBios(),
+        authorProfileRepository.observeProfiles(),
         _sortBy,
-    ) { memories, bios, sortBy ->
-        SortedAuthors(sortBy, buildAuthors(memories, bios, sortBy))
+    ) { memories, profiles, sortBy ->
+        SortedAuthors(sortBy, buildAuthors(memories, profiles, sortBy))
     }
 
     init {
@@ -79,7 +82,7 @@ class AuthorManageViewModel(
 
     private fun buildAuthors(
         memories: List<ReadingMemory>,
-        bios: Map<String, String>,
+        profiles: Map<String, AuthorProfile>,
         sortBy: AuthorSort,
     ): ImmutableList<AuthorItemUi> {
         val byAuthor = memories.groupBy { it.bookAuthor.trim() }
@@ -90,7 +93,7 @@ class AuthorManageViewModel(
                 bookCount = mems.size,
                 readBookCount = mems.count { isAuthorBookFinished(it) },
                 avgRating = authorAvgRating(mems),
-                bio = bios[name] ?: "",
+                bio = profiles[name]?.bio ?: "",
                 indexLabel = authorIndexLabel(name),
             )
         }

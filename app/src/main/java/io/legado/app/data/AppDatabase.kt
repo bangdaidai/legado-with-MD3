@@ -12,6 +12,7 @@ import io.legado.app.data.dao.AiChatDao
 import io.legado.app.data.dao.AiMemoryDao
 import io.legado.app.data.dao.AiProfileDao
 import io.legado.app.data.dao.AiPromptPresetDao
+import io.legado.app.data.dao.AuthorProfileDao
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookContentProcessDao
 import io.legado.app.data.dao.BookDao
@@ -62,6 +63,7 @@ import io.legado.app.data.entities.AiModelProfile
 import io.legado.app.data.entities.AiPromptPreset
 import io.legado.app.data.entities.AiProviderProfile
 import io.legado.app.data.entities.AiTaskPreset
+import io.legado.app.data.entities.AuthorProfile
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookCharacterEvent
@@ -147,7 +149,8 @@ val appDb by lazy {
         CloudTtsEngineEntity::class, ReadingMemory::class,
         ExactChapterPageCountEntity::class, BookTag::class, BookTagGroup::class,
         BookTagRelation::class, ExcludedTag::class, TagMapping::class,
-        RemovedAutoTag::class, ShareCardTemplate::class, BookMarking::class],
+        RemovedAutoTag::class, ShareCardTemplate::class, BookMarking::class,
+        AuthorProfile::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -259,6 +262,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val excludedTagDao: ExcludedTagDao
     abstract val tagMappingDao: TagMappingDao
     abstract val removedAutoTagDao: RemovedAutoTagDao
+    abstract val authorProfileDao: AuthorProfileDao
 
     companion object {
 

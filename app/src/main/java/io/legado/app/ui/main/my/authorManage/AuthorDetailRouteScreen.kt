@@ -25,6 +25,9 @@ fun AuthorDetailRouteScreen(
             when (effect) {
                 is AuthorDetailEffect.ShowToast ->
                     Toast.makeText(context, effect.messageResId, Toast.LENGTH_SHORT).show()
+
+                is AuthorDetailEffect.ShowError ->
+                    Toast.makeText(context, effect.message, Toast.LENGTH_LONG).show()
             }
         }
     }

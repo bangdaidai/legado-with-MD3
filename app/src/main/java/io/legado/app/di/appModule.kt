@@ -18,6 +18,7 @@ import io.legado.app.data.repository.AppLocaleRepository
 import io.legado.app.data.repository.AppShellSettingsRepository
 import io.legado.app.data.repository.AppStartupRepository
 import io.legado.app.data.repository.AppUiConfigurationRepository
+import io.legado.app.data.repository.AuthorProfileRepository
 import io.legado.app.data.repository.BackupRestoreRepository
 import io.legado.app.data.repository.BackupSettingsRepository
 import io.legado.app.data.repository.BookCacheCleanupRepository
@@ -186,6 +187,7 @@ import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
+import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
 import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
@@ -499,6 +501,7 @@ val appModule = module {
     single<BookMarkingGateway> { BookMarkingRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
     singleOf(::ReadingMemoryRepository)
+    singleOf(::AuthorProfileRepository)
     singleOf(::ShareCardRepository)
     single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get()) }
     singleOf(::CloudTtsCredentialCipher)
@@ -528,6 +531,7 @@ val appModule = module {
     singleOf(::GenerateChapterSummaryUseCase)
     singleOf(::AiTextFactoryUseCase)
     singleOf(::GenerateBookshelfAutoGroupPlanUseCase)
+    singleOf(::GenerateAuthorBioUseCase)
     singleOf(::ApplyBookshelfAutoGroupPlanUseCase)
     singleOf(::CleanSelectedTextUseCase)
     singleOf(::SaveBookContentProcessUseCase)
@@ -570,6 +574,8 @@ val appModule = module {
         AuthorDetailViewModel(
             name = name,
             repository = get(),
+            authorProfileRepository = get(),
+            generateAuthorBioUseCase = get(),
             bookshelfSettingsGateway = get(),
             themeSettingsGateway = get(),
         )

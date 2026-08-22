@@ -44,6 +44,8 @@ data class AuthorBookItem(
 data class AuthorDetailUi(
     val name: String,
     val bio: String,
+    /** 简介由 AI 生成（未经用户编辑），UI 需要据此提示内容可能不准确。 */
+    val bioIsAi: Boolean,
     val avgRating: Float,
     val readBookCount: Int,
     val bookCount: Int,
@@ -67,16 +69,28 @@ sealed interface AuthorManageIntent {
 data class AuthorDetailUiState(
     val detail: AuthorDetailUi? = null,
     val editingBio: Boolean = false,
+    /** 编辑弹窗中的草稿文本。放在状态里而非弹窗内部，AI 生成结果才能回灌。 */
+    val bioDraft: String = "",
+    val generatingBio: Boolean = false,
+    /** 以下书籍卡片相关配置与阅读记忆列表保持一致 */
     val bookshelfSettings: BookshelfSettings = BookshelfSettings(),
     val tagColorMap: ImmutableMap<String, Long> = persistentMapOf(),
+    val coverWidth: Int = 84,
+    val showIntro: Boolean = true,
+    val showReview: Boolean = false,
 )
 
 sealed interface AuthorDetailIntent {
     data object ToggleEditBio : AuthorDetailIntent
+    data class UpdateBioDraft(val bio: String) : AuthorDetailIntent
     data class SaveBio(val bio: String) : AuthorDetailIntent
+    data object GenerateBio : AuthorDetailIntent
     data object DismissEditBio : AuthorDetailIntent
 }
 
 sealed interface AuthorDetailEffect {
     data class ShowToast(@StringRes val messageResId: Int) : AuthorDetailEffect
+
+    /** AI 生成失败时展示原始错误，便于排查是没配模型还是请求失败。 */
+    data class ShowError(val message: String) : AuthorDetailEffect
 }

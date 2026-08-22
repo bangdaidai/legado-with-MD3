@@ -841,6 +841,21 @@ object DatabaseMigrations {
             )
             database.execSQL("DROP TABLE readRecordSession")
             database.execSQL("ALTER TABLE readRecordSession_migrated RENAME TO readRecordSession")
+
+            // 本地额外: 作者简介表。原先整份塞在 AppConfigStore 的 author_intros 单个 JSON 里，
+            // 而 settings DataStore 不能放大 value（会阻塞 App.onCreate 的同步预载），故独立成表。
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS authorProfiles (
+                    name TEXT NOT NULL,
+                    bio TEXT NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'manual',
+                    updateTime INTEGER NOT NULL DEFAULT 0,
+                    model TEXT,
+                    PRIMARY KEY(name)
+                )
+                """.trimIndent()
+            )
         }
     }
 }

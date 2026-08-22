@@ -89,6 +89,7 @@ object Backup {
             "excludedTag.json",
             "tagMapping.json",
             "readingMemory.json",
+            "authorProfiles.json",
             "bookMarking.json",
             "bookCharacterProfile.json",
             "bookCharacterEvents.json",
@@ -320,6 +321,8 @@ object Backup {
         }
         // 划线笔记（book_marks）。无忽略开关，随备份无条件导出。
         writeListToJson(appDb.bookMarkingDao.getAllSync(), "bookMarking.json", backupPath)
+        // 作者简介。原先随 settings 备份，搬到 Room 后同样无条件导出。
+        writeListToJson(appDb.authorProfileDao.getAllSync(), "authorProfiles.json", backupPath)
         // 以下几张表同样无忽略开关，随备份无条件导出。
         // 人物图谱剩余四张表（人物档案已在上面单独导出）
         writeListToJson(

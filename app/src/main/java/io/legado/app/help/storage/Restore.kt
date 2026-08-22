@@ -21,6 +21,7 @@ import io.legado.app.data.entities.AiModelProfile
 import io.legado.app.data.entities.AiPromptPreset
 import io.legado.app.data.entities.AiProviderProfile
 import io.legado.app.data.entities.AiTaskPreset
+import io.legado.app.data.entities.AuthorProfile
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookMarking
@@ -356,6 +357,10 @@ object Restore : KoinComponent {
         // 划线笔记（book_marks）。无忽略开关，与备份侧对应。
         fileToListT<BookMarking>(path, "bookMarking.json")?.let {
             appDb.bookMarkingDao.insertAll(it)
+        }
+        // 作者简介，与备份侧对应。
+        fileToListT<AuthorProfile>(path, "authorProfiles.json")?.let {
+            appDb.authorProfileDao.insertAll(it)
         }
         // 以下几张表同样无忽略开关，与备份侧对应。
         fileToListT<BookCharacterEvent>(path, "bookCharacterEvents.json")?.let {

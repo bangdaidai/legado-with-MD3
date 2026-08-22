@@ -34,6 +34,7 @@ import io.legado.app.data.entities.rule.BookInfoRule
 import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.data.entities.rule.ExploreRule
 import io.legado.app.data.entities.rule.SearchRule
+import io.legado.app.data.repository.AuthorProfileRepository
 import io.legado.app.di.appDatabaseModule
 import io.legado.app.di.appModule
 import io.legado.app.domain.gateway.AppLocaleGateway
@@ -203,6 +204,8 @@ class App : Application(), SingletonImageLoader.Factory {
             DefaultData.upVersion()
             TagManager.seedPresetExcludedTags()
             TagManager.applyExclusionToExistingTags()
+            // 一次性迁移: 作者简介从 settings 的单个 JSON 搬到 Room
+            get<AuthorProfileRepository>().migrateLegacyBios()
             AppFreezeMonitor.init(this@App)
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))

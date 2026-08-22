@@ -5,6 +5,7 @@ import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
+import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiProtocol
@@ -62,6 +63,7 @@ class OpenAiChatHandler : AiProtocolHandler {
             }
         }
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
+        body.applyProviderWebSearch(provider, params)
 
         return retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
             val response = aiOkHttpClient.newCallStrResponse {
@@ -116,6 +118,7 @@ class OpenAiChatHandler : AiProtocolHandler {
             }
         }
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
+        body.applyProviderWebSearch(provider, params)
 
         // For streaming, we retry before establishing the SSE connection.
         // Once streaming starts, errors are not retried (partial output would be confusing).
@@ -214,6 +217,23 @@ internal fun MutableMap<String, Any?>.applyZhipuThinking(
         this["thinking"] = mapOf(
             "type" to if (reasoningLevel == AiReasoningLevel.OFF) "disabled" else "enabled"
         )
+    }
+}
+
+/**
+ * 通义千问 / 阿里百炼的联网搜索开关。`enable_search` 不是 OpenAI 标准字段，
+ * 只在识别为该供应商且调用方显式请求联网时下发，其余供应商忽略。
+ * 注意：开启后书名、作者名等提示词内容会被送去做网络检索。
+ */
+internal fun MutableMap<String, Any?>.applyProviderWebSearch(
+    provider: AiProviderConfig,
+    params: AiGenerationParams
+) {
+    if (!params.webSearch) return
+    val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
+    val isQwenProvider = "dashscope" in identity || "qwen" in identity || "bailian" in identity
+    if (isQwenProvider) {
+        this["enable_search"] = true
     }
 }
 

@@ -8,16 +8,13 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Search
@@ -32,7 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -190,89 +186,58 @@ private fun AuthorIndexHeader(label: String) {
 }
 
 @Composable
-private fun AuthorAvatar(name: String) {
-    val palette = listOf(
-        LegadoTheme.colorScheme.primaryContainer to LegadoTheme.colorScheme.onPrimaryContainer,
-        LegadoTheme.colorScheme.secondaryContainer to LegadoTheme.colorScheme.onSecondaryContainer,
-        LegadoTheme.colorScheme.tertiaryContainer to LegadoTheme.colorScheme.onTertiaryContainer,
-    )
-    val (container, content) = palette[name.hashCode().mod(palette.size)]
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(container),
-        contentAlignment = Alignment.Center,
-    ) {
-        AppText(
-            text = name.take(1),
-            style = LegadoTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = content,
-        )
-    }
-}
-
-@Composable
 private fun AuthorCard(
     author: AuthorItemUi,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     NormalCard(onClick = onClick, modifier = modifier) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            AuthorAvatar(name = author.name)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AppText(
-                        text = author.name,
-                        style = LegadoTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (author.avgRating > 0f) {
-                        ReadingMemoryRatingBar(
-                            rating = author.avgRating,
-                            onRatingChanged = {},
-                            enabled = false,
-                            starSize = 14.dp,
-                        )
-                    }
-                }
-                if (author.bio.isNotBlank()) {
-                    AppText(
-                        text = author.bio,
-                        style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
                 AppText(
-                    text = stringResource(R.string.author_read_count, author.readBookCount)
-                            + " · " + stringResource(R.string.author_book_count, author.bookCount),
-                    style = LegadoTheme.typography.labelSmall,
+                    text = author.name,
+                    style = LegadoTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (author.avgRating > 0f) {
+                    ReadingMemoryRatingBar(
+                        rating = author.avgRating,
+                        onRatingChanged = {},
+                        enabled = false,
+                        starSize = 14.dp,
+                    )
+                }
+            }
+            if (author.bio.isNotBlank()) {
+                AppText(
+                    text = author.bio,
+                    style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+            AppText(
+                text = stringResource(R.string.author_read_count, author.readBookCount)
+                        + " · " + stringResource(R.string.author_book_count, author.bookCount),
+                style = LegadoTheme.typography.labelSmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
+
 
 
 
