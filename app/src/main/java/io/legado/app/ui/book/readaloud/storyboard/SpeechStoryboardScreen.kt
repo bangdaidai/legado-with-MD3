@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.readaloud.storyboard
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,11 @@ fun SpeechStoryboardScreen(
 ) {
     val context = LocalContext.current
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    val inChapterDetail = state.selectedChapterIndex != null
+
+    BackHandler(enabled = inChapterDetail) {
+        onIntent(SpeechStoryboardIntent.BackToChapters)
+    }
 
     LaunchedEffect(effects) {
         effects.collectLatest { effect ->
@@ -61,13 +67,26 @@ fun SpeechStoryboardScreen(
             GlassMediumFlexibleTopAppBar(
                 title = stringResource(R.string.speech_storyboard),
                 subtitle = state.chapterTitle,
-                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
-                actions = {
-                    TopBarActionButton(
-                        imageVector = Icons.Default.Autorenew,
-                        contentDescription = stringResource(R.string.speech_storyboard_reanalyze),
-                        onClick = { onIntent(SpeechStoryboardIntent.Reanalyze) },
+                navigationIcon = {
+                    TopBarNavigationButton(
+                        onClick = {
+                            if (inChapterDetail) {
+                                onIntent(SpeechStoryboardIntent.BackToChapters)
+                            } else {
+                                onBack()
+                            }
+                        },
                     )
+                },
+                actions = {
+                    // 只有正在读的那一章能重新分析：其它章拿不到排版结果
+                    if (inChapterDetail && state.isCurrentChapter) {
+                        TopBarActionButton(
+                            imageVector = Icons.Default.Autorenew,
+                            contentDescription = stringResource(R.string.speech_storyboard_reanalyze),
+                            onClick = { onIntent(SpeechStoryboardIntent.Reanalyze) },
+                        )
+                    }
                     TopBarActionButton(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = stringResource(R.string.refresh),
@@ -88,12 +107,99 @@ fun SpeechStoryboardScreen(
                 CircularProgressIndicator()
             }
 
-            else -> StoryboardList(
+            inChapterDetail -> StoryboardList(
                 state = state,
                 contentPadding = paddingValues,
                 modifier = Modifier.fillMaxSize(),
             )
+
+            else -> ChapterList(
+                state = state,
+                onIntent = onIntent,
+                contentPadding = paddingValues,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
+    }
+}
+
+@Composable
+private fun ChapterList(
+    state: SpeechStoryboardUiState,
+    onIntent: (SpeechStoryboardIntent) -> Unit,
+    contentPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = adaptiveContentPadding(
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (state.chapters.isEmpty()) {
+            item(contentType = "empty") {
+                AppText(
+                    text = stringResource(R.string.speech_storyboard_chapters_empty),
+                    style = LegadoTheme.typography.bodyMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 24.dp),
+                )
+            }
+        } else {
+            items(
+                items = state.chapters,
+                key = StoryboardChapterUi::chapterIndex,
+                contentType = { "chapter" },
+            ) { chapter ->
+                ChapterCard(chapter) {
+                    onIntent(SpeechStoryboardIntent.OpenChapter(chapter.chapterIndex))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChapterCard(chapter: StoryboardChapterUi, onClick: () -> Unit) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            AppText(
+                text = chapter.title,
+                style = LegadoTheme.typography.titleSmall,
+            )
+            AppText(
+                text = chapterRowLabel(chapter),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun chapterRowLabel(chapter: StoryboardChapterUi): String {
+    val counts = if (chapter.segmentCount == 0) {
+        stringResource(R.string.speech_storyboard_chapter_pending)
+    } else {
+        stringResource(
+            R.string.speech_storyboard_chapter_row,
+            chapter.segmentCount,
+            chapter.characterCount,
+        )
+    }
+    return if (chapter.isCurrent) {
+        "$counts · ${stringResource(R.string.speech_storyboard_current_chapter)}"
+    } else {
+        counts
     }
 }
 

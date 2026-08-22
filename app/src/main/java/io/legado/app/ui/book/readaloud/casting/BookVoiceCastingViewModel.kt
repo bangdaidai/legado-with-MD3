@@ -55,6 +55,13 @@ class BookVoiceCastingViewModel(
             BookVoiceCastingIntent.DismissVoicePicker -> {
                 _uiState.update { it.copy(picker = null) }
             }
+            is BookVoiceCastingIntent.SetVoiceGenderFilter -> {
+                // 再点一次已选中的性别就回到不筛选
+                val gender = intent.gender.takeUnless { it == _uiState.value.voiceGenderFilter }
+                    .orEmpty()
+                _uiState.update { it.copy(voiceGenderFilter = gender) }
+                publishState()
+            }
             is BookVoiceCastingIntent.AssignVoice -> assignVoice(intent.voiceId)
             is BookVoiceCastingIntent.PreviewVoice -> previewVoice(intent.voiceId)
             BookVoiceCastingIntent.ClearBinding -> clearBinding()
@@ -144,7 +151,10 @@ class BookVoiceCastingViewModel(
             compareByDescending<VoiceOptionUi> { it.selectable }
                 .thenBy { it.engineType }
                 .thenBy { it.name.lowercase() }
-        )
+        ).filter { option ->
+            val filter = _uiState.value.voiceGenderFilter
+            filter.isEmpty() || option.gender == filter
+        }
         val currentPicker = _uiState.value.picker?.let { picker ->
             val item = items.firstOrNull {
                 it.subjectType == picker.subjectType && it.subjectId == picker.subjectId

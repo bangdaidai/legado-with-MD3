@@ -6,6 +6,7 @@ import io.legado.app.data.entities.ChapterSpeechSegmentEntity
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
@@ -44,6 +45,26 @@ class ChapterSpeechRepository(
         withContext(Dispatchers.IO) {
             dao.getSegments(analysisId).map(ChapterSpeechSegmentEntity::toDomain)
         }
+
+    override suspend fun getChapterSegments(
+        bookUrl: String,
+        chapterIndex: Int,
+    ): List<ChapterSpeechSegment> = withContext(Dispatchers.IO) {
+        dao.getChapterSegments(bookUrl, chapterIndex).map(ChapterSpeechSegmentEntity::toDomain)
+    }
+
+    override suspend fun getChapterSummaries(bookUrl: String): List<ChapterSpeechSummary> =
+        withContext(Dispatchers.IO) {
+            dao.getChapterSummaries(bookUrl).map {
+                ChapterSpeechSummary(
+                    chapterIndex = it.chapterIndex,
+                    segmentCount = it.segmentCount,
+                    characterCount = it.characterCount,
+                    updatedAt = it.updatedAt,
+                )
+            }
+        }
+
 
     override suspend fun replaceSegments(
         analysisId: String,

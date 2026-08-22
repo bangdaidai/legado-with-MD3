@@ -672,6 +672,9 @@ fun MainActivity.mainEntryProvider(
             onOpenVoiceCasting = { bookUrl ->
                 onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
             },
+            onOpenSpeechStoryboard = { bookUrl ->
+                onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            },
             onOpenTtsEnginesAndVoices = {
                 onNavigateToRoute(MainRouteCloudTtsEngines(route.bookUrl))
             },
@@ -1292,7 +1295,6 @@ fun MainActivity.mainEntryProvider(
             effects = viewModel.effects,
             onBack = { onNavigateBack() },
             onManageCloudTts = { onNavigateToRoute(MainRouteCloudTtsEngines(route.bookUrl)) },
-            onOpenStoryboard = { onNavigateToRoute(MainRouteSpeechStoryboard(route.bookUrl)) },
         )
     }
 

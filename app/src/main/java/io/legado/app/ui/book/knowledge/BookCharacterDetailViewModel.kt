@@ -69,7 +69,10 @@ class BookCharacterDetailViewModel(
                     .toImmutableList())
             }
 
-            is CharacterDetailIntent.SetRole -> _uiState.update { it.copy(role = intent.value) }
+            // 男主/女主/男配/女配本身就带性别，选完角色定位顺手把声音性别带出来，用户之后仍可手改
+            is CharacterDetailIntent.SetRole -> _uiState.update {
+                it.copy(role = intent.value, voiceGender = intent.value.impliedVoiceGender() ?: it.voiceGender)
+            }
             is CharacterDetailIntent.SetVoiceGender -> _uiState.update { it.copy(voiceGender = intent.value) }
             is CharacterDetailIntent.SetVoiceAgeBand -> _uiState.update { it.copy(voiceAgeBand = intent.value) }
             is CharacterDetailIntent.SetIsProtagonist -> _uiState.update { it.copy(isProtagonist = intent.value) }
@@ -248,6 +251,17 @@ private fun String?.toTagList(): ImmutableList<String> {
         .orEmpty()
         .distinct()
         .toImmutableList()
+}
+
+/** 角色定位隐含的声音性别；其它定位（配角、反派等）看不出性别就返回 null，交给用户自己选 */
+private fun String.impliedVoiceGender(): String? = when (this) {
+    BookCharacterProfile.ROLE_MALE_LEAD,
+    BookCharacterProfile.ROLE_MALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_MALE
+
+    BookCharacterProfile.ROLE_FEMALE_LEAD,
+    BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_FEMALE
+
+    else -> null
 }
 
 private fun ImmutableList<String>.toTagsJson(): String {

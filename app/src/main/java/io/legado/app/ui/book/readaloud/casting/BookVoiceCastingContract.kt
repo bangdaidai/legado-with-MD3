@@ -11,6 +11,8 @@ data class BookVoiceCastingUiState(
     val items: ImmutableList<VoiceCastingItemUi> = persistentListOf(),
     val voices: ImmutableList<VoiceOptionUi> = persistentListOf(),
     val picker: VoicePickerUi? = null,
+    /** 选音色时的性别筛选，空串为不筛选；取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
+    val voiceGenderFilter: String = "",
     /** 正在合成试听音频的音色，用来在那一行上显示转圈 */
     val previewingVoiceId: String? = null,
 )
@@ -68,6 +70,7 @@ sealed interface BookVoiceCastingIntent {
     data object DismissVoicePicker : BookVoiceCastingIntent
     data class AssignVoice(val voiceId: String) : BookVoiceCastingIntent
     data class PreviewVoice(val voiceId: String) : BookVoiceCastingIntent
+    data class SetVoiceGenderFilter(val gender: String) : BookVoiceCastingIntent
     data object ClearBinding : BookVoiceCastingIntent
     data class PromoteCharacter(val subjectId: String) : BookVoiceCastingIntent
 }

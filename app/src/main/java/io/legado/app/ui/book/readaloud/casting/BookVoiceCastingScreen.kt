@@ -46,6 +46,7 @@ import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -69,7 +70,6 @@ fun BookVoiceCastingScreen(
     effects: Flow<BookVoiceCastingEffect>,
     onBack: () -> Unit,
     onManageCloudTts: () -> Unit,
-    onOpenStoryboard: () -> Unit,
 ) {
     val context = LocalContext.current
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
@@ -98,11 +98,6 @@ fun BookVoiceCastingScreen(
                 title = stringResource(R.string.book_voice_casting),
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
-                    TopBarActionButton(
-                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                        contentDescription = stringResource(R.string.speech_storyboard),
-                        onClick = onOpenStoryboard,
-                    )
                     TopBarActionButton(
                         imageVector = Icons.Default.RecordVoiceOver,
                         contentDescription = stringResource(R.string.read_aloud_engines_and_voices),
@@ -143,6 +138,7 @@ fun BookVoiceCastingScreen(
         picker = state.picker,
         voices = state.voices,
         previewingVoiceId = state.previewingVoiceId,
+        genderFilter = state.voiceGenderFilter,
         onIntent = onIntent,
     )
 }
@@ -346,6 +342,7 @@ private fun VoicePickerSheet(
     picker: VoicePickerUi?,
     voices: ImmutableList<VoiceOptionUi>,
     previewingVoiceId: String?,
+    genderFilter: String,
     onIntent: (BookVoiceCastingIntent) -> Unit,
 ) {
     AppModalBottomSheet(
@@ -359,6 +356,30 @@ private fun VoicePickerSheet(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                VoiceGenderFilterChip("", R.string.voice_gender_all, genderFilter, onIntent)
+                VoiceGenderFilterChip(
+                    ReadAloudVoiceTraits.GENDER_MALE,
+                    R.string.voice_gender_male,
+                    genderFilter,
+                    onIntent,
+                )
+                VoiceGenderFilterChip(
+                    ReadAloudVoiceTraits.GENDER_FEMALE,
+                    R.string.voice_gender_female,
+                    genderFilter,
+                    onIntent,
+                )
+                VoiceGenderFilterChip(
+                    ReadAloudVoiceTraits.GENDER_UNKNOWN,
+                    R.string.voice_gender_unknown,
+                    genderFilter,
+                    onIntent,
+                )
+            }
             if (voices.none { it.selectable }) {
                 AppText(
                     text = stringResource(R.string.no_available_voices),
@@ -378,6 +399,8 @@ private fun VoicePickerSheet(
                         TinySettingItem(
                             title = voice.name,
                             description = voiceDescription(voice),
+                            // 引擎 + 性别 + 风格标签一行放不下
+                            descriptionMaxLines = 2,
                             enabled = voice.selectable,
                             trailingContent = {
                                 Row(
@@ -393,7 +416,7 @@ private fun VoicePickerSheet(
                                                     BookVoiceCastingIntent.PreviewVoice(voice.id)
                                                 )
                                             },
-                                            enabled = voice.selectable && previewingVoiceId == null,
+                                            enabled = voice.selectable,
                                         ) {
                                             AppIcon(
                                                 imageVector = Icons.Default.PlayArrow,
@@ -434,6 +457,22 @@ private fun subjectTitle(kind: CastingSubjectKind, name: String): String = when 
     CastingSubjectKind.Unknown -> stringResource(R.string.voice_role_unknown)
     CastingSubjectKind.Character,
     CastingSubjectKind.TemporaryCharacter -> name
+}
+
+/** 空字符串代表不筛选；再点一次已选中的性别也会回到不筛选 */
+@Composable
+private fun VoiceGenderFilterChip(
+    gender: String,
+    labelRes: Int,
+    genderFilter: String,
+    onIntent: (BookVoiceCastingIntent) -> Unit,
+) {
+    ToggleChip(
+        label = stringResource(labelRes),
+        selected = genderFilter == gender,
+        onToggle = { onIntent(BookVoiceCastingIntent.SetVoiceGenderFilter(gender)) },
+        compact = true,
+    )
 }
 
 @Composable

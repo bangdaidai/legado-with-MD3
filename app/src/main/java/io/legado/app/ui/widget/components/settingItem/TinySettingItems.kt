@@ -98,6 +98,8 @@ val LocalSliderDragState = staticCompositionLocalOf<SliderDragState?> { null }
 fun TinySettingItem(
     title: String,
     description: String? = null,
+    /** 描述最多几行，大于 1 时行高不再固定 56dp，卡片跟着内容长高 */
+    descriptionMaxLines: Int = 1,
     imageVector: ImageVector? = null,
     modifier: Modifier = Modifier,
     color: Color? = LegadoTheme.colorScheme.surfaceContainerLow,
@@ -145,7 +147,10 @@ fun TinySettingItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .then(
+                        if (descriptionMaxLines > 1) Modifier.heightIn(min = 56.dp)
+                        else Modifier.height(56.dp)
+                    )
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -172,7 +177,7 @@ fun TinySettingItem(
                             text = it,
                             style = LegadoTheme.typography.labelSmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
-                            maxLines = 1,
+                            maxLines = descriptionMaxLines,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -386,6 +391,7 @@ fun TinySwitchSettingItem(
 fun TinyClickableSettingItem(
     title: String,
     description: String? = null,
+    descriptionMaxLines: Int = 1,
     imageVector: ImageVector? = null,
     modifier: Modifier = Modifier,
     color: Color? = LegadoTheme.colorScheme.surfaceContainerLow,
@@ -396,6 +402,7 @@ fun TinyClickableSettingItem(
     TinySettingItem(
         title = title,
         description = description,
+        descriptionMaxLines = descriptionMaxLines,
         imageVector = imageVector,
         modifier = modifier,
         color = color,

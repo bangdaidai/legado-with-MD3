@@ -114,6 +114,14 @@ data class ChapterSpeechSegment(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
+/** 一本书里某一章已存下来的分镜统计，用于分镜章节列表 */
+data class ChapterSpeechSummary(
+    val chapterIndex: Int,
+    val segmentCount: Int,
+    val characterCount: Int,
+    val updatedAt: Long,
+)
+
 data class CanonicalSpeechParagraph(
     val index: Int,
     val text: String,

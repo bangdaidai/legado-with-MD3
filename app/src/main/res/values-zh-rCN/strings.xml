@@ -2889,6 +2889,12 @@
     <string name="speech_storyboard_multi_off">未开启多角色朗读</string>
     <string name="speech_storyboard_empty">这一章没有分出任何段落。</string>
     <string name="speech_storyboard_no_chapter">分镜只能看正在阅读的这一章，请先回到阅读页打开本书。</string>
+    <string name="speech_storyboard_desc">按章查看分段、说话人和音色</string>
+    <string name="speech_storyboard_chapter_number">第 %1$d 章</string>
+    <string name="speech_storyboard_chapter_row">分段 %1$d 段 · 角色 %2$d 个</string>
+    <string name="speech_storyboard_chapter_pending">还没分析过</string>
+    <string name="speech_storyboard_current_chapter">正在读</string>
+    <string name="speech_storyboard_chapters_empty">还没有分析过任何章节，先朗读一章再回来看。</string>
     <string name="speech_role_dialogue">对白</string>
     <string name="speech_role_thought">心声</string>
     <string name="http_tts">HTTP TTS</string>

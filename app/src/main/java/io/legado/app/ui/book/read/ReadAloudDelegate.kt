@@ -226,6 +226,13 @@ class ReadAloudDelegate(
         }
     }
 
+    fun openSpeechStoryboard() {
+        ReadBook.book?.bookUrl?.let { bookUrl ->
+            host.updateState { it.copy(activeSheet = null) }
+            host.emitEffect(ReadBookEffect.OpenSpeechStoryboard(bookUrl))
+        }
+    }
+
     fun openSystemTtsSettings() {
         host.emitEffect(ReadBookEffect.OpenSystemTtsSettings)
     }

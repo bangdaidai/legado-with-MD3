@@ -747,7 +747,10 @@ val appModule = module {
         SpeechStoryboardViewModel(
             bookUrl = bookUrl,
             prepareChapterSpeechPlan = get(),
+            buildSpeechPlan = get(),
             chapterSpeechGateway = get(),
+            bookKnowledgeGateway = get(),
+            bookChapterDao = get(),
         )
     }
     viewModelOf(::TtsCacheViewModel)

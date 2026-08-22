@@ -134,6 +134,7 @@ fun ReadBookRouteScreen(
     onEffectsReady: () -> Unit = {},
     onOpenSearch: (word: String?, bookUrl: String, autoFocus: Boolean) -> Unit = { _, _, _ -> },
     onOpenVoiceCasting: (bookUrl: String) -> Unit = {},
+    onOpenSpeechStoryboard: (bookUrl: String) -> Unit = {},
     onOpenTtsEnginesAndVoices: () -> Unit = {},
     onOpenTtsCache: () -> Unit = {},
 ) {
@@ -378,6 +379,9 @@ fun ReadBookRouteScreen(
                             }
                             is ReadBookEffect.OpenBookVoiceCasting -> {
                                 onOpenVoiceCasting(effect.bookUrl)
+                            }
+                            is ReadBookEffect.OpenSpeechStoryboard -> {
+                                onOpenSpeechStoryboard(effect.bookUrl)
                             }
                             ReadBookEffect.OpenTtsEnginesAndVoices -> onOpenTtsEnginesAndVoices()
                             ReadBookEffect.OpenTtsCache -> onOpenTtsCache()

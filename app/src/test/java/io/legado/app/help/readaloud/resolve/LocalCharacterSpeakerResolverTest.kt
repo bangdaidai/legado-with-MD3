@@ -64,6 +64,45 @@ class LocalCharacterSpeakerResolverTest {
         assertNull(result.characterId)
     }
 
+    @Test
+    fun `resolves speaker with long modifier before verb`() {
+        val paragraph = paragraph("宝珠眼睛亮晶晶的，认真说：“上路时我身上入不敷出。”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“上路时我身上入不敷出。”"),
+            characters = listOf(character("baozhu", "宝珠")),
+        )
+
+        assertEquals("baozhu", result.characterId)
+    }
+
+    @Test
+    fun `prefers the name closest to the speech verb`() {
+        val paragraph = paragraph("陈师古买下了你，宝珠轻轻地说：“我把你赎回来。”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“我把你赎回来。”"),
+            characters = listOf(
+                character("chen", "陈师古"),
+                character("baozhu", "宝珠"),
+            ),
+        )
+
+        assertEquals("baozhu", result.characterId)
+    }
+
+    @Test
+    fun `does not cross sentence boundary when relaxing`() {
+        val paragraph = paragraph("宝珠走了。旁边的人接着说：“她走了。”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“她走了。”"),
+            characters = listOf(character("baozhu", "宝珠")),
+        )
+
+        assertNull(result.characterId)
+    }
+
     private fun resolve(
         paragraph: CanonicalSpeechParagraph,
         segment: ChapterSpeechSegment,

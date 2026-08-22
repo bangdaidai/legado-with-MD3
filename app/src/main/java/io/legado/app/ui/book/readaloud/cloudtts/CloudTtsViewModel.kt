@@ -230,6 +230,7 @@ class CloudTtsViewModel(
             is CloudTtsIntent.SelectVoice -> selectVoice(intent.id)
             CloudTtsIntent.TestEngine -> testEngine()
             CloudTtsIntent.Preview -> preview()
+            is CloudTtsIntent.PreviewCandidateVoice -> preview(intent.voiceId)
             CloudTtsIntent.Save -> if (_uiState.value.engineEditor != null) saveEngine() else saveVoice()
             CloudTtsIntent.DismissError -> _uiState.update { it.copy(activeDialog = null) }
             CloudTtsIntent.CopyError -> copyError()
@@ -482,18 +483,24 @@ class CloudTtsViewModel(
         _uiState.update { it.copy(testing = false) }
     }
 
-    private fun preview() = viewModelScope.launch {
+    private fun preview(voiceIdOverride: String? = null) = viewModelScope.launch {
         val editor = _uiState.value.voiceEditor ?: return@launch
-        if (editor.voiceId.isBlank()) {
+        val voiceId = voiceIdOverride ?: editor.voiceId
+        if (voiceId.isBlank()) {
             return@launch toast(application.getString(R.string.cloud_tts_select_voice_first))
         }
-        _uiState.update { it.copy(testing = true) }
+        _uiState.update { it.copy(testing = true, previewingCandidateVoiceId = voiceId) }
+        // buildRequest 校验失败会 return@launch，用 finally 兜住否则按钮一直停在「生成中」
+        try {
         runCatching {
-            val file = File(application.cacheDir, "cloud_tts_preview/${editor.engineId.hashCode()}.audio")
+            val file = File(
+                application.cacheDir,
+                "cloud_tts_preview/${editor.engineId.hashCode()}_${voiceId.hashCode()}.audio",
+            )
             if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
                 check(systemSynthesizer.synthesize(
                     engine = editor.engineId,
-                    voiceName = editor.voiceId,
+                    voiceName = voiceId,
                     text = application.getString(R.string.system_tts_preview_text),
                     output = file,
                     speechRate = editor.speed.toFloatOrNull() ?: 1f,
@@ -502,13 +509,13 @@ class CloudTtsViewModel(
                 val httpTts = editor.engineId.toLongOrNull()?.let { httpTtsRepository.findById(it) }
                     ?: error(application.getString(R.string.cloud_tts_engine_missing))
                 // 试听固定用正常语速：编辑器里的 speed 是云端引擎的倍率语义，和脚本的 speakSpeed 不通用
-                val previewVoice = if (editor.voiceId == DEFAULT_ENGINE_VOICE_ID) {
+                val previewVoice = if (voiceId == DEFAULT_ENGINE_VOICE_ID) {
                     null // 脚本没有 voices()，交给脚本自己的默认音色
                 } else {
                     withContext(Dispatchers.IO) {
                         HttpTtsVoiceCatalog.getVoices(httpTts)
-                            .firstOrNull { it.id == editor.voiceId }
-                    } ?: HttpTtsVoice(id = editor.voiceId, name = editor.voiceId)
+                            .firstOrNull { it.id == voiceId }
+                    } ?: HttpTtsVoice(id = voiceId, name = voiceId)
                 }
                 check(HttpTtsFileSynthesizer.synthesize(
                     httpTts = httpTts,
@@ -520,7 +527,7 @@ class CloudTtsViewModel(
             } else {
                 val engine = engines.firstOrNull { it.id == editor.engineId }
                     ?: error(application.getString(R.string.cloud_tts_engine_missing))
-                val request = buildRequest(editor, editor.voiceId) ?: return@launch
+                val request = buildRequest(editor, voiceId) ?: return@launch
                 check(synthesizer.synthesize(engine, request, file)) {
                     application.getString(R.string.cloud_tts_no_audio)
                 }
@@ -528,7 +535,9 @@ class CloudTtsViewModel(
             file
         }.onSuccess { _effects.tryEmit(CloudTtsEffect.PlayPreview(it.absolutePath)) }
             .onFailure { showError(formatError(it)) }
-        _uiState.update { it.copy(testing = false) }
+        } finally {
+            _uiState.update { it.copy(testing = false, previewingCandidateVoiceId = null) }
+        }
     }
 
     /**
@@ -754,8 +763,7 @@ class CloudTtsViewModel(
                 append(engineName(voice.engineType, voice.engineId))
                 if (voice.managedBy != ReadAloudVoice.MANAGED_BY_USER) append(application.getString(R.string.cloud_tts_auto_synced_suffix))
                 if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
-                val labels = traitLabels(traits)
-                if (labels.isNotEmpty()) append(labels.joinToString(" · ", prefix = " | "))
+                traitLabels(traits).forEach { append(" · ").append(it) }
             },
             deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
@@ -763,7 +771,7 @@ class CloudTtsViewModel(
         )
     }.toImmutableList()
 
-    /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多会把一行挤爆 */
+    /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多两行也放不下 */
     private fun traitLabels(traits: VoiceTraits): List<String> =
         listOfNotNull(genderLabel(traits.gender)) + traits.descriptors.take(3)
 

@@ -224,6 +224,11 @@ fun ReadAloudConfigContent(
                         },
                         onValueChange = { onIntent(ReadBookIntent.SetSpeechAnalysisMode(it)) },
                     )
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.speech_storyboard),
+                        description = stringResource(R.string.speech_storyboard_desc),
+                        onClick = { onIntent(ReadBookIntent.OpenSpeechStoryboard) },
+                    )
                     TinySwitchSettingItem(
                         title = stringResource(R.string.use_multi_speaker),
                         description = stringResource(R.string.use_multi_speaker_summary),

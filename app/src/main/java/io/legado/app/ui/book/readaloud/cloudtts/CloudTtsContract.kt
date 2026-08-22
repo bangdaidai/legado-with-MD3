@@ -24,8 +24,10 @@ data class CloudTtsUiState(
     val activeDialog: CloudTtsDialog? = null,
     val testing: Boolean = false,
     val discovering: Boolean = false,
-    /** 音色列表里正在试听的那条，非空时其余行的试听按钮禁用 */
+    /** 音色列表里正在试听的那条，用来给按钮加高亮 */
     val previewingVoiceId: String? = null,
+    /** 添加音色预设弹窗里正在试听的那条候选音色 */
+    val previewingCandidateVoiceId: String? = null,
     /** 音色列表的性别筛选，空串为不筛选；取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
     val voiceGenderFilter: String = "",
     val selectedTab: CloudTtsTab = CloudTtsTab.Voices,
@@ -158,6 +160,9 @@ sealed interface CloudTtsIntent {
     data class SelectVoice(val id: String) : CloudTtsIntent
     data object TestEngine : CloudTtsIntent
     data object Preview : CloudTtsIntent
+
+    /** 在添加音色预设弹窗里直接试听某条候选音色，不必先选中它 */
+    data class PreviewCandidateVoice(val voiceId: String) : CloudTtsIntent
     data object Save : CloudTtsIntent
     data object DismissError : CloudTtsIntent
     data object CopyError : CloudTtsIntent

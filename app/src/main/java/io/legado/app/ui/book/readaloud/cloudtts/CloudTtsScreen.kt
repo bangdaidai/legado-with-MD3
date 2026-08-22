@@ -223,7 +223,8 @@ fun CloudTtsScreen(
                 if (page == CloudTtsTab.Voices.ordinal) {
                 item {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        // LazyColumn 的 contentPadding 已经给了 16dp, 这里只补卡片之间那 4dp 的下间距
+                        modifier = Modifier.padding(bottom = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         VoiceGenderFilterChip("", R.string.voice_gender_all, state, onIntent)
@@ -254,11 +255,12 @@ fun CloudTtsScreen(
                     TinyClickableSettingItem(
                         title = voice.title,
                         description = voice.summary,
+                        // 引擎名 + 性别 + 风格标签一行放不下, 给两行
+                        descriptionMaxLines = 2,
                         trailingContent = {
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 MediumTonalButton(
                                     onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
-                                    enabled = state.previewingVoiceId == null,
                                     selected = state.previewingVoiceId == voice.id,
                                     icon = Icons.Default.PlayArrow,
                                     contentDescription = stringResource(R.string.voice_preview),
@@ -973,12 +975,23 @@ private fun TtsVoicePresetEditorContent(
                             title = voice.label.substringBefore(" · "),
                             description = buildString {
                                 voice.label.substringAfter(" · ", "").takeIf(String::isNotBlank)?.let(::append)
-                                if (isNotEmpty()) append(" | ")
+                                if (isNotEmpty()) append(" · ")
                                 append(voice.id)
                                 if (voice.id == editor.voiceId) {
-                                    append(" | ")
+                                    append(" · ")
                                     append(stringResource(R.string.cloud_tts_selected))
                                 }
+                            },
+                            descriptionMaxLines = 2,
+                            trailingContent = {
+                                MediumTonalButton(
+                                    onClick = {
+                                        onIntent(CloudTtsIntent.PreviewCandidateVoice(voice.id))
+                                    },
+                                    selected = state.previewingCandidateVoiceId == voice.id,
+                                    icon = Icons.Default.PlayArrow,
+                                    contentDescription = stringResource(R.string.voice_preview),
+                                )
                             },
                             onClick = { onIntent(CloudTtsIntent.SelectVoice(voice.id)) },
                         )
@@ -1017,7 +1030,9 @@ private fun TtsVoicePresetEditorContent(
                         )
                         AppText(
                             stringResource(R.string.cloud_tts_manual_voice_hint),
-                            Modifier.padding(horizontal = 24.dp),
+                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     EngineSectionTitle(R.string.cloud_tts_step_preset)
@@ -1085,20 +1100,31 @@ private fun TtsVoicePresetEditorContent(
                             }
                         }
                     } else if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
-                        AppText(stringResource(R.string.cloud_tts_system_defaults_hint))
+                        AppText(
+                            stringResource(R.string.cloud_tts_system_defaults_hint),
+                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
                         Field(editor.speed, { update(editor.copy(speed = it)) }, stringResource(R.string.cloud_tts_speed_multiplier))
                         Field(editor.pitch, { update(editor.copy(pitch = it)) }, stringResource(R.string.cloud_tts_pitch_multiplier))
                     }
                     if (editor.engineType == ReadAloudVoice.ENGINE_HTTP) {
-                        AppText(stringResource(R.string.cloud_tts_http_voice_hint))
-                    } else {
-                        MediumTonalButton(
-                            onClick = { onIntent(CloudTtsIntent.Preview) },
-                            enabled = editor.voiceId.isNotBlank() && !state.testing,
-                            modifier = Modifier.fillMaxWidth(),
-                            text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+                        AppText(
+                            stringResource(R.string.cloud_tts_http_voice_hint),
+                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    MediumTonalButton(
+                        onClick = { onIntent(CloudTtsIntent.Preview) },
+                        enabled = editor.voiceId.isNotBlank() && !state.testing,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+                    )
                 }
             }
     }
