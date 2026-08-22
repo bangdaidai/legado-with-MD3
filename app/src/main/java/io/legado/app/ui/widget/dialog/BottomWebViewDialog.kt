@@ -808,7 +808,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                     ByteArrayInputStream("(() => {$JS_INJECTION\n$preloadJs\n})();".toByteArray())
                 )
             }
-            if (request.isForMainFrame && !preloadJs.isNullOrEmpty()) {
+            val scheme = request.url.scheme
+            if (request.isForMainFrame && !preloadJs.isNullOrEmpty()
+                && (scheme == "http" || scheme == "https")
+            ) {
                 return runBlocking(IO) {
                     getModifiedContentWithJs(url, request) ?: super.shouldInterceptRequest(
                         view,

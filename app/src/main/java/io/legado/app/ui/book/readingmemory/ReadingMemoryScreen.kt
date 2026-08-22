@@ -468,13 +468,14 @@ internal fun MemoryBookCard(
         memory.abandoned -> LegadoTheme.colorScheme.error
         memory.progress >= 1f -> LegadoTheme.colorScheme.tertiary
         memory.progress > 0f -> LegadoTheme.colorScheme.primary
-        else -> LegadoTheme.colorScheme.surfaceVariant
+        // surfaceVariant 跟卡片底色几乎分不出来，「待看」用 secondary 保持和其它状态同样的对比度
+        else -> LegadoTheme.colorScheme.secondary
     }
     val statusContent = when {
         memory.abandoned -> LegadoTheme.colorScheme.onError
         memory.progress >= 1f -> LegadoTheme.colorScheme.onTertiary
         memory.progress > 0f -> LegadoTheme.colorScheme.onPrimary
-        else -> LegadoTheme.colorScheme.onSurfaceVariant
+        else -> LegadoTheme.colorScheme.onSecondary
     }
 
     val intro = remember(memory.intro, settings.bookshelfIntroMaxLines) {
