@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import io.legado.app.R
 import io.legado.app.constant.AppConst
+import io.legado.app.help.JsProbe
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.http.CookieManager
 import io.legado.app.help.http.CookieStore
@@ -200,6 +201,12 @@ fun WebViewRouteScreen(
                                 setAcceptThirdPartyCookies(currentWebView, true)
                             }
                             addJavascriptInterface(basicJsInterface, nameBasic)
+                            // 临时探针：确认 java/cache 桥到底有没有装上
+                            JsProbe.step(
+                                "browserBridge",
+                                "localHtml=${viewModel.localHtml} source=${viewModel.source != null}"
+                            )
+                            JsProbe.dump("browserBridge")
                             // 书源授权页会用 cache.put 回写授权信息，需要与 R 项目一样注入 java / cache 桥
                             if (viewModel.localHtml) {
                                 viewModel.source?.let { source ->

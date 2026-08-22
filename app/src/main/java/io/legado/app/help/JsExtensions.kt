@@ -378,7 +378,7 @@ interface JsExtensions : JsEncodeUtils {
         html: String?
     ): StrResponse {
         rhinoContext.ensureActive()
-        JsProbe.step("startBrowserAwait", "$title|${url.take(60)}")
+        JsProbe.step("startBrowserAwait", "$title|${url.take(60)}|html=${html?.length ?: -1}")
         val pair = SourceVerificationHelp.getVerificationResult(
             getSource(), url, title, true, refetchAfterSuccess, html
         )
