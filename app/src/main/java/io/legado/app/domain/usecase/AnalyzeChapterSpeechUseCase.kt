@@ -28,15 +28,17 @@ class AnalyzeChapterSpeechUseCase(
             contentHash = contentHash,
             resolverVersion = resolverVersion,
         )
-        if (
-            cached != null &&
-            cached.status in setOf(SpeechAnalysisStatus.Success, SpeechAnalysisStatus.Partial)
-        ) {
-            return ChapterSpeechAnalysisResult(
-                analysis = cached,
-                segments = chapterSpeechGateway.getSegments(cached.id),
-                fromCache = true,
-            )
+        if (cached != null && cached.status in REUSABLE_STATUSES) {
+            val cachedSegments = chapterSpeechGateway.getSegments(cached.id)
+            // Failed 记的是「AI 复核那一步失败」，规则分段本身是好的，而且状态要原样带出去，
+            // RefineSpeechWithAiUseCase 才能看到「刚失败过」并进入冷却。分段真没落库时才重跑。
+            if (cached.status != SpeechAnalysisStatus.Failed || cachedSegments.isNotEmpty()) {
+                return ChapterSpeechAnalysisResult(
+                    analysis = cached,
+                    segments = cachedSegments,
+                    fromCache = true,
+                )
+            }
         }
 
         val analysisId = SpeechIdentity.analysisId(
@@ -92,4 +94,13 @@ class AnalyzeChapterSpeechUseCase(
 
     private val SpeechRoleType.requiresSpeakerResolution: Boolean
         get() = this == SpeechRoleType.Character || this == SpeechRoleType.Thought
+
+    private companion object {
+        /** 分段可以直接复用的状态；`Pending` / `Running` 是半成品，只能重跑 */
+        val REUSABLE_STATUSES = setOf(
+            SpeechAnalysisStatus.Success,
+            SpeechAnalysisStatus.Partial,
+            SpeechAnalysisStatus.Failed,
+        )
+    }
 }

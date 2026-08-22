@@ -10,6 +10,7 @@ import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
+import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskPresetConfig
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
@@ -26,6 +27,7 @@ import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
+import kotlinx.coroutines.CancellationException
 import kotlin.uuid.Uuid
 
 class RefineSpeechWithAiUseCase(
@@ -60,6 +62,7 @@ class RefineSpeechWithAiUseCase(
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
+        if (analysisResult.isAiCoolingDown(now)) return analysisResult
         if (
             mode == SpeechAnalysisMode.AiUnderstanding &&
             analysisResult.fromCache &&
@@ -67,21 +70,29 @@ class RefineSpeechWithAiUseCase(
         ) return analysisResult
         val profiles = knownProfiles(analysisResult.analysis.bookUrl)
         val preset = resolvePreset()
-        val refined = when (mode) {
-            SpeechAnalysisMode.Rule -> analysisResult.segments
-            SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
-                analysisResult = analysisResult,
-                profiles = profiles,
-                preset = preset,
-                now = now,
-            )
-            SpeechAnalysisMode.AiUnderstanding -> {
-                if (analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
-                    completeRuleSegments(analysisResult, profiles, preset, now)
-                } else {
-                    understandAtoms(analysisResult, paragraphs, profiles, preset, now)
+        val refined = try {
+            when (mode) {
+                SpeechAnalysisMode.Rule -> analysisResult.segments
+                SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
+                    analysisResult = analysisResult,
+                    profiles = profiles,
+                    preset = preset,
+                    now = now,
+                )
+                SpeechAnalysisMode.AiUnderstanding -> {
+                    if (analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
+                        completeRuleSegments(analysisResult, profiles, preset, now)
+                    } else {
+                        understandAtoms(analysisResult, paragraphs, profiles, preset, now)
+                    }
                 }
             }
+        } catch (e: CancellationException) {
+            // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却
+            throw e
+        } catch (e: Throwable) {
+            markAiFailed(analysisResult, e, now)
+            throw e
         }
         val status = if (refined.any { segment ->
                 segment.characterId == null && segment.roleType in setOf(
@@ -100,6 +111,36 @@ class RefineSpeechWithAiUseCase(
             segments = refined,
             fromCache = false,
         )
+    }
+
+    /**
+     * 上一次 AI 失败后的冷却期内直接用规则结果，不再发请求。
+     *
+     * 失败原因基本都是模型不支持、网络不通、额度用尽这类短时间不会变的问题；没有冷却的话，同一章
+     * 每换一个段落起读都会把整章重新发一遍，既慢又烧额度。换模型、改 prompt 或改角色卡会让
+     * `resolverVersion` 变化、落到另一条分析记录上，天然解除冷却；分镜页的「重新分析」会
+     * `deleteChapter`，也能立刻重试。设备时间回退导致差值为负时按已过期处理。
+     */
+    private fun ChapterSpeechAnalysisResult.isAiCoolingDown(now: Long): Boolean =
+        analysis.status == SpeechAnalysisStatus.Failed &&
+            now - analysis.updatedAt in 0 until AI_FAILURE_COOLDOWN_MS
+
+    /**
+     * 把 AI 失败写进分析记录：分段保持规则结果不动，只标状态和原因。
+     *
+     * 写库本身失败不能盖掉原始异常，所以这里吞掉写库错误。
+     */
+    private suspend fun markAiFailed(
+        analysisResult: ChapterSpeechAnalysisResult,
+        error: Throwable,
+        now: Long,
+    ) {
+        val analysis = analysisResult.analysis.copy(
+            status = SpeechAnalysisStatus.Failed,
+            error = error.localizedMessage.orEmpty().take(MAX_ERROR_LENGTH),
+            updatedAt = now,
+        )
+        runCatching { chapterSpeechGateway.saveAnalysis(analysis, analysisResult.segments) }
     }
 
     private suspend fun completeRuleSegments(
@@ -306,7 +347,13 @@ class RefineSpeechWithAiUseCase(
                 AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode)),
                 AiMessage(AiMessageRole.USER, GSON.toJson(payload)),
             ),
-            params = preset.params.copy(temperature = 0f),
+            // 说话人归因是结构化抽取，思考没有收益，却会把 max_tokens 花光 ——
+            // 思考型模型于是只回 reasoning_content、正文为空，整块分析白跑。
+            params = preset.params.copy(
+                temperature = 0f,
+                reasoningLevel = AiReasoningLevel.OFF,
+                maxOutputTokens = maxOf(preset.params.maxOutputTokens ?: 0, MIN_OUTPUT_TOKENS),
+            ),
         )
     ).getOrThrow().text
 
@@ -483,8 +530,17 @@ class RefineSpeechWithAiUseCase(
     companion object {
         const val VERSION = "ai-speech-analysis-v2"
         private const val MAX_CHUNK_CHARS = 6_000
+
+        /** 一块 6000 字要按段返回 JSON，输出上限低于这个数就会被截断 */
+        private const val MIN_OUTPUT_TOKENS = 8_000
         private const val HYBRID_CONFIDENCE_THRESHOLD = 0.75f
         private const val DRAFT_SPEAKER_CONFIDENCE = 0.6f
+
+        /** AI 失败后多久之内不再重试，10 分钟够覆盖「反复点段落起读」这种连续操作 */
+        private const val AI_FAILURE_COOLDOWN_MS = 10 * 60 * 1000L
+
+        /** 失败原因只用于排障提示，截断避免把整段响应写进库 */
+        private const val MAX_ERROR_LENGTH = 200
         private const val DEFAULT_PROMPT =
             "Analyze fiction speech for text-to-speech. Distinguish narration, spoken dialogue, " +
                 "internal thought and unknown speech. Resolve speakers only from the supplied " +

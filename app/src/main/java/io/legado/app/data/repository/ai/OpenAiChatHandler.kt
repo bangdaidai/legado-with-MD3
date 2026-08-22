@@ -6,12 +6,15 @@ import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
 import io.legado.app.domain.model.AiGenerationParams
+import io.legado.app.domain.model.AiHttpException
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
+import io.legado.app.domain.model.AiNativeWebSearchSupport
 import io.legado.app.domain.model.AiProtocol
 import io.legado.app.domain.model.AiProviderConfig
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiToolDefinition
+import io.legado.app.domain.model.nativeWebSearchSupport
 import io.legado.app.help.http.addHeaders
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.newCallStrResponse
@@ -62,35 +65,48 @@ class OpenAiChatHandler : AiProtocolHandler {
                 body["reasoning_effort"] = it
             }
         }
+        body.applyThinkingSwitch(provider, params.reasoningLevel)
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
         body.applyProviderWebSearch(provider, params)
 
-        return retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
-            val response = aiOkHttpClient.newCallStrResponse {
-                url(provider.baseUrl + provider.chatPath)
-                postJson(GSON.toJson(body))
-                addHeaders(
-                    provider.headers + provider.customHeaders + mapOf(
-                        "Authorization" to "Bearer ${keyRotator.currentKey}",
-                        "Content-Type" to "application/json"
+        // 返回 null 代表「只有思考内容」，交给外层降级重试；其余失败照旧抛出
+        suspend fun send(): AiGenerateResponse? =
+            retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
+                val response = aiOkHttpClient.newCallStrResponse {
+                    url(provider.baseUrl + provider.chatPath)
+                    postJson(GSON.toJson(body))
+                    addHeaders(
+                        provider.headers + provider.customHeaders + mapOf(
+                            "Authorization" to "Bearer ${keyRotator.currentKey}",
+                            "Content-Type" to "application/json"
+                        )
                     )
-                )
-            }
-            if (!response.isSuccessful()) {
-                throw Exception("HTTP ${response.code()}: ${response.message()}")
-            }
-            val json = GSON.fromJson(response.body, OpenAiChatResponse::class.java)
-            val message = json?.choices?.firstOrNull()?.message
-            val text = message?.content
-            if (text.isNullOrBlank()) {
-                if (!message?.reasoningContent.isNullOrBlank()) {
-                    throw Exception("AI response contains only reasoning content; disable thinking for this model")
                 }
-                throw Exception("Empty AI response")
-            } else {
-                AiGenerateResponse(text = text, rawBody = response.body)
+                if (!response.isSuccessful()) {
+                    throw AiHttpException(response.code(), response.message(), response.body)
+                }
+                val json = GSON.fromJson(response.body, OpenAiChatResponse::class.java)
+                val message = json?.choices?.firstOrNull()?.message
+                val text = message?.content
+                if (text.isNullOrBlank()) {
+                    if (!message?.reasoningContent.isNullOrBlank()) {
+                        null
+                    } else {
+                        throw Exception("Empty AI response")
+                    }
+                } else {
+                    AiGenerateResponse(text = text, rawBody = response.body)
+                }
             }
-        }
+
+        send()?.let { return it }
+        // 思考把 max_tokens 花光了：显式关掉思考、抬高输出上限再试一次，比直接失败划算
+        body.applyThinkingSwitch(provider, AiReasoningLevel.OFF)
+        body.applyZhipuThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
+        body.remove("reasoning_effort")
+        body["max_tokens"] = maxOf(params.maxOutputTokens ?: 0, REASONING_FALLBACK_MAX_TOKENS)
+        return send()
+            ?: throw Exception("AI response contains only reasoning content; disable thinking for this model")
     }
 
     private suspend fun streamInternal(
@@ -117,6 +133,7 @@ class OpenAiChatHandler : AiProtocolHandler {
                 body["reasoning_effort"] = it
             }
         }
+        body.applyThinkingSwitch(provider, params.reasoningLevel)
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
         body.applyProviderWebSearch(provider, params)
 
@@ -134,7 +151,9 @@ class OpenAiChatHandler : AiProtocolHandler {
                 )
             }.also {
                 if (!it.isSuccessful) {
-                    throw Exception("HTTP ${it.code}: ${it.message}")
+                    val errorBody = runCatching { it.body.string() }.getOrNull()
+                    it.close()
+                    throw AiHttpException(it.code, it.message, errorBody)
                 }
             }
         }
@@ -192,11 +211,36 @@ class OpenAiChatHandler : AiProtocolHandler {
                 )
             }
             if (!response.isSuccessful()) {
-                throw Exception("HTTP ${response.code()}: ${response.message()}")
+                throw AiHttpException(response.code(), response.message(), response.body)
             }
             val json = GSON.fromJson(response.body, OpenAiModelsResponse::class.java)
             json?.data.toAvailableModels()
         }
+    }
+}
+
+/** 思考吃光输出预算后重试用的下限，太小的话关了思考照样被截断 */
+private const val REASONING_FALLBACK_MAX_TOKENS = 8_192
+
+/**
+ * 「关闭思考」在 OpenAI 兼容协议里没有统一字段，[AiReasoningLevel.OFF] 之前实际发不出去：
+ * `reasoningLevel.effortFor()` 只认 LOW..MAX，OFF 一律返回 null，于是思考保持服务端默认(开)。
+ * 结果是思考型模型把 max_tokens 花在推理上、`content` 为空，调用方只能报
+ * 「AI response contains only reasoning content」。
+ *
+ * 这里补上大多数网关认的 `enable_thinking`（通义/百炼、硅基流动、vLLM、ollama 等）。
+ * OpenAI 与 DeepSeek 官方不认这个字段、且其推理模型本就不能关思考，所以不下发，免得 400。
+ * GLM 走 [applyZhipuThinking] 的 `thinking.type`。
+ */
+internal fun MutableMap<String, Any?>.applyThinkingSwitch(
+    provider: AiProviderConfig,
+    reasoningLevel: AiReasoningLevel
+) {
+    if (reasoningLevel != AiReasoningLevel.OFF) return
+    val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
+    val rejectsUnknownFields = "api.openai.com" in identity || "api.deepseek.com" in identity
+    if (!rejectsUnknownFields) {
+        this["enable_thinking"] = false
     }
 }
 
@@ -221,8 +265,14 @@ internal fun MutableMap<String, Any?>.applyZhipuThinking(
 }
 
 /**
- * 通义千问 / 阿里百炼的联网搜索开关。`enable_search` 不是 OpenAI 标准字段，
- * 只在识别为该供应商且调用方显式请求联网时下发，其余供应商忽略。
+ * Chat Completions 协议下的供应商自带联网搜索。字段都不是 OpenAI 标准，只在识别出对应供应商
+ * 且调用方显式请求联网时下发，其余供应商保持原样（乱发未知字段会被 400）。
+ *
+ * - 通义千问 / 阿里百炼：顶层 `enable_search`
+ * - 智谱 GLM：追加 `web_search` 内置工具（与业务 function tools 共存）
+ *
+ * 供应商识别统一走 [nativeWebSearchSupport]，这里只负责按结果下发对应字段。
+ *
  * 注意：开启后书名、作者名等提示词内容会被送去做网络检索。
  */
 internal fun MutableMap<String, Any?>.applyProviderWebSearch(
@@ -230,12 +280,36 @@ internal fun MutableMap<String, Any?>.applyProviderWebSearch(
     params: AiGenerationParams
 ) {
     if (!params.webSearch) return
-    val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
-    val isQwenProvider = "dashscope" in identity || "qwen" in identity || "bailian" in identity
-    if (isQwenProvider) {
-        this["enable_search"] = true
+    when (provider.nativeWebSearchSupport()) {
+        AiNativeWebSearchSupport.QWEN_ENABLE_SEARCH -> {
+            this["enable_search"] = true
+        }
+
+        AiNativeWebSearchSupport.ZHIPU_WEB_SEARCH_TOOL -> {
+            // 智谱这几个开关文档给的是字符串 "True"，照抄以免网关按字面量校验
+            appendServerTool(
+                mapOf(
+                    "type" to "web_search",
+                    "web_search" to mapOf(
+                        "enable" to "True",
+                        "search_engine" to "search_std",
+                        "search_result" to "True"
+                    )
+                )
+            )
+        }
+
+        else -> Unit
     }
 }
+
+/** 把供应商内置工具追加到已有 `tools` 后面，不覆盖业务 function tools。 */
+internal fun MutableMap<String, Any?>.appendServerTool(tool: Map<String, Any?>) {
+    @Suppress("UNCHECKED_CAST")
+    val existing = this["tools"] as? List<Map<String, Any?>> ?: emptyList()
+    this["tools"] = existing + tool
+}
+
 
 // ---- Message & tool format converters ----
 

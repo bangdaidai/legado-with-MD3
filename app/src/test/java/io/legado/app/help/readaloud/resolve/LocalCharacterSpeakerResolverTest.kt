@@ -103,6 +103,54 @@ class LocalCharacterSpeakerResolverTest {
         assertNull(result.characterId)
     }
 
+    @Test
+    fun `resolves action subject without speech verb`() {
+        val paragraph = paragraph("韦训拨弄了一下手里的金币，正好十枚，“这是？”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“这是？”"),
+            characters = listOf(character("weixun", "韦训")),
+        )
+
+        assertEquals("weixun", result.characterId)
+    }
+
+    @Test
+    fun `resolves pronoun speaker mentioned in previous paragraph`() {
+        val first = CanonicalSpeechParagraph(
+            0,
+            "韦训见她从铺子里出来，特意往她发髻上瞧了瞧，依然只有那支桂花。",
+            0,
+        )
+        val second = CanonicalSpeechParagraph(1, "他狐疑地问：“你买了什么？”", first.text.length)
+        val result = LocalCharacterSpeakerResolver.resolve(
+            paragraphs = listOf(first, second),
+            segments = listOf(
+                narration(first, first.text),
+                narration(second, "他狐疑地问："),
+                dialogue(second, "“你买了什么？”"),
+            ),
+            characters = listOf(character("weixun", "韦训", voiceGender = "male")),
+        ).last()
+
+        assertEquals("weixun", result.characterId)
+    }
+
+    @Test
+    fun `does not treat a mentioned object as the speaker`() {
+        val paragraph = paragraph("他看了韦训一眼，“走吧。”")
+        val result = LocalCharacterSpeakerResolver.resolve(
+            paragraphs = listOf(paragraph),
+            segments = listOf(
+                narration(paragraph, "他看了韦训一眼，"),
+                dialogue(paragraph, "“走吧。”"),
+            ),
+            characters = listOf(character("weixun", "韦训", voiceGender = "male")),
+        ).last()
+
+        assertNull(result.characterId)
+    }
+
     private fun resolve(
         paragraph: CanonicalSpeechParagraph,
         segment: ChapterSpeechSegment,
@@ -118,10 +166,21 @@ class LocalCharacterSpeakerResolverTest {
     private fun dialogue(
         paragraph: CanonicalSpeechParagraph,
         text: String,
+    ): ChapterSpeechSegment = segment(paragraph, text, SpeechRoleType.Character)
+
+    private fun narration(
+        paragraph: CanonicalSpeechParagraph,
+        text: String,
+    ): ChapterSpeechSegment = segment(paragraph, text, SpeechRoleType.Narrator)
+
+    private fun segment(
+        paragraph: CanonicalSpeechParagraph,
+        text: String,
+        roleType: SpeechRoleType,
     ): ChapterSpeechSegment {
         val start = paragraph.text.indexOf(text)
         return ChapterSpeechSegment(
-            id = "segment",
+            id = "segment-${paragraph.index}-$start",
             analysisId = "analysis",
             bookUrl = "book",
             chapterIndex = 0,
@@ -130,7 +189,7 @@ class LocalCharacterSpeakerResolverTest {
             end = start + text.length,
             chapterPosition = start,
             text = text,
-            roleType = SpeechRoleType.Character,
+            roleType = roleType,
             source = SpeechResolutionSource.Rule,
         )
     }
@@ -139,5 +198,6 @@ class LocalCharacterSpeakerResolverTest {
         id: String,
         name: String,
         aliases: List<String> = emptyList(),
-    ) = SpeakerCharacter(id = id, name = name, aliases = aliases)
+        voiceGender: String = "unknown",
+    ) = SpeakerCharacter(id = id, name = name, aliases = aliases, voiceGender = voiceGender)
 }

@@ -34,6 +34,28 @@ class AnalyzeChapterSpeechUseCaseTest {
     }
 
     @Test
+    fun `keeps failed analysis so ai retry can cool down`() = runBlocking {
+        val gateway = MemoryChapterSpeechGateway()
+        val useCase = AnalyzeChapterSpeechUseCase(gateway)
+        val paragraphs = listOf(CanonicalSpeechParagraph(0, "旁白。“你好！”", 0))
+
+        val first = useCase("book", 3, paragraphs, now = 100)
+        // AI 复核失败时记在同一条分析上，分段仍是规则结果
+        gateway.saveAnalysis(
+            first.analysis.copy(status = SpeechAnalysisStatus.Failed, updatedAt = 150),
+            first.segments,
+        )
+        val second = useCase("book", 3, paragraphs, now = 200)
+
+        // 状态和时间要原样带出去，RefineSpeechWithAiUseCase 才能判断还在冷却期
+        assertTrue(second.fromCache)
+        assertEquals(SpeechAnalysisStatus.Failed, second.analysis.status)
+        assertEquals(150L, second.analysis.updatedAt)
+        assertEquals(first.segments.map { it.id }, second.segments.map { it.id })
+        assertEquals(2, gateway.saveCount)
+    }
+
+    @Test
     fun `content change invalidates segmentation cache`() = runBlocking {
         val gateway = MemoryChapterSpeechGateway()
         val useCase = AnalyzeChapterSpeechUseCase(gateway)
