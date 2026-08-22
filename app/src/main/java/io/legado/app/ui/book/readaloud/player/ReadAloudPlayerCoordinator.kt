@@ -91,6 +91,7 @@ class ReadAloudPlayerCoordinator(
             engineName = playback.engineName,
             speakerName = playback.characterName.ifBlank { playback.roleType.storageValue },
             isPaused = session.status != ReadAloudSessionStatus.Playing,
+            isPreparing = session.status == ReadAloudSessionStatus.Preparing,
             speed = ReadConfig.ttsSpeechRate,
             timerMinutes = session.timerMinutes,
             finishCurrentChapterAfterTimer = settings.finishCurrentChapterAfterTimer,
@@ -118,6 +119,7 @@ class ReadAloudPlayerCoordinator(
             engineName = playback.engineName,
             speakerName = playback.characterName.ifBlank { playback.roleType.storageValue },
             isPaused = session.status != ReadAloudSessionStatus.Playing,
+            isPreparing = session.status == ReadAloudSessionStatus.Preparing,
             speed = ReadConfig.ttsSpeechRate,
             timerMinutes = session.timerMinutes,
             finishCurrentChapterAfterTimer =
@@ -152,6 +154,8 @@ class ReadAloudPlayerCoordinator(
 
     fun togglePause() {
         when {
+            // 还在生成朗读计划（AI 分析）时点按钮就是取消准备，走 pause 会被随后的 play() 吞掉
+            BaseReadAloudService.isPreparing -> ReadAloud.stop(application)
             !BaseReadAloudService.isRun -> ReadBook.readAloud()
             BaseReadAloudService.pause -> ReadAloud.resume(application)
             else -> ReadAloud.pause(application)
@@ -234,6 +238,7 @@ data class ReadAloudPlayerSourceState(
     val engineName: String,
     val speakerName: String,
     val isPaused: Boolean,
+    val isPreparing: Boolean,
     val speed: Int,
     val timerMinutes: Int,
     val finishCurrentChapterAfterTimer: Boolean,

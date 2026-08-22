@@ -65,6 +65,12 @@
 -keep class cn.hutool.crypto.digest.DigestUtil { *; }
 -keep class com.script.** { *; }
 -keep class io.legado.app.model.SharedJsScope { *; }
+# HttpTTS 朗读脚本里的 voice 变量：混淆掉 getter 后 JS 读 voice.id 会变 undefined,
+# 所有音色都会退回脚本自己的默认音色, 表现就是每个音色听起来一样
+-keep class io.legado.app.domain.model.readaloud.HttpTtsVoice { *; }
+# 同理: 云端 / 系统音色的合成参数也存在 traitsJson 里, 字段名被混淆后风格标签与语速全丢
+-keep class io.legado.app.domain.model.readaloud.CloudTtsVoiceConfig { *; }
+-keep class io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig { *; }
 -dontwarn org.mozilla.javascript.**
 -dontnote org.mozilla.javascript.**
 # 数据类

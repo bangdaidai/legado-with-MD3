@@ -110,6 +110,7 @@ class ReadAloudPlayerViewModel(
             engineName = source.engineName,
             speakerName = source.speakerName,
             isPaused = source.isPaused,
+            isPreparing = source.isPreparing,
             speed = source.speed,
             timerMinutes = source.timerMinutes,
             finishCurrentChapterAfterTimer = source.finishCurrentChapterAfterTimer,

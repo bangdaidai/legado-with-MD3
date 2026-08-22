@@ -228,6 +228,8 @@ data class ReadBookUiState(
     // Read aloud / auto page
     val isReadAloudRunning: Boolean = false,
     val isReadAloudPaused: Boolean = false,
+    /** 朗读计划还在生成（含 AI 分析），此时还没出声 */
+    val isReadAloudPreparing: Boolean = false,
     val readAloudEngineName: String = "",
     val readAloudCharacterName: String = "",
     val readAloudRoleType: SpeechRoleType = SpeechRoleType.Narrator,

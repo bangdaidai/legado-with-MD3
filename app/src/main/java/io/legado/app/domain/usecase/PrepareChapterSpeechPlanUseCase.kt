@@ -24,6 +24,14 @@ class PrepareChapterSpeechPlanUseCase(
     private val buildSpeechPlan: BuildSpeechPlanUseCase,
 ) {
 
+    /**
+     * 上一次已经弹过的回落原因。
+     *
+     * 每次重新起读（换章、选段落）都会重跑一遍分析，同一个失败原因不去重的话会连着弹很多次 toast。
+     */
+    @Volatile
+    private var lastNotifiedFallback: String? = null
+
     suspend operator fun invoke(
         bookUrl: String,
         chapterIndex: Int,
@@ -38,6 +46,10 @@ class PrepareChapterSpeechPlanUseCase(
             RuleBasedSpeechSegmenter.VERSION
         } else {
             runCatching { refineSpeechWithAi.resolverVersion(bookUrl, requestedMode) }
+                .onFailure {
+                    // 没配 AI 模型时这里就抛了，静默回落会让用户以为 AI 模式生效了
+                    notifyFallback("AI 分析未启用，已按规则模式朗读", it)
+                }
                 .getOrDefault(RuleBasedSpeechSegmenter.VERSION)
         }
         val effectiveMode = if (resolverVersion == RuleBasedSpeechSegmenter.VERSION) {
@@ -64,9 +76,10 @@ class PrepareChapterSpeechPlanUseCase(
                     paragraphs = paragraphs,
                     mode = effectiveMode,
                 )
+            }.onSuccess {
+                lastNotifiedFallback = null
             }.onFailure {
-                // 静默回落会让「AI 没配模型」和「AI 返回不合法」看起来完全一样
-                AppLog.put("AI 分析说话人失败，已回落规则结果\n${it.localizedMessage}", it, true)
+                notifyFallback("AI 分析说话人失败，已回落规则结果", it)
             }.getOrDefault(locallyResolved)
         }
         if (useMultiSpeaker) {
@@ -87,6 +100,16 @@ class PrepareChapterSpeechPlanUseCase(
             characterPerformances = resolved.characterPerformances.associateBy { it.characterId },
             useMultiSpeaker = useMultiSpeaker,
         ).also { plan -> logPlanSummary(chapterIndex, effectiveMode, resolved, plan) }
+    }
+
+    /**
+     * 回落提示按「原因」去重：只有换了新原因才弹 toast，重复的只进日志。
+     */
+    private fun notifyFallback(reason: String, error: Throwable) {
+        val message = "$reason\n${error.localizedMessage}"
+        val repeated = message == lastNotifiedFallback
+        lastNotifiedFallback = message
+        AppLog.put(message, error, !repeated)
     }
 
     /** 只给本章真正开口的角色自动选音，别把整本人物表的音色都占掉 */

@@ -31,6 +31,7 @@ data class ReadAloudPlayerUiState(
     val engineName: String = "",
     val speakerName: String = "",
     val isPaused: Boolean = false,
+    val isPreparing: Boolean = false,
     val speed: Int = 10,
     val timerMinutes: Int = 0,
     val finishCurrentChapterAfterTimer: Boolean = false,

@@ -72,6 +72,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.java.KoinJavaComponent.get
 import splitties.init.appCtx
 import splitties.systemservices.audioManager
@@ -93,6 +94,15 @@ abstract class BaseReadAloudService : BaseService(),
 
         @JvmStatic
         var pause = true
+            private set
+
+        /**
+         * 正在生成朗读计划（AI 分析可能几十秒），此时 [isRun] 已经是 true 但还没出声。
+         * 界面据此显示「准备中」，点一下就是取消准备而不是暂停。
+         */
+        @JvmStatic
+        @Volatile
+        var isPreparing = false
             private set
 
         @JvmStatic
@@ -187,6 +197,10 @@ abstract class BaseReadAloudService : BaseService(),
     private var finishChapterAtIndex = NO_FINISH_CHAPTER
     private var prepareReadAloudJob: Coroutine<*>? = null
     private var prepareReadAloudGeneration = 0L
+
+    /** 进入「准备中」之前的状态，准备被取消或失败时要还原回去 */
+    @Volatile
+    private var statusBeforePreparing: ReadAloudSessionStatus? = null
     private var cover: Bitmap =
         BitmapFactory.decodeResource(appCtx.resources, R.drawable.ic_launcher)
     var pageChanged = false
@@ -267,6 +281,8 @@ abstract class BaseReadAloudService : BaseService(),
         }
         isRun = false
         pause = true
+        isPreparing = false
+        statusBeforePreparing = null
         sessionStore.stop()
         currentChapterIndex = -1
         currentProgress = 0
@@ -317,6 +333,7 @@ abstract class BaseReadAloudService : BaseService(),
         clearFinishChapterTimerIfChapterChanged(ReadBook.durChapterIndex)
         val generation = ++prepareReadAloudGeneration
         prepareReadAloudJob?.cancel()
+        if (play) upPreparingState(true)
         prepareReadAloudJob = execute(executeContext = IO) {
             val preparedChapter = ReadBook.curTextChapter ?: return@execute
             if (!preparedChapter.isCompleted) {
@@ -397,13 +414,36 @@ abstract class BaseReadAloudService : BaseService(),
             updateReadAloudProgressSnapshot(preparedReadAloudNumber + 1)
             if (moveToLast) toLast = false
             preparedPlaybackCursor?.takeIf { hasSpeechPlaybackQueue }?.let(::publishPlaybackInfo)
-            launch(Main) {
-                if (generation != prepareReadAloudGeneration) return@launch
+            withContext(Main) {
+                if (generation != prepareReadAloudGeneration) return@withContext
                 upMediaMetadata()
                 if (play) play() else pageChanged = true
             }
         }.onError {
             AppLog.put("启动朗读出错\n${it.localizedMessage}", it, true)
+        }.onFinally {
+            // 提前返回 / 出错时 play() 不会执行, 这里兜底把「准备中」摘掉, 否则界面一直转圈
+            if (generation == prepareReadAloudGeneration) upPreparingState(false)
+        }
+    }
+
+    /**
+     * 生成朗读计划期间对外报「准备中」。
+     *
+     * 服务在 onCreate 里就把 [isRun] 置成 true、[pause] 置成 false, 所以准备阶段不能靠这两个
+     * 静态标志判断，只能单独记一档状态，否则界面会把「还在分析」显示成「正在朗读」或「已停止」。
+     */
+    private fun upPreparingState(preparing: Boolean) {
+        isPreparing = preparing
+        val current = sessionStore.state.value.status
+        if (preparing) {
+            if (current != ReadAloudSessionStatus.Preparing) statusBeforePreparing = current
+            sessionStore.setStatus(ReadAloudSessionStatus.Preparing)
+        } else {
+            if (current == ReadAloudSessionStatus.Preparing) {
+                sessionStore.setStatus(statusBeforePreparing ?: ReadAloudSessionStatus.Idle)
+            }
+            statusBeforePreparing = null
         }
     }
 
@@ -439,6 +479,7 @@ abstract class BaseReadAloudService : BaseService(),
         }
         isRun = true
         pause = false
+        isPreparing = false
         needResumeOnAudioFocusGain = false
         needResumeOnCallStateIdle = false
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)

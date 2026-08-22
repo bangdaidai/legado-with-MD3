@@ -66,6 +66,7 @@ import kotlin.time.Duration.Companion.milliseconds
 fun ReadAloudCapsule(
     book: Book?,
     isPaused: Boolean,
+    isPreparing: Boolean,
     offsetXDp: Float,
     offsetYDp: Float,
     progress: Float,
@@ -175,6 +176,7 @@ fun ReadAloudCapsule(
                 if (isCollapsed) {
                     CollapsedCapsuleContent(
                         isPaused = isPaused,
+                        isPreparing = isPreparing,
                         onTogglePause = onTogglePause,
                         onExpand = { collapsed = false },
                     )
@@ -182,6 +184,7 @@ fun ReadAloudCapsule(
                     ExpandedCapsuleContent(
                         book = book,
                         isPaused = isPaused,
+                        isPreparing = isPreparing,
                         progress = progress,
                         coverRotation = coverRotation.value,
                         onTogglePause = onTogglePause,
@@ -197,9 +200,15 @@ fun ReadAloudCapsule(
 @Composable
 private fun CollapsedCapsuleContent(
     isPaused: Boolean,
+    isPreparing: Boolean,
     onTogglePause: () -> Unit,
     onExpand: () -> Unit,
 ) {
+    val labelRes = when {
+        isPreparing -> R.string.read_aloud_preparing
+        isPaused -> R.string.resume_read_aloud
+        else -> R.string.pause_read_aloud
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -209,19 +218,22 @@ private fun CollapsedCapsuleContent(
                 .clickable(onClick = onTogglePause)
                 .padding(all = 8.dp),
         ) {
-            Icon(
-                imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                contentDescription = stringResource(
-                    if (isPaused) R.string.resume_read_aloud else R.string.pause_read_aloud
-                ),
-                modifier = Modifier
-                    .size(16.dp),
-                tint = LegadoTheme.colorScheme.onSurface,
-            )
+            if (isPreparing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = stringResource(labelRes),
+                    modifier = Modifier
+                        .size(16.dp),
+                    tint = LegadoTheme.colorScheme.onSurface,
+                )
+            }
             Text(
-                text = stringResource(
-                    if (isPaused) R.string.resume_read_aloud else R.string.pause_read_aloud
-                ),
+                text = stringResource(labelRes),
                 style = LegadoTheme.typography.labelSmall,
                 color = LegadoTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 2.dp),
@@ -252,6 +264,7 @@ private fun CollapsedCapsuleContent(
 private fun ExpandedCapsuleContent(
     book: Book?,
     isPaused: Boolean,
+    isPreparing: Boolean,
     progress: Float,
     coverRotation: Float,
     onTogglePause: () -> Unit,
@@ -282,14 +295,21 @@ private fun ExpandedCapsuleContent(
                 .clickable(onClick = onTogglePause),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                contentDescription = stringResource(
-                    if (isPaused) R.string.resume_read_aloud else R.string.pause_read_aloud
-                ),
-                modifier = Modifier.size(24.dp),
-                tint = LegadoTheme.colorScheme.onSecondaryContainer,
-            )
+            if (isPreparing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = stringResource(
+                        if (isPaused) R.string.resume_read_aloud else R.string.pause_read_aloud
+                    ),
+                    modifier = Modifier.size(24.dp),
+                    tint = LegadoTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
         Box(
             modifier = Modifier

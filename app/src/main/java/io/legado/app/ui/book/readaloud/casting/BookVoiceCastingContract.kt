@@ -35,6 +35,10 @@ data class VoiceOptionUi(
     val engineType: String,
     val engineName: String,
     val selectable: Boolean,
+    /** 见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] 的 GENDER_* 常量 */
+    val gender: String = "",
+    /** 音色脚本声明的风格标签, 例如「少年」「清亮」 */
+    val descriptors: ImmutableList<String> = persistentListOf(),
 )
 
 @Stable

@@ -67,8 +67,11 @@ object HttpTtsVoiceCatalog {
     /** 运行时把音色表里的 HTTP 音色还原成朗读 URL JS 里 `voice` 的形状。 */
     fun fromVoice(voice: ReadAloudVoice): HttpTtsVoice? {
         if (voice.speakerId.isBlank()) return null
-        return GSON.fromJsonObject<HttpTtsVoice>(voice.traitsJson).getOrNull()
-            ?.takeIf { it.id.isNotBlank() }
+        // traitsJson 可能是老版本混淆包写下的（字段名被 R8 改过），解不出来就只用 id/name 兜底
+        return runCatching {
+            GSON.fromJsonObject<HttpTtsVoice>(voice.traitsJson).getOrNull()
+                ?.takeIf { it.id.isNotBlank() }
+        }.getOrNull()
             ?: HttpTtsVoice(id = voice.speakerId, name = voice.displayName)
     }
 

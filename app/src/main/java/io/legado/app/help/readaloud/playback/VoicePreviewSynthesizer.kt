@@ -1,5 +1,6 @@
 package io.legado.app.help.readaloud.playback
 
+import io.legado.app.constant.AppLog
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
@@ -44,12 +45,18 @@ class VoicePreviewSynthesizer(
                 if (httpTts == null) {
                     false
                 } else {
+                    val httpVoice = HttpTtsVoiceCatalog.fromVoice(voice)
+                    // 试听「每个音色听起来都一样」时，先看这条：httpVoice=null 或 id 相同就是音色没传下去
+                    AppLog.putDebug(
+                        "试听 http 音色 engine=${httpTts.name} speakerId=${voice.speakerId} " +
+                            "解析出的 voice=${httpVoice?.id ?: "null"}"
+                    )
                     HttpTtsFileSynthesizer.synthesize(
                         httpTts = httpTts,
                         text = text,
                         output = output,
                         speechRate = PREVIEW_SPEECH_RATE,
-                        voice = HttpTtsVoiceCatalog.fromVoice(voice),
+                        voice = httpVoice,
                     )
                 }
             }

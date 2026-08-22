@@ -21,6 +21,16 @@ data class ReadAloudVoice(
         const val ENGINE_CLOUD = "cloud_tts"
         const val MANAGED_BY_USER = "user"
         const val MANAGED_BY_CONFIGURED_TTS = "configured_tts"
+
+        /**
+         * 自动同步来的音色被用户改过名字：条目仍由引擎目录维护，但 [displayName] 归用户。
+         *
+         * [io.legado.app.domain.usecase.SyncReadAloudVoicesUseCase] 遇到这个值时保留旧名字。
+         */
+        const val MANAGED_BY_USER_NAMED = "configured_tts_renamed"
+
+        /** 由引擎目录同步维护的条目（含被改过名的） */
+        val CATALOG_MANAGED = setOf(MANAGED_BY_CONFIGURED_TTS, MANAGED_BY_USER_NAMED)
     }
 }
 

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.runtime.Composable
@@ -47,6 +48,7 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.profile
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
@@ -54,6 +56,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -218,6 +221,32 @@ fun CloudTtsScreen(
                 ),
             ) {
                 if (page == CloudTtsTab.Voices.ordinal) {
+                item {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        VoiceGenderFilterChip("", R.string.voice_gender_all, state, onIntent)
+                        VoiceGenderFilterChip(
+                            ReadAloudVoiceTraits.GENDER_MALE,
+                            R.string.voice_gender_male,
+                            state,
+                            onIntent,
+                        )
+                        VoiceGenderFilterChip(
+                            ReadAloudVoiceTraits.GENDER_FEMALE,
+                            R.string.voice_gender_female,
+                            state,
+                            onIntent,
+                        )
+                        VoiceGenderFilterChip(
+                            ReadAloudVoiceTraits.GENDER_UNKNOWN,
+                            R.string.voice_gender_unknown,
+                            state,
+                            onIntent,
+                        )
+                    }
+                }
                 if (state.voices.isEmpty() && !state.loading) {
                     item { AppText(stringResource(R.string.cloud_tts_no_saved_voices), Modifier.padding(24.dp)) }
                 }
@@ -225,13 +254,29 @@ fun CloudTtsScreen(
                     TinyClickableSettingItem(
                         title = voice.title,
                         description = voice.summary,
-                        trailingContent = if (voice.deletable) {{
-                            MediumTonalButton(
-                                onClick = { onIntent(CloudTtsIntent.RequestDeleteVoice(voice.id)) },
-                                icon = Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.delete),
-                            )
-                        }} else null,
+                        trailingContent = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                MediumTonalButton(
+                                    onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
+                                    enabled = state.previewingVoiceId == null,
+                                    selected = state.previewingVoiceId == voice.id,
+                                    icon = Icons.Default.PlayArrow,
+                                    contentDescription = stringResource(R.string.voice_preview),
+                                )
+                                MediumTonalButton(
+                                    onClick = { onIntent(CloudTtsIntent.RequestRenameVoice(voice.id)) },
+                                    icon = Icons.Default.Edit,
+                                    contentDescription = stringResource(R.string.cloud_tts_rename_voice),
+                                )
+                                if (voice.deletable) {
+                                    MediumTonalButton(
+                                        onClick = { onIntent(CloudTtsIntent.RequestDeleteVoice(voice.id)) },
+                                        icon = Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.delete),
+                                    )
+                                }
+                            }
+                        },
                         onClick = {
                             if (voice.editable) onIntent(CloudTtsIntent.EditVoice(voice.id))
                         },
@@ -405,6 +450,28 @@ fun CloudTtsScreen(
         dismissText = stringResource(R.string.cancel),
         onDismiss = { onIntent(CloudTtsIntent.DismissError) },
     )
+    val renameVoice = state.activeDialog as? CloudTtsDialog.RenameVoice
+    if (renameVoice != null) {
+        var name by remember(renameVoice) { mutableStateOf(renameVoice.currentName) }
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { onIntent(CloudTtsIntent.DismissError) },
+            title = stringResource(R.string.cloud_tts_rename_voice),
+            confirmText = stringResource(R.string.ok),
+            onConfirm = { onIntent(CloudTtsIntent.ConfirmRenameVoice(name)) },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { onIntent(CloudTtsIntent.DismissError) },
+            content = {
+                AppTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = { AppText(stringResource(R.string.cloud_tts_rename_voice)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+        )
+    }
     val defaultScope = state.activeDialog as? CloudTtsDialog.DefaultEngineScope
     AppAlertDialog(
         show = defaultScope != null,
@@ -450,6 +517,23 @@ private fun EngineSectionTitle(titleRes: Int) {
         style = LegadoTheme.typography.labelMediumEmphasized
     )
 }
+
+/** 空字符串代表不筛选; 再点一次已选中的性别也会回到不筛选 */
+@Composable
+private fun VoiceGenderFilterChip(
+    gender: String,
+    labelRes: Int,
+    state: CloudTtsUiState,
+    onIntent: (CloudTtsIntent) -> Unit,
+) {
+    ToggleChip(
+        label = stringResource(labelRes),
+        selected = state.voiceGenderFilter == gender,
+        onToggle = { onIntent(CloudTtsIntent.SetVoiceGenderFilter(gender)) },
+        compact = true,
+    )
+}
+
 
 @Composable
 private fun HttpTtsEditorSheet(

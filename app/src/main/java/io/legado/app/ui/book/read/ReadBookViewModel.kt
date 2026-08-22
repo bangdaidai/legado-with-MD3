@@ -1842,6 +1842,7 @@ class ReadBookViewModel(
                     state.copy(
                         isReadAloudRunning = status != ReadAloudSessionStatus.Idle,
                         isReadAloudPaused = status == ReadAloudSessionStatus.Paused,
+                        isReadAloudPreparing = status == ReadAloudSessionStatus.Preparing,
                         readAloudEngineName = info.engineName,
                         readAloudCharacterName = info.characterName,
                         readAloudRoleType = info.roleType,
@@ -2269,7 +2270,13 @@ class ReadBookViewModel(
             return
         }
         ReadAloud.stop(context)
-        _uiState.update { it.copy(isReadAloudRunning = false, isReadAloudPaused = false) }
+        _uiState.update {
+            it.copy(
+                isReadAloudRunning = false,
+                isReadAloudPaused = false,
+                isReadAloudPreparing = false,
+            )
+        }
     }
 
     private fun addCurrentBookToBookshelfAndFinish() {

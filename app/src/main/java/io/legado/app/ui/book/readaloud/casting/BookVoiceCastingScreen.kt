@@ -42,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
@@ -443,7 +444,13 @@ private fun voiceDescription(voice: VoiceOptionUi): String {
         else -> voice.engineType
     }
     return if (voice.selectable) {
-        listOf(engineType, voice.engineName).filter(String::isNotBlank).joinToString(" · ")
+        val gender = when (voice.gender) {
+            ReadAloudVoiceTraits.GENDER_MALE -> stringResource(R.string.voice_gender_male)
+            ReadAloudVoiceTraits.GENDER_FEMALE -> stringResource(R.string.voice_gender_female)
+            else -> ""
+        }
+        (listOf(engineType, voice.engineName, gender) + voice.descriptors)
+            .filter(String::isNotBlank).joinToString(" · ")
     } else {
         stringResource(R.string.voice_unavailable_named, engineType)
     }

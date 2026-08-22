@@ -476,10 +476,11 @@ class ReadBookController(
 
             // 只做暂停/续读，与菜单栏的 toggleReadAloud()（含"朗读未启动则启动"编排）不同，
             // 保持点击区原语义：朗读没开着时这个手势是空操作。
-            ReaderEvent.ToggleReadAloudPause -> if (BaseReadAloudService.isPlay()) {
-                ReadAloud.pause(activity)
-            } else {
-                ReadAloud.resume(activity)
+            ReaderEvent.ToggleReadAloudPause -> when {
+                // 准备中还没出声，此时 isPlay() 虽为 true，但 pause 会被随后的 play() 吞掉
+                BaseReadAloudService.isPreparing -> Unit
+                BaseReadAloudService.isPlay() -> ReadAloud.pause(activity)
+                else -> ReadAloud.resume(activity)
             }
 
             ReaderEvent.SyncProgress -> ReadBook.syncProgress(
@@ -1336,6 +1337,8 @@ class ReadBookController(
     private fun toggleReadAloud() {
         viewModel.onIntent(ReadBookIntent.StopAutoPage)
         when {
+            // 还在生成朗读计划（AI 分析）时点按钮就是取消准备，走 pause 会被随后的 play() 吞掉
+            BaseReadAloudService.isPreparing -> ReadAloud.stop(activity)
             !BaseReadAloudService.isRun -> {
                 ReadAloud.upReadAloudClass()
                 val scrollPageAnim = ReadBook.pageAnim() == 3

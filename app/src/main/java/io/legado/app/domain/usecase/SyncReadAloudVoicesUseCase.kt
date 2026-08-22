@@ -37,14 +37,18 @@ class SyncReadAloudVoicesUseCase(
 
         incoming.forEach { (entry, id) ->
             val old = existingById[id]
+            // 用户改过名的条目：名字归用户，其余字段照旧跟着引擎目录走
+            val userNamed = old?.managedBy == ReadAloudVoice.MANAGED_BY_USER_NAMED
+            val displayName = if (userNamed) old.displayName else entry.displayName
+            val managedBy = if (userNamed) old.managedBy else entry.managedBy
             val metadataChanged = old == null ||
                 old.engineType != entry.engineType ||
                 old.engineId != entry.engineId ||
                 old.speakerId != entry.speakerId ||
-                old.displayName != entry.displayName ||
+                old.displayName != displayName ||
                 old.traitsJson != entry.traitsJson ||
                 old.emotionCatalogJson != entry.emotionCatalogJson ||
-                old.managedBy != entry.managedBy
+                old.managedBy != managedBy
             val revision = when {
                 old == null -> entry.sourceRevision
                 metadataChanged -> maxOf(entry.sourceRevision, old.revision + 1)
@@ -55,10 +59,10 @@ class SyncReadAloudVoicesUseCase(
                 engineType = entry.engineType,
                 engineId = entry.engineId,
                 speakerId = entry.speakerId,
-                displayName = entry.displayName,
+                displayName = displayName,
                 traitsJson = entry.traitsJson,
                 emotionCatalogJson = entry.emotionCatalogJson,
-                managedBy = entry.managedBy,
+                managedBy = managedBy,
                 enabled = old?.enabled ?: true,
                 available = true,
                 revision = revision,

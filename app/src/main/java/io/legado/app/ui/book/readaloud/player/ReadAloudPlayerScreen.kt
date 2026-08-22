@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -301,9 +302,18 @@ fun ReadAloudPlayerScreenContent(
                         )
                         MediumTonalButton(
                             onClick = { onIntent(ReadAloudPlayerIntent.TogglePause) },
-                            icon = if (state.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            icon = when {
+                                // 准备中：还在生成朗读计划，点一下是取消准备
+                                state.isPreparing -> Icons.Default.HourglassEmpty
+                                state.isPaused -> Icons.Default.PlayArrow
+                                else -> Icons.Default.Pause
+                            },
                             contentDescription = stringResource(
-                                if (state.isPaused) R.string.resume else R.string.pause
+                                when {
+                                    state.isPreparing -> R.string.read_aloud_preparing
+                                    state.isPaused -> R.string.resume
+                                    else -> R.string.pause
+                                }
                             ),
                             modifier = Modifier.size(64.dp),
                         )

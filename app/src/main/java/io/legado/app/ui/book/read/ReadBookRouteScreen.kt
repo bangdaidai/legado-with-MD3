@@ -584,6 +584,7 @@ fun ReadBookRouteScreen(
                 ReadAloudCapsule(
                     book = state.book,
                     isPaused = state.isReadAloudPaused,
+                    isPreparing = state.isReadAloudPreparing,
                     offsetXDp = state.readAloudCapsuleOffsetX,
                     offsetYDp = state.readAloudCapsuleOffsetY,
                     progress = state.readAloudChapterPosition.toFloat() /

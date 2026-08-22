@@ -35,10 +35,13 @@ import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
+import io.legado.app.help.readaloud.VoiceTraits
 import io.legado.app.help.readaloud.playback.CloudTtsAudioSynthesizer
 import io.legado.app.help.readaloud.playback.HttpTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsVoiceCatalog
+import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -74,6 +77,7 @@ class CloudTtsViewModel(
     private val uploadRepository: UploadRepository,
     private val httpTtsRepository: HttpTtsRepository,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
+    private val previewSynthesizer: VoicePreviewSynthesizer,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CloudTtsUiState())
     val uiState = _uiState.asStateFlow()
@@ -107,7 +111,7 @@ class CloudTtsViewModel(
                 val configuredHttpEngineIds = allHttpEngines.mapTo(mutableSetOf()) { it.sourceId }
                 val orphanedVoiceIds = allSavedVoices.asSequence()
                     .filter { it.engineType == ReadAloudVoice.ENGINE_HTTP }
-                    .filter { it.managedBy == ReadAloudVoice.MANAGED_BY_CONFIGURED_TTS }
+                    .filter { it.managedBy in ReadAloudVoice.CATALOG_MANAGED }
                     .filter { it.engineId !in configuredHttpEngineIds }
                     .mapTo(mutableSetOf()) { it.id }
                 allSavedVoices
@@ -138,19 +142,7 @@ class CloudTtsViewModel(
                             loginUrl = engine.loginUrl,
                         )
                     }.toImmutableList(),
-                    voices = savedVoices.map { voice ->
-                        CloudTtsVoiceItemUi(
-                            voice.id,
-                            voice.displayName,
-                            buildString {
-                                append(engineName(voice.engineType, voice.engineId))
-                                if (voice.managedBy != ReadAloudVoice.MANAGED_BY_USER) append(application.getString(R.string.cloud_tts_auto_synced_suffix))
-                                if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
-                            },
-                            deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
-                            editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
-                        )
-                    }.toImmutableList(),
+                    voices = voiceItems(_uiState.value.voiceGenderFilter),
                     availableEngines = engineOptions(),
                 ) }
             }
@@ -218,6 +210,14 @@ class CloudTtsViewModel(
             is CloudTtsIntent.RequestDeleteVoice -> requestDeleteVoice(intent.id)
             CloudTtsIntent.ConfirmDeleteVoice -> confirmDeleteVoice()
             is CloudTtsIntent.EditVoice -> editVoice(intent.id)
+            is CloudTtsIntent.PreviewSavedVoice -> previewSavedVoice(intent.id)
+            is CloudTtsIntent.RequestRenameVoice -> requestRenameVoice(intent.id)
+            is CloudTtsIntent.SetVoiceGenderFilter -> _uiState.update {
+                val gender = intent.gender.takeUnless { value -> value == it.voiceGenderFilter }
+                    .orEmpty()
+                it.copy(voiceGenderFilter = gender, voices = voiceItems(gender))
+            }
+            is CloudTtsIntent.ConfirmRenameVoice -> confirmRenameVoice(intent.name)
             is CloudTtsIntent.UpdateEngineEditor -> _uiState.update { it.copy(engineEditor = intent.editor) }
             is CloudTtsIntent.UpdateVoiceEditor -> _uiState.update { it.copy(voiceEditor = intent.editor) }
             CloudTtsIntent.DismissEngineEditor -> _uiState.update { it.copy(engineEditor = null) }
@@ -531,6 +531,70 @@ class CloudTtsViewModel(
         _uiState.update { it.copy(testing = false) }
     }
 
+    /**
+     * 试听音色表里已保存的一条音色。
+     *
+     * 合成走 [VoicePreviewSynthesizer]，和真正朗读同一条路径，听到的就是朗读时的效果；
+     * 播放交给界面的 MediaPlayer。
+     */
+    private fun previewSavedVoice(id: String) {
+        if (_uiState.value.previewingVoiceId != null) return
+        val voice = voices.firstOrNull { it.id == id } ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(previewingVoiceId = id) }
+            runCatching {
+                val file = File(application.cacheDir, "voice_preview/${id.hashCode()}.audio")
+                check(
+                    previewSynthesizer.synthesize(
+                        voice = voice,
+                        text = application.getString(R.string.voice_preview_text),
+                        output = file,
+                    )
+                ) { application.getString(R.string.voice_preview_failed) }
+                file
+            }.onSuccess { _effects.tryEmit(CloudTtsEffect.PlayPreview(it.absolutePath)) }
+                .onFailure { showError(formatError(it)) }
+            _uiState.update { it.copy(previewingVoiceId = null) }
+        }
+    }
+
+    private fun requestRenameVoice(id: String) {
+        val voice = voices.firstOrNull { it.id == id } ?: return
+        _uiState.update {
+            it.copy(activeDialog = CloudTtsDialog.RenameVoice(voice.id, voice.displayName))
+        }
+    }
+
+    /**
+     * 自动同步来的音色也能改名。
+     *
+     * 改过名的条目标成 [ReadAloudVoice.MANAGED_BY_USER_NAMED]，
+     * 引擎目录下次刷新时只更新其它字段，不会把名字覆盖回去。
+     */
+    private fun confirmRenameVoice(name: String) = viewModelScope.launch {
+        val dialog = _uiState.value.activeDialog as? CloudTtsDialog.RenameVoice ?: return@launch
+        val newName = name.trim()
+        val voice = voices.firstOrNull { it.id == dialog.id }
+        if (voice == null || newName.isBlank() || newName == voice.displayName) {
+            return@launch _uiState.update { it.copy(activeDialog = null) }
+        }
+        val managedBy = if (voice.managedBy == ReadAloudVoice.MANAGED_BY_USER) {
+            voice.managedBy
+        } else {
+            ReadAloudVoice.MANAGED_BY_USER_NAMED
+        }
+        voiceGateway.upsertVoice(
+            voice.copy(
+                displayName = newName,
+                managedBy = managedBy,
+                revision = voice.revision + 1,
+                updatedAt = System.currentTimeMillis(),
+            )
+        )
+        _uiState.update { it.copy(activeDialog = null) }
+        toast(application.getString(R.string.cloud_tts_voice_saved))
+    }
+
     private fun buildEngine(): CloudTtsEngine? {
         val editor = _uiState.value.engineEditor ?: return null
         val provider = CloudTtsProviderType.entries.firstOrNull {
@@ -673,6 +737,41 @@ class CloudTtsViewModel(
                 )
             })
         }.toImmutableList()
+
+    /**
+     * 音色行：引擎名 + 同步/可用状态 + 性别与风格标签。
+     *
+     * 标签来自 [ReadAloudVoiceTraits]（http 引擎脚本 `voices()` 声明的 gender/style/tags、
+     * 云端音色的 style/role），音色表本身没有这些列。
+     */
+    private fun voiceItems(genderFilter: String) = voices.mapNotNull { voice ->
+        val traits = ReadAloudVoiceTraits.of(voice)
+        if (genderFilter.isNotEmpty() && traits.gender != genderFilter) return@mapNotNull null
+        CloudTtsVoiceItemUi(
+            voice.id,
+            voice.displayName,
+            buildString {
+                append(engineName(voice.engineType, voice.engineId))
+                if (voice.managedBy != ReadAloudVoice.MANAGED_BY_USER) append(application.getString(R.string.cloud_tts_auto_synced_suffix))
+                if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
+                val labels = traitLabels(traits)
+                if (labels.isNotEmpty()) append(labels.joinToString(" · ", prefix = " | "))
+            },
+            deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
+            editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
+            gender = traits.gender,
+        )
+    }.toImmutableList()
+
+    /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多会把一行挤爆 */
+    private fun traitLabels(traits: VoiceTraits): List<String> =
+        listOfNotNull(genderLabel(traits.gender)) + traits.descriptors.take(3)
+
+    private fun genderLabel(gender: String): String? = when (gender) {
+        ReadAloudVoiceTraits.GENDER_MALE -> application.getString(R.string.voice_gender_male)
+        ReadAloudVoiceTraits.GENDER_FEMALE -> application.getString(R.string.voice_gender_female)
+        else -> null
+    }
 
     private fun engineName(engineType: String, engineId: String): String = when (engineType) {
         ReadAloudVoice.ENGINE_SYSTEM -> systemEngines.firstOrNull {
@@ -881,7 +980,7 @@ class CloudTtsViewModel(
         }
         syncReadAloudVoicesUseCase(
             entries = entries,
-            managedSources = setOf(ReadAloudVoice.MANAGED_BY_CONFIGURED_TTS),
+            managedSources = ReadAloudVoice.CATALOG_MANAGED,
             removeMissingEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
             // 这里只同步 http，系统音色不在本次条目里，别被判成失效
             scopeEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),

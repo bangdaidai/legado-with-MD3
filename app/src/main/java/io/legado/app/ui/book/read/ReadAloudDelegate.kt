@@ -142,7 +142,7 @@ class ReadAloudDelegate(
                 }
                 addAll(httpEntries)
             },
-            managedSources = setOf(ReadAloudVoice.MANAGED_BY_CONFIGURED_TTS),
+            managedSources = ReadAloudVoice.CATALOG_MANAGED,
             removeMissingEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
         )
     }
@@ -157,7 +157,13 @@ class ReadAloudDelegate(
 
     fun stop() {
         ReadAloud.stop(context)
-        host.updateState { it.copy(isReadAloudRunning = false, isReadAloudPaused = false) }
+        host.updateState {
+            it.copy(
+                isReadAloudRunning = false,
+                isReadAloudPaused = false,
+                isReadAloudPreparing = false,
+            )
+        }
     }
 
     fun prevParagraph() = ReadAloud.prevParagraph(context)

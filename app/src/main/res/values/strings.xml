@@ -2965,6 +2965,8 @@
     <string name="cloud_tts_default_requires_voice">Save at least one voice for this cloud engine before making it the default.</string>
     <string name="read_aloud_default_engine_updated">Default read-aloud engine updated</string>
     <string name="cloud_tts_delete_voice_message">Delete the voice preset “%1$s”? Character assignments using it will fall back to another voice.</string>
+    <string name="cloud_tts_rename_voice">Rename voice</string>
+    <string name="read_aloud_preparing">Preparing…</string>
     <string name="cloud_tts_no_test_voice">The provider returned no voice available for testing</string>
     <string name="cloud_tts_connection_test_text">Welcome to cloud multi-speaker reading. This is a connection test.</string>
     <string name="cloud_tts_no_audio">Cloud TTS returned no valid audio</string>
@@ -3099,6 +3101,7 @@
     <string name="voice_gender_male">Male</string>
     <string name="voice_gender_female">Female</string>
     <string name="voice_gender_unknown">Unknown</string>
+    <string name="voice_gender_all">All</string>
     <string name="voice_age_child">Child</string>
     <string name="voice_age_teen">Teen</string>
     <string name="voice_age_young_adult">Young adult</string>

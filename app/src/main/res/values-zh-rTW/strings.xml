@@ -2653,6 +2653,8 @@
     <string name="cloud_tts_default_requires_voice">請先為此雲端 TTS 引擎儲存至少一個音色，再設為預設引擎。</string>
     <string name="read_aloud_default_engine_updated">預設朗讀引擎已更新</string>
     <string name="cloud_tts_delete_voice_message">刪除音色預設「%1$s」？使用它的人物綁定將回退到其他音色。</string>
+    <string name="cloud_tts_rename_voice">重新命名音色</string>
+    <string name="read_aloud_preparing">準備中…</string>
     <string name="cloud_tts_no_test_voice">廠商沒有傳回可用於測試的音色</string>
     <string name="cloud_tts_connection_test_text">歡迎使用雲端多角色朗讀，這是連線測試。</string>
     <string name="cloud_tts_no_audio">雲端 TTS 沒有傳回有效音訊</string>
@@ -2765,6 +2767,7 @@
     <string name="voice_gender_male">男性</string>
     <string name="voice_gender_female">女性</string>
     <string name="voice_gender_unknown">未知</string>
+    <string name="voice_gender_all">全部</string>
     <string name="voice_age_child">兒童</string>
     <string name="voice_age_teen">少年／少女</string>
     <string name="voice_age_young_adult">青年</string>

@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
@@ -128,12 +129,16 @@ class BookVoiceCastingViewModel(
             )
         }
         val voiceOptions = voices.map { voice ->
+            val traits = ReadAloudVoiceTraits.of(voice)
             VoiceOptionUi(
                 id = voice.id,
                 name = voice.displayName,
                 engineType = voice.engineType,
                 engineName = voice.engineId,
                 selectable = voice.available && voice.enabled,
+                gender = traits.gender,
+                // 一行装不下太多标签, 只取前 3 条
+                descriptors = traits.descriptors.take(3).toImmutableList(),
             )
         }.sortedWith(
             compareByDescending<VoiceOptionUi> { it.selectable }

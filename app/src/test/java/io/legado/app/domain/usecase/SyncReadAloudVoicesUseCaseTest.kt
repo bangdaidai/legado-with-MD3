@@ -90,6 +90,41 @@ class SyncReadAloudVoicesUseCaseTest {
         assertEquals(1, result.unavailable)
         assertTrue(gateway.voices.isEmpty())
     }
+
+    @Test
+    fun `renamed catalog voice keeps its name on resync`() = runBlocking {
+        val id = SpeechIdentity.voiceId("http", "7", "zh-CN-XiaoxiaoNeural")
+        val renamed = ReadAloudVoice(
+            id = id,
+            engineType = ReadAloudVoice.ENGINE_HTTP,
+            engineId = "7",
+            speakerId = "zh-CN-XiaoxiaoNeural",
+            displayName = "我的旁白",
+            traitsJson = "{}",
+            managedBy = ReadAloudVoice.MANAGED_BY_USER_NAMED,
+        )
+        val gateway = MutableVoiceGateway(mutableListOf(renamed))
+
+        SyncReadAloudVoicesUseCase(gateway)(
+            entries = listOf(
+                VoiceCatalogEntry(
+                    engineType = ReadAloudVoice.ENGINE_HTTP,
+                    engineId = "7",
+                    speakerId = "zh-CN-XiaoxiaoNeural",
+                    displayName = "Next Edge TTS · 晓晓",
+                    traitsJson = """{"id":"zh-CN-XiaoxiaoNeural"}""",
+                )
+            ),
+            managedSources = ReadAloudVoice.CATALOG_MANAGED,
+            removeMissingEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
+            now = 300,
+        )
+
+        val voice = gateway.voices.single()
+        assertEquals("我的旁白", voice.displayName)
+        assertEquals(ReadAloudVoice.MANAGED_BY_USER_NAMED, voice.managedBy)
+        assertEquals("""{"id":"zh-CN-XiaoxiaoNeural"}""", voice.traitsJson)
+    }
 }
 
 private class MutableVoiceGateway(

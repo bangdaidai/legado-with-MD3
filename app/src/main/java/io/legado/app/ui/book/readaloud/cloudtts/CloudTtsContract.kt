@@ -24,6 +24,10 @@ data class CloudTtsUiState(
     val activeDialog: CloudTtsDialog? = null,
     val testing: Boolean = false,
     val discovering: Boolean = false,
+    /** 音色列表里正在试听的那条，非空时其余行的试听按钮禁用 */
+    val previewingVoiceId: String? = null,
+    /** 音色列表的性别筛选，空串为不筛选；取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
+    val voiceGenderFilter: String = "",
     val selectedTab: CloudTtsTab = CloudTtsTab.Voices,
 )
 
@@ -52,6 +56,8 @@ data class TtsManagedEngineItemUi(
     val summary: String,
     val deletable: Boolean,
     val editable: Boolean,
+    /** 筛选用的性别，取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
+    val gender: String = "",
 )
 @Stable data class TtsEngineOptionUi(
     val engineType: String,
@@ -136,6 +142,12 @@ sealed interface CloudTtsIntent {
     data class RequestDeleteVoice(val id: String) : CloudTtsIntent
     data object ConfirmDeleteVoice : CloudTtsIntent
     data class EditVoice(val id: String) : CloudTtsIntent
+    /** 试听音色表里已保存的一条音色 */
+    data class PreviewSavedVoice(val id: String) : CloudTtsIntent
+    data class RequestRenameVoice(val id: String) : CloudTtsIntent
+    /** 切换音色列表的性别筛选，传空串为取消筛选 */
+    data class SetVoiceGenderFilter(val gender: String) : CloudTtsIntent
+    data class ConfirmRenameVoice(val name: String) : CloudTtsIntent
     data class UpdateEngineEditor(val editor: CloudTtsEngineEditorUi) : CloudTtsIntent
     data class UpdateVoiceEditor(val editor: TtsVoicePresetEditorUi) : CloudTtsIntent
     data object DismissEngineEditor : CloudTtsIntent
@@ -164,5 +176,6 @@ sealed interface CloudTtsEffect {
 sealed interface CloudTtsDialog {
     data class Error(val message: String) : CloudTtsDialog
     data class DeleteVoice(val id: String, val title: String) : CloudTtsDialog
+    data class RenameVoice(val id: String, val currentName: String) : CloudTtsDialog
     data class DefaultEngineScope(val value: String?, val title: String) : CloudTtsDialog
 }
