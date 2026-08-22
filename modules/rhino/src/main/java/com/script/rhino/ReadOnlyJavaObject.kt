@@ -20,13 +20,10 @@ class ReadOnlyJavaObject(scope: Scriptable?, javaObject: Any, staticType: Class<
         if (name.length > 3 && name.startsWith("set")) {
             val name2 = name.substring(3).replaceFirstChar { it.lowercase() }
             if (super.has(name2, start)) {
-                RhinoProbe.onGet(javaObject.javaClass.simpleName, name, NOT_FOUND)
                 return NOT_FOUND
             }
         }
-        val value = super.get(name, start)
-        RhinoProbe.onGet(javaObject.javaClass.simpleName, name, value)
-        return value
+        return super.get(name, start)
     }
 
     override fun put(
@@ -34,8 +31,7 @@ class ReadOnlyJavaObject(scope: Scriptable?, javaObject: Any, staticType: Class<
         start: Scriptable?,
         value: Any?
     ) {
-        // 只读包装会静默丢弃写入，这里记一笔，避免书源赋值失败也看不出来
-        RhinoProbe.onGet("${javaObject.javaClass.simpleName}(写入被丢弃)", name ?: "?", value)
+        // do nothing
     }
 
     companion object {

@@ -56,8 +56,6 @@ object CacheManager {
      */
     @JvmOverloads
     fun put(key: String, value: Any, saveTime: Int = 0) {
-        // 临时探针：授权页到底有没有写回 v_* 这类数据，看这条
-        JsProbe.step("cache.put", "${key.take(60)}=${value.toString().take(20)} ttl=$saveTime")
         val deadline =
             if (saveTime == 0) 0 else System.currentTimeMillis() + saveTime * 1000
         when (value) {
@@ -85,13 +83,6 @@ object CacheManager {
     }
 
     fun get(key: String): String? {
-        // 临时探针：书源在弹提示前最后几步就是 cache.get，需要知道读的是什么、读到没有
-        val value = getInternal(key)
-        JsProbe.step("cache.get", "${key.take(60)}→len=${value?.length ?: -1}")
-        return value
-    }
-
-    private fun getInternal(key: String): String? {
         getFromMemory(key)?.let {
             if (it is String) return it
         }
@@ -165,22 +156,17 @@ object CacheManager {
 object WebCacheManager {
     @JavascriptInterface
     fun put(key: String, value: String, saveTime: Int = 0) {
-        // 临时探针：带 web. 前缀，用来区分「网页里调的」和「书源 JS 调的」
-        JsProbe.step("web.cache.put", "${key.take(60)}=${value.take(20)}")
         CacheManager.put(key, value, saveTime)
     }
 
     @JavascriptInterface
     fun putMemory(key: String, value: String) {
-        JsProbe.step("web.cache.putMemory", "${key.take(60)}=${value.take(20)}")
         memoryLruCache.put(key, value)
     }
 
     @JavascriptInterface
     fun getFromMemory(key: String): String? {
-        val value = memoryLruCache[key] as? String
-        JsProbe.step("web.cache.getFromMemory", "${key.take(60)}→len=${value?.length ?: -1}")
-        return value
+        return memoryLruCache[key] as? String
     }
 
     @JavascriptInterface
@@ -190,7 +176,6 @@ object WebCacheManager {
 
     @JavascriptInterface
     fun get(key: String): String? {
-        JsProbe.step("web.cache.get", key.take(60))
         return CacheManager.get(key)
     }
 

@@ -45,7 +45,6 @@ import io.legado.app.help.AppWebDav
 import io.legado.app.help.CrashHandler
 import io.legado.app.help.DefaultData
 import io.legado.app.help.DispatchersMonitor
-import io.legado.app.help.JsProbe
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
@@ -340,7 +339,6 @@ class App : Application(), SingletonImageLoader.Factory {
 
     private fun initRhino() {
         RhinoScriptEngine
-        JsProbe.install()
         RhinoWrapFactory.register(BookSource::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(RssSource::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(HttpTTS::class.java, NativeBaseSource.factory)

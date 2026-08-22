@@ -1,7 +1,6 @@
 package io.legado.app.help.crypto
 
 import androidx.annotation.Keep
-import io.legado.app.help.JsProbe
 import io.legado.app.utils.isHex
 import java.io.InputStream
 import java.nio.charset.Charset
@@ -22,9 +21,6 @@ open class SymmetricCryptoAndroid(
         ?: KeyGenerator.getInstance(keyAlgorithm).generateKey()
     private var iv: ByteArray? = null
 
-    // 临时探针：密钥非法时要看到它到底是什么（疑似 "undefined"），定位后连同下面的 try/catch 一起删
-    private val keyForProbe = key
-
     private fun normalizedKey(key: ByteArray): ByteArray = when {
         // 与 Hutool KeyUtil 一致：DES/DESede 走 DESKeySpec/DESedeKeySpec，超长密钥只取前 8/24 字节；
         // 其余算法（含 AES）原样交给 SecretKeySpec，密钥长度非法时由 provider 抛异常。
@@ -38,28 +34,13 @@ open class SymmetricCryptoAndroid(
         return this
     }
 
-    private fun cipher(mode: Int): Cipher = try {
-        Cipher.getInstance(transformation).apply {
-            val iv = this@SymmetricCryptoAndroid.iv
-            if (iv == null || transformation.contains("/ECB/", true)) {
-                init(mode, secretKey)
-            } else {
-                init(mode, secretKey, IvParameterSpec(iv))
-            }
+    private fun cipher(mode: Int): Cipher = Cipher.getInstance(transformation).apply {
+        val iv = this@SymmetricCryptoAndroid.iv
+        if (iv == null || transformation.contains("/ECB/", true)) {
+            init(mode, secretKey)
+        } else {
+            init(mode, secretKey, IvParameterSpec(iv))
         }
-    } catch (e: Throwable) {
-        // 临时探针：书源会吞掉这里的异常，定位后删除本 try/catch
-        JsProbe.stepError("cipher($transformation,mode=$mode,key=${probeKey()})", e)
-        throw e
-    }
-
-    /** 临时探针：可打印字符原样输出，否则给 hex，最多 32 个字符 */
-    private fun probeKey(): String {
-        val bytes = keyForProbe ?: return "随机"
-        val text = String(bytes, Charsets.UTF_8)
-        val printable = text.none { it.code < 0x20 || it.code == 0x7F }
-        return if (printable) "${bytes.size}B/\"${text.take(32)}\""
-        else "${bytes.size}B/hex:${bytes.take(16).joinToString("") { "%02x".format(it) }}"
     }
 
     fun encrypt(data: ByteArray): ByteArray = cipher(Cipher.ENCRYPT_MODE).doFinal(data)
@@ -74,16 +55,7 @@ open class SymmetricCryptoAndroid(
 
     fun encrypt(data: InputStream): ByteArray = encrypt(data.readBytes())
 
-    fun decrypt(data: ByteArray): ByteArray {
-        val cipher = cipher(Cipher.DECRYPT_MODE)
-        return try {
-            cipher.doFinal(data)
-        } catch (e: Throwable) {
-            // 临时探针：密钥错误时这里抛 BadPadding，书源同样会吞掉
-            JsProbe.stepError("decryptDoFinal(${data.size}B)", e)
-            throw e
-        }
-    }
+    fun decrypt(data: ByteArray): ByteArray = cipher(Cipher.DECRYPT_MODE).doFinal(data)
 
     fun encryptBase64(data: ByteArray): String {
         return encrypt(data).toBase64()
