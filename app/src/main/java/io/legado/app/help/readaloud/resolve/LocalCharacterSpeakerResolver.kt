@@ -10,7 +10,7 @@ import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 
 object LocalCharacterSpeakerResolver {
 
-    const val VERSION = "local-character-resolver-v4-pronoun"
+    const val VERSION = "local-character-resolver-v5-zero-subject"
 
     private const val CONTEXT_LENGTH = 64
 
@@ -18,10 +18,16 @@ object LocalCharacterSpeakerResolver {
     private const val VERB_PREFIX = "[^，,。.！!？?；;：:、“”‘’\"'\\s]{0,4}"
 
     /**
-     * 名字与说话动词之间允许夹的修饰语长度，如「宝珠眼睛亮晶晶的，认真说：」。
+     * 说话动词后常见的补语，如「说了一遍：」「应了一声：」「说了一句：」。
+     * 只在以冒号收尾的写法里放开 —— 有冒号兜底，不会把「韦训说的那个人」认成他在说话。
+     */
+    private const val VERB_SUFFIX = "[^，,。.！!？?；;：:、“”‘’\"'\\s]{0,6}"
+
+    /**
+     * 名字与说话动词之间允许夹的修饰语长度，如「宝珠心中酸涩，摸索着摘下头上的桂花枝，自语道：」。
      * 允许逗号但不允许句末标点和引号，免得跨句抢别人的台词。
      */
-    private const val LOOSE_CUE_LENGTH = 20
+    private const val LOOSE_CUE_LENGTH = 40
     private const val LOOSE_CUE = "[^。.！!？?；;：:“”‘’\"'\\n]{0,$LOOSE_CUE_LENGTH}"
 
     private const val SPEECH_VERB_CORE = "(?:说道|说|问道|问|答道|答|喊道|喊|叫道|叫|喝道|笑道|" +
@@ -32,10 +38,11 @@ object LocalCharacterSpeakerResolver {
 
     /**
      * 名字后面只有动作、根本没有说话动词就直接接引号的写法：
-     * 「韦训拨弄了一下手里的金币，正好十枚，“这是？”」。
-     * 允许逗号，不允许句末标点和引号，免得跨句抢别人的台词。
+     * 「韦训拨弄了一下手里的金币，正好十枚，“这是？”」「杨行简一拍大腿：“糟了。”」。
+     * 允许逗号，不允许句末标点和引号。长度压在 20 字以内 —— 再长就容易把
+     * 「宝珠……忽而从背后传来呼喝驱赶之声，“官员巡游”」这种无主语的喊话算到宝珠头上。
      */
-    private const val ACTION_CUE = "[^。.！!？?；;：:“”‘’\"'\\n]{0,30}"
+    private const val ACTION_CUE = "[^。.！!？?；;：:“”‘’\"'\\n]{0,20}"
 
     /**
      * 小句开头。名字必须在段首或标点之后才可能是动作主语：「他看了韦训一眼，“……”」里的韦训跟在
@@ -51,6 +58,14 @@ object LocalCharacterSpeakerResolver {
     private fun pronounCueRegex(pronoun: String) = Regex(
         "$CLAUSE_START$pronoun(?!们)$LOOSE_CUE" +
             "(?:$SPEECH_VERB_CORE|$THOUGHT_VERB_CORE)\\s*[，,：:\\s]*$"
+    )
+
+    /**
+     * 整段只有说话动词、主语承接上文的写法：「问道：“你认识那几个人？”」。
+     * 必须以冒号收尾，否则「说是这样」这类旁白也会命中。
+     */
+    private val zeroSubjectCueRegex = Regex(
+        "^[\\s　]*(?:$VERB_PREFIX)?(?:$SPEECH_VERB_CORE|$THOUGHT_VERB_CORE)$VERB_SUFFIX[：:]\\s*$"
     )
 
     fun resolve(
@@ -83,13 +98,14 @@ object LocalCharacterSpeakerResolver {
         val to = end.coerceIn(from, paragraph.text.length)
         val before = paragraph.text.substring(0, from).takeLast(CONTEXT_LENGTH)
         val after = paragraph.text.substring(to).take(CONTEXT_LENGTH)
-        // 置信度按线索强度递减：说话动词最硬，动作主语和代词回指都是推断，
+        // 置信度按线索强度递减：说话动词最硬，动作主语、代词回指和零主语承前都是推断，
         // 压到 0.75 以下让「规则 + AI」模式还会去复核一遍
         val (character, resolvedConfidence) =
             resolveStrict(aliases, before, after, roleType)?.let { it to 0.94f }
                 ?: resolveLoose(aliases, before)?.let { it to 0.94f }
                 ?: resolveActionSubject(aliases, before)?.let { it to 0.74f }
                 ?: mentions.resolvePronoun(before)?.let { it to 0.7f }
+                ?: mentions.resolveZeroSubject(before)?.let { it to 0.6f }
                 ?: return this
         mentions.remember(character)
         return copy(
@@ -117,8 +133,11 @@ object LocalCharacterSpeakerResolver {
         .singleOrNull()
 
     /**
-     * 严格匹配要求名字紧贴说话动词，「宝珠眼睛亮晶晶的，认真说：」这种带长修饰语的写法会整句漏掉，
-     * 最后退成旁白音。这里放宽中间的修饰语，多个名字都命中时取离说话动词最近的那个。
+     * 严格匹配要求名字紧贴说话动词，「宝珠心中酸涩，摸索着摘下头上的桂花枝，自语道：」这种带长
+     * 修饰语的写法会整句漏掉，最后退成旁白音。这里放宽中间的修饰语，多个名字都命中时取离说话动词
+     * 最近的那个。
+     *
+     * 名字必须落在小句开头，否则「让十三郎从行李里取出漆盒，自语道：」会把宾语十三郎当成说话人。
      */
     private fun resolveLoose(
         aliases: List<AliasCandidate>,
@@ -136,8 +155,8 @@ object LocalCharacterSpeakerResolver {
             (roleType == SpeechRoleType.Character || roleType == SpeechRoleType.Thought)
 
     /**
-     * 名字在小句开头、后面只有动作就直接接引号：
-     * 「韦训拨弄了一下手里的金币，正好十枚，“这是？”」。
+     * 名字在小句开头、后面只有动作就直接接引号或冒号：
+     * 「韦训拨弄了一下手里的金币，正好十枚，“这是？”」「杨行简一拍大腿：“糟了。”」。
      * 命中两个角色就放弃，免得把「甲看了乙一眼，“……”」认成乙在说话。
      */
     private fun resolveActionSubject(
@@ -152,23 +171,32 @@ object LocalCharacterSpeakerResolver {
         .singleOrNull()
 
     /**
-     * 顺序扫描时记住最近出现过的男/女角色，用来解「他/她 + 说话动词」这种跨段落代词回指：
-     * 「韦训见她从铺子里出来……」下一段「他狐疑地问：“你买了什么？”」。
+     * 顺序扫描时记住最近出现过的角色，用来解两种跨段落线索：
+     * - 代词回指：「韦训见她从铺子里出来……」下一段「他狐疑地问：“你买了什么？”」按性别落人；
+     * - 零主语承前：「……韦训心想那一鞭并未打中她」下一段「问道：“你认识那几个人？”」落到最近那个人。
      *
-     * 性别拿不准就不记，宁可掉回旁白音也不瞎猜。
+     * 性别拿不准就不记进性别槽，宁可掉回旁白音也不瞎猜。
      */
     private class RecentMentions(private val aliases: List<AliasCandidate>) {
 
         private var recentMale: SpeakerCharacter? = null
         private var recentFemale: SpeakerCharacter? = null
+        private var lastMentioned: SpeakerCharacter? = null
 
+        /** 按名字在这段里最后出现的位置依次记录，否则「最近」取决于别名表顺序而不是行文顺序 */
         fun observe(text: String) {
-            aliases.forEach { candidate ->
-                if (candidate.alias in text) remember(candidate.character)
-            }
+            aliases
+                .mapNotNull { candidate ->
+                    text.lastIndexOf(candidate.alias)
+                        .takeIf { it >= 0 }
+                        ?.let { it to candidate.character }
+                }
+                .sortedBy { it.first }
+                .forEach { remember(it.second) }
         }
 
         fun remember(character: SpeakerCharacter) {
+            lastMentioned = character
             when (character.speakingGender()) {
                 ReadAloudVoiceTraits.GENDER_MALE -> recentMale = character
                 ReadAloudVoiceTraits.GENDER_FEMALE -> recentFemale = character
@@ -180,6 +208,9 @@ object LocalCharacterSpeakerResolver {
             femalePronounCueRegex.containsMatchIn(before) -> recentFemale
             else -> null
         }
+
+        fun resolveZeroSubject(before: String): SpeakerCharacter? =
+            lastMentioned.takeIf { zeroSubjectCueRegex.matches(before) }
     }
 
     /** 角色卡写明的性别优先，其次从男主/女主这类定位推 */
@@ -222,7 +253,8 @@ object LocalCharacterSpeakerResolver {
     ) {
         private val escapedAlias = Regex.escape(alias)
         private val beforeSpeechRegex = Regex(
-            "(?<![\\p{L}\\p{N}_])$escapedAlias\\s*(?:$speechVerb|$thoughtVerb)?\\s*[：:]\\s*$"
+            "(?<![\\p{L}\\p{N}_])$escapedAlias\\s*" +
+                "(?:(?:$speechVerb|$thoughtVerb)$VERB_SUFFIX)?\\s*[：:]\\s*$"
         )
         private val beforeVerbRegex = Regex(
             "(?<![\\p{L}\\p{N}_])$escapedAlias\\s*(?:$speechVerb|$thoughtVerb)\\s*[，,\\s]*$"
@@ -231,10 +263,10 @@ object LocalCharacterSpeakerResolver {
             "^[，,。.!！?？\\s]*(?<![\\p{L}\\p{N}_])$escapedAlias\\s*(?:$speechVerb|$thoughtVerb)"
         )
         private val beforeLooseRegex = Regex(
-            "(?<![\\p{L}\\p{N}_])$escapedAlias$LOOSE_CUE" +
-                "(?:$SPEECH_VERB_CORE|$THOUGHT_VERB_CORE)\\s*[：:]\\s*$"
+            "$CLAUSE_START$escapedAlias$LOOSE_CUE" +
+                "(?:$SPEECH_VERB_CORE|$THOUGHT_VERB_CORE)$VERB_SUFFIX[：:]\\s*$"
         )
-        private val actionSubjectRegex = Regex("$CLAUSE_START$escapedAlias$ACTION_CUE$")
+        private val actionSubjectRegex = Regex("$CLAUSE_START$escapedAlias$ACTION_CUE[：:]?\\s*$")
 
         fun matchesActionSubject(context: String): Boolean =
             actionSubjectRegex.containsMatchIn(context)

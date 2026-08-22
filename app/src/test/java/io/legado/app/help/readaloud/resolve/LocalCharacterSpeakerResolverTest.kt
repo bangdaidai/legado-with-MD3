@@ -151,6 +151,70 @@ class LocalCharacterSpeakerResolverTest {
         assertNull(result.characterId)
     }
 
+    @Test
+    fun `resolves action subject followed by colon`() {
+        val paragraph = paragraph("听完之后，杨行简一拍大腿：“糟了，是我疏忽。”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“糟了，是我疏忽。”"),
+            characters = listOf(character("yang", "杨行简")),
+        )
+
+        assertEquals("yang", result.characterId)
+    }
+
+    @Test
+    fun `resolves speaker when verb carries a suffix`() {
+        val paragraph = paragraph("宝珠心生警惕，立刻收了泪，照着套话说了一遍：“有去处。”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“有去处。”"),
+            characters = listOf(character("baozhu", "宝珠")),
+        )
+
+        assertEquals("baozhu", result.characterId)
+    }
+
+    @Test
+    fun `does not treat an object in the middle of a clause as the speaker`() {
+        val paragraph = paragraph("宝珠摘下头上的桂花枝，让十三郎取出琉璃漆盒，重新放回盒中，自语道：“那人倒提醒了我。”")
+        val result = resolve(
+            paragraph = paragraph,
+            segment = dialogue(paragraph, "“那人倒提醒了我。”"),
+            characters = listOf(
+                character("baozhu", "宝珠"),
+                character("shisan", "十三郎"),
+            ),
+        )
+
+        assertEquals("baozhu", result.characterId)
+    }
+
+    @Test
+    fun `resolves zero subject speech carried over from the previous paragraph`() {
+        val first = CanonicalSpeechParagraph(
+            0,
+            "宝珠失魂落魄，一言不发，韦训心想那一鞭并未打中她。",
+            0,
+        )
+        val second = CanonicalSpeechParagraph(1, "问道：“你认识那几个人？”", first.text.length)
+        val result = LocalCharacterSpeakerResolver.resolve(
+            paragraphs = listOf(first, second),
+            segments = listOf(
+                narration(first, first.text),
+                narration(second, "问道："),
+                dialogue(second, "“你认识那几个人？”"),
+            ),
+            characters = listOf(
+                character("baozhu", "宝珠", voiceGender = "female"),
+                character("weixun", "韦训", voiceGender = "male"),
+            ),
+        ).last()
+
+        // 「问道：」没有主语，承接上一段最后出场的人
+        assertEquals("weixun", result.characterId)
+    }
+
     private fun resolve(
         paragraph: CanonicalSpeechParagraph,
         segment: ChapterSpeechSegment,
