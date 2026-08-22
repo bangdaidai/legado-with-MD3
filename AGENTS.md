@@ -107,6 +107,15 @@ platform implementations (Android/JVM/iOS/...)
 
 具体文件形态和审查清单由 Compose migration/review skill 维护，本文件不复制完整模板。
 
+### 间距规范
+
+- 正文距标题栏 8dp，由 `AdaptivePadding.kt` 的 `ContentTopGap` 统一定义；页面不要再自己往
+  `adaptiveContentPadding(top = ...)` 里加数值。
+- 屏幕水平边距 16dp(M3) / 12dp(Miuix)，走 `adaptiveContentPadding` / `adaptiveHorizontalPadding`。
+- 卡片之间 4dp（`TinySettingItem` 自带 `padding(bottom = 4.dp)`）；卡片内边距水平 12dp，单行靠 56dp 固定
+  高度居中，多行描述加 10dp 上下内边距。
+- 列表里的筛选/工具行按同一节奏给上下留白，不要一边 4dp 一边 24dp。
+
 ## 数据与设置边界
 
 - UI（包括 ViewModel）不得新增 DAO、`appDb.*Dao`、网络客户端或旧偏好 API 直连；历史债务由

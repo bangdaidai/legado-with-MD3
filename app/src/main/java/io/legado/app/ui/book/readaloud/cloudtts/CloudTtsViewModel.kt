@@ -748,8 +748,9 @@ class CloudTtsViewModel(
         }.toImmutableList()
 
     /**
-     * 音色行：引擎名 + 同步/可用状态 + 性别与风格标签。
+     * 音色行：可用状态 + 性别与风格标签。
      *
+     * 引擎名和「自动同步」每行都一样, 是重复信息, 不再写进描述。
      * 标签来自 [ReadAloudVoiceTraits]（http 引擎脚本 `voices()` 声明的 gender/style/tags、
      * 云端音色的 style/role），音色表本身没有这些列。
      */
@@ -760,11 +761,9 @@ class CloudTtsViewModel(
             voice.id,
             voice.displayName,
             buildString {
-                append(engineName(voice.engineType, voice.engineId))
-                if (voice.managedBy != ReadAloudVoice.MANAGED_BY_USER) append(application.getString(R.string.cloud_tts_auto_synced_suffix))
+                traitLabels(traits).joinTo(this, " · ")
                 if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
-                traitLabels(traits).forEach { append(" · ").append(it) }
-            },
+            }.removePrefix(" · "),
             deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             gender = traits.gender,

@@ -62,15 +62,20 @@ fun adaptiveContentPaddingOnlyVertical(
     )
 }
 
+/**
+ * 正文内容距标题栏的标准间距。M3 没有给死数值，项目统一取 8dp：列表/卡片流本身还带 4dp 的行间距，
+ * 再多就明显头重。横向仍按引擎区分 16dp(M3) / 12dp(Miuix)。
+ */
+private val ContentTopGap = 8.dp
+
 @Composable
 fun adaptiveContentPadding(
     top: Dp,
     bottom: Dp
 ): PaddingValues {
     val horizontal = if (ThemeResolver.isMiuixEngine(composeEngine)) 12.dp else 16.dp
-    val adjustedTop = if (ThemeResolver.isMiuixEngine(composeEngine)) top + 12.dp else top + 16.dp
     return PaddingValues(
-        top = adjustedTop,
+        top = top + ContentTopGap,
         bottom = bottom,
         start = horizontal,
         end = horizontal
@@ -86,9 +91,8 @@ fun adaptiveContentPadding(
 ): PaddingValues {
     val horizontal =
         if (ThemeResolver.isMiuixEngine(composeEngine)) miuixHorizontal else m3Horizontal
-    val adjustedTop = if (ThemeResolver.isMiuixEngine(composeEngine)) top + 12.dp else top + 16.dp
     return PaddingValues(
-        top = adjustedTop,
+        top = top + ContentTopGap,
         bottom = bottom,
         start = horizontal,
         end = horizontal
@@ -101,9 +105,8 @@ fun adaptiveContentPadding(
     bottom: Dp,
     horizontal: Dp
 ): PaddingValues {
-    val adjustedTop = if (ThemeResolver.isMiuixEngine(composeEngine)) top + 12.dp else top + 16.dp
     return PaddingValues(
-        top = adjustedTop,
+        top = top + ContentTopGap,
         bottom = bottom,
         start = horizontal,
         end = horizontal
@@ -116,11 +119,10 @@ fun adaptiveContentPaddingBookshelf(
     bottom: Dp,
     horizontal: Dp
 ): PaddingValues {
-    val adjustedTop = if (ThemeResolver.isMiuixEngine(composeEngine)) top + 12.dp else top + 8.dp
     val horizontal =
         if (ThemeResolver.isMiuixEngine(composeEngine)) 6.dp + horizontal else 4.dp + horizontal
     return PaddingValues(
-        top = adjustedTop,
+        top = top + ContentTopGap,
         bottom = bottom,
         start = horizontal,
         end = horizontal

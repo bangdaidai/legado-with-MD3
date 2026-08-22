@@ -151,7 +151,12 @@ fun TinySettingItem(
                         if (descriptionMaxLines > 1) Modifier.heightIn(min = 56.dp)
                         else Modifier.height(56.dp)
                     )
-                    .padding(horizontal = 12.dp),
+                    // 单行靠 56dp 固定高度居中; 多行描述时高度跟着内容长, 必须自己给 10dp 上下内边距,
+                    // 不然文字会顶到卡片边缘显得很挤
+                    .padding(
+                        horizontal = 12.dp,
+                        vertical = if (descriptionMaxLines > 1) 10.dp else 0.dp,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {

@@ -216,15 +216,15 @@ fun CloudTtsScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = adaptiveContentPadding(
-                    top = padding.calculateTopPadding() + 8.dp,
+                    top = padding.calculateTopPadding(),
                     bottom = padding.calculateBottomPadding() + 96.dp,
                 ),
             ) {
                 if (page == CloudTtsTab.Voices.ordinal) {
                 item {
                     Row(
-                        // LazyColumn 的 contentPadding 已经给了 16dp, 这里只补卡片之间那 4dp 的下间距
-                        modifier = Modifier.padding(bottom = 4.dp),
+                        // 上方 contentPadding 已经给了 8dp, 这里给同样的 8dp, 上下留白一致
+                        modifier = Modifier.padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         VoiceGenderFilterChip("", R.string.voice_gender_all, state, onIntent)
@@ -254,8 +254,9 @@ fun CloudTtsScreen(
                 items(state.voices, key = { "voice:${it.id}" }) { voice ->
                     TinyClickableSettingItem(
                         title = voice.title,
-                        description = voice.summary,
-                        // 引擎名 + 性别 + 风格标签一行放不下, 给两行
+                        // 没有性别/风格标签也没异常状态时不占描述行
+                        description = voice.summary.ifEmpty { null },
+                        // 性别 + 风格标签一行放不下, 给两行
                         descriptionMaxLines = 2,
                         trailingContent = {
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
