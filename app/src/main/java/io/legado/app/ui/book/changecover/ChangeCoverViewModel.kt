@@ -7,11 +7,13 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.SearchRepository
+import io.legado.app.model.BookCover
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.config.otherConfig.OtherConfig
 import io.legado.app.utils.mapParallelSafe
@@ -119,7 +121,33 @@ class ChangeCoverViewModel(
             bookSourceParts.clear()
             bookSourceParts.addAll(bookSourceRepository.getAllEnabledPart())
             initSearchPool()
+            searchWithBookCover()
             search()
+        }
+    }
+
+    /**
+     * 封面规则搜索，结果排在书源前面
+     */
+    private fun searchWithBookCover() {
+        viewModelScope.launch(IO) {
+            try {
+                val coverUrls = BookCover.searchCoverList(Book(name = name, author = author))
+                coverUrls?.forEachIndexed { index, coverUrl ->
+                    searchSuccess?.invoke(
+                        SearchBook(
+                            bookUrl = coverUrl,
+                            originName = "封面规则",
+                            name = name,
+                            author = author,
+                            coverUrl = coverUrl,
+                            originOrder = -1 - index
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                AppLog.put("封面规则搜索出错\n${e.localizedMessage}", e)
+            }
         }
     }
 

@@ -238,6 +238,13 @@ object BookCover : KoinComponent {
     }
 
     suspend fun searchCover(book: Book): String? {
+        return searchCoverList(book)?.firstOrNull()
+    }
+
+    /**
+     * 封面规则可返回多个封面，每行一个
+     */
+    suspend fun searchCoverList(book: Book): List<String>? {
         val config = getCoverRule()
         if (!config.enable || config.searchUrl.isBlank() || config.coverRule.isBlank()) {
             return null
@@ -254,7 +261,7 @@ object BookCover : KoinComponent {
         analyzeRule.setCoroutineContext(currentCoroutineContext())
         analyzeRule.setContent(res.body)
         analyzeRule.setRedirectUrl(res.url)
-        return analyzeRule.getString(config.coverRule, isUrl = true)
+        return analyzeRule.getStringList(config.coverRule, isUrl = true)
     }
 
     fun saveCoverRule(config: CoverRule) {
