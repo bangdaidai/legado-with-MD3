@@ -27,4 +27,7 @@ interface ChapterSpeechGateway {
 
     suspend fun replaceSegments(analysisId: String, segments: List<ChapterSpeechSegment>)
     suspend fun deleteChapter(bookUrl: String, chapterIndex: Int)
+
+    /** 删书时清掉整本的分镜 */
+    suspend fun deleteBook(bookUrl: String)
 }

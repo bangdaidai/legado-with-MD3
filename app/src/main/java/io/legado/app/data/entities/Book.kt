@@ -454,6 +454,8 @@ data class Book(
             ReadBook.clearCurrentBook()
         }
         appDb.bookChapterDao.delByBook(bookUrl)
+        // 分镜是派生数据，书下架就没用了；阅读记忆留的是书名/作者/封面，不依赖这两张表
+        appDb.chapterSpeechDao.delByBook(bookUrl)
         type = type or BookType.notShelf
         appDb.bookDao.update(this)
     }

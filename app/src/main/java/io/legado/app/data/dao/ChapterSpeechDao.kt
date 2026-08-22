@@ -104,6 +104,25 @@ interface ChapterSpeechDao {
         deleteChapterAnalyses(bookUrl, chapterIndex)
     }
 
+    @Query("delete from chapter_speech_segments where bookUrl = :bookUrl")
+    fun delSegmentsByBook(bookUrl: String)
+
+    @Query("delete from chapter_speech_analysis where bookUrl = :bookUrl")
+    fun delAnalysesByBook(bookUrl: String)
+
+    /**
+     * 删书时清掉整本的分镜。分镜是派生数据，书下架就没用了 —— 阅读记忆要留的是书名、作者和封面，
+     * 跟这两张表无关。
+     *
+     * 非 suspend 是为了跟 [io.legado.app.data.entities.Book.delete] 里的
+     * `bookChapterDao.delByBook` 保持同一种调用方式。
+     */
+    @Transaction
+    fun delByBook(bookUrl: String) {
+        delSegmentsByBook(bookUrl)
+        delAnalysesByBook(bookUrl)
+    }
+
     @Query("delete from chapter_speech_segments where bookUrl not in (select bookUrl from books)")
     suspend fun deleteOrphanSegments()
 
@@ -111,10 +130,9 @@ interface ChapterSpeechDao {
     suspend fun deleteOrphanAnalyses()
 
     /**
-     * 清掉已经不存在的书留下的分镜数据。
+     * 兜底清理：删书路径漏掉的、或者旧版本残留的分镜数据。
      *
-     * 删书是软删除（打 `notShelf` 位），books 行还在，所以移出书架再加回来时分镜仍然可用；
-     * 只有启动期 [BookDao.deleteNotShelfBook] 真把 books 行删掉之后，这里才会跟着清理。
+     * 正常路径由 [delByBook] 在删书时清掉，这里只负责收拾 bookUrl 已经不在 books 表里的行。
      * 这两张表没有指向 books 的外键，靠 CASCADE 是清不掉的。
      */
     @Transaction

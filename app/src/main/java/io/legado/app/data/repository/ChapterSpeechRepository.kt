@@ -81,6 +81,10 @@ class ChapterSpeechRepository(
         withContext(Dispatchers.IO) {
             dao.deleteChapter(bookUrl, chapterIndex)
         }
+
+    override suspend fun deleteBook(bookUrl: String) = withContext(Dispatchers.IO) {
+        dao.delByBook(bookUrl)
+    }
 }
 
 private fun ChapterSpeechAnalysisEntity.toDomain() = ChapterSpeechAnalysis(
