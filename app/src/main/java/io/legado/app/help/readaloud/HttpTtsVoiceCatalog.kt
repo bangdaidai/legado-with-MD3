@@ -6,6 +6,7 @@ import com.google.gson.JsonParser
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.domain.model.readaloud.HttpTtsVoice
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
+import io.legado.app.domain.model.readaloud.VoiceCatalogEntry
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 
@@ -31,6 +32,37 @@ object HttpTtsVoiceCatalog {
         return array.mapNotNull { (it as? JsonObject)?.toVoice() }
             .distinctBy(HttpTtsVoice::id)
     }
+
+    /**
+     * 音色表条目：定义了 `voices()` 的引擎展开成多条，没定义的保持「一条引擎一个音色」。
+     *
+     * 同样会同步执行脚本，调用方自己保证不在主线程。
+     */
+    fun catalogEntries(httpTtsList: List<HttpTTS>): List<VoiceCatalogEntry> =
+        httpTtsList.flatMap { httpTts ->
+            val voices = getVoices(httpTts)
+            if (voices.isEmpty()) {
+                listOf(
+                    VoiceCatalogEntry(
+                        engineType = ReadAloudVoice.ENGINE_HTTP,
+                        engineId = httpTts.id.toString(),
+                        displayName = httpTts.name,
+                        sourceRevision = httpTts.lastUpdateTime,
+                    )
+                )
+            } else {
+                voices.map { voice ->
+                    VoiceCatalogEntry(
+                        engineType = ReadAloudVoice.ENGINE_HTTP,
+                        engineId = httpTts.id.toString(),
+                        speakerId = voice.id,
+                        displayName = "${httpTts.name} · ${voice.name}",
+                        traitsJson = GSON.toJson(voice),
+                        sourceRevision = httpTts.lastUpdateTime,
+                    )
+                }
+            }
+        }
 
     /** 运行时把音色表里的 HTTP 音色还原成朗读 URL JS 里 `voice` 的形状。 */
     fun fromVoice(voice: ReadAloudVoice): HttpTtsVoice? {

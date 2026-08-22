@@ -11,6 +11,8 @@ data class BookVoiceCastingUiState(
     val items: ImmutableList<VoiceCastingItemUi> = persistentListOf(),
     val voices: ImmutableList<VoiceOptionUi> = persistentListOf(),
     val picker: VoicePickerUi? = null,
+    /** 正在合成试听音频的音色，用来在那一行上显示转圈 */
+    val previewingVoiceId: String? = null,
 )
 
 @Stable
@@ -61,10 +63,12 @@ sealed interface BookVoiceCastingIntent {
         BookVoiceCastingIntent
     data object DismissVoicePicker : BookVoiceCastingIntent
     data class AssignVoice(val voiceId: String) : BookVoiceCastingIntent
+    data class PreviewVoice(val voiceId: String) : BookVoiceCastingIntent
     data object ClearBinding : BookVoiceCastingIntent
     data class PromoteCharacter(val subjectId: String) : BookVoiceCastingIntent
 }
 
 sealed interface BookVoiceCastingEffect {
     data class ShowToast(val message: String) : BookVoiceCastingEffect
+    data class PlayPreview(val path: String) : BookVoiceCastingEffect
 }

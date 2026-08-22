@@ -1,10 +1,12 @@
 package io.legado.app.ui.book.readaloud.casting
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -17,16 +19,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,14 +68,24 @@ fun BookVoiceCastingScreen(
     effects: Flow<BookVoiceCastingEffect>,
     onBack: () -> Unit,
     onManageCloudTts: () -> Unit,
+    onOpenStoryboard: () -> Unit,
 ) {
     val context = LocalContext.current
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    val player = remember { MediaPlayer() }
+    val previewFailed = stringResource(R.string.voice_preview_failed)
+    DisposableEffect(player) { onDispose { player.release() } }
 
     LaunchedEffect(effects) {
         effects.collectLatest { effect ->
             when (effect) {
                 is BookVoiceCastingEffect.ShowToast -> context.toastOnUi(effect.message)
+                is BookVoiceCastingEffect.PlayPreview -> runCatching {
+                    player.reset()
+                    player.setDataSource(effect.path)
+                    player.prepare()
+                    player.start()
+                }.onFailure { context.toastOnUi(previewFailed) }
             }
         }
     }
@@ -81,6 +97,11 @@ fun BookVoiceCastingScreen(
                 title = stringResource(R.string.book_voice_casting),
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
+                    TopBarActionButton(
+                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                        contentDescription = stringResource(R.string.speech_storyboard),
+                        onClick = onOpenStoryboard,
+                    )
                     TopBarActionButton(
                         imageVector = Icons.Default.RecordVoiceOver,
                         contentDescription = stringResource(R.string.read_aloud_engines_and_voices),
@@ -120,6 +141,7 @@ fun BookVoiceCastingScreen(
     VoicePickerSheet(
         picker = state.picker,
         voices = state.voices,
+        previewingVoiceId = state.previewingVoiceId,
         onIntent = onIntent,
     )
 }
@@ -322,6 +344,7 @@ private fun VoiceCastingCard(
 private fun VoicePickerSheet(
     picker: VoicePickerUi?,
     voices: ImmutableList<VoiceOptionUi>,
+    previewingVoiceId: String?,
     onIntent: (BookVoiceCastingIntent) -> Unit,
 ) {
     AppModalBottomSheet(
@@ -355,15 +378,37 @@ private fun VoicePickerSheet(
                             title = voice.name,
                             description = voiceDescription(voice),
                             enabled = voice.selectable,
-                            trailingContent = if (picker.selectedVoiceId == voice.id) {
-                                {
-                                    AppIcon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = LegadoTheme.colorScheme.primary,
-                                    )
+                            trailingContent = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (previewingVoiceId == voice.id) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                    } else {
+                                        IconButton(
+                                            onClick = {
+                                                onIntent(
+                                                    BookVoiceCastingIntent.PreviewVoice(voice.id)
+                                                )
+                                            },
+                                            enabled = voice.selectable && previewingVoiceId == null,
+                                        ) {
+                                            AppIcon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = stringResource(R.string.voice_preview),
+                                            )
+                                        }
+                                    }
+                                    if (picker.selectedVoiceId == voice.id) {
+                                        AppIcon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = LegadoTheme.colorScheme.primary,
+                                        )
+                                    }
                                 }
-                            } else null,
+                            },
                             onClick = { onIntent(BookVoiceCastingIntent.AssignVoice(voice.id)) },
                         )
                     }

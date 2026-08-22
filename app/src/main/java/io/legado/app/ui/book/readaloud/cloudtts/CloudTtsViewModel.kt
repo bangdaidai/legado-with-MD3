@@ -28,6 +28,7 @@ import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig
 import io.legado.app.domain.model.readaloud.TtsEngineDescriptor
 import io.legado.app.domain.model.readaloud.profile
+import io.legado.app.domain.usecase.SyncReadAloudVoicesUseCase
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
@@ -72,6 +73,7 @@ class CloudTtsViewModel(
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val uploadRepository: UploadRepository,
     private val httpTtsRepository: HttpTtsRepository,
+    private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CloudTtsUiState())
     val uiState = _uiState.asStateFlow()
@@ -862,13 +864,34 @@ class CloudTtsViewModel(
 
     private fun saveHttpTts(value: HttpTTS) = viewModelScope.launch {
         withContext(Dispatchers.IO) { appDb.httpTTSDao.insert(value) }
+        refreshHttpVoiceCatalog()
         _uiState.update { it.copy(httpTtsEditor = null) }
         toast(application.getString(R.string.success))
+    }
+
+    /**
+     * 引擎增删改后立刻把 http 音色同步进音色表。
+     *
+     * 不做这一步的话，音色表要等下次进阅读页（`ReadBookViewModel` 构造或打开朗读弹层）才刷新，
+     * 表现就是刚导入的引擎只有一个音色，退出去再进来才变多。
+     */
+    private suspend fun refreshHttpVoiceCatalog() {
+        val entries = withContext(Dispatchers.IO) {
+            HttpTtsVoiceCatalog.catalogEntries(httpTtsRepository.getAllSync())
+        }
+        syncReadAloudVoicesUseCase(
+            entries = entries,
+            managedSources = setOf(ReadAloudVoice.MANAGED_BY_CONFIGURED_TTS),
+            removeMissingEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
+            // 这里只同步 http，系统音色不在本次条目里，别被判成失效
+            scopeEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
+        )
     }
 
     private fun deleteHttpTts(engineId: String) = viewModelScope.launch {
         val id = engineId.toLongOrNull() ?: return@launch
         withContext(Dispatchers.IO) { appDb.httpTTSDao.get(id)?.let(appDb.httpTTSDao::delete) }
+        refreshHttpVoiceCatalog()
         if (isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engineId)) {
             readAloudSettingsGateway.update { it.copy(ttsEngine = null) }
             ReadAloud.upReadAloudClass()
@@ -982,6 +1005,7 @@ class CloudTtsViewModel(
         val selected = state.items.filter { it.isSelected }.map { it.data }
         if (selected.isEmpty()) return@launch
         withContext(Dispatchers.IO) { appDb.httpTTSDao.insert(*selected.toTypedArray()) }
+        refreshHttpVoiceCatalog()
         _uiState.update { it.copy(httpTtsImportState = BaseImportUiState.Idle) }
         toast(application.getString(R.string.success))
     }

@@ -108,6 +108,8 @@ import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsEffect
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsIntent
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsScreen
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
+import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardScreen
+import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardViewModel
 import io.legado.app.ui.book.search.SearchIntent
 import io.legado.app.ui.book.search.SearchRouteScreen
 import io.legado.app.ui.book.search.SearchViewModel
@@ -1290,6 +1292,20 @@ fun MainActivity.mainEntryProvider(
             effects = viewModel.effects,
             onBack = { onNavigateBack() },
             onManageCloudTts = { onNavigateToRoute(MainRouteCloudTtsEngines(route.bookUrl)) },
+            onOpenStoryboard = { onNavigateToRoute(MainRouteSpeechStoryboard(route.bookUrl)) },
+        )
+    }
+
+    entry<MainRouteSpeechStoryboard> { route ->
+        val viewModel = koinViewModel<SpeechStoryboardViewModel>(
+            key = "SpeechStoryboard:${route.bookUrl}",
+            parameters = { parametersOf(route.bookUrl) },
+        )
+        SpeechStoryboardScreen(
+            state = viewModel.uiState.collectAsStateWithLifecycle().value,
+            onIntent = viewModel::onIntent,
+            effects = viewModel.effects,
+            onBack = { onNavigateBack() },
         )
     }
 

@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
+import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -21,11 +22,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
+import java.io.File
 
 class BookVoiceCastingViewModel(
     private val bookUrl: String,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
     private val voiceGateway: ReadAloudVoiceGateway,
+    private val previewSynthesizer: VoicePreviewSynthesizer,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BookVoiceCastingUiState(bookUrl = bookUrl))
@@ -38,6 +41,7 @@ class BookVoiceCastingViewModel(
     private var voices: List<ReadAloudVoice> = emptyList()
     private var bindings: List<BookVoiceBinding> = emptyList()
     private var loadJob: Job? = null
+    private var previewJob: Job? = null
 
     init {
         load()
@@ -51,6 +55,7 @@ class BookVoiceCastingViewModel(
                 _uiState.update { it.copy(picker = null) }
             }
             is BookVoiceCastingIntent.AssignVoice -> assignVoice(intent.voiceId)
+            is BookVoiceCastingIntent.PreviewVoice -> previewVoice(intent.voiceId)
             BookVoiceCastingIntent.ClearBinding -> clearBinding()
             is BookVoiceCastingIntent.PromoteCharacter -> promoteCharacter(intent.subjectId)
         }
@@ -205,6 +210,48 @@ class BookVoiceCastingViewModel(
                 throw e
             } catch (e: Throwable) {
                 showSaveError(e)
+            }
+        }
+    }
+
+    /**
+     * 试听音色表里的一条音色，不改绑定。
+     *
+     * 合成走 [VoicePreviewSynthesizer]，和真正朗读同一条路径；播放交给界面的 MediaPlayer。
+     */
+    private fun previewVoice(voiceId: String) {
+        val voice = voices.firstOrNull { it.id == voiceId && it.available && it.enabled } ?: return
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            _uiState.update { it.copy(previewingVoiceId = voiceId) }
+            try {
+                val file = File(appCtx.cacheDir, "voice_preview/${voiceId.hashCode()}.audio")
+                val ok = previewSynthesizer.synthesize(
+                    voice = voice,
+                    text = appCtx.getString(R.string.voice_preview_text),
+                    output = file,
+                )
+                if (ok) {
+                    _effects.tryEmit(BookVoiceCastingEffect.PlayPreview(file.absolutePath))
+                } else {
+                    _effects.tryEmit(
+                        BookVoiceCastingEffect.ShowToast(
+                            appCtx.getString(R.string.voice_preview_failed)
+                        )
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _effects.tryEmit(
+                    BookVoiceCastingEffect.ShowToast(
+                        e.localizedMessage ?: appCtx.getString(R.string.voice_preview_failed)
+                    )
+                )
+            } finally {
+                _uiState.update {
+                    if (it.previewingVoiceId == voiceId) it.copy(previewingVoiceId = null) else it
+                }
             }
         }
     }

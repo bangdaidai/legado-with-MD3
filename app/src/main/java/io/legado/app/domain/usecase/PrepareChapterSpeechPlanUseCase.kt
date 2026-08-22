@@ -99,7 +99,7 @@ class PrepareChapterSpeechPlanUseCase(
         return characterPerformances.filter { it.characterId in speaking }
     }
 
-    /** 分镜结果目前没有任何界面，出问题时只能靠这条日志区分「没分段」「没识别到角色」「没分配音色」。 */
+    /** 分镜页只看当前章，这条日志覆盖后台朗读时区分「没分段」「没识别到角色」「没分配音色」。 */
     private fun logPlanSummary(
         chapterIndex: Int,
         mode: SpeechAnalysisMode,

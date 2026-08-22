@@ -219,6 +219,7 @@ import io.legado.app.help.coil.CoverInterceptor
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.http.okHttpClientCover
 import io.legado.app.help.http.okHttpClientManga
+import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.model.LegacyReaderSession
 import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReaderSession
@@ -267,6 +268,7 @@ import io.legado.app.ui.book.readaloud.casting.BookVoiceCastingViewModel
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerCoordinator
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
+import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardViewModel
 import io.legado.app.ui.book.search.SearchViewModel
 import io.legado.app.ui.book.searchContent.SearchContentViewModel
 import io.legado.app.ui.book.source.debug.BookSourceDebugViewModel
@@ -502,6 +504,7 @@ val appModule = module {
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }
     single<ChapterSpeechGateway> { ChapterSpeechRepository(get()) }
+    singleOf(::VoicePreviewSynthesizer)
     single { ExploreRepositoryImpl(get()) }
     single<ExploreRepository> { get<ExploreRepositoryImpl>() }
     single<ExploreBooksGateway> { get<ExploreRepositoryImpl>() }
@@ -730,9 +733,17 @@ val appModule = module {
             bookUrl = bookUrl,
             bookKnowledgeGateway = get(),
             voiceGateway = get(),
+            previewSynthesizer = get(),
         )
     }
     viewModelOf(::CloudTtsViewModel)
+    viewModel { (bookUrl: String) ->
+        SpeechStoryboardViewModel(
+            bookUrl = bookUrl,
+            prepareChapterSpeechPlan = get(),
+            chapterSpeechGateway = get(),
+        )
+    }
     viewModelOf(::TtsCacheViewModel)
     singleOf(::ReadAloudPlayerCoordinator)
     viewModelOf(::ReadAloudPlayerViewModel)

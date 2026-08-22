@@ -21,7 +21,6 @@ import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
-import io.legado.app.utils.GSON
 import io.legado.app.utils.TTSCacheUtils
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.CoroutineScope
@@ -120,8 +119,8 @@ class ReadAloudDelegate(
         httpTtsList: List<HttpTTS> = httpTtsRepository.getAllSync(),
     ) {
         // jsLib 里定义了 voices() 的引擎，一条引擎展开成多个音色；脚本执行放到 IO
-        val httpVoices = withContext(IO) {
-            httpTtsList.associateWith(HttpTtsVoiceCatalog::getVoices)
+        val httpEntries = withContext(IO) {
+            HttpTtsVoiceCatalog.catalogEntries(httpTtsList)
         }
         syncReadAloudVoicesUseCase(
             entries = buildList {
@@ -141,32 +140,7 @@ class ReadAloudDelegate(
                         )
                     )
                 }
-                httpTtsList.forEach { httpTts ->
-                    val voices = httpVoices[httpTts].orEmpty()
-                    if (voices.isEmpty()) {
-                        add(
-                            VoiceCatalogEntry(
-                                engineType = ReadAloudVoice.ENGINE_HTTP,
-                                engineId = httpTts.id.toString(),
-                                displayName = httpTts.name,
-                                sourceRevision = httpTts.lastUpdateTime,
-                            )
-                        )
-                    } else {
-                        voices.forEach { voice ->
-                            add(
-                                VoiceCatalogEntry(
-                                    engineType = ReadAloudVoice.ENGINE_HTTP,
-                                    engineId = httpTts.id.toString(),
-                                    speakerId = voice.id,
-                                    displayName = "${httpTts.name} · ${voice.name}",
-                                    traitsJson = GSON.toJson(voice),
-                                    sourceRevision = httpTts.lastUpdateTime,
-                                )
-                            )
-                        }
-                    }
-                }
+                addAll(httpEntries)
             },
             managedSources = setOf(ReadAloudVoice.MANAGED_BY_CONFIGURED_TTS),
             removeMissingEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),

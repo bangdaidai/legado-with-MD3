@@ -23,6 +23,7 @@ class SyncReadAloudVoicesUseCase(
         entries: List<VoiceCatalogEntry>,
         managedSources: Set<String>,
         removeMissingEngineTypes: Set<String> = emptySet(),
+        scopeEngineTypes: Set<String> = emptySet(),
         now: Long = System.currentTimeMillis(),
     ): SyncReadAloudVoicesResult = syncMutex.withLock {
         val existing = voiceGateway.getVoices()
@@ -80,6 +81,8 @@ class SyncReadAloudVoicesUseCase(
         var unavailable = 0
         existing.asSequence()
             .filter { it.managedBy in managedSources }
+            // 只传了部分引擎类型的条目时，别把没参与本次同步的类型判成失效
+            .filter { scopeEngineTypes.isEmpty() || it.engineType in scopeEngineTypes }
             .filter { it.id !in incomingIds }
             .forEach { voice ->
                 if (voice.engineType in removeMissingEngineTypes) {

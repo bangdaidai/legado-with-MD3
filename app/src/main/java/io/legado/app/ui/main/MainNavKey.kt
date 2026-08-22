@@ -185,6 +185,12 @@ data class MainRouteBookVoiceCasting(
 ) : MainRoute
 
 @Serializable
+data class MainRouteSpeechStoryboard(
+    val bookUrl: String,
+) : MainRoute
+
+
+@Serializable
 data class MainRouteCloudTtsEngines(val bookUrl: String? = null) : MainRoute
 
 @Serializable
