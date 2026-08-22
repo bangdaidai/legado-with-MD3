@@ -856,6 +856,49 @@ object DatabaseMigrations {
                 )
                 """.trimIndent()
             )
+
+            // 本地额外: readingMemory.customTag 与 bookTags 的 name 唯一索引在实体里已声明,
+            // 但建表迁移(98_99 / 99_100)漏了, 老库升级后会在 Room 校验 schema 时抛
+            // IllegalStateException。全新安装由 createAllTables 建表, 已带这两项, 因此先探测再补。
+            val hasCustomTag = database.query("PRAGMA table_info(`readingMemory`)").use { cursor ->
+                val nameIndex = cursor.getColumnIndex("name")
+                var found = false
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameIndex) == "customTag") {
+                        found = true
+                        break
+                    }
+                }
+                found
+            }
+            if (!hasCustomTag) {
+                database.execSQL("ALTER TABLE readingMemory ADD COLUMN customTag TEXT")
+            }
+            // 唯一索引缺失期间可能已写入同名标签, 先把关联指向保留下来的那一条再去重, 否则建索引会失败
+            database.execSQL(
+                """
+                UPDATE bookTagRelations SET tagId = (
+                    SELECT MIN(keep.id) FROM bookTags keep
+                    WHERE keep.name = (
+                        SELECT dup.name FROM bookTags dup WHERE dup.id = bookTagRelations.tagId
+                    )
+                )
+                WHERE EXISTS (SELECT 1 FROM bookTags dup WHERE dup.id = bookTagRelations.tagId)
+                """.trimIndent()
+            )
+            database.execSQL(
+                "DELETE FROM bookTags WHERE id NOT IN (SELECT MIN(id) FROM bookTags GROUP BY name)"
+            )
+            database.execSQL(
+                """
+                DELETE FROM bookTagRelations WHERE id NOT IN (
+                    SELECT MIN(id) FROM bookTagRelations GROUP BY bookUrl, tagId
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_bookTags_name` ON `bookTags` (`name`)"
+            )
         }
     }
 }

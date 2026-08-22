@@ -368,7 +368,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
                 }
             }
         }
-        latestBackStack = startRoutes.toList()
         val backStack = rememberNavBackStack(*startRoutes)
 
         SideEffect {

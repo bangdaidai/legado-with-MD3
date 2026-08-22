@@ -170,8 +170,9 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     var webBookProgress: BookProgress? = null
 
     var preDownloadTask: Job? = null
-    val downloadedChapters = hashSetOf<Int>()
-    val downloadFailChapters = hashMapOf<Int, Int>()
+    //预下载和缓存下载会从多个协程并发读写, 必须使用并发容器
+    val downloadedChapters: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+    val downloadFailChapters = ConcurrentHashMap<Int, Int>()
     var contentProcessor: ContentProcessor? = null
     val downloadScope = CoroutineScope(SupervisorJob() + IO)
     val preDownloadSemaphore = Semaphore(2)

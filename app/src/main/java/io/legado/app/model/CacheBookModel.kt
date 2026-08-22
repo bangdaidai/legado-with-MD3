@@ -752,8 +752,7 @@ class CacheBookModel(
                 return "download canceled"
             }
             onError(chapter, e)
-            ReadBook.downloadFailChapters[chapter.index] =
-                (ReadBook.downloadFailChapters[chapter.index] ?: 0) + 1
+            ReadBook.downloadFailChapters.merge(chapter.index, 1, Int::plus)
             return "获取正文失败\n${e.localizedMessage}"
         } finally {
             host.onTaskQueuesChanged(book.bookUrl)
@@ -824,14 +823,12 @@ class CacheBookModel(
                 throw e
             } catch (e: Exception) {
                 onError(chapter, e)
-                ReadBook.downloadFailChapters[chapter.index] =
-                    (ReadBook.downloadFailChapters[chapter.index] ?: 0) + 1
+                ReadBook.downloadFailChapters.merge(chapter.index, 1, Int::plus)
                 // 不覆盖已展示的正文
             }
         }.onError {
             onError(chapter, it)
-            ReadBook.downloadFailChapters[chapter.index] =
-                (ReadBook.downloadFailChapters[chapter.index] ?: 0) + 1
+            ReadBook.downloadFailChapters.merge(chapter.index, 1, Int::plus)
             downloadFinish(
                 chapter,
                 "获取正文失败\n${it.localizedMessage}",

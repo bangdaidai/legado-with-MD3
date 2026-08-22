@@ -23,7 +23,7 @@ class ExcludedTagViewModel(
     private val _uiState = MutableStateFlow(ExcludedTagUiState())
     val uiState = _uiState.asStateFlow()
 
-    private val _effect = MutableSharedFlow<ExcludedTagEffect>()
+    private val _effect = MutableSharedFlow<ExcludedTagEffect>(extraBufferCapacity = 16)
     val effect: SharedFlow<ExcludedTagEffect> = _effect.asSharedFlow()
 
     init {

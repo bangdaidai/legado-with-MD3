@@ -52,6 +52,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import splitties.systemservices.audioManager
 import splitties.systemservices.notificationManager
@@ -229,10 +230,11 @@ class AudioPlayService : BaseService(),
         if (!requestFocus()) {
             return
         }
-        execute(context = Main) {
+        execute {
             AudioPlay.status = Status.STOP
             postEvent(EventBus.AUDIO_STATE, Status.STOP)
             upPlayProgressJob?.cancel()
+            //AnalyzeUrl 会执行书源 JS 并访问网络/数据库，必须留在 IO 线程
             val analyzeUrl = AnalyzeUrl(
                 url,
                 source = AudioPlay.bookSource,
@@ -240,13 +242,16 @@ class AudioPlayService : BaseService(),
                 chapter = AudioPlay.durChapter,
                 coroutineContext = coroutineContext
             )
-            exoPlayer.setMediaItem(analyzeUrl.getMediaItem())
-            exoPlayer.playWhenReady = true
+            val mediaItem = analyzeUrl.getMediaItem()
             // 片头跳过设定（仅从头播放时生效）
             val skipStartMs = (AudioPlay.book?.getOpenCredits() ?: 0) * 1000L
             val playtime = if (position == 0) skipStartMs else position.toLong()
-            exoPlayer.seekTo(playtime)
-            exoPlayer.prepare()
+            withContext(Main) {
+                exoPlayer.setMediaItem(mediaItem)
+                exoPlayer.playWhenReady = true
+                exoPlayer.seekTo(playtime)
+                exoPlayer.prepare()
+            }
         }.onError {
             AppLog.put("播放出错\n${it.localizedMessage}", it)
             toastOnUi("$url ${it.localizedMessage}")

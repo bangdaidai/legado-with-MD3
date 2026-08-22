@@ -855,28 +855,34 @@ class HttpReadAloudService : BaseReadAloudService(),
                     coroutineContext = currentCoroutineContext()
                 )
                 var response = analyzeUrl.getResponseAwait()
-                currentCoroutineContext().ensureActive()
-                val checkJs = httpTts.loginCheckJs
-                if (checkJs?.isNotBlank() == true) {
-                    response = analyzeUrl.evalJS(checkJs, response) as Response
-                }
-                response.headers["Content-Type"]?.let { contentType ->
-                    val contentType = contentType.substringBefore(";")
-                    val ct = httpTts.contentType
-                    if (contentType == "application/json" || contentType.startsWith("text/")) {
-                        throw NoStackTraceException(response.body.string())
-                    } else if (ct?.isNotBlank() == true) {
-                        if (!contentType.matches(ct.toRegex())) {
-                            throw NoStackTraceException(
-                                "TTS服务器返回错误：" + response.body.string()
-                            )
+                try {
+                    currentCoroutineContext().ensureActive()
+                    val checkJs = httpTts.loginCheckJs
+                    if (checkJs?.isNotBlank() == true) {
+                        response = analyzeUrl.evalJS(checkJs, response) as Response
+                    }
+                    response.headers["Content-Type"]?.let { contentType ->
+                        val contentType = contentType.substringBefore(";")
+                        val ct = httpTts.contentType
+                        if (contentType == "application/json" || contentType.startsWith("text/")) {
+                            throw NoStackTraceException(response.body.string())
+                        } else if (ct?.isNotBlank() == true) {
+                            if (!contentType.matches(ct.toRegex())) {
+                                throw NoStackTraceException(
+                                    "TTS服务器返回错误：" + response.body.string()
+                                )
+                            }
                         }
                     }
-                }
-                currentCoroutineContext().ensureActive()
-                response.body.byteStream().let { stream ->
-                    downloadErrorNo = 0
-                    return stream
+                    currentCoroutineContext().ensureActive()
+                    response.body.byteStream().let { stream ->
+                        downloadErrorNo = 0
+                        return stream
+                    }
+                } catch (e: Throwable) {
+                    //取消或校验失败时必须关闭响应, 否则连接和文件句柄会持续泄漏
+                    runCatching { response.close() }
+                    throw e
                 }
             } catch (e: Exception) {
                 when (e) {

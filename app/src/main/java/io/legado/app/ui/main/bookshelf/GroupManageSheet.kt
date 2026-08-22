@@ -93,8 +93,12 @@ fun GroupManageSheet(
         }
     }
 
+    var hasDragged by remember { mutableStateOf(false) }
     LaunchedEffect(reorderableState.isAnyItemDragging) {
-        if (!reorderableState.isAnyItemDragging) {
+        if (reorderableState.isAnyItemDragging) {
+            hasDragged = true
+        } else if (hasDragged) {
+            hasDragged = false
             val updatedGroups = listData.mapIndexed { index, group ->
                 group.copy(order = index)
             }

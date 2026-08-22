@@ -73,7 +73,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -333,28 +332,16 @@ fun BookshelfScreen(
             }
     }
 
-    val currentTabGroupId by remember {
-        derivedStateOf {
-            uiState.groups.getOrNull(pagerState.settledPage)?.groupId ?: BookGroup.IdAll
-        }
+    val currentTabGroupId =
+        uiState.groups.getOrNull(pagerState.settledPage)?.groupId ?: BookGroup.IdAll
+    val searchGroupExists = uiState.allGroups.any { it.groupId == uiState.selectedGroupId }
+    val currentGroupId = if (uiState.isSearch && searchGroupExists) {
+        uiState.selectedGroupId
+    } else {
+        currentTabGroupId
     }
-    val searchGroupExists by remember {
-        derivedStateOf { uiState.allGroups.any { it.groupId == uiState.selectedGroupId } }
-    }
-    val currentGroupId by remember {
-        derivedStateOf {
-            if (uiState.isSearch && searchGroupExists) {
-                uiState.selectedGroupId
-            } else {
-                currentTabGroupId
-            }
-        }
-    }
-    val isUsingStandaloneSearchGroup by remember {
-        derivedStateOf {
-            uiState.isSearch && uiState.groups.none { it.groupId == currentGroupId }
-        }
-    }
+    val isUsingStandaloneSearchGroup =
+        uiState.isSearch && uiState.groups.none { it.groupId == currentGroupId }
     val isShowingFolderRoot =
         bookGroupStyle == 2 && isInFolderRoot && !isUsingStandaloneSearchGroup
     LaunchedEffect(scrollToTopRequest) {
@@ -371,7 +358,7 @@ fun BookshelfScreen(
             }
         }
     }
-    val currentGroupBookCount by remember { derivedStateOf { uiState.currentGroupBookCount } }
+    val currentGroupBookCount = uiState.currentGroupBookCount
 
     val clearSelection = {
         onIntent(BookshelfIntent.ClearSelection)
@@ -398,7 +385,7 @@ fun BookshelfScreen(
         }
     }
 
-    val currentGroupName by remember { derivedStateOf { uiState.currentGroupName } }
+    val currentGroupName = uiState.currentGroupName
 
     PredictiveBackHandler(enabled = bookGroupStyle == 2 && !isInFolderRoot && !isEditMode) { progress ->
         try {
@@ -429,22 +416,17 @@ fun BookshelfScreen(
     } else {
         uiState.settings.bookshelfFolderLayoutListPortrait
     }
-    val currentMenuGroupId by remember {
-        derivedStateOf { if (uiState.isSearch) uiState.selectedGroupId else currentTabGroupId }
-    }
-    val editStickySummary by remember {
-        derivedStateOf {
-            if (uiState.isEditMode) {
-                BookshelfEditStickySummary(
-                    selectedCount = uiState.selectedBookUrls.size,
-                    currentGroupTotalCount = currentGroupBookCount,
-                    groupName = currentGroupName,
-                    showGroupName = uiState.bookGroupStyle != 0
-                )
-            } else {
-                null
-            }
-        }
+    val currentMenuGroupId =
+        if (uiState.isSearch) uiState.selectedGroupId else currentTabGroupId
+    val editStickySummary = if (uiState.isEditMode) {
+        BookshelfEditStickySummary(
+            selectedCount = uiState.selectedBookUrls.size,
+            currentGroupTotalCount = currentGroupBookCount,
+            groupName = currentGroupName,
+            showGroupName = uiState.bookGroupStyle != 0
+        )
+    } else {
+        null
     }
 
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
@@ -764,18 +746,12 @@ fun BookshelfScreen(
             )
         }
     ) { paddingValues ->
-        val currentGroup by remember {
-            derivedStateOf {
-                if (uiState.isSearch) {
-                    uiState.allGroups.firstOrNull { it.groupId == currentGroupId }
-                } else {
-                    uiState.groups.getOrNull(pagerState.settledPage)
-                }
-            }
+        val currentGroup = if (uiState.isSearch) {
+            uiState.allGroups.firstOrNull { it.groupId == currentGroupId }
+        } else {
+            uiState.groups.getOrNull(pagerState.settledPage)
         }
-        val pullToRefreshEnabled by remember {
-            derivedStateOf { (currentGroup?.enableRefresh ?: true) && !isEditMode }
-        }
+        val pullToRefreshEnabled = (currentGroup?.enableRefresh ?: true) && !isEditMode
 
         Box(Modifier.fillMaxSize()) {
             AppPullToRefresh(

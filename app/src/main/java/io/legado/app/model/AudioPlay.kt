@@ -454,7 +454,7 @@ object AudioPlay : CoroutineScope by MainScope() {
             activityContext = null
             callback = null
         }
-        coroutineContext.cancelChildren()
+        //章节内容加载由播放服务驱动, 界面退出后必须继续, 不能在这里取消协程
     }
 
     fun registerService(context: Context) {
@@ -463,6 +463,7 @@ object AudioPlay : CoroutineScope by MainScope() {
 
     fun unregisterService() {
         serviceContext = null
+        coroutineContext.cancelChildren()
     }
 
     interface CallBack {

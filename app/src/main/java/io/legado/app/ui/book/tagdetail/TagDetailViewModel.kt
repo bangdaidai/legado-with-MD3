@@ -26,7 +26,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
     private val _uiState = MutableStateFlow(TagDetailUiState())
     val uiState = _uiState.asStateFlow()
 
-    private val _effect = MutableSharedFlow<TagDetailEffect>()
+    private val _effect = MutableSharedFlow<TagDetailEffect>(extraBufferCapacity = 16)
     val effect: SharedFlow<TagDetailEffect> = _effect.asSharedFlow()
 
     init {

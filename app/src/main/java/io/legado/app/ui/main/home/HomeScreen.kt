@@ -334,7 +334,8 @@ fun HomeRouteScreen(
                 is io.legado.app.ui.main.homepage.HomepageEffect.NavigateToExploreShow ->
                     onOpenExploreShow(effect.title, effect.sourceUrl, effect.exploreUrl)
 
-                is io.legado.app.ui.main.homepage.HomepageEffect.ShowSnackbar -> {}
+                is io.legado.app.ui.main.homepage.HomepageEffect.ShowSnackbar ->
+                    context.toastOnUi(effect.message)
             }
         }
     }

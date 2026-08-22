@@ -31,7 +31,7 @@ class TagManagementViewModel(
     private val _uiState = MutableStateFlow(TagManagementUiState())
     val uiState = _uiState.asStateFlow()
 
-    private val _effect = MutableSharedFlow<TagManagementEffect>()
+    private val _effect = MutableSharedFlow<TagManagementEffect>(extraBufferCapacity = 16)
     val effect: SharedFlow<TagManagementEffect> = _effect.asSharedFlow()
 
     init {

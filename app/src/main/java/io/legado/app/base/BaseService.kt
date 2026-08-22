@@ -18,7 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import org.koin.java.KoinJavaComponent.get
 import kotlin.coroutines.CoroutineContext
@@ -45,18 +45,17 @@ abstract class BaseService : LifecycleService() {
         isForeground = true
         LifecycleHelp.onServiceCreate(this)
         val localPreferencesRepository: SettingsRepository = get(SettingsRepository::class.java)
-        val checked: Boolean = runBlocking {
-            localPreferencesRepository.getPreference(
+        //DataStore 读写不能用 runBlocking 卡住 onCreate 所在的主线程
+        lifecycleScope.launch {
+            val checked: Boolean = localPreferencesRepository.getPreference(
                 LocalPreferencesKeys.PERMISSION_CHECKED, false
             ).first()
-        }
-        if (!checked) {
-            runBlocking {
+            if (!checked) {
                 localPreferencesRepository.updatePreference(
                     LocalPreferencesKeys.PERMISSION_CHECKED, true
                 )
+                checkPermission()
             }
-            checkPermission()
         }
     }
 
