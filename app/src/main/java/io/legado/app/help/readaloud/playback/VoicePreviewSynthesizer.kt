@@ -6,6 +6,7 @@ import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig
 import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
 import io.legado.app.utils.GSON
+import splitties.init.appCtx
 import java.io.File
 
 /**
@@ -19,13 +20,16 @@ class VoicePreviewSynthesizer(
 ) {
     private val cloudSynthesizer = CloudTtsAudioSynthesizer(cloudEngineGateway)
 
+    /** 懒加载：不试听系统音色就不去起 TextToSpeech 引擎 */
+    private val systemSynthesizer by lazy { SystemTtsFileSynthesizer(appCtx) }
+
     suspend fun synthesize(voice: ReadAloudVoice, text: String, output: File): Boolean {
         return when (voice.engineType) {
             ReadAloudVoice.ENGINE_SYSTEM -> {
                 val config = runCatching {
                     GSON.fromJson(voice.traitsJson, SystemTtsVoiceConfig::class.java)
                 }.getOrNull()
-                SystemTtsFileSynthesizer.synthesize(
+                systemSynthesizer.synthesize(
                     engine = voice.engineId,
                     voiceName = voice.speakerId,
                     text = text,
