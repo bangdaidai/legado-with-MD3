@@ -103,4 +103,23 @@ interface ChapterSpeechDao {
         deleteChapterSegments(bookUrl, chapterIndex)
         deleteChapterAnalyses(bookUrl, chapterIndex)
     }
+
+    @Query("delete from chapter_speech_segments where bookUrl not in (select bookUrl from books)")
+    suspend fun deleteOrphanSegments()
+
+    @Query("delete from chapter_speech_analysis where bookUrl not in (select bookUrl from books)")
+    suspend fun deleteOrphanAnalyses()
+
+    /**
+     * 清掉已经不存在的书留下的分镜数据。
+     *
+     * 删书是软删除（打 `notShelf` 位），books 行还在，所以移出书架再加回来时分镜仍然可用；
+     * 只有启动期 [BookDao.deleteNotShelfBook] 真把 books 行删掉之后，这里才会跟着清理。
+     * 这两张表没有指向 books 的外键，靠 CASCADE 是清不掉的。
+     */
+    @Transaction
+    suspend fun deleteOrphans() {
+        deleteOrphanSegments()
+        deleteOrphanAnalyses()
+    }
 }

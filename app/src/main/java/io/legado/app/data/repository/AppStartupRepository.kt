@@ -10,4 +10,8 @@ class AppStartupRepository(
     override suspend fun deleteNotShelfBooks() {
         appDatabase.bookDao.deleteNotShelfBook()
     }
+
+    override suspend fun deleteOrphanChapterSpeech() {
+        appDatabase.chapterSpeechDao.deleteOrphans()
+    }
 }
