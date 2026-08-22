@@ -21,9 +21,17 @@ class ProtectedNativeJavaClass(
 
     override fun get(name: String, start: Scriptable?): Any? {
         if (protectedName.contains(name)) {
+            RhinoProbe.onGet(probeOwner(), name, NOT_FOUND)
             return NOT_FOUND
         }
-        return super.get(name, start)
+        val value = super.get(name, start)
+        RhinoProbe.onGet(probeOwner(), name, value)
+        return value
+    }
+
+    private fun probeOwner(): String {
+        val target = javaObject
+        return if (target is Class<*>) target.simpleName else target.toString()
     }
 
     override fun put(

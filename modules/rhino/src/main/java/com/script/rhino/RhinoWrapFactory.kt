@@ -57,7 +57,20 @@ object RhinoWrapFactory : WrapFactory() {
             return null
         }
         return wrapOrNull(scope, javaObject, staticType)
-            ?: super.wrapAsJavaObject(cx, scope, javaObject, staticType)
+            ?: probeWrap(cx, scope, javaObject, staticType)
+    }
+
+    /** 临时探针：未注册专用包装的对象也包一层，好把 java.* / cache.* 的访问记进轨迹 */
+    private fun probeWrap(
+        cx: Context,
+        scope: Scriptable?,
+        javaObject: Any,
+        staticType: Class<*>?
+    ): Scriptable? {
+        if (javaObject is Collection<*> || javaObject is Map<*, *> || javaObject.javaClass.isArray) {
+            return super.wrapAsJavaObject(cx, scope, javaObject, staticType)
+        }
+        return ProbingJavaObject(scope, javaObject, staticType)
     }
 
     override fun wrapJavaClass(

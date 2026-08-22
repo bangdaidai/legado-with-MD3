@@ -1,6 +1,7 @@
 package io.legado.app.help.rhino
 
 import com.script.rhino.JavaObjectWrapFactory
+import com.script.rhino.RhinoProbe
 import org.mozilla.javascript.NativeJavaObject
 import org.mozilla.javascript.Scriptable
 
@@ -19,12 +20,15 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
 
     override fun get(name: String, start: Scriptable): Any? {
         if (name != "setVariable" && name.length > 3 && name.startsWith("set")) {
-            val name = name.substring(3).replaceFirstChar { it.lowercase() }
-            if (super.has(name, start)) {
+            val name2 = name.substring(3).replaceFirstChar { it.lowercase() }
+            if (super.has(name2, start)) {
+                RhinoProbe.onGet("source", name, NOT_FOUND)
                 return NOT_FOUND
             }
         }
-        return super.get(name, start)
+        val value = super.get(name, start)
+        RhinoProbe.onGet("source", name, value)
+        return value
     }
 
     override fun put(
@@ -33,7 +37,10 @@ class NativeBaseSource(scope: Scriptable?, javaObject: Any, staticType: Class<*>
         value: Any?
     ) {
         if (name == "variable") {
+            RhinoProbe.onGet("source(写入)", name, value)
             super.put(name, start, value)
+        } else {
+            RhinoProbe.onGet("source(写入被丢弃)", name, value)
         }
     }
 
