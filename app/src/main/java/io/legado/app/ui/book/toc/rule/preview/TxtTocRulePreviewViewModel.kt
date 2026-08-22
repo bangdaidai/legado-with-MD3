@@ -10,7 +10,10 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.repository.BookRepository
+import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.data.repository.TxtTocRuleRepository
+import io.legado.app.domain.model.AiTitleCleanRuleDraft
+import io.legado.app.domain.usecase.GenerateTocRuleUseCase
 import io.legado.app.help.DefaultData
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isLocalTxt
@@ -37,6 +40,8 @@ class TxtTocRulePreviewViewModel(
     private val app: Application,
     private val bookRepository: BookRepository,
     private val repository: TxtTocRuleRepository,
+    private val replaceRuleRepository: ReplaceRuleRepository,
+    private val generateTocRuleUseCase: GenerateTocRuleUseCase,
 ) : ViewModel() {
 
     private val context get() = app.applicationContext
@@ -110,6 +115,10 @@ class TxtTocRulePreviewViewModel(
             }
             is TxtTocRulePreviewIntent.UpdateSearchQuery -> {
                 _uiState.update { it.copy(searchQuery = intent.query) }
+            }
+            is TxtTocRulePreviewIntent.GenerateWithAi -> generateWithAi()
+            is TxtTocRulePreviewIntent.AdoptAiTitleDraft -> {
+                viewModelScope.launch(Dispatchers.IO) { adoptAiTitleDraft(intent.item) }
             }
             is TxtTocRulePreviewIntent.ApplyRule -> {
                 val selectedRule = _uiState.value.selectedRule
@@ -451,6 +460,159 @@ class TxtTocRulePreviewViewModel(
                 computeChaptersLazy(book, remainingRules)
             }
         }
+    }
+
+    // ===================== AI 读真实目录反推规则 =====================
+
+    /**
+     * 两种模式产出不同：网络书籍给标题净化规则（需要用户逐条采用），
+     * 本地 TXT 给目录正则（直接填进既有编辑弹窗，复用它的校验与落库）。
+     */
+    private fun generateWithAi() {
+        if (_uiState.value.generatingAi) return
+        val currentBook = book ?: run {
+            _effects.tryEmit(TxtTocRulePreviewEffect.ShowToast(context.getString(R.string.no_book)))
+            return
+        }
+        _uiState.update { it.copy(generatingAi = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_uiState.value.isTxt) {
+                generateTxtTocRule(currentBook)
+            } else {
+                generateTitleCleanRules(currentBook)
+            }
+            _uiState.update { it.copy(generatingAi = false) }
+        }
+    }
+
+    private suspend fun generateTitleCleanRules(currentBook: Book) {
+        val chapters = runCatching { bookRepository.getChapters(currentBook.bookUrl) }
+            .getOrDefault(emptyList())
+        if (chapters.isEmpty()) {
+            toastAiFailure(context.getString(R.string.toc_preview_no_cached_chapters))
+            return
+        }
+        val titles = chapters.map { preprocessTitle(it.title) }
+        generateTocRuleUseCase.titleCleanRules(currentBook.name, titles)
+            .onSuccess { drafts ->
+                if (drafts.isEmpty()) {
+                    toastAiFailure(context.getString(R.string.ai_toc_rule_none))
+                    return@onSuccess
+                }
+                val items = drafts.map { draft -> draft.previewOn(titles) }
+                _uiState.update {
+                    it.copy(
+                        activeSheet = TxtTocRulePreviewSheet.AiTitleDrafts(items.toImmutableList())
+                    )
+                }
+            }
+            .onFailure { toastAiFailure(it.localizedMessage) }
+    }
+
+    /** 在真实标题上跑一遍，命中数和样例由这里算，不信模型自己说的命中情况。 */
+    private fun AiTitleCleanRuleDraft.previewOn(titles: List<String>): AiTitleDraftItem {
+        val rule = toReplaceRule()
+        val pattern = if (rule.isRegex && rule.pattern.isNotEmpty()) {
+            runCatching { Pattern.compile(rule.pattern) }.getOrNull()
+        } else {
+            null
+        }
+        val samples = mutableListOf<Pair<String, String>>()
+        var matchCount = 0
+        for (title in titles) {
+            val after = applySingleReplaceRule(rule, pattern, title)
+            if (after != title) {
+                matchCount++
+                if (samples.size < 200) samples.add(title to after)
+            }
+        }
+        return AiTitleDraftItem(
+            draft = this,
+            matchCount = matchCount,
+            totalChapter = titles.size,
+            samples = samples.toImmutableList(),
+        )
+    }
+
+    /**
+     * 只作用于标题，不碰正文：这条规则是为净化目录生成的。
+     * 作用范围默认限定到本书：规则是从这一本的真实标题反推出来的，
+     * 放开成全局容易误伤别的书；用户要全局生效可以在替换规则管理页清空作用范围。
+     */
+    private fun AiTitleCleanRuleDraft.toReplaceRule(scope: String? = null) = ReplaceRule(
+        name = name,
+        pattern = pattern,
+        replacement = replacement,
+        isRegex = isRegex,
+        scope = scope,
+        scopeTitle = true,
+        scopeContent = false,
+        isEnabled = true,
+    )
+
+    private suspend fun adoptAiTitleDraft(item: AiTitleDraftItem) {
+        val currentBook = book ?: run {
+            _effects.tryEmit(TxtTocRulePreviewEffect.ShowToast(context.getString(R.string.no_book)))
+            return
+        }
+        val rule = item.draft.toReplaceRule(scope = currentBook.name)
+        // 与替换规则编辑页同一套校验：除了正则能编译，还挡住结尾裸 | 这类会替换超时的写法
+        if (!rule.isValid()) {
+            toastAiFailure(context.getString(R.string.replace_rule_invalid))
+            return
+        }
+        runCatching {
+            // 新规则排在链条末尾，和编辑页新建规则的口径一致，不要抢在既有规则前面
+            rule.order = replaceRuleRepository.getNextOrder()
+            replaceRuleRepository.insert(rule)
+            ContentProcessor.upReplaceRules()
+        }.onFailure {
+            toastAiFailure(it.localizedMessage)
+            return
+        }
+        _uiState.update { it.copy(activeSheet = null) }
+        loadNetworkPreview(currentBook)
+    }
+
+    /**
+     * TXT 取样直接复用 [analyzeWithPattern]：用「非空行」正则跑一遍就拿到前若干行，
+     * 不必再写一份分块读文件的逻辑。
+     */
+    private suspend fun generateTxtTocRule(currentBook: Book) {
+        val lines = runCatching {
+            analyzeWithPattern(currentBook, Regex("^.+$", RegexOption.MULTILINE)).first
+        }.getOrDefault(emptyList())
+        if (lines.isEmpty()) {
+            toastAiFailure(context.getString(R.string.invalid_format))
+            return
+        }
+        generateTocRuleUseCase.txtTocRule(currentBook.name, lines.map { it.trim() })
+            .onSuccess { draft ->
+                // 交给既有编辑弹窗：用户能改，确认后走同一条校验 + 落库 + 重算路径
+                _uiState.update {
+                    it.copy(
+                        activeSheet = null,
+                        editingRule = TxtTocRule(
+                            name = draft.name,
+                            chapterRule = draft.chapterRule,
+                            volumeRule = draft.volumeRule,
+                            example = draft.reason.ifBlank { null },
+                        ),
+                    )
+                }
+            }
+            .onFailure { toastAiFailure(it.localizedMessage) }
+    }
+
+    private fun toastAiFailure(message: String?) {
+        _effects.tryEmit(
+            TxtTocRulePreviewEffect.ShowToast(
+                context.getString(
+                    R.string.ai_toc_rule_failed,
+                    message ?: context.getString(R.string.ai_toc_rule_unknown)
+                )
+            )
+        )
     }
 
     private suspend fun getAllRules(): List<TxtTocRule> {

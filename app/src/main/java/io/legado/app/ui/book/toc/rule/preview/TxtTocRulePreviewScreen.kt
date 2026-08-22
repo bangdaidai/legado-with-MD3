@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -66,6 +67,7 @@ import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
+import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
@@ -79,6 +81,7 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
+import kotlinx.collections.immutable.ImmutableList
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -178,6 +181,19 @@ fun TxtTocRulePreviewScreen(
             }
         }
 
+        is TxtTocRulePreviewSheet.AiTitleDrafts -> {
+            AppModalBottomSheet(
+                data = sheet.items,
+                onDismissRequest = { onIntent(TxtTocRulePreviewIntent.DismissSheet) },
+                title = stringResource(R.string.ai_toc_rule_drafts),
+            ) { items ->
+                AiTitleDraftsSheetContent(
+                    items = items,
+                    onAdopt = { onIntent(TxtTocRulePreviewIntent.AdoptAiTitleDraft(it)) },
+                )
+            }
+        }
+
         null -> { /* no sheet */ }
     }
 
@@ -238,6 +254,20 @@ fun TxtTocRulePreviewScreen(
                         imageVector = AppIcons.Search,
                         contentDescription = stringResource(R.string.search),
                     )
+                    // 让 AI 读本书真实目录反推规则；生成期间用进度替代按钮，避免重复触发
+                    if (state.generatingAi) {
+                        AppCircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(horizontal = 14.dp)
+                                .size(20.dp)
+                        )
+                    } else {
+                        TopBarActionButton(
+                            onClick = { onIntent(TxtTocRulePreviewIntent.GenerateWithAi) },
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = stringResource(R.string.ai_toc_rule),
+                        )
+                    }
                     if (state.isTxt) {
                         // Layout toggle button
                         TopBarActionButton(
@@ -542,6 +572,93 @@ private fun NetworkRuleChapterSheetContent(
 }
 
 @Composable
+private fun AiTitleDraftsSheetContent(
+    items: ImmutableList<AiTitleDraftItem>,
+    onAdopt: (AiTitleDraftItem) -> Unit,
+) {
+    FastScrollLazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 520.dp)
+            .padding(horizontal = 16.dp),
+    ) {
+        itemsIndexed(items.toList()) { _, item ->
+            AiTitleDraftCard(item = item, onAdopt = { onAdopt(item) })
+        }
+    }
+}
+
+@Composable
+private fun AiTitleDraftCard(
+    item: AiTitleDraftItem,
+    onAdopt: () -> Unit,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            AppText(
+                text = item.draft.name,
+                style = LegadoTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            AppText(
+                text = "${item.draft.pattern} → ${item.draft.replacement.ifEmpty { "\"\"" }}",
+                style = LegadoTheme.typography.bodySmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+            if (item.draft.reason.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                AppText(
+                    text = item.draft.reason,
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                AppText(
+                    text = stringResource(
+                        R.string.ai_toc_rule_hits,
+                        item.matchCount,
+                        item.totalChapter,
+                    ),
+                    style = LegadoTheme.typography.labelMedium,
+                    color = if (item.matchCount > 0) LegadoTheme.colorScheme.primary
+                    else LegadoTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                SmallTonalButton(
+                    onClick = onAdopt,
+                    enabled = item.matchCount > 0,
+                    icon = AppIcons.Check,
+                    text = stringResource(R.string.ai_toc_rule_adopt),
+                )
+            }
+            // 样本取自本书真实目录：上为净化后标题，下为原标题
+            item.samples.take(AI_DRAFT_SAMPLE_LIMIT).forEach { (origin, display) ->
+                Spacer(Modifier.height(6.dp))
+                Column {
+                    AppText(
+                        text = display,
+                        style = LegadoTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    AppText(
+                        text = origin,
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun RulePreviewCard(
     item: TocRulePreviewItem,
     isSelected: Boolean,
@@ -822,3 +939,6 @@ private fun NetworkRulePreviewContent(
         }
     }
 }
+
+// AI 草稿卡片里只列少量样本，够判断规则对不对就行
+private const val AI_DRAFT_SAMPLE_LIMIT = 3

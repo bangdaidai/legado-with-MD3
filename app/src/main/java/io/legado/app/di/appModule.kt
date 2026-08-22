@@ -192,6 +192,7 @@ import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
 import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
+import io.legado.app.domain.usecase.GenerateTocRuleUseCase
 import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
@@ -541,6 +542,7 @@ val appModule = module {
     singleOf(::AiTextFactoryUseCase)
     singleOf(::GenerateBookshelfAutoGroupPlanUseCase)
     singleOf(::GenerateAuthorBioUseCase)
+    singleOf(::GenerateTocRuleUseCase)
     singleOf(::ApplyBookshelfAutoGroupPlanUseCase)
     singleOf(::CleanSelectedTextUseCase)
     singleOf(::SaveBookContentProcessUseCase)
@@ -635,6 +637,8 @@ val appModule = module {
             app = get(),
             bookRepository = get(),
             repository = get(),
+            replaceRuleRepository = get(),
+            generateTocRuleUseCase = get(),
         )
     }
     viewModel {

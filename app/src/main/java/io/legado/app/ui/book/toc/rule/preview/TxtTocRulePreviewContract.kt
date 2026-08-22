@@ -3,6 +3,7 @@ package io.legado.app.ui.book.toc.rule.preview
 import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.entities.TxtTocRule
+import io.legado.app.domain.model.AiTitleCleanRuleDraft
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -33,6 +34,8 @@ data class TxtTocRulePreviewUiState(
     val chainDemo: ChainDemo? = null,
     // 空目录提示（网络书无缓存目录时）
     val emptyHint: String = "",
+    // AI 正在读目录生成规则
+    val generatingAi: Boolean = false,
 ) {
     val filteredRules: ImmutableList<TocRulePreviewItem>
         get() = if (searchQuery.isBlank()) rules
@@ -101,9 +104,22 @@ data class ChainDemo(
     val changedStepCount: Int get() = steps.count { it.changed }
 }
 
+/**
+ * AI 依据本书真实标题给出的一条净化规则草稿，附带在本书目录上的实际命中情况。
+ * 命中数为 0 的草稿仍然展示，让用户看到模型给错了，而不是静默丢掉。
+ */
+@Stable
+data class AiTitleDraftItem(
+    val draft: AiTitleCleanRuleDraft,
+    val matchCount: Int = 0,
+    val totalChapter: Int = 0,
+    val samples: ImmutableList<Pair<String, String>> = persistentListOf(),
+)
+
 sealed interface TxtTocRulePreviewSheet {
     data class ChapterList(val item: TocRulePreviewItem) : TxtTocRulePreviewSheet
     data class NetworkRuleChapters(val item: NetworkRulePreviewItem) : TxtTocRulePreviewSheet
+    data class AiTitleDrafts(val items: ImmutableList<AiTitleDraftItem>) : TxtTocRulePreviewSheet
 }
 
 sealed interface TxtTocRulePreviewIntent {
@@ -125,6 +141,11 @@ sealed interface TxtTocRulePreviewIntent {
     data class EditNetworkRule(val ruleId: Long) : TxtTocRulePreviewIntent
     // 规则被编辑后，重新统计
     data object Refresh : TxtTocRulePreviewIntent
+    // ===== AI 生成规则 =====
+    // 让 AI 读本书真实目录，反推一条规则；TXT 与网络书籍产出不同
+    data object GenerateWithAi : TxtTocRulePreviewIntent
+    // 采用某条 AI 草稿，落库成作用于标题的替换规则
+    data class AdoptAiTitleDraft(val item: AiTitleDraftItem) : TxtTocRulePreviewIntent
 }
 
 sealed interface TxtTocRulePreviewEffect {
