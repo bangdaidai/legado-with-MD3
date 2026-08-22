@@ -132,6 +132,7 @@ object PreferKey {
     const val autoClearExpired = "autoClearExpired"
     const val autoChangeSource = "autoChangeSource"
     const val autoSuggestDayNight = "autoSuggestDayNight"
+    const val readingAnchorEnabled = "readingAnchorEnabled"
     const val importKeepName = "importKeepName"
     const val importKeepGroup = "importKeepGroup"
     const val readingMemoryCoverWidth = "readingMemoryCoverWidth"
