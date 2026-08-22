@@ -192,7 +192,6 @@ class AuthorDetailViewModel(
             detail = AuthorDetailUi(
                 name = name,
                 bio = profile?.bio ?: "",
-                bioIsAi = profile?.source == AuthorProfile.SOURCE_AI,
                 avgRating = authorAvgRating(mems),
                 readBookCount = mems.count { isAuthorBookFinished(it) },
                 bookCount = mems.size,

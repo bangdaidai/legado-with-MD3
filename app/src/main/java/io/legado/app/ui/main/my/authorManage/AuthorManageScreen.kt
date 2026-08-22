@@ -34,10 +34,12 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
@@ -144,7 +146,10 @@ fun AuthorManageScreen(
 
             else -> LazyColumn(
                 state = listState,
-                contentPadding = contentPadding,
+                contentPadding = adaptiveContentPadding(
+                    top = contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
@@ -161,7 +166,6 @@ fun AuthorManageScreen(
                     item(key = author.name) {
                         AuthorCard(
                             author = author,
-                            modifier = Modifier.padding(horizontal = 12.dp),
                             onClick = { onClickAuthor(author.name) },
                         )
                     }
@@ -181,7 +185,7 @@ private fun AuthorIndexHeader(label: String) {
         modifier = Modifier
             .fillMaxWidth()
             .background(LegadoTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(vertical = 6.dp),
     )
 }
 
@@ -211,12 +215,7 @@ private fun AuthorCard(
                     modifier = Modifier.weight(1f),
                 )
                 if (author.avgRating > 0f) {
-                    ReadingMemoryRatingBar(
-                        rating = author.avgRating,
-                        onRatingChanged = {},
-                        enabled = false,
-                        starSize = 14.dp,
-                    )
+                    AuthorRatingLabel(rating = author.avgRating, starSize = 14.dp)
                 }
             }
             if (author.bio.isNotBlank()) {
@@ -224,8 +223,6 @@ private fun AuthorCard(
                     text = author.bio,
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             AppText(
@@ -238,6 +235,28 @@ private fun AuthorCard(
     }
 }
 
-
+/** 星条 + 平均分数值。作者列表和作者页共用，两处评分展示保持一致。 */
+@Composable
+internal fun AuthorRatingLabel(
+    rating: Float,
+    starSize: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        ReadingMemoryRatingBar(
+            rating = rating,
+            onRatingChanged = {},
+            enabled = false,
+            starSize = starSize,
+        )
+        AppText(
+            text = "%.1f".format(rating),
+            style = LegadoTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = LegadoTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+    }
+}
 
 

@@ -44,8 +44,6 @@ data class AuthorBookItem(
 data class AuthorDetailUi(
     val name: String,
     val bio: String,
-    /** 简介由 AI 生成（未经用户编辑），UI 需要据此提示内容可能不准确。 */
-    val bioIsAi: Boolean,
     val avgRating: Float,
     val readBookCount: Int,
     val bookCount: Int,

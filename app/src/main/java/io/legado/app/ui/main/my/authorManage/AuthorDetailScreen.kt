@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,10 +20,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
-import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.button.series.SmallTonalButton
+import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -106,6 +106,8 @@ fun AuthorDetailScreen(
                             // 作者页不重复显示作者名；评分随之移到标题行，否则会跟着副标题一起消失
                             showAuthor = false,
                             ratingInTitle = true,
+                            // 标签只占一行，横向滚动，跟书架列表一致
+                            singleLineTags = true,
                             onBookClick = onOpenBook,
                         )
                     }
@@ -140,19 +142,14 @@ private fun AuthorDetailHeader(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (detail.avgRating > 0f) {
-                    ReadingMemoryRatingBar(
-                        rating = detail.avgRating,
-                        onRatingChanged = {},
-                        enabled = false,
-                        starSize = 16.dp,
-                    )
+                    AuthorRatingLabel(rating = detail.avgRating, starSize = 16.dp)
                 }
                 AppText(
                     text = stringResource(R.string.author_read_count, detail.readBookCount)
                             + " · " + stringResource(R.string.author_book_count, detail.bookCount),
                     style = LegadoTheme.typography.labelMedium,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = if (detail.avgRating > 0f) 4.dp else 0.dp),
+                    modifier = Modifier.padding(start = if (detail.avgRating > 0f) 8.dp else 0.dp),
                 )
             }
             if (detail.bio.isNotBlank()) {
@@ -161,13 +158,6 @@ private fun AuthorDetailHeader(
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurface,
                 )
-                if (detail.bioIsAi) {
-                    AppText(
-                        text = stringResource(R.string.author_bio_ai_generated),
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
     }
@@ -186,43 +176,34 @@ private fun BioEditDialog(
         show = true,
         onDismissRequest = onDismiss,
         title = stringResource(R.string.author_edit_bio),
+        // AI 生成放标题栏操作槽，跟其它 AI 入口一致；生成中把按钮换成进度圈
+        titleAction = {
+            if (generating) {
+                AppCircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                SmallTonalButton(
+                    onClick = onGenerate,
+                    icon = Icons.Default.AutoAwesome,
+                    text = stringResource(R.string.author_bio_generate),
+                )
+            }
+        },
         confirmText = stringResource(R.string.ok),
         onConfirm = { onSave(bio.trim()) },
         dismissText = stringResource(R.string.cancel),
         onDismiss = onDismiss,
         content = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = bio,
-                    onValueChange = onBioChange,
-                    placeholder = { AppText(stringResource(R.string.author_bio_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    singleLine = false,
-                    enabled = !generating,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    TextButton(onClick = onGenerate, enabled = !generating) {
-                        AppText(
-                            text = stringResource(
-                                if (generating) R.string.author_bio_generating
-                                else R.string.author_bio_generate
-                            )
-                        )
-                    }
-                    if (generating) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    }
-                }
-                AppText(
-                    text = stringResource(R.string.author_bio_ai_warning),
-                    style = LegadoTheme.typography.labelSmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            AppTextField(
+                value = bio,
+                onValueChange = onBioChange,
+                placeholder = { AppText(stringResource(R.string.author_bio_hint)) },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                enabled = !generating,
+            )
         },
     )
 }

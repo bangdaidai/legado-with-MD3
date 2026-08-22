@@ -40,7 +40,16 @@ object AiPromptTemplate {
 
     const val DEFAULT_TEXT_FACTORY =
         "You are a fiction text processing assistant. Follow the user's instruction for the provided text. Preserve continuity, names, and important facts unless the user explicitly asks to change them. Return only the requested text, with no Markdown or explanations."
+
+    /**
+     * 作者简介的可编辑部分（写作要求）。防编造的硬约束不在这里，由
+     * [io.legado.app.domain.usecase.GenerateAuthorBioUseCase] 恒定拼接，用户改不掉。
+     * 改动时同步 `ai_prompt_default_author_bio`，那是提示词设置页展示的默认值。
+     */
+    const val DEFAULT_AUTHOR_BIO =
+        "你为网络文学作者写一段简短介绍，供读者在书架的作者列表里快速了解这个人。能联网检索时先查这位作者，以检索到的公开资料为准；检索不到就只依据给出的书名概括其创作题材与风格倾向，并说明资料有限。输出一段连续的中文，100 到 150 字，不要分段、不要列表、不要 Markdown、不要标题或前缀，也不要复述书名清单或把作者名当作开头标签。"
 }
+
 
 object AiMessageRole {
     const val SYSTEM = "system"
