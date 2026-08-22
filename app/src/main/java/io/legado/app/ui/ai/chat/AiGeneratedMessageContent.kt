@@ -244,12 +244,13 @@ private fun MessageTextContent(
         if (isUser) {
             AppText(
                 text = text,
-                style = LegadoTheme.typography.bodyLarge
+                style = LegadoTheme.typography.bodyMedium
             )
         } else if (text.isNotBlank()) {
             MarkdownBlock(
                 content = text,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                style = LegadoTheme.typography.bodyMedium
             )
         } else if (isStreaming) {
             StreamingDots()
