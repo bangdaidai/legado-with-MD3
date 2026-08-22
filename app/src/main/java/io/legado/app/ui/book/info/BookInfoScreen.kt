@@ -1209,7 +1209,8 @@ private fun BookInfoSummary(
             AnimatedTextLine(
                 text = when {
                     book.durChapterIndex == 0 && book.durChapterPos == 0 -> stringResource(R.string.is_unread)
-                    book.durChapterIndex + 1 == book.totalChapterNum && book.totalChapterNum > 0 -> "已读完"
+                    book.durChapterIndex + 1 == book.totalChapterNum && book.totalChapterNum > 0 ->
+                        stringResource(R.string.is_read_finished)
                     else -> stringResource(R.string.read_chapter_index, book.durChapterIndex + 1)
                 },
                 style = LegadoTheme.typography.labelMedium,

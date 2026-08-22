@@ -462,13 +462,13 @@ internal fun MemoryBookCard(
         memory.abandoned -> "弃文"
         memory.progress >= 1f -> "已读"
         memory.progress > 0f -> "在读"
-        else -> "待看"
+        else -> "未读"
     }
     val statusContainer = when {
         memory.abandoned -> LegadoTheme.colorScheme.error
         memory.progress >= 1f -> LegadoTheme.colorScheme.tertiary
         memory.progress > 0f -> LegadoTheme.colorScheme.primary
-        // surfaceVariant 跟卡片底色几乎分不出来，「待看」用 secondary 保持和其它状态同样的对比度
+        // surfaceVariant 跟卡片底色几乎分不出来，「未读」用 secondary 保持和其它状态同样的对比度
         else -> LegadoTheme.colorScheme.secondary
     }
     val statusContent = when {

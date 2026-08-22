@@ -980,8 +980,11 @@ class BookInfoViewModel(
             // SSOT：书架/信息页/阅读记忆统一入口（排除规则 + 标签映射）
             val displayTagNames = TagManager.bookDisplayTags(book.kind, book.customTag)
             val enabledRules = highlightTagRuleRepository.getEnabled()
-            val tagEntities = appDb.bookTagDao.getByNames(displayTagNames).associateBy { it.name }
-            val coloredTags = displayTagNames.map { name ->
+            // 高亮规则也作用在 SSOT 标签上（而非原始 kind 拆分）。命中规则的标签只在高亮行展示，
+            // 下方标签行只放未命中的，避免同一个标签在两处重复出现。
+            val (highlighted, regularTagNames) = parseHighlightedTags(displayTagNames, enabledRules)
+            val tagEntities = appDb.bookTagDao.getByNames(regularTagNames).associateBy { it.name }
+            val coloredTags = regularTagNames.map { name ->
                 val t = tagEntities[name]
                 BookTagUi(
                     id = t?.id ?: 0,
@@ -989,8 +992,6 @@ class BookInfoViewModel(
                     color = t?.color ?: TagManager.generateTagColor(name),
                 )
             }
-            // 高亮规则也作用在 SSOT 标签上（而非原始 kind 拆分）
-            val (highlighted, _) = parseHighlightedTags(displayTagNames, enabledRules)
             HighlightMeta(highlighted, normalizedGroupNames, hasCustomGroup, coloredTags)
         }.onSuccess {
             currentHighlightedTags = it.highlighted

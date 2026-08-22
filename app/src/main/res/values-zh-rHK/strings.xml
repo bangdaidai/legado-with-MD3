@@ -1924,11 +1924,11 @@
     <string name="is_blur_enable">啟用元素模糊</string>
     <string name="is_blur_progressive_enable">啟用漸進式模糊</string>
     <string name="is_event_listener">事件監聽器</string>
-    <string name="is_read_finished">已讀完</string>
-    <string name="is_read_finished_complete">已讀完（完結）</string>
-    <string name="is_read_finished_update">已讀完（連載）</string>
+    <string name="is_read_finished">已讀</string>
+    <string name="is_read_finished_complete">完本已讀</string>
+    <string name="is_read_finished_update">連載已讀</string>
     <string name="is_read_finished_pit">坑書已讀</string>
-    <string name="is_reading">閲讀中</string>
+    <string name="is_reading">在讀</string>
     <string name="is_unread">未讀</string>
     <string name="js_disabled">JS 已禁用</string>
     <string name="jump_to_volume">跳轉到卷</string>
@@ -2558,7 +2558,7 @@
     <string name="reading_time">閱讀時間</string>
     <string name="reading_days">閱讀天數</string>
     <string name="total_read_books">累計讀過</string>
-    <string name="finished_books">讀完書籍</string>
+    <string name="finished_books">已讀書籍</string>
     <string name="reading_books">在讀書籍</string>
     <string name="reading_words">閱讀字數</string>
     <string name="reading_data">閱讀資料</string>

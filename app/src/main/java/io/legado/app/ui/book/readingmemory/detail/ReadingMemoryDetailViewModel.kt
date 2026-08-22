@@ -91,7 +91,7 @@ class ReadingMemoryDetailViewModel(
                     else -> 0
                 }
                 val statusText = when (status) {
-                    0 -> "待看"
+                    0 -> "未读"
                     1 -> "在读"
                     2 -> "已读"
                     else -> "弃文"

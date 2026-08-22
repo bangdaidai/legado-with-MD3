@@ -47,7 +47,13 @@ object ShareCardDataBuilder {
             latestChapterTitle = book?.latestChapterTitle.orEmpty(),
             typeText = book?.let { bookTypeText(it.type) }.orEmpty(),
             charset = book?.charset.orEmpty(),
-            readingStatusText = if (memory.abandoned) "已弃读" else if (memory.finishReadTime > 0) "已完结" else "阅读中",
+            // 状态词全项目统一为 未读 / 在读 / 已读 / 弃文，CSS 里的 .status-tag.<状态> 依赖这几个词
+            readingStatusText = when {
+                memory.abandoned -> "弃文"
+                memory.finishReadTime > 0 || memory.progress >= 1f -> "已读"
+                memory.progress > 0f -> "在读"
+                else -> "未读"
+            },
             readingProgress = String.format("%.1f%%", memory.progress * 100),
             readChapters = "${memory.durChapterIndex + 1}/${memory.totalChapterNum}",
             unreadChapters = (memory.totalChapterNum - memory.durChapterIndex - 1).coerceAtLeast(0),

@@ -2780,7 +2780,7 @@
     <string name="reading_time">阅读时间</string>
     <string name="reading_days">阅读天数</string>
     <string name="total_read_books">累计读过</string>
-    <string name="finished_books">读完书籍</string>
+    <string name="finished_books">已读书籍</string>
     <string name="abandoned_books">弃文</string>
     <string name="reading_books">在读书籍</string>
     <string name="reading_words">阅读字数</string>
