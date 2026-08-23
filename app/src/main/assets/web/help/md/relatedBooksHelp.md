@@ -28,6 +28,12 @@
 | **title** | `String` | 是  | 模块标题，显示在轮播上方。如「同作者作品」。                  |
 | **url** | `String` | 是  | 数据接口 URL。支持模板变量替换。                      |
 
+### 两条硬性要求
+
+1. **整个字段必须是 JSON 数组**，最外层的 `[ ]` 不能省，只配一个模块也一样。写成单个 `{...}` 会直接解析失败，日志里是「关联书籍规则不是合法 JSON 数组」。
+2. **`url` 里的所有空白字符都会被删掉**（空格、换行、制表符）。所以 `@js:` 只能写成一个不依赖空格的表达式；需要多行逻辑时把它放进书源的 `jsLib` 里定义成函数，这里只写函数调用。
+
+
 ---
 
 ## 3. 工作原理
@@ -59,19 +65,26 @@ URL 支持与 `exploreUrl` 相同的 JS 语法，包括 `@js:` 前缀、`<js></j
 
 ### 简单模板语法
 
-对于简单的 URL，可以直接使用 `{{book.属性名}}` 语法，值会自动进行 URL 编码：
+对于简单的 URL，可以直接使用 `{{book.属性名}}` 语法：
 
 ```
 https://example.com/search?keyword={{book.author}}&name={{book.name}}
 ```
 
+**编码规则**：值出现在 query 段（`?` 之后）时会自动做 URL 编码；出现在**路径段**里不会，中文和特殊字符要自己编码：
+
+```
+https://example.com/category/{{java.net.URLEncoder.encode(book.kind,"UTF-8")}}
+```
+
 ### `@js:` 表达式
 
-对于需要逻辑处理的 URL，使用 `@js:` 前缀：
+需要逻辑处理时用 `@js:` 前缀。注意空白会被删掉，所以必须是**单个表达式**：
 
 ```
-@js:"https://example.com/api/related?author=" + java.net.URLEncoder.encode(book.author, "UTF-8")
+@js:"https://example.com/api/related?author="+java.net.URLEncoder.encode(book.author,"UTF-8")
 ```
+
 
 ---
 
@@ -157,33 +170,42 @@ https://example.com/category/{{book.kind}}?page=1
 
 ### 使用 JS 表达式
 
-与 `exploreUrl` 一样，URL 完整支持 `@js:` 和 `<js>` 表达式。在 JS 上下文中，`book` 对象即当前书籍，可访问 `book.name`、`book.author`、`book.kind`、`book.bookUrl`、`book.tocUrl` 等属性。
+与 `exploreUrl` 一样，URL 支持 `@js:` 和 `<js>` 表达式。在 JS 上下文中，`book` 对象即当前书籍，可访问 `book.name`、`book.author`、`book.kind`、`book.bookUrl`、`book.tocUrl` 等属性，书源 `jsLib` 里定义的函数也可以直接调用。
 
-**简单拼接：**
-
-```
-@js:"https://example.com/api/related?author=" + java.net.URLEncoder.encode(book.author, "UTF-8") + "&book_id=" + book.bookUrl.split("/").pop()
-```
-
-**带条件逻辑：**
+**简单拼接**（单表达式，无空格）：
 
 ```
-@js:
-var base = "https://example.com/api/related";
-if (book.kind && book.kind.contains("玄幻")) {
-  base + "?genre=fantasy&author=" + java.net.URLEncoder.encode(book.author, "UTF-8")
-} else {
-  base + "?author=" + java.net.URLEncoder.encode(book.author, "UTF-8")
+@js:"https://example.com/api/related?author="+java.net.URLEncoder.encode(book.author,"UTF-8")
+```
+
+**带条件判断**：用三元表达式，不要写 `if` 语句：
+
+```
+@js:"https://example.com/api/related?genre="+(/玄幻/.test(String(book.kind))?"fantasy":"other")
+```
+
+**复杂逻辑一律放 jsLib**。先在书源的 `jsLib` 里定义函数（那里可以正常换行、正常写空格）：
+
+```js
+function relatedUrl(b){
+	const {java} = this;
+	try{
+		let id = JSON.parse(java.ajax(b.bookUrl)).authorId;
+		return "https://example.com/api/related?author=" + id
+	}catch(e){
+		return ""
+	}
 }
 ```
 
-**带 Cookie/鉴权的请求：**
+然后 url 里只写一句调用：
 
 ```
-@js:
-var ck = "sessionid=" + (String(cookie.getKey("example.com", "sessionid")) || "");
-"https://example.com/api/related?book_id=" + book.bookUrl.split("/").pop() + "&cookie=" + java.net.URLEncoder.encode(ck, "UTF-8")
+@js:relatedUrl(book)
 ```
+
+这样既绕开了「空白被删除」的限制，也便于复用和调试。返回空字符串时该模块会被跳过。
+
 
 ---
 
@@ -192,13 +214,16 @@ var ck = "sessionid=" + (String(cookie.getKey("example.com", "sessionid")) || ""
 | 条件                                  | 行为                        |
 |:------------------------------------|:-------------------------|
 | `relatedBooks` 为空或未配置       | 不显示关联书籍模块               |
-| JSON 格式错误                          | 静默跳过，不影响详情页其他内容        |
-| 某个模块的 URL 请求失败                    | 跳过该模块，其他模块正常显示         |
-| 某个模块返回空列表                         | 跳过该模块，其他模块正常显示         |
+| JSON 格式错误                          | 跳过，不影响详情页其他内容；原因写入日志   |
+| 某个模块的 URL 请求失败                    | 跳过该模块，其他模块正常显示；原因写入日志  |
+| 某个模块返回空列表                         | 跳过该模块，其他模块正常显示；写入日志并带最终 url |
 | 所有模块均无结果                          | 不显示关联书籍区域               |
 | 结果中包含当前书籍                         | 自动过滤掉当前书籍               |
 | 本地书籍（无书源）                         | 不显示关联书籍模块               |
 | 切换书源时                              | 清空关联书籍，重新加载新源的数据       |
+
+轮播不出来时，先去「我的 → 日志」看有没有以「关联书籍」开头的记录：一条都没有说明字段是空的；有记录则会直接说明是 JSON 不合法、请求失败，还是解析不出书籍。
+
 
 ---
 
@@ -219,6 +244,6 @@ var ck = "sessionid=" + (String(cookie.getKey("example.com", "sessionid")) || ""
 3. **优先使用作者或分类**：按作者查找是最常见的关联方式，能有效推荐同作者的其他作品。
 4. **避免过于宽泛的查询**：如果 URL 返回的结果与当前书籍关联性不强，用户体验会下降。
 5. **确保发现规则兼容**：URL 返回的数据必须能被 `ruleExplore` 正确解析。
-6. **简单场景用模板，复杂场景用 JS**：简单的 `{{book.author}}` 替换直接用模板语法；需要条件判断、字符串拼接、Cookie 处理等复杂逻辑时用 `@js:` 表达式。
-7. **测试边界情况**：测试作者名包含特殊字符（如 `&`、`#`、中文）时 URL 是否正常工作。模板变量会自动进行 URL 编码，但 `@js:` 表达式中需要手动调用 `java.net.URLEncoder.encode()`。
+6. **简单场景用模板，复杂逻辑放 jsLib**：简单的 `{{book.author}}` 替换直接用模板语法；需要条件判断、二次请求、Cookie 处理时，在 `jsLib` 里写函数，url 里只写 `@js:函数名(book)`。不要试图在 url 里写多行脚本，空白会被删掉。
+7. **测试边界情况**：测试作者名包含特殊字符（如 `&`、`#`、中文）时 URL 是否正常工作。query 段的模板变量会自动编码，路径段和 `@js:` 里都要自己调用 `java.net.URLEncoder.encode()`。
 8. **控制返回数量**：建议服务端限制返回数量（如 10-20 本），过多的轮播内容会影响体验。
