@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -32,12 +32,12 @@ import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
 import io.legado.app.ui.book.search.ScopeSelectSheet
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
-import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
@@ -61,6 +61,10 @@ fun AuthorDetailScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     var showScopeSheet by remember { mutableStateOf(false) }
     var previewBook by remember { mutableStateOf<SearchBook?>(null) }
+    // 与阅读记忆书籍卡片同一套底色：优先书架自定义色，否则用主题的卡片底色
+    val cardContainerColor = uiState.bookshelfSettings.let {
+        if (LegadoTheme.isDark) it.bookshelfCardColorDark else it.bookshelfCardColor
+    }.takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.cardContainer
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -90,20 +94,23 @@ fun AuthorDetailScreen(
             )
         } else {
             LazyColumn(
-                contentPadding = contentPadding,
+                contentPadding = adaptiveContentPadding(
+                    top = contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 // 评分和简介都没有时整张卡是空的，直接不渲染
                 if (detail.avgRating > 0f || detail.bio.isNotBlank()) {
                     item {
                         AuthorDetailHeader(
                             detail = detail,
+                            containerColor = cardContainerColor,
+                            onClick = { onIntent(AuthorDetailIntent.ToggleEditBio) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp, bottom = 4.dp),
+                                .padding(vertical = 4.dp),
                         )
                     }
                 }
@@ -114,7 +121,8 @@ fun AuthorDetailScreen(
                         onToggleFilter = { onIntent(AuthorDetailIntent.ToggleBookFilter(it)) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp, bottom = 4.dp),
+                            // 12dp + 卡片自带的 4dp = 分区之间 16dp，与标签管理页同节奏
+                            .padding(vertical = 12.dp),
                     )
                 }
                 if (detail.books.isEmpty()) {
@@ -157,7 +165,7 @@ fun AuthorDetailScreen(
                         onPickScope = { showScopeSheet = true },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp, bottom = 4.dp),
+                            .padding(vertical = 12.dp),
                     )
                 }
                 when (val works = uiState.works) {
@@ -187,13 +195,28 @@ fun AuthorDetailScreen(
                         works.books,
                         key = { it.book.bookUrl },
                     ) { item ->
-                        SearchBookListItem(
-                            book = item.book,
-                            shelfState = item.shelfState,
+                        // 套一层卡片，和上面的关联书籍卡片保持同样的底色、圆角和行间距
+                        NormalCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            cornerRadius = 8.dp,
+                            containerColor = cardContainerColor,
                             onClick = { onOpenSearchBook(item.book) },
-                            onLongClick = { book, _ -> previewBook = book },
-                            sourceCount = item.book.origins.size,
-                        )
+                            onLongClick = { previewBook = item.book },
+                        ) {
+                            SearchBookListItem(
+                                book = item.book,
+                                shelfState = item.shelfState,
+                                onClick = null,
+                                // 点击与长按都交给外层卡片，避免两层水波纹
+                                showPadding = false,
+                                modifier = Modifier.padding(
+                                    horizontal = 12.dp,
+                                    vertical = 10.dp,
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -257,7 +280,9 @@ fun AuthorDetailScreen(
 /**
  * 「其他作品」分区标题：范围按钮 + 搜索/停止按钮。
  * 不自动联网，必须点搜索按钮才发请求。
+ * 结构与「关联书籍」那行一致：标题在左，控件紧跟标题，放不下就折行。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OtherWorksHeader(
     scopeNames: ImmutableList<String>,
@@ -267,32 +292,37 @@ private fun OtherWorksHeader(
     onPickScope: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    FlowRow(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         AppText(
             text = stringResource(R.string.author_other_works),
             style = LegadoTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .padding(end = 2.dp),
         )
         SmallTonalButton(
             onClick = onPickScope,
             text = scopeNames.takeIf { it.isNotEmpty() }?.joinToString("/")
                 ?: stringResource(R.string.author_works_scope_all),
+            modifier = Modifier.align(Alignment.CenterVertically),
         )
         if (searching) {
             SmallTonalButton(
                 onClick = onStop,
                 icon = Icons.Default.Close,
-                text = stringResource(R.string.author_works_stop),
+                contentDescription = stringResource(R.string.author_works_stop),
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
         } else {
             SmallTonalButton(
                 onClick = onRefresh,
                 icon = Icons.Default.Search,
-                text = stringResource(R.string.author_works_search),
+                contentDescription = stringResource(R.string.author_works_search),
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
         }
     }
@@ -337,13 +367,12 @@ private fun RelatedBooksHeader(
         )
         AuthorBookStatus.entries.forEach { status ->
             val count = detail.statusCounts[status] ?: 0
-            // 该状态一本书都没有就不占位；已选中的保留，否则取消不掉筛选
+            // 与「其他作品」那行的按钮同一个组件，保证两行样式一致
             if (count > 0 || status == selected) {
-                ToggleChip(
-                    label = "${stringResource(status.labelResId)} $count",
+                SmallTonalButton(
+                    onClick = { onToggleFilter(status) },
                     selected = status == selected,
-                    onToggle = { onToggleFilter(status) },
-                    compact = true,
+                    text = "${stringResource(status.labelResId)} $count",
                     modifier = Modifier.align(Alignment.CenterVertically),
                 )
             }
@@ -354,13 +383,16 @@ private fun RelatedBooksHeader(
 @Composable
 private fun AuthorDetailHeader(
     detail: AuthorDetailUi,
+    containerColor: Color,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 换成 secondaryContainer，跟下面的书籍卡片拉开层次
+    // 底色跟下面的书籍卡片一致，不再单独用 secondaryContainer
     NormalCard(
         modifier = modifier,
-        containerColor = LegadoTheme.colorScheme.secondaryContainer,
-        contentColor = LegadoTheme.colorScheme.onSecondaryContainer,
+        containerColor = containerColor,
+        // 点整张卡等于点标题栏的编辑按钮
+        onClick = onClick,
     ) {
         Column(
             modifier = Modifier
@@ -375,7 +407,6 @@ private fun AuthorDetailHeader(
                 AppText(
                     text = detail.bio,
                     style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }

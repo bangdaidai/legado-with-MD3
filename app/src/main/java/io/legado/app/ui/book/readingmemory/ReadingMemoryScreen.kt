@@ -32,6 +32,7 @@ import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryRatingBar
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
+import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
@@ -236,7 +237,8 @@ fun ReadingMemoryScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                        // 水平边距走全局规范（16dp/12dp），上下 8dp 与其它列表一致
+                        contentPadding = adaptiveContentPadding(top = 0.dp, bottom = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
                         items(uiState.items) { item ->
