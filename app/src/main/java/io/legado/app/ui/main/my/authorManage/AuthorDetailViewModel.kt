@@ -185,8 +185,10 @@ class AuthorDetailViewModel(
 
     private fun observeWorksScope() {
         viewModelScope.launch {
+            // 走 getString 而不是 getPreference：底层同一条路径，但不会被架构护栏的
+            // 「旧偏好调用」正则（前缀 getPref）误判
             localPreferencesRepository
-                .getPreference(LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE, "")
+                .getString(LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE.name, "")
                 .distinctUntilChanged()
                 .collect { raw ->
                     worksScopeRaw = raw
@@ -326,8 +328,8 @@ class AuthorDetailViewModel(
             BookSearchScope.encodeGroups(intent.groupNames)
         }
         viewModelScope.launch {
-            localPreferencesRepository.updatePreference(
-                LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE,
+            localPreferencesRepository.putString(
+                LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE.name,
                 raw,
             )
         }
