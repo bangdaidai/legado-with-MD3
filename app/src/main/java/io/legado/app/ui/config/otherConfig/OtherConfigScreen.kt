@@ -186,6 +186,15 @@ fun OtherConfigScreen(
                 )
 
                 SwitchSettingItem(
+                    title = stringResource(R.string.allow_same_name_author_type),
+                    description = stringResource(R.string.allow_same_name_author_type_summary),
+                    checked = state.allowSameNameAuthorType,
+                    onCheckedChange = {
+                        onIntent(OtherConfigIntent.AllowSameNameAuthorTypeChanged(it))
+                    }
+                )
+
+                SwitchSettingItem(
                     title = stringResource(R.string.show_manga_ui),
                     checked = state.showMangaUi,
                     onCheckedChange = { onIntent(OtherConfigIntent.ShowMangaUiChanged(it)) }

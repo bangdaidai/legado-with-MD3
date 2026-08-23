@@ -619,16 +619,6 @@ fun BookshelfConfigSheet(
             PillHeaderDivider(title = stringResource(R.string.other))
 
             CompactSwitchSettingItem(
-                title = stringResource(R.string.allow_same_name_author_type),
-                description = stringResource(R.string.allow_same_name_author_type_summary),
-                checked = settings.allowSameNameAuthorType,
-                color = LegadoTheme.colorScheme.surface,
-                onCheckedChange = { value ->
-                    onUpdate { it.copy(allowSameNameAuthorType = value) }
-                }
-            )
-
-            CompactSwitchSettingItem(
                 title = stringResource(R.string.search_filter_first),
                 checked = settings.bookshelfSearchActionDirectToSearch,
                 color = LegadoTheme.colorScheme.surface,

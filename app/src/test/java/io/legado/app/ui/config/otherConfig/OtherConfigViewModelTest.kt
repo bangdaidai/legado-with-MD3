@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Looper
 import io.legado.app.R
 import io.legado.app.domain.gateway.AppLocaleGateway
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.DirectLinkRule
 import io.legado.app.domain.gateway.DirectLinkSettingsGateway
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
@@ -14,6 +15,7 @@ import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.DownloadCacheSettings
+import io.legado.app.domain.model.settings.BookshelfSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,8 +49,10 @@ class OtherConfigViewModelTest {
         val appLocaleGateway = FakeAppLocaleGateway()
         val viewModel = OtherConfigViewModel(
             appLocaleGateway = appLocaleGateway,
-            readAloudSettingsGateway = FakeReadAloudSettingsGateway(),
-            otherSettingsGateway = otherSettingsGateway,
+        readAloudSettingsGateway = FakeReadAloudSettingsGateway(),
+        otherSettingsGateway = otherSettingsGateway,
+        bookshelfSettingsGateway = FakeBookshelfSettingsGateway(),
+            bookshelfSettingsGateway = FakeBookshelfSettingsGateway(),
             downloadCacheSettingsGateway = FakeDownloadCacheSettingsGateway(),
             directLinkSettingsGateway = FakeDirectLinkSettingsGateway(),
             localPasswordGateway = FakeLocalPasswordGateway(),
@@ -194,6 +198,18 @@ class OtherConfigViewModelTest {
         override suspend fun update(
             transform: (ReadAloudSettings) -> ReadAloudSettings,
         ) {
+            state.value = transform(state.value)
+        }
+    }
+
+    private class FakeBookshelfSettingsGateway : BookshelfSettingsGateway {
+        private val state = MutableStateFlow(BookshelfSettings())
+
+        override val currentSettings: BookshelfSettings
+            get() = state.value
+        override val settings: Flow<BookshelfSettings> = state
+
+        override suspend fun update(transform: (BookshelfSettings) -> BookshelfSettings) {
             state.value = transform(state.value)
         }
     }

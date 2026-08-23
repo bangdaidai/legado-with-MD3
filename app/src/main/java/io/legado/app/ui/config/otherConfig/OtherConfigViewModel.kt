@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.domain.gateway.AppLocaleGateway
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.DirectLinkRule
 import io.legado.app.domain.gateway.DirectLinkSettingsGateway
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
@@ -14,6 +15,7 @@ import io.legado.app.domain.gateway.OtherConfigSystemGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.model.settings.OtherSettings
+import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
@@ -28,6 +30,7 @@ class OtherConfigViewModel(
     private val appLocaleGateway: AppLocaleGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val otherSettingsGateway: OtherSettingsGateway,
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val downloadCacheSettingsGateway: DownloadCacheSettingsGateway,
     private val directLinkSettingsGateway: DirectLinkSettingsGateway,
     private val localPasswordGateway: LocalPasswordGateway,
@@ -45,6 +48,8 @@ class OtherConfigViewModel(
             readAloudByMediaButton =
                 readAloudSettingsGateway.currentSettings.readAloudByMediaButton,
             ignoreAudioFocus = readAloudSettingsGateway.currentSettings.ignoreAudioFocus,
+            allowSameNameAuthorType =
+                bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType,
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -72,6 +77,13 @@ class OtherConfigViewModel(
                         readAloudByMediaButton = preferences.readAloudByMediaButton,
                         ignoreAudioFocus = preferences.ignoreAudioFocus,
                     )
+                }
+            }
+        }
+        viewModelScope.launch {
+            bookshelfSettingsGateway.settings.collect { settings ->
+                _uiState.update {
+                    it.copy(allowSameNameAuthorType = settings.allowSameNameAuthorType)
                 }
             }
         }
@@ -109,6 +121,8 @@ class OtherConfigViewModel(
                 updateOtherSetting { it.copy(autoClearExpired = intent.value) }
             is OtherConfigIntent.ShowAddToShelfAlertChanged ->
                 updateOtherSetting { it.copy(showAddToShelfAlert = intent.value) }
+            is OtherConfigIntent.AllowSameNameAuthorTypeChanged ->
+                updateBookshelfSetting { it.copy(allowSameNameAuthorType = intent.value) }
             is OtherConfigIntent.ShowMangaUiChanged ->
                 updateOtherSetting { it.copy(showMangaUi = intent.value) }
             is OtherConfigIntent.WebServiceWakeLockChanged ->
@@ -198,6 +212,15 @@ class OtherConfigViewModel(
     ) {
         viewModelScope.launch {
             runCatching { readAloudSettingsGateway.update(transform) }
+                .onFailure { showMessage(it.localizedMessage ?: "设置失败") }
+        }
+    }
+
+    private fun updateBookshelfSetting(
+        transform: (BookshelfSettings) -> BookshelfSettings,
+    ) {
+        viewModelScope.launch {
+            runCatching { bookshelfSettingsGateway.update(transform) }
                 .onFailure { showMessage(it.localizedMessage ?: "设置失败") }
         }
     }
