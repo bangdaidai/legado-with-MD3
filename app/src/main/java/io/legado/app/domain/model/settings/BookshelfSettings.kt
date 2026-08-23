@@ -52,6 +52,8 @@ data class BookshelfSettings(
     val bookshelfListCoverWidth: Int = 84,
     val bookshelfGridCoverWidth: Int = 120,
     val bookshelfSearchActionDirectToSearch: Boolean = true,
+    /** 允许书架同时存在同名同作者同形态（文本/有声/漫画）的书；关闭时加入书架会替换已有那本 */
+    val allowSameNameAuthorType: Boolean = false,
     val autoRefreshBook: Boolean = false,
     val saveTabPosition: Long = BookGroup.IdAll,
 )

@@ -131,6 +131,7 @@ fun ExploreShowRouteScreen(
         title = title,
         onBack = onBack,
         onBookClick = onBookClick,
+        resolveShelfState = viewModel::getCurrentBookShelfState,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
     )
@@ -148,6 +149,7 @@ fun ExploreShowScreen(
     title: String = "",
     onBack: () -> Unit,
     onBookClick: (SearchBook, String?) -> Unit,
+    resolveShelfState: (SearchBook) -> BookShelfState = { BookShelfState.NOT_IN_SHELF },
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
@@ -527,10 +529,7 @@ fun ExploreShowScreen(
         }
     }
 
-    val previewShelfState = previewBook?.let { book ->
-        books.find { it.book.bookUrl == book.bookUrl }?.shelfState
-            ?: BookShelfState.NOT_IN_SHELF
-    }
+    val previewShelfState = previewBook?.let(resolveShelfState)
     SearchBookPreviewSheet(
         data = previewBook,
         shelfState = previewShelfState,

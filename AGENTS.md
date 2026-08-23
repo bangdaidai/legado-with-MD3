@@ -199,9 +199,14 @@ KMP 任务名在模块实际创建后才存在；不要假装运行尚未定义�
   抽取时再通过能力契约替换 JVM API。
 - 代码 namespace 为 `io.legado.app`，Android `applicationId` 为 `io.legato.kazusa`，不要混用。
 - `AppDatabase.version` 必须与上游保持一致，不得自行提升。本 fork 的 schema 变更（新增列、新增表）追加到与
-  上游最新版本对应的手写迁移里（当前是 `DatabaseMigrations.kt` 的 `migration_100_101`）；上游提版本（例如
-  101→102）时把本地新增搬进新迁移，而不是创建 fork 专属版本号。这样 `version =` 那一行永远不会冲突，
-  `fallbackToDestructiveMigration` 继续作为兜底。
+  上游最新版本对应的手写迁移里（当前是 `DatabaseMigrations.kt` 的 `migration_102_103`，对应
+  `AppDatabase.version = 103`）；上游提版本（例如 103→104）时把本地新增搬进新迁移，而不是创建 fork 专属版本号。
+  这样 `version =` 那一行永远不会冲突，`fallbackToDestructiveMigration` 继续作为兜底。
+- 改动**已有表的结构**（改主键、加唯一索引、改列类型）不能只往当前迁移里追加：已经处在该版本的库不会重跑迁移，
+  Room 打开时 identity hash 校验失败会直接抛 `IllegalStateException`（destructive fallback 只覆盖版本变更时
+  找不到迁移路径的情况）。这类变更要么等上游提版本，要么在交付说明里明确要求卸载重装/清数据后从备份恢复，
+  不得默认覆盖安装也能用。备份是 JSON（`Backup.kt` 的 `readingMemory.json` 等）而非 db 文件，因此
+  卸载→重装→恢复这条路可行，但主键变更会让备份里同键的多行折叠成一行。
 - 当前 minSdk 26、target/compile SDK 37；Release 启用 R8 与资源压缩，`noR8` 变体用于排障。
 - Rhino 书源/RSS/TTS 规则、Android 服务、Web 服务和阅读器渲染属于高行为风险平台能力，迁移前必须建立兼容测试或
   capability 边界。

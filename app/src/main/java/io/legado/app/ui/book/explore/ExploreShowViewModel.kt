@@ -6,6 +6,7 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.R
 import io.legado.app.data.repository.ExploreRepository
+import io.legado.app.domain.model.BookShelfState
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.BookShelfKey
 import io.legado.app.domain.usecase.ExploreBooksUseCase
@@ -172,6 +173,18 @@ class ExploreShowViewModel(
             }
         }
     }
+
+    /**
+     * 预览 sheet 用：直接按当前书架快照实时计算。
+     * 不要从展示列表反查——筛选把该书隐藏后就查不到，会误判成不在书架。
+     */
+    fun getCurrentBookShelfState(book: SearchBook): BookShelfState =
+        resolveBookShelfStateUseCase.execute(
+            name = book.name,
+            author = book.author,
+            url = book.bookUrl,
+            shelf = _bookshelf.value,
+        )
 
     private fun combineUiState() {
         viewModelScope.launch {

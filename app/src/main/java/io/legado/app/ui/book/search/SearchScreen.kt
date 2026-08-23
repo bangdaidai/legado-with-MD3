@@ -132,6 +132,7 @@ fun SearchRouteScreen(
         state = state,
         onIntent = viewModel::onIntent,
         onBack = onBack,
+        resolveShelfState = viewModel::getCurrentBookShelfState,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
     )
@@ -143,6 +144,7 @@ fun SearchScreen(
     state: SearchUiState,
     onIntent: (SearchIntent) -> Unit,
     onBack: () -> Unit,
+    resolveShelfState: (SearchBook) -> BookShelfState = { BookShelfState.NOT_IN_SHELF },
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
@@ -767,12 +769,7 @@ fun SearchScreen(
         onIntent = onIntent,
     )
 
-    val resultsByBookUrl = remember(state.results) {
-        state.results.associateBy { it.book.bookUrl }
-    }
-    val previewShelfState = previewBook?.let { book ->
-        resultsByBookUrl[book.bookUrl]?.shelfState ?: BookShelfState.NOT_IN_SHELF
-    }
+    val previewShelfState = previewBook?.let(resolveShelfState)
     SearchBookPreviewSheet(
         data = previewBook,
         shelfState = previewShelfState,

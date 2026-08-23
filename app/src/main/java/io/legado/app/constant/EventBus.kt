@@ -25,6 +25,12 @@ object EventBus {
     const val CHECK_SOURCE_DONE = "checkSourceDone"
     const val TIP_COLOR = "tipColor"
     const val SOURCE_CHANGED = "sourceChanged"
+
+    /**
+     * 一本书被另一本书整体替换（换源导致 bookUrl 变化）。
+     * 载荷是 [io.legado.app.domain.usecase.BookReplacedEvent]，持有旧 bookUrl 的页面据此改绑到新书。
+     */
+    const val BOOK_REPLACED = "bookReplaced"
     const val TAGS_UPDATED = "tagsUpdated"
     const val SEARCH_RESULT = "searchResult"
     const val UPDATE_READ_ACTION_BAR = "updateReadActionBar"

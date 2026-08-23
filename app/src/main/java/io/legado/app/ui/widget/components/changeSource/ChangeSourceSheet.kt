@@ -112,6 +112,9 @@ fun ChangeSourceSheet(
     val scopeState by viewModel.scopeUiState.collectAsStateWithLifecycle()
     val emptyScopeName by viewModel.emptyScopeName.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val allowSameNameAuthorType by viewModel.allowSameNameAuthorType.collectAsStateWithLifecycle()
+    // 书架不允许同名同作者同形态时，换源只有「替换本书」一条路，选源后直接执行，不弹任何确认
+    val canAddAsNew = allowAddAsNew && allowSameNameAuthorType
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val checkAuthor = settings.checkAuthor
     val loadInfo = settings.loadInfo
@@ -432,7 +435,7 @@ fun ChangeSourceSheet(
                             if (item.bookUrl != oldBook.bookUrl) {
                                 if (!item.sameBookTypeLocal(oldBook.type)) {
                                     mismatchBook = item
-                                } else if (allowAddAsNew) {
+                                } else if (canAddAsNew) {
                                     actionBook = item
                                 } else {
                                     performAction(item, true)
@@ -507,7 +510,7 @@ fun ChangeSourceSheet(
         confirmText = stringResource(android.R.string.ok),
         onConfirm = { searchBook ->
             mismatchBook = null
-            if (allowAddAsNew) {
+            if (canAddAsNew) {
                 actionBook = searchBook
             } else {
                 performAction(searchBook, true)
@@ -516,7 +519,7 @@ fun ChangeSourceSheet(
         dismissText = stringResource(android.R.string.cancel),
         onDismiss = { mismatchBook = null }
     )
-    if (allowAddAsNew) {
+    if (canAddAsNew) {
         AppAlertDialog(
             data = actionBook,
             onDismissRequest = { actionBook = null },

@@ -588,6 +588,28 @@ class ReadingMemoryRepository(
     }
 
     /**
+     * 重新加入书架时按书名+作者认领旧的孤立阅读记忆。
+     * 场景：书籍从书架删除后换另一个书源重新添加，bookUrl 变化，旧记忆（评分/书评/弃文/书摘快照）会与新书失联。
+     * 仅在新 bookUrl 尚无记忆、且候选记忆对应的书已不在书架（下架或 books 行已被清理）时迁移，
+     * 避免抢走书架上同名同作者另一本书的记忆。调用方随后应调用 [ensureMemory] 刷新封面/进度等汇总字段。
+     *
+     * @return 是否发生了迁移
+     */
+    suspend fun adoptOrphanMemory(book: Book): Boolean {
+        if (book.name.isBlank()) return false
+        if (dao.exists(book.bookUrl) > 0) return false
+        val candidate = dao.getByNameAuthorSync(book.name, book.author) ?: return false
+        if (candidate.bookUrl == book.bookUrl) return false
+        val oldBook = bookDao.getBook(candidate.bookUrl)
+        if (oldBook != null && !oldBook.isNotShelf) return false
+        database.withTransaction {
+            dao.migrateToNewBookUrl(candidate.bookUrl, book.bookUrl)
+            dao.deleteMigrated(candidate.bookUrl)
+        }
+        return true
+    }
+
+    /**
      * 清空全部阅读记忆。
      */
     suspend fun clearAll() {

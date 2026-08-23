@@ -357,6 +357,7 @@ object PreferKey {
     const val bookshelfTitleMaxLines = "bookshelfTitleMaxLines"
     const val bookshelfCoverShadow = "bookshelfCoverShadow"
     const val bookshelfSearchActionDirectToSearch = "bookshelfSearchActionDirectToSearch"
+    const val allowSameNameAuthorType = "allowSameNameAuthorType"
     const val bookshelfCardColor = "bookshelfCardColor"
     const val bookshelfCardColorDark = "bookshelfCardColorDark"
     const val bookshelfGroupListStyle = "bookshelfGroupListStyle"

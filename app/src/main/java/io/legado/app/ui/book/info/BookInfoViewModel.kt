@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
 import coil3.request.SuccessResult
 import coil3.toBitmap
+import com.google.gson.annotations.SerializedName
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
@@ -39,6 +40,7 @@ import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ThemeSettings
+import io.legado.app.domain.usecase.BookReplacedEvent
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.domain.usecase.ClearBookCacheUseCase
@@ -48,6 +50,7 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.getDisplayTagList
 import io.legado.app.help.book.getExportFileName
+import io.legado.app.help.book.formTypeMask
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.book.isSameNameAuthor
@@ -179,6 +182,41 @@ class BookInfoViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            // 换源改变 bookUrl 等于换了一本书：旧行已删除，本页必须改绑到新 bookUrl，
+            // 否则返回时会拿旧 url 查不到书而误判成「不在书架」，且书源/目录仍停留在旧源
+            eventFlow<BookReplacedEvent>(EventBus.BOOK_REPLACED).collect { event ->
+                onBookReplaced(event)
+            }
+        }
+    }
+
+    private fun onBookReplaced(event: BookReplacedEvent) {
+        if (event.oldBookUrl == selfReplacedFromUrl) {
+            // 本页自己发起的换源已在 changeTo 的 onSuccess 里处理，避免重复加载
+            selfReplacedFromUrl = null
+            return
+        }
+        val current = currentBook ?: return
+        if (current.bookUrl != event.oldBookUrl) return
+        rebindToBook(event.newBookUrl)
+    }
+
+    private fun rebindToBook(bookUrl: String) {
+        execute {
+            val book = bookRepository.getBook(bookUrl) ?: return@execute null
+            val source = if (book.isLocal) {
+                null
+            } else {
+                bookSourceRepository.getBookSource(book.origin)
+            }
+            book to source
+        }.onSuccess { result ->
+            result?.let { (book, source) ->
+                inBookshelf = !book.isNotShelf
+                upBook(book, source)
+            }
+        }
     }
 
     private inline fun <reified T> eventFlow(tag: String): Flow<T> = callbackFlow {
@@ -218,6 +256,9 @@ class BookInfoViewModel(
     private var relatedBooksLoadJob: Job? = null
     private var characterLoadJob: Job? = null
     private var pendingSourceRefresh = false
+
+    /** 本页自己发起换源时的旧 bookUrl，用于忽略自己触发的 [EventBus.BOOK_REPLACED] */
+    private var selfReplacedFromUrl: String? = null
 
     fun initData(intent: Intent) {
         initData(
@@ -736,6 +777,26 @@ class BookInfoViewModel(
         val book = currentBook ?: return
         execute {
             book.removeType(BookType.notShelf)
+            // 不允许同名同作者同形态时，加入书架就是替换在架那本，不弹窗、不额外确认
+            if (!bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType) {
+                val conflict = bookRepository
+                    .getShelfBookConflict(book.name, book.author, book.formTypeMask)
+                if (conflict != null && conflict.bookUrl != book.bookUrl) {
+                    changeBookSourceUseCase.replaceShelfBookWithoutToc(conflict, book)
+                    bookRepository.insertChapters(*currentChapterList.toTypedArray())
+                    // 阅读会话已由替换本身改绑，听书会话只在内存里，这里补一次
+                    if (AudioPlay.book?.isSameNameAuthor(book) == true) {
+                        AudioPlay.book = book
+                    }
+                    SourceCallBack.callBackBook(
+                        SourceCallBack.ADD_BOOK_SHELF,
+                        bookSource,
+                        book
+                    )
+                    readingMemoryRepository.ensureMemory(book.bookUrl)
+                    return@execute book
+                }
+            }
             if (book.order == 0) {
                 book.order = bookRepository.getMinOrder() - 1
             }
@@ -752,6 +813,9 @@ class BookInfoViewModel(
             book.save()
             SourceCallBack.callBackBook(SourceCallBack.ADD_BOOK_SHELF, bookSource, book)
             bookRepository.insertChapters(*currentChapterList.toTypedArray())
+            // 换源重新添加导致 bookUrl 变化时，先认领旧的孤立记忆，再汇总刷新
+            readingMemoryRepository.adoptOrphanMemory(book)
+            readingMemoryRepository.ensureMemory(book.bookUrl)
             book
         }.onSuccess {
             currentBook = it
@@ -769,6 +833,8 @@ class BookInfoViewModel(
             }
             bookRepository.insert(book)
             bookRepository.insertChapters(*toc.toTypedArray())
+            readingMemoryRepository.adoptOrphanMemory(book)
+            readingMemoryRepository.ensureMemory(book.bookUrl)
             book
         }.onSuccess {
             if (currentBook?.bookUrl == it.bookUrl) {
@@ -889,6 +955,7 @@ class BookInfoViewModel(
         changeSourceCoroutine = execute {
             val oldBook = replacedBook ?: currentBook ?: return@execute book
             if (shouldPersist) {
+                selfReplacedFromUrl = oldBook.bookUrl.takeIf { it != book.bookUrl }
                 changeBookSourceUseCase.changeTo(oldBook, book, toc, options)
             } else {
                 changeBookSourceUseCase.applyMigration(oldBook, book, toc, options)
@@ -1684,6 +1751,7 @@ class BookInfoViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                AppLog.put("关联书籍加载失败\n${e.localizedMessage}", e)
                 if (!isCurrentBookSource(book, source)) return@launch
                 currentRelatedBooks = emptyList()
                 syncUiState()
@@ -1702,11 +1770,14 @@ class BookInfoViewModel(
         }
         return try {
             GSON.fromJsonArray<RelatedBooksDef>(modulesJson)
+                .onFailure { AppLog.put("关联书籍规则不是合法 JSON 数组\n$modulesJson", it) }
                 .getOrNull()
                 ?.filter { !it.url.isNullOrBlank() }
                 ?.map { it.copy(url = it.url!!.replace(Regex("\\s"), "")) }
+                ?.also { if (it.isEmpty()) AppLog.put("关联书籍规则没有可用模块\n$modulesJson") }
                 ?: emptyList()
         } catch (e: Exception) {
+            AppLog.put("关联书籍规则解析异常\n$modulesJson", e)
             emptyList()
         }
     }
@@ -1725,7 +1796,11 @@ class BookInfoViewModel(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
+                        AppLog.put("关联书籍「${def.title}」请求失败\n$url\n${e.localizedMessage}", e)
                         url to emptyList()
+                    }
+                    if (books.isEmpty()) {
+                        AppLog.put("关联书籍「${def.title}」没有解析到书籍\n$resolvedUrl")
                     }
                     RelatedBooksUi(
                         key = def.key ?: def.title.orEmpty(),
@@ -1833,8 +1908,16 @@ private val BookInfoWebFile.isSupported: Boolean
 private val BookInfoWebFile.isSupportDecompress: Boolean
     get() = AppPattern.archiveFileRegex.matches(name)
 
+/**
+ * 关联书籍模块定义, 由书源 ruleBookInfo.relatedBooks 的 JSON 数组反序列化而来。
+ * 字段必须标 @SerializedName: 这个类不在 proguard 的 keep 名单里, R8 会重命名字段,
+ * 没有注解时 release 包会把 title/url 解析成 null, 导致关联书籍静默不显示。
+ */
 private data class RelatedBooksDef(
+    @SerializedName("key")
     val key: String? = null,
+    @SerializedName("title")
     val title: String? = null,
+    @SerializedName("url")
     val url: String? = null,
 )

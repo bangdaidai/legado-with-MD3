@@ -8,6 +8,7 @@ import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.model.BookSearchScope
+import io.legado.app.domain.model.BookShelfState
 import io.legado.app.domain.model.ContentQualityConfig
 import io.legado.app.domain.model.ContentQualityProgress
 import io.legado.app.domain.model.MatchMode
@@ -927,6 +928,18 @@ class SearchViewModel(
             .sortedWithSearchPriority(_uiState.value.committedQuery, _uiState.value.matchMode)
             .toSearchResultItems(shelf)
     }
+
+    /**
+     * 预览 sheet 用：直接按当前书架快照实时计算。
+     * 不要从结果列表按 bookUrl 反查——换源展开的子列表不在 results 里，反查不到会误判成不在书架。
+     */
+    fun getCurrentBookShelfState(book: SearchBook): BookShelfState =
+        resolveBookShelfStateUseCase.execute(
+            name = book.name,
+            author = book.author,
+            url = book.bookUrl,
+            shelf = bookshelfKeys.value,
+        )
 
     private fun List<SearchResultItemUi>.withShelfState(
         shelf: Set<BookShelfKey>

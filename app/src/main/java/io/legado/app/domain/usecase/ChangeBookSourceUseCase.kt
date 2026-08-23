@@ -3,6 +3,7 @@ package io.legado.app.domain.usecase
 import androidx.room.withTransaction
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
+import io.legado.app.constant.EventBus
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
@@ -19,6 +20,7 @@ import io.legado.app.help.book.removeType
 import io.legado.app.model.ReadBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.mapAsync
+import io.legado.app.utils.postEvent
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.toList
 import java.util.concurrent.atomic.AtomicInteger
@@ -38,6 +40,15 @@ data class ChangeSourceMigrationOptions(
 data class ChangeBookSourceResult(
     val oldBookUrl: String,
     val book: Book,
+)
+
+/**
+ * 换源导致 bookUrl 变化时广播的「书籍被替换」事件（[io.legado.app.constant.EventBus.BOOK_REPLACED]）。
+ * 换源等于删旧行插新行，仍持有旧 bookUrl 的页面收到后应改绑到 [newBookUrl]，而不是把旧 url 查不到当成不在书架。
+ */
+data class BookReplacedEvent(
+    val oldBookUrl: String,
+    val newBookUrl: String,
 )
 
 data class BatchChangeBookSourceResult(
@@ -140,6 +151,58 @@ class ChangeBookSourceUseCase(
         TagManager.updateTagsOnSourceChange(newBook)
         if (effectiveOptions.migrateChapters) {
             ReadBook.onChapterListUpdated(newBook)
+        }
+        // bookUrl 变了就是一次书籍替换：旧行已被删除，任何仍持有旧 bookUrl 的页面必须改绑到新书
+        if (oldBookUrl != newBook.bookUrl) {
+            postEvent(EventBus.BOOK_REPLACED, BookReplacedEvent(oldBookUrl, newBook.bookUrl))
+        }
+        return ChangeBookSourceResult(oldBookUrl, newBook)
+    }
+
+    /**
+     * 一键添加（搜索/发现/首页）命中「同名同作者同形态」时的轻量替换：不联网取目录，
+     * 直接用新书替换在架的旧书，保证一键添加仍是瞬时且不会失败的操作。
+     * 进度按章节序号原样带走——按标题对齐需要目录，留给之后刷新目录时自然修正。
+     */
+    suspend fun replaceShelfBookWithoutToc(oldBook: Book, newBook: Book): ChangeBookSourceResult {
+        val oldBookUrl = oldBook.bookUrl
+        newBook.durChapterIndex = oldBook.durChapterIndex
+        newBook.durChapterPos = oldBook.durChapterPos
+        newBook.durChapterTitle = oldBook.durChapterTitle
+        newBook.durChapterTime = oldBook.durChapterTime
+        newBook.totalChapterNum = oldBook.totalChapterNum
+        newBook.group = oldBook.group
+        newBook.order = oldBook.order
+        newBook.customCoverUrl = oldBook.customCoverUrl
+        newBook.customIntro = oldBook.customIntro
+        newBook.customTag = oldBook.customTag
+        newBook.remark = oldBook.remark
+        newBook.readConfig = oldBook.readConfig
+        newBook.canUpdate = oldBook.canUpdate
+        newBook.removeType(BookType.updateError)
+        if (oldBookUrl != newBook.bookUrl) {
+            BookHelp.updateCacheFolder(oldBook, newBook)
+        }
+        database.withTransaction {
+            bookChapterDao.delByBook(oldBookUrl)
+            bookDao.delete(oldBook)
+            bookDao.insert(newBook)
+            if (oldBookUrl != newBook.bookUrl) {
+                database.readingMemoryDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
+                database.readingMemoryDao.deleteMigrated(oldBookUrl)
+                database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
+            }
+        }
+        if (oldBookUrl != newBook.bookUrl) {
+            database.bookTagRelationDao.deleteByBookUrl(oldBookUrl)
+        }
+        TagManager.updateTagsOnSourceChange(newBook)
+        // 阅读会话正指向这部作品时同步换掉，否则 saveRead 会把已删除的旧行写回去
+        if (ReadBook.isCurrentBook(newBook)) {
+            ReadBook.replaceCurrentBook(newBook)
+        }
+        if (oldBookUrl != newBook.bookUrl) {
+            postEvent(EventBus.BOOK_REPLACED, BookReplacedEvent(oldBookUrl, newBook.bookUrl))
         }
         return ChangeBookSourceResult(oldBookUrl, newBook)
     }

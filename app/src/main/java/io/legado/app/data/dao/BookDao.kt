@@ -42,6 +42,10 @@ private const val HAS_PIT_TAG =
     "EXISTS (SELECT 1 FROM bookTagRelations r INNER JOIN bookTags t ON r.tagId = t.id " +
         "WHERE r.bookUrl = books.bookUrl AND t.name = '$TAG_PIT')"
 
+/** 书架投影行的评分列：评分存在 readingMemory 而不是 books，按 bookUrl 关联取出 */
+private const val RATING_SUBQUERY =
+    "COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating"
+
 @Dao
 interface BookDao {
 
@@ -130,7 +134,7 @@ interface BookDao {
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         where type & ${BookType.text} > 0
         and type & ${BookType.local} = 0
@@ -173,7 +177,7 @@ interface BookDao {
         kind,
         customTag,
         wordCount,
-        COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+        $RATING_SUBQUERY
 FROM books
 
     WHERE $PUBLIC_BOOK_FILTER
@@ -214,7 +218,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE type & ${BookType.audio} > 0
@@ -249,7 +253,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE type & ${BookType.video} > 0
@@ -287,7 +291,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE type & ${BookType.local} > 0
@@ -330,7 +334,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         where type & ${BookType.audio} = 0 and type & ${BookType.local} = 0
@@ -374,7 +378,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         where type & ${BookType.local} > 0
@@ -413,7 +417,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE (`group` & :group) > 0
@@ -453,7 +457,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE (name like '%'||:key||'%' or author like '%'||:key||'%' or originName like '%'||:key||'%'
@@ -493,7 +497,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         where type & ${BookType.updateError} > 0 
@@ -532,7 +536,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE durChapterIndex = 0 AND durChapterPos = 0
@@ -570,7 +574,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1
@@ -610,7 +614,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG
@@ -650,7 +654,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG
@@ -690,7 +694,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG
@@ -728,7 +732,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1
@@ -766,7 +770,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE type & ${BookType.image} > 0
@@ -804,7 +808,7 @@ FROM books
             kind,
             customTag,
             wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
     FROM books
 
         WHERE type & ${BookType.text} > 0
@@ -842,7 +846,20 @@ FROM books
     @Query("SELECT * FROM books WHERE bookUrl = :bookUrl")
     fun flowGetBook(bookUrl: String): Flow<Book?>
 
-    @Query("SELECT * FROM books WHERE name = :name and author = :author")
+    /**
+     * 按书名+作者取一本书(阅读记录跳转、进度继承、AI 工具反查).
+     * 书架允许同名同作者时会命中多行, 必须显式排序: 在架优先 -> 最近阅读优先, 否则返回哪一行由 SQLite 决定.
+     */
+    @Query(
+        """
+        SELECT * FROM books
+        WHERE name = :name AND author = :author
+        ORDER BY
+            CASE WHEN type & ${BookType.notShelf} = 0 THEN 0 ELSE 1 END,
+            durChapterTime DESC
+        LIMIT 1
+        """
+    )
     fun getBook(name: String, author: String): Book?
 
     /**
@@ -873,6 +890,22 @@ FROM books
         """
     )
     fun getShelfBookConflict(name: String, author: String): Book?
+
+    /**
+     * 同名同作者且形态相同的在架书籍。formMask 由调用方传入新书的形态位
+     * （text/audio/image/video，忽略 local/webFile），本地 txt 与网络文本书算同形态。
+     */
+    @Query(
+        """
+        SELECT * FROM books
+        WHERE name = :name AND author = :author
+            AND type & ${BookType.notShelf} = 0
+            AND type & :formMask != 0
+        ORDER BY durChapterTime DESC
+        LIMIT 1
+        """
+    )
+    fun getShelfBookConflict(name: String, author: String, formMask: Int): Book?
 
     @Query("""select distinct bs.* from books, book_sources bs 
         where origin == bookSourceUrl and origin not like '${BookType.localTag}%' 
@@ -1054,7 +1087,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
@@ -1071,7 +1104,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.text} > 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
@@ -1091,7 +1124,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.local} > 0
             AND $PUBLIC_BOOK_FILTER
@@ -1109,7 +1142,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.audio} > 0
             AND $PUBLIC_BOOK_FILTER
@@ -1127,7 +1160,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.video} > 0
             AND $PUBLIC_BOOK_FILTER
@@ -1145,7 +1178,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.audio} = 0 AND type & ${BookType.local} = 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
@@ -1164,7 +1197,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.local} > 0
             AND ($PUBLIC_GROUP_MASK & `group`) = 0
@@ -1183,7 +1216,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.image} > 0
             AND $PUBLIC_BOOK_FILTER
@@ -1201,7 +1234,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.text} > 0
             AND $PUBLIC_BOOK_FILTER
@@ -1219,7 +1252,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.updateError} > 0
             AND $PUBLIC_BOOK_FILTER
@@ -1237,7 +1270,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE durChapterIndex = 0 AND durChapterPos = 0
             AND $PUBLIC_BOOK_FILTER
@@ -1255,7 +1288,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1
             AND $PUBLIC_BOOK_FILTER
@@ -1273,7 +1306,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1
             AND $PUBLIC_BOOK_FILTER
@@ -1291,7 +1324,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG
             AND $PUBLIC_BOOK_FILTER
@@ -1309,7 +1342,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG
             AND $PUBLIC_BOOK_FILTER
@@ -1327,7 +1360,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG
             AND $PUBLIC_BOOK_FILTER
@@ -1345,7 +1378,7 @@ FROM books
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
-            COALESCE((SELECT rating FROM readingMemory WHERE readingMemory.bookUrl = books.bookUrl), 0.0) as rating
+            $RATING_SUBQUERY
         FROM books
         WHERE (`group` & :groupId) > 0
             AND ((SELECT isPrivate FROM book_groups WHERE groupId = :groupId) = 1 OR $PUBLIC_BOOK_FILTER)

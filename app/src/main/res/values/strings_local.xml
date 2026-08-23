@@ -32,6 +32,8 @@
     <string name="clear_all_bookmarks_confirm">Delete all bookmarks? This cannot be undone.</string>
     <string name="clear_all_bookmarks_done">All bookmarks cleared</string>
     <string name="export_markings">Export markings</string>
+    <string name="allow_same_name_author_type">Allow duplicate books</string>
+    <string name="allow_same_name_author_type_summary">Keep books with the same title, author and type as separate entries. When off, adding one replaces the existing book and keeps its reading data.</string>
 
 
 

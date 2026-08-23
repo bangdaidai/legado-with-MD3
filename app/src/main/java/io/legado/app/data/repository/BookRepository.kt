@@ -71,6 +71,13 @@ class BookRepository(
         }
     }
 
+    /** 同名同作者且形态相同的在架书籍；formMask 见 [io.legado.app.help.book.formTypeMask] */
+    suspend fun getShelfBookConflict(name: String, author: String, formMask: Int): Book? {
+        return withContext(Dispatchers.IO) {
+            bookDao.getShelfBookConflict(name, author, formMask)
+        }
+    }
+
     fun flowBookShelfByGroup(groupId: Long): Flow<List<BookShelfItem>> {
         return bookDao.flowBookShelfByGroup(groupId)
     }

@@ -13,12 +13,14 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.data.repository.BookRepository
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.model.settings.ChangeSourceSettings
 import io.legado.app.domain.usecase.ChangeSourceSearchEvent
 import io.legado.app.domain.usecase.ChangeSourceSearchUseCase
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.domain.usecase.GetChapterContentUseCase
+import io.legado.app.help.book.formTypeMask
 import io.legado.app.help.book.isWebFile
 import io.legado.app.help.book.primaryStr
 import io.legado.app.ui.book.search.SearchScope
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,6 +53,7 @@ class ChangeBookSourceComposeViewModel(
     private val searchRepository: SearchRepository,
     private val bookRepository: BookRepository,
     private val changeSourceSettingsGateway: ChangeSourceSettingsGateway,
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
 ) : ViewModel() {
 
     // Public state for the sheet
@@ -66,6 +70,15 @@ class ChangeBookSourceComposeViewModel(
         changeSourceSettingsGateway.currentSettings,
     )
     private val searchScope = SearchScope(settings.value.searchScope)
+
+    /** 书架是否允许同名同作者同形态；关闭时换源只能替换本书，不提供「添加为新书」 */
+    val allowSameNameAuthorType = bookshelfSettingsGateway.settings
+        .map { it.allowSameNameAuthorType }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType,
+        )
 
     data class ScopeUiState(
         val isAll: Boolean,
@@ -108,7 +121,11 @@ class ChangeBookSourceComposeViewModel(
 
     fun findShelfConflict(book: Book, onResult: (Book?) -> Unit) {
         viewModelScope.launch(IO) {
-            val conflict = bookRepository.getShelfBookConflict(book.name, book.author)
+            val conflict = bookRepository.getShelfBookConflict(
+                book.name,
+                book.author,
+                book.formTypeMask,
+            )
             onMain { onResult(conflict) }
         }
     }

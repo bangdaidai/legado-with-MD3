@@ -618,6 +618,17 @@ fun Book.isSameNameAuthor(other: Any?): Boolean {
     return false
 }
 
+/**
+ * 形态位掩码：只保留 text/audio/image/video，忽略 local/webFile/archive/notShelf/updateError 这些会变的位。
+ * 用于「同名同作者同形态」判重，因此本地 txt 与网络文本书算同形态；未设置形态位的老数据按文本处理。
+ */
+val Book.formTypeMask: Int
+    get() {
+        val mask = type and
+            (BookType.text or BookType.audio or BookType.image or BookType.video)
+        return if (mask == 0) BookType.text else mask
+    }
+
 fun Book.getExportFileName(
     suffix: String,
     template: String? = AppConfig.bookExportFileName,
