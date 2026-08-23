@@ -96,6 +96,12 @@ class BookInfoActivity : BaseComposeActivity() {
             onOpenEventList = { bookUrl ->
                 startActivity(MainActivity.createBookEventListIntent(this, bookUrl))
             },
+            onNavigateToReadingMemory = { bookUrl ->
+                startActivity(MainActivity.createReadingMemoryDetailIntent(this, bookUrl))
+            },
+            onNavigateToAuthorDetail = { author ->
+                startActivity(MainActivity.createAuthorDetailIntent(this, author))
+            },
         )
     }
 

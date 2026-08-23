@@ -325,6 +325,8 @@ object MainRouteConst {
     const val ROUTE_RULE_SUB = "rss/rule_sub"
     const val ROUTE_READ_RECORD = "read_record"
     const val ROUTE_READ_RECORD_OVERVIEW = "read_record_overview"
+    const val ROUTE_READING_MEMORY_DETAIL = "reading_memory/detail"
+    const val ROUTE_AUTHOR_DETAIL = "author/detail"
     const val ROUTE_ABOUT = "about"
     const val ROUTE_TTS_CACHE = "tts_cache"
 }

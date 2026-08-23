@@ -345,6 +345,26 @@ object MainIntent {
         }
     }
 
+    fun createReadingMemoryDetailIntent(
+        context: Context,
+        bookUrl: String,
+    ): Intent {
+        return createLauncherIntent(context).apply {
+            putExtra(EXTRA_START_ROUTE, MainRouteConst.ROUTE_READING_MEMORY_DETAIL)
+            putExtra(EXTRA_BOOK_URL, bookUrl)
+        }
+    }
+
+    fun createAuthorDetailIntent(
+        context: Context,
+        author: String,
+    ): Intent {
+        return createLauncherIntent(context).apply {
+            putExtra(EXTRA_START_ROUTE, MainRouteConst.ROUTE_AUTHOR_DETAIL)
+            putExtra(EXTRA_BOOK_AUTHOR, author)
+        }
+    }
+
     fun createExploreShowIntent(
         context: Context,
         exploreName: String? = null,

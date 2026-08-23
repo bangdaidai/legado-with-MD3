@@ -598,6 +598,19 @@ object MainNavigator {
                     )
                 } ?: MainRouteHome
 
+            MainRouteConst.ROUTE_READING_MEMORY_DETAIL -> intent?.getStringExtra(MainIntent.EXTRA_BOOK_URL)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { bookUrl ->
+                    MainRouteReadingMemoryDetail(bookUrl = bookUrl)
+                } ?: MainRouteHome
+
+            MainRouteConst.ROUTE_AUTHOR_DETAIL -> intent?.getStringExtra(MainIntent.EXTRA_BOOK_AUTHOR)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { author ->
+                    MainRouteAuthorDetail(name = author)
+                } ?: MainRouteHome
+
             MainRouteConst.ROUTE_EXPLORE_SHOW -> intent?.getStringExtra(MainIntent.EXTRA_SOURCE_URL)
                 ?.takeIf { it.isNotBlank() }
                 ?.let { sourceUrl ->

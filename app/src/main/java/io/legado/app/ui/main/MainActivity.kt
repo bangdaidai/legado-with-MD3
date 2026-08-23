@@ -266,6 +266,16 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
             sourceUrl: String,
             exploreUrl: String? = null,
         ): Intent = MainIntent.createExploreShowIntent(context, exploreName, sourceUrl, exploreUrl)
+
+        fun createReadingMemoryDetailIntent(
+            context: Context,
+            bookUrl: String,
+        ): Intent = MainIntent.createReadingMemoryDetailIntent(context, bookUrl)
+
+        fun createAuthorDetailIntent(
+            context: Context,
+            author: String,
+        ): Intent = MainIntent.createAuthorDetailIntent(context, author)
     }
 
     private val viewModel by viewModel<MainViewModel>()
