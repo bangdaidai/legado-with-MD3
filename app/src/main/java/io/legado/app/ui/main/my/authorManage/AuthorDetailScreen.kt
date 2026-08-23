@@ -2,7 +2,8 @@ package io.legado.app.ui.main.my.authorManage
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
@@ -78,12 +80,25 @@ fun AuthorDetailScreen(
                     .fillMaxSize()
                     .padding(horizontal = 8.dp),
             ) {
+                // 评分和简介都没有时整张卡是空的，直接不渲染
+                if (detail.avgRating > 0f || detail.bio.isNotBlank()) {
+                    item {
+                        AuthorDetailHeader(
+                            detail = detail,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+                }
                 item {
-                    AuthorDetailHeader(
+                    RelatedBooksHeader(
                         detail = detail,
+                        selected = uiState.bookFilter,
+                        onToggleFilter = { onIntent(AuthorDetailIntent.ToggleBookFilter(it)) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 4.dp),
+                            .padding(top = 4.dp, bottom = 4.dp),
                     )
                 }
                 if (detail.books.isEmpty()) {
@@ -101,8 +116,13 @@ fun AuthorDetailScreen(
                             settings = uiState.bookshelfSettings,
                             tagColorMap = uiState.tagColorMap,
                             coverWidth = uiState.coverWidth,
-                            showIntro = uiState.showIntro,
-                            showReview = uiState.showReview,
+                            // 作者页固定展示简介和书评，不跟阅读记忆的开关
+                            showIntro = true,
+                            showReview = true,
+                            // 简介只占一行、跟在标签下面；书评放封面下方独立区块，保留票据样式
+                            forceInlineIntro = true,
+                            inlineIntroMaxLines = 1,
+                            forceReviewBelowContent = true,
                             // 作者页不重复显示作者名；评分随之移到标题行，否则会跟着副标题一起消失
                             showAuthor = false,
                             ratingInTitle = true,
@@ -128,35 +148,71 @@ fun AuthorDetailScreen(
     }
 }
 
+/**
+ * 「关联书籍（总数）」标题 + 各状态筛选标签。总数不随筛选变化，
+ * 标签点击切换筛选，再点一次取消。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RelatedBooksHeader(
+    detail: AuthorDetailUi,
+    selected: AuthorBookStatus?,
+    onToggleFilter: (AuthorBookStatus) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        AppText(
+            text = stringResource(R.string.author_related_books, detail.bookCount),
+            style = LegadoTheme.typography.titleMedium,
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .padding(end = 2.dp),
+        )
+        AuthorBookStatus.entries.forEach { status ->
+            val count = detail.statusCounts[status] ?: 0
+            // 该状态一本书都没有就不占位；已选中的保留，否则取消不掉筛选
+            if (count > 0 || status == selected) {
+                ToggleChip(
+                    label = "${stringResource(status.labelResId)} $count",
+                    selected = status == selected,
+                    onToggle = { onToggleFilter(status) },
+                    compact = true,
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun AuthorDetailHeader(
     detail: AuthorDetailUi,
     modifier: Modifier = Modifier,
 ) {
-    NormalCard(modifier = modifier) {
+    // 换成 secondaryContainer，跟下面的书籍卡片拉开层次
+    NormalCard(
+        modifier = modifier,
+        containerColor = LegadoTheme.colorScheme.secondaryContainer,
+        contentColor = LegadoTheme.colorScheme.onSecondaryContainer,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (detail.avgRating > 0f) {
-                    AuthorRatingLabel(rating = detail.avgRating, starSize = 16.dp)
-                }
-                AppText(
-                    text = stringResource(R.string.author_read_count, detail.readBookCount)
-                            + " · " + stringResource(R.string.author_book_count, detail.bookCount),
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = if (detail.avgRating > 0f) 8.dp else 0.dp),
-                )
+            if (detail.avgRating > 0f) {
+                AuthorRatingLabel(rating = detail.avgRating, starSize = 16.dp)
             }
             if (detail.bio.isNotBlank()) {
                 AppText(
                     text = detail.bio,
                     style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.onSurface,
+                    color = LegadoTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }

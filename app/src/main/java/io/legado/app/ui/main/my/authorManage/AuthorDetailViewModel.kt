@@ -40,8 +40,6 @@ private data class MemoryCardConfig(
     val settings: BookshelfSettings,
     val tagColorMap: ImmutableMap<String, Long>,
     val coverWidth: Int,
-    val showIntro: Boolean,
-    val showReview: Boolean,
 )
 
 /**
@@ -73,6 +71,7 @@ class AuthorDetailViewModel(
     val effects: SharedFlow<AuthorDetailEffect> = _effects.asSharedFlow()
 
     private val _bioEdit = MutableStateFlow(BioEditState())
+    private val _bookFilter = MutableStateFlow<AuthorBookStatus?>(null)
     private var generateJob: Job? = null
 
     private val bookshelfSettings = bookshelfSettingsGateway.settings.stateIn(
@@ -89,15 +88,11 @@ class AuthorDetailViewModel(
         bookshelfSettings,
         tagColorMap,
         AppConfigStore.observeInt(PreferKey.readingMemoryCoverWidth),
-        AppConfigStore.observeBoolean(PreferKey.readingMemoryShowIntro),
-        AppConfigStore.observeBoolean(PreferKey.readingMemoryShowReview),
-    ) { settings, colorMap, coverWidth, showIntro, showReview ->
+    ) { settings, colorMap, coverWidth ->
         MemoryCardConfig(
             settings = settings,
             tagColorMap = colorMap,
             coverWidth = coverWidth ?: 84,
-            showIntro = showIntro ?: true,
-            showReview = showReview ?: false,
         )
     }
 
@@ -108,8 +103,9 @@ class AuthorDetailViewModel(
                 authorProfileRepository.observeProfiles(),
                 _bioEdit,
                 cardConfig,
-            ) { memories, profiles, bioEdit, config ->
-                buildState(memories, profiles, bioEdit, config)
+                _bookFilter,
+            ) { memories, profiles, bioEdit, config, filter ->
+                buildState(memories, profiles, bioEdit, config, filter)
             }.flowOn(Dispatchers.Default).collect { _uiState.value = it }
         }
     }
@@ -131,6 +127,10 @@ class AuthorDetailViewModel(
             AuthorDetailIntent.GenerateBio -> generateBio()
 
             is AuthorDetailIntent.SaveBio -> saveBio(intent.bio)
+
+            is AuthorDetailIntent.ToggleBookFilter -> _bookFilter.update {
+                if (it == intent.status) null else intent.status
+            }
         }
     }
 
@@ -182,9 +182,12 @@ class AuthorDetailViewModel(
         profiles: Map<String, AuthorProfile>,
         bioEdit: BioEditState,
         config: MemoryCardConfig,
+        filter: AuthorBookStatus?,
     ): AuthorDetailUiState {
         val mems = memories.filter { it.bookAuthor.trim() == name }
+        val statusCounts = mems.groupingBy { authorBookStatus(it) }.eachCount()
         val books = mems
+            .filter { filter == null || authorBookStatus(it) == filter }
             // 按阅读进度倒序：读完的在最前，待看的沉底；进度相同时保持 DAO 的 updateTime 倒序
             .sortedByDescending { it.progress }
             .map { AuthorBookItem(it, TagManager.bookDisplayTags(it.kind, it.customTag).toImmutableList()) }
@@ -195,18 +198,17 @@ class AuthorDetailViewModel(
                 name = name,
                 bio = profile?.bio ?: "",
                 avgRating = authorAvgRating(mems),
-                readBookCount = mems.count { isAuthorBookFinished(it) },
                 bookCount = mems.size,
+                statusCounts = statusCounts.toImmutableMap(),
                 books = books,
             ),
             editingBio = bioEdit.editing,
             bioDraft = bioEdit.draft,
             generatingBio = bioEdit.generating,
+            bookFilter = filter,
             bookshelfSettings = config.settings,
             tagColorMap = config.tagColorMap,
             coverWidth = config.coverWidth,
-            showIntro = config.showIntro,
-            showReview = config.showReview,
         )
     }
 }

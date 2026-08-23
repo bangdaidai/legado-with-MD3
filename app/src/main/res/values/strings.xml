@@ -2529,6 +2529,7 @@
     <string name="author_no_bio">No bio yet</string>
     <string name="author_read_count">Read %1$d</string>
     <string name="author_book_count">%1$d books</string>
+    <string name="author_related_books">Related books (%1$d)</string>
     <string name="author_tab_finished">Read</string>
     <string name="author_tab_reading">Reading</string>
     <string name="author_tab_to_read">To Read</string>

@@ -8,6 +8,14 @@ import io.legado.app.data.entities.ReadingMemory
 internal fun isAuthorBookFinished(memory: ReadingMemory): Boolean =
     !memory.abandoned && memory.progress >= 1f
 
+/** 书籍的阅读状态，判定顺序与 `MemoryBookCard` 的状态标签保持一致。 */
+internal fun authorBookStatus(memory: ReadingMemory): AuthorBookStatus = when {
+    memory.abandoned -> AuthorBookStatus.Abandoned
+    memory.progress >= 1f -> AuthorBookStatus.Finished
+    memory.progress > 0f -> AuthorBookStatus.Reading
+    else -> AuthorBookStatus.ToRead
+}
+
 /** 已打分书籍的平均分（无评分时为 0），只要打过分就参与统计。 */
 internal fun authorAvgRating(memories: List<ReadingMemory>): Float {
     val rated = memories.filter { it.rating > 0f }

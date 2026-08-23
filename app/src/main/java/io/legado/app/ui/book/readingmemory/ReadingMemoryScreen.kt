@@ -454,6 +454,12 @@ internal fun MemoryBookCard(
     showAuthor: Boolean = true,
     ratingInTitle: Boolean = false,
     singleLineTags: Boolean = false,
+    /** 强制简介走标签下方的内联分支，忽略「简介独立显示」设置。 */
+    forceInlineIntro: Boolean = false,
+    /** 强制书评走封面下方的独立区块（含票据样式），忽略「简介独立显示」设置。 */
+    forceReviewBelowContent: Boolean = false,
+    /** 内联分支的简介行数；null 表示跟随书架的「简介行数」设置。 */
+    inlineIntroMaxLines: Int? = null,
     onBookClick: (String) -> Unit,
     onBookLongPress: (String) -> Unit = {},
 ) {
@@ -478,8 +484,9 @@ internal fun MemoryBookCard(
         else -> LegadoTheme.colorScheme.onSecondary
     }
 
-    val intro = remember(memory.intro, settings.bookshelfIntroMaxLines) {
-        val formatted = if (settings.bookshelfIntroMaxLines == 0) {
+    val intro = remember(memory.intro, settings.bookshelfIntroMaxLines, forceInlineIntro) {
+        // 限了行数就用摘要格式把换行压掉，不限行才保留段落
+        val formatted = if (!forceInlineIntro && settings.bookshelfIntroMaxLines == 0) {
             HtmlFormatter.formatIntroText(memory.intro)
         } else {
             HtmlFormatter.formatSummaryText(memory.intro)
@@ -487,10 +494,18 @@ internal fun MemoryBookCard(
         formatted.takeIf { it.isNotBlank() }
     }
 
+    // 书架设置里 0 表示不限行，和独立区块的口径保持一致
+    val resolvedInlineIntroMaxLines = inlineIntroMaxLines
+        ?: if (settings.bookshelfIntroMaxLines == 0) {
+            Int.MAX_VALUE
+        } else {
+            settings.bookshelfIntroMaxLines
+        }
+
     val showIntroBelowContent = showIntro && intro != null
-        && settings.bookshelfListIntroBelowContent
+        && settings.bookshelfListIntroBelowContent && !forceInlineIntro
     val showReviewBelowContent = showReview && !memory.review.isNullOrBlank()
-        && settings.bookshelfListIntroBelowContent
+        && (settings.bookshelfListIntroBelowContent || forceReviewBelowContent)
     val ticketStyle = (showIntroBelowContent || showReviewBelowContent)
         && settings.bookshelfTicketStyle
     val themeSettings = LocalAppUiConfiguration.current.theme
@@ -599,7 +614,7 @@ internal fun MemoryBookCard(
                     text = intro.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = resolvedInlineIntroMaxLines,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 )
