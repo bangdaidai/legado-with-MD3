@@ -1079,7 +1079,8 @@ class ReadBookViewModel(
                     is ReadBookSheet.TextProcessing -> contentProcessDelegate.onSheetDismissed()
                     else -> Unit
                 }
-                _uiState.update { it.copy(activeSheet = null) }
+                // 二级 sheet 关闭时回上一级，没有上一级才真正收起
+                _uiState.update { it.copy(activeSheet = it.activeSheet?.parentSheet) }
             }
             is ReadBookIntent.SetActiveSheet -> _uiState.update {
                 it.copy(activeSheet = intent.sheet)

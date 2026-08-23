@@ -1048,6 +1048,24 @@ sealed interface ReadBookSheet {
     ) : ReadBookSheet
 }
 
+/**
+ * 二级 sheet 的上一级。关闭时该回到这里，而不是退回阅读页。
+ *
+ * `activeSheet` 是单值而不是栈，所以「回上一级」必须由类型自己说明。这几个数值 sheet 在
+ * `ReadBookScreen` 里已经把 `onDismissRequest` 指向听书设置了，但阅读页的 `BackHandler`
+ * 在 sheet 打开时统一发 [ReadBookIntent.DismissSheet]；两条路必须给出同一个结果，否则
+ * 返回键从哪个窗口被消费就决定了会回上一级还是直接退到阅读页。
+ */
+val ReadBookSheet.parentSheet: ReadBookSheet?
+    get() = when (this) {
+        ReadBookSheet.PreDownloadConfig,
+        ReadBookSheet.PreSynthesisConcurrencyConfig,
+        ReadBookSheet.AudioCacheCleanConfig,
+        ReadBookSheet.ParagraphIntervalConfig -> ReadBookSheet.ReadAloudConfig
+
+        else -> null
+    }
+
 @Immutable
 sealed interface ReadBookDialog {
     data class ReadRecordAliasConflict(
