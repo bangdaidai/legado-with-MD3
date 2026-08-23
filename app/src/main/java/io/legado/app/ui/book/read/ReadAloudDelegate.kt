@@ -215,27 +215,35 @@ class ReadAloudDelegate(
     }
 
     fun openTtsEnginesAndVoices() {
-        host.updateState { it.copy(activeSheet = null) }
+        rememberSheetToRestore()
         host.emitEffect(ReadBookEffect.OpenTtsEnginesAndVoices)
     }
 
     fun openTtsCache() {
-        host.updateState { it.copy(activeSheet = null) }
+        rememberSheetToRestore()
         host.emitEffect(ReadBookEffect.OpenTtsCache)
     }
 
     fun openBookVoiceCasting() {
         ReadBook.book?.bookUrl?.let { bookUrl ->
-            host.updateState { it.copy(activeSheet = null) }
+            rememberSheetToRestore()
             host.emitEffect(ReadBookEffect.OpenBookVoiceCasting(bookUrl))
         }
     }
 
     fun openSpeechStoryboard() {
         ReadBook.book?.bookUrl?.let { bookUrl ->
-            host.updateState { it.copy(activeSheet = null) }
+            rememberSheetToRestore()
             host.emitEffect(ReadBookEffect.OpenSpeechStoryboard(bookUrl))
         }
+    }
+
+    /**
+     * 这四个入口跳的是独立的 Navigation 3 整页，sheet 是 dialog window、不收起会浮在新页面上；
+     * 但用户按返回时期望回到刚才那一级设置，所以先把它记下来，回到阅读页时再放回去。
+     */
+    private fun rememberSheetToRestore() {
+        host.updateState { it.copy(activeSheet = null, pendingSheet = it.activeSheet) }
     }
 
     fun openSystemTtsSettings() {

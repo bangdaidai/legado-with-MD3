@@ -260,6 +260,13 @@ data class ReadBookUiState(
     val menuState: ReadBookMenuState = ReadBookMenuState(),
     // Active sheet / dialog
     val activeSheet: ReadBookSheet? = null,
+    /**
+     * 跳去 Navigation 3 整页（朗读引擎、TTS 缓存、角色配音、分镜）之前关掉的 sheet。
+     *
+     * 那些页面是独立目的地，跳转时必须先收起 sheet，否则它是 dialog window、会浮在新页面上；
+     * 但从它们返回时要回到原来那一级设置，所以先记在这里，回到阅读页时再放回 [activeSheet]。
+     */
+    val pendingSheet: ReadBookSheet? = null,
     val activeDialog: ReadBookDialog? = null,
     /** 书签/笔记跳转前校验不通过时的待确认目标（弹确认框）。 */
     val pendingBookmarkTarget: PendingBookmarkTarget? = null,
@@ -552,6 +559,9 @@ sealed interface ReadBookIntent {
     data class ShowSheet(val sheet: ReadBookSheet) : ReadBookIntent
     data object DismissSheet : ReadBookIntent
     data class SetActiveSheet(val sheet: ReadBookSheet?) : ReadBookIntent
+
+    /** 从 Navigation 3 整页返回阅读页时，把跳转前收起的那一级 sheet 放回来 */
+    data object RestorePendingSheet : ReadBookIntent
     data class ShowDialog(val dialog: ReadBookDialog) : ReadBookIntent
     data class ResolveReadRecordAlias(val merge: Boolean, val rememberChoice: Boolean = false) : ReadBookIntent
     /** 清除所有持久化的未知作者决定，使冲突可以再次由用户确认。 */

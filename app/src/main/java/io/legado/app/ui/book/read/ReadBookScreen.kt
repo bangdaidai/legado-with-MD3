@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import io.legado.app.R
@@ -87,6 +88,12 @@ fun ReadBookScreen(
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
 ) {
+    // 从朗读引擎/角色配音/分镜这些独立目的地返回时，把跳转前收起的那一级 sheet 放回来
+    LifecycleResumeEffect(Unit) {
+        onIntent(ReadBookIntent.RestorePendingSheet)
+        onPauseOrDispose { }
+    }
+
     BackHandler {
         when {
             state.activeSheet != null -> onIntent(ReadBookIntent.DismissSheet)
