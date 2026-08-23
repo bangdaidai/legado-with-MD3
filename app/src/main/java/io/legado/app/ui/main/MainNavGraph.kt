@@ -1169,6 +1169,9 @@ fun MainActivity.mainEntryProvider(
             onNavigateToReadingMemory = { bookUrl ->
                 onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl))
             },
+            onNavigateToAuthorDetail = { author ->
+                onNavigateToRoute(MainRouteAuthorDetail(author))
+            },
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = LocalNavAnimatedContentScope.current,
             sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(route.bookUrl),

@@ -224,6 +224,7 @@ sealed interface BookInfoIntent {
     ) : BookInfoIntent
 
     data class RelatedBookClick(val book: SearchBook) : BookInfoIntent
+    data class RelatedBookAddToShelf(val book: SearchBook) : BookInfoIntent
     data class RelatedBooksMore(val title: String, val url: String) : BookInfoIntent
     data class CharacterClick(val characterId: String) : BookInfoIntent
     data object AddCharacterClick : BookInfoIntent
@@ -300,6 +301,9 @@ sealed interface BookInfoEffect {
 
 sealed interface BookInfoCallbackAction {
     data class Search(val keyword: String) : BookInfoCallbackAction
+
+    /** 书源没有处理 LONG_CLICK_AUTHOR 时, 长按作者进入作者管理详情页 */
+    data class OpenAuthorDetail(val author: String) : BookInfoCallbackAction
     data class ShareText(val chooserTitle: String, val text: String) : BookInfoCallbackAction
     data class CopyText(val text: String) : BookInfoCallbackAction
     data object ClearCache : BookInfoCallbackAction

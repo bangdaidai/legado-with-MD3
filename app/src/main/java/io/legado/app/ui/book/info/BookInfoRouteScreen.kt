@@ -58,6 +58,7 @@ fun BookInfoRouteScreen(
     onOpenKnowledgeList: (bookUrl: String) -> Unit = {},
     onOpenEventList: (bookUrl: String) -> Unit = {},
     onNavigateToReadingMemory: (bookUrl: String) -> Unit = {},
+    onNavigateToAuthorDetail: (author: String) -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -161,7 +162,13 @@ fun BookInfoRouteScreen(
 
                 is BookInfoEffect.OpenFile -> activity.openFileUri(effect.uri, effect.mimeType)
                 is BookInfoEffect.RunSourceCallback -> {
-                    runSourceCallback(activity, effect, viewModel, onOpenSearch)
+                    runSourceCallback(
+                        activity,
+                        effect,
+                        viewModel,
+                        onOpenSearch,
+                        onNavigateToAuthorDetail,
+                    )
                 }
 
 
@@ -217,6 +224,7 @@ private fun runSourceCallback(
     effect: BookInfoEffect.RunSourceCallback,
     viewModel: BookInfoViewModel,
     onOpenSearch: (String) -> Unit,
+    onNavigateToAuthorDetail: (String) -> Unit,
 ) {
     SourceCallBack.callBackBtn(
         activity,
@@ -228,6 +236,12 @@ private fun runSourceCallback(
         when (val action = effect.action) {
             is BookInfoCallbackAction.Search -> {
                 onOpenSearch(action.keyword)
+            }
+
+            is BookInfoCallbackAction.OpenAuthorDetail -> {
+                if (action.author.isNotEmpty()) {
+                    onNavigateToAuthorDetail(action.author)
+                }
             }
 
             is BookInfoCallbackAction.ShareText -> {

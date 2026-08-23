@@ -40,6 +40,7 @@ import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ThemeSettings
+import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.BookReplacedEvent
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
@@ -123,6 +124,7 @@ class BookInfoViewModel(
     private val otherSettingsGateway: OtherSettingsGateway,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val readingMemoryRepository: ReadingMemoryRepository,
+    private val addToBookshelfUseCase: AddToBookshelfUseCase,
 ) : BaseViewModel(application) {
 
     val allGroups = bookGroupRepository.flowSelect().map { it.toImmutableList() }
@@ -425,6 +427,10 @@ class BookInfoViewModel(
             }
 
             is BookInfoIntent.RelatedBookClick -> onRelatedBookClick(intent.book)
+            is BookInfoIntent.RelatedBookAddToShelf -> viewModelScope.launch {
+                addToBookshelfUseCase.execute(intent.book)
+            }
+
             is BookInfoIntent.RelatedBooksMore -> onRelatedBooksMore(intent.title, intent.url)
             is BookInfoIntent.CharacterClick -> openCharacterDetail(intent.characterId)
             BookInfoIntent.AddCharacterClick -> openCharacterDetail(null)
@@ -1380,7 +1386,11 @@ class BookInfoViewModel(
                 event = if (longClick) SourceCallBack.LONG_CLICK_AUTHOR else SourceCallBack.CLICK_AUTHOR,
                 source = bookSource,
                 book = book.uiCopy(),
-                action = BookInfoCallbackAction.Search(book.author),
+                action = if (longClick) {
+                    BookInfoCallbackAction.OpenAuthorDetail(book.author.trim())
+                } else {
+                    BookInfoCallbackAction.Search(book.author)
+                },
             )
         )
     }

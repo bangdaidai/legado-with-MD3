@@ -104,6 +104,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.alert.BookDeleteConfirmDialog
+import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.HighlightTagRow
@@ -241,6 +242,8 @@ private fun BookInfoScreenContent(
         M3GlassScrollBehavior(TopAppBarDefaults.exitUntilCollapsedScrollBehavior())
     }
     val listState = rememberLazyListState()
+    // 关联书籍长按预览：与搜索/发现页一致，用局部状态托管预览 sheet
+    var previewRelatedBook by remember { mutableStateOf<SearchBook?>(null) }
 
     AppScaffold(
         modifier = Modifier
@@ -366,6 +369,9 @@ private fun BookInfoScreenContent(
                                         onBookClick = { book, _ ->
                                             onIntent(BookInfoIntent.RelatedBookClick(book))
                                         },
+                                        onBookLongClick = { book, _ ->
+                                            previewRelatedBook = book
+                                        },
                                         onMoreClick = {
                                             onIntent(BookInfoIntent.RelatedBooksMore(module.title, module.resolvedUrl))
                                         },
@@ -476,6 +482,19 @@ private fun BookInfoScreenContent(
             onDismissRequest = { onIntent(BookInfoIntent.DismissSheet) },
         )
     }
+
+    SearchBookPreviewSheet(
+        data = previewRelatedBook,
+        onDismissRequest = { previewRelatedBook = null },
+        onOpenDetail = { book, _ ->
+            previewRelatedBook = null
+            onIntent(BookInfoIntent.RelatedBookClick(book))
+        },
+        onAddToShelf = { book ->
+            previewRelatedBook = null
+            onIntent(BookInfoIntent.RelatedBookAddToShelf(book))
+        },
+    )
 
     BookInfoDialogs(state = state, onIntent = onIntent)
 }
@@ -1352,6 +1371,7 @@ private fun RelatedBooksBanner(
     title: String,
     books: ImmutableList<SearchBook>,
     onBookClick: (SearchBook, String?) -> Unit,
+    onBookLongClick: (SearchBook, String?) -> Unit,
     onMoreClick: () -> Unit,
 ) {
     Column(
@@ -1383,9 +1403,10 @@ private fun RelatedBooksBanner(
             books = books.map { io.legado.app.ui.main.homepage.HomepageBookItemUi(book = it) }
                 .toImmutableList(),
             onClick = onBookClick,
+            onLongClick = onBookLongClick,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 16.dp),
         )
     }
 }
