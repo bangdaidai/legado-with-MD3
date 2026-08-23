@@ -133,6 +133,7 @@ object PreferKey {
     const val autoChangeSource = "autoChangeSource"
     const val autoSuggestDayNight = "autoSuggestDayNight"
     const val readingAnchorEnabled = "readingAnchorEnabled"
+    const val readAloudDetachReminderEnabled = "readAloudDetachReminderEnabled"
     const val importKeepName = "importKeepName"
     const val importKeepGroup = "importKeepGroup"
     const val readingMemoryCoverWidth = "readingMemoryCoverWidth"
@@ -197,6 +198,7 @@ object PreferKey {
     const val defaultReadAloudInterface = "defaultReadAloudInterface"
     const val readAloudPlayerBgMode = "readAloudPlayerBgMode"
     const val audioPlayBgMode = "audioPlayBgMode"
+    const val audioPlayCoverRatio = "audioPlayCoverRatio"
     const val showLastUpdateTime = "showLastUpdateTime"
     const val showWaitUpCount = "showWaitUpCount"
     const val clearWebViewData = "clearWebViewData"
@@ -518,4 +520,11 @@ object ReadAloudBgMode {
     const val Blur = 1
     const val FlowingLight = 2
     const val Transparent = 3
+}
+
+object CoverRatio {
+    const val Square = 0
+    const val Circle = 1
+    const val Book = 2
+    const val Unrestricted = 3
 }

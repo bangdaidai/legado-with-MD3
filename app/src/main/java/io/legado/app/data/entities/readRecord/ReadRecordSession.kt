@@ -18,7 +18,7 @@ data class ReadRecordSession(
     val startTime: Long = 0,
     val endTime: Long = 0,
 
-    // 本次阅读的字数
+    // 本次阅读的字数（本 fork 由 ReadBook.computeSessionWords() 写入真实字数）
     val words: Long = 0,
 
     // 书籍类型位标记 (BookType)
@@ -28,6 +28,7 @@ data class ReadRecordSession(
     // 章节标题（视频为集数名，文本为章节名；冗余存储避免删书后丢失）
     @ColumnInfo(defaultValue = "")
     val chapterTitle: String = ""
+
 ) {
     /** 跨设备稳定身份，不依赖 Room 自动生成的数据库行 ID。 */
     val stableFingerprint: String

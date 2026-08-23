@@ -1,7 +1,7 @@
 package io.legado.app.ui.book.readRecord
 
-import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.Stable
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadRecordRepository

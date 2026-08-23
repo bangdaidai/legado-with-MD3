@@ -39,7 +39,8 @@ data class BookInfoUiState(
     val readRecordTotalTime: Long = 0L,
     val readRecordTimelineDays: List<ReadRecordTimelineDay> = emptyList(),
     val inBookshelf: Boolean = false,
-    val bookSource: BookInfoSourceUi? = null,
+    val bookSource: BookSource? = null,
+    val bookSourceUi: BookInfoSourceUi? = null,
     val relatedBooks: ImmutableList<RelatedBooksUi> = persistentListOf(),
     val characters: ImmutableList<BookInfoCharacterUi> = persistentListOf(),
     val knowledgeEntries: ImmutableList<BookInfoKnowledgeUi> = persistentListOf(),
@@ -82,8 +83,7 @@ data class BookInfoBookUi(
     val durChapterIndex: Int,
     val durChapterPos: Int,
     val remark: String?,
-    val displayIntro: String?,
-    val wordCount: String?,
+    val intro: String?,
 )
 
 @Stable

@@ -36,7 +36,13 @@ data class ReadAloudPlayerUiState(
     val timerMinutes: Int = 0,
     val finishCurrentChapterAfterTimer: Boolean = false,
     val bgMode: Int = 0,
+    val activeSheet: ReadAloudPlayerSheet? = null,
 )
+
+sealed interface ReadAloudPlayerSheet {
+    data object Speed : ReadAloudPlayerSheet
+    data object Timer : ReadAloudPlayerSheet
+}
 
 sealed interface ReadAloudPlayerIntent {
     data object Refresh : ReadAloudPlayerIntent
@@ -53,6 +59,8 @@ sealed interface ReadAloudPlayerIntent {
     data class SetSpeed(val value: Int) : ReadAloudPlayerIntent
     data class SetTimer(val minutes: Int) : ReadAloudPlayerIntent
     data class SetFinishCurrentChapterAfterTimer(val value: Boolean) : ReadAloudPlayerIntent
+    data class OpenSheet(val sheet: ReadAloudPlayerSheet) : ReadAloudPlayerIntent
+    data object DismissSheet : ReadAloudPlayerIntent
     data class SeekTo(val chapterPosition: Int) : ReadAloudPlayerIntent
 }
 
