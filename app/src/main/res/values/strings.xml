@@ -1799,7 +1799,7 @@
     <string name="toc_preview_chapter_count">%d chapters in cache</string>
     <string name="toc_preview_rule_count">%d title replace rules applied</string>
     <string name="toc_preview_network_tip">Preview how title replace rules affect chapter names in this book.</string>
-    <string name="toc_preview_replace_disabled">Replace rules are turned off for this book, so they will not change the table of contents.</string>
+    <string name="toc_preview_replace_disabled">\"Use replace rules\" is off in the table of contents menu, so these rules will not change chapter titles.</string>
     <string name="toc_preview_no_title_rule">No title replace rules configured for this book.</string>
     <string name="toc_preview_matched">Matched %d</string>
     <string name="toc_preview_no_match">No match</string>

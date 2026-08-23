@@ -1744,7 +1744,7 @@
     <string name="toc_preview_chapter_count">缓存目录共 %d 章</string>
     <string name="toc_preview_rule_count">已应用 %d 条标题替换规则</string>
     <string name="toc_preview_network_tip">预览标题替换规则对本书章节名的实际影响</string>
-    <string name="toc_preview_replace_disabled">本书的替换净化已关闭，规则不会作用到目录</string>
+    <string name="toc_preview_replace_disabled">目录菜单里的「使用替换规则」是关的，规则不会作用到目录标题</string>
     <string name="toc_preview_no_title_rule">本书没有启用作用于标题的替换规则</string>
     <string name="toc_preview_matched">命中 %d</string>
     <string name="toc_preview_no_match">未命中</string>

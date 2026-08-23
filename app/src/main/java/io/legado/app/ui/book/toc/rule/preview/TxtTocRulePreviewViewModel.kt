@@ -196,8 +196,8 @@ class TxtTocRulePreviewViewModel(
 
     private suspend fun loadNetworkPreview(book: Book) {
         _uiState.update { it.copy(loading = true, isTxt = false, emptyHint = "") }
-        // 与阅读/目录页一致：本书自己的净化开关优先，未设置时才看全局默认
-        val useReplace = book.getUseReplaceRule(AppConfig.replaceEnableDefault)
+        // 与目录页同一个条件：只看本书自己的目录净化开关，和正文那个开关无关
+        val useReplace = book.getUseReplaceRuleToc()
         val chapters = runCatching { bookRepository.getChapters(book.bookUrl) }
             .getOrDefault(emptyList())
         if (chapters.isEmpty()) {

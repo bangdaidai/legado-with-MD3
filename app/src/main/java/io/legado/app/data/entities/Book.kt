@@ -258,6 +258,14 @@ data class Book(
         return defaultReplaceEnabled
     }
 
+    /**
+     * 目录标题是否走净化替换，和正文的开关互不影响，只按本书自己的设置来。
+     * 图片/epub 书源在正文里默认关净化，但目录标题仍可能有脏字符，这里不套用那条特例。
+     */
+    fun getUseReplaceRuleToc(): Boolean {
+        return config.useReplaceRuleToc ?: false
+    }
+
     fun setReSegment(reSegment: Boolean) {
         config.reSegment = reSegment
     }
@@ -477,6 +485,7 @@ data class Book(
         var reSegment: Boolean = false,
         var imageStyle: String? = null,
         var useReplaceRule: Boolean? = null,// 正文使用净化替换规则
+        var useReplaceRuleToc: Boolean? = null,// 目录标题使用净化替换规则
         var delTag: Long = 0L,//去除标签
         var ttsEngine: String? = null,
         var splitLongChapter: Boolean = true,

@@ -20,7 +20,6 @@ import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
-import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.domain.usecase.CacheBookChaptersUseCase
 import io.legado.app.help.book.BookHelp
@@ -186,7 +185,6 @@ private data class TocUiConfig(
     val useReplace: Boolean,
     val showWordCount: Boolean,
     val isReverse: Boolean,
-    val defaultReplaceEnabled: Boolean,
     val chineseConverterType: Int,
 )
 
@@ -247,7 +245,6 @@ class TocViewModel(
     private val bookMarkingGateway: BookMarkingGateway,
     private val readSettingsRepository: ReadSettingsRepository,
     private val replaceRuleRepository: ReplaceRuleRepository,
-    private val otherSettingsGateway: OtherSettingsGateway,
 ) : BaseRuleViewModel<TocItemUi, TocDomainItem, Int, TocActionState>(
     application,
     initialState = TocActionState()
@@ -408,13 +405,16 @@ class TocViewModel(
         bookState.map { it?.getReverseToc() ?: false }
             .distinctUntilChanged()
 
-    private val tocPreferences = readSettingsRepository.preferences
-        .map {
-            TocPreferences(
-                useReplace = it.tocUiUseReplace,
-                showWordCount = it.tocCountWords
-            )
-        }
+    // 目录的替换净化按书记，默认关；和阅读页那个「替换净化」（只管正文）互不影响
+    private val tocPreferences = combine(
+        readSettingsRepository.preferences,
+        bookState,
+    ) { preferences, book ->
+        TocPreferences(
+            useReplace = book?.getUseReplaceRuleToc() ?: false,
+            showWordCount = preferences.tocCountWords
+        )
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -433,15 +433,13 @@ class TocViewModel(
         _collapsedVolumes,
         tocPreferences,
         reverseFlow,
-        otherSettingsGateway.settings,
         readSettingsRepository.settings,
-    ) { collapsed, tocPreferences, isReverse, otherSettings, readSettings ->
+    ) { collapsed, tocPreferences, isReverse, readSettings ->
         TocUiConfig(
             collapsedVolumes = collapsed,
             useReplace = tocPreferences.useReplace,
             showWordCount = tocPreferences.showWordCount,
             isReverse = isReverse,
-            defaultReplaceEnabled = otherSettings.replaceEnableDefault,
             chineseConverterType = readSettings.chineseConverterType,
         )
     }
@@ -484,9 +482,7 @@ class TocViewModel(
             originalChapters
         }
 
-        val replaceRules = if (
-            config.useReplace && book.getUseReplaceRule(config.defaultReplaceEnabled)
-        ) {
+        val replaceRules = if (config.useReplace) {
             ContentProcessor.get(book.name, book.origin).getTitleReplaceRules()
         } else emptyList()
 
@@ -495,7 +491,6 @@ class TocViewModel(
             chapters = processedChapters,
             replaceRules = replaceRules,
             useReplace = config.useReplace,
-            defaultReplaceEnabled = config.defaultReplaceEnabled,
             chineseConverterType = config.chineseConverterType,
         )
 
@@ -701,10 +696,12 @@ class TocViewModel(
         }
     }
 
-    fun toggleUseReplace() {
-        viewModelScope.launch {
-            readSettingsRepository.setTocUiUseReplace(!tocPreferences.value.useReplace)
-        }
+    /** 目录的替换净化按书记，和阅读页的「替换净化」（只管正文）互不影响 */
+    fun toggleUseReplace() = execute {
+        val currentBook = bookState.value ?: return@execute
+        val currentConfig = currentBook.readConfig ?: Book.ReadConfig()
+        val newConfig = currentConfig.copy(useReplaceRuleToc = !tocPreferences.value.useReplace)
+        bookRepository.update(currentBook.copy(readConfig = newConfig))
     }
 
     fun toggleShowWordCount() {
@@ -921,12 +918,9 @@ class TocViewModel(
         chapters: List<BookChapter>,
         replaceRules: List<ReplaceRule>,
         useReplace: Boolean,
-        defaultReplaceEnabled: Boolean,
         chineseConverterType: Int,
     ) {
-        val shouldUseReplace = useReplace &&
-                book.getUseReplaceRule(defaultReplaceEnabled) &&
-                replaceRules.isNotEmpty()
+        val shouldUseReplace = useReplace && replaceRules.isNotEmpty()
         if (!shouldUseReplace) {
             titleCacheJob?.cancel()
             titleCacheJob = null
