@@ -2196,7 +2196,7 @@
     <string name="ai_toc_rule_none">The table of contents looks clean; AI suggested no rule</string>
     <string name="ai_toc_rule_failed">Generation failed: %1$s</string>
     <string name="ai_toc_rule_unknown">unknown error</string>
-    <string name="ai_toc_rule_drafts">AI suggested rules</string>
+    <string name="ai_toc_rule_drafts">AI rules</string>
     <string name="ai_toc_rule_hits">Matches %1$d of %2$d chapters</string>
     <string name="ai_toc_rule_adopt_selected">Adopt selected (%1$d)</string>
     <string name="ai_web_search_service">Search Service</string>

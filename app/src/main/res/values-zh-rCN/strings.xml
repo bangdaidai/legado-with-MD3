@@ -2258,7 +2258,7 @@
     <string name="ai_toc_rule_none">目录本来就干净，AI 没给出规则</string>
     <string name="ai_toc_rule_failed">生成失败：%1$s</string>
     <string name="ai_toc_rule_unknown">未知错误</string>
-    <string name="ai_toc_rule_drafts">AI 给出的规则</string>
+    <string name="ai_toc_rule_drafts">AI 规则</string>
     <string name="ai_toc_rule_hits">命中 %1$d / %2$d 章</string>
     <string name="ai_toc_rule_adopt_selected">采用所选 (%1$d)</string>
     <string name="ai_web_search_service">检索服务</string>
