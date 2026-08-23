@@ -20,6 +20,7 @@ import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
+import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.domain.usecase.CacheBookChaptersUseCase
 import io.legado.app.help.book.BookHelp
@@ -245,6 +246,7 @@ class TocViewModel(
     private val bookMarkingGateway: BookMarkingGateway,
     private val readSettingsRepository: ReadSettingsRepository,
     private val replaceRuleRepository: ReplaceRuleRepository,
+    private val otherSettingsGateway: OtherSettingsGateway,
 ) : BaseRuleViewModel<TocItemUi, TocDomainItem, Int, TocActionState>(
     application,
     initialState = TocActionState()
@@ -405,13 +407,16 @@ class TocViewModel(
         bookState.map { it?.getReverseToc() ?: false }
             .distinctUntilChanged()
 
-    // 目录的替换净化按书记，默认关；和阅读页那个「替换净化」（只管正文）互不影响
+    // 目录的替换净化按书记，本书没设置过时跟全局「默认启用替换净化」；
+    // 和阅读页那个「替换净化」（只管正文）互不影响
     private val tocPreferences = combine(
         readSettingsRepository.preferences,
         bookState,
-    ) { preferences, book ->
+        otherSettingsGateway.settings,
+    ) { preferences, book, otherSettings ->
         TocPreferences(
-            useReplace = book?.getUseReplaceRuleToc() ?: false,
+            useReplace = book?.getUseReplaceRuleToc(otherSettings.replaceEnableDefault)
+                ?: otherSettings.replaceEnableDefault,
             showWordCount = preferences.tocCountWords
         )
     }

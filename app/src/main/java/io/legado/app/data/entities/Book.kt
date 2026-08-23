@@ -259,11 +259,11 @@ data class Book(
     }
 
     /**
-     * 目录标题是否走净化替换，和正文的开关互不影响，只按本书自己的设置来。
+     * 目录标题是否走净化替换，和正文的开关互不影响；本书没设置过时跟全局「默认启用替换净化」。
      * 图片/epub 书源在正文里默认关净化，但目录标题仍可能有脏字符，这里不套用那条特例。
      */
-    fun getUseReplaceRuleToc(): Boolean {
-        return config.useReplaceRuleToc ?: false
+    fun getUseReplaceRuleToc(defaultReplaceEnabled: Boolean): Boolean {
+        return config.useReplaceRuleToc ?: defaultReplaceEnabled
     }
 
     fun setReSegment(reSegment: Boolean) {
