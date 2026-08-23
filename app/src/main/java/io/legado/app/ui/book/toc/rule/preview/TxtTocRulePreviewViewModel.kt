@@ -3,6 +3,8 @@ package io.legado.app.ui.book.toc.rule.preview
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.script.ScriptBindings
+import com.script.rhino.RhinoScriptEngine
 import io.legado.app.R
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.Book
@@ -21,17 +23,21 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.Utf8BomUtils
+import io.legado.app.utils.quoteReplacementJs
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.coroutines.coroutineContext
@@ -55,6 +61,7 @@ class TxtTocRulePreviewViewModel(
     private var book: Book? = null
     private var lazyComputeJob: Job? = null
     private var networkCountJob: Job? = null
+    private var ruleWatchJob: Job? = null
 
     /**
      * 入口。本地 TXT 走目录正则规则预览，网络书籍走标题替换规则预览。
@@ -66,9 +73,27 @@ class TxtTocRulePreviewViewModel(
             book = loadedBook
             if (loadedBook != null && !loadedBook.isLocalTxt) {
                 loadNetworkPreview(loadedBook)
+                observeReplaceRuleChanges(loadedBook)
             } else {
                 loadRules(bookUrl, currentTocRegex)
             }
+        }
+    }
+
+    /**
+     * 规则可能在管理页、编辑页、AI 采用甚至导入里被改，回到本页不一定有 result 回调可用。
+     * 所以直接盯规则表：任何入口改完，刷新 [ContentProcessor] 缓存再重算命中。
+     * 第一次发射是当前状态，[loadNetworkPreview] 刚读过，跳过。
+     */
+    private fun observeReplaceRuleChanges(book: Book) {
+        ruleWatchJob?.cancel()
+        ruleWatchJob = viewModelScope.launch(Dispatchers.IO) {
+            replaceRuleRepository.flowContentSignature()
+                .drop(1)
+                .collect {
+                    runCatching { ContentProcessor.upReplaceRules() }
+                    loadNetworkPreview(book)
+                }
         }
     }
 
@@ -92,7 +117,14 @@ class TxtTocRulePreviewViewModel(
                 _uiState.update { it.copy(isGridLayout = !it.isGridLayout) }
             }
             is TxtTocRulePreviewIntent.OpenManagePage -> {
-                _effects.tryEmit(TxtTocRulePreviewEffect.OpenManagePage)
+                // TXT 去目录正则管理页；网络书这里的规则本体是替换净化，去替换净化管理页
+                _effects.tryEmit(
+                    if (_uiState.value.isTxt) {
+                        TxtTocRulePreviewEffect.OpenManagePage
+                    } else {
+                        TxtTocRulePreviewEffect.OpenReplaceRuleManagePage
+                    }
+                )
             }
             is TxtTocRulePreviewIntent.EditRule -> {
                 _uiState.update { it.copy(activeSheet = null, editingRule = intent.rule) }
@@ -117,8 +149,24 @@ class TxtTocRulePreviewViewModel(
                 _uiState.update { it.copy(searchQuery = intent.query) }
             }
             is TxtTocRulePreviewIntent.GenerateWithAi -> generateWithAi()
-            is TxtTocRulePreviewIntent.AdoptAiTitleDraft -> {
-                viewModelScope.launch(Dispatchers.IO) { adoptAiTitleDraft(intent.item) }
+            is TxtTocRulePreviewIntent.ToggleAiTitleDraft -> {
+                _uiState.update { state ->
+                    val sheet = state.activeSheet as? TxtTocRulePreviewSheet.AiTitleDrafts
+                        ?: return@update state
+                    val items = sheet.items.mapIndexed { index, item ->
+                        if (index == intent.index) item.copy(selected = !item.selected) else item
+                    }
+                    state.copy(
+                        activeSheet = TxtTocRulePreviewSheet.AiTitleDrafts(items.toImmutableList())
+                    )
+                }
+            }
+            is TxtTocRulePreviewIntent.AdoptSelectedAiTitleDrafts -> {
+                val sheet = _uiState.value.activeSheet as? TxtTocRulePreviewSheet.AiTitleDrafts
+                    ?: return
+                val selected = sheet.items.filter { it.selected }
+                if (selected.isEmpty()) return
+                viewModelScope.launch(Dispatchers.IO) { adoptAiTitleDrafts(selected) }
             }
             is TxtTocRulePreviewIntent.ApplyRule -> {
                 val selectedRule = _uiState.value.selectedRule
@@ -148,8 +196,8 @@ class TxtTocRulePreviewViewModel(
 
     private suspend fun loadNetworkPreview(book: Book) {
         _uiState.update { it.copy(loading = true, isTxt = false, emptyHint = "") }
-        // 与阅读/目录页一致：替换净化总开关
-        val useReplace = AppConfig.replaceEnableDefault
+        // 与阅读/目录页一致：本书自己的净化开关优先，未设置时才看全局默认
+        val useReplace = book.getUseReplaceRule(AppConfig.replaceEnableDefault)
         val chapters = runCatching { bookRepository.getChapters(book.bookUrl) }
             .getOrDefault(emptyList())
         if (chapters.isEmpty()) {
@@ -176,6 +224,9 @@ class TxtTocRulePreviewViewModel(
                 rule = rule,
                 order = index + 1,
                 totalChapter = chapters.size,
+                jsSampleLimit = if (rule.isJsReplacement()) {
+                    minOf(JS_SAMPLE_LIMIT, chapters.size)
+                } else 0,
                 computed = false,
             )
         }
@@ -235,9 +286,17 @@ class TxtTocRulePreviewViewModel(
             titleRules.forEachIndexed { index, rule ->
                 ensureActive()
                 val pattern = compiled[index]
+                // @js: 只在前几章试跑：每个匹配点都要起一次 Rhino，全书跑一遍既慢又可能有副作用
+                val jsLimit = if (rule.isJsReplacement()) minOf(JS_SAMPLE_LIMIT, chapters.size) else 0
                 for (i in chapters.indices) {
                     val before = current[i]
-                    val after = applySingleReplaceRule(rule, pattern, before)
+                    val after = if (jsLimit > 0) {
+                        if (i < jsLimit) {
+                            runJsReplace(rule, pattern, before, chapters[i]) ?: before
+                        } else before
+                    } else {
+                        applySingleReplaceRule(rule, pattern, before)
+                    }
                     if (after != before) {
                         matchCounts[index]++
                         changeCount[i]++
@@ -274,7 +333,12 @@ class TxtTocRulePreviewViewModel(
             val original = title
             val steps = titleRules.mapIndexed { index, rule ->
                 val before = title
-                val after = applySingleReplaceRule(rule, compiled[index], before)
+                // 示范只有一章，@js: 在这里照常试跑，让脚本规则的效果也能看见
+                val after = if (rule.isJsReplacement()) {
+                    runJsReplace(rule, compiled[index], before, chapters[demoIndex]) ?: before
+                } else {
+                    applySingleReplaceRule(rule, compiled[index], before)
+                }
                 title = after
                 ChainStep(
                     ruleId = rule.id,
@@ -308,7 +372,7 @@ class TxtTocRulePreviewViewModel(
 
     /**
      * 单条替换规则应用，语义与 getDisplayTitle 一致：替换结果为空则保留原标题。
-     * `@js:` 替换在预览中不执行，按未变化处理，避免脚本副作用。
+     * `@js:` 走 [runJsReplace] 单独试跑，不进这里。
      */
     private fun applySingleReplaceRule(
         rule: ReplaceRule,
@@ -334,6 +398,52 @@ class TxtTocRulePreviewViewModel(
             input.replace(rule.pattern, rule.replacement)
         }
         return if (result.isBlank()) input else result
+    }
+
+    private fun ReplaceRule.isJsReplacement(): Boolean =
+        isRegex && pattern.isNotEmpty() && replacement.startsWith("@js:")
+
+    /**
+     * 预览里的 `@js:` 试跑：语义与 [io.legado.app.utils.replace] 一致（每个匹配点把命中文本交给脚本），
+     * 但**不复用**那条路径——它的看门狗超时会弹窗并在 3 秒后重启应用，一个预览页面不能承担这种后果。
+     *
+     * 这里改成：把协程上下文交给 Rhino，让脚本能被取消；再用 [withTimeoutOrNull] 兜住超时，
+     * 超时或脚本报错都返回 null，调用方按“未改变”处理。只对样本章节调用，见 [JS_SAMPLE_LIMIT]。
+     */
+    private suspend fun runJsReplace(
+        rule: ReplaceRule,
+        pattern: Pattern?,
+        input: String,
+        chapter: BookChapter,
+    ): String? {
+        val p = pattern ?: return null
+        val script = rule.replacement.substring(4)
+        val searchBook = book?.toSearchBook()
+        return withTimeoutOrNull(rule.getValidTimeoutMillisecond()) {
+            try {
+                val matcher = p.matcher(input)
+                val sb = StringBuffer()
+                while (matcher.find()) {
+                    ensureActive()
+                    val bindings = ScriptBindings()
+                    bindings["result"] = matcher.group()
+                    bindings["chapter"] = chapter
+                    bindings["book"] = searchBook
+                    val jsResult = RhinoScriptEngine.eval(
+                        script,
+                        RhinoScriptEngine.getRuntimeScope(bindings),
+                        currentCoroutineContext(),
+                    )?.toString().orEmpty()
+                    matcher.appendReplacement(sb, jsResult.quoteReplacementJs())
+                }
+                matcher.appendTail(sb)
+                sb.toString().takeIf { it.isNotBlank() }
+            } catch (_: Throwable) {
+                // 脚本来源不可控，取消会由 Rhino 抛成 Error，报错也不该带崩预览页；
+                // 统一按“这条规则没改动标题”处理，真正的取消由外层循环的 ensureActive 兜住
+                null
+            }
+        }
     }
 
     // ===================== 本地 TXT：目录正则规则预览 =====================
@@ -465,7 +575,7 @@ class TxtTocRulePreviewViewModel(
     // ===================== AI 读真实目录反推规则 =====================
 
     /**
-     * 两种模式产出不同：网络书籍给标题净化规则（需要用户逐条采用），
+     * 两种模式产出不同：网络书籍给标题净化规则（在弹窗里多选后一次采用），
      * 本地 TXT 给目录正则（直接填进既有编辑弹窗，复用它的校验与落库）。
      */
     private fun generateWithAi() {
@@ -531,6 +641,8 @@ class TxtTocRulePreviewViewModel(
             matchCount = matchCount,
             totalChapter = titles.size,
             samples = samples.toImmutableList(),
+            // 有命中的默认勾上，用户按需取消，避免一条条点
+            selected = matchCount > 0,
         )
     }
 
@@ -550,25 +662,38 @@ class TxtTocRulePreviewViewModel(
         isEnabled = true,
     )
 
-    private suspend fun adoptAiTitleDraft(item: AiTitleDraftItem) {
+    /**
+     * 一次采用多条草稿：按勾选顺序排到链条末尾，落库后只刷一次缓存和预览。
+     * 单条校验不过就跳过它并提示，不连坐其它草稿。
+     */
+    private suspend fun adoptAiTitleDrafts(items: List<AiTitleDraftItem>) {
         val currentBook = book ?: run {
             _effects.tryEmit(TxtTocRulePreviewEffect.ShowToast(context.getString(R.string.no_book)))
             return
         }
-        val rule = item.draft.toReplaceRule(scope = currentBook.name)
         // 与替换规则编辑页同一套校验：除了正则能编译，还挡住结尾裸 | 这类会替换超时的写法
-        if (!rule.isValid()) {
+        val (valid, invalid) = items
+            .map { it.draft.toReplaceRule(scope = currentBook.name) }
+            .partition { it.isValid() }
+        if (valid.isEmpty()) {
             toastAiFailure(context.getString(R.string.replace_rule_invalid))
             return
         }
         runCatching {
             // 新规则排在链条末尾，和编辑页新建规则的口径一致，不要抢在既有规则前面
-            rule.order = replaceRuleRepository.getNextOrder()
-            replaceRuleRepository.insert(rule)
+            var order = replaceRuleRepository.getNextOrder()
+            valid.forEach { rule ->
+                rule.order = order
+                order++
+            }
+            replaceRuleRepository.insert(*valid.toTypedArray())
             ContentProcessor.upReplaceRules()
         }.onFailure {
             toastAiFailure(it.localizedMessage)
             return
+        }
+        if (invalid.isNotEmpty()) {
+            toastAiFailure(context.getString(R.string.replace_rule_invalid))
         }
         _uiState.update { it.copy(activeSheet = null) }
         loadNetworkPreview(currentBook)
@@ -668,3 +793,9 @@ class TxtTocRulePreviewViewModel(
         return chapters to totalCount
     }
 }
+
+/**
+ * `@js:` 规则在预览里的试跑章节数。只看前几章就够判断这条规则有没有在动标题，
+ * 而每个匹配点都要起一次 Rhino，全书跑一遍既慢又可能有副作用。
+ */
+private const val JS_SAMPLE_LIMIT = 10

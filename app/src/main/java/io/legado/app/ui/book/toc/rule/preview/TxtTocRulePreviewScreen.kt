@@ -69,6 +69,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -115,6 +116,12 @@ fun TxtTocRulePreviewRouteScreen(
             when (effect) {
                 is TxtTocRulePreviewEffect.ShowToast -> context.toastOnUi(effect.message)
                 is TxtTocRulePreviewEffect.OpenManagePage -> onOpenManagePage()
+                is TxtTocRulePreviewEffect.OpenReplaceRuleManagePage -> {
+                    // 走同一个 launcher：管理页进入即 setResult(RESULT_OK)，返回时顺带重算命中
+                    editReplaceLauncher.launch(
+                        ReplaceRuleActivity.startIntent(context, bookUrl = bookUrl)
+                    )
+                }
                 is TxtTocRulePreviewEffect.ApplyRule -> onApplyRule(effect.rule)
                 is TxtTocRulePreviewEffect.OpenReplaceRuleEditor -> {
                     editReplaceLauncher.launch(
@@ -189,7 +196,10 @@ fun TxtTocRulePreviewScreen(
             ) { items ->
                 AiTitleDraftsSheetContent(
                     items = items,
-                    onAdopt = { onIntent(TxtTocRulePreviewIntent.AdoptAiTitleDraft(it)) },
+                    onToggle = { onIntent(TxtTocRulePreviewIntent.ToggleAiTitleDraft(it)) },
+                    onAdoptSelected = {
+                        onIntent(TxtTocRulePreviewIntent.AdoptSelectedAiTitleDrafts)
+                    },
                 )
             }
         }
@@ -281,20 +291,15 @@ fun TxtTocRulePreviewScreen(
                                 if (state.isGridLayout) R.string.layout_mode_list else R.string.layout_mode_grid
                             ),
                         )
-                        // Manage page button
-                        TopBarActionButton(
-                            onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
-                            imageVector = AppIcons.Settings,
-                            contentDescription = stringResource(R.string.manage),
-                        )
-                    } else {
-                        // 网络书：跳转替换规则管理页
-                        TopBarActionButton(
-                            onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
-                            imageVector = AppIcons.Settings,
-                            contentDescription = stringResource(R.string.manage),
-                        )
                     }
+                    // 管理入口：TXT 去目录规则管理页，网络书去替换净化管理页
+                    TopBarActionButton(
+                        onClick = { onIntent(TxtTocRulePreviewIntent.OpenManagePage) },
+                        imageVector = AppIcons.Settings,
+                        contentDescription = stringResource(
+                            if (state.isTxt) R.string.manage else R.string.replace_rule_title
+                        ),
+                    )
                 },
                 bottomContent = {
                     AnimatedVisibility(
@@ -418,7 +423,14 @@ private fun NetworkRuleCard(
                         LegadoTheme.colorScheme.surfaceVariant,
                 ) {
                     AppText(
-                        text = if (item.matchCount > 0)
+                        // 脚本规则只在样本章节里试跑，命中数得标明范围，别跟全书统计混起来
+                        text = if (item.jsSampleLimit > 0)
+                            stringResource(
+                                R.string.toc_preview_js_sample_hits,
+                                item.matchCount,
+                                item.jsSampleLimit,
+                            )
+                        else if (item.matchCount > 0)
                             stringResource(R.string.toc_preview_matched, item.matchCount)
                         else
                             stringResource(R.string.toc_preview_no_match),
@@ -574,84 +586,128 @@ private fun NetworkRuleChapterSheetContent(
 @Composable
 private fun AiTitleDraftsSheetContent(
     items: ImmutableList<AiTitleDraftItem>,
-    onAdopt: (AiTitleDraftItem) -> Unit,
+    onToggle: (Int) -> Unit,
+    onAdoptSelected: () -> Unit,
 ) {
-    FastScrollLazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 520.dp)
-            .padding(horizontal = 16.dp),
-    ) {
-        itemsIndexed(items.toList()) { _, item ->
-            AiTitleDraftCard(item = item, onAdopt = { onAdopt(item) })
+    val selectedCount = items.count { it.selected }
+    // 水平边距由 AppModalBottomSheet 统一给，这里只排纵向节奏
+    Column(modifier = Modifier.fillMaxWidth()) {
+        FastScrollLazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp),
+        ) {
+            itemsIndexed(items.toList()) { index, item ->
+                AiTitleDraftCard(item = item, onToggle = { onToggle(index) })
+            }
         }
+        Spacer(Modifier.height(8.dp))
+        SmallTonalButton(
+            modifier = Modifier.align(Alignment.End),
+            onClick = onAdoptSelected,
+            enabled = selectedCount > 0,
+            icon = AppIcons.Check,
+            text = stringResource(R.string.ai_toc_rule_adopt_selected, selectedCount),
+        )
     }
 }
 
 @Composable
 private fun AiTitleDraftCard(
     item: AiTitleDraftItem,
-    onAdopt: () -> Unit,
+    onToggle: () -> Unit,
 ) {
-    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            AppText(
-                text = item.draft.name,
-                style = LegadoTheme.typography.titleSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(4.dp))
-            AppText(
-                text = "${item.draft.pattern} → ${item.draft.replacement.ifEmpty { "\"\"" }}",
-                style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
+    GlassCard(
+        onClick = onToggle,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            // 第一层：规则名 + 命中数徽标 + 勾选态，与网络规则卡片同一节奏
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                AppText(
+                    text = item.draft.name,
+                    style = LegadoTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (item.matchCount > 0)
+                        LegadoTheme.colorScheme.primaryContainer
+                    else
+                        LegadoTheme.colorScheme.errorContainer,
+                ) {
+                    AppText(
+                        text = stringResource(
+                            R.string.ai_toc_rule_hits,
+                            item.matchCount,
+                            item.totalChapter,
+                        ),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = if (item.matchCount > 0)
+                            LegadoTheme.colorScheme.onPrimaryContainer
+                        else
+                            LegadoTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                // 整卡点击切换勾选，复选框只做状态展示，避免两处都吃点击
+                AppCheckbox(checked = item.selected, onCheckedChange = null)
+            }
+            // 第二层：规则本体，单独底色框起来，和说明文字区分开
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = LegadoTheme.colorScheme.surfaceVariant,
+            ) {
+                AppText(
+                    text = "${item.draft.pattern} → ${item.draft.replacement.ifEmpty { "\"\"" }}",
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
+            // 第三层：说明
             if (item.draft.reason.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 AppText(
                     text = item.draft.reason,
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // 第四层：示例，样本取自本书真实目录，上为净化后标题，下为原标题
+            val samples = item.samples.take(AI_DRAFT_SAMPLE_LIMIT)
+            if (samples.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
                 AppText(
-                    text = stringResource(
-                        R.string.ai_toc_rule_hits,
-                        item.matchCount,
-                        item.totalChapter,
-                    ),
-                    style = LegadoTheme.typography.labelMedium,
-                    color = if (item.matchCount > 0) LegadoTheme.colorScheme.primary
-                    else LegadoTheme.colorScheme.error,
-                    modifier = Modifier.weight(1f),
+                    text = stringResource(R.string.example),
+                    style = LegadoTheme.typography.labelSmall,
+                    color = LegadoTheme.colorScheme.primary,
                 )
-                SmallTonalButton(
-                    onClick = onAdopt,
-                    enabled = item.matchCount > 0,
-                    icon = AppIcons.Check,
-                    text = stringResource(R.string.ai_toc_rule_adopt),
-                )
-            }
-            // 样本取自本书真实目录：上为净化后标题，下为原标题
-            item.samples.take(AI_DRAFT_SAMPLE_LIMIT).forEach { (origin, display) ->
-                Spacer(Modifier.height(6.dp))
-                Column {
-                    AppText(
-                        text = display,
-                        style = LegadoTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    AppText(
-                        text = origin,
-                        style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                samples.forEach { (origin, display) ->
+                    Column(Modifier.padding(top = 4.dp)) {
+                        AppText(
+                            text = display,
+                            style = LegadoTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        AppText(
+                            text = origin,
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
@@ -901,6 +957,15 @@ private fun NetworkRulePreviewContent(
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
+                if (!state.useReplace) {
+                    // 命中数会全是 0，得说清是开关关着而不是规则不对
+                    AppText(
+                        text = stringResource(R.string.toc_preview_replace_disabled),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
                 AppText(
                     text = stringResource(R.string.toc_preview_network_tip),
                     style = LegadoTheme.typography.bodySmall,

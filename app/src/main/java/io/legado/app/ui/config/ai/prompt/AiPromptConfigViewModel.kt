@@ -87,6 +87,12 @@ class AiPromptConfigViewModel(
             nameResId = R.string.ai_prompt_task_author_bio,
             descResId = R.string.ai_prompt_task_author_bio_desc,
             defaultPromptResId = R.string.ai_prompt_default_author_bio
+        ),
+        TaskPromptMeta(
+            taskType = AiTaskType.TOC_RULE,
+            nameResId = R.string.ai_prompt_task_toc_rule,
+            descResId = R.string.ai_prompt_task_toc_rule_desc,
+            defaultPromptResId = R.string.ai_prompt_default_toc_rule
         )
     )
 

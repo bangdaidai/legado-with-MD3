@@ -3,15 +3,30 @@ package io.legado.app.data.repository
 import android.text.TextUtils
 import io.legado.app.data.dao.ReplaceRuleDao
 import io.legado.app.data.entities.ReplaceRule
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 class ReplaceRuleRepository(
     private val dao: ReplaceRuleDao,
 ) {
+
+    /**
+     * [ContentProcessor] 把每本书生效的规则缓存在内存里，只在被通知时重读。规则写库后不刷新，
+     * 目录、正文、朗读都还在用旧规则——原先只有阅读页和书源导入记得手动刷，从替换净化管理页
+     * 改完规则其它页面全都看不到效果。所以在写入出口统一失效，调用方不必各自记得。
+     *
+     * 只分组名变化的操作不调用：`group` 不参与匹配和作用范围判断。
+     */
+    private fun invalidateProcessors() {
+        runCatching { ContentProcessor.upReplaceRules() }
+    }
+
 
     fun flowGroups(): Flow<List<String>> {
         return dao.flowGroups().flowOn(Dispatchers.IO)
@@ -19,6 +34,34 @@ class ReplaceRuleRepository(
 
     fun flowAll(): Flow<List<ReplaceRule>> {
         return dao.flowAll().flowOn(Dispatchers.IO)
+    }
+
+    /**
+     * 规则内容指纹。规则表由管理页、编辑页、导入、AI 采用等多个入口写入，页面靠 onResume
+     * 之类的时机去重查并不可靠；Room 的失效通知能覆盖所有写入方，是唯一可信的信号源。
+     *
+     * 不能直接对 `List<ReplaceRule>` 做 `distinctUntilChanged`：[ReplaceRule.hashCode] 只取 id，
+     * 改 pattern/replacement 前后两个列表会被判定相同。所以显式把参与替换和作用范围判断的字段
+     * 折进指纹；`name`、`group` 这些只影响展示的字段不参与，避免改个名字就让目录重算。
+     */
+    fun flowContentSignature(): Flow<Int> {
+        return flowAll().map { rules ->
+            rules.fold(1) { acc, rule ->
+                var hash = acc
+                hash = 31 * hash + rule.id.hashCode()
+                hash = 31 * hash + rule.pattern.hashCode()
+                hash = 31 * hash + rule.replacement.hashCode()
+                hash = 31 * hash + rule.isRegex.hashCode()
+                hash = 31 * hash + rule.isEnabled.hashCode()
+                hash = 31 * hash + rule.scopeTitle.hashCode()
+                hash = 31 * hash + rule.scopeContent.hashCode()
+                hash = 31 * hash + rule.scope.hashCode()
+                hash = 31 * hash + rule.excludeScope.hashCode()
+                hash = 31 * hash + rule.order
+                hash = 31 * hash + rule.timeoutMillisecond.hashCode()
+                hash
+            }
+        }.distinctUntilChanged()
     }
 
     fun flowNoGroup(): Flow<List<ReplaceRule>> {
@@ -44,26 +87,31 @@ class ReplaceRuleRepository(
     suspend fun update(vararg rule: ReplaceRule) {
         withContext(Dispatchers.IO) {
             dao.update(*rule)
+            invalidateProcessors()
         }
     }
 
     suspend fun setEnabled(id: Long, enabled: Boolean) {
         withContext(Dispatchers.IO) {
             dao.updateEnabled(id, enabled)
+            invalidateProcessors()
         }
     }
 
     suspend fun insert(vararg rule: ReplaceRule) {
         withContext(Dispatchers.IO) {
             dao.insert(*rule)
+            invalidateProcessors()
         }
     }
 
     suspend fun delete(rule: ReplaceRule) {
         withContext(Dispatchers.IO) {
             dao.delete(rule)
+            invalidateProcessors()
         }
     }
+
 
     suspend fun toTop(rule: ReplaceRule, isDesc: Boolean = false) {
         withContext(Dispatchers.IO) {
@@ -73,6 +121,7 @@ class ReplaceRuleRepository(
                 rule.order = dao.minOrder - 1
             }
             dao.update(rule)
+            invalidateProcessors()
         }
     }
 
@@ -84,8 +133,10 @@ class ReplaceRuleRepository(
                 rule.order = dao.maxOrder + 1
             }
             dao.update(rule)
+            invalidateProcessors()
         }
     }
+
 
     suspend fun upOrder() {
         withContext(Dispatchers.IO) {
@@ -97,6 +148,7 @@ class ReplaceRuleRepository(
                 }
             }
             dao.update(*rules.toTypedArray())
+            invalidateProcessors()
         }
     }
 
@@ -146,12 +198,14 @@ class ReplaceRuleRepository(
         withContext(Dispatchers.IO) {
             if (ids.isEmpty()) return@withContext
             dao.updateEnabled(ids.toList(), true)
+            invalidateProcessors()
         }
 
     suspend fun disableByIds(ids: Set<Long>) =
         withContext(Dispatchers.IO) {
             if (ids.isEmpty()) return@withContext
             dao.updateEnabled(ids.toList(), false)
+            invalidateProcessors()
         }
 
     suspend fun deleteByIds(ids: Set<Long>) =
@@ -160,7 +214,9 @@ class ReplaceRuleRepository(
 
             val rules = dao.getByIds(ids)
             dao.delete(*rules.toTypedArray())
+            invalidateProcessors()
         }
+
 
     suspend fun topByIds(ids: Set<Long>, isDesc: Boolean = false) =
         withContext(Dispatchers.IO) {
@@ -181,7 +237,9 @@ class ReplaceRuleRepository(
                 }
                 dao.update(*updated.toTypedArray())
             }
+            invalidateProcessors()
         }
+
 
     suspend fun bottomByIds(ids: Set<Long>, isDesc: Boolean = false) =
         withContext(Dispatchers.IO) {
@@ -203,7 +261,9 @@ class ReplaceRuleRepository(
                 }
                 dao.update(*updated.toTypedArray())
             }
+            invalidateProcessors()
         }
+
 
     /**
      * 把 [draggedId] 规则移动到 [anchorId] 规则旁边（[afterAnchor] 为 true 时在其后，否则在其前）。
@@ -222,6 +282,7 @@ class ReplaceRuleRepository(
             remaining.add(insertIndex, dragged)
             val updated = remaining.mapIndexed { index, rule -> rule.copy(order = index + 1) }
             dao.update(*updated.toTypedArray())
+            invalidateProcessors()
         }
     }
 
@@ -233,6 +294,7 @@ class ReplaceRuleRepository(
                 rule.copy(order = order)
             }
             dao.update(*updatedRules.toTypedArray())
+            invalidateProcessors()
         }
     }
 

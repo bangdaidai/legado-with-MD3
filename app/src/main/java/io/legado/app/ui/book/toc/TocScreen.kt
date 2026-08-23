@@ -161,7 +161,7 @@ fun TocRouteScreen(
     }
     val tocRulePreviewLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
-    ) { /* 网络书预览不回传结果 */ }
+    ) { /* 规则变化由 ViewModel 直接盯规则表处理，这里不需要回传结果 */ }
     LaunchedEffect(bookUrl) {
         bookUrl?.let { viewModel.onIntent(TocIntent.LoadBook(it)) }
     }

@@ -18,6 +18,7 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.ReadSettingsRepository
+import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.model.TextProcessAnchor
@@ -59,6 +60,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -244,6 +246,7 @@ class TocViewModel(
     private val bookmarkRepository: BookmarkRepository,
     private val bookMarkingGateway: BookMarkingGateway,
     private val readSettingsRepository: ReadSettingsRepository,
+    private val replaceRuleRepository: ReplaceRuleRepository,
     private val otherSettingsGateway: OtherSettingsGateway,
 ) : BaseRuleViewModel<TocItemUi, TocDomainItem, Int, TocActionState>(
     application,
@@ -447,13 +450,32 @@ class TocViewModel(
     private var titleCacheJob: Job? = null
     private var lastTitleCacheKey: TitleCacheKey? = null
 
+    /**
+     * 替换净化规则表不是本页数据源，改动后需要一个显式的重算信号。
+     * 只做触发用，值本身没有含义。
+     */
+    private val replaceRulesRevision = MutableStateFlow(0)
+
+    init {
+        // 规则会被管理页、编辑页、导入、AI 采用等多个入口写，只靠回到本页时 onResume 触发会漏掉
+        // 页面仍在前台时的改动。Room 的失效通知覆盖所有写入方，指纹去重让改名字/换分组不触发重算。
+        // 第一次发射是当前库内状态，页面初次加载已经读过一遍，跳过它避免多算一轮。
+        viewModelScope.launch {
+            replaceRuleRepository.flowContentSignature()
+                .drop(1)
+                .collect { refreshTitleReplace() }
+        }
+    }
+
+
     override val rawDataFlow: Flow<List<TocDomainItem>> = combine(
         bookState.filterNotNull().map { it.bookUrl }.distinctUntilChanged()
             .flatMapLatest { bookRepository.flowChapters(it) },
         downloadContextFlow,
         uiConfigFlow,
-        titleReplaceState
-    ) { originalChapters, downloadCtx, config, titleState ->
+        titleReplaceState,
+        replaceRulesRevision,
+    ) { originalChapters, downloadCtx, config, titleState, _ ->
         val book = bookState.value ?: return@combine emptyList()
 
         val processedChapters = if (config.isReverse) {
@@ -879,6 +901,19 @@ class TocViewModel(
 
     private fun showMessage(message: String) {
         _effects.tryEmit(TocEffect.ShowMessage(message))
+    }
+
+    /**
+     * 替换净化规则不是本页数据源：`rawDataFlow` 的 combine 只在章节、下载、设置或
+     * [titleReplaceState] 变化时重跑，`ContentProcessor` 也只在自己被通知时刷新缓存。
+     * 所以规则表变动时要显式发一次信号，由 init 里的规则指纹订阅调用。
+     *
+     * 真正要不要重算由 [updateTitleReplaceCacheIfNeeded] 比对规则指纹决定；
+     * 规则没变就原地返回，不会闪一下原标题。
+     */
+    private fun refreshTitleReplace() = execute {
+        ContentProcessor.upReplaceRules()
+        replaceRulesRevision.update { it + 1 }
     }
 
     private fun updateTitleReplaceCacheIfNeeded(

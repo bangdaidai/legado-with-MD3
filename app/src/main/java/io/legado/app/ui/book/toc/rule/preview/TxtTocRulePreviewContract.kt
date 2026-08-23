@@ -75,6 +75,8 @@ data class NetworkRulePreviewItem(
     val chapters: ImmutableList<Pair<String, String>> = persistentListOf(),
     // 替换示例（原标题 → 替换后标题）
     val example: String? = null,
+    // >0 表示这条是 @js: 规则，预览只在前这么多章试跑，命中数是样本内的数字
+    val jsSampleLimit: Int = 0,
     // 是否已完成命中统计（未完成时卡片展示加载中）
     val computed: Boolean = true,
 )
@@ -107,6 +109,7 @@ data class ChainDemo(
 /**
  * AI 依据本书真实标题给出的一条净化规则草稿，附带在本书目录上的实际命中情况。
  * 命中数为 0 的草稿仍然展示，让用户看到模型给错了，而不是静默丢掉。
+ * [selected] 用于一次生成里多选采用，默认勾上有命中的草稿。
  */
 @Stable
 data class AiTitleDraftItem(
@@ -114,6 +117,7 @@ data class AiTitleDraftItem(
     val matchCount: Int = 0,
     val totalChapter: Int = 0,
     val samples: ImmutableList<Pair<String, String>> = persistentListOf(),
+    val selected: Boolean = false,
 )
 
 sealed interface TxtTocRulePreviewSheet {
@@ -144,13 +148,18 @@ sealed interface TxtTocRulePreviewIntent {
     // ===== AI 生成规则 =====
     // 让 AI 读本书真实目录，反推一条规则；TXT 与网络书籍产出不同
     data object GenerateWithAi : TxtTocRulePreviewIntent
-    // 采用某条 AI 草稿，落库成作用于标题的替换规则
-    data class AdoptAiTitleDraft(val item: AiTitleDraftItem) : TxtTocRulePreviewIntent
+    // 勾选/取消勾选某条 AI 草稿
+    data class ToggleAiTitleDraft(val index: Int) : TxtTocRulePreviewIntent
+    // 一次采用所有勾选的草稿，落库成作用于标题的替换规则
+    data object AdoptSelectedAiTitleDrafts : TxtTocRulePreviewIntent
 }
 
 sealed interface TxtTocRulePreviewEffect {
     data class ShowToast(val message: String) : TxtTocRulePreviewEffect
+    // 打开 txt 目录规则管理页（本地 TXT 模式）
     data object OpenManagePage : TxtTocRulePreviewEffect
+    // 打开替换净化管理页（网络书籍模式）
+    data object OpenReplaceRuleManagePage : TxtTocRulePreviewEffect
     data class ApplyRule(val rule: String) : TxtTocRulePreviewEffect
     // 打开替换规则编辑页（网络书籍规则预览用）
     data class OpenReplaceRuleEditor(val ruleId: Long) : TxtTocRulePreviewEffect
