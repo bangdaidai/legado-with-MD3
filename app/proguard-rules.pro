@@ -112,6 +112,8 @@
 -keep class io.legado.app.data.repository.OpenAIResponse{*;}
 -keep class io.legado.app.data.repository.OpenAIChoice{*;}
 -keep class io.legado.app.data.repository.OpenAIMessage{*;}
+# 关联书籍(ruleBookInfo.relatedBooks)的模块定义, R8 重命名字段会让 Gson 解析出空模块
+-keep class io.legado.app.ui.book.info.RelatedBooksDef{*;}
 # 缓存 Cookie
 -keep class **.help.http.CookieStore{*;}
 -keep class **.help.CacheManager{*;}
