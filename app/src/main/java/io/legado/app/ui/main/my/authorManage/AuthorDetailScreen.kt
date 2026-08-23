@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,19 +13,30 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import io.legado.app.data.entities.SearchBook
+import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
+import io.legado.app.ui.book.search.ScopeSelectSheet
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.book.SearchBookListItem
+import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
@@ -35,6 +47,7 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import kotlinx.collections.immutable.ImmutableList
 
 @Composable
 fun AuthorDetailScreen(
@@ -42,9 +55,12 @@ fun AuthorDetailScreen(
     onIntent: (AuthorDetailIntent) -> Unit,
     onBack: () -> Unit,
     onOpenBook: (String) -> Unit,
+    onOpenSearchBook: (SearchBook) -> Unit,
 ) {
     val detail = uiState.detail
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    var showScopeSheet by remember { mutableStateOf(false) }
+    var previewBook by remember { mutableStateOf<SearchBook?>(null) }
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -132,6 +148,54 @@ fun AuthorDetailScreen(
                         )
                     }
                 }
+                item {
+                    OtherWorksHeader(
+                        scopeNames = uiState.worksScopeNames,
+                        searching = uiState.works is AuthorWorksState.Searching,
+                        onRefresh = { onIntent(AuthorDetailIntent.RefreshWorks) },
+                        onStop = { onIntent(AuthorDetailIntent.StopWorksSearch) },
+                        onPickScope = { showScopeSheet = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp, bottom = 4.dp),
+                    )
+                }
+                when (val works = uiState.works) {
+                    AuthorWorksState.Idle -> item {
+                        WorksHint(stringResource(R.string.author_works_idle))
+                    }
+
+                    is AuthorWorksState.Searching -> item {
+                        WorksHint(
+                            stringResource(
+                                R.string.author_works_searching,
+                                works.processed,
+                                works.total,
+                            )
+                        )
+                    }
+
+                    AuthorWorksState.Empty -> item {
+                        WorksHint(stringResource(R.string.author_works_empty))
+                    }
+
+                    is AuthorWorksState.Error -> item {
+                        WorksHint(stringResource(R.string.author_works_error, works.message))
+                    }
+
+                    is AuthorWorksState.Success -> items(
+                        works.books,
+                        key = { it.book.bookUrl },
+                    ) { item ->
+                        SearchBookListItem(
+                            book = item.book,
+                            shelfState = item.shelfState,
+                            onClick = { onOpenSearchBook(item.book) },
+                            onLongClick = { book, _ -> previewBook = book },
+                            sourceCount = item.book.origins.size,
+                        )
+                    }
+                }
             }
         }
     }
@@ -146,6 +210,105 @@ fun AuthorDetailScreen(
             onSave = { onIntent(AuthorDetailIntent.SaveBio(it)) },
         )
     }
+
+    // 复用搜索页的范围选择弹窗，草稿模式：选完点勾才提交
+    val worksScope = BookSearchScope(uiState.worksScopeRaw)
+    ScopeSelectSheet(
+        show = showScopeSheet,
+        onDismissRequest = { showScopeSheet = false },
+        isAll = worksScope.isAll,
+        onSelectAll = {
+            onIntent(AuthorDetailIntent.ApplyWorksScope(emptyList(), emptyList(), false))
+        },
+        groups = uiState.enabledGroups,
+        selectedGroups = worksScope.groupNames,
+        onToggleGroup = {},
+        sources = uiState.enabledSources,
+        selectedSources = worksScope.sourceUrls,
+        onToggleSource = {},
+        isSourceScope = worksScope.isSource,
+        title = stringResource(R.string.author_works_scope),
+        onApplyScope = { selection ->
+            onIntent(
+                AuthorDetailIntent.ApplyWorksScope(
+                    groupNames = selection.groupNames,
+                    sources = selection.sources,
+                    isSourceScope = selection.isSourceScope,
+                )
+            )
+            showScopeSheet = false
+        },
+    )
+
+    SearchBookPreviewSheet(
+        data = previewBook,
+        onDismissRequest = { previewBook = null },
+        onOpenDetail = { book, _ ->
+            previewBook = null
+            onOpenSearchBook(book)
+        },
+        onAddToShelf = { book ->
+            previewBook = null
+            onIntent(AuthorDetailIntent.AddWorkToBookshelf(book))
+        },
+    )
+}
+
+/**
+ * 「其他作品」分区标题：范围按钮 + 搜索/停止按钮。
+ * 不自动联网，必须点搜索按钮才发请求。
+ */
+@Composable
+private fun OtherWorksHeader(
+    scopeNames: ImmutableList<String>,
+    searching: Boolean,
+    onRefresh: () -> Unit,
+    onStop: () -> Unit,
+    onPickScope: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        AppText(
+            text = stringResource(R.string.author_other_works),
+            style = LegadoTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        SmallTonalButton(
+            onClick = onPickScope,
+            text = scopeNames.takeIf { it.isNotEmpty() }?.joinToString("/")
+                ?: stringResource(R.string.author_works_scope_all),
+        )
+        if (searching) {
+            SmallTonalButton(
+                onClick = onStop,
+                icon = Icons.Default.Close,
+                text = stringResource(R.string.author_works_stop),
+            )
+        } else {
+            SmallTonalButton(
+                onClick = onRefresh,
+                icon = Icons.Default.Search,
+                text = stringResource(R.string.author_works_search),
+            )
+        }
+    }
+}
+
+/** 其他作品的空/进度/错误提示，占位样式统一。 */
+@Composable
+private fun WorksHint(text: String) {
+    AppText(
+        text = text,
+        style = LegadoTheme.typography.bodySmall,
+        color = LegadoTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+    )
 }
 
 /**

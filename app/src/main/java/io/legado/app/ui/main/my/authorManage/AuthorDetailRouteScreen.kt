@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.legado.app.data.entities.SearchBook
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -15,6 +16,7 @@ fun AuthorDetailRouteScreen(
     name: String,
     onBack: () -> Unit,
     onOpenBook: (String) -> Unit,
+    onOpenSearchBook: (SearchBook) -> Unit,
 ) {
     val viewModel = koinViewModel<AuthorDetailViewModel>(parameters = { parametersOf(name) })
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -37,5 +39,6 @@ fun AuthorDetailRouteScreen(
         onIntent = viewModel::onIntent,
         onBack = onBack,
         onOpenBook = onOpenBook,
+        onOpenSearchBook = onOpenSearchBook,
     )
 }

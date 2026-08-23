@@ -3,7 +3,10 @@ package io.legado.app.ui.main.my.authorManage
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Stable
 import io.legado.app.R
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.ReadingMemory
+import io.legado.app.data.entities.SearchBook
+import io.legado.app.domain.model.BookShelfState
 import io.legado.app.domain.model.settings.BookshelfSettings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -65,6 +68,28 @@ data class AuthorDetailUi(
     val books: ImmutableList<AuthorBookItem>,
 )
 
+/** 作者其他作品的一条搜索结果。 */
+@Stable
+data class AuthorWorkItem(
+    val book: SearchBook,
+    val shelfState: BookShelfState,
+)
+
+/** 作者其他作品的加载状态。只在用户点刷新时才会进入 Searching。 */
+@Stable
+sealed interface AuthorWorksState {
+    /** 还没搜过，也没有缓存可显示。 */
+    data object Idle : AuthorWorksState
+
+    data class Searching(val processed: Int, val total: Int) : AuthorWorksState
+
+    data object Empty : AuthorWorksState
+
+    data class Success(val books: ImmutableList<AuthorWorkItem>) : AuthorWorksState
+
+    data class Error(val message: String) : AuthorWorksState
+}
+
 @Stable
 data class AuthorManageUiState(
     val loading: Boolean = false,
@@ -91,6 +116,13 @@ data class AuthorDetailUiState(
     val bookshelfSettings: BookshelfSettings = BookshelfSettings(),
     val tagColorMap: ImmutableMap<String, Long> = persistentMapOf(),
     val coverWidth: Int = 84,
+    /** 以下是「其他作品」跨书源搜索相关 */
+    val works: AuthorWorksState = AuthorWorksState.Idle,
+    /** 搜索范围的展示名，空列表表示全部书源。 */
+    val worksScopeNames: ImmutableList<String> = persistentListOf(),
+    val worksScopeRaw: String = "",
+    val enabledGroups: ImmutableList<String> = persistentListOf(),
+    val enabledSources: ImmutableList<BookSourcePart> = persistentListOf(),
 )
 
 sealed interface AuthorDetailIntent {
@@ -102,6 +134,17 @@ sealed interface AuthorDetailIntent {
 
     /** 再次点击已选中的状态会取消筛选。 */
     data class ToggleBookFilter(val status: AuthorBookStatus) : AuthorDetailIntent
+
+    /** 手动触发跨书源搜索作者其他作品。 */
+    data object RefreshWorks : AuthorDetailIntent
+    data object StopWorksSearch : AuthorDetailIntent
+    data class ApplyWorksScope(
+        val groupNames: List<String>,
+        val sources: List<BookSourcePart>,
+        val isSourceScope: Boolean,
+    ) : AuthorDetailIntent
+
+    data class AddWorkToBookshelf(val book: SearchBook) : AuthorDetailIntent
 }
 
 sealed interface AuthorDetailEffect {

@@ -62,6 +62,21 @@ interface SearchBookDao {
     )
     fun getEnableHasCover(name: String, author: String): List<SearchBook>
 
+    /**
+     * 作者其他作品用：按作者名取缓存的搜索结果，只保留仍启用的书源。
+     * 同名同作者可能来自多个书源，这里不去重，由调用方按 name 折叠。
+     */
+    @Query(
+        """
+        select t1.* from searchBooks as t1 inner join book_sources as t2
+        on t1.origin = t2.bookSourceUrl
+        where t1.author = :author and t2.enabled = 1
+        order by t1.time desc
+        """
+    )
+    fun getByAuthor(author: String): List<SearchBook>
+
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(vararg searchBook: SearchBook): List<Long>
 

@@ -2534,6 +2534,15 @@
     <string name="author_tab_reading">Reading</string>
     <string name="author_tab_to_read">To Read</string>
     <string name="author_tab_abandoned">Abandoned</string>
+    <string name="author_other_works">Other works</string>
+    <string name="author_works_search">Search</string>
+    <string name="author_works_stop">Stop</string>
+    <string name="author_works_scope">Search scope</string>
+    <string name="author_works_scope_all">All sources</string>
+    <string name="author_works_idle">Tap search to look for this author\'s other works in book sources</string>
+    <string name="author_works_searching">Searching %1$d/%2$d</string>
+    <string name="author_works_empty">No other works found for this author</string>
+    <string name="author_works_error">Search failed: %1$s</string>
 
     <!-- Compose UI extracted strings -->
     <string name="edit_replace_rule">Edit Replace Rule</string>

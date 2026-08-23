@@ -51,6 +51,9 @@ object LocalPreferencesKeys {
     val CHANGE_SOURCE_WORD_COUNT_THRESHOLD = intPreferencesKey("changeSourceWordCountThreshold")
     val CHANGE_SOURCE_SEARCH_SCOPE = stringPreferencesKey("changeSourceSearchScope")
 
+    // 作者页「其他作品」的搜索范围，和全局搜索页的 SEARCH_SCOPE 分开存
+    val AUTHOR_WORKS_SEARCH_SCOPE = stringPreferencesKey("authorWorksSearchScope")
+
     // Book source check options
     val CHECK_SOURCE_TIMEOUT = longPreferencesKey("checkSourceTimeout")
     val CHECK_SOURCE_SEARCH = booleanPreferencesKey("checkSearch")

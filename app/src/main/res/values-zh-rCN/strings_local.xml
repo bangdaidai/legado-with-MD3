@@ -22,6 +22,15 @@
     <string name="author_tab_reading">在读</string>
     <string name="author_tab_to_read">未读</string>
     <string name="author_tab_abandoned">弃文</string>
+    <string name="author_other_works">其他作品</string>
+    <string name="author_works_search">搜索</string>
+    <string name="author_works_stop">停止</string>
+    <string name="author_works_scope">搜索范围</string>
+    <string name="author_works_scope_all">全部书源</string>
+    <string name="author_works_idle">点右上角搜索，在书源中查找该作者的其他作品</string>
+    <string name="author_works_searching">搜索中 %1$d/%2$d</string>
+    <string name="author_works_empty">没有搜到该作者的其他作品</string>
+    <string name="author_works_error">搜索失败：%1$s</string>
     <string name="tag_mapping">标签映射</string>
     <string name="excluded_tags">排除标签</string>
     <string name="search_tag">搜索标签</string>
@@ -48,6 +57,8 @@
     <string name="clear_all_bookmarks_confirm">确定删除全部书签？此操作不可撤销。</string>
     <string name="clear_all_bookmarks_done">已清除所有书签</string>
     <string name="export_markings">导出所有笔记</string>
+    <string name="allow_same_name_author_type">允许同名书籍</string>
+    <string name="allow_same_name_author_type_summary">允许书架同时存在同名同作者同类型的书；关闭时加入书架会替换已有那本并保留阅读数据（不同类型不受影响）</string>
 
 
 

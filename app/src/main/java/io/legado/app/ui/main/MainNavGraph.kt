@@ -1195,6 +1195,17 @@ fun MainActivity.mainEntryProvider(
             name = route.name,
             onBack = { onNavigateBack() },
             onOpenBook = { bookUrl -> onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl)) },
+            onOpenSearchBook = { book ->
+                onNavigateToRoute(
+                    MainRouteBookInfo(
+                        name = book.name,
+                        author = book.author,
+                        bookUrl = book.bookUrl,
+                        origin = book.origin,
+                        coverPath = book.coverUrl
+                    )
+                )
+            },
         )
     }
 

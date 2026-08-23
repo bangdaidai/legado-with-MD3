@@ -591,6 +591,11 @@ val appModule = module {
             generateAuthorBioUseCase = get(),
             bookshelfSettingsGateway = get(),
             themeSettingsGateway = get(),
+            searchRepository = get(),
+            searchBooksUseCase = get(),
+            resolveBookShelfStateUseCase = get(),
+            addToBookshelfUseCase = get(),
+            localPreferencesRepository = get(),
         )
     }
     viewModelOf(::ExcludedTagViewModel)
