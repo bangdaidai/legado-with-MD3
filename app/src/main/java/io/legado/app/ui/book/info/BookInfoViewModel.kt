@@ -161,18 +161,6 @@ class BookInfoViewModel(
     private val _effects = MutableSharedFlow<BookInfoEffect>(extraBufferCapacity = 8)
     val effects = _effects.asSharedFlow()
 
-    init {
-        collectEventBus()
-        viewModelScope.launch {
-            localPreferencesRepository
-                .getBoolean(PreferKey.wordCountAsHighlightedTag, true)
-                .collect {
-                    _wordCountHighlighted.value = it
-                    syncUiState()
-                }
-        }
-    }
-
     private fun collectEventBus() {
         viewModelScope.launch {
             eventFlow<Boolean>(EventBus.REFRESH_BOOK_INFO).collect {
@@ -275,6 +263,23 @@ class BookInfoViewModel(
 
     /** 本页自己发起换源时的旧 bookUrl，用于忽略自己触发的 [EventBus.BOOK_REPLACED] */
     private var selfReplacedFromUrl: String? = null
+
+    // init 必须放在所有属性声明之后：viewModelScope 是 Main.immediate，VM 在主线程构造时
+    // launch 会同步跑到第一个真正的挂起点，而设置流来自 AppConfigStore 的 StateFlow，
+    // 首个值不挂起就发出。若 init 在上面，collect 里的 syncUiState() 会在
+    // currentChapterList 等字段还是 null 时执行，直接 NPE。
+    init {
+        collectEventBus()
+        viewModelScope.launch {
+            localPreferencesRepository
+                .getBoolean(PreferKey.wordCountAsHighlightedTag, true)
+                .collect {
+                    _wordCountHighlighted.value = it
+                    syncUiState()
+                }
+        }
+    }
+
 
     fun initData(intent: Intent) {
         initData(
