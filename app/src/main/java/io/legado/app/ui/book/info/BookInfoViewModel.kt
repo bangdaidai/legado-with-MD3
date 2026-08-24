@@ -31,6 +31,7 @@ import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.data.repository.RemoteBookRepository
 import io.legado.app.data.repository.SearchRepository
+import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.CoverSettingsGateway
@@ -90,6 +91,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -124,6 +126,7 @@ class BookInfoViewModel(
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val readingMemoryRepository: ReadingMemoryRepository,
     private val addToBookshelfUseCase: AddToBookshelfUseCase,
+    private val localPreferencesRepository: SettingsRepository,
 ) : BaseViewModel(application) {
 
     val allGroups = bookGroupRepository.flowSelect().map { it.toImmutableList() }
@@ -973,7 +976,7 @@ class BookInfoViewModel(
                 inBookshelf = true
             }
             currentChapterList = toc
-            currentRelatedBooks = emptyList()
+            source?.let { scheduleRelatedBooksLoad(book, it) }
             currentCharacters = emptyList()
             currentGroupNames = null
             currentHasCustomGroup = false
@@ -989,7 +992,6 @@ class BookInfoViewModel(
         currentChapterList = emptyList()
         tocLoadFailed = false
         currentWebFiles = emptyList()
-        currentRelatedBooks = emptyList()
         currentCharacters = emptyList()
         currentColoredTags = emptyList()
         currentGroupNames = null
@@ -1734,6 +1736,42 @@ class BookInfoViewModel(
         }
     }
 
+    private data class RelatedBooksCacheItem(
+        @SerializedName("key") val key: String,
+        @SerializedName("title") val title: String,
+        @SerializedName("url") val url: String,
+        @SerializedName("resolvedUrl") val resolvedUrl: String,
+        @SerializedName("books") val books: List<SearchBook>,
+    )
+
+    private val relatedBooksCacheKey: (Book) -> String =
+        { b -> "relatedBooks_${b.name.trim()}_${b.getRealAuthor().trim()}" }
+
+    private suspend fun saveRelatedBooksCache(book: Book, items: List<RelatedBooksUi>) {
+        val dto = items.map {
+            RelatedBooksCacheItem(it.key, it.title, it.url, it.resolvedUrl, it.books.toList())
+        }
+        runCatching {
+            localPreferencesRepository.putString(relatedBooksCacheKey(book), GSON.toJson(dto))
+        }
+    }
+
+    private suspend fun loadRelatedBooksCache(book: Book): List<RelatedBooksUi> {
+        val json = localPreferencesRepository.getString(relatedBooksCacheKey(book)).first()
+        if (json.isBlank()) return emptyList()
+        return runCatching {
+            GSON.fromJsonArray<RelatedBooksCacheItem>(json).getOrNull()?.map {
+                RelatedBooksUi(
+                    key = it.key,
+                    title = it.title,
+                    url = it.url,
+                    resolvedUrl = it.resolvedUrl,
+                    books = it.books.toImmutableList(),
+                )
+            }.orEmpty()
+        }.getOrDefault(emptyList())
+    }
+
     private fun scheduleRelatedBooksLoad(
         book: Book,
         source: BookSource,
@@ -1743,28 +1781,26 @@ class BookInfoViewModel(
         relatedBooksLoadJob = viewModelScope.launch {
             delay(delayMillis)
             if (!isCurrentBookSource(book, source)) return@launch
-
-            val modules = parseRelatedBookModules(source)
-            if (modules.isEmpty()) {
-                currentRelatedBooks = emptyList()
+            // 先恢复缓存，保证换源/重进页面时列表不空白
+            val cached = runCatching { loadRelatedBooksCache(book) }.getOrNull().orEmpty()
+            if (cached.isNotEmpty()) {
+                currentRelatedBooks = cached
                 syncUiState()
-                return@launch
             }
-
+            val modules = parseRelatedBookModules(source)
+            if (modules.isEmpty()) return@launch
             try {
                 val result = withContext(IO) {
                     loadRelatedBooks(book, source, modules)
                 }
                 if (!isCurrentBookSource(book, source)) return@launch
                 currentRelatedBooks = result
+                runCatching { saveRelatedBooksCache(book, result) }
                 syncUiState()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 AppLog.put("关联书籍加载失败\n${e.localizedMessage}", e)
-                if (!isCurrentBookSource(book, source)) return@launch
-                currentRelatedBooks = emptyList()
-                syncUiState()
             }
         }
     }
