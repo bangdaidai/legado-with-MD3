@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Timeline
@@ -107,13 +108,16 @@ import io.legado.app.help.coil.CoverExtras
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.main.homepage.modules.BannerModule
+import io.legado.app.ui.theme.AppThemeMode
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.LocalHazeState
 import io.legado.app.ui.theme.LocalLegadoThemeColors
 import io.legado.app.ui.theme.ProvideColorSchemeOverride
 import io.legado.app.ui.theme.ThemeOverrideState
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.animateColorSchemeAsState
+import io.legado.app.ui.theme.applyTransparentSurfaces
 import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
@@ -693,7 +697,20 @@ private fun rememberBookInfoColorTheme(
         extras[CoverExtras.LoadOnlyWifi] = loadOnlyWifi
     }
 
-    return rememberThemeOverride(seedColor)
+    val override = rememberThemeOverride(seedColor)
+    // 透明主题下 override 必须保持同样的透明 surface。否则封面取色一到位，surface 就会从
+    // Color.Transparent（alpha 0 的黑）补间到不透明色，中间帧是半透明黑，进页时整页闪黑；
+    // 同时透明主题在这一页也会被悄悄换成不透明配色。
+    val appThemeMode = ThemeResolver.resolveThemeMode(
+        LocalAppUiConfiguration.current.theme.appTheme
+    )
+    return remember(override, appThemeMode) {
+        if (override == null || appThemeMode != AppThemeMode.Transparent) {
+            override
+        } else {
+            override.copy(colorScheme = override.colorScheme.applyTransparentSurfaces())
+        }
+    }
 }
 
 private fun resolveBookInfoBackdropStyle(
@@ -720,6 +737,14 @@ private fun BookInfoTopBarActions(
         imageVector = Icons.Default.Timeline,
         contentDescription = "阅读记忆"
     )
+    // 书源带自定义按钮时才显示，占标题栏第二位；不再进溢出菜单，避免双入口
+    if (state.bookSourceUi?.hasCustomButton == true) {
+        TopBarActionButton(
+            onClick = { onMenuAction(BookInfoMenuAction.CustomButton) },
+            imageVector = Icons.Default.Extension,
+            contentDescription = stringResource(R.string.custom_button)
+        )
+    }
     TopBarActionButton(
         onClick = { onMenuAction(BookInfoMenuAction.Edit) },
         imageVector = Icons.Default.Edit,
@@ -869,12 +894,6 @@ private fun BookInfoOverflowMenu(
 ) {
     val book = state.book
     RoundDropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest) {
-        if (state.bookSourceUi?.hasCustomButton == true) {
-            RoundDropdownMenuItem(
-                text = stringResource(R.string.custom_button),
-                onClick = { onMenuAction(BookInfoMenuAction.CustomButton) }
-            )
-        }
         if (book?.isLocal == true) {
             RoundDropdownMenuItem(
                 text = stringResource(R.string.re_sync_webdav),
@@ -1080,7 +1099,7 @@ private fun BookInfoHeader(
                 if (wordCountHighlighted && !wordCount.isNullOrBlank()) {
                     highlightedTags + HighlightedTag(
                         matchedLabels = listOf(formatWordCount(wordCount)),
-                        title = stringResource(R.string.word_count_as_highlighted_tag),
+                        title = stringResource(R.string.word_count_tag_title),
                     )
                 } else {
                     highlightedTags

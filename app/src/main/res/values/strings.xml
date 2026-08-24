@@ -2489,6 +2489,7 @@
     <!-- Tag Rules -->
     <string name="highlight_tag_config">Tag Rules</string>
     <string name="word_count_as_highlighted_tag">Show word count as highlighted tag</string>
+    <string name="word_count_tag_title">Word count</string>
     <string name="import_highlight_tag_rule">Import Tag Rules</string>
     <string name="highlight_tag_title">Title</string>
     <string name="highlight_tag_pattern">Pattern</string>
