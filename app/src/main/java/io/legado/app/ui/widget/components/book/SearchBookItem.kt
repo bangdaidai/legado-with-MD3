@@ -61,6 +61,8 @@ fun SearchBookListItem(
     showAuthor: Boolean = true,
     /** 封面宽度，默认 72dp；列表更紧凑时可调小。 */
     coverSize: Dp = 72.dp,
+    /** 简介行数，默认 2 行（同时作为最小行数，保证同列表卡片等高）。 */
+    introMaxLines: Int = 2,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -196,8 +198,8 @@ fun SearchBookListItem(
                     text = intro,
                     style = LegadoTheme.typography.labelSmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    minLines = 2,
+                    maxLines = introMaxLines,
+                    minLines = introMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

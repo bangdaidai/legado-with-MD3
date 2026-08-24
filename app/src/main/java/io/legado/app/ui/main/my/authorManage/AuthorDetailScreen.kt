@@ -212,14 +212,14 @@ fun AuthorDetailScreen(
                                 onClick = null,
                                 // 该区块已是「某作者的其他作品」，作者名多余，隐藏那一行
                                 showAuthor = false,
-                                // 去掉作者行后内容更矮，封面同步缩小到 56dp
-                                coverSize = 56.dp,
+                                // 封面对齐关联书籍卡片：那边 Box 宽 coverWidth，内部还有 8dp 留白
+                                coverSize = (uiState.coverWidth - 16).coerceAtLeast(32).dp,
+                                // 简介一行，与关联书籍卡片的内联简介口径一致
+                                introMaxLines = 1,
                                 // 点击与长按都交给外层卡片，避免两层水波纹
                                 showPadding = false,
-                                modifier = Modifier.padding(
-                                    horizontal = 12.dp,
-                                    vertical = 10.dp,
-                                ),
+                                // 8dp 对齐关联书籍卡片：封面自带 8dp 留白、文字右侧也是 8dp
+                                modifier = Modifier.padding(8.dp),
                             )
                         }
                     }
