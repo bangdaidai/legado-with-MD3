@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -243,7 +244,7 @@ class AuthorDetailViewModel(
     private suspend fun loadWorksCache(): List<SearchBook> {
         val json = localPreferencesRepository.getString(worksCacheKey).first()
         if (json.isBlank()) return emptyList()
-        return fromJsonArray<SearchBook>(json).getOrNull().orEmpty()
+        return GSON.fromJsonArray<SearchBook>(json).getOrNull().orEmpty()
     }
 
     fun onIntent(intent: AuthorDetailIntent) {
