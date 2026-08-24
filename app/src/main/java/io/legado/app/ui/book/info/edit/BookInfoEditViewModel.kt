@@ -45,8 +45,6 @@ data class BookInfoEditUiState(
     val intro: String? = null,
     val remark: String? = null,
     val sourceKindList: List<String> = emptyList(),
-    val kindList: List<String> = emptyList(),
-    val originalKindList: List<String> = emptyList(),
     val selectedType: BookInfoEditType = BookInfoEditType.TEXT,
     val fixedType: Boolean = false,
     val book: Book? = null,
@@ -71,7 +69,6 @@ class BookInfoEditViewModel(
                     else -> BookInfoEditType.TEXT
                 }
                 val sourceKinds = it.kind?.splitNotBlank(",", "\n").orEmpty().distinct()
-                val customTags = it.customTag?.splitNotBlank(",", "\n").orEmpty().distinct()
                 _uiState.value = BookInfoEditUiState(
                     name = it.name,
                     author = it.author,
@@ -79,18 +76,12 @@ class BookInfoEditViewModel(
                     intro = it.getDisplayIntro(),
                     remark = it.remark,
                     sourceKindList = sourceKinds,
-                    kindList = customTags,
-                    originalKindList = customTags,
                     selectedType = selectedType,
                     fixedType = it.config.fixedType,
                     book = it
                 )
             }
         }
-    }
-
-    fun resetKinds() {
-        _uiState.value = _uiState.value.copy(kindList = _uiState.value.originalKindList.toList())
     }
 
     fun onNameChange(name: String) {
@@ -111,10 +102,6 @@ class BookInfoEditViewModel(
 
     fun onRemarkChange(remark: String) {
         _uiState.value = _uiState.value.copy(remark = remark)
-    }
-
-    fun onKindListChange(kindList: List<String>) {
-        _uiState.value = _uiState.value.copy(kindList = kindList.distinct())
     }
 
     fun onBookTypeChange(bookType: BookInfoEditType) {
@@ -149,7 +136,6 @@ class BookInfoEditViewModel(
                 book.config.fixedType = currentState.fixedType
                 book.customCoverUrl = if (currentState.coverUrl == book.coverUrl) null else currentState.coverUrl
                 book.customIntro = if (currentState.intro == book.intro) null else currentState.intro
-                book.customTag = currentState.kindList.joinToString(",").ifBlank { null }
                 applyTagGroupRulesForBook(book)
                 BookHelp.updateCacheFolder(oldBook, book)
 
@@ -157,9 +143,6 @@ class BookInfoEditViewModel(
                     ReadBook.replaceCurrentBook(book)
                 }
                 bookRepository.update(book)
-                // 编辑用户标签后同步关系表：以 kind+customTag 为 SSOT 重建该书标签关联
-                appDb.bookTagRelationDao.deleteByBookUrl(book.bookUrl)
-                TagManager.generateTagsFromKind(book)
             }
         }.onSuccess {
             onSuccess.invoke()
