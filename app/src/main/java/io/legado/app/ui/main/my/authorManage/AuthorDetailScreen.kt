@@ -385,7 +385,10 @@ private fun RelatedBooksHeader(
                     onClick = { onToggleFilter(status) },
                     selected = status == selected,
                     text = "${stringResource(status.labelResId)} $count",
-                    modifier = Modifier.align(Alignment.CenterVertically),
+                    // 与「其他作品」那行的按钮同高，统一锁 32.dp
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .height(32.dp),
                 )
             }
         }
