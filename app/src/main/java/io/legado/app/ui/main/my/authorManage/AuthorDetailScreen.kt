@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -62,10 +61,6 @@ fun AuthorDetailScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     var showScopeSheet by remember { mutableStateOf(false) }
     var previewBook by remember { mutableStateOf<SearchBook?>(null) }
-    // 与阅读记忆书籍卡片同一套底色：优先书架自定义色，否则用主题的卡片底色
-    val cardContainerColor = uiState.bookshelfSettings.let {
-        if (LegadoTheme.isDark) it.bookshelfCardColorDark else it.bookshelfCardColor
-    }.takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.cardContainer
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -107,7 +102,6 @@ fun AuthorDetailScreen(
                     item {
                         AuthorDetailHeader(
                             detail = detail,
-                            containerColor = cardContainerColor,
                             onClick = { onIntent(AuthorDetailIntent.ToggleEditBio) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -196,13 +190,13 @@ fun AuthorDetailScreen(
                         works.books,
                         key = { it.book.bookUrl },
                     ) { item ->
-                        // 套一层卡片，和上面的关联书籍卡片保持同样的底色、圆角和行间距
+                        // 网络搜到、还没入库的结果，底色压低一档，与关联书籍分层
                         NormalCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
                             cornerRadius = 8.dp,
-                            containerColor = cardContainerColor,
+                            containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
                             onClick = { onOpenSearchBook(item.book) },
                             onLongClick = { previewBook = item.book },
                         ) {
@@ -216,6 +210,11 @@ fun AuthorDetailScreen(
                                 coverSize = (uiState.coverWidth - 16).coerceAtLeast(32).dp,
                                 // 简介一行，与关联书籍卡片的内联简介口径一致
                                 introMaxLines = 1,
+                                // 字号也对齐关联书籍卡片：书名 titleMediumEmphasized、简介 labelSmallEmphasized
+                                titleStyle = LegadoTheme.typography.titleMediumEmphasized,
+                                introStyle = LegadoTheme.typography.labelSmallEmphasized,
+                                // 书名行数也跟书架的「标题行数」设置
+                                titleMaxLines = uiState.bookshelfSettings.bookshelfTitleMaxLines,
                                 // 点击与长按都交给外层卡片，避免两层水波纹
                                 showPadding = false,
                                 // 8dp 对齐关联书籍卡片：封面自带 8dp 留白、文字右侧也是 8dp
@@ -398,14 +397,13 @@ private fun RelatedBooksHeader(
 @Composable
 private fun AuthorDetailHeader(
     detail: AuthorDetailUi,
-    containerColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 底色跟下面的书籍卡片一致，不再单独用 secondaryContainer
+    // 用主题自己的卡片底色，不跟书架的自定义卡片色，这样和下面的书籍卡片能分层
     NormalCard(
         modifier = modifier,
-        containerColor = containerColor,
+        containerColor = LegadoTheme.colorScheme.cardContainer,
         // 点整张卡等于点标题栏的编辑按钮
         onClick = onClick,
     ) {

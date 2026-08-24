@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +64,12 @@ fun SearchBookListItem(
     coverSize: Dp = 72.dp,
     /** 简介行数，默认 2 行（同时作为最小行数，保证同列表卡片等高）。 */
     introMaxLines: Int = 2,
+    /** 书名字号；null 用搜索列表默认的 titleSmall。 */
+    titleStyle: TextStyle? = null,
+    /** 书名行数，默认 1 行。 */
+    titleMaxLines: Int = 1,
+    /** 简介字号；null 用搜索列表默认的 labelSmall。 */
+    introStyle: TextStyle? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -146,8 +153,8 @@ fun SearchBookListItem(
                 AppText(
                     text = book.name,
                     modifier = Modifier.weight(1f),
-                    style = LegadoTheme.typography.titleSmall,
-                    maxLines = 1,
+                    style = titleStyle ?: LegadoTheme.typography.titleSmall,
+                    maxLines = titleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
 
@@ -196,7 +203,7 @@ fun SearchBookListItem(
             if (intro.isNotEmpty()) {
                 AppText(
                     text = intro,
-                    style = LegadoTheme.typography.labelSmall,
+                    style = introStyle ?: LegadoTheme.typography.labelSmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = introMaxLines,
                     minLines = introMaxLines,
