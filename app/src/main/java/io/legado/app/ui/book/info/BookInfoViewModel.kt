@@ -16,6 +16,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -134,6 +135,9 @@ class BookInfoViewModel(
     // 仅保存“每本书/屏幕”状态；外观与其他设置不在此存储，避免整体重置时被抹掉。
     private val _screenState = MutableStateFlow(BookInfoUiState())
 
+    // 字数是否以高亮标签形式展示（来自设置，默认开）
+    private val _wordCountHighlighted = MutableStateFlow(true)
+
     // 设置类字段始终从各自 gateway（唯一 SSOT）派生叠加，重置屏幕状态无法影响它们。
     val uiState: StateFlow<BookInfoUiState> = combine(
         _screenState,
@@ -159,6 +163,14 @@ class BookInfoViewModel(
 
     init {
         collectEventBus()
+        viewModelScope.launch {
+            localPreferencesRepository
+                .getBoolean(PreferKey.wordCountAsHighlightedTag, true)
+                .collect {
+                    _wordCountHighlighted.value = it
+                    syncUiState()
+                }
+        }
     }
 
     private fun collectEventBus() {
@@ -1566,6 +1578,7 @@ class BookInfoViewModel(
                 relatedBooks = currentRelatedBooks.toImmutableList(),
                 characters = currentCharacters.toImmutableList(),
                 highlightedTags = currentHighlightedTags,
+                wordCountHighlighted = _wordCountHighlighted.value,
                 coloredTags = currentColoredTags,
                 groupNames = currentGroupNames,
                 hasCustomGroup = currentHasCustomGroup,

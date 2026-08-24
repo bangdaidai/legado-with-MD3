@@ -2464,6 +2464,7 @@
 
     <!-- 标签规则 -->
     <string name="highlight_tag_config">标签规则</string>
+    <string name="word_count_as_highlighted_tag">字数显示为高亮标签</string>
     <string name="import_highlight_tag_rule">导入标签规则</string>
     <string name="highlight_tag_title">标题</string>
     <string name="highlight_tag_pattern">匹配规则</string>

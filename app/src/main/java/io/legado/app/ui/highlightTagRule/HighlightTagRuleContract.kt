@@ -56,6 +56,7 @@ sealed interface HighlightTagRuleIntent {
     data class ToggleImportAll(val isSelected: Boolean) : HighlightTagRuleIntent
     data class UpdateImportItem(val index: Int, val rule: HighlightTagRule) : HighlightTagRuleIntent
     data object SaveImportedRules : HighlightTagRuleIntent
+    data class SetWordCountHighlighted(val value: Boolean) : HighlightTagRuleIntent
 }
 
 sealed interface HighlightTagRuleEffect {

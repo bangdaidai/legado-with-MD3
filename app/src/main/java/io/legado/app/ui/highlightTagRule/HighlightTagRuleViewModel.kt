@@ -3,8 +3,10 @@ package io.legado.app.ui.highlightTagRule
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseRuleViewModel
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.HighlightTagRule
 import io.legado.app.data.repository.HighlightTagRuleRepository
+import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import io.legado.app.ui.widget.components.list.InteractionState
@@ -20,6 +22,7 @@ import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -27,7 +30,8 @@ import kotlinx.coroutines.withContext
 
 class HighlightTagRuleViewModel(
     application: Application,
-    uploadRepository: UploadRepository
+    uploadRepository: UploadRepository,
+    private val settingsRepository: SettingsRepository
 ) : BaseRuleViewModel<HighlightTagRuleItemUi, HighlightTagRule, Long, HighlightTagRuleUiState>(
     application,
     HighlightTagRuleUiState(interaction = InteractionState(isLoading = true)),
@@ -36,6 +40,17 @@ class HighlightTagRuleViewModel(
     private val repository = HighlightTagRuleRepository()
     private val _effects = MutableSharedFlow<HighlightTagRuleEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
+
+    private val _wordCountHighlighted = MutableStateFlow(true)
+    val wordCountHighlighted: Flow<Boolean> = _wordCountHighlighted
+
+    init {
+        viewModelScope.launch {
+            settingsRepository
+                .getBoolean(PreferKey.wordCountAsHighlightedTag, true)
+                .collect { _wordCountHighlighted.value = it }
+        }
+    }
 
     override val rawDataFlow: Flow<List<HighlightTagRule>> = repository.flowAll()
 
@@ -86,6 +101,11 @@ class HighlightTagRuleViewModel(
             is HighlightTagRuleIntent.ToggleImportAll -> toggleImportAll(intent.isSelected)
             is HighlightTagRuleIntent.UpdateImportItem -> updateImportItem(intent.index, intent.rule)
             HighlightTagRuleIntent.SaveImportedRules -> saveImportedRules()
+            is HighlightTagRuleIntent.SetWordCountHighlighted -> {
+                viewModelScope.launch {
+                    settingsRepository.putBoolean(PreferKey.wordCountAsHighlightedTag, intent.value)
+                }
+            }
         }
     }
 

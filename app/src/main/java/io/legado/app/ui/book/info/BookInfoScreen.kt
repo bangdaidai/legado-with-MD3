@@ -344,6 +344,7 @@ private fun BookInfoScreenContent(
                                 highlightedTags = state.highlightedTags,
                                 coloredTags = state.coloredTags,
                                 groupNames = state.groupNames,
+                                wordCountHighlighted = state.wordCountHighlighted,
                                 enableCustomTagColors = state.enableCustomTagColors,
                                 tagBorder = state.bookshelfTagBorder,
                                 onCoverClick = { onIntent(BookInfoIntent.CoverClick) },
@@ -948,6 +949,7 @@ private fun BookInfoHeader(
     highlightedTags: List<HighlightedTag>,
     coloredTags: List<BookTagUi>,
     groupNames: String?,
+    wordCountHighlighted: Boolean,
     enableCustomTagColors: Boolean,
     tagBorder: Boolean,
     onCoverClick: () -> Unit,
@@ -1073,10 +1075,20 @@ private fun BookInfoHeader(
                     )
                 }
             }
-            if (highlightedTags.isNotEmpty()) {
-                HighlightTagRow(tags = highlightedTags)
+            val wordCount = book.wordCount
+            val effectiveHighlightedTags =
+                if (wordCountHighlighted && !wordCount.isNullOrBlank()) {
+                    highlightedTags + HighlightedTag(
+                        matchedLabels = listOf(formatWordCount(wordCount)),
+                        title = stringResource(R.string.word_count_as_highlighted_tag),
+                    )
+                } else {
+                    highlightedTags
+                }
+            if (effectiveHighlightedTags.isNotEmpty()) {
+                HighlightTagRow(tags = effectiveHighlightedTags)
             }
-            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank() || !book?.wordCount.isNullOrBlank()) {
+            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank() || (!wordCountHighlighted && !book.wordCount.isNullOrBlank())) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
                     state = kindListState,
@@ -1108,7 +1120,7 @@ private fun BookInfoHeader(
                             showColoredBorder = tagBorder,
                         )
                     }
-                    book?.wordCount?.takeIf { it.isNotBlank() }?.let {
+                    book.wordCount?.takeIf { !wordCountHighlighted && it.isNotBlank() }?.let {
                         item(key = "wordcount") {
                             TagChip(
                                 tag = formatWordCount(it),

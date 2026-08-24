@@ -47,6 +47,7 @@ import io.legado.app.ui.widget.components.importComponents.SourceInputDialog
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.rules.RuleListScaffold
+import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import kotlinx.coroutines.flow.Flow
 import org.koin.androidx.compose.koinViewModel
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -59,10 +60,13 @@ fun HighlightTagRuleRouteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val importState by viewModel.importState.collectAsStateWithLifecycle()
+    val wordCountHighlighted by viewModel.wordCountHighlighted.collectAsStateWithLifecycle()
 
     HighlightTagRuleScreen(
         state = uiState,
         importState = importState,
+        wordCountHighlighted = wordCountHighlighted,
+        onWordCountHighlightedChange = { viewModel.onIntent(HighlightTagRuleIntent.SetWordCountHighlighted(it)) },
         events = viewModel.events,
         effects = viewModel.effects,
         onIntent = viewModel::onIntent,
@@ -76,6 +80,8 @@ fun HighlightTagRuleRouteScreen(
 fun HighlightTagRuleScreen(
     state: HighlightTagRuleUiState,
     importState: BaseImportUiState<HighlightTagRule>,
+    wordCountHighlighted: Boolean = true,
+    onWordCountHighlightedChange: (Boolean) -> Unit = {},
     events: Flow<BaseRuleEvent>,
     effects: Flow<HighlightTagRuleEffect>,
     onIntent: (HighlightTagRuleIntent) -> Unit,
@@ -304,6 +310,13 @@ fun HighlightTagRuleScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item(key = "wordCountHighlighted") {
+                    SwitchSettingItem(
+                        title = stringResource(R.string.word_count_as_highlighted_tag),
+                        checked = wordCountHighlighted,
+                        onCheckedChange = onWordCountHighlightedChange,
+                    )
+                }
                 items(rules, key = { it.id }) { item ->
                     val enabledState = stringResource(
                         if (item.isEnabled) R.string.enabled else R.string.disabled

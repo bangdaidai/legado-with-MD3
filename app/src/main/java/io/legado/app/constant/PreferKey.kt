@@ -504,6 +504,9 @@ object PreferKey {
     const val protagonistExtractionInvalidWords = "protagonistExtractionInvalidWords"
     const val protagonistExtractionRelaxed = "protagonistExtractionRelaxed"
 
+    // 书籍信息页：字数是否以高亮标签形式展示
+    const val wordCountAsHighlightedTag = "wordCountAsHighlightedTag"
+
     // Eye Protection
     const val eyeProtectionEnabled = "eyeProtectionEnabled"
     const val colorTemperature = "colorTemperature"
