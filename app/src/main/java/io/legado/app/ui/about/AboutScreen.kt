@@ -91,6 +91,7 @@ private fun MaterialAboutScreen(
     val privacyPolicyTitle = stringResource(R.string.about_privacy_policy_title)
     val licenseTitle = stringResource(R.string.about_license_title)
     val disclaimerTitle = stringResource(R.string.about_disclaimer_title)
+    val updateLogTitle = stringResource(R.string.update_log)
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -172,6 +173,14 @@ private fun MaterialAboutScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 title = ""
             ) {
+                SettingItemWithDivider {
+                    SettingItem(
+                        title = stringResource(R.string.update_log),
+                        onClick = {
+                            onIntent(AboutIntent.ShowMdFile(updateLogTitle, "updateLog.md"))
+                        }
+                    )
+                }
                 SettingItemWithDivider {
                     SettingItem(
                         title = stringResource(R.string.contributors),

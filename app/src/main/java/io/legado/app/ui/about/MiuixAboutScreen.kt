@@ -184,6 +184,7 @@ private fun AboutContent(
     val privacyPolicyTitle = stringResource(R.string.about_privacy_policy_title)
     val licenseTitle = stringResource(R.string.about_license_title)
     val disclaimerTitle = stringResource(R.string.about_disclaimer_title)
+    val updateLogTitle = stringResource(R.string.update_log)
 
     val backdrop = rememberBlurBackdrop()
     var blurRadius by remember { mutableFloatStateOf(60f) }
@@ -426,6 +427,17 @@ private fun AboutContent(
                             Color.Transparent,
                         ),
                     ) {
+                        ArrowPreference(
+                            title = stringResource(R.string.update_log),
+                            onClick = {
+                                onIntent(
+                                    AboutIntent.ShowMdFile(
+                                        updateLogTitle,
+                                        "updateLog.md"
+                                    )
+                                )
+                            },
+                        )
                         ArrowPreference(
                             title = stringResource(R.string.privacy_policy),
                             onClick = {
