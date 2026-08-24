@@ -13,6 +13,10 @@ jobs:
       version: ${{ steps.appversion.outputs.name }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # 生成更新日志需要完整历史与已有 tag，用于定位上一个发布点
+          fetch-depth: 0
+
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -118,6 +122,99 @@ jobs:
           echo "APP_VERSION_NAME=$NAME" >> $GITHUB_ENV
           echo "构建版本号: $NAME"
 
+      - name: Generate Changelog
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
+        run: |
+          # 上一个发布 tag：本次 tag 还没创建，所以 HEAD 能 describe 到的就是上一版
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..HEAD"
+            echo "对比区间: $RANGE"
+          else
+            RANGE=$(git rev-list --max-count=20 HEAD | tail -n 1)..HEAD
+            echo "未找到历史 tag，回退到最近 20 个提交: $RANGE"
+          fi
+
+          : > CHANGES.md
+          # 按 conventional commit 前缀分组；scope 保留下来当作模块名
+          section() {
+            local pattern="$1"
+            local title="$2"
+            local lines
+            lines=$(git log --no-merges --pretty=format:'%s' "$RANGE" | grep -E "$pattern" || true)
+            [ -z "$lines" ] && return 0
+            {
+              echo "### $title"
+              printf '%s\n' "$lines" \
+                | sed -E 's/ *Co-authored-by:.*$//' \
+                | sed -E 's/^[a-zA-Z]+\(([^)]*)\)!?: */* \1: /; s/^[a-zA-Z]+!?: */* /'
+              echo ""
+            } >> CHANGES.md
+          }
+
+          section '^feat(\(|!?:)' '✨ 新功能'
+          section '^fix(\(|!?:)' '🐛 修复'
+          section '^perf(\(|!?:)' '⚡ 性能'
+          section '^(refactor|style)(\(|!?:)' '🧹 优化与重构'
+          section '^(docs|chore|build|ci|test|merge)(\(|!?:)' '🔧 其它'
+
+          # 没有任何符合规范的提交时兜底列出原始标题，避免更新日志空白
+          if ! grep -q '^### ' CHANGES.md; then
+            {
+              echo "### 📝 本次改动"
+              git log --no-merges --pretty=format:'* %s' "$RANGE"
+              echo ""
+              echo ""
+            } >> CHANGES.md
+          fi
+
+          {
+            echo "## 🚀 Release v$APP_VERSION_NAME"
+            echo ""
+            echo "**Build Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "**Commit:** ${{ github.sha }}"
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Since:** $PREV_TAG"
+            fi
+            echo ""
+          } > RELEASE_NOTES.md
+          cat CHANGES.md >> RELEASE_NOTES.md
+          {
+            echo "### 📦 Downloads"
+            echo "- **APK:** 直接安装到 Android 设备"
+          } >> RELEASE_NOTES.md
+
+          echo "===== RELEASE_NOTES.md ====="
+          cat RELEASE_NOTES.md
+
+      - name: Inject changelog into app assets
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
+        run: |
+          LOG=app/src/main/assets/updateLog.md
+          MARKER='<!-- CI_LATEST_CHANGELOG -->'
+          if ! grep -qF "$MARKER" "$LOG"; then
+            echo "❌ $LOG 缺少 $MARKER 占位标记，跳过注入"
+            exit 0
+          fi
+
+          {
+            echo "## 本版更新 v$APP_VERSION_NAME"
+            echo ""
+            cat CHANGES.md
+          } > SECTION.md
+
+          awk -v marker="$MARKER" '
+            index($0, marker) { while ((getline line < "SECTION.md") > 0) print line; next }
+            { print }
+          ' "$LOG" > "$LOG.tmp"
+          mv "$LOG.tmp" "$LOG"
+
+          echo "===== updateLog.md 头部 ====="
+          head -n 40 "$LOG"
+
+
       - name: Build Release APK
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
@@ -208,6 +305,13 @@ jobs:
           path: app/build/outputs/apk/app/**/*.apk
           retention-days: 30
 
+      - name: Upload Release Notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 30
+
       - name: Upload Mapping (compressed)
         uses: actions/upload-artifact@v4
         with:
@@ -225,9 +329,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-        with:
-          # 生成更新日志需要完整历史与已有 tag，用于定位上一个发布点
-          fetch-depth: 0
 
       - name: Download Release APK
         uses: actions/download-artifact@v4
@@ -240,6 +341,13 @@ jobs:
         with:
           name: mapping
           path: mapping_dir
+
+      - name: Download Release Notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .
+
 
       - name: Flatten APK files
         run: |
@@ -258,73 +366,15 @@ jobs:
         run: |
           # 直接复用 build job 解析好的版本号，保证日期与 APK 内版本完全一致
           echo "version=${{ needs.build.outputs.version }}" >> $GITHUB_OUTPUT
-          
-      - name: Generate Release Notes
+
+      - name: Show Release Notes
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          # 上一个发布 tag：本次 tag 还没创建，所以 HEAD 能 describe 到的就是上一版
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..HEAD"
-            echo "对比区间: $RANGE"
-          else
-            RANGE=$(git rev-list --max-count=20 HEAD | tail -n 1)..HEAD
-            echo "未找到历史 tag，回退到最近 20 个提交: $RANGE"
-          fi
-
-          {
-            echo "## 🚀 Release v$VERSION"
-            echo ""
-            echo "**Build Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            echo "**Commit:** ${{ github.sha }}"
-            if [ -n "$PREV_TAG" ]; then
-              echo "**Since:** $PREV_TAG"
-            fi
-          } > RELEASE_NOTES.md
-
-          # 按 conventional commit 前缀分组；scope 保留下来当作模块名
-          section() {
-            local pattern="$1"
-            local title="$2"
-            local lines
-            lines=$(git log --no-merges --pretty=format:'%s' "$RANGE" | grep -E "$pattern" || true)
-            [ -z "$lines" ] && return 0
-            {
-              echo ""
-              echo "### $title"
-              printf '%s\n' "$lines" \
-                | sed -E 's/ *Co-authored-by:.*$//' \
-                | sed -E 's/^[a-zA-Z]+\(([^)]*)\)!?: */- \1: /; s/^[a-zA-Z]+!?: */- /'
-            } >> RELEASE_NOTES.md
-          }
-
-          section '^feat(\(|!?:)' '✨ 新功能'
-          section '^fix(\(|!?:)' '🐛 修复'
-          section '^perf(\(|!?:)' '⚡ 性能'
-          section '^(refactor|style)(\(|!?:)' '🧹 优化与重构'
-          section '^(docs|chore|build|ci|test|merge)(\(|!?:)' '🔧 其它'
-
-          # 没有任何符合规范的提交时兜底列出原始标题，避免更新日志空白
-          if ! grep -q '^### ' RELEASE_NOTES.md; then
-            {
-              echo ""
-              echo "### 📝 本次改动"
-              git log --no-merges --pretty=format:'- %s' "$RANGE"
-              echo ""
-            } >> RELEASE_NOTES.md
-          fi
-
-          {
-            echo ""
-            echo "### 📦 Downloads"
-            echo "- **APK:** 直接安装到 Android 设备"
-          } >> RELEASE_NOTES.md
-
+          # RELEASE_NOTES.md 由 build job 生成并随 artifact 带过来，保证与 APK 内置日志一致
           echo "===== RELEASE_NOTES.md ====="
           cat RELEASE_NOTES.md
 
-
       - name: Create GitHub Release
+
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
