@@ -124,6 +124,13 @@ platform implementations (Android/JVM/iOS/...)
   `appDb.xxxDao` 访问，与 `daoInjectionBaseline`（文件名含 `ViewModel`）/ `uiDaoAccessBaseline`（其它 UI
   文件）比对，多一个或少一个都失败。新写的 ViewModel 默认零 DAO：先在已有 gateway 上加方法，需要别的表的
   字段（典型：章节标题）时在 DAO 的 `@Query` 里 join 出来随聚合行返回；不要为了让构建通过去改基线表。
+- **收尾必查基线**：任何改动碰到 `io/legado/app/ui/` 或其它进入基线表的文件后，提交前必须回到
+  `build.gradle.kts` 的三张表逐条核对——`legacyPreferenceCallBaseline`（`build.gradle.kts:222`）、
+  `legacyDaoInjectionBaseline`（`build.gradle.kts:249`）、`legacyUiDaoAccessBaseline`（`build.gradle.kts:265`
+  之后）。棘轮是双向的：删掉一处直连、删除 DAO import、重写 ViewModel、删除/搬移被冻结的文件，都会触发
+  `已减少 DAO 直连，请将基线从 N 下调到 M` 而使 `verifyConfigArchitecture` 失败。规则是：实际计数变少就把该
+  条目改成新计数；清零时保留 `to 0` 让棘轮继续盯住该文件；文件被删除或改名则删掉对应条目。删代码这类“看起来
+  只会让护栏更宽松”的改动才是最常漏的一步。
 - 普通设置 Gateway 通过 `update { current -> current.copy(...) }` 修改状态；关联字段在一次
   `copy(...)` 中原子提交。
 - 不引入 `*SettingsUpdate` 分发类型或 `updateAll`。
