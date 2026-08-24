@@ -23,7 +23,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,7 +44,7 @@ class HighlightTagRuleViewModel(
     val effects = _effects.asSharedFlow()
 
     private val _wordCountHighlighted = MutableStateFlow(true)
-    val wordCountHighlighted: Flow<Boolean> = _wordCountHighlighted
+    val wordCountHighlighted: StateFlow<Boolean> = _wordCountHighlighted.asStateFlow()
 
     init {
         viewModelScope.launch {
