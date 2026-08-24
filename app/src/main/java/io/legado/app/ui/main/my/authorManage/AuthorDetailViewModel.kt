@@ -28,6 +28,8 @@ import io.legado.app.domain.usecase.SearchRunEvent
 import io.legado.app.help.book.TagManager
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.ui.config.otherConfig.OtherConfig
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonArray
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
@@ -214,14 +216,34 @@ class AuthorDetailViewModel(
         }
     }
 
-    /** 进页面只读 searchBooks 缓存，不联网。 */
+    /** 进页面只读缓存，不联网。优先读持久化的「其他作品」结果，其次才是 searchBooks 表。 */
     private fun loadCachedWorks() {
         val author = name.trim()
         if (author.isBlank()) return
         viewModelScope.launch {
+            val cached = runCatching { loadWorksCache() }.getOrNull().orEmpty()
+            if (cached.isNotEmpty()) {
+                // 搜过一次后保留结果，直到下次点搜索覆盖；直接当作已完成展示
+                worksRaw.value = cached
+                worksPhase.value = WorksPhase.Done
+                return@launch
+            }
             runCatching { searchRepository.getSearchBooksByAuthor(author) }
                 .onSuccess { if (it.isNotEmpty()) worksRaw.value = it }
         }
+    }
+
+    /** 持久化缓存的 key：按作者名隔离。 */
+    private val worksCacheKey: String get() = "authorWorksCache_${name.trim()}"
+
+    private suspend fun saveWorksCache(books: List<SearchBook>) {
+        runCatching { localPreferencesRepository.putString(worksCacheKey, GSON.toJson(books)) }
+    }
+
+    private suspend fun loadWorksCache(): List<SearchBook> {
+        val json = localPreferencesRepository.getString(worksCacheKey).first()
+        if (json.isBlank()) return emptyList()
+        return fromJsonArray<SearchBook>(json).getOrNull().orEmpty()
     }
 
     fun onIntent(intent: AuthorDetailIntent) {
@@ -301,6 +323,8 @@ class AuthorDetailViewModel(
                 }
                 worksRaw.value = collected.values.toList()
                 worksPhase.value = WorksPhase.Done
+                // 落盘，下次进页面直接展示，直到再次点搜索覆盖
+                saveWorksCache(collected.values.toList())
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
@@ -314,7 +338,13 @@ class AuthorDetailViewModel(
         searchJob?.cancel()
         searchJob = null
         // 已经搜到的结果留着，没搜到就退回未搜索状态
-        worksPhase.value = if (worksRaw.value.isEmpty()) WorksPhase.Idle else WorksPhase.Done
+        if (worksRaw.value.isEmpty()) {
+            worksPhase.value = WorksPhase.Idle
+        } else {
+            worksPhase.value = WorksPhase.Done
+            // 中途停止时也已拿到部分结果，顺手落盘
+            viewModelScope.launch { saveWorksCache(worksRaw.value) }
+        }
     }
 
     private fun applyWorksScope(intent: AuthorDetailIntent.ApplyWorksScope) {

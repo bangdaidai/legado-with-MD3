@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.data.entities.SearchBook
@@ -56,6 +57,10 @@ fun SearchBookListItem(
     onLongClick: ((SearchBook, String?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     showPadding: Boolean = true,
+    /** 作者页「其他作品」等场景下作者名已隐含，可隐藏作者那一行。 */
+    showAuthor: Boolean = true,
+    /** 封面宽度，默认 72dp；列表更紧凑时可调小。 */
+    coverSize: Dp = 72.dp,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -74,7 +79,7 @@ fun SearchBookListItem(
             .then(if (showPadding) Modifier.adaptiveHorizontalPadding(vertical = 8.dp) else Modifier)
     ) {
         Box(modifier = Modifier
-            .width(72.dp)
+            .width(coverSize)
             .aspectRatio(5f / 7f)) {
             CoilBookCover(
                 name = book.name,
@@ -155,33 +160,35 @@ fun SearchBookListItem(
                 }
             }
 
-            Row {
-                AppText(
-                    text = book.author,
-                    style = LegadoTheme.typography.bodySmall,
-                    maxLines = 1,
-                )
-
-                val latestChapter = book.latestChapterTitle
-                if (!latestChapter.isNullOrEmpty()) {
+            if (showAuthor) {
+                Row {
                     AppText(
-                        text = " • ",
+                        text = book.author,
                         style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                     )
 
-                    AppText(
-                        text = "最新: $latestChapter",
-                        style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    val latestChapter = book.latestChapterTitle
+                    if (!latestChapter.isNullOrEmpty()) {
+                        AppText(
+                            text = " • ",
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+
+                        AppText(
+                            text = "最新: $latestChapter",
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
             val intro = remember(book.intro) { HtmlFormatter.formatSummaryText(book.intro) }
             if (intro.isNotEmpty()) {

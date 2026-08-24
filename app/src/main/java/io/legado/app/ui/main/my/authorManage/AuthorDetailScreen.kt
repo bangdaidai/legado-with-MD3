@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -209,6 +210,10 @@ fun AuthorDetailScreen(
                                 book = item.book,
                                 shelfState = item.shelfState,
                                 onClick = null,
+                                // 该区块已是「某作者的其他作品」，作者名多余，隐藏那一行
+                                showAuthor = false,
+                                // 去掉作者行后内容更矮，封面同步缩小到 56dp
+                                coverSize = 56.dp,
                                 // 点击与长按都交给外层卡片，避免两层水波纹
                                 showPadding = false,
                                 modifier = Modifier.padding(
@@ -308,21 +313,28 @@ private fun OtherWorksHeader(
             onClick = onPickScope,
             text = scopeNames.takeIf { it.isNotEmpty() }?.joinToString("/")
                 ?: stringResource(R.string.author_works_scope_all),
-            modifier = Modifier.align(Alignment.CenterVertically),
+            // 与右侧图标按钮同高：文本按钮按内容定高，图标按钮是 32dp 方形，这里统一锁 32dp
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .height(32.dp),
         )
         if (searching) {
             SmallTonalButton(
                 onClick = onStop,
                 icon = Icons.Default.Close,
                 contentDescription = stringResource(R.string.author_works_stop),
-                modifier = Modifier.align(Alignment.CenterVertically),
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .height(32.dp),
             )
         } else {
             SmallTonalButton(
                 onClick = onRefresh,
                 icon = Icons.Default.Search,
                 contentDescription = stringResource(R.string.author_works_search),
-                modifier = Modifier.align(Alignment.CenterVertically),
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .height(32.dp),
             )
         }
     }
