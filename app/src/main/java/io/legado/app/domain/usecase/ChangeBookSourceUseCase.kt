@@ -10,6 +10,7 @@ import io.legado.app.data.dao.BookDao
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
+import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.help.book.BookHelp
@@ -88,6 +89,7 @@ class ChangeBookSourceUseCase(
     private val bookChapterDao: BookChapterDao,
     private val otherSettingsGateway: OtherSettingsGateway,
     private val readSettingsGateway: ReadSettingsGateway,
+    private val bookKnowledgeGateway: BookKnowledgeGateway,
 ) {
 
     suspend fun applyMigration(
@@ -140,6 +142,8 @@ class ChangeBookSourceUseCase(
                 database.readingMemoryDao.deleteMigrated(oldBookUrl)
                 // 笔记高亮的渲染查询按 bookUrl 过滤，不跟着搬就会静默画不出来
                 database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
+                // 迁移角色数据：保留旧角色，避免换源后丢失
+                bookKnowledgeGateway.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
             }
         }
         // 换源后重建新书的标签关联，并清理旧 bookUrl 上的孤儿关联，避免标签丢失。
@@ -370,7 +374,8 @@ class ChangeBookSourceUseCase(
         }
         if (options.migrateCategory) {
             newBook.customTag = customTag
-            newBook.kind = kind
+            // kind 不迁移：新书源应提供自己的 kind，避免旧标签残留
+            // newBook.kind = kind
         }
         if (options.migrateRemark) {
             newBook.customIntro = customIntro
@@ -397,6 +402,7 @@ class ChangeBookSourceUseCase(
                 newBook.coverUrl = coverUrl
                 newBook.customIntro = customIntro
                 newBook.intro = intro
+                newBook.kind = kind  // 正版→非正版时保留 kind
             }
         }
         // 换源到本地文件后，刷新会走 LocalBook.upBookInfo 重新解析文件，把 intro/coverUrl 覆盖成文件自带的。

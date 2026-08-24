@@ -71,4 +71,7 @@ interface BookKnowledgeGateway {
 
     suspend fun deleteCharacterRelation(relationId: String)
     suspend fun deleteKnowledgeEntry(entryId: String)
+
+    /** 换源迁移：将旧 bookUrl 的角色、事件、关系迁移到新 bookUrl */
+    suspend fun migrateToNewBookUrl(oldBookUrl: String, newBookUrl: String)
 }

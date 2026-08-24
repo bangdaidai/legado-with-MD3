@@ -280,5 +280,15 @@ interface BookKnowledgeDao {
         updatedAt: Long = System.currentTimeMillis(),
     )
 
+    /** 换源迁移：将旧 bookUrl 的角色、事件、关系迁移到新 bookUrl */
+    @Query("UPDATE book_character_profiles SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
+    suspend fun migrateCharacterProfilesToNewBookUrl(oldBookUrl: String, newBookUrl: String)
+
+    @Query("UPDATE book_character_events SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
+    suspend fun migrateCharacterEventsToNewBookUrl(oldBookUrl: String, newBookUrl: String)
+
+    @Query("UPDATE book_character_relations SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
+    suspend fun migrateCharacterRelationsToNewBookUrl(oldBookUrl: String, newBookUrl: String)
+
     // endregion
 }
