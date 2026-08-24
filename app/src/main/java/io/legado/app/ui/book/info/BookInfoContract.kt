@@ -84,6 +84,7 @@ data class BookInfoBookUi(
     val durChapterPos: Int,
     val remark: String?,
     val intro: String?,
+    val wordCount: String?,
 )
 
 @Stable

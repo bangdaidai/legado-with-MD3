@@ -1899,6 +1899,7 @@ class BookInfoViewModel(
             durChapterPos = durChapterPos,
             remark = remark,
             intro = getDisplayIntro(),
+            wordCount = wordCount,
         )
     }
 

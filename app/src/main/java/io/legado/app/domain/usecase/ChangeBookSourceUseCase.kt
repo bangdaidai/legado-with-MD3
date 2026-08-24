@@ -403,6 +403,7 @@ class ChangeBookSourceUseCase(
                 newBook.customIntro = customIntro
                 newBook.intro = intro
                 newBook.kind = kind  // 正版→非正版时保留 kind
+                newBook.wordCount = wordCount  // 正版→非正版时保留字数
             }
         }
         // 换源到本地文件后，刷新会走 LocalBook.upBookInfo 重新解析文件，把 intro/coverUrl 覆盖成文件自带的。

@@ -1076,7 +1076,7 @@ private fun BookInfoHeader(
             if (highlightedTags.isNotEmpty()) {
                 HighlightTagRow(tags = highlightedTags)
             }
-            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank()) {
+            if (coloredTags.isNotEmpty() || !groupNames.isNullOrBlank() || !book?.wordCount.isNullOrBlank()) {
                 val kindListState = rememberLazyListState()
                 LazyRow(
                     state = kindListState,
@@ -1107,6 +1107,14 @@ private fun BookInfoHeader(
                             color = tagColor,
                             showColoredBorder = tagBorder,
                         )
+                    }
+                    book?.wordCount?.takeIf { it.isNotBlank() }?.let {
+                        item(key = "wordcount") {
+                            TagChip(
+                                tag = formatWordCount(it),
+                                showColoredBorder = tagBorder,
+                            )
+                        }
                     }
                 }
             }
