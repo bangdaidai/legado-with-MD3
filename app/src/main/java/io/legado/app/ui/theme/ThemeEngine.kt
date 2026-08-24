@@ -147,11 +147,23 @@ object ThemeEngine {
         forceOpaque: Boolean
     ): ColorScheme {
         if (forceOpaque || mode != AppThemeMode.Transparent) return this
-        return copy(
-            surface = Color.Transparent,
-            background = Color.Transparent,
-            surfaceContainerLow = Color.Transparent,
-            surfaceContainer = Color.Transparent,
-        )
+        return applyTransparentSurfaces()
     }
+}
+
+/**
+ * 透明主题真正“透明”的那几个角色。
+ *
+ * 封面取色一类的 override 走 [buildThemeOverrideState]，不经过 [ThemeEngine.getColorScheme]，
+ * 必须复用同一份清单，否则 override 会把不透明 surface 带回来：既让透明主题在该页失效，
+ * 也会让 [animateColorSchemeAsState] 从 alpha 0 的 [Color.Transparent]（RGB 是黑）
+ * 插值到不透明色，中间帧变成半透明黑而闪一下。
+ */
+internal fun ColorScheme.applyTransparentSurfaces(): ColorScheme {
+    return copy(
+        surface = Color.Transparent,
+        background = Color.Transparent,
+        surfaceContainerLow = Color.Transparent,
+        surfaceContainer = Color.Transparent,
+    )
 }
