@@ -17,6 +17,8 @@ import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadRecordRepository
+import io.legado.app.domain.gateway.ProtagonistExtractionSettingsGateway
+import io.legado.app.domain.model.settings.ProtagonistExtractionSettings
 import io.legado.app.help.book.ProtagonistExtractor
 import io.legado.app.help.book.TagManager
 import io.legado.app.help.book.isNotShelf
@@ -34,6 +36,7 @@ class ReadingMemoryRepository(
     private val readRecordDao: ReadRecordDao,
     private val database: AppDatabase,
     private val readRecordRepository: ReadRecordRepository,
+    private val extractionSettingsGateway: ProtagonistExtractionSettingsGateway,
 ) {
 
     companion object {
@@ -466,33 +469,62 @@ class ReadingMemoryRepository(
      * 提取成功则将主角名写入 book_character_profiles 并设置 isProtagonist = true。
      * 返回提取到的主角名列表。
      */
-    suspend fun extractProtagonists(bookUrl: String, intro: String): List<String> {
-        val names = ProtagonistExtractor.extract(intro)
-        if (names.isEmpty()) return emptyList()
+    suspend fun extractProtagonists(
+        bookUrl: String,
+        intro: String,
+        rules: ProtagonistExtractionSettings = extractionSettingsGateway.currentSettings,
+    ): List<String> {
+        val extracted = ProtagonistExtractor.extract(intro, rules)
+        if (extracted.isEmpty()) return emptyList()
 
         val now = System.currentTimeMillis()
-        names.forEach { name ->
-            val existing = bookKnowledgeDao.getCharacterByNameIncludeDeleted(bookUrl, name)
-            if (existing == null) {
-                // 创建新的角色条目并标记为主角
-                val profile = BookCharacterProfile(
-                    id = UUID.randomUUID().toString(),
-                    bookUrl = bookUrl,
-                    name = name,
-                    source = BookCharacterProfile.SOURCE_AI,
-                    isProtagonist = true,
-                    createdAt = now,
-                    updatedAt = now,
-                )
-                bookKnowledgeDao.upsertCharacterProfile(profile)
-            } else if (existing.status == BookCharacterProfile.STATUS_DELETED) {
-                // 用户已删除，不再自动重建
-            } else if (!existing.isProtagonist) {
-                // 已有角色但未标记为主角，更新标记
-                bookKnowledgeDao.setProtagonist(bookUrl, name, true, now)
+        extracted.forEach { ec ->
+            val existing = bookKnowledgeDao.getCharacterByNameIncludeDeleted(bookUrl, ec.name)
+            when {
+                existing == null -> {
+                    // 新建角色条目并标记主角 / 配角，带上推断音色（供听书复用）
+                    bookKnowledgeDao.upsertCharacterProfile(
+                        BookCharacterProfile(
+                            id = UUID.randomUUID().toString(),
+                            bookUrl = bookUrl,
+                            name = ec.name,
+                            source = BookCharacterProfile.SOURCE_AI,
+                            role = if (ec.isProtagonist) "" else BookCharacterProfile.ROLE_SUPPORTING,
+                            isProtagonist = ec.isProtagonist,
+                            voiceGender = ec.voiceGender,
+                            createdAt = now,
+                            updatedAt = now,
+                        )
+                    )
+                }
+
+                existing.status == BookCharacterProfile.STATUS_DELETED -> {
+                    // 用户已删除，不再自动重建
+                }
+
+                else -> {
+                    val needsProtagonistUpdate = existing.isProtagonist != ec.isProtagonist
+                    // 仅在当前无性别推断时回填，避免覆盖用户 / AI 已设音色
+                    val needsGenderUpdate = existing.voiceGender == BookCharacterProfile.VOICE_GENDER_UNKNOWN &&
+                        ec.voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN
+                    if (needsProtagonistUpdate || needsGenderUpdate) {
+                        bookKnowledgeDao.upsertCharacterProfile(
+                            existing.copy(
+                                isProtagonist = if (needsProtagonistUpdate) ec.isProtagonist else existing.isProtagonist,
+                                role = if (needsProtagonistUpdate && !ec.isProtagonist) {
+                                    BookCharacterProfile.ROLE_SUPPORTING
+                                } else {
+                                    existing.role
+                                },
+                                voiceGender = if (needsGenderUpdate) ec.voiceGender else existing.voiceGender,
+                                updatedAt = now,
+                            )
+                        )
+                    }
+                }
             }
         }
-        return names
+        return extracted.map { it.name }
     }
 
     /**

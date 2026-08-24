@@ -50,6 +50,7 @@ data class BookCharacterProfile(
         const val ROLE_FEMALE_LEAD = "female_lead"
         const val ROLE_MALE_SUPPORTING = "male_supporting"
         const val ROLE_FEMALE_SUPPORTING = "female_supporting"
+        const val ROLE_SUPPORTING = "supporting"
         val ALL_ROLES =
             listOf(ROLE_MALE_LEAD, ROLE_FEMALE_LEAD, ROLE_MALE_SUPPORTING, ROLE_FEMALE_SUPPORTING)
 

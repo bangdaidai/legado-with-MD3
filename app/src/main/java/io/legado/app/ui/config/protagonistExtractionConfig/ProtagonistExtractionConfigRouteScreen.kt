@@ -1,4 +1,4 @@
-package io.legado.app.ui.config.readConfig
+package io.legado.app.ui.config.protagonistExtractionConfig
 
 import android.widget.Toast
 import androidx.compose.runtime.Composable
@@ -9,10 +9,9 @@ import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
-fun ReadConfigRouteScreen(
+fun ProtagonistExtractionConfigRouteScreen(
     onBackClick: () -> Unit,
-    viewModel: ReadConfigViewModel = koinViewModel(),
-    onNavigateToProtagonistExtraction: () -> Unit = {},
+    viewModel: ProtagonistExtractionConfigViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val state = viewModel.uiState.collectAsStateWithLifecycle().value
@@ -20,17 +19,16 @@ fun ReadConfigRouteScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
-                is ReadConfigEffect.SettingsUpdateFailed -> {
+                is ProtagonistExtractionConfigEffect.ShowToast -> {
                     Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    ReadConfigScreen(
+    ProtagonistExtractionConfigScreen(
         state = state,
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
-        onNavigateToProtagonistExtraction = onNavigateToProtagonistExtraction,
     )
 }

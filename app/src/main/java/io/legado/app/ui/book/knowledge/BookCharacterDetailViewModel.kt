@@ -261,6 +261,8 @@ private fun String.impliedVoiceGender(): String? = when (this) {
     BookCharacterProfile.ROLE_FEMALE_LEAD,
     BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_FEMALE
 
+    BookCharacterProfile.ROLE_SUPPORTING -> null
+
     else -> null
 }
 

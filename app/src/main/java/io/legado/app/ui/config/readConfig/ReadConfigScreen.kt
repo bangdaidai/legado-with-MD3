@@ -30,6 +30,7 @@ fun ReadConfigScreen(
     state: ReadConfigUiState,
     onIntent: (ReadConfigIntent) -> Unit,
     onBackClick: () -> Unit,
+    onNavigateToProtagonistExtraction: () -> Unit = {},
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val settings = state
@@ -435,6 +436,15 @@ fun ReadConfigScreen(
             }
         }
     }
+
+            item {
+                SplicedColumnGroup(title = stringResource(R.string.advanced)) {
+                    ClickableSettingItem(
+                        title = stringResource(R.string.protagonist_extraction_config),
+                        onClick = onNavigateToProtagonistExtraction,
+                    )
+                }
+            }
 
     PageKeySheet(
         show = state.activeSheet == ReadConfigSheet.PageKeys,

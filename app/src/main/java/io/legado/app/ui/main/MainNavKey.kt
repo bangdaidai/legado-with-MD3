@@ -59,6 +59,9 @@ data object MainRouteSettingsOther : MainRoute
 data object MainRouteSettingsRead : MainRoute
 
 @Serializable
+data object MainRouteProtagonistExtractionConfig : MainRoute
+
+@Serializable
 data object MainRouteSettingsCover : MainRoute
 
 @Serializable

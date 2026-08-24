@@ -495,6 +495,15 @@ object PreferKey {
     const val labEInkDisplay = "labEInkDisplay"
     const val labEyeProtection = "labEyeProtection"
 
+    // 简介角色提取规则
+    const val protagonistExtractionPrefix = "protagonistExtractionPrefix"
+    const val protagonistExtractionSupportingPrefix = "protagonistExtractionSupportingPrefix"
+    const val protagonistExtractionSeparators = "protagonistExtractionSeparators"
+    const val protagonistExtractionMinLength = "protagonistExtractionMinLength"
+    const val protagonistExtractionMaxLength = "protagonistExtractionMaxLength"
+    const val protagonistExtractionInvalidWords = "protagonistExtractionInvalidWords"
+    const val protagonistExtractionRelaxed = "protagonistExtractionRelaxed"
+
     // Eye Protection
     const val eyeProtectionEnabled = "eyeProtectionEnabled"
     const val colorTemperature = "colorTemperature"

@@ -1,75 +1,126 @@
 package io.legado.app.help.book
 
+import io.legado.app.domain.model.settings.ProtagonistExtractionSettings
+
 /**
- * 从书籍简介中自动提取主角名。
- * 移植自 readdai 项目，纯 Kotlin 工具，无 UI/框架依赖。
+ * 从书籍简介中提取角色名（主角 / 配角）。
  *
- * 三种设主角途径：
- * 1. 简介自动提取（本工具）
- * 2. 阅读页长按文本设为主角（见阅读页菜单接线）
- * 3. 知识-人物编辑页「是否主角」开关（见 BookInfoEdit）
- *
- * 数据源统一写入 book_character_profiles.isProtagonist 列。
+ * 提取规则完全由 [ProtagonistExtractionSettings] 驱动，可在
+ * 「设置 → 阅读 → 角色提取规则」中自定义，以适应不同书源简介写法。
+ * 提取结果写入 [io.legado.app.data.entities.BookCharacterProfile]
+ * （由调用方负责落库与标记主角/配角）。
  */
 object ProtagonistExtractor {
 
-    /** 主角提取正则：匹配「主角：xxx」或「主角:xxx」 */
-    private val PROTAGONIST_REGEX = Regex("主角[：:](.+)")
-
-    /** 中文标点分隔符 */
-    private val NAME_SEPARATOR_REGEX = Regex("[、，,]")
-
-    /** 无效词过滤（非人名的常见后缀/前缀） */
-    private val INVALID_WORDS = setOf(
-        "主角", "人物", "角色", "简介", "介绍", "内容",
-        "作者", "作品", "小说", "故事", "文章", "本书", "文案",
-        "男", "女", "男主", "女主",
+    data class ExtractedCharacter(
+        val name: String,
+        val isProtagonist: Boolean,
+        val voiceGender: String = GENDER_UNKNOWN,
     )
 
-    /** 主角名有效长度范围（含） */
-    private const val MIN_NAME_LENGTH = 2
-    private const val MAX_NAME_LENGTH = 4
+    private const val GENDER_MALE = "male"
+    private const val GENDER_FEMALE = "female"
+    private const val GENDER_UNKNOWN = "unknown"
+
+    /** 按命中前缀词推断性别，便于听书多角色朗读直接复用音色。 */
+    private fun genderFromPrefix(label: String): String =
+        when {
+            "男" in label -> GENDER_MALE
+            "女" in label -> GENDER_FEMALE
+            else -> GENDER_UNKNOWN
+        }
 
     /**
-     * 从简介文本中提取主角名列表。
-     * @param intro 书籍简介文本
-     * @return 去重后的主角名列表，失败时返回空列表
+     * 从简介提取角色名列表。
+     * @param rules 提取规则，缺省用 [ProtagonistExtractionSettings.DEFAULT]。
      */
-    fun extract(intro: String?): List<String> {
+    fun extract(
+        intro: String?,
+        rules: ProtagonistExtractionSettings = ProtagonistExtractionSettings.DEFAULT,
+    ): List<ExtractedCharacter> {
         if (intro.isNullOrBlank()) return emptyList()
 
-        val matchResult = PROTAGONIST_REGEX.find(intro) ?: return emptyList()
-        val namesBlock = matchResult.groupValues.getOrNull(1) ?: return emptyList()
-
-        return namesBlock
-            .split(NAME_SEPARATOR_REGEX)
+        val invalid = rules.invalidWords
+            .lineSequence()
             .map { it.trim() }
-            .filter { name ->
-                name.length in MIN_NAME_LENGTH..MAX_NAME_LENGTH &&
-                name !in INVALID_WORDS &&
-                name.none { c -> c.isWhitespace() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        val separatorRegex = Regex("[${Regex.escape(rules.separators)}]")
+        val protagonistRegex = regexOf(rules.protagonistPrefix)
+        val supportingRegex = regexOf(rules.supportingPrefix)
+
+        val result = LinkedHashMap<String, ExtractedCharacter>()
+
+        fun consume(block: String, isProtagonist: Boolean, gender: String) {
+            for (raw in block.split(separatorRegex)) {
+                val name = clean(raw, invalid, rules) ?: continue
+                val existing = result[name]
+                if (existing == null) {
+                    result[name] = ExtractedCharacter(name, isProtagonist, gender)
+                } else {
+                    // 同一名字若先被识别为配角、后又命中主角前缀，以主角优先。
+                    val nextProtagonist = if (isProtagonist) true else existing.isProtagonist
+                    // 已有性别推断则保留，避免被 unknown 覆盖。
+                    val nextGender = if (existing.voiceGender != GENDER_UNKNOWN) existing.voiceGender else gender
+                    result[name] = existing.copy(isProtagonist = nextProtagonist, voiceGender = nextGender)
+                }
             }
-            .distinct()
+        }
+
+        protagonistRegex.findAll(intro).forEach { m ->
+            consume(blockAfter(intro, m), true, genderFromPrefix(m.groupValues.getOrNull(1).orEmpty()))
+        }
+        supportingRegex.findAll(intro).forEach { m ->
+            consume(blockAfter(intro, m), false, genderFromPrefix(m.groupValues.getOrNull(1).orEmpty()))
+        }
+
+        if (result.isEmpty() && rules.relaxedFirstLine) {
+            val firstLine = intro.lines().firstOrNull { it.isNotBlank() } ?: return result.values.toList()
+            val hasSeparator = rules.separators.any { it in firstLine } ||
+                '：' in firstLine || ':' in firstLine
+            if (hasSeparator) consume(firstLine, false, GENDER_UNKNOWN)
+        }
+
+        return result.values.toList()
     }
 
     /**
-     * 宽松模式：也尝试从文本开头几行提取人名（不以「主角：」前缀的）。
-     * 作为 extract 的补充，用于简介不含明确「主角：」标记但开头几行直接列人名的场景。
+     * 宽松模式：忽略前缀，仅用简介首行按分隔符解析。
+     * 等价于 [extract] 在 [ProtagonistExtractionSettings.relaxedFirstLine] = true 时的行为。
      */
-    fun extractRelaxed(intro: String?): List<String> {
-        return extract(intro).ifEmpty {
-            intro?.let { text ->
-                val firstLine = text.lines().firstOrNull { it.isNotBlank() } ?: return emptyList()
-                // 首行按分隔符拆分，过滤短词
-                firstLine.split(NAME_SEPARATOR_REGEX)
-                    .map { it.trim() }
-                    .filter { name ->
-                        name.length in MIN_NAME_LENGTH..MAX_NAME_LENGTH &&
-                        name !in INVALID_WORDS &&
-                        name.none { c -> c.isWhitespace() }
-                    }
-                    .distinct()
-            } ?: emptyList()
-        }
+    fun extractRelaxed(
+        intro: String?,
+        rules: ProtagonistExtractionSettings = ProtagonistExtractionSettings.DEFAULT,
+    ): List<ExtractedCharacter> = extract(intro, rules.copy(relaxedFirstLine = true))
+
+    private fun regexOf(pattern: String): Regex =
+        if (pattern.isBlank()) Regex("$.^") else runCatching { Regex(pattern) }.getOrElse { Regex("$.^") }
+
+    /** 取匹配位置之后、直到行尾的名单文本。 */
+    private fun blockAfter(intro: String, match: MatchResult): String {
+        val start = match.range.last + 1
+        if (start >= intro.length) return ""
+        val rest = intro.substring(start)
+        val newLine = rest.indexOf('\n')
+        return if (newLine >= 0) rest.substring(0, newLine) else rest
+    }
+
+    /**
+     * 清洗单个候选词：
+     * 1. 去掉首尾标点与空白；
+     * 2. 去掉可能带在名字前的内置角色标签（如「男主张三」→「张三」）；
+     * 3. 过滤空白、无效词与长度越界。
+     */
+    private fun clean(raw: String, invalid: Set<String>, rules: ProtagonistExtractionSettings): String? {
+        var s = raw.trim()
+            .replace(Regex("^[\\p{P}\\p{Z}]+|[\\p{P}\\p{Z}]+$"), "")
+        s = s.replace(Regex("^(主角|配角|男主|女主|男配|女配|反派|主人公|主要角色)[：:]?"), "")
+        s = s.trim()
+            .replace(Regex("^[\\p{P}\\p{Z}]+|[\\p{P}\\p{Z}]+$"), "")
+        if (s.isEmpty()) return null
+        if (s in invalid) return null
+        if (s.any { it.isWhitespace() }) return null
+        if (s.length !in rules.minLength..rules.maxLength) return null
+        return s
     }
 }

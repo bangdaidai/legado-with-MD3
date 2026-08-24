@@ -403,6 +403,7 @@ private fun CharacterListItem(
                             BookCharacterProfile.ROLE_FEMALE_LEAD -> stringResource(R.string.role_female_lead)
                             BookCharacterProfile.ROLE_MALE_SUPPORTING -> stringResource(R.string.role_male_supporting)
                             BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> stringResource(R.string.role_female_supporting)
+                            BookCharacterProfile.ROLE_SUPPORTING -> stringResource(R.string.role_supporting)
                             else -> character.role
                         }
                         TextCard(text = roleLabel)

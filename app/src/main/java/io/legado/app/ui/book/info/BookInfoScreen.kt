@@ -1719,6 +1719,7 @@ private fun CharacterEntryCard(
         io.legado.app.data.entities.BookCharacterProfile.ROLE_FEMALE_LEAD -> stringResource(R.string.role_female_lead)
         io.legado.app.data.entities.BookCharacterProfile.ROLE_MALE_SUPPORTING -> stringResource(R.string.role_male_supporting)
         io.legado.app.data.entities.BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> stringResource(R.string.role_female_supporting)
+        io.legado.app.data.entities.BookCharacterProfile.ROLE_SUPPORTING -> stringResource(R.string.role_supporting)
         else -> ""
     }
 

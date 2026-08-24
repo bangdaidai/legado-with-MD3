@@ -9,6 +9,7 @@ import io.legado.app.domain.gateway.CoverSettingsGateway
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
 import io.legado.app.domain.gateway.LabSettingsGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
+import io.legado.app.domain.gateway.ProtagonistExtractionSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.TranslationSettingsGateway
 import io.legado.app.domain.gateway.WebSearchSettingsGateway
@@ -19,6 +20,7 @@ import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.DownloadCacheSettings
 import io.legado.app.domain.model.settings.LabSettings
 import io.legado.app.domain.model.settings.OtherSettings
+import io.legado.app.domain.model.settings.ProtagonistExtractionSettings
 import io.legado.app.domain.model.settings.ThemeSettings
 import io.legado.app.domain.model.settings.TranslationSettings
 import io.legado.app.domain.model.settings.WebSearchSettings
@@ -111,6 +113,24 @@ class LabSettingsRepository : LabSettingsGateway {
         AppConfigStore.atomicUpdate(
             read = Preferences::toLabSettings,
             toPrefMap = LabSettings::toPrefMap,
+            transform = transform,
+        )
+    }
+}
+
+class ProtagonistExtractionSettingsRepository : ProtagonistExtractionSettingsGateway {
+    override val currentSettings: ProtagonistExtractionSettings
+        get() = AppConfigStore.preferences.toProtagonistExtractionSettings()
+
+    override val settings: Flow<ProtagonistExtractionSettings> =
+        AppConfigStore.preferencesFlow
+            .map { it.toProtagonistExtractionSettings() }
+            .distinctUntilChanged()
+
+    override suspend fun update(transform: (ProtagonistExtractionSettings) -> ProtagonistExtractionSettings) {
+        AppConfigStore.atomicUpdate(
+            read = Preferences::toProtagonistExtractionSettings,
+            toPrefMap = ProtagonistExtractionSettings::toPrefMap,
             transform = transform,
         )
     }
@@ -242,6 +262,34 @@ internal fun LabSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.labEnabled to enabled,
     PreferKey.labEInkDisplay to eInkDisplay,
     PreferKey.labEyeProtection to eyeProtection,
+)
+
+internal fun Preferences.toProtagonistExtractionSettings(): ProtagonistExtractionSettings =
+    ProtagonistExtractionSettings(
+        protagonistPrefix = compatDsString(PreferKey.protagonistExtractionPrefix)
+            ?: ProtagonistExtractionSettings.DEFAULT.protagonistPrefix,
+        supportingPrefix = compatDsString(PreferKey.protagonistExtractionSupportingPrefix)
+            ?: ProtagonistExtractionSettings.DEFAULT.supportingPrefix,
+        separators = compatDsString(PreferKey.protagonistExtractionSeparators)
+            ?: ProtagonistExtractionSettings.DEFAULT.separators,
+        minLength = compatDsInt(PreferKey.protagonistExtractionMinLength)
+            ?: ProtagonistExtractionSettings.DEFAULT.minLength,
+        maxLength = compatDsInt(PreferKey.protagonistExtractionMaxLength)
+            ?: ProtagonistExtractionSettings.DEFAULT.maxLength,
+        invalidWords = compatDsString(PreferKey.protagonistExtractionInvalidWords)
+            ?: ProtagonistExtractionSettings.DEFAULT.invalidWords,
+        relaxedFirstLine = compatDsBoolean(PreferKey.protagonistExtractionRelaxed)
+            ?: ProtagonistExtractionSettings.DEFAULT.relaxedFirstLine,
+    )
+
+internal fun ProtagonistExtractionSettings.toPrefMap(): Map<String, Any?> = mapOf(
+    PreferKey.protagonistExtractionPrefix to protagonistPrefix,
+    PreferKey.protagonistExtractionSupportingPrefix to supportingPrefix,
+    PreferKey.protagonistExtractionSeparators to separators,
+    PreferKey.protagonistExtractionMinLength to minLength,
+    PreferKey.protagonistExtractionMaxLength to maxLength,
+    PreferKey.protagonistExtractionInvalidWords to invalidWords,
+    PreferKey.protagonistExtractionRelaxed to relaxedFirstLine,
 )
 
 internal fun Preferences.toTranslationSettings(): TranslationSettings {

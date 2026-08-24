@@ -149,6 +149,7 @@ import io.legado.app.domain.gateway.HomepageSettingsGateway
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
 import io.legado.app.domain.gateway.ImportBookSettingsGateway
 import io.legado.app.domain.gateway.LabSettingsGateway
+import io.legado.app.domain.gateway.ProtagonistExtractionSettingsGateway
 import io.legado.app.domain.gateway.LocalBookGateway
 import io.legado.app.domain.gateway.LocalPasswordGateway
 import io.legado.app.domain.gateway.MangaReaderDataGateway
@@ -302,6 +303,7 @@ import io.legado.app.ui.config.coverConfig.CoverConfigViewModel
 import io.legado.app.ui.config.customTheme.CustomThemeViewModel
 import io.legado.app.ui.config.downloadCacheConfig.DownloadCacheConfigViewModel
 import io.legado.app.ui.config.labConfig.LabConfigViewModel
+import io.legado.app.ui.config.protagonistExtractionConfig.ProtagonistExtractionConfigViewModel
 import io.legado.app.ui.config.otherConfig.OtherConfigViewModel
 import io.legado.app.ui.config.readConfig.ApplyReadSettingUseCase
 import io.legado.app.ui.config.readConfig.ReadConfigViewModel
@@ -410,6 +412,7 @@ val appModule = module {
     single<CoverSettingsGateway> { CoverSettingsRepository() }
     single<BackupSettingsGateway> { BackupSettingsRepository() }
     single<LabSettingsGateway> { LabSettingsRepository() }
+    single<ProtagonistExtractionSettingsGateway> { ProtagonistExtractionSettingsRepository() }
     single<MangaSettingsGateway> { MangaSettingsRepository() }
     single<ChangeSourceSettingsGateway> { ChangeSourceSettingsRepository() }
     single<ImportBookSettingsGateway> { ImportBookSettingsRepository() }
@@ -669,6 +672,7 @@ val appModule = module {
     viewModelOf(::ThemeManageViewModel)
     viewModelOf(::BackupConfigViewModel)
     viewModelOf(::LabConfigViewModel)
+    viewModelOf(::ProtagonistExtractionConfigViewModel)
     viewModelOf(::TranslationConfigViewModel)
     viewModelOf(::AiConfigViewModel)
     viewModelOf(::AiSummaryConfigViewModel)

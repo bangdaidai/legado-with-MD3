@@ -137,6 +137,7 @@ import io.legado.app.ui.config.downloadCacheConfig.DownloadCacheConfigRouteScree
 import io.legado.app.ui.config.labConfig.LabConfigRouteScreen
 import io.legado.app.ui.config.otherConfig.OtherConfigRouteScreen
 import io.legado.app.ui.config.readConfig.ReadConfigRouteScreen
+import io.legado.app.ui.config.protagonistExtractionConfig.ProtagonistExtractionConfigRouteScreen
 import io.legado.app.ui.config.themeConfig.ThemeConfigRouteScreen
 import io.legado.app.ui.config.themeManage.ThemeManageRouteScreen
 import io.legado.app.ui.config.translation.TranslationConfigRouteScreen
@@ -470,7 +471,16 @@ fun MainActivity.mainEntryProvider(
     }
 
     entry<MainRouteSettingsRead> {
-        ReadConfigRouteScreen(onBackClick = { onNavigateBack() })
+        ReadConfigRouteScreen(
+            onBackClick = { onNavigateBack() },
+            onNavigateToProtagonistExtraction = {
+                backStack.add(MainRouteProtagonistExtractionConfig)
+            },
+        )
+    }
+
+    entry<MainRouteProtagonistExtractionConfig> {
+        ProtagonistExtractionConfigRouteScreen(onBackClick = { onNavigateBack() })
     }
 
     entry<MainRouteSettingsCover> {
