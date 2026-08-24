@@ -75,7 +75,6 @@ sealed interface BookSourceEditIntent {
     data object ClearCookie : BookSourceEditIntent
     data object ShowLog : BookSourceEditIntent
     data object ShowHelp : BookSourceEditIntent
-    data object ShowRelatedBooksHelp : BookSourceEditIntent
     data object DismissSheet : BookSourceEditIntent
     data object SaveAndSetVariable : BookSourceEditIntent
     data class UpdateVariable(val value: String) : BookSourceEditIntent

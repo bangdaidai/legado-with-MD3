@@ -411,8 +411,5 @@ private fun BookSourceEditMenu(
         RoundDropdownMenuItem(
             text = stringResource(R.string.help),
             onClick = { click(BookSourceEditIntent.ShowHelp) })
-        RoundDropdownMenuItem(
-            text = stringResource(R.string.related_books),
-            onClick = { click(BookSourceEditIntent.ShowRelatedBooksHelp) })
     }
 }

@@ -95,7 +95,6 @@ class BookSourceEditViewModel(
             BookSourceEditIntent.ClearCookie -> clearCookie()
             BookSourceEditIntent.ShowLog -> _uiState.update { it.copy(activeSheet = BookSourceEditSheet.Log) }
             BookSourceEditIntent.ShowHelp -> showHelp()
-            BookSourceEditIntent.ShowRelatedBooksHelp -> showHelp("relatedBooksHelp")
             BookSourceEditIntent.DismissSheet -> _uiState.update { it.copy(activeSheet = null) }
             BookSourceEditIntent.SaveAndSetVariable -> save { BookSourceEditEffect.OpenVariable(it) }
             is BookSourceEditIntent.UpdateVariable -> updateVariable(intent.value)
