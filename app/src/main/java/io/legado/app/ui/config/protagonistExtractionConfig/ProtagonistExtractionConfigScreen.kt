@@ -48,9 +48,11 @@ fun ProtagonistExtractionConfigScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .adaptiveContentPadding(
-                    top = paddingValues.calculateTopPadding(),
-                    bottom = 24.dp,
+                .padding(
+                    adaptiveContentPadding(
+                        top = paddingValues.calculateTopPadding(),
+                        bottom = 24.dp,
+                    ),
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

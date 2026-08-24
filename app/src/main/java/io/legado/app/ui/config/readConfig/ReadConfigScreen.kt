@@ -435,7 +435,6 @@ fun ReadConfigScreen(
                 }
             }
         }
-    }
 
             item {
                 SplicedColumnGroup(title = stringResource(R.string.advanced)) {
@@ -445,6 +444,8 @@ fun ReadConfigScreen(
                     )
                 }
             }
+
+    }
 
     PageKeySheet(
         show = state.activeSheet == ReadConfigSheet.PageKeys,

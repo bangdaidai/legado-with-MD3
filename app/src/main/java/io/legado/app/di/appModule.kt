@@ -74,6 +74,7 @@ import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.data.repository.ReadAloudVoiceRepository
 import io.legado.app.data.repository.ReadBookStyleConfigRepository
 import io.legado.app.data.repository.ReadRecordRepository
+import io.legado.app.data.repository.ProtagonistExtractionSettingsRepository
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.data.repository.ReadStyleConfigStore
