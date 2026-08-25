@@ -406,7 +406,7 @@ object AudioPlay : CoroutineScope by MainScope() {
                 appDb.bookChapterDao.getChapter(book.bookUrl, book.durChapterIndex)?.let {
                     book.durChapterTitle = it.getDisplayTitle(
                         ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
-                        book.getUseReplaceRule(AppConfig.replaceEnableDefault),
+                        book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault),
                         chineseConverterType = AppConfig.chineseConverterType,
                     )
                     SourceCallBack.callBackBook(SourceCallBack.SAVE_READ, bookSource, book, it)

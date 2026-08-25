@@ -350,7 +350,7 @@ class ChangeBookSourceUseCase(
                 .coerceIn(0, chapters.lastIndex)
             newBook.durChapterTitle = chapters[newBook.durChapterIndex].getDisplayTitle(
                 ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules(),
-                getUseReplaceRule(defaultReplaceEnabled),
+                getUseReplaceRuleToc(defaultReplaceEnabled),
                 chineseConverterType = chineseConverterType,
             )
             newBook.durChapterPos = durChapterPos
@@ -359,7 +359,7 @@ class ChangeBookSourceUseCase(
             newBook.durChapterIndex = 0
             newBook.durChapterTitle = chapters.firstOrNull()?.getDisplayTitle(
                 ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules(),
-                getUseReplaceRule(defaultReplaceEnabled),
+                getUseReplaceRuleToc(defaultReplaceEnabled),
                 chineseConverterType = chineseConverterType,
             )
             newBook.durChapterPos = 0
