@@ -46,20 +46,23 @@ class AiLogRepository {
     private val loaded = AtomicBoolean(false)
     private val cache = mutableListOf<AiLogEntry>()
 
-    private suspend fun ensureLoaded() {
+    /**
+     * 首次访问时把文件里的历史记录读进 [cache]。
+     *
+     * 调用方必须已经持有 [mutex]：[Mutex] 不可重入，这里再加一次锁会永久挂住调用方
+     * （record 挂住时 AI 调用永远不返回，getLogs 挂住时日志页永远转圈）。
+     */
+    private fun ensureLoadedLocked() {
         if (loaded.get()) return
-        mutex.withLock {
-            if (loaded.get()) return
-            runCatching {
-                if (file.exists()) {
-                    val text = file.readText()
-                    if (text.isNotBlank()) {
-                        GSON.fromJsonArray<AiLogEntry>(text).getOrNull()?.let { cache.addAll(it) }
-                    }
+        runCatching {
+            if (file.exists()) {
+                val text = file.readText()
+                if (text.isNotBlank()) {
+                    GSON.fromJsonArray<AiLogEntry>(text).getOrNull()?.let { cache.addAll(it) }
                 }
             }
-            loaded.set(true)
         }
+        loaded.set(true)
     }
 
     suspend fun record(entry: AiLogEntry) {
@@ -67,7 +70,7 @@ class AiLogRepository {
         runCatching {
             withContext(NonCancellable + Dispatchers.IO) {
                 mutex.withLock {
-                    ensureLoaded()
+                    ensureLoadedLocked()
                     cache.add(entry)
                     while (cache.size > maxEntries) cache.removeAt(0)
                     file.writeText(GSON.toJson(cache))
@@ -78,7 +81,7 @@ class AiLogRepository {
 
     suspend fun getLogs(): List<AiLogEntry> = withContext(Dispatchers.IO) {
         mutex.withLock {
-            ensureLoaded()
+            ensureLoadedLocked()
             cache.toList().reversed()
         }
     }
