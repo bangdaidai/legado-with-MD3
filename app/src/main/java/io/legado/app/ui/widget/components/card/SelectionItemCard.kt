@@ -184,7 +184,7 @@ fun SelectionItemCardContent(
 
         if (ThemeResolver.isMiuixEngine(composeEngine)) {
             BasicComponent(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).containerAlpha()
             ) {
                 AppText(
                     text = title,

@@ -1,5 +1,7 @@
 package io.legado.app.ui.widget.components.settingItem
 
+import io.legado.app.ui.widget.components.card.containerAlpha
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -52,6 +54,7 @@ fun InputSettingItem(
     if (ThemeResolver.isMiuixEngine(composeEngine)) {
         Column(modifier = Modifier.fillMaxWidth()) {
             BasicComponent(
+                modifier = Modifier.containerAlpha(),
                 title = title,
                 summary = value,
                 onClick = { expanded = !expanded }

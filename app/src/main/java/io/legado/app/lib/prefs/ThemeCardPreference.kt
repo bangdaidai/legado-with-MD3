@@ -108,6 +108,10 @@ class ThemeCardPreference(context: Context, attrs: AttributeSet) : Preference(co
                                 appTheme = value,
                                 containerOpacity = if (value == "13") {
                                     0
+                                } else if (it.appTheme == "13") {
+                                    // 从透明主题切走时把容器透明度恢复默认，否则会残留 0
+                                    // 导致整页 GlassCard 全透明；非透明主题之间切换保留原值。
+                                    100
                                 } else {
                                     it.containerOpacity
                                 },

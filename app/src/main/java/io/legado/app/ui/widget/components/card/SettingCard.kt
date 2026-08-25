@@ -30,7 +30,7 @@ fun SettingCard(
     val composeEngine = LegadoTheme.composeEngine
     if (ThemeResolver.isMiuixEngine(composeEngine)) {
         BasicComponent(
-            modifier = modifier,
+            modifier = modifier.containerAlpha(),
             onClick = onClick,
             content = content
         )

@@ -1,5 +1,7 @@
 package io.legado.app.ui.widget.components.settingItem
 
+import io.legado.app.ui.widget.components.card.containerAlpha
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
@@ -110,6 +112,7 @@ fun SliderSettingItem(
                 .fillMaxWidth()
         ) {
             BasicComponent(
+                modifier = Modifier.containerAlpha(),
                 title = title,
                 summary = displayDescription,
                 onClick = {

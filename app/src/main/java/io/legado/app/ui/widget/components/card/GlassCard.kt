@@ -11,6 +11,7 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -21,6 +22,17 @@ import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.widget.components.AppContainerBackgroundType
 import io.legado.app.ui.widget.components.appContainerBackground
 import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
+
+/**
+ * Miuix 引擎下卡片组件（BasicComponent 等）不会像 Material 的 GlassCard 那样读取
+ * containerOpacity，这里统一在 modifier 上叠加容器透明度，使「容器背景不透明度」
+ * 在 Miuix 引擎下也生效。Material 引擎的卡片由 GlassCard 内部统一处理，无需使用本扩展。
+ */
+@Composable
+fun Modifier.containerAlpha(): Modifier {
+    val opacity = LocalAppUiConfiguration.current.theme.containerOpacity / 100f
+    return this.alpha(opacity)
+}
 
 @Composable
 private fun BaseCardContent(
