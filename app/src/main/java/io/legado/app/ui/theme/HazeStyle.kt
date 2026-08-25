@@ -92,7 +92,7 @@ fun Modifier.responsiveHazeEffectFixedStyle(
 /**
  * 状态栏独立模糊：仅在全局「控件模糊」关闭时作为状态栏区域的补偿层生效，固定为渐变模糊。
  * 全局模糊开启时状态栏区域由顶栏自身的模糊负责，这里不再叠加，保持与上游一致的观感。
- * 模糊半径与透明度跟随全局顶栏设置。
+ * 与全局「控件模糊」的顶栏风格保持一致（零色膜 ultraThinPlus），只做渐变模糊、不叠白膜。
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -105,13 +105,14 @@ fun Modifier.responsiveHazeEffectStatusBar(state: HazeState): Modifier {
         if (ThemeResolver.isMiuixEngine(composeEngine)) MiuixTheme.colorScheme.surface
         else MaterialTheme.colorScheme.surface
     }
-    val style = HazeLegado.custom(
-        containerColor = containerColor,
-        blurRadius = themeSettings.topBarBlurRadius,
-        blurAlpha = themeSettings.topBarBlurAlpha,
-    )
+    // 与全局「控件模糊」的顶栏风格保持一致：用零色膜的 ultraThinPlus 只做模糊、不叠白膜，
+    // 再配渐进渐变，这样状态栏补偿层和「控件模糊+渐变模糊」观感统一，不会糊一层白。
+    val style = HazeLegado.ultraThinPlus(containerColor = containerColor)
     return this.hazeEffect(state = state, style = style) {
-        progressive = HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f)
+        progressive = HazeProgressive.verticalGradient(
+            startIntensity = 1f,
+            endIntensity = 0f,
+        )
     }
 }
 

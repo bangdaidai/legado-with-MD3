@@ -924,7 +924,7 @@ private fun BookInfoTopScrim(statusBarHeight: Dp, hazeState: HazeState) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(statusBarHeight + 16.dp)
+            .height(statusBarHeight)
             .responsiveHazeEffectStatusBar(hazeState)
     )
 }
