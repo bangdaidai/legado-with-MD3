@@ -41,6 +41,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.BookShelfState
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.widget.components.card.GlassCard
@@ -330,16 +331,23 @@ fun SearchBookGridItem(
 @Composable
 fun SearchBookTagChip(
     text: String,
-    color: Color = LegadoTheme.colorScheme.surfaceContainerHigh
+    color: Color = LegadoTheme.colorScheme.surfaceContainerHigh,
 ) {
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val resolvedCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
+        themeSettings.baseCardCornerRadius.dp
+    } else {
+        8.dp
+    }
     GlassCard(
         containerColor = color,
-        cornerRadius = 4.dp
+        cornerRadius = resolvedCornerRadius,
     ) {
         AppText(
             text = text,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-            style = LegadoTheme.typography.labelSmallEmphasized,
+            // 与 TagChip(Small) 统一字号与内边距：labelSmall + 水平 4dp / 垂直 1dp
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style = LegadoTheme.typography.labelSmall,
             color = LegadoTheme.colorScheme.onCardContainer,
         )
     }

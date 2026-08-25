@@ -190,13 +190,13 @@ fun AuthorDetailScreen(
                         works.books,
                         key = { it.book.bookUrl },
                     ) { item ->
-                        // 网络搜到、还没入库的结果，底色压低一档，与关联书籍分层
-                        NormalCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            cornerRadius = 8.dp,
-                            containerColor = LegadoTheme.colorScheme.surfaceContainerLowest,
+                            // 网络搜到、还没入库的结果，用主题卡片底色，保证任何主题下都有颜色
+                            NormalCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                cornerRadius = 8.dp,
+                                containerColor = LegadoTheme.colorScheme.cardContainer,
                             onClick = { onOpenSearchBook(item.book) },
                             onLongClick = { previewBook = item.book },
                         ) {
@@ -210,9 +210,9 @@ fun AuthorDetailScreen(
                                 coverSize = (uiState.coverWidth - 16).coerceAtLeast(32).dp,
                                 // 简介一行，与关联书籍卡片的内联简介口径一致
                                 introMaxLines = 1,
-                                // 字号也对齐关联书籍卡片：书名 titleMediumEmphasized、简介 labelSmallEmphasized
+                                // 字号对齐关联书籍卡片：书名 titleMediumEmphasized、简介 bodySmall
                                 titleStyle = LegadoTheme.typography.titleMediumEmphasized,
-                                introStyle = LegadoTheme.typography.labelSmallEmphasized,
+                                introStyle = LegadoTheme.typography.bodySmall,
                                 // 书名行数也跟书架的「标题行数」设置
                                 titleMaxLines = uiState.bookshelfSettings.bookshelfTitleMaxLines,
                                 // 点击与长按都交给外层卡片，避免两层水波纹
