@@ -1928,7 +1928,7 @@
     <string name="invert_selection">反選</string>
     <string name="is_blur_enable">啟用元素模糊</string>
     <string name="status_bar_blur">狀態列模糊</string>
-    <string name="status_bar_blur_summary">即使關閉全域元素模糊與漸進式模糊，仍單獨對狀態列區域啟用模糊；半徑與透明度跟隨全域設定。</string>
+    <string name="status_bar_blur_summary">只對書籍資訊頁生效</string>
     <string name="is_blur_progressive_enable">啟用漸進式模糊</string>
     <string name="is_event_listener">事件監聽器</string>
     <string name="is_read_finished">已讀</string>

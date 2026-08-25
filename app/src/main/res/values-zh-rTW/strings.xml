@@ -2006,7 +2006,7 @@
     <string name="tip_compose_set">這些選項僅影響使用 Compose 重寫的介面。停用的選項為佔位符，將在實作後啟用。</string>
     <string name="is_blur_enable">啟用元素模糊</string>
     <string name="status_bar_blur">狀態列模糊</string>
-    <string name="status_bar_blur_summary">即使關閉全域元素模糊與漸進式模糊，仍單獨對狀態列區域啟用模糊；半徑與透明度跟隨全域設定。</string>
+    <string name="status_bar_blur_summary">只對書籍資訊頁生效</string>
     <string name="use_underline">強調文字始終使用底線</string>
     <string name="adapt_special_style">適配特殊樣式</string>
     <string name="compose_engine">主題樣式</string>
