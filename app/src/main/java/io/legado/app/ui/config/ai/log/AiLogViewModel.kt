@@ -2,9 +2,11 @@ package io.legado.app.ui.config.ai.log
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.help.config.AppConfigStore
+import io.legado.app.utils.sendToClip
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -101,7 +101,7 @@ class CloudTtsAudioSynthesizer(
                     sampleRate = config.sampleRate,
                 ),
             )
-        } ?: return@withContext false
+        }.getOrNull() ?: return@withContext false
         output.parentFile?.mkdirs()
         output.writeBytes(audio.bytes)
         output.length() > 0
@@ -120,7 +120,7 @@ class CloudTtsAudioSynthesizer(
                 timeMillis = start,
                 kind = kind,
                 providerName = engine.provider.storageValue,
-                modelId = engine.customName.takeIf { it.isNotBlank() } ?: engine.name,
+                modelId = engine.model.takeIf { it.isNotBlank() } ?: engine.name,
                 summary = summary,
                 success = result.isSuccess,
                 durationMillis = System.currentTimeMillis() - start,
