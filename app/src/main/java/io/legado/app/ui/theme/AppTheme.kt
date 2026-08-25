@@ -143,7 +143,8 @@ private fun AppThemeActual(
     // 6. 构造 Legado 主题模式数据
     // themeMode 用 effectiveDarkTheme 归一化（System 已在上面解析成明确的深浅色），
     // 这样"跟随系统"和"深色"在系统深色下产生相等的 LegadoThemeMode，
-    // staticCompositionLocalOf 不会触发全树重组
+    // compositionLocalOf 在值相等时同样不会触发全树重组；值真正变化（换主题/深浅切换）时
+    // 才会重组读取方，否则旧的透明/旧配色会被静态 local 钉死不刷新。
     val themeColors = remember(
         colorScheme, effectiveDarkTheme, themeSeedColor, paletteStyleValue, composeEngine,
         appThemeMode

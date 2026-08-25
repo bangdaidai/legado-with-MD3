@@ -196,7 +196,7 @@ fun AuthorDetailScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
                             cornerRadius = 8.dp,
-                            containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+                            containerColor = LegadoTheme.colorScheme.surfaceContainerLowest,
                             onClick = { onOpenSearchBook(item.book) },
                             onLongClick = { previewBook = item.book },
                         ) {
