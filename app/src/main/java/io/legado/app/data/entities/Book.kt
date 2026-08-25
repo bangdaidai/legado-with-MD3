@@ -418,7 +418,7 @@ data class Book(
             .getDurChapter(durChapterIndex, durChapterTitle, toc, totalChapterNum)
         newBook.durChapterTitle = toc[newBook.durChapterIndex].getDisplayTitle(
             ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules(),
-            getUseReplaceRule(defaultReplaceEnabled),
+            getUseReplaceRuleToc(defaultReplaceEnabled),
             chineseConverterType = chineseConverterType,
         )
         newBook.durChapterPos = durChapterPos

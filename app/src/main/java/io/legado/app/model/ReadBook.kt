@@ -1809,7 +1809,7 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                     appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)?.let {
                         book.durChapterTitle = it.getDisplayTitle(
                             ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
-                            book.getUseReplaceRule(AppConfig.replaceEnableDefault),
+                            book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault),
                             chineseConverterType = AppConfig.chineseConverterType,
                         )
                         SourceCallBack.callBackBook(SourceCallBack.SAVE_READ, bookSource, book, it)

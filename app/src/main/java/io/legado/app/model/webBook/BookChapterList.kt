@@ -155,7 +155,7 @@ object BookChapterList {
         book.durChapterTitle = list.getOrElse(book.durChapterIndex) { list.last() }
             .getDisplayTitle(
                 replaceRules,
-                book.getUseReplaceRule(AppConfig.replaceEnableDefault),
+                book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault),
                 chineseConverterType = AppConfig.chineseConverterType,
             )
         if (book.totalChapterNum < list.size) {
@@ -168,7 +168,7 @@ object BookChapterList {
             list.getOrElse(book.simulatedTotalChapterNum() - 1) { list.last() }
                 .getDisplayTitle(
                     replaceRules,
-                    book.getUseReplaceRule(AppConfig.replaceEnableDefault),
+                    book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault),
                     chineseConverterType = AppConfig.chineseConverterType,
                 )
         coroutineContext.ensureActive()
