@@ -201,6 +201,7 @@ class AnthropicHandler : AiProtocolHandler {
                     throw Exception("Invalid Anthropic stream event", it)
                 } ?: return@readSseData
                 when (event.type) {
+                    null -> return@readSseData
                     "error" -> {
                         throw Exception(event.error?.message ?: event.error?.type ?: "Anthropic stream error")
                     }

@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -69,12 +68,14 @@ import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveContentPaddingOnlyVertical
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
+import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.LoadMoreFooter
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.SelectionItemCard
@@ -821,41 +822,40 @@ private fun ContentQualitySheet(
         onDismissRequest = { onIntent(SearchIntent.CloseContentQuality) },
         title = stringResource(R.string.content_quality_detection),
         endAction = {
-            SmallPlainButton(
+            MediumTonalButton(
                 onClick = { onIntent(SearchIntent.StartContentQuality) },
                 enabled = !state.isRunning && resultCount > 0,
                 icon = AppIcons.Check,
-                text = stringResource(R.string.content_quality_start),
                 contentDescription = stringResource(R.string.content_quality_start),
             )
         },
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            TextField(
+            AppTextField(
                 value = state.chapterSpec,
                 onValueChange = { onIntent(SearchIntent.UpdateContentQualityChapterSpec(it)) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.content_quality_chapters)) },
-                supportingText = { Text(stringResource(R.string.content_quality_chapters_summary)) },
+                label = stringResource(R.string.content_quality_chapters),
+                supportingText = { AppText(stringResource(R.string.content_quality_chapters_summary)) },
                 singleLine = true,
             )
-            TextField(
+            AppTextField(
                 value = state.keywords,
                 onValueChange = { onIntent(SearchIntent.UpdateContentQualityKeywords(it)) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.content_quality_keywords)) },
-                supportingText = { Text(stringResource(R.string.content_quality_keywords_summary)) },
+                label = stringResource(R.string.content_quality_keywords),
+                supportingText = { AppText(stringResource(R.string.content_quality_keywords_summary)) },
                 singleLine = true,
             )
-            TextField(
+            AppTextField(
                 value = state.skipHeadChars,
                 onValueChange = { onIntent(SearchIntent.UpdateContentQualitySkipHeadChars(it)) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.content_quality_skip_chars)) },
-                supportingText = { Text(stringResource(R.string.content_quality_skip_chars_summary)) },
+                label = stringResource(R.string.content_quality_skip_chars),
+                supportingText = { AppText(stringResource(R.string.content_quality_skip_chars_summary)) },
                 singleLine = true,
             )
 

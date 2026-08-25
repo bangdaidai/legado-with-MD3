@@ -157,6 +157,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
                 val root = data.toJsonObject() ?: throw Exception("Invalid OpenAI Responses stream chunk")
                 root.extractApiErrorMessage()?.let { throw Exception(it) }
                 when (root.getString("type")) {
+                    null -> {}
                     "response.output_text.delta",
                     "response.refusal.delta" -> {
                         root.getString("delta")?.takeIf { it.isNotEmpty() }?.let {
