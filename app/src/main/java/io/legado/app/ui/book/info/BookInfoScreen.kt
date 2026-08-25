@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -897,6 +898,7 @@ private fun BookInfoBackdrop(
     }
 }
 
+@Composable
 private fun BookInfoTopScrim(statusBarHeight: Dp) {
     val hazeState = LocalHazeState.current
     Box(
