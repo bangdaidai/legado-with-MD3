@@ -4,13 +4,9 @@
 
 <!-- CI_LATEST_CHANGELOG -->
 
-## 本次更新
-
-（记录当前开发版本的改动，发版后归档到「历史版本」并清空此节）
-
 ## 历史版本
 
-<!-- 每次发版后，将「本次更新」内容移到这里，格式：### v版本号（日期） -->
+<!-- CI_HISTORY -->
 
 ## 本分支改动（2026/07/24）
 
@@ -134,8 +130,3 @@
 * Release 随包上传 mapping.txt（gzip），本地字符串抽到 `strings_local.xml` 避免与上游冲突
 * 引入配置架构护栏基线，逐步清理 UI 层 DAO 直连
 
-----
-
-* [2023年日志](https://github.com/gedoor/legado/blob/record2023/app/src/main/assets/updateLog.md)
-* [2022年日志](https://github.com/gedoor/legado/blob/record2022/app/src/main/assets/updateLog.md)
-* [2021年日志](https://github.com/gedoor/legado/blob/record2021/app/src/main/assets/updateLog.md)

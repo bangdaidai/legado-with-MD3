@@ -136,37 +136,63 @@ jobs:
             echo "未找到历史 tag，回退到最近 20 个提交: $RANGE"
           fi
 
-          : > CHANGES.md
-          # 按 conventional commit 前缀分组；scope 保留下来当作模块名
-          section() {
-            local pattern="$1"
-            local title="$2"
+          # 复用：把某个提交区间按 conventional commit 前缀分组写入指定文件
+          gen_changes() {
+            local rng="$1" out="$2"
+            : > "$out"
             local lines
-            lines=$(git log --no-merges --pretty=format:'%s' "$RANGE" | grep -E "$pattern" || true)
-            [ -z "$lines" ] && return 0
-            {
-              echo "### $title"
-              printf '%s\n' "$lines" \
-                | sed -E 's/ *Co-authored-by:.*$//' \
-                | sed -E 's/^[a-zA-Z]+\(([^)]*)\)!?: */* \1: /; s/^[a-zA-Z]+!?: */* /'
-              echo ""
-            } >> CHANGES.md
+            section() {
+              local pattern="$1" title="$2"
+              lines=$(git log --no-merges --pretty=format:'%s' "$rng" | grep -E "$pattern" || true)
+              [ -z "$lines" ] && return 0
+              {
+                echo "### $title"
+                printf '%s\n' "$lines" \
+                  | sed -E 's/ *Co-authored-by:.*$//' \
+                  | sed -E 's/^[a-zA-Z]+\(([^)]*)\)!?: */* \1: /; s/^[a-zA-Z]+!?: */* /'
+                echo ""
+              } >> "$out"
+            }
+            section '^feat(\(|!?:)' '✨ 新功能'
+            section '^fix(\(|!?:)' '🐛 修复'
+            section '^perf(\(|!?:)' '⚡ 性能'
+            section '^(refactor|style)(\(|!?:)' '🧹 优化与重构'
+            section '^(docs|chore|build|ci|test|merge)(\(|!?:)' '🔧 其它'
+            if ! grep -q '^### ' "$out"; then
+              {
+                echo "### 📝 本次改动"
+                git log --no-merges --pretty=format:'* %s' "$rng"
+                echo ""
+                echo ""
+              } >> "$out"
+            fi
           }
 
-          section '^feat(\(|!?:)' '✨ 新功能'
-          section '^fix(\(|!?:)' '🐛 修复'
-          section '^perf(\(|!?:)' '⚡ 性能'
-          section '^(refactor|style)(\(|!?:)' '🧹 优化与重构'
-          section '^(docs|chore|build|ci|test|merge)(\(|!?:)' '🔧 其它'
+          gen_changes "$RANGE" CHANGES.md
 
-          # 没有任何符合规范的提交时兜底列出原始标题，避免更新日志空白
-          if ! grep -q '^### ' CHANGES.md; then
-            {
-              echo "### 📝 本次改动"
-              git log --no-merges --pretty=format:'* %s' "$RANGE"
-              echo ""
-              echo ""
-            } >> CHANGES.md
+          # 历史版本：遍历已有 tag，每个 tag 自动派生一段（不含当前未发布段）
+          : > HISTORY.md
+          mapfile -t TAGS < <(git tag --sort=version:refname)
+          if [ "${#TAGS[@]}" -ge 2 ]; then
+            # 取最近 9 个 tag 作为窗口（8 段历史 + 1 个锚点 prev），避免日志过长
+            start=$(( ${#TAGS[@]} > 9 ? ${#TAGS[@]} - 9 : 0 ))
+            window=("${TAGS[@]:$start}")
+            # 从新到旧输出，使「历史版本」顶部为最近一次发版
+            for ((i = ${#window[@]} - 1; i >= 1; i--)); do
+              tag="${window[$i]}"
+              prev="${window[$i-1]}"
+              r="$prev..$tag"
+              cnt=$(git rev-list --count "$r" 2>/dev/null || echo 0)
+              [ "$cnt" = "0" ] && continue
+              date=$(git log -1 --date=format:'%Y/%m/%d' --format='%cd' "$tag")
+              {
+                echo "### $tag（$date）"
+                echo ""
+              } >> HISTORY.md
+              gen_changes "$r" HIST_TMP.md
+              cat HIST_TMP.md >> HISTORY.md
+              echo "" >> HISTORY.md
+            done
           fi
 
           {
@@ -187,32 +213,45 @@ jobs:
 
           echo "===== RELEASE_NOTES.md ====="
           cat RELEASE_NOTES.md
+          echo "===== HISTORY.md ====="
+          cat HISTORY.md
 
       - name: Inject changelog into app assets
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           LOG=app/src/main/assets/updateLog.md
-          MARKER='<!-- CI_LATEST_CHANGELOG -->'
-          if ! grep -qF "$MARKER" "$LOG"; then
-            echo "❌ $LOG 缺少 $MARKER 占位标记，跳过注入"
+          LATEST_MARKER='<!-- CI_LATEST_CHANGELOG -->'
+          HIST_MARKER='<!-- CI_HISTORY -->'
+          if ! grep -qF "$LATEST_MARKER" "$LOG"; then
+            echo "❌ $LOG 缺少 $LATEST_MARKER 占位标记，跳过注入"
             exit 0
           fi
 
+          # 本版更新：当前构建（上一 tag 到 HEAD）的改动
           {
             echo "## 本版更新 v$APP_VERSION_NAME"
             echo ""
             cat CHANGES.md
           } > SECTION.md
 
-          awk -v marker="$MARKER" '
+          awk -v marker="$LATEST_MARKER" '
             index($0, marker) { while ((getline line < "SECTION.md") > 0) print line; next }
             { print }
           ' "$LOG" > "$LOG.tmp"
           mv "$LOG.tmp" "$LOG"
 
+          # 历史版本：从已有 tag 自动派生，注入到 CI_HISTORY 标记之后
+          if grep -qF "$HIST_MARKER" "$LOG" && [ -s HISTORY.md ]; then
+            awk -v marker="$HIST_MARKER" '
+              index($0, marker) { while ((getline line < "HISTORY.md") > 0) print line; next }
+              { print }
+            ' "$LOG" > "$LOG.tmp"
+            mv "$LOG.tmp" "$LOG"
+          fi
+
           echo "===== updateLog.md 头部 ====="
-          head -n 40 "$LOG"
+          head -n 80 "$LOG"
 
 
       - name: Build Release APK
