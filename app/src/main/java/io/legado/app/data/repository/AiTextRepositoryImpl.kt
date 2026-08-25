@@ -58,7 +58,7 @@ class AiTextRepositoryImpl(
         try {
             response = withContext(Dispatchers.IO) {
                 withTimeout(callTimeoutMs()) {
-                    registry.handlerFor(provider.protocol).generate(request, recording)
+                    registry.handlerFor(provider.protocol).generate(request, recording).getOrThrow()
                 }
             }
         } catch (e: TimeoutCancellationException) {

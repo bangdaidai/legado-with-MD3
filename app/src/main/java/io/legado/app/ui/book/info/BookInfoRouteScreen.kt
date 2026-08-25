@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
@@ -215,11 +216,11 @@ fun BookInfoRouteScreen(
     val otherWorksScopeRaw by viewModel.otherWorksScopeRaw
         .collectAsStateWithLifecycle("")
     val otherWorksScopeNames by viewModel.otherWorksScopeNames
-        .collectAsStateWithLifecycle(persistentListOf())
+        .collectAsStateWithLifecycle(persistentListOf<String>())
     val otherWorksEnabledGroups by viewModel.otherWorksEnabledGroups
-        .collectAsStateWithLifecycle(persistentListOf())
+        .collectAsStateWithLifecycle(persistentListOf<String>())
     val otherWorksEnabledSources by viewModel.otherWorksEnabledSources
-        .collectAsStateWithLifecycle(persistentListOf())
+        .collectAsStateWithLifecycle(persistentListOf<BookSourcePart>())
 
     BookInfoScreen(
         state = uiState,

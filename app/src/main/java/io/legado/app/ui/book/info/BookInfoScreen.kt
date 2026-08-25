@@ -118,7 +118,6 @@ import io.legado.app.ui.book.search.ScopeSelectSheet
 import io.legado.app.ui.main.homepage.modules.BannerModule
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import io.legado.app.ui.theme.AppThemeMode
 import io.legado.app.ui.theme.LegadoTheme
