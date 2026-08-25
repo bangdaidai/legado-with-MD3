@@ -26,7 +26,6 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
 import splitties.init.appCtx
 import java.lang.ref.WeakReference
-import java.util.concurrent.CopyOnWriteArrayList
 
 class ContentProcessor private constructor(
     private val bookName: String,
@@ -57,8 +56,10 @@ class ContentProcessor private constructor(
 
     }
 
-    private val titleReplaceRules = CopyOnWriteArrayList<ReplaceRule>()
-    private val contentReplaceRules = CopyOnWriteArrayList<ReplaceRule>()
+    @Volatile
+    private var titleReplaceRules: List<ReplaceRule> = emptyList()
+    @Volatile
+    private var contentReplaceRules: List<ReplaceRule> = emptyList()
     val removeSameTitleCache = hashSetOf<String>()
 
     init {
@@ -67,14 +68,12 @@ class ContentProcessor private constructor(
     }
 
     fun upReplaceRules() {
-        titleReplaceRules.run {
-            clear()
-            addAll(appDb.replaceRuleDao.findEnabledByTitleScope(bookName, bookOrigin))
-        }
-        contentReplaceRules.run {
-            clear()
-            addAll(appDb.replaceRuleDao.findEnabledByContentScope(bookName, bookOrigin))
-        }
+        // 整表重读后整体替换引用：clear()+addAll() 分两步会被并发调用方交错成
+        // [A,B,A,B] 这样的重复列表，目录/正文预览按 rule.id 做 LazyColumn key 时
+        // 会直接崩 IllegalStateException/IllegalArgumentException。原子换引用后，
+        // 读者要么看到旧快照要么看到新快照，永远不会是拼了一半的中间态。
+        titleReplaceRules = appDb.replaceRuleDao.findEnabledByTitleScope(bookName, bookOrigin)
+        contentReplaceRules = appDb.replaceRuleDao.findEnabledByContentScope(bookName, bookOrigin)
     }
 
     private fun upRemoveSameTitle() {
