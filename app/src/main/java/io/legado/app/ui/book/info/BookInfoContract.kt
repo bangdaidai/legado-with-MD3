@@ -8,6 +8,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
+import io.legado.app.ui.book.search.ScopeSelection
 import io.legado.app.ui.widget.components.variable.VariableEditorUiState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -162,6 +163,19 @@ data class RelatedBooksUi(
     val books: ImmutableList<SearchBook>,
 )
 
+/**
+ * 「其他作品」板块状态：按作者跨书源搜索，独立于书源 relatedBooks。
+ * 只在用户点搜索按钮时联网，换源/下拉刷新都不动它。
+ */
+@Stable
+sealed interface OtherWorksState {
+    data object Idle : OtherWorksState
+    data class Searching(val processed: Int, val total: Int) : OtherWorksState
+    data object Empty : OtherWorksState
+    data class Success(val books: ImmutableList<SearchBook>) : OtherWorksState
+    data class Error(val message: String) : OtherWorksState
+}
+
 sealed interface BookInfoIntent {
     data object DismissSheet : BookInfoIntent
     data object DismissDialog : BookInfoIntent
@@ -228,6 +242,11 @@ sealed interface BookInfoIntent {
     data class RelatedBookClick(val book: SearchBook) : BookInfoIntent
     data class RelatedBookAddToShelf(val book: SearchBook) : BookInfoIntent
     data class RelatedBooksMore(val title: String, val url: String) : BookInfoIntent
+
+    /** 触发「其他作品」搜索（按当前书作者跨书源搜）。 */
+    data object OtherWorksSearch : BookInfoIntent
+    /** 应用新的搜索范围（写入与作者管理页共用的偏好键，不自动触发搜索）。 */
+    data class OtherWorksApplyScope(val selection: ScopeSelection) : BookInfoIntent
     data class CharacterClick(val characterId: String) : BookInfoIntent
     data object AddCharacterClick : BookInfoIntent
     data object CharacterNetworkClick : BookInfoIntent

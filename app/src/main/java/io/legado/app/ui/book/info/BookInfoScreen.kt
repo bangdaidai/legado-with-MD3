@@ -105,11 +105,21 @@ import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.domain.usecase.BookShelfKey
+import io.legado.app.domain.usecase.ResolveBookShelfStateUseCase
+import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.coil.CoverExtras
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.ui.association.OnLineImportActivity
+import io.legado.app.ui.book.search.ScopeSelection
+import io.legado.app.ui.book.search.ScopeSelectSheet
 import io.legado.app.ui.main.homepage.modules.BannerModule
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import io.legado.app.ui.theme.AppThemeMode
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
@@ -130,6 +140,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.alert.BookDeleteConfirmDialog
+import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
@@ -178,6 +189,12 @@ fun BookInfoScreen(
     groups: ImmutableList<BookGroup>,
     onIntent: (BookInfoIntent) -> Unit,
     onBack: () -> Unit,
+    bookshelfState: Set<BookShelfKey>,
+    otherWorksState: OtherWorksState,
+    otherWorksScopeRaw: String,
+    otherWorksScopeNames: ImmutableList<String>,
+    otherWorksEnabledGroups: ImmutableList<String>,
+    otherWorksEnabledSources: ImmutableList<BookSourcePart>,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     sharedCoverKey: String? = null,
@@ -236,6 +253,12 @@ fun BookInfoScreen(
             groups = groups,
             onIntent = onIntent,
             onBack = onBack,
+            bookshelfState = bookshelfState,
+            otherWorksState = otherWorksState,
+            otherWorksScopeRaw = otherWorksScopeRaw,
+            otherWorksScopeNames = otherWorksScopeNames,
+            otherWorksEnabledGroups = otherWorksEnabledGroups,
+            otherWorksEnabledSources = otherWorksEnabledSources,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedCoverKey = sharedCoverKey,
@@ -259,6 +282,12 @@ private fun BookInfoScreenContent(
     groups: ImmutableList<BookGroup>,
     onIntent: (BookInfoIntent) -> Unit,
     onBack: () -> Unit,
+    bookshelfState: Set<BookShelfKey>,
+    otherWorksState: OtherWorksState,
+    otherWorksScopeRaw: String,
+    otherWorksScopeNames: ImmutableList<String>,
+    otherWorksEnabledGroups: ImmutableList<String>,
+    otherWorksEnabledSources: ImmutableList<BookSourcePart>,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     sharedCoverKey: String?,
@@ -275,6 +304,8 @@ private fun BookInfoScreenContent(
     val listState = rememberLazyListState()
     // 关联书籍长按预览：与搜索/发现页一致，用局部状态托管预览 sheet
     var previewRelatedBook by remember { mutableStateOf<SearchBook?>(null) }
+    // 「其他作品」范围选择弹窗：点范围/搜索都不自动搜，仅写偏好
+    var showOtherWorksScopeSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -429,6 +460,13 @@ private fun BookInfoScreenContent(
                                         },
                                     )
                                 }
+                                BookInfoSummary(
+                                    book = book,
+                                    tocLoadFailed = state.tocLoadFailed,
+                                    onRemarkClick = { onIntent(BookInfoIntent.RemarkClick) },
+                                    bookSource = state.bookSource,
+                                    onJumpToAnotherApp = jumpToAnotherApp,
+                                )
                                 state.relatedBooks.forEach { module ->
                                     RelatedBooksBanner(
                                         title = module.title,
@@ -444,12 +482,17 @@ private fun BookInfoScreenContent(
                                         },
                                     )
                                 }
-                                BookInfoSummary(
-                                    book = book,
-                                    tocLoadFailed = state.tocLoadFailed,
-                                    onRemarkClick = { onIntent(BookInfoIntent.RemarkClick) },
-                                    bookSource = state.bookSource,
-                                    onJumpToAnotherApp = jumpToAnotherApp,
+                                OtherWorksSection(
+                                    author = book.author,
+                                    scopeNames = otherWorksScopeNames,
+                                    state = otherWorksState,
+                                    enabledGroups = otherWorksEnabledGroups,
+                                    enabledSources = otherWorksEnabledSources,
+                                    scopeRaw = otherWorksScopeRaw,
+                                    bookshelfState = bookshelfState,
+                                    onIntent = onIntent,
+                                    onPickScope = { showOtherWorksScopeSheet = true },
+                                    onPreview = { previewRelatedBook = it },
                                 )
         }
         }
@@ -563,6 +606,33 @@ private fun BookInfoScreenContent(
         onAddToShelf = { book ->
             previewRelatedBook = null
             onIntent(BookInfoIntent.RelatedBookAddToShelf(book))
+        },
+    )
+
+    val otherWorksScope = BookSearchScope(otherWorksScopeRaw)
+    ScopeSelectSheet(
+        show = showOtherWorksScopeSheet,
+        onDismissRequest = { showOtherWorksScopeSheet = false },
+        isAll = otherWorksScope.isAll,
+        onSelectAll = {
+            onIntent(
+                BookInfoIntent.OtherWorksApplyScope(
+                    ScopeSelection(emptyList<String>(), emptyList<BookSourcePart>(), false),
+                ),
+            )
+            showOtherWorksScopeSheet = false
+        },
+        groups = otherWorksEnabledGroups,
+        selectedGroups = otherWorksScope.groupNames,
+        onToggleGroup = {},
+        sources = otherWorksEnabledSources,
+        selectedSources = otherWorksScope.sourceUrls,
+        onToggleSource = {},
+        isSourceScope = otherWorksScope.isSource,
+        title = stringResource(R.string.author_works_scope),
+        onApplyScope = { selection ->
+            onIntent(BookInfoIntent.OtherWorksApplyScope(selection))
+            showOtherWorksScopeSheet = false
         },
     )
 
@@ -1717,6 +1787,8 @@ private fun RelatedBooksBanner(
                 )
             }
         }
+        // 书源 relatedBooks 保留原轮播样式：它是书源的个性化（可能是相关推荐等），
+        // 不视为「其他作品」，不再与作者管理页的列表混用。
         BannerModule(
             books = books.map { io.legado.app.ui.main.homepage.HomepageBookItemUi(book = it) }
                 .toImmutableList(),
@@ -1727,6 +1799,121 @@ private fun RelatedBooksBanner(
                 .padding(horizontal = 16.dp),
         )
     }
+}
+
+/**
+ * 固定「其他作品」板块：按作者跨书源搜索，独立于书源 relatedBooks。
+ * 只在点搜索按钮时联网；换源、下拉刷新、改范围都不自动搜。结果固化在页面上。
+ */
+@Composable
+private fun OtherWorksSection(
+    author: String,
+    scopeNames: ImmutableList<String>,
+    state: OtherWorksState,
+    enabledGroups: ImmutableList<String>,
+    enabledSources: ImmutableList<BookSourcePart>,
+    scopeRaw: String,
+    bookshelfState: Set<BookShelfKey>,
+    onIntent: (BookInfoIntent) -> Unit,
+    onPickScope: () -> Unit,
+    onPreview: (SearchBook) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (author.isBlank()) return
+    val resolveShelfState = koinInject<ResolveBookShelfStateUseCase>()
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        OtherWorksHeader(
+            scopeNames = scopeNames,
+            onRefresh = { onIntent(BookInfoIntent.OtherWorksSearch) },
+            onPickScope = onPickScope,
+        )
+        when (val s = state) {
+            OtherWorksState.Idle -> WorksHint(stringResource(R.string.author_works_idle))
+            is OtherWorksState.Searching -> WorksHint(
+                stringResource(R.string.author_works_searching, s.processed, s.total),
+            )
+            OtherWorksState.Empty -> WorksHint(stringResource(R.string.author_works_empty))
+            is OtherWorksState.Error -> WorksHint(
+                stringResource(R.string.author_works_error, s.message),
+            )
+            is OtherWorksState.Success -> Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                s.books.forEach { book ->
+                    SearchBookListItem(
+                        book = book,
+                        shelfState = resolveShelfState.execute(
+                            name = book.name,
+                            author = book.author,
+                            url = book.bookUrl,
+                            shelf = bookshelfState,
+                        ),
+                        onClick = { onIntent(BookInfoIntent.RelatedBookClick(book)) },
+                        onLongClick = { b, _ -> onPreview(b) },
+                        showPadding = false,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 「其他作品」分区标题：范围按钮 + 搜索按钮。不自动联网，必须点搜索按钮才发请求。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OtherWorksHeader(
+    scopeNames: ImmutableList<String>,
+    onRefresh: () -> Unit,
+    onPickScope: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        AppText(
+            text = stringResource(R.string.author_other_works),
+            style = LegadoTheme.typography.titleMedium,
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .padding(end = 2.dp),
+        )
+        SmallTonalButton(
+            onClick = onPickScope,
+            text = scopeNames.takeIf { it.isNotEmpty() }?.joinToString("/")
+                ?: stringResource(R.string.author_works_scope_all),
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .height(32.dp),
+        )
+        SmallTonalButton(
+            onClick = onRefresh,
+            icon = Icons.Default.Search,
+            contentDescription = stringResource(R.string.author_works_search),
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .height(32.dp),
+        )
+    }
+}
+
+/** 其他作品的空/进度/错误提示，占位样式统一。 */
+@Composable
+private fun WorksHint(text: String) {
+    AppText(
+        text = text,
+        style = LegadoTheme.typography.bodySmall,
+        color = LegadoTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+    )
 }
 
 @Composable

@@ -22,8 +22,10 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.TagManager
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
+import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.data.repository.BookGroupRepository
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
@@ -41,8 +43,15 @@ import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.OtherSettings
+import io.legado.app.domain.model.BookSearchScope
+import io.legado.app.domain.model.MatchMode
 import io.legado.app.domain.model.settings.ThemeSettings
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
+import io.legado.app.domain.usecase.BookSearchControl
+import io.legado.app.domain.usecase.BookSearchRequest
+import io.legado.app.domain.usecase.BookShelfKey
+import io.legado.app.domain.usecase.SearchBooksUseCase
+import io.legado.app.domain.usecase.SearchRunEvent
 import io.legado.app.domain.usecase.BookReplacedEvent
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
@@ -73,6 +82,8 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.config.coverConfig.CoverConfig
+import io.legado.app.ui.config.otherConfig.OtherConfig
+import io.legado.app.ui.book.search.ScopeSelection
 import io.legado.app.ui.main.MainIntent
 import io.legado.app.ui.widget.components.image.cover.buildCoverImageRequest
 import io.legado.app.utils.ArchiveUtils
@@ -97,8 +108,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -127,6 +140,7 @@ class BookInfoViewModel(
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val readingMemoryRepository: ReadingMemoryRepository,
     private val addToBookshelfUseCase: AddToBookshelfUseCase,
+    private val searchBooksUseCase: SearchBooksUseCase,
     private val localPreferencesRepository: SettingsRepository,
 ) : BaseViewModel(application) {
 
@@ -160,6 +174,28 @@ class BookInfoViewModel(
 
     private val _effects = MutableSharedFlow<BookInfoEffect>(extraBufferCapacity = 8)
     val effects = _effects.asSharedFlow()
+
+    // 关联书籍列表用：实时书架快照，用于解析每本书「是否在书架」
+    private val _bookshelf = MutableStateFlow<Set<BookShelfKey>>(emptySet())
+    val bookshelfState: StateFlow<Set<BookShelfKey>> = _bookshelf.asStateFlow()
+
+    // 「其他作品」：按作者跨书源搜索，独立于书源 relatedBooks。
+    // 只在用户点搜索按钮时联网，换源/下拉刷新都不动它；搜过一次的结果固化在页面上。
+    private val _otherWorks = MutableStateFlow<OtherWorksState>(OtherWorksState.Idle)
+    val otherWorksState: StateFlow<OtherWorksState> = _otherWorks.asStateFlow()
+
+    private val _otherWorksScopeRaw = MutableStateFlow("")
+    val otherWorksScopeRaw: StateFlow<String> = _otherWorksScopeRaw.asStateFlow()
+    private val _otherWorksScopeNames = MutableStateFlow<ImmutableList<String>>(persistentListOf())
+    val otherWorksScopeNames: StateFlow<ImmutableList<String>> = _otherWorksScopeNames.asStateFlow()
+
+    private val _otherWorksEnabledGroups = MutableStateFlow<ImmutableList<String>>(persistentListOf())
+    val otherWorksEnabledGroups: StateFlow<ImmutableList<String>> = _otherWorksEnabledGroups.asStateFlow()
+    private val _otherWorksEnabledSources = MutableStateFlow<ImmutableList<BookSourcePart>>(persistentListOf())
+    val otherWorksEnabledSources: StateFlow<ImmutableList<BookSourcePart>> = _otherWorksEnabledSources.asStateFlow()
+
+    private var otherWorksJob: Job? = null
+    private var otherWorksCacheLoaded = false
 
     private fun collectEventBus() {
         viewModelScope.launch {
@@ -270,6 +306,9 @@ class BookInfoViewModel(
     // currentChapterList 等字段还是 null 时执行，直接 NPE。
     init {
         collectEventBus()
+        observeBookshelf()
+        observeOtherWorksScope()
+        observeOtherWorksSources()
         viewModelScope.launch {
             localPreferencesRepository
                 .getBoolean(PreferKey.wordCountAsHighlightedTag, true)
@@ -277,6 +316,136 @@ class BookInfoViewModel(
                     _wordCountHighlighted.value = it
                     syncUiState()
                 }
+        }
+    }
+
+    private fun observeBookshelf() {
+        viewModelScope.launch {
+            bookRepository.getAllBooks().collect { list ->
+                _bookshelf.value = list.filter { !it.isNotShelf }.map {
+                    BookShelfKey(it.name, it.author, it.bookUrl)
+                }.toSet()
+            }
+        }
+    }
+
+    /** 读取与作者管理页共用的搜索范围偏好（空=全部启用书源）。 */
+    private fun observeOtherWorksScope() {
+        viewModelScope.launch {
+            localPreferencesRepository
+                .getString(LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE.name, "")
+                .distinctUntilChanged()
+                .collect { raw ->
+                    _otherWorksScopeRaw.value = raw
+                    val scope = BookSearchScope(raw)
+                    val names = if (scope.isSource) scope.sourceNames else scope.groupNames
+                    _otherWorksScopeNames.value = names.toImmutableList()
+                }
+        }
+    }
+
+    /** 范围选择弹窗可选项：启用书源分组与启用书源。 */
+    private fun observeOtherWorksSources() {
+        viewModelScope.launch {
+            searchRepository.enabledGroups.catch { emit(emptyList()) }.collect { groups ->
+                _otherWorksEnabledGroups.value = groups.toImmutableList()
+            }
+        }
+        viewModelScope.launch {
+            searchRepository.enabledSources.catch { emit(emptyList()) }.collect { sources ->
+                _otherWorksEnabledSources.value = sources.toImmutableList()
+            }
+        }
+    }
+
+    /** 进页面只读缓存（按作者），不联网；固化上次搜索结果。换源/下拉刷新都不会再触发。 */
+    private fun loadOtherWorksCache() {
+        if (otherWorksCacheLoaded) return
+        otherWorksCacheLoaded = true
+        val author = currentBook?.author?.trim() ?: return
+        if (author.isBlank()) return
+        val currentBookName = currentBook?.name?.trim().orEmpty()
+        viewModelScope.launch {
+            val cached = runCatching { searchRepository.getSearchBooksByAuthor(author) }
+                .getOrNull().orEmpty()
+                .filter { it.author.trim() == author && it.name.trim() != currentBookName }
+                .distinctBy { it.name.trim() }
+            if (cached.isNotEmpty()) {
+                _otherWorks.value = OtherWorksState.Success(cached.toImmutableList())
+            }
+        }
+    }
+
+    /**
+     * 按作者跨书源搜索「其他作品」。范围来自 [LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE]，
+     * 与作者管理页共用。只在该方法被调用（用户点搜索）时执行，换源/刷新不触发。
+     */
+    fun searchOtherWorks() {
+        val author = currentBook?.author?.trim() ?: return
+        if (author.isBlank()) return
+        if (otherWorksJob?.isActive == true) return
+        otherWorksJob = viewModelScope.launch {
+            _otherWorks.value = OtherWorksState.Searching(0, 0)
+            val collected = LinkedHashMap<String, SearchBook>()
+            try {
+                searchBooksUseCase.execute(
+                    BookSearchRequest(
+                        keyword = author,
+                        page = 1,
+                        scope = BookSearchScope(_otherWorksScopeRaw.value),
+                        matchMode = MatchMode.EXACT,
+                        concurrency = OtherConfig.threadCount,
+                    ),
+                    BookSearchControl(),
+                ).collect { event ->
+                    when (event) {
+                        SearchRunEvent.Started -> Unit
+                        is SearchRunEvent.Progress -> {
+                            event.upsertBooks.forEach { collected[it.bookUrl] = it }
+                            event.removedBookUrls.forEach { collected.remove(it) }
+                            _otherWorks.value = OtherWorksState.Searching(
+                                event.processedSources,
+                                event.totalSources,
+                            )
+                        }
+                        is SearchRunEvent.Finished -> Unit
+                    }
+                }
+                val currentBookName = currentBook?.name?.trim().orEmpty()
+                val books = collected.values.filter {
+                    it.author.trim() == author && it.name.trim() != currentBookName
+                }.distinctBy { it.name.trim() }
+                _otherWorks.value = if (books.isNotEmpty()) {
+                    OtherWorksState.Success(books.toImmutableList())
+                } else {
+                    OtherWorksState.Empty
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (e: Throwable) {
+                _otherWorks.value = OtherWorksState.Error(
+                    e.localizedMessage ?: e.javaClass.simpleName,
+                )
+            }
+        }
+    }
+
+    /** 写入与作者管理页共用的搜索范围偏好；不自动触发搜索，需用户再点搜索按钮。 */
+    private fun applyOtherWorksScope(selection: ScopeSelection) {
+        val raw = if (selection.isSourceScope) {
+            BookSearchScope.encodeSources(
+                selection.sources.map {
+                    BookSearchScope.ScopeSourceItem(it.bookSourceName, it.bookSourceUrl)
+                },
+            )
+        } else {
+            BookSearchScope.encodeGroups(selection.groupNames)
+        }
+        viewModelScope.launch {
+            localPreferencesRepository.putString(
+                LocalPreferencesKeys.AUTHOR_WORKS_SEARCH_SCOPE.name,
+                raw,
+            )
         }
     }
 
@@ -449,6 +618,9 @@ class BookInfoViewModel(
             is BookInfoIntent.RelatedBookAddToShelf -> viewModelScope.launch {
                 addToBookshelfUseCase.execute(intent.book)
             }
+
+            BookInfoIntent.OtherWorksSearch -> searchOtherWorks()
+            is BookInfoIntent.OtherWorksApplyScope -> applyOtherWorksScope(intent.selection)
 
             is BookInfoIntent.RelatedBooksMore -> onRelatedBooksMore(intent.title, intent.url)
             is BookInfoIntent.CharacterClick -> openCharacterDetail(intent.characterId)
@@ -1006,6 +1178,7 @@ class BookInfoViewModel(
 
     private fun upBook(book: Book, source: BookSource?) {
         currentBook = book
+        loadOtherWorksCache()
         currentChapterList = emptyList()
         tocLoadFailed = false
         currentWebFiles = emptyList()

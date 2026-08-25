@@ -207,12 +207,32 @@ fun BookInfoRouteScreen(
         }
     }
 
+    val bookshelfState by viewModel.bookshelfState
+        .collectAsStateWithLifecycle(emptySet())
+
+    val otherWorksState by viewModel.otherWorksState
+        .collectAsStateWithLifecycle(OtherWorksState.Idle)
+    val otherWorksScopeRaw by viewModel.otherWorksScopeRaw
+        .collectAsStateWithLifecycle("")
+    val otherWorksScopeNames by viewModel.otherWorksScopeNames
+        .collectAsStateWithLifecycle(persistentListOf())
+    val otherWorksEnabledGroups by viewModel.otherWorksEnabledGroups
+        .collectAsStateWithLifecycle(persistentListOf())
+    val otherWorksEnabledSources by viewModel.otherWorksEnabledSources
+        .collectAsStateWithLifecycle(persistentListOf())
+
     BookInfoScreen(
         state = uiState,
         groups = viewModel.allGroups
             .collectAsStateWithLifecycle(persistentListOf<BookGroup>()).value,
         onIntent = viewModel::onIntent,
         onBack = onBack,
+        bookshelfState = bookshelfState,
+        otherWorksState = otherWorksState,
+        otherWorksScopeRaw = otherWorksScopeRaw,
+        otherWorksScopeNames = otherWorksScopeNames,
+        otherWorksEnabledGroups = otherWorksEnabledGroups,
+        otherWorksEnabledSources = otherWorksEnabledSources,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         sharedCoverKey = sharedCoverKey,
