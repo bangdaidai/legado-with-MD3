@@ -500,6 +500,14 @@ fun ThemeConfigScreen(
                             }
                         )
                     }
+                    SwitchSettingItem(
+                        title = stringResource(R.string.status_bar_blur),
+                        description = stringResource(R.string.status_bar_blur_summary),
+                        checked = theme.enableStatusBarBlur,
+                        onCheckedChange = { value ->
+                            updateTheme { it.copy(enableStatusBarBlur = value) }
+                        }
+                    )
                 }
 
             }

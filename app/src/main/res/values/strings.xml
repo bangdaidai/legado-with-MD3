@@ -1970,6 +1970,8 @@
     <string name="material_version">Color Specification</string>
     <string name="tip_compose_set">These options only affect screens rewritten in Compose. Disabled options are placeholders and will be enabled after implementation.</string>
     <string name="is_blur_enable">Enable Element Blur</string>
+    <string name="status_bar_blur">Status Bar Blur</string>
+    <string name="status_bar_blur_summary">Blur the status bar area independently, even when global element and progressive blur are off. Radius and opacity follow the global settings.</string>
     <string name="use_underline">Always Use Underline for Emphasized Text</string>
     <string name="adapt_special_style">Adapt Special Styles</string>
     <string name="compose_engine">Theme Style</string>

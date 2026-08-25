@@ -32,8 +32,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -92,6 +90,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.ImageLoader
@@ -122,6 +121,7 @@ import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
 import io.legado.app.ui.theme.responsiveHazeEffectFixedStyle
+import io.legado.app.ui.theme.responsiveHazeEffectStatusBar
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
@@ -293,12 +293,17 @@ private fun BookInfoScreenContent(
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            BookInfoTransparentTopAppBar(
-                state = state,
-                onMenuAction = { onIntent(BookInfoIntent.MenuAction(it)) },
-                onBackPressed = onBack,
-                scrollBehavior = scrollBehavior,
-            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                val statusBarHeight =
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                BookInfoTopScrim(statusBarHeight)
+                BookInfoTransparentTopAppBar(
+                    state = state,
+                    onMenuAction = { onIntent(BookInfoIntent.MenuAction(it)) },
+                    onBackPressed = onBack,
+                    scrollBehavior = scrollBehavior,
+                )
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
@@ -312,7 +317,6 @@ private fun BookInfoScreenContent(
         },
         alwaysDrawBehindBars = true,
     ) { paddingValues ->
-        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val book = state.book
         if (book == null) {
             Box(modifier = Modifier.fillMaxSize())
@@ -334,11 +338,9 @@ private fun BookInfoScreenContent(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .statusBarsPadding(),
+                            .fillMaxSize(),
                         contentPadding = PaddingValues(
-                            top = (paddingValues.calculateTopPadding() - statusBarHeight)
-                                .coerceAtLeast(0.dp) + 8.dp,
+                            top = paddingValues.calculateTopPadding() + 8.dp,
                             bottom = paddingValues.calculateBottomPadding() + 88.dp,
                         ),
                     ) {
@@ -430,12 +432,13 @@ private fun BookInfoScreenContent(
                                     onJumpToAnotherApp = jumpToAnotherApp,
                                 )
         }
+        }
     }
 }
                 }
+
             }
         }
-    }
 
     val currentSheet = state.sheet
     var renderedSheet by remember { mutableStateOf<BookInfoSheet>(BookInfoSheet.None) }
@@ -892,6 +895,19 @@ private fun BookInfoBackdrop(
                 )
         )
     }
+}
+
+private fun BookInfoTopScrim(statusBarHeight: Dp) {
+    val hazeState = LocalHazeState.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(statusBarHeight + 16.dp)
+            .then(
+                hazeState?.let { Modifier.responsiveHazeEffectStatusBar(it) }
+                    ?: Modifier
+            )
+    )
 }
 
 private data class BookInfoBackdropState(

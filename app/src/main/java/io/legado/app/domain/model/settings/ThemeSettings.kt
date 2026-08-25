@@ -36,6 +36,7 @@ data class ThemeSettings(
     val bottomBarOpacity: Int = 100,
     val enableBlur: Boolean = false,
     val enableProgressiveBlur: Boolean = false,
+    val enableStatusBarBlur: Boolean = true,
     val topBarBlurRadius: Int = 24,
     val bottomBarBlurRadius: Int = 8,
     val topBarBlurAlpha: Int = 73,

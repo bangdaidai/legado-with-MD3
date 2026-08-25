@@ -49,6 +49,7 @@ data class ThemeExportData(
     val itemDividerColor: Int = 0,
     val enableBlur: Boolean = false,
     val enableProgressiveBlur: Boolean = false,
+    val enableStatusBarBlur: Boolean = true,
     val topBarBlurRadius: Int = 24,
     val bottomBarBlurRadius: Int = 8,
     val topBarBlurAlpha: Int = 73,

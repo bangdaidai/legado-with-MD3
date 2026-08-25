@@ -276,6 +276,7 @@ object BackupConfig {
         PreferKey.bottomBarOpacity,
         PreferKey.enableBlur,
         PreferKey.enableProgressiveBlur,
+        PreferKey.enableStatusBarBlur,
         PreferKey.topBarBlurRadius,
         PreferKey.bottomBarBlurRadius,
         PreferKey.topBarBlurAlpha,

@@ -250,6 +250,7 @@ object PreferKey {
     const val bottomBarOpacity = "bottomBarOpacity"
     const val enableBlur = "enableBlur"
     const val enableProgressiveBlur = "enableProgressiveBlur"
+    const val enableStatusBarBlur = "enableStatusBarBlur"
     const val topBarBlurRadius = "topBarBlurRadius"
     const val bottomBarBlurRadius = "bottomBarBlurRadius"
     const val topBarBlurAlpha = "topBarBlurAlpha"

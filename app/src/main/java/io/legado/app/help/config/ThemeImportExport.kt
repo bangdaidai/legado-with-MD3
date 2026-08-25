@@ -298,6 +298,7 @@ object ThemeImportExport {
             itemDividerColor = root.int("z"),
             enableBlur = root.boolean("A"),
             enableProgressiveBlur = root.boolean("B"),
+            enableStatusBarBlur = root.boolean("K"),
             topBarBlurRadius = root.int("C", 24),
             bottomBarBlurRadius = root.int("D", 8),
             topBarBlurAlpha = root.int("E", 73),
