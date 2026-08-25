@@ -114,10 +114,10 @@ import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.LocalHazeState
 import io.legado.app.ui.theme.LocalLegadoThemeColors
 import io.legado.app.ui.theme.ProvideColorSchemeOverride
+import io.legado.app.ui.theme.ThemeEngine
 import io.legado.app.ui.theme.ThemeOverrideState
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.animateColorSchemeAsState
-import io.legado.app.ui.theme.applyTransparentSurfaces
 import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
@@ -551,12 +551,42 @@ private fun BookInfoColorTheme(
     theme: ThemeOverrideState?,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
     val baseTheme = LocalLegadoThemeColors.current
+    val appThemeSettings = LocalAppUiConfiguration.current.theme
+    val appThemeMode = ThemeResolver.resolveThemeMode(appThemeSettings.appTheme)
+    val isDark = LegadoTheme.isDark
+    // 透明主题下封面取色未到位时不能让 fallback 是透明 surface：封面只铺顶部 480dp，
+    // 透明 fallback 会先透出黑底，等取色一到又从透明补间到不透明，整页先黑再变正常。
+    // 用透明主题的“不透明等价”（WH）做 fallback，两端 surface 都是不透明，进页不再闪黑，
+    // 取色到位后从不透明 WH 平滑补间到封面取色配色，最终落回彩色封面主题。
+    val opaqueFallback = remember(
+        context, appThemeMode, isDark,
+        appThemeSettings.isPureBlack, appThemeSettings.paletteStyle,
+        appThemeSettings.materialVersion, appThemeSettings.customContrast,
+        appThemeSettings.customPrimary, appThemeSettings.customNightPrimary,
+    ) {
+        ThemeEngine.getColorScheme(
+            context = context,
+            mode = AppThemeMode.Transparent,
+            darkTheme = isDark,
+            isAmoled = appThemeSettings.isPureBlack,
+            paletteStyle = appThemeSettings.paletteStyle,
+            materialVersion = appThemeSettings.materialVersion,
+            forceOpaque = true,
+            customSeedColor = if (isDark) appThemeSettings.customNightPrimary else appThemeSettings.customPrimary,
+            customContrast = appThemeSettings.customContrast,
+        )
+    }
+    val targetColorScheme = when {
+        theme != null -> theme.colorScheme
+        appThemeMode == AppThemeMode.Transparent -> opaqueFallback
+        else -> baseTheme.colorScheme
+    }
     val animationSpec = tween<Color>(
         durationMillis = 400,
         easing = FastOutSlowInEasing,
     )
-    val targetColorScheme = theme?.colorScheme ?: baseTheme.colorScheme
     val targetSeedColor = theme?.seedColor ?: baseTheme.seedColor
     val animatedColorScheme = targetColorScheme.animateColorSchemeAsState(animationSpec)
     val animatedSeedColor by animateColorAsState(
@@ -697,20 +727,7 @@ private fun rememberBookInfoColorTheme(
         extras[CoverExtras.LoadOnlyWifi] = loadOnlyWifi
     }
 
-    val override = rememberThemeOverride(seedColor)
-    // 透明主题下 override 必须保持同样的透明 surface。否则封面取色一到位，surface 就会从
-    // Color.Transparent（alpha 0 的黑）补间到不透明色，中间帧是半透明黑，进页时整页闪黑；
-    // 同时透明主题在这一页也会被悄悄换成不透明配色。
-    val appThemeMode = ThemeResolver.resolveThemeMode(
-        LocalAppUiConfiguration.current.theme.appTheme
-    )
-    return remember(override, appThemeMode) {
-        if (override == null || appThemeMode != AppThemeMode.Transparent) {
-            override
-        } else {
-            override.copy(colorScheme = override.colorScheme.applyTransparentSurfaces())
-        }
-    }
+    return rememberThemeOverride(seedColor)
 }
 
 private fun resolveBookInfoBackdropStyle(
