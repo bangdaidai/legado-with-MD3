@@ -1,6 +1,7 @@
 package io.legado.app.data.repository.ai
 
 import io.legado.app.constant.PreferKey
+import io.legado.app.domain.model.AiLogStep
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -30,6 +31,7 @@ data class AiLogEntry(
     val success: Boolean = true,
     val durationMillis: Long = 0,
     val error: String? = null,
+    val steps: List<AiLogStep> = emptyList(),
 )
 
 /**

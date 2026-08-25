@@ -4,6 +4,7 @@ import androidx.annotation.Keep
 import com.google.gson.JsonObject
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.model.AiAvailableModel
+import io.legado.app.domain.model.AiCallTrace
 import io.legado.app.domain.model.AiCapability
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
@@ -30,24 +31,34 @@ class AnthropicHandler : AiProtocolHandler {
 
     override val protocols = setOf(AiProtocol.ANTHROPIC_MESSAGES)
 
-    override suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse> =
+    override suspend fun generate(
+        request: AiGenerateRequest,
+        trace: AiCallTrace
+    ): Result<AiGenerateResponse> =
         withContext(Dispatchers.IO) {
-            runCatching { generateInternal(request) }
+            runCatching { generateInternal(request, trace) }
         }
 
     override suspend fun stream(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace
     ) {
-        streamInternal(request, emitEvent)
+        streamInternal(request, emitEvent, trace)
     }
 
-    override suspend fun fetchModels(provider: AiProviderConfig): Result<List<AiAvailableModel>> =
+    override suspend fun fetchModels(
+        provider: AiProviderConfig,
+        trace: AiCallTrace
+    ): Result<List<AiAvailableModel>> =
         withContext(Dispatchers.IO) {
-            runCatching { fetchModelsInternal(provider) }
+            runCatching { fetchModelsInternal(provider, trace) }
         }
 
-    private suspend fun generateInternal(request: AiGenerateRequest): AiGenerateResponse {
+    private suspend fun generateInternal(
+        request: AiGenerateRequest,
+        trace: AiCallTrace
+    ): AiGenerateResponse {
         val provider = request.model.provider
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank() && request.model.modelId.isNotBlank()) {
             "Anthropic configuration incomplete: baseUrl, apiKey, and model are required"
@@ -87,6 +98,7 @@ class AnthropicHandler : AiProtocolHandler {
         request.params.topP?.let { body["top_p"] = it }
 
         return retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
+            trace.mark("已发送请求")
             val response = aiOkHttpClient.newCallStrResponse {
                 url(provider.baseUrl + provider.messagesPath)
                 postJson(GSON.toJson(body))
@@ -98,6 +110,7 @@ class AnthropicHandler : AiProtocolHandler {
                     )
                 )
             }
+            trace.mark("已收到响应")
             if (!response.isSuccessful()) {
                 throw AiHttpException(response.code(), response.message(), response.body)
             }
@@ -115,7 +128,8 @@ class AnthropicHandler : AiProtocolHandler {
 
     private suspend fun streamInternal(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace
     ) {
         val provider = request.model.provider
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank() && request.model.modelId.isNotBlank()) {
@@ -156,6 +170,7 @@ class AnthropicHandler : AiProtocolHandler {
         request.params.topP?.let { body["top_p"] = it }
 
         val keyRotator = KeyRotator(provider.apiKey)
+        trace.mark("已发送请求")
         val response = retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
             aiOkHttpClient.newCallResponse {
                 url(provider.baseUrl + provider.messagesPath)
@@ -175,7 +190,9 @@ class AnthropicHandler : AiProtocolHandler {
                 }
             }
         }
+        trace.mark("已建立连接")
         val toolBlocks = mutableMapOf<Int, AnthropicToolBlock>()
+        var firstContent = true
         try {
             response.readSseData { data ->
                 val event = runCatching {
@@ -211,6 +228,10 @@ class AnthropicHandler : AiProtocolHandler {
                         when (delta.type) {
                             "text_delta", null -> {
                                 delta.text?.takeIf { it.isNotEmpty() }?.let {
+                                    if (firstContent) {
+                                        firstContent = false
+                                        trace.markFirstToken()
+                                    }
                                     emitEvent(AiStreamEvent.Content(it))
                                 }
                                 delta.thinking?.takeIf { it.isNotEmpty() }?.let {
@@ -260,7 +281,10 @@ class AnthropicHandler : AiProtocolHandler {
         }
     }
 
-    private suspend fun fetchModelsInternal(provider: AiProviderConfig): List<AiAvailableModel> {
+    private suspend fun fetchModelsInternal(
+        provider: AiProviderConfig,
+        trace: AiCallTrace
+    ): List<AiAvailableModel> {
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank()) {
             "Anthropic configuration incomplete: baseUrl and apiKey are required"
         }
@@ -269,6 +293,7 @@ class AnthropicHandler : AiProtocolHandler {
             ?: provider.modelsUrl
             ?: (provider.baseUrl + "/v1/models")
         return retryWithBackoff(maxAttempts = 2, keyRotator = keyRotator) {
+            trace.mark("已发送请求")
             val response = okHttpClient.newCallStrResponse {
                 url(modelsUrl)
                 addHeaders(
@@ -279,6 +304,7 @@ class AnthropicHandler : AiProtocolHandler {
                     )
                 )
             }
+            trace.mark("已收到响应")
             if (!response.isSuccessful()) {
                 throw AiHttpException(response.code(), response.message(), response.body)
             }

@@ -61,6 +61,7 @@ class AiLogViewModel(
                     success = entry.success,
                     durationText = formatDuration(entry.durationMillis),
                     error = entry.error,
+                    steps = entry.steps.map { AiLogStepUi(relativeMs = it.relativeMs, label = it.label) },
                 )
             }.toImmutableList()
             _uiState.update { it.copy(logs = logs, loading = false) }
@@ -87,6 +88,12 @@ class AiLogViewModel(
                 append(" | ${item.provider} / ${item.model}")
                 append(" | ${item.durationText}")
                 if (item.summary.isNotBlank()) append("\n${item.summary}")
+                if (item.steps.isNotEmpty()) {
+                    append("\n过程:")
+                    item.steps.forEach { step ->
+                        append("\n  +${formatDuration(step.relativeMs)} ${step.label}")
+                    }
+                }
                 if (!item.success && !item.error.isNullOrBlank()) append("\n错误: ${item.error}")
             }
         }

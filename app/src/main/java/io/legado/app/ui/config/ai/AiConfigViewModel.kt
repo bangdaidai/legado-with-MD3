@@ -32,6 +32,11 @@ class AiConfigViewModel(
             }
         }
         viewModelScope.launch {
+            AppConfigStore.observeInt(PreferKey.aiCallTimeout).collect { seconds ->
+                _uiState.update { it.copy(aiCallTimeout = seconds ?: 60) }
+            }
+        }
+        viewModelScope.launch {
             combine(
                 aiProfileGateway.observeProviders(),
                 aiProfileGateway.observeModels(),
@@ -98,11 +103,16 @@ class AiConfigViewModel(
         when (intent) {
             is AiConfigIntent.SetDefaultModel -> setDefaultModel(intent.modelProfileId)
             is AiConfigIntent.SetAiLogEnabled -> setAiLogEnabled(intent.enabled)
+            is AiConfigIntent.SetAiCallTimeout -> setAiCallTimeout(intent.seconds)
         }
     }
 
     private fun setAiLogEnabled(enabled: Boolean) {
         AppConfigStore.putBoolean(PreferKey.aiLogEnabled, enabled)
+    }
+
+    private fun setAiCallTimeout(seconds: Int) {
+        AppConfigStore.putInt(PreferKey.aiCallTimeout, seconds.coerceIn(5, 600))
     }
 
     private fun setDefaultModel(modelProfileId: String) {

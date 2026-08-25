@@ -3,6 +3,7 @@ package io.legado.app.data.repository.ai
 import com.google.gson.JsonObject
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.model.AiAvailableModel
+import io.legado.app.domain.model.AiCallTrace
 import io.legado.app.domain.model.AiCapability
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
@@ -28,24 +29,31 @@ class OpenAiResponsesHandler : AiProtocolHandler {
 
     override val protocols = setOf(AiProtocol.OPENAI_RESPONSES)
 
-    override suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse> =
+    override suspend fun generate(
+        request: AiGenerateRequest,
+        trace: AiCallTrace
+    ): Result<AiGenerateResponse> =
         withContext(Dispatchers.IO) {
-            runCatching { generateInternal(request) }
+            runCatching { generateInternal(request, trace) }
         }
 
     override suspend fun stream(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace
     ) {
-        streamInternal(request, emitEvent)
+        streamInternal(request, emitEvent, trace)
     }
 
-    override suspend fun fetchModels(provider: AiProviderConfig): Result<List<AiAvailableModel>> =
+    override suspend fun fetchModels(
+        provider: AiProviderConfig,
+        trace: AiCallTrace
+    ): Result<List<AiAvailableModel>> =
         withContext(Dispatchers.IO) {
-            runCatching { fetchOpenAiCompatibleModels(provider) }
+            runCatching { fetchOpenAiCompatibleModels(provider, trace) }
         }
 
-    private suspend fun generateInternal(request: AiGenerateRequest): AiGenerateResponse {
+    private suspend fun generateInternal(request: AiGenerateRequest, trace: AiCallTrace): AiGenerateResponse {
         val provider = request.model.provider
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank() && request.model.modelId.isNotBlank()) {
             "OpenAI Responses configuration incomplete: baseUrl, apiKey, and model are required"
@@ -71,6 +79,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
         }
 
         return retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
+            trace.mark("已发送请求")
             val response = aiOkHttpClient.newCallStrResponse {
                 url(provider.baseUrl + provider.responsesPath)
                 postJson(GSON.toJson(body))
@@ -81,6 +90,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
                     )
                 )
             }
+            trace.mark("已收到响应")
             if (!response.isSuccessful()) {
                 throw AiHttpException(response.code(), response.message(), response.body)
             }
@@ -96,7 +106,8 @@ class OpenAiResponsesHandler : AiProtocolHandler {
 
     private suspend fun streamInternal(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace
     ) {
         val provider = request.model.provider
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank() && request.model.modelId.isNotBlank()) {
@@ -232,7 +243,10 @@ class OpenAiResponsesHandler : AiProtocolHandler {
         }
     }
 
-    private suspend fun fetchOpenAiCompatibleModels(provider: AiProviderConfig): List<AiAvailableModel> {
+    private suspend fun fetchOpenAiCompatibleModels(
+        provider: AiProviderConfig,
+        trace: AiCallTrace
+    ): List<AiAvailableModel> {
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank()) {
             "AI provider configuration incomplete: baseUrl and apiKey are required"
         }
@@ -241,6 +255,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
             ?: provider.modelsUrl
             ?: (provider.baseUrl + "/models")
         return retryWithBackoff(maxAttempts = 2, keyRotator = keyRotator) {
+            trace.mark("已发送请求")
             val response = okHttpClient.newCallStrResponse {
                 url(modelsUrl)
                 addHeaders(
@@ -250,6 +265,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
                     )
                 )
             }
+            trace.mark("已收到响应")
             if (!response.isSuccessful()) {
                 throw AiHttpException(response.code(), response.message(), response.body)
             }

@@ -3,6 +3,7 @@ package io.legado.app.data.repository.ai
 import androidx.annotation.Keep
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.model.AiAvailableModel
+import io.legado.app.domain.model.AiCallTrace
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
 import io.legado.app.domain.model.AiGenerationParams
@@ -28,24 +29,31 @@ class OpenAiChatHandler : AiProtocolHandler {
 
     override val protocols = setOf(AiProtocol.OPENAI_CHAT_COMPLETIONS)
 
-    override suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse> =
+    override suspend fun generate(
+        request: AiGenerateRequest,
+        trace: AiCallTrace
+    ): Result<AiGenerateResponse> =
         withContext(Dispatchers.IO) {
-            runCatching { generateInternal(request) }
+            runCatching { generateInternal(request, trace) }
         }
 
     override suspend fun stream(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace
     ) {
-        streamInternal(request, emitEvent)
+        streamInternal(request, emitEvent, trace)
     }
 
-    override suspend fun fetchModels(provider: AiProviderConfig): Result<List<AiAvailableModel>> =
+    override suspend fun fetchModels(
+        provider: AiProviderConfig,
+        trace: AiCallTrace
+    ): Result<List<AiAvailableModel>> =
         withContext(Dispatchers.IO) {
-            runCatching { fetchModelsInternal(provider) }
+            runCatching { fetchModelsInternal(provider, trace) }
         }
 
-    private suspend fun generateInternal(request: AiGenerateRequest): AiGenerateResponse {
+    private suspend fun generateInternal(request: AiGenerateRequest, trace: AiCallTrace): AiGenerateResponse {
         val provider = request.model.provider
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank() && request.model.modelId.isNotBlank()) {
             "OpenAI-compatible configuration incomplete: baseUrl, apiKey, and model are required"
@@ -72,6 +80,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         // 返回 null 代表「只有思考内容」，交给外层降级重试；其余失败照旧抛出
         suspend fun send(): AiGenerateResponse? =
             retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
+                trace.mark("已发送请求")
                 val response = aiOkHttpClient.newCallStrResponse {
                     url(provider.baseUrl + provider.chatPath)
                     postJson(GSON.toJson(body))
@@ -82,6 +91,7 @@ class OpenAiChatHandler : AiProtocolHandler {
                         )
                     )
                 }
+                trace.mark("已收到响应")
                 if (!response.isSuccessful()) {
                     throw AiHttpException(response.code(), response.message(), response.body)
                 }
@@ -111,7 +121,8 @@ class OpenAiChatHandler : AiProtocolHandler {
 
     private suspend fun streamInternal(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace
     ) {
         val provider = request.model.provider
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank() && request.model.modelId.isNotBlank()) {
@@ -139,6 +150,7 @@ class OpenAiChatHandler : AiProtocolHandler {
 
         // For streaming, we retry before establishing the SSE connection.
         // Once streaming starts, errors are not retried (partial output would be confusing).
+        trace.mark("已发送请求")
         val response = retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
             aiOkHttpClient.newCallResponse {
                 url(provider.baseUrl + provider.chatPath)
@@ -157,6 +169,8 @@ class OpenAiChatHandler : AiProtocolHandler {
                 }
             }
         }
+        trace.mark("已建立连接")
+        var firstContent = true
         try {
             response.readSseData { data ->
                 val root = data.toJsonObject()
@@ -170,6 +184,10 @@ class OpenAiChatHandler : AiProtocolHandler {
                     }
                     val content = delta?.content
                     if (!content.isNullOrEmpty()) {
+                        if (firstContent) {
+                            firstContent = false
+                            trace.markFirstToken()
+                        }
                         emitEvent(AiStreamEvent.Content(content))
                     }
                     delta?.tool_calls?.forEach { toolCall ->
@@ -192,7 +210,10 @@ class OpenAiChatHandler : AiProtocolHandler {
         }
     }
 
-    private suspend fun fetchModelsInternal(provider: AiProviderConfig): List<AiAvailableModel> {
+    private suspend fun fetchModelsInternal(
+        provider: AiProviderConfig,
+        trace: AiCallTrace
+    ): List<AiAvailableModel> {
         require(provider.baseUrl.isNotBlank() && provider.apiKey.isNotBlank()) {
             "AI provider configuration incomplete: baseUrl and apiKey are required"
         }
@@ -201,6 +222,7 @@ class OpenAiChatHandler : AiProtocolHandler {
             ?: provider.modelsUrl
             ?: (provider.baseUrl + "/models")
         return retryWithBackoff(maxAttempts = 2, keyRotator = keyRotator) {
+            trace.mark("已发送请求")
             val response = okHttpClient.newCallStrResponse {
                 url(modelsUrl)
                 addHeaders(
@@ -210,6 +232,7 @@ class OpenAiChatHandler : AiProtocolHandler {
                     )
                 )
             }
+            trace.mark("已收到响应")
             if (!response.isSuccessful()) {
                 throw AiHttpException(response.code(), response.message(), response.body)
             }

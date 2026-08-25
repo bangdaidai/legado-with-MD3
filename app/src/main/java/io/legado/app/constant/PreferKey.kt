@@ -482,6 +482,7 @@ object PreferKey {
 
     // AI log (debug tracing of every AI call)
     const val aiLogEnabled = "aiLogEnabled"
+    const val aiCallTimeout = "aiCallTimeout"
 
     // AI web search (Tavily)
     const val aiWebSearchEnabled = "aiWebSearchEnabled"

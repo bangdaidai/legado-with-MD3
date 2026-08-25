@@ -13,7 +13,8 @@ data class AiConfigUiState(
     val providerCount: Int = 0,
     val modelCount: Int = 0,
     val presetCount: Int = 0,
-    val aiLogEnabled: Boolean = false
+    val aiLogEnabled: Boolean = false,
+    val aiCallTimeout: Int = 60
 )
 
 @Stable
@@ -46,6 +47,7 @@ sealed interface AiConfigIntent
 {
     data class SetDefaultModel(val modelProfileId: String) : AiConfigIntent
     data class SetAiLogEnabled(val enabled: Boolean) : AiConfigIntent
+    data class SetAiCallTimeout(val seconds: Int) : AiConfigIntent
 }
 
 sealed interface AiConfigEffect {

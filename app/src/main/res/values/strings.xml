@@ -1971,7 +1971,7 @@
     <string name="tip_compose_set">These options only affect screens rewritten in Compose. Disabled options are placeholders and will be enabled after implementation.</string>
     <string name="is_blur_enable">Enable Element Blur</string>
     <string name="status_bar_blur">Status Bar Blur</string>
-    <string name="status_bar_blur_summary">Blur the status bar area independently, even when global element and progressive blur are off. Radius and opacity follow the global settings.</string>
+    <string name="status_bar_blur_summary">Only applies to the book info page.</string>
     <string name="use_underline">Always Use Underline for Emphasized Text</string>
     <string name="adapt_special_style">Adapt Special Styles</string>
     <string name="compose_engine">Theme Style</string>
@@ -2220,6 +2220,9 @@
     <string name="ai_log_cleared">AI log cleared</string>
     <string name="ai_log_copy_all">Copy</string>
     <string name="ai_log_error_format">Error: %1$s</string>
+    <string name="ai_log_steps">Steps</string>
+    <string name="ai_call_timeout">AI call timeout (seconds)</string>
+    <string name="ai_call_timeout_desc">Abort an AI call if it takes longer than this. Range 5-600, default 60</string>
     <string name="ai_generate_timeout">AI generation timed out. Check your network or try again later</string>
     <string name="ai_web_search_enable">Enable web search</string>
     <string name="ai_web_search_enable_desc">Author names, book titles and questions will be sent to Tavily</string>

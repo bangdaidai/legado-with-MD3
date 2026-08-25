@@ -2,9 +2,11 @@ package io.legado.app.data.repository.ai
 
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.model.AiAvailableModel
+import io.legado.app.domain.model.AiCallTrace
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
 import io.legado.app.domain.model.AiProviderConfig
+import io.legado.app.domain.model.NoOpTrace
 
 /**
  * Protocol-specific handler for AI text generation.
@@ -16,14 +18,21 @@ interface AiProtocolHandler {
     val protocols: Set<String>
 
     /** Single-shot text generation. */
-    suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse>
+    suspend fun generate(
+        request: AiGenerateRequest,
+        trace: AiCallTrace = NoOpTrace
+    ): Result<AiGenerateResponse>
 
     /** Streaming text generation via SSE. */
     suspend fun stream(
         request: AiGenerateRequest,
-        emitEvent: suspend (AiStreamEvent) -> Unit
+        emitEvent: suspend (AiStreamEvent) -> Unit,
+        trace: AiCallTrace = NoOpTrace
     )
 
     /** Fetch available models from the provider. */
-    suspend fun fetchModels(provider: AiProviderConfig): Result<List<AiAvailableModel>>
+    suspend fun fetchModels(
+        provider: AiProviderConfig,
+        trace: AiCallTrace = NoOpTrace
+    ): Result<List<AiAvailableModel>>
 }

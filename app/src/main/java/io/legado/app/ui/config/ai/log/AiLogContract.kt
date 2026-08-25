@@ -12,6 +12,12 @@ data class AiLogUiState(
 )
 
 @Stable
+data class AiLogStepUi(
+    val relativeMs: Long,
+    val label: String,
+)
+
+@Stable
 data class AiLogItemUi(
     val timeText: String,
     val kind: String,
@@ -21,6 +27,7 @@ data class AiLogItemUi(
     val success: Boolean,
     val durationText: String,
     val error: String?,
+    val steps: List<AiLogStepUi> = emptyList(),
 )
 
 sealed interface AiLogIntent {

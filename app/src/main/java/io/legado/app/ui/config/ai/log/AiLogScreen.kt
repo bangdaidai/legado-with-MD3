@@ -1,17 +1,24 @@
 package io.legado.app.ui.config.ai.log
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -19,9 +26,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,6 +38,7 @@ import io.legado.app.R
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -49,6 +59,7 @@ fun AiLogRouteScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AiLogScreen(
     state: AiLogUiState,
@@ -58,6 +69,8 @@ fun AiLogScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val hasLogs = state.logs.isNotEmpty()
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    val expandedKeys = remember { mutableStateMapOf<String, Boolean>() }
 
     LaunchedEffect(Unit) {
         effects.collectLatest { effect ->
@@ -68,11 +81,13 @@ fun AiLogScreen(
     }
 
     AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = stringResource(R.string.ai_log),
                 navigationIcon = { TopBarNavigationButton(onClick = onBackClick) },
+                scrollBehavior = scrollBehavior,
                 actions = {
                     if (hasLogs) {
                         TopBarActionButton(
@@ -101,25 +116,44 @@ fun AiLogScreen(
                     bottom = 120.dp,
                 )
             ) {
-                items(state.logs, key = { it.timeText + it.kind + it.provider + it.model }) { item ->
-                    LogCard(item)
+                items(state.logs, key = { it.stableKey() }) { item ->
+                    val key = item.stableKey()
+                    LogCard(
+                        item = item,
+                        expanded = expandedKeys[key] == true,
+                        onToggleExpand = { expandedKeys[key] = expandedKeys[key] != true },
+                    )
                 }
             }
         }
     }
 }
 
+private fun AiLogItemUi.stableKey(): String = "$timeText|$kind|$provider|$model"
+
+private fun formatRelativeMs(ms: Long): String = when {
+    ms < 1000 -> "${ms}ms"
+    else -> String.format(java.util.Locale.getDefault(), "%.1fs", ms / 1000.0)
+}
+
 @Composable
-private fun LogCard(item: AiLogItemUi) {
+private fun LogCard(
+    item: AiLogItemUi,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+) {
     val statusColor = if (item.success) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.error
     }
+    val hasLongContent = item.summary.isNotBlank() ||
+        (!item.success && !item.error.isNullOrBlank())
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            .clickable(enabled = hasLongContent, onClick = onToggleExpand),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -146,13 +180,29 @@ private fun LogCard(item: AiLogItemUi) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            if (item.steps.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.ai_log_steps),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                item.steps.forEach { step ->
+                    Text(
+                        text = "+${formatRelativeMs(step.relativeMs)} ${step.label}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp, start = 8.dp),
+                    )
+                }
+            }
             if (item.summary.isNotBlank()) {
                 Text(
                     text = item.summary,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
-                    maxLines = 4,
+                    maxLines = if (expanded) Int.MAX_VALUE else 4,
                 )
             }
             Text(
@@ -167,7 +217,29 @@ private fun LogCard(item: AiLogItemUi) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 4.dp),
+                    maxLines = if (expanded) Int.MAX_VALUE else 4,
                 )
+            }
+            if (hasLongContent) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(if (expanded) R.string.collapse else R.string.expand),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
