@@ -100,6 +100,9 @@ data object MainRouteSettingsAiPrompt : MainRoute
 data object MainRouteSettingsAiWebSearch : MainRoute
 
 @Serializable
+data object MainRouteSettingsAiLog : MainRoute
+
+@Serializable
 data object MainRouteSettingsCustomTheme : MainRoute
 
 @Serializable

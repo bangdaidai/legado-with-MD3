@@ -12,7 +12,8 @@ data class AiConfigUiState(
     val currentModelName: String = "",
     val providerCount: Int = 0,
     val modelCount: Int = 0,
-    val presetCount: Int = 0
+    val presetCount: Int = 0,
+    val aiLogEnabled: Boolean = false
 )
 
 @Stable
@@ -44,6 +45,7 @@ data class AiModelListItemUi(
 sealed interface AiConfigIntent
 {
     data class SetDefaultModel(val modelProfileId: String) : AiConfigIntent
+    data class SetAiLogEnabled(val enabled: Boolean) : AiConfigIntent
 }
 
 sealed interface AiConfigEffect {

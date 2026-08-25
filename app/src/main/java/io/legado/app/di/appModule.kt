@@ -101,6 +101,7 @@ import io.legado.app.data.repository.UploadRepository
 import io.legado.app.data.repository.WebDavBackupRepository
 import io.legado.app.data.repository.WebDavReadingProgressRepository
 import io.legado.app.data.repository.WebSearchSettingsRepository
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.data.repository.ai.TavilySearchRepository
 import io.legado.app.data.repository.manga.DefaultMangaReaderSession
 import io.legado.app.data.repository.manga.MangaReaderActionRepository
@@ -294,6 +295,7 @@ import io.legado.app.ui.browser.WebViewModel
 import io.legado.app.ui.config.ai.AiConfigViewModel
 import io.legado.app.ui.config.ai.AiModelEditViewModel
 import io.legado.app.ui.config.ai.AiProviderEditViewModel
+import io.legado.app.ui.config.ai.log.AiLogViewModel
 import io.legado.app.ui.config.ai.prompt.AiPromptConfigViewModel
 import io.legado.app.ui.config.ai.summary.AiSummaryConfigViewModel
 import io.legado.app.ui.config.ai.websearch.AiWebSearchConfigViewModel
@@ -493,8 +495,9 @@ val appModule = module {
     single<AiChatGateway> { AiChatRepository(get()) }
     single<AiMemoryGateway> { AiMemoryRepository(get()) }
     single<AiPromptPresetGateway> { AiPromptPresetRepository(get()) }
-    single<AiTextGateway> { AiTextRepositoryImpl() }
-    single<AiWebSearchGateway> { TavilySearchRepository(get()) }
+    single { AiLogRepository() }
+    single<AiTextGateway> { AiTextRepositoryImpl(get()) }
+    single<AiWebSearchGateway> { TavilySearchRepository(get(), get()) }
     single<AiToolGateway> {
         AiToolRepository(get(), get(), get(), get(), get(), get(), get(), get())
     }
@@ -679,6 +682,7 @@ val appModule = module {
     viewModelOf(::AiSummaryConfigViewModel)
     viewModelOf(::AiPromptConfigViewModel)
     viewModelOf(::AiWebSearchConfigViewModel)
+    viewModelOf(::AiLogViewModel)
     viewModelOf(::AiChatViewModel)
     viewModel { (providerId: String?) ->
         AiProviderEditViewModel(

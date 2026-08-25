@@ -8,6 +8,8 @@ import io.legado.app.domain.model.AiWebSearchHit
 import io.legado.app.domain.model.AiWebSearchQuery
 import io.legado.app.domain.model.AiWebSearchResult
 import io.legado.app.domain.model.settings.WebSearchSettings
+import io.legado.app.data.repository.ai.AiLogEntry
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.help.http.addHeaders
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
@@ -25,16 +27,30 @@ import kotlinx.coroutines.withContext
  */
 class TavilySearchRepository(
     private val settingsGateway: WebSearchSettingsGateway,
+    private val aiLogRepository: AiLogRepository,
 ) : AiWebSearchGateway {
 
     override val isConfigured: Boolean
         get() = settingsGateway.currentSettings.isConfigured
 
-    override suspend fun search(query: AiWebSearchQuery): Result<AiWebSearchResult> =
-        withContext(Dispatchers.IO) {
+    override suspend fun search(query: AiWebSearchQuery): Result<AiWebSearchResult> {
+        val start = System.currentTimeMillis()
+        val result = withContext(Dispatchers.IO) {
             runCatching { searchInternal(query) }
                 .onFailure { if (it is CancellationException) throw it }
         }
+        aiLogRepository.record(
+            AiLogEntry(
+                timeMillis = start,
+                kind = "webSearch",
+                summary = query.query,
+                success = result.isSuccess,
+                durationMillis = System.currentTimeMillis() - start,
+                error = result.exceptionOrNull()?.message,
+            )
+        )
+        return result
+    }
 
     private suspend fun searchInternal(query: AiWebSearchQuery): AiWebSearchResult {
         val settings = settingsGateway.currentSettings

@@ -12,6 +12,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.UploadRepository
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
@@ -78,12 +79,13 @@ class CloudTtsViewModel(
     private val httpTtsRepository: HttpTtsRepository,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
     private val previewSynthesizer: VoicePreviewSynthesizer,
+    private val aiLogRepository: AiLogRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CloudTtsUiState())
     val uiState = _uiState.asStateFlow()
     private val _effects = MutableSharedFlow<CloudTtsEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
-    private val synthesizer = CloudTtsAudioSynthesizer(engineGateway)
+    private val synthesizer = CloudTtsAudioSynthesizer(engineGateway, aiLogRepository)
     private val systemCatalog = SystemTtsVoiceCatalog(application)
     private val systemSynthesizer = SystemTtsFileSynthesizer(application)
     private var engines = emptyList<CloudTtsEngine>()

@@ -22,6 +22,7 @@ import io.legado.app.ui.widget.components.SplicedColumnGroup
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.ClickableSettingItem
+import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
@@ -38,6 +39,7 @@ fun AiConfigRouteScreen(
     onNavigateToAiSummary: () -> Unit,
     onNavigateToAiPrompt: () -> Unit,
     onNavigateToAiWebSearch: () -> Unit,
+    onNavigateToAiLog: () -> Unit,
     viewModel: AiConfigViewModel = koinViewModel()
 ) {
     AiConfigScreen(
@@ -50,7 +52,8 @@ fun AiConfigRouteScreen(
         onNavigateToTranslation = onNavigateToTranslation,
         onNavigateToAiSummary = onNavigateToAiSummary,
         onNavigateToAiPrompt = onNavigateToAiPrompt,
-        onNavigateToAiWebSearch = onNavigateToAiWebSearch
+        onNavigateToAiWebSearch = onNavigateToAiWebSearch,
+        onNavigateToAiLog = onNavigateToAiLog
     )
 }
 
@@ -66,7 +69,8 @@ fun AiConfigScreen(
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
     onNavigateToAiPrompt: () -> Unit,
-    onNavigateToAiWebSearch: () -> Unit
+    onNavigateToAiWebSearch: () -> Unit,
+    onNavigateToAiLog: () -> Unit
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -156,6 +160,22 @@ fun AiConfigScreen(
                         title = stringResource(R.string.ai_web_search),
                         description = stringResource(R.string.ai_web_search_desc),
                         onClick = onNavigateToAiWebSearch
+                    )
+                }
+            }
+
+            item {
+                SplicedColumnGroup(title = stringResource(R.string.ai_log)) {
+                    SwitchSettingItem(
+                        title = stringResource(R.string.ai_log),
+                        description = stringResource(R.string.ai_log_desc),
+                        checked = state.aiLogEnabled,
+                        onCheckedChange = { onIntent(AiConfigIntent.SetAiLogEnabled(it)) }
+                    )
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_view_log),
+                        description = stringResource(R.string.ai_view_log_desc),
+                        onClick = onNavigateToAiLog
                     )
                 }
             }

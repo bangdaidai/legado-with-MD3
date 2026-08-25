@@ -1,5 +1,7 @@
 package io.legado.app.help.readaloud.playback
 
+import io.legado.app.data.repository.ai.AiLogEntry
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.model.readaloud.CloudTtsSynthesisRequest
 import io.legado.app.domain.model.readaloud.CloudTtsEngine
@@ -15,6 +17,7 @@ import kotlinx.coroutines.withContext
 
 class CloudTtsAudioSynthesizer(
     private val engineGateway: CloudTtsEngineGateway,
+    private val aiLogRepository: AiLogRepository,
 ) {
     private val registry = CloudTtsProviderRegistry()
 
@@ -22,12 +25,16 @@ class CloudTtsAudioSynthesizer(
         withContext(Dispatchers.IO) {
             val engine = engineGateway.get(engineId) ?: error("云 TTS 引擎不存在")
             require(engine.enabled) { "云 TTS 引擎已停用" }
-            registry.get(engine.provider).fetchVoices(engine)
+            return@withContext logCloudTts(engine, "cloudTtsVoices", "拉取音色列表") {
+                registry.get(engine.provider).fetchVoices(engine)
+            }.getOrThrow()
         }
 
     suspend fun fetchVoices(engine: CloudTtsEngine): List<CloudTtsVoiceDescriptor> =
         withContext(Dispatchers.IO) {
-            registry.get(engine.provider).fetchVoices(engine)
+            return@withContext logCloudTts(engine, "cloudTtsVoices", "拉取音色列表") {
+                registry.get(engine.provider).fetchVoices(engine)
+            }.getOrThrow()
         }
 
     suspend fun synthesize(
@@ -35,7 +42,9 @@ class CloudTtsAudioSynthesizer(
         request: CloudTtsSynthesisRequest,
         output: File,
     ): Boolean = withContext(Dispatchers.IO) {
-        val audio = registry.get(engine.provider).synthesize(engine, request)
+        val audio = logCloudTts(engine, "cloudTts", "语音合成 ${request.text.length} 字") {
+            registry.get(engine.provider).synthesize(engine, request)
+        }.getOrNull() ?: return@withContext false
         output.parentFile?.mkdirs()
         output.writeBytes(audio.bytes)
         output.length() > 0
@@ -75,24 +84,49 @@ class CloudTtsAudioSynthesizer(
             roleInstruction.takeIf(String::isNotBlank),
             emotionControl.instruction.takeIf(String::isNotBlank),
         ).joinToString(" ")
-        val audio = registry.get(engine.provider).synthesize(
-            engine = engine,
-            request = CloudTtsSynthesisRequest(
-                text = text,
-                voiceId = voice.speakerId,
-                locale = config.locale,
-                style = mappedStyle ?: config.style,
-                role = config.role,
-                instructions = instructions,
-                speed = config.speed,
-                pitch = config.pitch,
-                volume = config.volume,
-                format = config.format,
-                sampleRate = config.sampleRate,
-            ),
-        )
+        val audio = logCloudTts(engine, "cloudTts", "语音合成 ${text.length} 字") {
+            registry.get(engine.provider).synthesize(
+                engine = engine,
+                request = CloudTtsSynthesisRequest(
+                    text = text,
+                    voiceId = voice.speakerId,
+                    locale = config.locale,
+                    style = mappedStyle ?: config.style,
+                    role = config.role,
+                    instructions = instructions,
+                    speed = config.speed,
+                    pitch = config.pitch,
+                    volume = config.volume,
+                    format = config.format,
+                    sampleRate = config.sampleRate,
+                ),
+            )
+        } ?: return@withContext false
         output.parentFile?.mkdirs()
         output.writeBytes(audio.bytes)
         output.length() > 0
+    }
+
+    private suspend inline fun <T> logCloudTts(
+        engine: CloudTtsEngine,
+        kind: String,
+        summary: String,
+        block: () -> T,
+    ): Result<T> {
+        val start = System.currentTimeMillis()
+        val result = runCatching(block)
+        aiLogRepository.record(
+            AiLogEntry(
+                timeMillis = start,
+                kind = kind,
+                providerName = engine.provider.storageValue,
+                modelId = engine.customName.takeIf { it.isNotBlank() } ?: engine.name,
+                summary = summary,
+                success = result.isSuccess,
+                durationMillis = System.currentTimeMillis() - start,
+                error = result.exceptionOrNull()?.message,
+            )
+        )
+        return result
     }
 }

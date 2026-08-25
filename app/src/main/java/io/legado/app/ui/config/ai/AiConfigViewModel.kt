@@ -2,8 +2,10 @@ package io.legado.app.ui.config.ai
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.constant.PreferKey
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.model.AiTaskType
+import io.legado.app.help.config.AppConfigStore
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +26,11 @@ class AiConfigViewModel(
     val effects = _effects.asSharedFlow()
 
     init {
+        viewModelScope.launch {
+            AppConfigStore.observeBoolean(PreferKey.aiLogEnabled).collect { enabled ->
+                _uiState.update { it.copy(aiLogEnabled = enabled ?: false) }
+            }
+        }
         viewModelScope.launch {
             combine(
                 aiProfileGateway.observeProviders(),
@@ -90,7 +97,12 @@ class AiConfigViewModel(
     fun onIntent(intent: AiConfigIntent) {
         when (intent) {
             is AiConfigIntent.SetDefaultModel -> setDefaultModel(intent.modelProfileId)
+            is AiConfigIntent.SetAiLogEnabled -> setAiLogEnabled(intent.enabled)
         }
+    }
+
+    private fun setAiLogEnabled(enabled: Boolean) {
+        AppConfigStore.putBoolean(PreferKey.aiLogEnabled, enabled)
     }
 
     private fun setDefaultModel(modelProfileId: String) {

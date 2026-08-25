@@ -479,6 +479,9 @@ object PreferKey {
     const val llmPrompt = "llmPrompt"
     const val aiRewritePresets = "aiRewritePresets"
 
+    // AI log (debug tracing of every AI call)
+    const val aiLogEnabled = "aiLogEnabled"
+
     // AI web search (Tavily)
     const val aiWebSearchEnabled = "aiWebSearchEnabled"
     const val aiWebSearchApiKey = "aiWebSearchApiKey"
