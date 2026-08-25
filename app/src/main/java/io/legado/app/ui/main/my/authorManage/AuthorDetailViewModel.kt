@@ -37,7 +37,9 @@ import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
+import splitties.init.appCtx
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -431,11 +433,12 @@ class AuthorDetailViewModel(
                 },
                 onFailure = { error ->
                     _bioEdit.update { it.copy(generating = false) }
-                    _effects.tryEmit(
-                        AuthorDetailEffect.ShowError(
-                            error.localizedMessage ?: error.toString()
-                        )
-                    )
+                    val message = if (error is TimeoutCancellationException) {
+                        appCtx.getString(R.string.ai_generate_timeout)
+                    } else {
+                        error.localizedMessage ?: error.toString()
+                    }
+                    _effects.tryEmit(AuthorDetailEffect.ShowError(message))
                 },
             )
         }

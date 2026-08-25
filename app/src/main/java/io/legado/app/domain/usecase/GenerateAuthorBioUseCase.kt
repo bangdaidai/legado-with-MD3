@@ -14,6 +14,7 @@ import io.legado.app.domain.model.AiWebSearchResult
 import io.legado.app.domain.model.nativeWebSearchSupport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 
 /**
@@ -65,7 +66,9 @@ class GenerateAuthorBioUseCase(
             val bio = response.text.trim().ifEmpty { error("AI returned empty text") }
             Generated(bio, preset.model.modelId)
         }.onFailure { error ->
-            if (error is CancellationException) throw error
+            // 超时（TimeoutCancellationException）视为生成失败，让上层弹提示并停止；
+            // 只有用户主动取消（普通 CancellationException）才向上抛，避免误报错误。
+            if (error is CancellationException && error !is TimeoutCancellationException) throw error
         }
     }
 

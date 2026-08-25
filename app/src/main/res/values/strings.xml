@@ -2220,6 +2220,7 @@
     <string name="ai_log_cleared">AI log cleared</string>
     <string name="ai_log_copy_all">Copy</string>
     <string name="ai_log_error_format">Error: %1$s</string>
+    <string name="ai_generate_timeout">AI generation timed out. Check your network or try again later</string>
     <string name="ai_web_search_enable">Enable web search</string>
     <string name="ai_web_search_enable_desc">Author names, book titles and questions will be sent to Tavily</string>
     <string name="ai_web_search_api_key">API key</string>
