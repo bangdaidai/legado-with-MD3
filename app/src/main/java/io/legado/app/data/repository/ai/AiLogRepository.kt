@@ -1,5 +1,6 @@
 package io.legado.app.data.repository.ai
 
+import androidx.annotation.Keep
 import io.legado.app.constant.PreferKey
 import io.legado.app.domain.model.AiLogStep
 import io.legado.app.help.config.AppConfigStore
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 每次 app 真正发起一次 AI 调用（文本生成 / 流式生成 / 拉取模型 / 联网检索）就落一条，
  * 不会按 token 或子事件拆分，方便用户复盘「这次 AI 到底发了什么、成功没、花了多久」。
  */
+@Keep
 data class AiLogEntry(
     val timeMillis: Long,
     val kind: String,
@@ -33,6 +35,24 @@ data class AiLogEntry(
     val error: String? = null,
     val steps: List<AiLogStep> = emptyList(),
 )
+
+/**
+ * 净化从 ai_log.json 恢复的条目。
+ *
+ * [AiLogEntry.steps] 的泛型依赖 R8 保留字段 Signature；历史版本或损坏数据可能让 steps 里
+ * 混入非 [AiLogStep] 元素（例如泛型丢失后 Gson 反序列化出的 LinkedTreeMap），直接透传给 UI
+ * 会在页面刷新时抛 ClassCastException。这里统一过滤异常元素，并把 Gson 可能注入的空 label 兜底为空串。
+ */
+internal fun sanitizeLoadedEntries(entries: List<AiLogEntry>): List<AiLogEntry> =
+    entries.filterIsInstance<AiLogEntry>().map { entry ->
+        entry.copy(
+            steps = entry.steps.orEmpty()
+                .filterIsInstance<AiLogStep>()
+                .map { step ->
+                    if (step.label.isNullOrEmpty()) step.copy(label = "") else step
+                }
+        )
+    }
 
 /**
  * 把 AI 调用记录落盘到 files 目录下的 json 文件，内存 + 文件双写，最多保留 [maxEntries] 条。
@@ -60,7 +80,9 @@ class AiLogRepository {
             if (file.exists()) {
                 val text = file.readText()
                 if (text.isNotBlank()) {
-                    GSON.fromJsonArray<AiLogEntry>(text).getOrNull()?.let { cache.addAll(it) }
+                    GSON.fromJsonArray<AiLogEntry>(text).getOrNull()?.let { entries ->
+                        cache.addAll(sanitizeLoadedEntries(entries))
+                    }
                 }
             }
         }

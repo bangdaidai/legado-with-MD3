@@ -106,6 +106,10 @@
 -keep class io.legado.app.domain.model.ModuleDef{*;}
 -keep class io.legado.app.domain.model.ModuleItem{*;}
 -keep class io.legado.app.domain.model.CustomSetItem{*;}
+# AI 日志：Gson 反射读写 AiLogEntry.steps，字段名与泛型签名不能被混淆，
+# 否则 R8 丢弃泛型后 List<AiLogStep> 会被反序列化成 LinkedTreeMap，AI 日志页刷新时 ClassCastException
+-keep class io.legado.app.domain.model.AiLogStep{*;}
+-keep class io.legado.app.data.repository.ai.AiLogEntry{*;}
 -keep class io.legado.app.data.repository.GoogleTranslateResponse{*;}
 -keep class io.legado.app.data.repository.GoogleSentence{*;}
 -keep class io.legado.app.data.repository.GoogleSpell{*;}
