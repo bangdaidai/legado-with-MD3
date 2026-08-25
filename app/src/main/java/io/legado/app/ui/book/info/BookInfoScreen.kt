@@ -97,6 +97,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.size.Size
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import io.legado.app.R
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.BaseSource
@@ -288,6 +290,10 @@ private fun BookInfoScreenContent(
         }
     }
 
+    // 状态栏模糊只在全局控件模糊关闭时作为补偿层生效，此时 AppScaffold 不注册模糊源，得自备取样层
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val standaloneStatusBarBlur = themeSettings.enableStatusBarBlur && !themeSettings.enableBlur
+    val standaloneStatusBarHazeState = remember { HazeState() }
 
     AppScaffold(
         modifier = Modifier
@@ -297,7 +303,10 @@ private fun BookInfoScreenContent(
             Box(modifier = Modifier.fillMaxWidth()) {
                 val statusBarHeight =
                     WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                BookInfoTopScrim(statusBarHeight)
+                BookInfoTopScrim(
+                    statusBarHeight = statusBarHeight,
+                    hazeState = standaloneStatusBarHazeState,
+                )
                 BookInfoTransparentTopAppBar(
                     state = state,
                     onMenuAction = { onIntent(BookInfoIntent.MenuAction(it)) },
@@ -323,7 +332,17 @@ private fun BookInfoScreenContent(
             Box(modifier = Modifier.fillMaxSize())
         } else {
             val resolvedBackdropStyle = requireNotNull(backdropStyle)
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (standaloneStatusBarBlur) {
+                            Modifier.hazeSource(standaloneStatusBarHazeState)
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
                 BookInfoBackdrop(
                     book = book,
                     style = resolvedBackdropStyle,
@@ -899,16 +918,14 @@ private fun BookInfoBackdrop(
 }
 
 @Composable
-private fun BookInfoTopScrim(statusBarHeight: Dp) {
-    val hazeState = LocalHazeState.current
+private fun BookInfoTopScrim(statusBarHeight: Dp, hazeState: HazeState) {
+    // hazeState 由调用方给出：全局模糊关闭时 LocalHazeState 为 null，
+    // 状态栏补偿层要用页面自备的取样层。
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(statusBarHeight + 16.dp)
-            .then(
-                hazeState?.let { Modifier.responsiveHazeEffectStatusBar(it) }
-                    ?: Modifier
-            )
+            .responsiveHazeEffectStatusBar(hazeState)
     )
 }
 

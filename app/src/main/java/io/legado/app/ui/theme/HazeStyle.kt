@@ -90,17 +90,15 @@ fun Modifier.responsiveHazeEffectFixedStyle(
 }
 
 /**
- * 状态栏独立模糊：即使全局「控件模糊/渐变模糊」关闭，也可单独开启。
- * 开启全局模糊时沿用全局样式与渐进模糊开关；仅状态栏独立开启时固定为渐变模糊。
- * 模糊半径与透明度始终跟随全局顶栏设置。
+ * 状态栏独立模糊：仅在全局「控件模糊」关闭时作为状态栏区域的补偿层生效，固定为渐变模糊。
+ * 全局模糊开启时状态栏区域由顶栏自身的模糊负责，这里不再叠加，保持与上游一致的观感。
+ * 模糊半径与透明度跟随全局顶栏设置。
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun Modifier.responsiveHazeEffectStatusBar(state: HazeState): Modifier {
     val themeSettings = LocalAppUiConfiguration.current.theme
-    val enableBlur = themeSettings.enableBlur
-    val enableStatusBarBlur = themeSettings.enableStatusBarBlur
-    if (!enableBlur && !enableStatusBarBlur) return this
+    if (themeSettings.enableBlur || !themeSettings.enableStatusBarBlur) return this
 
     val composeEngine = LegadoTheme.composeEngine
     val containerColor = GlassDefaults.secondaryColorOr {
@@ -112,13 +110,8 @@ fun Modifier.responsiveHazeEffectStatusBar(state: HazeState): Modifier {
         blurRadius = themeSettings.topBarBlurRadius,
         blurAlpha = themeSettings.topBarBlurAlpha,
     )
-    val useGradient = if (enableBlur) themeSettings.enableProgressiveBlur else true
     return this.hazeEffect(state = state, style = style) {
-        progressive = if (useGradient) {
-            HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f)
-        } else {
-            null
-        }
+        progressive = HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f)
     }
 }
 

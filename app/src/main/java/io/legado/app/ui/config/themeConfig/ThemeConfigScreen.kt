@@ -500,14 +500,17 @@ fun ThemeConfigScreen(
                             }
                         )
                     }
-                    SwitchSettingItem(
-                        title = stringResource(R.string.status_bar_blur),
-                        description = stringResource(R.string.status_bar_blur_summary),
-                        checked = theme.enableStatusBarBlur,
-                        onCheckedChange = { value ->
-                            updateTheme { it.copy(enableStatusBarBlur = value) }
-                        }
-                    )
+                    // 全局模糊开启时状态栏区域由顶栏模糊负责，这个开关不再有作用，直接隐藏
+                    AnimatedVisibility(visible = !theme.enableBlur) {
+                        SwitchSettingItem(
+                            title = stringResource(R.string.status_bar_blur),
+                            description = stringResource(R.string.status_bar_blur_summary),
+                            checked = theme.enableStatusBarBlur,
+                            onCheckedChange = { value ->
+                                updateTheme { it.copy(enableStatusBarBlur = value) }
+                            }
+                        )
+                    }
                 }
 
             }
