@@ -18,10 +18,13 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 class AiTextRepositoryImpl(
     private val aiLogRepository: AiLogRepository,
 ) : AiTextGateway {
+
+    private val AI_CALL_TIMEOUT_MS = 120_000L
 
     private val registry = AiProviderRegistry(
         handlers = listOf(
@@ -35,8 +38,10 @@ class AiTextRepositoryImpl(
         val start = System.currentTimeMillis()
         val result = withContext(Dispatchers.IO) {
             runCatching {
-                registry.handlerFor(request.model.provider.protocol).generate(request)
-            }.mapCatching { it.getOrThrow() }
+                withTimeout(AI_CALL_TIMEOUT_MS) {
+                    registry.handlerFor(request.model.provider.protocol).generate(request).getOrThrow()
+                }
+            }
         }
         aiLogRepository.record(
             AiLogEntry(
@@ -86,7 +91,9 @@ class AiTextRepositoryImpl(
         val start = System.currentTimeMillis()
         val result = withContext(Dispatchers.IO) {
             runCatching {
-                registry.handlerFor(provider.protocol).fetchModels(provider).getOrThrow()
+                withTimeout(AI_CALL_TIMEOUT_MS) {
+                    registry.handlerFor(provider.protocol).fetchModels(provider).getOrThrow()
+                }
             }
         }
         aiLogRepository.record(

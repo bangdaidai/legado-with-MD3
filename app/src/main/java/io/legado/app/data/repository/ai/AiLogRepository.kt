@@ -5,6 +5,7 @@ import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -64,7 +65,7 @@ class AiLogRepository {
     suspend fun record(entry: AiLogEntry) {
         if (AppConfigStore.getBoolean(PreferKey.aiLogEnabled) != true) return
         runCatching {
-            withContext(Dispatchers.IO) {
+            withContext(NonCancellable + Dispatchers.IO) {
                 mutex.withLock {
                     ensureLoaded()
                     cache.add(entry)
