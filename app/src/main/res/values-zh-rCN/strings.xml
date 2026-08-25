@@ -1913,6 +1913,8 @@
     <string name="material_version">颜色规格</string>
     <string name="tip_compose_set">这里的选项仅可以控制使用Compose重写的界面。对于禁用的选项，会在日后实现时开放，现在仅作占位。</string>
     <string name="is_blur_enable">启用控件模糊</string>
+    <string name="status_bar_blur">状态栏模糊</string>
+    <string name="status_bar_blur_summary">即使关闭全局控件模糊与渐变模糊，也单独对状态栏区域启用模糊；半径与透明度跟随全局设置。</string>
     <string name="use_underline">总是使用下划线表示强调文本</string>
     <string name="adapt_special_style">适配特殊样式</string>
     <string name="compose_engine">主题风格</string>
@@ -3408,4 +3410,14 @@
     <string name="advanced">高级</string>
     <string name="role_supporting">配角</string>
     <string name="restore_defaults">恢复默认</string>
+    <string name="ai_log">AI 日志</string>
+    <string name="ai_log_desc">记录每次 AI 调用（生成、检索、拉取模型）便于调试</string>
+    <string name="ai_view_log">查看 AI 日志</string>
+    <string name="ai_view_log_desc">查看近期 AI 调用及其结果</string>
+    <string name="ai_log_empty">暂无 AI 调用记录</string>
+    <string name="ai_log_disabled">AI 日志已关闭，请在 AI 设置中开启后开始记录</string>
+    <string name="ai_log_clear">清除</string>
+    <string name="ai_log_cleared">AI 日志已清除</string>
+    <string name="ai_log_copy_all">复制</string>
+    <string name="ai_log_error_format">错误：%1$s</string>
 </resources>
