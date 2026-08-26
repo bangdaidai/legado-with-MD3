@@ -83,6 +83,7 @@ import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.sheet.ReaderBookSheetTab
 import io.legado.app.ui.book.searchContent.SearchResult
+import io.legado.app.ui.book.shareCard.ShareCardScene
 import io.legado.app.utils.ImageSaveUtils
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.isAbsUrl
@@ -274,6 +275,7 @@ class ReadBookViewModel(
                     showShareCard = true,
                     shareCardData = data,
                     shareCardLoading = false,
+                    shareCardScene = ShareCardScene.NOTE,
                 )
             }
         }
@@ -304,6 +306,7 @@ class ReadBookViewModel(
                     showShareCard = true,
                     shareCardData = data,
                     shareCardLoading = false,
+                    shareCardScene = ShareCardScene.SELECTION,
                 )
             }
         }
@@ -1547,6 +1550,7 @@ class ReadBookViewModel(
                     it.copy(
                         showShareCard = false,
                         shareCardData = null,
+                        shareCardScene = null,
                     )
                 }
             }

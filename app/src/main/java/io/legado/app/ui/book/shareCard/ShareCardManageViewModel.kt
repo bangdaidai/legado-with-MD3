@@ -40,7 +40,8 @@ class ShareCardManageViewModel(
             is ShareCardManageIntent.SelectGroup -> selectGroup(intent.group)
             is ShareCardManageIntent.SetDefault -> setDefault(intent.id)
             is ShareCardManageIntent.StartEdit -> _uiState.update {
-                it.copy(editing = intent.template ?: ShareCardTemplate(groupName = it.selectedGroup ?: ""))
+                // 新建模板默认归入空分组（未分组），用户可在编辑时自行选择/输入分组
+                it.copy(editing = intent.template ?: ShareCardTemplate(groupName = ""))
             }
             is ShareCardManageIntent.CancelEdit -> _uiState.update { it.copy(editing = null) }
             is ShareCardManageIntent.SaveTemplate -> saveTemplate(intent.name, intent.html, intent.group)
@@ -53,6 +54,7 @@ class ShareCardManageViewModel(
             is ShareCardManageIntent.DismissGroupManage -> _uiState.update { it.copy(showGroupManage = false) }
             is ShareCardManageIntent.RenameGroup -> renameGroup(intent.oldName, intent.newName)
             is ShareCardManageIntent.DeleteGroup -> deleteGroup(intent.group)
+            is ShareCardManageIntent.ToggleGroupScene -> toggleGroupScene(intent.group, intent.sceneKey)
             is ShareCardManageIntent.ShowHelp -> _uiState.update { it.copy(showHelp = true) }
             is ShareCardManageIntent.DismissHelp -> _uiState.update { it.copy(showHelp = false) }
             is ShareCardManageIntent.RestoreBuiltins -> restoreBuiltins()
@@ -66,20 +68,24 @@ class ShareCardManageViewModel(
                 ShareCardGenerator.getOrCreateBuiltinTemplates()
             }
             val selectedGroup = _uiState.value.selectedGroup
-            val (groups, templates) = withContext(Dispatchers.IO) {
-                val existing = repository.getDistinctGroupNames()
-                val tpls = if (selectedGroup == null) {
+            val groups: List<String>
+            val templates: List<ShareCardTemplate>
+            val sceneMap: Map<String, List<String>>
+            withContext(Dispatchers.IO) {
+                groups = repository.getDistinctGroupNames()
+                templates = if (selectedGroup == null) {
                     repository.getAll()
                 } else {
                     repository.getByGroupName(selectedGroup)
                 }
-                existing to tpls
+                sceneMap = repository.getSceneGroupMap()
             }
             _uiState.update {
                 it.copy(
                     loading = false,
                     groups = groups.toImmutableList(),
                     templates = templates.toImmutableList(),
+                    sceneGroupMap = sceneMap,
                 )
             }
         }
@@ -145,6 +151,7 @@ class ShareCardManageViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 repository.updateGroupName(oldName, newName)
+                repository.renameSceneGroupKey(oldName, newName)
             }
             // update selectedGroup if it was renamed
             _uiState.update {
@@ -158,11 +165,22 @@ class ShareCardManageViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 repository.deleteByGroupName(group)
+                repository.removeSceneGroupKey(group)
             }
             _uiState.update {
                 it.copy(selectedGroup = if (it.selectedGroup == group) null else it.selectedGroup)
             }
             reloadAll()
+        }
+    }
+
+    private fun toggleGroupScene(group: String, sceneKey: String) {
+        viewModelScope.launch {
+            val map = withContext(Dispatchers.IO) {
+                repository.toggleSceneForGroup(group, sceneKey)
+                repository.getSceneGroupMap()
+            }
+            _uiState.update { it.copy(sceneGroupMap = map) }
         }
     }
 
@@ -178,19 +196,23 @@ class ShareCardManageViewModel(
 
     private suspend fun reloadAll() {
         val selectedGroup = _uiState.value.selectedGroup
-        val (groups, templates) = withContext(Dispatchers.IO) {
-            val existing = repository.getDistinctGroupNames()
-            val tpls = if (selectedGroup == null) {
+        val groups: List<String>
+        val templates: List<ShareCardTemplate>
+        val sceneMap: Map<String, List<String>>
+        withContext(Dispatchers.IO) {
+            groups = repository.getDistinctGroupNames()
+            templates = if (selectedGroup == null) {
                 repository.getAll()
             } else {
                 repository.getByGroupName(selectedGroup)
             }
-            existing to tpls
+            sceneMap = repository.getSceneGroupMap()
         }
         _uiState.update {
             it.copy(
                 groups = groups.toImmutableList(),
                 templates = templates.toImmutableList(),
+                sceneGroupMap = sceneMap,
             )
         }
     }

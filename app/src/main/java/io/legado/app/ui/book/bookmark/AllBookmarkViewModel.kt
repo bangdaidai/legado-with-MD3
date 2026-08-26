@@ -8,8 +8,6 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.repository.BookmarkRepository
-import io.legado.app.data.repository.ReadingMemoryRepository
-import io.legado.app.help.book.ShareCardDataBuilder
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -64,9 +62,6 @@ data class BookmarkUiState(
     val error: Throwable? = null,
     val searchQuery: String = "",
     val collapsedGroups: ImmutableSet<String> = persistentSetOf(),
-    val shareCardLoading: Boolean = false,
-    val showShareCard: Boolean = false,
-    val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
 )
 
 sealed interface AllBookmarkIntent {
@@ -76,8 +71,6 @@ sealed interface AllBookmarkIntent {
     data class UpdateBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class DeleteBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
-    data class GenerateShareCard(val bookmark: Bookmark) : AllBookmarkIntent
-    data object DismissShareCard : AllBookmarkIntent
     data object ClearAll : AllBookmarkIntent
 }
 
@@ -89,18 +82,12 @@ sealed interface AllBookmarkEffect {
 class AllBookmarkViewModel(
     application: Application,
     private val bookmarkRepository: BookmarkRepository,
-    private val readingMemoryRepository: ReadingMemoryRepository,
 ) : AndroidViewModel(application) {
 
     private val _searchQuery = MutableStateFlow("")
     private val _collapsedGroups = MutableStateFlow<Set<String>>(emptySet())
     private val _effects = MutableSharedFlow<AllBookmarkEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
-
-    // 分享卡片（分享卡片）生成状态：由 GenerateShareCard / DismissShareCard 驱动
-    private val _shareCardLoading = MutableStateFlow(false)
-    private val _showShareCard = MutableStateFlow(false)
-    private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val baseUiState: StateFlow<BookmarkUiState> = combine(
@@ -151,23 +138,8 @@ class AllBookmarkViewModel(
         initialValue = BookmarkUiState(isLoading = true)
     )
 
-    /** 在基础状态之上叠加分享卡片预览状态，避免生成时重跑书签查询 */
-    val uiState: StateFlow<BookmarkUiState> = combine(
-        baseUiState,
-        _shareCardLoading,
-        _showShareCard,
-        _shareCardData,
-    ) { base, loading, show, shareCardData ->
-        base.copy(
-            shareCardLoading = loading,
-            showShareCard = show,
-            shareCardData = shareCardData,
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = BookmarkUiState(isLoading = true)
-    )
+    /** 基础状态即为完整 UI 状态（分享卡片入口已移除） */
+    val uiState: StateFlow<BookmarkUiState> = baseUiState
 
     fun onIntent(intent: AllBookmarkIntent) {
         when (intent) {
@@ -177,25 +149,7 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is AllBookmarkIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is AllBookmarkIntent.Export -> exportBookmark(intent.treeUri, intent.isMarkdown)
-            is AllBookmarkIntent.GenerateShareCard -> generateShareCard(intent.bookmark)
-            AllBookmarkIntent.DismissShareCard -> {
-                _showShareCard.value = false
-                _shareCardData.value = null
-            }
             AllBookmarkIntent.ClearAll -> clearAllBookmarks()
-        }
-    }
-
-    private fun generateShareCard(bookmark: Bookmark) {
-        _showShareCard.value = true
-        _shareCardLoading.value = true
-        _shareCardData.value = null
-        viewModelScope.launch(Dispatchers.IO) {
-            val memory = readingMemoryRepository.getByNameAuthor(bookmark.bookName, bookmark.bookAuthor)
-            val book = readingMemoryRepository.getBook(bookmark.bookUrl)
-            val data = ShareCardDataBuilder.buildFromBookmark(bookmark, memory, book)
-            _shareCardData.value = data
-            _shareCardLoading.value = false
         }
     }
 

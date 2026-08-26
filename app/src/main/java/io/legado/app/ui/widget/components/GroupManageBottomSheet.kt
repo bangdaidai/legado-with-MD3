@@ -1,12 +1,17 @@
 ﻿package io.legado.app.ui.widget.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -16,6 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +35,7 @@ import io.legado.app.R
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.SettingItem
+import io.legado.app.ui.widget.components.text.AppText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,7 +44,10 @@ fun GroupManageBottomSheet(
     groups: List<String>,
     onDismissRequest: () -> Unit,
     onUpdateGroup: (oldGroup: String, newGroup: String) -> Unit,
-    onDeleteGroup: (group: String) -> Unit
+    onDeleteGroup: (group: String) -> Unit,
+    sceneLabels: List<Pair<String, String>> = emptyList(),
+    groupScenes: (group: String) -> List<String> = { emptyList() },
+    onToggleGroupScene: (group: String, sceneKey: String) -> Unit = { _, _ -> },
 ) {
     AppModalBottomSheet(
         show = show,
@@ -48,8 +58,11 @@ fun GroupManageBottomSheet(
             items(groups, key = { it }) { group ->
                 GroupItem(
                     group = group,
+                    sceneLabels = sceneLabels,
+                    currentScenes = groupScenes(group),
+                    onToggleGroupScene = onToggleGroupScene,
                     onUpdateGroup = onUpdateGroup,
-                    onDeleteGroup = onDeleteGroup
+                    onDeleteGroup = onDeleteGroup,
                 )
             }
         }
@@ -59,8 +72,11 @@ fun GroupManageBottomSheet(
 @Composable
 private fun GroupItem(
     group: String,
+    sceneLabels: List<Pair<String, String>>,
+    currentScenes: List<String>,
+    onToggleGroupScene: (group: String, sceneKey: String) -> Unit,
     onUpdateGroup: (oldGroup: String, newGroup: String) -> Unit,
-    onDeleteGroup: (group: String) -> Unit
+    onDeleteGroup: (group: String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val state = rememberTextFieldState(initialText = group)
@@ -84,13 +100,13 @@ private fun GroupItem(
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = stringResource(id = R.string.edit)
+                        contentDescription = stringResource(id = R.string.edit),
                     )
                 }
                 IconButton(onClick = { onDeleteGroup(group) }) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = stringResource(id = R.string.delete)
+                        contentDescription = stringResource(id = R.string.delete),
                     )
                 }
             }
@@ -106,13 +122,50 @@ private fun GroupItem(
                     top = 4.dp,
                     bottom = 4.dp,
                     start = 12.dp,
-                    end = 12.dp
+                    end = 12.dp,
                 ),
                 onKeyboardAction = {
                     onUpdateGroup(group, state.text.toString())
                     expanded = false
                 }
             )
+
+            if (sceneLabels.isNotEmpty()) {
+                Spacer(Modifier.size(8.dp))
+                AppText(
+                    text = "绑定场景",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.size(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    sceneLabels.forEach { (key, label) ->
+                        val selected = currentScenes.contains(key)
+                        Surface(
+                            onClick = { onToggleGroupScene(group, key) },
+                            shape = RoundedCornerShape(50),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            contentColor = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        ) {
+                            AppText(
+                                text = label,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -124,10 +177,9 @@ private fun GroupItem(
                         expanded = false
                     },
                     icon = Icons.Default.Check,
-                    text = stringResource(id = R.string.ok)
+                    text = stringResource(id = R.string.ok),
                 )
             }
         }
     )
 }
-

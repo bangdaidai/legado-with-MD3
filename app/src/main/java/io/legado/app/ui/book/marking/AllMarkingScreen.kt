@@ -64,6 +64,7 @@ import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
+import io.legado.app.ui.book.shareCard.ShareCardScene
 import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
@@ -359,6 +360,7 @@ fun AllMarkingScreen(
         data = state.shareCardData,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(AllMarkingIntent.DismissShareCard) },
+        scene = ShareCardScene.NOTE,
     )
 }
 

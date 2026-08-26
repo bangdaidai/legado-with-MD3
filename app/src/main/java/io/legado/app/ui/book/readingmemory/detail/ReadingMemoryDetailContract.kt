@@ -4,6 +4,7 @@ import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadingStatistics
+import io.legado.app.ui.book.shareCard.ShareCardScene
 
 /**
  * 阅读记忆详情页的 UI 状态。
@@ -55,6 +56,7 @@ data class ReadingMemoryDetailUiState(
     val shareCardLoading: Boolean = false,
     val showShareCard: Boolean = false,
     val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
+    val shareCardScene: ShareCardScene? = null,
 )
 
 

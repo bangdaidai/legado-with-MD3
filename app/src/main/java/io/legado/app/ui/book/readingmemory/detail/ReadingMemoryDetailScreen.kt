@@ -204,6 +204,7 @@ fun ReadingMemoryDetailScreen(
         data = state.shareCardData,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(ReadingMemoryDetailIntent.DismissShareCard) },
+        scene = state.shareCardScene,
     )
 }
 

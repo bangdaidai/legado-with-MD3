@@ -42,8 +42,8 @@ import io.legado.app.data.entities.ShareCardData
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.repository.ShareCardRepository
 import io.legado.app.help.book.ShareCardGenerator
+import io.legado.app.ui.book.shareCard.ShareCardScene
 import io.legado.app.help.book.ShareCardHtmlRenderer
-import io.legado.app.help.config.AppConfigStore
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
@@ -87,13 +87,16 @@ fun ShareCardPreviewSheet(
     data: ShareCardData?,
     loading: Boolean,
     onDismissRequest: () -> Unit,
+    scene: ShareCardScene? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareCardRepository = koinInject<ShareCardRepository>()
 
     var templates by remember { mutableStateOf<List<ShareCardTemplate>>(emptyList()) }
-    var selectedTemplateId by remember { mutableLongStateOf(0L) }
+    var visibleTemplates by remember { mutableStateOf<List<ShareCardTemplate>>(emptyList()) }
+    // 按场景记忆上次选中的模板：切换场景时归零并重新解析该场景的默认/绑定模板
+    var selectedTemplateId by remember(scene) { mutableLongStateOf(0L) }
     var showTemplateMenu by remember { mutableStateOf(false) }
     // 临时主题色：null = 用模板自身配色，不写库、关闭后不保留
     var accentColor by remember { mutableStateOf<Int?>(null) }
@@ -168,8 +171,7 @@ fun ShareCardPreviewSheet(
         }
     }
 
-    // 开门：预热 WebView + 复位瞬时态；selectedTemplateId 为 0（未选）时按已保存/默认解析一次。
-    // 模板已在进页面时加载，此处不再做 IO，开局即渲染用户模板、不跳变。
+    // 开门：预热 WebView + 复位瞬时态；按场景过滤可用模板，并解析默认。
     LaunchedEffect(show, templates) {
         if (!show || templates.isEmpty()) return@LaunchedEffect
         ShareCardHtmlRenderer.warm(context)
@@ -177,15 +179,24 @@ fun ShareCardPreviewSheet(
         schemeOverride = null
         renderFailed = false
         saving = false
+        // 场景绑定了分组 → 仅显示这些分组的并集；未绑定/无模板 → 显示全部
+        val allowedGroups = if (scene != null) {
+            withContext(Dispatchers.IO) { shareCardRepository.getGroupsForScene(scene.key) }
+        } else emptyList()
+        visibleTemplates = if (scene == null || allowedGroups.isEmpty()) {
+            templates
+        } else {
+            templates.filter { allowedGroups.contains(it.groupName) }
+        }
         if (selectedTemplateId == 0L) {
             val saved = withContext(Dispatchers.IO) {
-                AppConfigStore.getLong(ShareCardGenerator.SELECTED_TEMPLATE_KEY) ?: 0L
+                shareCardRepository.getSelectedTemplateId(scene?.key)
             }
-            selectedTemplateId = templates.firstOrNull { it.id == saved }?.id
-                ?: templates.firstOrNull {
+            selectedTemplateId = visibleTemplates.firstOrNull { it.id == saved }?.id
+                ?: visibleTemplates.firstOrNull {
                     it.isBuiltin && it.groupName == ShareCardTemplate.DEFAULT_GROUP_BOOK
                 }?.id
-                ?: templates.firstOrNull()?.id
+                ?: visibleTemplates.firstOrNull()?.id
                 ?: 0L
         }
     }
@@ -240,7 +251,7 @@ fun ShareCardPreviewSheet(
                         // 不把 rendering 计入 enabled：这两个按钮只负责「打开模板/色盘菜单」，不直接出图；
                         // 渲染中开菜单无害，真正选中项时 rerender 已用 renderJob.cancel 串行化。
                         // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
-                        enabled = templates.isNotEmpty() && !loading,
+                        enabled = visibleTemplates.isNotEmpty() && !loading,
                         icon = Icons.Default.SwapHoriz,
                         contentDescription = "切换模板",
                     )
@@ -248,7 +259,7 @@ fun ShareCardPreviewSheet(
                         expanded = showTemplateMenu,
                         onDismissRequest = { showTemplateMenu = false },
                     ) { dismiss ->
-                        templates.forEach { tpl ->
+                        visibleTemplates.forEach { tpl ->
                             RoundDropdownMenuItem(
                                 text = tpl.name.ifBlank { "未命名" },
                                 isSelected = tpl.id == selectedTemplateId,
@@ -256,6 +267,8 @@ fun ShareCardPreviewSheet(
                                     dismiss()
                                     if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
                                     selectedTemplateId = tpl.id
+                                    // 记住该场景下上次选中的模板
+                                    shareCardRepository.setSelectedTemplateId(scene?.key, tpl.id)
                                     // 切模板复位临时配色，新模板用自身默认色起手；
                                     // 实际渲染交由下方协调 effect（selectedTemplateId 变化触发）
                                     accentColor = null
@@ -268,7 +281,7 @@ fun ShareCardPreviewSheet(
                 Box {
                     MediumTonalButton(
                         onClick = { showPaletteMenu = true },
-                        enabled = templates.isNotEmpty() && !loading,
+                        enabled = visibleTemplates.isNotEmpty() && !loading,
                         selected = accentColor != null,
                         icon = Icons.Default.Palette,
                         contentDescription = "切换颜色",

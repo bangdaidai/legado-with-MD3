@@ -292,7 +292,7 @@
     <string name="camera_scan">Scan QR code</string>
     <string name="scan_image">Scan local images</string>
     <string name="rule_summary">Rules description</string>
-    <string name="share">Share</string>
+    <string name="share">Share Text</string>
     <string name="share_app">Share to</string>
     <string name="flow_sys">System</string>
     <string name="add">Add</string>
@@ -3411,7 +3411,11 @@
     <string name="manga_reader_no_source">No suitable source</string>
     <string name="manga_reader_auto_source_failed">Automatic source change failed</string>
     <string name="share_card_template">Share Template</string>
-    <string name="share_card">Card</string>
+    <string name="share_card">Share</string>
+    <string name="share_card_scene_selection">Selection</string>
+    <string name="share_card_scene_note">Note</string>
+    <string name="share_card_scene_reading_memory">Reading Memory</string>
+    <string name="share_card_scene_stats">Stats</string>
     <string name="manga_reader_auto_background">Automatic page background</string>
     <string name="manga_reader_scale_type">Page scale type</string>
     <string name="manga_reader_scale_fit_screen">Fit screen</string>

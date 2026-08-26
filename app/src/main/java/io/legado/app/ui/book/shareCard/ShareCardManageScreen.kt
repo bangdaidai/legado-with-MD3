@@ -91,7 +91,12 @@ fun ShareCardManageScreen(
         groups = state.groups,
         onDismissRequest = { onIntent(ShareCardManageIntent.DismissGroupManage) },
         onUpdateGroup = { old, new -> onIntent(ShareCardManageIntent.RenameGroup(old, new)) },
-        onDeleteGroup = { onIntent(ShareCardManageIntent.DeleteGroup(it)) }
+        onDeleteGroup = { onIntent(ShareCardManageIntent.DeleteGroup(it)) },
+        sceneLabels = ShareCardScene.all.map { it.key to stringResource(it.labelRes) },
+        groupScenes = { group -> state.sceneGroupMap[group] ?: emptyList() },
+        onToggleGroupScene = { group, scene ->
+            onIntent(ShareCardManageIntent.ToggleGroupScene(group, scene))
+        },
     )
 
     // 删除确认对话框

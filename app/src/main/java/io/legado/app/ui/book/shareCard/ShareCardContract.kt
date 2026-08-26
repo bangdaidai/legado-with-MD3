@@ -17,6 +17,7 @@ data class ShareCardManageUiState(
     val showGroupManage: Boolean = false,
     val showHelp: Boolean = false,
     val deleteConfirm: ShareCardTemplate? = null,
+    val sceneGroupMap: Map<String, List<String>> = emptyMap(),
 )
 
 sealed interface ShareCardManageIntent {
@@ -35,6 +36,7 @@ sealed interface ShareCardManageIntent {
     data object DismissGroupManage : ShareCardManageIntent
     data class RenameGroup(val oldName: String, val newName: String) : ShareCardManageIntent
     data class DeleteGroup(val group: String) : ShareCardManageIntent
+    data class ToggleGroupScene(val group: String, val sceneKey: String) : ShareCardManageIntent
     data object ShowHelp : ShareCardManageIntent
     data object DismissHelp : ShareCardManageIntent
     data object RestoreBuiltins : ShareCardManageIntent

@@ -262,7 +262,7 @@
     <string name="camera_scan">扫描二维码</string>
     <string name="scan_image">扫描本地图片</string>
     <string name="rule_summary">规则说明</string>
-    <string name="share">分享</string>
+    <string name="share">分享文字</string>
     <string name="share_app">软件分享</string>
     <string name="flow_sys">跟随系统</string>
     <string name="add">添加</string>
@@ -3360,7 +3360,11 @@
     <string name="manga_reader_no_source">没有合适书源</string>
     <string name="manga_reader_auto_source_failed">自动换源失败</string>
     <string name="share_card_template">分享模板</string>
-    <string name="share_card">卡片</string>
+    <string name="share_card">分享</string>
+    <string name="share_card_scene_selection">长按</string>
+    <string name="share_card_scene_note">笔记</string>
+    <string name="share_card_scene_reading_memory">阅读记忆</string>
+    <string name="share_card_scene_stats">统计</string>
     <string name="manga_reader_auto_background">自动页面背景色</string>
     <string name="manga_reader_scale_type">页面缩放模式</string>
     <string name="manga_reader_scale_fit_screen">适应屏幕</string>

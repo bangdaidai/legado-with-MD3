@@ -473,6 +473,7 @@ fun ReadBookScreen(
         data = state.shareCardData,
         loading = state.shareCardLoading,
         onDismissRequest = { onIntent(ReadBookIntent.DismissShareCard) },
+        scene = state.shareCardScene,
     )
 
     val aloudPlayerViewModel: ReadAloudPlayerViewModel =

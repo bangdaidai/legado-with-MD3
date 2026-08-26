@@ -44,6 +44,7 @@ class ReadingMemoryDetailViewModel(
     private val _shareCardLoading = MutableStateFlow(false)
     private val _showShareCard = MutableStateFlow(false)
     private val _shareCardData = MutableStateFlow<io.legado.app.data.entities.ShareCardData?>(null)
+    private val _shareCardScene = MutableStateFlow<io.legado.app.ui.book.shareCard.ShareCardScene?>(null)
 
 
     private val _effectFlow = MutableSharedFlow<ReadingMemoryDetailEffect>(extraBufferCapacity = 1)
@@ -170,11 +171,13 @@ class ReadingMemoryDetailViewModel(
         _shareCardLoading,
         _showShareCard,
         _shareCardData,
-    ) { base, shareCardLoading, showShareCard, shareCardData ->
+        _shareCardScene,
+    ) { base, shareCardLoading, showShareCard, shareCardData, shareCardScene ->
         base.copy(
             shareCardLoading = shareCardLoading,
             showShareCard = showShareCard,
             shareCardData = shareCardData,
+            shareCardScene = shareCardScene,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingMemoryDetailUiState())
 
@@ -291,6 +294,7 @@ class ReadingMemoryDetailViewModel(
                         is ReadingMemoryDetailIntent.DismissShareCard -> {
                             _showShareCard.value = false
                             _shareCardData.value = null
+                            _shareCardScene.value = null
                         }
                     }
                 }
@@ -302,8 +306,9 @@ class ReadingMemoryDetailViewModel(
         intentFlow.tryEmit(intent)
     }
 
-    /** 生成分享卡片并就地展示在预览弹窗中 */
+    /** 生成分享卡片并就地展示在预览弹窗中（整书信息 → 阅读记忆场景） */
     private fun generateShareCard() {
+        _shareCardScene.value = io.legado.app.ui.book.shareCard.ShareCardScene.READING_MEMORY
         _showShareCard.value = true
         _shareCardLoading.value = true
         _shareCardData.value = null
@@ -316,8 +321,9 @@ class ReadingMemoryDetailViewModel(
         }
     }
 
-    /** 从划线笔记生成分享卡片 */
+    /** 从划线笔记生成分享卡片（划线 → 笔记场景） */
     private fun generateShareCardFromMarking(marking: io.legado.app.data.entities.BookMarking) {
+        _shareCardScene.value = io.legado.app.ui.book.shareCard.ShareCardScene.NOTE
         _showShareCard.value = true
         _shareCardLoading.value = true
         _shareCardData.value = null

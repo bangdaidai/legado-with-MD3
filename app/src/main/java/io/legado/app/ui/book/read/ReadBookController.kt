@@ -873,7 +873,7 @@ class ReadBookController(
             items.add(ActionMenuItem(R.id.menu_ai_clean, activity.getString(R.string.ai_text_clean)))
             items.add(ActionMenuItem(R.id.menu_ai_rewrite, activity.getString(R.string.ai_text_rewrite)))
             items.add(ActionMenuItem(R.id.menu_search_content, activity.getString(R.string.search_content)))
-            items.add(ActionMenuItem(R.id.menu_set_protagonist, "设为主角"))
+            items.add(ActionMenuItem(R.id.menu_set_protagonist, "主角"))
 
             val thirdPartyItems = mutableListOf<ActionMenuItem>()
             runCatching {

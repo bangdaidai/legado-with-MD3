@@ -15,6 +15,7 @@ import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.ui.book.shareCard.ShareCardScene
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.model.settings.ReadStyleItem
@@ -314,10 +315,11 @@ data class ReadBookUiState(
     val menuConfig: ReadMenuConfig = ReadMenuConfig(),
     // AI 域状态见 ReadAiUiState —— 由 ReadAiDelegate 独立持有
     val eyeProtection: EyeProtectionUiState = EyeProtectionUiState(),
-    // ShareCard preview (for generating shareCard from marking)
-    val shareCardLoading: Boolean = false,
-    val showShareCard: Boolean = false,
-    val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
+// ShareCard preview (for generating shareCard from marking)
+val shareCardLoading: Boolean = false,
+val showShareCard: Boolean = false,
+val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
+val shareCardScene: ShareCardScene? = null,
 ) {
     val menuVisible: Boolean
         get() = menuState.visible

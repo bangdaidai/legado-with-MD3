@@ -60,7 +60,6 @@ import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
-import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
@@ -410,20 +409,8 @@ fun AllBookmarkScreen(
                 onIntent(AllBookmarkIntent.DeleteBookmark(bookmarkToDelete))
                 showBottomSheet = false
             },
-            onGenerateShareCard = { bookmark ->
-                showBottomSheet = false
-                editingBookmark = null
-                onIntent(AllBookmarkIntent.GenerateShareCard(bookmark))
-            }
         )
     }
-
-    ShareCardPreviewSheet(
-        show = state.showShareCard,
-        data = state.shareCardData,
-        loading = state.shareCardLoading,
-        onDismissRequest = { onIntent(AllBookmarkIntent.DismissShareCard) },
-    )
 
     if (showClearAllDialog) {
         AppAlertDialog(
