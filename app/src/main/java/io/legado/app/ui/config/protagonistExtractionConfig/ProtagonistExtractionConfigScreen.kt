@@ -53,7 +53,7 @@ fun ProtagonistExtractionConfigScreen(
             )
         ) {
             item {
-                SplicedColumnGroup(title = stringResource(R.string.protagonist_extraction_config)) {
+                SplicedColumnGroup {
                     InputSettingItem(
                         title = stringResource(R.string.protagonist_extraction_prefix),
                         value = settings.protagonistPrefix,
