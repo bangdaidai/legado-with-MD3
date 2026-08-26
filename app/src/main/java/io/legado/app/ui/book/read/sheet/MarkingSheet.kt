@@ -49,6 +49,7 @@ import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.AppTextFieldSurface
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
@@ -90,6 +91,9 @@ fun MarkingSheet(
             ?.selectedText
             ?: ""
     }
+    // 标题用位置（章节名），与书签对话框一致；原文单独作为只读框展示。
+    val position = selection?.chapterName?.takeIf { it.isNotBlank() } ?: editing?.chapterName ?: ""
+    val originalText = selection?.bookText?.takeIf { it.isNotBlank() } ?: editingAnchorText
 
     // 状态提升到 Sheet 顶层：底部 ColorPickerSheet 与内容共用；以 show + editing 为键，
     // 每次打开/切到编辑模式时重置（编辑模式的样式/颜色/备注来自已有标记）。
@@ -124,7 +128,7 @@ fun MarkingSheet(
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
-        title = selection?.bookText?.takeIf { it.isNotBlank() } ?: editingAnchorText,
+        title = position,
         startAction = {
             if (editing != null) {
                 MediumTonalButton(
@@ -247,6 +251,18 @@ fun MarkingSheet(
 
                 Spacer(Modifier.height(4.dp))
             }
+
+            // 笔记原文（只读展示，与书签对话框一致）
+            AppTextFieldSurface(
+                value = originalText,
+                onValueChange = {},
+                readOnly = true,
+                label = stringResource(R.string.bookmark_original_text),
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 10,
+            )
+
+            Spacer(Modifier.height(12.dp))
 
             // 备注（笔记）
             AppTextField(
