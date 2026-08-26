@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,12 +34,16 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.ui.book.readingmemory.MemoryBookCard
 import io.legado.app.ui.book.search.ScopeSelectSheet
+import io.legado.app.ui.main.bookshelf.BookshelfListItem
+import io.legado.app.ui.widget.components.card.TagChip
+import io.legado.app.ui.widget.components.card.TagChipSize
+import io.legado.app.ui.widget.components.image.cover.CoilBookCover
+import io.legado.app.utils.HtmlFormatter
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
-import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
@@ -190,37 +197,59 @@ fun AuthorDetailScreen(
                         works.books,
                         key = { it.book.bookUrl },
                     ) { item ->
-                            // 网络搜到、还没入库的结果，用主题卡片底色，保证任何主题下都有颜色
-                            NormalCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                cornerRadius = 8.dp,
-                                containerColor = LegadoTheme.colorScheme.cardContainer,
+                        // 与上方「关联书籍」用同一个 BookshelfListItem 卡片，背景、行距、标签口径完全一致
+                        BookshelfListItem(
+                            settings = uiState.bookshelfSettings,
+                            isCompact = false,
+                            coverWidth = uiState.coverWidth,
+                            cover = { m ->
+                                CoilBookCover(
+                                    name = item.book.name.takeIf { it.isNotBlank() },
+                                    author = item.book.author.takeIf { it.isNotBlank() },
+                                    path = item.book.coverUrl?.takeIf { it.isNotBlank() },
+                                    radius = 8.dp,
+                                    modifier = m.fillMaxSize(),
+                                )
+                            },
+                            title = item.book.name,
+                            titleMaxLines = uiState.bookshelfSettings.bookshelfTitleMaxLines,
+                            columnContent = {
+                                // 该区块已是「某作者的其他作品」，作者名多余，不显示副标题
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(vertical = 4.dp),
+                                ) {
+                                    item.tags.forEach { tag ->
+                                        TagChip(
+                                            tag = tag,
+                                            color = null,
+                                            size = TagChipSize.Small,
+                                            showColoredBorder = uiState.bookshelfSettings.bookshelfTagBorder,
+                                        )
+                                    }
+                                }
+                                val intro = remember(item.book.intro) {
+                                    item.book.intro?.takeIf { it.isNotBlank() }
+                                        ?.let { HtmlFormatter.formatSummaryText(it) }
+                                }
+                                if (intro != null) {
+                                    AppText(
+                                        text = intro,
+                                        style = LegadoTheme.typography.bodySmall,
+                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp),
+                                    )
+                                }
+                            },
                             onClick = { onOpenSearchBook(item.book) },
                             onLongClick = { previewBook = item.book },
-                        ) {
-                            SearchBookListItem(
-                                book = item.book,
-                                shelfState = item.shelfState,
-                                onClick = null,
-                                // 该区块已是「某作者的其他作品」，作者名多余，隐藏那一行
-                                showAuthor = false,
-                                // 封面对齐关联书籍卡片：那边 Box 宽 coverWidth，内部还有 8dp 留白
-                                coverSize = (uiState.coverWidth - 16).coerceAtLeast(32).dp,
-                                // 简介一行，与关联书籍卡片的内联简介口径一致
-                                introMaxLines = 1,
-                                // 字号对齐关联书籍卡片：书名 titleMediumEmphasized、简介 bodySmall
-                                titleStyle = LegadoTheme.typography.titleMediumEmphasized,
-                                introStyle = LegadoTheme.typography.bodySmall,
-                                // 书名行数也跟书架的「标题行数」设置
-                                titleMaxLines = uiState.bookshelfSettings.bookshelfTitleMaxLines,
-                                // 点击与长按都交给外层卡片，避免两层水波纹
-                                showPadding = false,
-                                // 8dp 对齐关联书籍卡片：封面自带 8dp 留白、文字右侧也是 8dp
-                                modifier = Modifier.padding(8.dp),
-                            )
-                        }
+                        )
                     }
                 }
             }

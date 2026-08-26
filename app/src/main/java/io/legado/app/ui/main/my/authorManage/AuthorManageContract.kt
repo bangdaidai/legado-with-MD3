@@ -73,6 +73,7 @@ data class AuthorDetailUi(
 data class AuthorWorkItem(
     val book: SearchBook,
     val shelfState: BookShelfState,
+    val tags: ImmutableList<String> = persistentListOf(),
 )
 
 /** 作者其他作品的加载状态。只在用户点刷新时才会进入 Searching。 */

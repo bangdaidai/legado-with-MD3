@@ -371,7 +371,7 @@ class AuthorDetailViewModel(
     /**
      * 只保留作者名精确一致、且不在关联书籍里的书，按书名折叠多书源结果。
      */
-    private fun buildWorksState(
+    private suspend fun buildWorksState(
         raw: List<SearchBook>,
         phase: WorksPhase,
         shelf: Set<BookShelfKey>,
@@ -390,6 +390,7 @@ class AuthorDetailViewModel(
                     book = it,
                     shelfState = resolveBookShelfStateUseCase
                         .execute(it.name, it.author, it.bookUrl, shelf),
+                    tags = TagManager.bookDisplayTags(it.kind, null).toImmutableList(),
                 )
             }
             .toImmutableList()
