@@ -103,6 +103,13 @@ class PrepareChapterSpeechPlanUseCase(
     }
 
     /**
+     * 分镜页「重新分析」时主动解除本书 AI 失败冷却，避免被 [refineSpeechWithAi] 的本书级冷却挡住。
+     */
+    fun clearAiCooldown(bookUrl: String) {
+        refineSpeechWithAi.clearAiCooldown(bookUrl)
+    }
+
+    /**
      * 回落提示按「原因」去重：只有换了新原因才弹 toast，重复的只进日志。
      */
     private fun notifyFallback(reason: String, error: Throwable) {

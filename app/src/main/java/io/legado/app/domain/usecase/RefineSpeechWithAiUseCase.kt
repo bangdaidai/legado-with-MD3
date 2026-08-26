@@ -29,6 +29,7 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
 import kotlin.uuid.Uuid
+import java.util.concurrent.ConcurrentHashMap
 
 class RefineSpeechWithAiUseCase(
     private val aiProfileGateway: AiProfileGateway,
@@ -36,6 +37,23 @@ class RefineSpeechWithAiUseCase(
     private val bookKnowledgeGateway: BookKnowledgeGateway,
     private val chapterSpeechGateway: ChapterSpeechGateway,
 ) {
+
+    /**
+     * 本书级 AI 失败冷却：同一本书任意一章 AI 识别失败后，后续章节（含听书预加载的下一章）
+     * 直接跳过 AI、回落规则，避免每章都各自等一次超时。
+     *
+     * 之前是按章冷却（[ChapterSpeechAnalysisResult.isAiCoolingDown]），但分析记录按
+     * (bookUrl, chapterIndex, resolverVersion) 分章独立，第一章失败不会让第二章跳过 AI，
+     * 于是预加载 10 章会各发一次慢 AI 请求。改成本书级后，第一章失败即整本书进入冷却。
+     *
+     * 注意：换模型/改 prompt 会因 resolverVersion 变化落到新分析记录，但本书冷却仍按 bookUrl 计；
+     * 分镜页「重新分析」会调用 [clearAiCooldown] 主动解除，避免被冷却挡住。
+     */
+    private val bookAiCooldownUntil = ConcurrentHashMap<String, Long>()
+
+    fun clearAiCooldown(bookUrl: String) {
+        bookAiCooldownUntil.remove(bookUrl)
+    }
 
     suspend fun resolverVersion(bookUrl: String, mode: SpeechAnalysisMode): String {
         if (mode == SpeechAnalysisMode.Rule) return RuleBasedSpeechSegmenter.VERSION
@@ -62,7 +80,8 @@ class RefineSpeechWithAiUseCase(
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
-        if (analysisResult.isAiCoolingDown(now)) return analysisResult
+        val bookUrl = analysisResult.analysis.bookUrl
+        if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return analysisResult
         if (
             mode == SpeechAnalysisMode.AiUnderstanding &&
             analysisResult.fromCache &&
@@ -92,6 +111,7 @@ class RefineSpeechWithAiUseCase(
             throw e
         } catch (e: Throwable) {
             markAiFailed(analysisResult, e, now)
+            bookAiCooldownUntil[bookUrl] = now + AI_FAILURE_COOLDOWN_MS
             throw e
         }
         val status = if (refined.any { segment ->
@@ -106,24 +126,14 @@ class RefineSpeechWithAiUseCase(
         }
         val analysis = analysisResult.analysis.copy(status = status, error = "", updatedAt = now)
         chapterSpeechGateway.saveAnalysis(analysis, refined)
+        // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
+        bookAiCooldownUntil.remove(bookUrl)
         return analysisResult.copy(
             analysis = analysis,
             segments = refined,
             fromCache = false,
         )
     }
-
-    /**
-     * 上一次 AI 失败后的冷却期内直接用规则结果，不再发请求。
-     *
-     * 失败原因基本都是模型不支持、网络不通、额度用尽这类短时间不会变的问题；没有冷却的话，同一章
-     * 每换一个段落起读都会把整章重新发一遍，既慢又烧额度。换模型、改 prompt 或改角色卡会让
-     * `resolverVersion` 变化、落到另一条分析记录上，天然解除冷却；分镜页的「重新分析」会
-     * `deleteChapter`，也能立刻重试。设备时间回退导致差值为负时按已过期处理。
-     */
-    private fun ChapterSpeechAnalysisResult.isAiCoolingDown(now: Long): Boolean =
-        analysis.status == SpeechAnalysisStatus.Failed &&
-            now - analysis.updatedAt in 0 until AI_FAILURE_COOLDOWN_MS
 
     /**
      * 把 AI 失败写进分析记录：分段保持规则结果不动，只标状态和原因。

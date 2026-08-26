@@ -169,6 +169,7 @@ class SpeechStoryboardViewModel(
             withContext(Dispatchers.IO) {
                 chapterSpeechGateway.deleteChapter(bookUrl, chapterIndex)
             }
+            prepareChapterSpeechPlan.clearAiCooldown(bookUrl)
         }
         return prepareChapterSpeechPlan(
             bookUrl = bookUrl,
