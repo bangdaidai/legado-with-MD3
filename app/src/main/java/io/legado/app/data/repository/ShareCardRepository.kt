@@ -4,6 +4,7 @@ import io.legado.app.data.dao.ShareCardTemplateDao
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.flow.Flow
 
 class ShareCardRepository(
