@@ -19,8 +19,8 @@ data class ProtagonistExtractionSettings(
     val minLength: Int = 1,
     /** 名字最大长度（含）。 */
     val maxLength: Int = 8,
-    /** 无效词，按行分隔，命中即丢弃（用于过滤「主角/简介」等标签词）。 */
-    val invalidWords: String = "主角\n人物\n角色\n简介\n介绍\n内容\n作者\n作品\n小说\n故事\n文章\n本书\n文案\n男\n女\n男主\n女主\n配角\n男配\n女配\n反派",
+    /** 无效词，逗号分隔，命中即丢弃（用于过滤「主角/简介」等标签词）。 */
+    val invalidWords: String = "主角,人物,角色,简介,介绍,内容,作者,作品,小说,故事,文章,本书,文案,男,女,男主,女主,配角,男配,女配,反派",
     /** 宽松模式：简介首行若含分隔符或冒号，也按名单解析（默认关闭以降低假阳性）。 */
     val relaxedFirstLine: Boolean = false,
 ) {

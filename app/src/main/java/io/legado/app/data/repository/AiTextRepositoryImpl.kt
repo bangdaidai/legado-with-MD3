@@ -166,6 +166,6 @@ class AiTextRepositoryImpl(
             ?.content
             ?: request.messages.lastOrNull()?.content
             .orEmpty()
-        return content.replace("\\s+".toRegex(), " ").take(24)
+        return content.replace("\\s+".toRegex(), " ").trim()
     }
 }
