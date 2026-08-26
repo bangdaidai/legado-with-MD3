@@ -84,7 +84,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -95,6 +95,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.ImageLoader
@@ -1511,40 +1513,36 @@ private fun BookInfoIntro(
     val density = LocalDensity.current
     var isOverflowing by remember(intro) { mutableStateOf(false) }
 
+    val introContent: @Composable () -> Unit = {
+        when (val c = content) {
+            is BookInfoIntroContent.Web -> BookInfoWebIntro(
+                html = c.html,
+                baseUrl = baseUrl,
+                bookSource = bookSource,
+                onJumpToAnotherApp = onJumpToAnotherApp,
+            )
+
+            is BookInfoIntroContent.Html -> HtmlContent(html = c.html)
+
+            is BookInfoIntroContent.Markdown -> MarkdownBlock(content = c.markdown)
+
+            is BookInfoIntroContent.Plain -> AnimatedTextLine(
+                text = c.text,
+                style = LegadoTheme.typography.bodyMedium,
+            )
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .then(
-                    if (!expanded) {
-                        Modifier.heightIn(max = collapsedMaxHeight)
-                    } else {
-                        Modifier
-                    }
-                )
-                .onGloballyPositioned { coordinates ->
-                    if (!expanded) {
-                        val maxHeightPx = with(density) { collapsedMaxHeight.roundToPx() }
-                        isOverflowing = coordinates.size.height > maxHeightPx
-                    }
-                }
-        ) {
-            when (val c = content) {
-                is BookInfoIntroContent.Web -> BookInfoWebIntro(
-                    html = c.html,
-                    baseUrl = baseUrl,
-                    bookSource = bookSource,
-                    onJumpToAnotherApp = onJumpToAnotherApp,
-                )
-
-                is BookInfoIntroContent.Html -> HtmlContent(html = c.html)
-
-                is BookInfoIntroContent.Markdown -> MarkdownBlock(content = c.markdown)
-
-                is BookInfoIntroContent.Plain -> AnimatedTextLine(
-                    text = c.text,
-                    style = LegadoTheme.typography.bodyMedium,
-                )
-            }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            IntroCollapsibleLayout(
+                expanded = expanded,
+                collapsedMaxHeight = collapsedMaxHeight,
+                density = density,
+                onOverflowingChange = { isOverflowing = it },
+                modifier = Modifier.fillMaxWidth(),
+                content = introContent,
+            )
             if (!expanded && isOverflowing) {
                 Box(
                     modifier = Modifier
@@ -1578,6 +1576,49 @@ private fun BookInfoIntro(
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * 简介折叠容器：先以不限制最大高度的约束测量内容自然高度，判断是否超出折叠高度，
+ * 再决定实际展示高度（展开=自然高度，折叠且未超出=自然高度，折叠且超出=折叠高度并截断）。
+ * 这样折叠态下的溢出检测不再被 heightIn 约束干扰，展开/收起按钮能正常出现。
+ */
+@Composable
+private fun IntroCollapsibleLayout(
+    expanded: Boolean,
+    collapsedMaxHeight: Dp,
+    density: Density,
+    onOverflowingChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val maxHeightPx = with(density) { collapsedMaxHeight.roundToPx() }
+    val lastOverflowing = remember { mutableStateOf(false) }
+    Layout(
+        content = content,
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val measurable = measurables.first()
+        val natural = measurable.measure(constraints.copy(maxHeight = Constraints.Infinity))
+        val overflowing = natural.height > maxHeightPx
+        val finalHeight = when {
+            expanded -> natural.height
+            !overflowing -> natural.height
+            else -> maxHeightPx
+        }
+        val placeable = if (finalHeight == natural.height) {
+            natural
+        } else {
+            measurable.measure(constraints.copy(maxHeight = finalHeight))
+        }
+        if (overflowing != lastOverflowing.value) {
+            lastOverflowing.value = overflowing
+            onOverflowingChange(overflowing)
+        }
+        layout(placeable.width, finalHeight) {
+            placeable.placeRelative(0, 0)
         }
     }
 }
