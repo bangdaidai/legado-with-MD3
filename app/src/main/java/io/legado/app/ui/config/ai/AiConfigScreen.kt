@@ -22,7 +22,7 @@ import io.legado.app.ui.widget.components.SplicedColumnGroup
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.ClickableSettingItem
-import io.legado.app.ui.widget.components.settingItem.InputSettingItem
+import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
@@ -169,21 +169,19 @@ fun AiConfigScreen(
                 SplicedColumnGroup(title = stringResource(R.string.ai_log)) {
                     SwitchSettingItem(
                         title = stringResource(R.string.ai_log),
-                        description = stringResource(R.string.ai_log_desc),
                         checked = state.aiLogEnabled,
                         onCheckedChange = { onIntent(AiConfigIntent.SetAiLogEnabled(it)) }
                     )
-                    InputSettingItem(
+                    SliderSettingItem(
                         title = stringResource(R.string.ai_call_timeout),
-                        description = stringResource(R.string.ai_call_timeout_desc),
-                        value = state.aiCallTimeout.toString(),
-                        onConfirm = { raw ->
-                            onIntent(AiConfigIntent.SetAiCallTimeout(raw.toIntOrNull() ?: 60))
-                        }
+                        value = state.aiCallTimeout.toFloat(),
+                        defaultValue = 60f,
+                        valueRange = 5f..600f,
+                        valueLabel = { "${it.toInt()}s" },
+                        onValueChange = { onIntent(AiConfigIntent.SetAiCallTimeout(it.toInt())) }
                     )
                     ClickableSettingItem(
                         title = stringResource(R.string.ai_view_log),
-                        description = stringResource(R.string.ai_view_log_desc),
                         onClick = onNavigateToAiLog
                     )
                 }
