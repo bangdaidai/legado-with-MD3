@@ -462,6 +462,7 @@ internal fun MemoryBookCard(
     forceReviewBelowContent: Boolean = false,
     /** 内联分支的简介行数；null 表示跟随书架的「简介行数」设置。 */
     inlineIntroMaxLines: Int? = null,
+    contentFillHeight: Boolean = false,
     onBookClick: (String) -> Unit,
     onBookLongPress: (String) -> Unit = {},
 ) {
@@ -521,6 +522,7 @@ internal fun MemoryBookCard(
     BookshelfListItem(
         settings = settings,
         isCompact = false,
+        contentFillHeight = contentFillHeight,
         cover = { m ->
             CoilBookCover(
                 name = memory.bookName.takeIf { it.isNotBlank() },

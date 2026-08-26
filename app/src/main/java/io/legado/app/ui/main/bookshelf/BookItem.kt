@@ -163,6 +163,7 @@ fun BookshelfGridItem(
 fun BookshelfListItem(
     settings: BookshelfSettings,
     isCompact: Boolean,
+    contentFillHeight: Boolean = false,
     cover: @Composable (Modifier) -> Unit,
     title: String,
     modifier: Modifier = Modifier,
@@ -209,8 +210,17 @@ fun BookshelfListItem(
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .then(
+                            if (contentFillHeight) {
+                                Modifier.height((coverWidth * 7f / 5f).dp)
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(top = 4.dp, bottom = 4.dp, end = 8.dp, start = 0.dp),
-                    verticalArrangement = if (settings.bookshelfListCoverCenter) {
+                    verticalArrangement = if (contentFillHeight) {
+                        Arrangement.SpaceBetween
+                    } else if (settings.bookshelfListCoverCenter) {
                         Arrangement.Center
                     } else {
                         Arrangement.Top

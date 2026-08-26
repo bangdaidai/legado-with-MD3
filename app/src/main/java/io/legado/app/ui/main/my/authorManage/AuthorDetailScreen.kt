@@ -155,6 +155,8 @@ fun AuthorDetailScreen(
                             ratingInTitle = true,
                             // 标签只占一行，横向滚动，跟书架列表一致
                             singleLineTags = true,
+                            // 右侧内容列锁定为封面高度并上下撑开，保证封面与文字上下对齐
+                            contentFillHeight = true,
                             onBookClick = onOpenBook,
                         )
                     }
@@ -203,6 +205,8 @@ fun AuthorDetailScreen(
                             settings = uiState.bookshelfSettings,
                             isCompact = false,
                             coverWidth = uiState.coverWidth,
+                            // 右侧内容列锁定为封面高度并上下撑开，保证封面与文字上下对齐
+                            contentFillHeight = true,
                             cover = { m ->
                                 CoilBookCover(
                                     name = item.book.name.takeIf { it.isNotBlank() },
