@@ -44,28 +44,23 @@ fun AiRewritePresetConfigSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.ai_rewrite_presets),
+        endAction = {
+            MediumTonalButton(
+                onClick = { onIntent(ReadBookIntent.AddAiRewritePreset) },
+                icon = Icons.Default.Add,
+                contentDescription = stringResource(R.string.add),
+            )
+        },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AppText(
-                    text = stringResource(R.string.ai_rewrite_presets_summary),
-                    modifier = Modifier.weight(1f),
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    style = LegadoTheme.typography.bodySmall,
-                )
-                MediumTonalButton(
-                    onClick = { onIntent(ReadBookIntent.AddAiRewritePreset) },
-                    icon = Icons.Default.Add,
-                    text = stringResource(R.string.add),
-                )
-            }
+            AppText(
+                text = stringResource(R.string.ai_rewrite_presets_summary),
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                style = LegadoTheme.typography.bodySmall,
+            )
 
             if (state.editing) {
                 Spacer(Modifier.height(12.dp))
