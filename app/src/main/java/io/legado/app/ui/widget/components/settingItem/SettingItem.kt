@@ -69,6 +69,7 @@ fun SettingItem(
 
     var showMenu by remember { mutableStateOf(false) }
     val isExpandable = expandContent != null && onExpandChange != null
+    val hasSupporting = description != null || option != null
 
     SettingCard(
         modifier = modifier
@@ -106,41 +107,30 @@ fun SettingItem(
                     ),
                 leadingContent = if (painter != null || imageVector != null) {
                     {
-                        if (painter != null) {
-                            Icon(
-                                painter = painter,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else if (imageVector != null) {
-                            Icon(
-                                imageVector = imageVector,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else null,
-                supportingContent = if (description != null || option != null) {
-                    {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            description?.let {
-                                AppText(
-                                    it,
-                                    style = LegadoTheme.typography.bodySmallEmphasized,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .wrapContentHeight(
+                                    if (hasSupporting) Alignment.Top else Alignment.CenterVertically
                                 )
-                            }
-                            option?.let {
-                                AppText(
-                                    it,
-                                    style = LegadoTheme.typography.labelMediumEmphasized,
-                                    color = MaterialTheme.colorScheme.primary
+                        ) {
+                            if (painter != null) {
+                                Icon(
+                                    painter = painter,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else if (imageVector != null) {
+                                Icon(
+                                    imageVector = imageVector,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
                 } else null,
+                supportingContent = null,
                 trailingContent = {
                     Box(contentAlignment = Alignment.Center) {
                         if (isExpandable && trailingContent == null) {
@@ -168,10 +158,26 @@ fun SettingItem(
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             ) {
-                AppText(
-                    text = title,
-                    style = LegadoTheme.typography.titleMedium
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    AppText(
+                        text = title,
+                        style = LegadoTheme.typography.titleMedium
+                    )
+                    description?.let {
+                        AppText(
+                            it,
+                            style = LegadoTheme.typography.bodySmallEmphasized,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                    option?.let {
+                        AppText(
+                            it,
+                            style = LegadoTheme.typography.labelMediumEmphasized,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
 
             if (isExpandable) {
