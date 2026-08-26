@@ -990,6 +990,8 @@ private fun BookInfoBackdrop(
 private fun BookInfoTopScrim(statusBarHeight: Dp, hazeState: HazeState) {
     // hazeState 由调用方给出：全局模糊关闭时 LocalHazeState 为 null，
     // 状态栏补偿层要用页面自备的取样层。
+    // 模糊框高度即为状态栏高度：渐进 1f→0f 从状态栏顶部满模糊、到底部归零，
+    // 与下方无模糊内容自然衔接，不额外外扩。
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1500,21 +1502,61 @@ private fun BookInfoIntro(
         )
         return
     }
-    when (val c = content) {
-        is BookInfoIntroContent.Web -> BookInfoWebIntro(
-            html = c.html,
-            baseUrl = baseUrl,
-            bookSource = bookSource,
-            onJumpToAnotherApp = onJumpToAnotherApp,
-        )
+    var expanded by rememberSaveable(intro) { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (!expanded) {
+                        Modifier.heightIn(max = 132.dp).clip(RoundedCornerShape(0.dp))
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            when (val c = content) {
+                is BookInfoIntroContent.Web -> BookInfoWebIntro(
+                    html = c.html,
+                    baseUrl = baseUrl,
+                    bookSource = bookSource,
+                    onJumpToAnotherApp = onJumpToAnotherApp,
+                )
 
-        is BookInfoIntroContent.Html -> HtmlContent(html = c.html)
+                is BookInfoIntroContent.Html -> HtmlContent(html = c.html)
 
-        is BookInfoIntroContent.Markdown -> MarkdownBlock(content = c.markdown)
+                is BookInfoIntroContent.Markdown -> MarkdownBlock(content = c.markdown)
 
-        is BookInfoIntroContent.Plain -> AnimatedTextLine(
-            text = c.text,
-            style = LegadoTheme.typography.bodyMedium,
+                is BookInfoIntroContent.Plain -> AnimatedTextLine(
+                    text = c.text,
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+            }
+            if (!expanded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    LegadoTheme.colorScheme.surface,
+                                )
+                            )
+                        )
+                )
+            }
+        }
+        AppText(
+            text = stringResource(if (expanded) R.string.collapse else R.string.expand),
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.primary,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .clickable { expanded = !expanded }
+                .padding(vertical = 4.dp)
         )
     }
 }
