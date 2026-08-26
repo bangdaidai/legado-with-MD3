@@ -1194,6 +1194,11 @@ class BookInfoViewModel(
         loadBookCharacters(book.bookUrl)
         loadBookKnowledge(book.bookUrl)
         loadBookEvents(book.bookUrl)
+        if (inBookshelf) {
+            execute {
+                readingMemoryRepository.autoExtractProtagonists(book.bookUrl)
+            }
+        }
         refreshMeta(book)
         upCoverByRule(book)
         if (book.tocUrl.isEmpty() && !book.isLocal) {

@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
@@ -82,6 +84,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -93,6 +96,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.roundToPx
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
@@ -1401,7 +1405,7 @@ private fun BookInfoSummary(
         modifier = Modifier
             .fillMaxWidth()
             .background(LegadoTheme.colorScheme.surface)
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         AnimatedTextLine(
@@ -1500,22 +1504,60 @@ private fun BookInfoIntro(
         )
         return
     }
-    when (val c = content) {
-        is BookInfoIntroContent.Web -> BookInfoWebIntro(
-            html = c.html,
-            baseUrl = baseUrl,
-            bookSource = bookSource,
-            onJumpToAnotherApp = onJumpToAnotherApp,
-        )
+    
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val collapsedMaxHeight = 120.dp
+    val density = LocalDensity.current
+    var isOverflowing by remember { mutableStateOf(false) }
+    
+    Column {
+        Box(
+            modifier = Modifier
+                .then(
+                    if (!expanded) {
+                        Modifier.heightIn(max = collapsedMaxHeight)
+                    } else {
+                        Modifier
+                    }
+                )
+                .onGloballyPositioned { coordinates ->
+                    if (!expanded) {
+                        val maxHeightPx = with(density) { collapsedMaxHeight.roundToPx() }
+                        isOverflowing = coordinates.size.height > maxHeightPx
+                    }
+                }
+        ) {
+            when (val c = content) {
+                is BookInfoIntroContent.Web -> BookInfoWebIntro(
+                    html = c.html,
+                    baseUrl = baseUrl,
+                    bookSource = bookSource,
+                    onJumpToAnotherApp = onJumpToAnotherApp,
+                )
 
-        is BookInfoIntroContent.Html -> HtmlContent(html = c.html)
+                is BookInfoIntroContent.Html -> HtmlContent(html = c.html)
 
-        is BookInfoIntroContent.Markdown -> MarkdownBlock(content = c.markdown)
+                is BookInfoIntroContent.Markdown -> MarkdownBlock(content = c.markdown)
 
-        is BookInfoIntroContent.Plain -> AnimatedTextLine(
-            text = c.text,
-            style = LegadoTheme.typography.bodyMedium,
-        )
+                is BookInfoIntroContent.Plain -> AnimatedTextLine(
+                    text = c.text,
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+            }
+        }
+        
+        if (isOverflowing) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                SmallTonalButton(
+                    onClick = { expanded = !expanded },
+                    icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) stringResource(R.string.collapse) else stringResource(R.string.expand),
+                )
+            }
+        }
     }
 }
 
