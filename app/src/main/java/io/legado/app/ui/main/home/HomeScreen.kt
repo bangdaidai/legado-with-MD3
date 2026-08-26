@@ -593,7 +593,8 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(viewportHeight),
+                            .height(viewportHeight)
+                            .padding(top = 4.dp),
                     ) {
                         if (selectedSets.isEmpty()) {
                             Box(
