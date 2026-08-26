@@ -41,7 +41,7 @@ object ProtagonistExtractor {
         if (intro.isNullOrBlank()) return emptyList()
 
         val invalid = rules.invalidWords
-            .lineSequence()
+            .split(Regex("[,，\n]"))
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
