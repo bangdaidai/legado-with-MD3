@@ -84,7 +84,7 @@ fun HomepageModuleFeed(
     modifier: Modifier = Modifier,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     gridState: LazyStaggeredGridState = rememberLazyStaggeredGridState(),
-    verticalItemSpacing: Dp = 16.dp,
+    verticalItemSpacing: Dp = 12.dp,
     @StringRes emptyMessageRes: Int = R.string.homepage_add_module_definition,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -522,7 +522,7 @@ private fun ModuleHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (hasSourceTabs) {

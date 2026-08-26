@@ -425,7 +425,8 @@ private fun BookInfoScreenContent(
                                     .background(
                                         color = LegadoTheme.colorScheme.surface
                                     )
-                                    .padding(bottom = 24.dp)
+                                    .padding(top = 8.dp, bottom = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
                                 BookInfoActions(
                                     inBookshelf = state.inBookshelf,
@@ -1315,9 +1316,9 @@ private fun BookInfoActions(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(LegadoTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .background(LegadoTheme.colorScheme.surface)
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         BookInfoActionCard(
             modifier = Modifier.weight(1f),
@@ -1403,7 +1404,7 @@ private fun BookInfoSummary(
         modifier = Modifier
             .fillMaxWidth()
             .background(LegadoTheme.colorScheme.surface)
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         AnimatedTextLine(
@@ -1806,13 +1807,12 @@ private fun RelatedBooksBanner(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 16.dp)
     ) {
         if (title.isNotBlank()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(
@@ -1865,7 +1865,7 @@ private fun OtherWorksSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp),
     ) {
         OtherWorksHeader(
             scopeNames = scopeNames,
@@ -1882,8 +1882,8 @@ private fun OtherWorksSection(
                 stringResource(R.string.author_works_error, s.message),
             )
             is OtherWorksState.Success -> Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 s.books.forEach { book ->
                     SearchBookListItem(
@@ -1969,9 +1969,8 @@ private fun BookInfoCharacters(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(LegadoTheme.colorScheme.surface)
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .background(LegadoTheme.colorScheme.surface),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             modifier = Modifier
