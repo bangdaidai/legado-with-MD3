@@ -3,6 +3,11 @@
 本文件定义仓库级不变量。专项流程放在 `.agents/skills/`，长期方案放在 `docs/dev/`
 ；不要把临时任务、讨论过程或一次性结论继续堆进本文件。
 
+## 交互约定
+
+- 始终使用简体中文回复用户。
+- 代码注释也使用中文。
+
 ## HARD RULE: Never run builds
 
 **The agent MUST NOT run Gradle builds, compiles, tests, or lint.** No exceptions, no "just to

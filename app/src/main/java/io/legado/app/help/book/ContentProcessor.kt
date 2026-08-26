@@ -118,7 +118,7 @@ class ContentProcessor private constructor(
                 if (match != null) {
                     mContent = mContent.substring(match.range.last + 1)
                     sameTitleRemoved = true
-                } else if (useReplace && book.getUseReplaceRule(AppConfig.replaceEnableDefault)) {
+                } else if (useReplace && book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault)) {
                     title = Regex.escape(
                         chapter.getDisplayTitle(
                             contentReplaceRules,
@@ -219,7 +219,7 @@ class ContentProcessor private constructor(
             //重新添加标题
             mContent = chapter.getDisplayTitle(
                 getTitleReplaceRules(),
-                useReplace = useReplace && book.getUseReplaceRule(AppConfig.replaceEnableDefault),
+                useReplace = useReplace && book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault),
                 chineseConverterType = AppConfig.chineseConverterType,
             ) + "\n" + mContent
         }
