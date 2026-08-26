@@ -4,6 +4,8 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.domain.gateway.ThemePackageSettingsGateway
 import io.legado.app.domain.model.settings.ThemeExportData
 import io.legado.app.help.config.AppConfigStore
+import io.legado.app.lib.theme.ThemeStore
+import splitties.init.appCtx
 
 class ThemePackageSettingsRepository : ThemePackageSettingsGateway {
 
@@ -138,7 +140,7 @@ class ThemePackageSettingsRepository : ThemePackageSettingsGateway {
         coverShowNameN = boolean(PreferKey.coverShowNameN, true),
         coverShowAuthorN = boolean(PreferKey.coverShowAuthorN, true),
         coverInfoOrientation = string(PreferKey.coverInfoOrientation, "0"),
-    )
+    ).fillMissingRealColors()
 
     override suspend fun applyAndAwait(data: ThemeExportData) {
         AppConfigStore.putAllAndAwait(data.toPreferenceValues())
@@ -269,5 +271,23 @@ internal fun ThemeExportData.toPreferenceValues(): Map<String, Any?> {
                 PreferKey.coverShowNameN to data.coverShowNameN,
                 PreferKey.coverShowAuthorN to data.coverShowAuthorN,
                 PreferKey.coverInfoOrientation to data.coverInfoOrientation,
+    )
+}
+
+/**
+ * 运行时主题色实际由旧 [ThemeStore]（SharedPreferences）管理，而 [exportCurrent]
+ * 从新的 AppConfigStore 读取这些颜色字段时往往为 0。保存主题时回填当前真实生效的
+ * 主色/暗色主色/背景色，使主题管理页的预览（6 个色点）能还原每个主题各自的配色，
+ * 而不是全部回退到当前应用的主题色。
+ */
+private fun ThemeExportData.fillMissingRealColors(): ThemeExportData {
+    val ctx = appCtx
+    return copy(
+        cPrimary = cPrimary.takeIf { it != 0 } ?: ThemeStore.primaryColor(ctx),
+        cNPrimary = cNPrimary.takeIf { it != 0 } ?: ThemeStore.primaryColorDark(ctx),
+        themeColor = themeColor.takeIf { it != 0 } ?: ThemeStore.primaryColor(ctx),
+        themeColorNight = themeColorNight.takeIf { it != 0 } ?: ThemeStore.primaryColorDark(ctx),
+        themeBackgroundColor =
+            themeBackgroundColor.takeIf { it != 0 } ?: ThemeStore.backgroundColor(ctx),
     )
 }
