@@ -96,7 +96,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.roundToPx
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
