@@ -1507,18 +1507,26 @@ private fun BookInfoIntro(
         return
     }
     var expanded by rememberSaveable(intro) { mutableStateOf(false) }
+    val collapsedMaxHeight = 132.dp
+    val density = LocalDensity.current
+    var isOverflowing by remember(intro) { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
                 .then(
                     if (!expanded) {
-                        Modifier.heightIn(max = 132.dp).clip(RoundedCornerShape(0.dp))
+                        Modifier.heightIn(max = collapsedMaxHeight)
                     } else {
                         Modifier
                     }
                 )
-
+                .onGloballyPositioned { coordinates ->
+                    if (!expanded) {
+                        val maxHeightPx = with(density) { collapsedMaxHeight.roundToPx() }
+                        isOverflowing = coordinates.size.height > maxHeightPx
+                    }
+                }
         ) {
             when (val c = content) {
                 is BookInfoIntroContent.Web -> BookInfoWebIntro(
@@ -1537,7 +1545,7 @@ private fun BookInfoIntro(
                     style = LegadoTheme.typography.bodyMedium,
                 )
             }
-            if (!expanded) {
+            if (!expanded && isOverflowing) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1554,15 +1562,23 @@ private fun BookInfoIntro(
                 )
             }
         }
-        AppText(
-            text = stringResource(if (expanded) R.string.collapse else R.string.expand),
-            style = LegadoTheme.typography.labelMedium,
-            color = LegadoTheme.colorScheme.primary,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .clickable { expanded = !expanded }
-                .padding(vertical = 4.dp)
-        )
+
+        if (isOverflowing) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                SmallTonalButton(
+                    onClick = { expanded = !expanded },
+                    icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) {
+                        stringResource(R.string.collapse)
+                    } else {
+                        stringResource(R.string.expand)
+                    },
+                )
+            }
+        }
     }
 }
 
