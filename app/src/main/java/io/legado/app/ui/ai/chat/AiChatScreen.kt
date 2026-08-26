@@ -454,32 +454,39 @@ fun AiChatScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
 
-                            state.pendingToolConfirmation?.let { confirmation ->
-                                PendingToolConfirmationCard(
-                                    confirmation = confirmation,
-                                    onConfirm = {
-                                        onIntent(AiChatIntent.ConfirmPendingTool)
-                                    },
-                                    onReject = {
-                                        onIntent(AiChatIntent.RejectPendingTool)
-                                    }
-                                )
-                            }
-                            ChatInputBar(
-                                value = draft,
-                                isSending = state.isSending,
-                                reasoningLevel = state.reasoningLevel,
-                                onValueChange = { draft = it },
-                                onSend = {
-                                    val text = draft
-                                    draft = ""
-                                    onIntent(AiChatIntent.SendMessage(text))
-                                },
-                                onStop = { onIntent(AiChatIntent.StopGenerating) },
-                                onUpdateReasoningLevel = {
-                                    onIntent(AiChatIntent.UpdateReasoningLevel(it))
-                                }
-                            )
+            val isKeyboardVisible =
+                WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
+            val toolbarBottomPadding by animateDpAsState(
+                targetValue = if (isKeyboardVisible) 16.dp else 32.dp,
+                animationSpec = tween(durationMillis = 250),
+                label = "AiChatToolbarBottomPadding"
+            )
+            state.pendingToolConfirmation?.let { confirmation ->
+                PendingToolConfirmationCard(
+                    confirmation = confirmation,
+                    onConfirm = {
+                        onIntent(AiChatIntent.ConfirmPendingTool)
+                    },
+                onReject = {
+                        onIntent(AiChatIntent.RejectPendingTool)
+                    }
+                )
+            }
+            ChatInputBar(
+                value = draft,
+                isSending = state.isSending,
+                reasoningLevel = state.reasoningLevel,
+                onValueChange = { draft = it },
+                onSend = {
+                    val text = draft
+                    draft = ""
+                    onIntent(AiChatIntent.SendMessage(text))
+                },
+                onStop = { onIntent(AiChatIntent.StopGenerating) },
+                onUpdateReasoningLevel = {
+                    onIntent(AiChatIntent.UpdateReasoningLevel(it))
+                }
+            )
                         }
                     }
                 }
@@ -672,7 +679,7 @@ private fun PendingToolConfirmationCard(
         containerColor = LegadoTheme.colorScheme.tertiaryContainer,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             AppText(
@@ -930,11 +937,6 @@ private fun ChatInputBar(
 ) {
     val isKeyboardVisible =
         WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
-    val horizontalPadding by animateDpAsState(
-        targetValue = if (isKeyboardVisible) 16.dp else 46.dp,
-        animationSpec = tween(durationMillis = 250),
-        label = "AiChatInputHorizontalPadding"
-    )
     val bottomPadding by animateDpAsState(
         targetValue = if (isKeyboardVisible) 16.dp else 32.dp,
         animationSpec = tween(durationMillis = 250),
@@ -946,8 +948,8 @@ private fun ChatInputBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = horizontalPadding,
-                end = horizontalPadding,
+                start = 16.dp,
+                end = 16.dp,
                 bottom = bottomPadding
             ),
         shape = RoundedCornerShape(32.dp),
