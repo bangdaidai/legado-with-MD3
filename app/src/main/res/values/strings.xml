@@ -3460,7 +3460,7 @@
     <string name="protagonist_extraction_separators">Name separators</string>
     <string name="protagonist_extraction_min_length">Min name length</string>
     <string name="protagonist_extraction_max_length">Max name length</string>
-    <string name="protagonist_extraction_invalid_words">Invalid words (one per line)</string>
+    <string name="protagonist_extraction_invalid_words">Invalid words (comma or newline separated)</string>
     <string name="protagonist_extraction_relaxed">Relaxed mode (parse first line as list)</string>
     <string name="advanced">Advanced</string>
     <string name="role_supporting">Supporting</string>

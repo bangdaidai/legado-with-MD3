@@ -43,7 +43,6 @@ import io.legado.app.ui.widget.components.AppRadioButton
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
-import io.legado.app.ui.widget.components.button.series.SmallOutlinedButton
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -141,10 +140,10 @@ fun AiTextRewriteSheet(
                                     onIntent(ReadBookIntent.SetAiTextRewriteReasoningLevel(it))
                                 },
                             )
-                            SmallOutlinedButton(
+                            MediumTonalButton(
                                 onClick = { onIntent(ReadBookIntent.OpenAiRewritePresetConfig) },
                                 icon = Icons.Default.Settings,
-                                text = stringResource(R.string.ai_rewrite_manage_presets),
+                                contentDescription = stringResource(R.string.ai_rewrite_manage_presets),
                             )
                         }
 

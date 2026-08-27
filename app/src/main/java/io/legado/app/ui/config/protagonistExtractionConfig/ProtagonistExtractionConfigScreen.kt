@@ -2,9 +2,9 @@ package io.legado.app.ui.config.protagonistExtractionConfig
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -19,6 +19,7 @@ import io.legado.app.ui.widget.components.settingItem.InputSettingItem
 import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,9 +39,11 @@ fun ProtagonistExtractionConfigScreen(
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onClick = onBackClick) },
                 actions = {
-                    TextButton(onClick = { onIntent(ProtagonistExtractionConfigIntent.RestoreDefaults) }) {
-                        Text(stringResource(R.string.restore_defaults))
-                    }
+                    TopBarActionButton(
+                        onClick = { onIntent(ProtagonistExtractionConfigIntent.RestoreDefaults) },
+                        imageVector = Icons.Default.Restore,
+                        contentDescription = stringResource(R.string.restore_defaults),
+                    )
                 },
             )
         }

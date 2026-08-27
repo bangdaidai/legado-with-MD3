@@ -3409,7 +3409,7 @@
     <string name="protagonist_extraction_separators">名字分隔符</string>
     <string name="protagonist_extraction_min_length">名字最小长度</string>
     <string name="protagonist_extraction_max_length">名字最大长度</string>
-    <string name="protagonist_extraction_invalid_words">无效词（每行一个）</string>
+    <string name="protagonist_extraction_invalid_words">无效词（逗号或换行分隔）</string>
     <string name="protagonist_extraction_relaxed">宽松模式（首行按名单解析）</string>
     <string name="advanced">高级</string>
     <string name="role_supporting">配角</string>
