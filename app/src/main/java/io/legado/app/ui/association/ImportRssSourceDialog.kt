@@ -1,44 +1,48 @@
 package io.legado.app.ui.association
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
-import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.observeAsState
 import io.legado.app.R
-import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.data.appDb
+import io.legado.app.base.BaseComposeDialogFragment
 import io.legado.app.data.entities.RssSource
-import io.legado.app.databinding.DialogCustomGroupBinding
-import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.ItemSourceImportBinding
-import io.legado.app.help.config.AppConfig
 import io.legado.app.domain.gateway.OtherSettingsGateway
-import io.legado.app.domain.model.settings.OtherSettings
-import io.legado.app.lib.dialogs.alert
-//import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.widget.dialog.CodeDialog
-import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.*
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-import splitties.views.onClick
+import io.legado.app.ui.theme.AppIcons
+import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.importComponents.BatchImportDialog
+import io.legado.app.ui.widget.components.importComponents.ImportStatus
+import io.legado.app.ui.widget.components.importComponents.associationImportState
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
+import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 /**
- * 导入rss源弹出窗口
+ * 导入 rss 源弹出窗口（Compose 版，沿用 BatchImportDialog 规范）。
  */
-class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
-    Toolbar.OnMenuItemClickListener,
-    CodeDialog.Callback {
+class ImportRssSourceDialog() : BaseComposeDialogFragment() {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
         arguments = Bundle().apply {
@@ -47,225 +51,181 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
         }
     }
 
-    private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by viewModel<ImportRssSourceViewModel>()
     private val otherSettingsGateway by inject<OtherSettingsGateway>()
-    private val adapter by lazy { SourcesAdapter(requireContext()) }
+    private var finishOnDismiss = false
 
-    override fun onStart() {
-        super.onStart()
-        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        finishOnDismiss = arguments?.getBoolean("finishOnDismiss") == true
+        val source = arguments?.getString("source")
+        if (source.isNullOrEmpty()) {
+            dismissAllowingStateLoss()
+        } else {
+            viewModel.importSource(source)
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        if (arguments?.getBoolean("finishOnDismiss") == true) {
+        if (finishOnDismiss) {
             activity?.finish()
         }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        //binding.toolBar.setBackgroundColor(primaryColor)
-        binding.toolBar.setTitle(R.string.import_rss_source)
-        //binding.rotateLoading.visible()
-        initMenu()
-        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerView.adapter = adapter
-        binding.tvCancel.visible()
-        binding.tvCancel.setOnClickListener {
-            dismissAllowingStateLoss()
-        }
-        binding.tvOk.visible()
-        binding.tvOk.setOnClickListener {
-            val waitDialog = WaitDialog(requireContext())
-            waitDialog.show()
-            viewModel.importSelect {
-                waitDialog.dismiss()
-                dismissAllowingStateLoss()
-            }
-        }
-        binding.tvFooterLeft.visible()
-        binding.tvFooterLeft.setOnClickListener {
-            val selectAll = viewModel.isSelectAll
-            viewModel.selectStatus.forEachIndexed { index, b ->
-                if (b != !selectAll) {
-                    viewModel.selectStatus[index] = !selectAll
-                }
-            }
-            adapter.notifyDataSetChanged()
-            upSelectText()
-        }
-        viewModel.errorLiveData.observe(this) {
-            binding.rotateLoading.gone()
-            binding.emptyView.apply {
-                setMessage(it)
-                visible()
-            }
-        }
-        viewModel.successLiveData.observe(this) {
-            binding.rotateLoading.gone()
-            if (it > 0) {
-                adapter.setItems(viewModel.allSources)
-                upSelectText()
-            } else {
-                binding.emptyView.apply {
-                    setMessage(R.string.wrong_format)
-                    visible()
-                }
-            }
-        }
-        val source = arguments?.getString("source")
-        if (source.isNullOrEmpty()) {
-            dismiss()
-            return
-        }
-        viewModel.importSource(source)
-    }
+    @Composable
+    override fun Content() {
+        val scope = rememberCoroutineScope()
+        val error by viewModel.errorLiveData.observeAsState()
+        val successCount by viewModel.successLiveData.observeAsState(-1)
+        var refresh by remember { mutableIntStateOf(0) }
+        var keepVersion by remember { mutableIntStateOf(0) }
+        var showGroupDialog by remember { mutableStateOf(false) }
 
-    private fun upSelectText() {
-        if (viewModel.isSelectAll) {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_cancel_count,
-                viewModel.selectCount,
-                viewModel.allSources.size
-            )
-        } else {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_all_count,
-                viewModel.selectCount,
-                viewModel.allSources.size
-            )
-        }
-    }
-
-    private fun initMenu() {
-        binding.toolBar.setOnMenuItemClickListener(this)
-        binding.toolBar.inflateMenu(R.menu.import_source)
-        binding.toolBar.menu.findItem(R.id.menu_keep_original_name)?.isChecked =
-            AppConfig.importKeepName
-        binding.toolBar.menu.findItem(R.id.menu_keep_group)?.isChecked =
-            AppConfig.importKeepGroup
-        binding.toolBar.menu.findItem(R.id.menu_keep_enable)?.isChecked =
-            AppConfig.importKeepEnable
-        binding.toolBar.menu.findItem(R.id.menu_select_new_source)?.isVisible = false
-        binding.toolBar.menu.findItem(R.id.menu_select_update_source)?.isVisible = false
-    }
-
-    @SuppressLint("InflateParams")
-    override fun onMenuItemClick(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_new_group -> alertCustomGroup(item)
-            R.id.menu_keep_original_name -> {
-                item.isChecked = !item.isChecked
-                updateImportSetting { it.copy(importKeepName = item.isChecked) }
-            }
-
-            R.id.menu_keep_group -> {
-                item.isChecked = !item.isChecked
-                updateImportSetting { it.copy(importKeepGroup = item.isChecked) }
-            }
-
-            R.id.menu_keep_enable -> {
-                item.isChecked = !item.isChecked
-                updateImportSetting { it.copy(importKeepEnable = item.isChecked) }
-            }
-        }
-        return false
-    }
-
-    private fun updateImportSetting(transform: (OtherSettings) -> OtherSettings) {
-        lifecycleScope.launch { otherSettingsGateway.update(transform) }
-    }
-
-    private fun alertCustomGroup(item: MenuItem) {
-        alert(R.string.diy_edit_source_group) {
-            val alertBinding = DialogCustomGroupBinding.inflate(layoutInflater).apply {
-                val groups = appDb.rssSourceDao.allGroups()
-                textInputLayout.setHint(R.string.group_name)
-                editView.setFilterValues(groups.toList())
-                editView.dropDownHeight = 180.dpToPx()
-            }
-            customView {
-                alertBinding.root
-            }
-            okButton {
-                viewModel.isAddGroup = alertBinding.swAddGroup.isChecked
-                viewModel.groupName = alertBinding.editView.text?.toString()
-                if (viewModel.groupName.isNullOrBlank()) {
-                    item.title = getString(R.string.diy_source_group)
-                } else {
-                    val group = getString(R.string.diy_edit_source_group_title, viewModel.groupName)
-                    if (viewModel.isAddGroup) {
-                        item.title = "+$group"
-                    } else {
-                        item.title = group
+        val settings = remember(keepVersion) { otherSettingsGateway.currentSettings }
+        val importState = remember(refresh, error, successCount, keepVersion) {
+            associationImportState(
+                error = error,
+                loaded = successCount >= 0,
+                items = viewModel.allSources,
+                existing = viewModel.checkSources,
+                selected = viewModel.selectStatus,
+                statusOf = { existing, incoming ->
+                    when {
+                        existing == null -> ImportStatus.New
+                        incoming.lastUpdateTime > existing.lastUpdateTime -> ImportStatus.Update
+                        else -> ImportStatus.Existing
                     }
                 }
-            }
-            cancelButton()
-        }
-    }
-
-    override fun onCodeSave(code: String, requestId: String?) {
-        requestId?.toInt()?.let {
-            GSON.fromJsonObject<RssSource>(code).getOrNull()?.let { source ->
-                viewModel.allSources[it] = source
-                adapter.setItem(it, source)
-            }
-        }
-    }
-
-    inner class SourcesAdapter(context: Context) :
-        RecyclerAdapter<RssSource, ItemSourceImportBinding>(context) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemSourceImportBinding {
-            return ItemSourceImportBinding.inflate(inflater, parent, false)
+            )
         }
 
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemSourceImportBinding,
-            item: RssSource,
-            payloads: MutableList<Any>
-        ) {
-            binding.apply {
-                cbSourceName.isChecked = viewModel.selectStatus[holder.layoutPosition]
-                cbSourceName.text = item.sourceName
-                val localSource = viewModel.checkSources[holder.layoutPosition]
-                tvSourceState.text = when {
-                    localSource == null -> "新增"
-                    item.lastUpdateTime > localSource.lastUpdateTime -> "更新"
-                    else -> "已有"
+        BatchImportDialog(
+            asDialog = true,
+            title = stringResource(R.string.import_rss_source),
+            importState = importState,
+            onDismissRequest = { dismissAllowingStateLoss() },
+            onConfirm = { viewModel.importSelect { dismissAllowingStateLoss() } },
+            onToggleItem = { index ->
+                refresh++
+                viewModel.selectStatus[index] = !(viewModel.selectStatus[index])
+            },
+            onToggleAll = { selectAll ->
+                refresh++
+                viewModel.selectStatus.forEachIndexed { index, _ ->
+                    viewModel.selectStatus[index] = selectAll
                 }
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemSourceImportBinding) {
-            binding.apply {
-                cbSourceName.setOnCheckedChangeListener { buttonView, isChecked ->
-                    if (buttonView.isPressed) {
-                        viewModel.selectStatus[holder.layoutPosition] = isChecked
-                        upSelectText()
-                    }
-                }
-                root.onClick {
-                    cbSourceName.isChecked = !cbSourceName.isChecked
-                    viewModel.selectStatus[holder.layoutPosition] = cbSourceName.isChecked
-                    upSelectText()
-                }
-                tvOpen.setOnClickListener {
-                    val source = viewModel.allSources[holder.layoutPosition]
-                    showDialogFragment(
-                        CodeDialog(
-                            GSON.toJson(source),
-                            disableEdit = false,
-                            requestId = holder.layoutPosition.toString()
-                        )
+            },
+            onUpdateItem = { index, data ->
+                refresh++
+                (data as? RssSource)?.let { viewModel.allSources[index] = it }
+            },
+            topBarActions = {
+                var menuExpanded by remember { mutableStateOf(false) }
+                RoundDropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) { dismiss ->
+                    RoundDropdownMenuItem(
+                        text = stringResource(R.string.keep_original_name),
+                        isSelected = settings.importKeepName,
+                        onClick = {
+                            dismiss()
+                            scope.launch {
+                                otherSettingsGateway.update { it.copy(importKeepName = !settings.importKeepName) }
+                            }
+                            keepVersion++
+                        }
+                    )
+                    RoundDropdownMenuItem(
+                        text = stringResource(R.string.keep_group),
+                        isSelected = settings.importKeepGroup,
+                        onClick = {
+                            dismiss()
+                            scope.launch {
+                                otherSettingsGateway.update { it.copy(importKeepGroup = !settings.importKeepGroup) }
+                            }
+                            keepVersion++
+                        }
+                    )
+                    RoundDropdownMenuItem(
+                        text = stringResource(R.string.keep_enable),
+                        isSelected = settings.importKeepEnable,
+                        onClick = {
+                            dismiss()
+                            scope.launch {
+                                otherSettingsGateway.update { it.copy(importKeepEnable = !settings.importKeepEnable) }
+                            }
+                            keepVersion++
+                        }
+                    )
+                    RoundDropdownMenuItem(
+                        text = stringResource(R.string.diy_source_group),
+                        onClick = {
+                            dismiss()
+                            showGroupDialog = true
+                        }
                     )
                 }
-            }
+                MediumTonalButton(
+                    modifier = Modifier.heightIn(min = 24.dp),
+                    icon = AppIcons.MoreVert,
+                    contentDescription = stringResource(R.string.menu),
+                    onClick = { menuExpanded = true }
+                )
+            },
+            itemTitle = { it.sourceName },
+            itemSubtitle = { it.sourceUrl }
+        )
+
+        if (showGroupDialog) {
+            CustomGroupDialog(
+                initialName = viewModel.groupName ?: "",
+                initialAddGroup = viewModel.isAddGroup,
+                onDismissRequest = { showGroupDialog = false },
+                onConfirm = { name, addGroup ->
+                    viewModel.groupName = name
+                    viewModel.isAddGroup = addGroup
+                    showGroupDialog = false
+                }
+            )
         }
     }
 
+    @Composable
+    private fun CustomGroupDialog(
+        initialName: String,
+        initialAddGroup: Boolean,
+        onDismissRequest: () -> Unit,
+        onConfirm: (String, Boolean) -> Unit
+    ) {
+        var name by remember(initialName) { mutableStateOf(initialName) }
+        var addGroup by remember(initialAddGroup) { mutableStateOf(initialAddGroup) }
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = onDismissRequest,
+            title = stringResource(R.string.diy_edit_source_group),
+            confirmText = stringResource(android.R.string.ok),
+            onConfirm = { onConfirm(name.trim(), addGroup) },
+            dismissText = stringResource(android.R.string.cancel),
+            onDismiss = onDismissRequest
+            ) {
+                Column {
+                    AppTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = stringResource(R.string.group_name),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                    SwitchSettingItem(
+                        title = stringResource(R.string.add_to_group),
+                        checked = addGroup,
+                        onCheckedChange = { addGroup = it }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+    }
 }

@@ -1,36 +1,42 @@
 package io.legado.app.ui.association
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.observeAsState
 import io.legado.app.R
-import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.constant.PreferKey
-import io.legado.app.data.appDb
+import io.legado.app.base.BaseComposeDialogFragment
 import io.legado.app.data.entities.ReplaceRule
-import io.legado.app.databinding.DialogCustomGroupBinding
-import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.ItemSourceImportBinding
-import io.legado.app.lib.dialogs.alert
-//import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.widget.dialog.CodeDialog
-import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.*
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.theme.AppIcons
+import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.importComponents.ImportAssociationContent
+import io.legado.app.ui.widget.components.importComponents.ImportStatus
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
+import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import org.koin.androidx.viewmodel.ext.android.viewModel
-import splitties.views.onClick
 
-class ImportReplaceRuleDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
-    Toolbar.OnMenuItemClickListener,
-    CodeDialog.Callback {
+/**
+ * 导入替换规则（Compose 版，沿用 BatchImportDialog 规范）。
+ */
+class ImportReplaceRuleDialog() : BaseComposeDialogFragment() {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
         arguments = Bundle().apply {
@@ -39,210 +45,125 @@ class ImportReplaceRuleDialog() : BaseDialogFragment(R.layout.dialog_recycler_vi
         }
     }
 
-    private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by viewModel<ImportReplaceRuleViewModel>()
-    private val adapter by lazy { SourcesAdapter(requireContext()) }
+    private var finishOnDismiss = false
 
-    override fun onStart() {
-        super.onStart()
-        setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        finishOnDismiss = arguments?.getBoolean("finishOnDismiss") == true
+        val source = arguments?.getString("source")
+        if (source.isNullOrEmpty()) {
+            dismissAllowingStateLoss()
+        } else {
+            viewModel.import(source)
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        if (arguments?.getBoolean("finishOnDismiss") == true) {
+        if (finishOnDismiss) {
             activity?.finish()
         }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        //binding.toolBar.setBackgroundColor(primaryColor)
-        binding.toolBar.setTitle(R.string.import_replace_rule)
-        //binding.rotateLoading.visible()
-        initMenu()
-        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerView.adapter = adapter
-        binding.tvCancel.visible()
-        binding.tvCancel.setOnClickListener {
-            dismissAllowingStateLoss()
-        }
-        binding.tvOk.visible()
-        binding.tvOk.setOnClickListener {
-            val waitDialog = WaitDialog(requireContext())
-            waitDialog.show()
-            viewModel.importSelect {
-                waitDialog.dismiss()
-                dismissAllowingStateLoss()
-            }
-        }
-        binding.tvFooterLeft.visible()
-        binding.tvFooterLeft.setOnClickListener {
-            val selectAll = viewModel.isSelectAll
-            viewModel.selectStatus.forEachIndexed { index, b ->
-                if (b != !selectAll) {
-                    viewModel.selectStatus[index] = !selectAll
+    @Composable
+    override fun Content() {
+        var showGroupDialog by remember { mutableStateOf(false) }
+
+        ImportAssociationContent(
+            title = stringResource(R.string.import_replace_rule),
+            items = viewModel.allRules,
+            existing = viewModel.checkRules,
+            selected = viewModel.selectStatus,
+            errorLiveData = viewModel.errorLiveData,
+            successLiveData = viewModel.successLiveData,
+            onImportSelect = { finally -> viewModel.importSelect(finally) },
+            statusOf = { existing, incoming ->
+                when {
+                    existing == null -> ImportStatus.New
+                    existing.pattern != incoming.pattern
+                        || existing.replacement != incoming.replacement
+                        || existing.isRegex != incoming.isRegex
+                        || existing.scope != incoming.scope -> ImportStatus.Update
+                    else -> ImportStatus.Existing
                 }
-            }
-            adapter.notifyDataSetChanged()
-            upSelectText()
-        }
-        viewModel.errorLiveData.observe(this) {
-            binding.rotateLoading.gone()
-            binding.emptyView.apply {
-                setMessage(it)
-                visible()
-            }
-        }
-        viewModel.successLiveData.observe(this) {
-            binding.rotateLoading.gone()
-            if (it > 0) {
-                adapter.setItems(viewModel.allRules)
-                upSelectText()
-            } else {
-                binding.emptyView.apply {
-                    setMessage(R.string.wrong_format)
-                    visible()
-                }
-            }
-        }
-        val source = arguments?.getString("source")
-        if (source.isNullOrEmpty()) {
-            dismiss()
-            return
-        }
-        viewModel.import(source)
-    }
-
-    private fun initMenu() {
-        binding.toolBar.setOnMenuItemClickListener(this)
-        binding.toolBar.inflateMenu(R.menu.import_replace)
-    }
-
-    override fun onMenuItemClick(item: MenuItem?): Boolean {
-        when (item?.itemId) {
-            R.id.menu_new_group -> alertCustomGroup(item)
-            R.id.menu_keep_original_name -> {
-                item.isChecked = !item.isChecked
-                requireContext().putPrefBoolean(PreferKey.importKeepName, item.isChecked)
-            }
-        }
-        return true
-    }
-
-    private fun alertCustomGroup(item: MenuItem) {
-        alert(R.string.diy_edit_source_group) {
-            val alertBinding = DialogCustomGroupBinding.inflate(layoutInflater).apply {
-                val groups = appDb.replaceRuleDao.allGroups()
-                textInputLayout.setHint(R.string.group_name)
-                editView.setFilterValues(groups.toList())
-                editView.dropDownHeight = 180.dpToPx()
-            }
-            customView {
-                alertBinding.root
-            }
-            okButton {
-                viewModel.isAddGroup = alertBinding.swAddGroup.isChecked
-                viewModel.groupName = alertBinding.editView.text?.toString()
-                if (viewModel.groupName.isNullOrBlank()) {
-                    item.title = getString(R.string.diy_source_group)
-                } else {
-                    val group = getString(R.string.diy_edit_source_group_title, viewModel.groupName)
-                    if (viewModel.isAddGroup) {
-                        item.title = "+$group"
-                    } else {
-                        item.title = group
-                    }
-                }
-            }
-            noButton()
-        }
-    }
-
-    private fun upSelectText() {
-        if (viewModel.isSelectAll) {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_cancel_count,
-                viewModel.selectCount,
-                viewModel.allRules.size
-            )
-        } else {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_all_count,
-                viewModel.selectCount,
-                viewModel.allRules.size
-            )
-        }
-    }
-
-    override fun onCodeSave(code: String, requestId: String?) {
-        requestId?.toInt()?.let {
-            GSON.fromJsonObject<ReplaceRule>(code).getOrNull()?.let { rule ->
-                viewModel.allRules[it] = rule
-                adapter.setItem(it, rule)
-            }
-        }
-    }
-
-    inner class SourcesAdapter(context: Context) :
-        RecyclerAdapter<ReplaceRule, ItemSourceImportBinding>(context) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemSourceImportBinding {
-            return ItemSourceImportBinding.inflate(inflater, parent, false)
-        }
-
-        @SuppressLint("SetTextI18n")
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemSourceImportBinding,
-            item: ReplaceRule,
-            payloads: MutableList<Any>
-        ) {
-            binding.run {
-                cbSourceName.isChecked = viewModel.selectStatus[holder.layoutPosition]
-                cbSourceName.text = if (item.group.isNullOrBlank()) {
-                    item.name
-                } else {
-                    "${item.name}(${item.group})"
-                }
-                val localRule = viewModel.checkRules[holder.layoutPosition]
-                tvSourceState.text = when {
-                    localRule == null -> "新增"
-                    item.pattern != localRule.pattern
-                            || item.replacement != localRule.replacement
-                            || item.isRegex != localRule.isRegex
-                            || item.scope != localRule.scope -> "更新"
-                    else -> "已有"
-                }
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemSourceImportBinding) {
-            binding.run {
-                cbSourceName.setOnCheckedChangeListener { buttonView, isChecked ->
-                    if (buttonView.isPressed) {
-                        viewModel.selectStatus[holder.layoutPosition] = isChecked
-                        upSelectText()
-                    }
-                }
-                root.onClick {
-                    cbSourceName.isChecked = !cbSourceName.isChecked
-                    viewModel.selectStatus[holder.layoutPosition] = cbSourceName.isChecked
-                    upSelectText()
-                }
-                tvOpen.setOnClickListener {
-                    val source = viewModel.allRules[holder.layoutPosition]
-                    showDialogFragment(
-                        CodeDialog(
-                            GSON.toJson(source),
-                            disableEdit = false,
-                            requestId = holder.layoutPosition.toString()
-                        )
+            },
+            itemTitle = { r -> if (r.group.isNullOrBlank()) r.name else "${r.name}(${r.group})" },
+            onUpdateItem = { index, data ->
+                (data as? ReplaceRule)?.let { viewModel.allRules[index] = it }
+            },
+            topBarActions = {
+                var menuExpanded by remember { mutableStateOf(false) }
+                RoundDropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) { dismiss ->
+                    RoundDropdownMenuItem(
+                        text = stringResource(R.string.diy_source_group),
+                        onClick = {
+                            dismiss()
+                            showGroupDialog = true
+                        }
                     )
                 }
-            }
-        }
+                MediumTonalButton(
+                    modifier = Modifier.heightIn(min = 24.dp),
+                    icon = AppIcons.MoreVert,
+                    contentDescription = stringResource(R.string.menu),
+                    onClick = { menuExpanded = true }
+                )
+            },
+            onDismissRequest = { dismissAllowingStateLoss() }
+        )
 
+        if (showGroupDialog) {
+            CustomGroupDialog(
+                initialName = viewModel.groupName ?: "",
+                initialAddGroup = viewModel.isAddGroup,
+                onDismissRequest = { showGroupDialog = false },
+                onConfirm = { name, addGroup ->
+                    viewModel.groupName = name
+                    viewModel.isAddGroup = addGroup
+                    showGroupDialog = false
+                }
+            )
+        }
     }
 
+    @Composable
+    private fun CustomGroupDialog(
+        initialName: String,
+        initialAddGroup: Boolean,
+        onDismissRequest: () -> Unit,
+        onConfirm: (String, Boolean) -> Unit
+    ) {
+        var name by remember(initialName) { mutableStateOf(initialName) }
+        var addGroup by remember(initialAddGroup) { mutableStateOf(initialAddGroup) }
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = onDismissRequest,
+            title = stringResource(R.string.diy_edit_source_group),
+            confirmText = stringResource(android.R.string.ok),
+            onConfirm = { onConfirm(name.trim(), addGroup) },
+            dismissText = stringResource(android.R.string.cancel),
+            onDismiss = onDismissRequest
+        ) {
+            Column {
+                AppTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = stringResource(R.string.group_name),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+                SwitchSettingItem(
+                    title = stringResource(R.string.add_to_group),
+                    checked = addGroup,
+                    onCheckedChange = { addGroup = it }
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
 }

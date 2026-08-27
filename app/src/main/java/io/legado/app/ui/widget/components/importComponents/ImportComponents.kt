@@ -26,6 +26,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.compose.observeAsState
 import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
@@ -104,6 +107,100 @@ fun SourceInputDialog(
     )
 }
 
+/**
+ * 由遗留导入 ViewModel 的三组数据（全部条目、已存在对照、选中状态）构建统一的导入 UI 状态。
+ * [statusOf] 用于计算单条目的新增/更新/已有状态，随各实体类型不同。
+ */
+fun <T> associationImportState(
+    error: String?,
+    loaded: Boolean,
+    items: List<T>,
+    existing: List<T?>,
+    selected: List<Boolean>,
+    statusOf: (existing: T?, incoming: T) -> ImportStatus
+): BaseImportUiState<T> {
+    return when {
+        error != null -> BaseImportUiState.Error(error)
+        !loaded -> BaseImportUiState.Loading
+        else -> BaseImportUiState.Success(
+            source = "",
+            items = items.mapIndexed { index, data ->
+                ImportItemWrapper(
+                    data = data,
+                    oldData = existing.getOrNull(index),
+                    isSelected = selected.getOrNull(index) ?: true,
+                    status = statusOf(existing.getOrNull(index), data)
+                )
+            }
+        )
+    }
+}
+
+/**
+ * 遗留导入对话框（文件/订阅关联入口）共用的 Compose 承载内容。
+ * 直接以 [BatchImportDialog] 的 dialog 形态呈现，复用项目的选择/编辑/导入规范。
+ *
+ * @param items 全部待导入条目
+ * @param existing 与本地已存在条目的对照（可空）
+ * @param selected 选中状态列表（可变，直接在此处翻转）
+ * @param onImportSelect 提交导入，参数为导入完成后的回调
+ * @param statusOf 计算单条新增/更新/已有状态
+ */
+@Composable
+fun <T> ImportAssociationContent(
+    title: String,
+    items: List<T>,
+    existing: List<T?>,
+    selected: MutableList<Boolean>,
+    errorLiveData: LiveData<String>,
+    successLiveData: LiveData<Int>,
+    onImportSelect: (finally: () -> Unit) -> Unit,
+    statusOf: (existing: T?, incoming: T) -> ImportStatus,
+    itemTitle: (T) -> String,
+    itemSubtitle: (T) -> String? = { null },
+    onUpdateItem: (Int, T) -> Unit = { _, _ -> },
+    topBarActions: @Composable RowScope.() -> Unit = {},
+    onDismissRequest: () -> Unit
+) {
+    val error by errorLiveData.observeAsState()
+    val successCount by successLiveData.observeAsState(-1)
+    var refresh by remember { mutableIntStateOf(0) }
+
+    val importState = remember(refresh, error, successCount) {
+        associationImportState(
+            error = error,
+            loaded = successCount >= 0,
+            items = items,
+            existing = existing,
+            selected = selected,
+            statusOf = statusOf
+        )
+    }
+
+    BatchImportDialog(
+        asDialog = true,
+        title = title,
+        importState = importState,
+        onDismissRequest = onDismissRequest,
+        onConfirm = { onImportSelect(onDismissRequest) },
+        onToggleItem = { index ->
+            refresh++
+            selected[index] = !selected[index]
+        },
+        onToggleAll = { selectAll ->
+            refresh++
+            selected.forEachIndexed { index, _ -> selected[index] = selectAll }
+        },
+        onUpdateItem = { index, data ->
+            refresh++
+            onUpdateItem(index, data)
+        },
+        topBarActions = topBarActions,
+        itemTitle = itemTitle,
+        itemSubtitle = itemSubtitle
+    )
+}
+
 //TODO: 动画
 @SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +212,8 @@ fun <T> BatchImportDialog(
     onConfirm: (List<T>) -> Unit,
     onToggleItem: (index: Int) -> Unit,
     onToggleAll: (isSelected: Boolean) -> Unit,
+    /** 在 DialogFragment 等宿主中直接以 AppAlertDialog 形态呈现成功态，而非底部抽屉。 */
+    asDialog: Boolean = false,
     onItemInfoClick: (index: Int) -> Unit = {},
     onUpdateItem: (index: Int, data: T) -> Unit = { _, _ -> },
     topBarActions: @Composable RowScope.() -> Unit = {},
@@ -176,48 +275,9 @@ fun <T> BatchImportDialog(
         else -> title
     }
 
-    AppModalBottomSheet(
-        show = show,
-        onDismissRequest = onDismissRequest,
-        modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.8f),
-        title = sheetTitle,
-        startAction = if (isEditing) {
-            {
-                MediumTonalButton(
-                    onClick = { editingIndex = null },
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.back)
-                )
-            }
-        } else {
-            {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    topBarActions()
-                    MediumTonalButton(
-                        onClick = { onToggleAll(!allSelected) },
-                        icon = Icons.Default.SelectAll,
-                        contentDescription = stringResource(if (allSelected) R.string.deselect_all else R.string.select_all)
-                    )
-                }
-            }
-        },
-        endAction = if (!isEditing && selectedCount > 0) {
-            {
-                MediumTonalButton(
-                    onClick = {
-                        val selectedData = currentState.items.filter { it.isSelected }.map { it.data }
-                        onConfirm(selectedData)
-                    },
-                    icon = Icons.Default.FileDownload,
-                    text = stringResource(R.string.import_action)
-                )
-            }
-        } else {
-            null
-        }
-    ) {
+    val selectedData = currentState.items.filter { it.isSelected }.map { it.data }
+
+    val contentBody: @Composable () -> Unit = {
         if (isEditing) {
             BatchImportJsonEditContent(
                 data = editingItem.data,
@@ -261,6 +321,81 @@ fun <T> BatchImportDialog(
                 .navigationBarsPadding()
                 .height(8.dp)
         )
+    }
+
+    if (asDialog) {
+        AppAlertDialog(
+            show = show,
+            onDismissRequest = onDismissRequest,
+            title = sheetTitle,
+            titleAction = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isEditing) {
+                        MediumTonalButton(
+                            onClick = { editingIndex = null },
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    } else {
+                        topBarActions()
+                        MediumTonalButton(
+                            onClick = { onToggleAll(!allSelected) },
+                            icon = Icons.Default.SelectAll,
+                            contentDescription = stringResource(if (allSelected) R.string.deselect_all else R.string.select_all)
+                        )
+                    }
+                }
+            },
+            confirmText = stringResource(R.string.import_action),
+            onConfirm = if (!isEditing && selectedCount > 0) {
+                { onConfirm(selectedData) }
+            } else null,
+            dismissText = stringResource(android.R.string.cancel),
+            onDismiss = onDismissRequest,
+            content = contentBody
+        )
+    } else {
+        AppModalBottomSheet(
+            show = show,
+            onDismissRequest = onDismissRequest,
+            modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.8f),
+            title = sheetTitle,
+            startAction = if (isEditing) {
+                {
+                    MediumTonalButton(
+                        onClick = { editingIndex = null },
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back)
+                    )
+                }
+            } else {
+                {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        topBarActions()
+                        MediumTonalButton(
+                            onClick = { onToggleAll(!allSelected) },
+                            icon = Icons.Default.SelectAll,
+                            contentDescription = stringResource(if (allSelected) R.string.deselect_all else R.string.select_all)
+                        )
+                    }
+                }
+            },
+            endAction = if (!isEditing && selectedCount > 0) {
+                {
+                    MediumTonalButton(
+                        onClick = { onConfirm(selectedData) },
+                        icon = Icons.Default.FileDownload,
+                        text = stringResource(R.string.import_action)
+                    )
+                }
+            } else {
+                null
+            }
+        ) {
+            contentBody()
+        }
     }
 }
 
