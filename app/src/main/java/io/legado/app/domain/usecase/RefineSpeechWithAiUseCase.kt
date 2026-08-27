@@ -28,6 +28,8 @@ import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.Uuid
 import java.util.concurrent.ConcurrentHashMap
 
@@ -50,6 +52,18 @@ class RefineSpeechWithAiUseCase(
      * 分镜页「重新分析」会调用 [clearAiCooldown] 主动解除，避免被冷却挡住。
      */
     private val bookAiCooldownUntil = ConcurrentHashMap<String, Long>()
+
+    /**
+     * 同一本书的 AI 分析串行锁。
+     *
+     * 朗读服务起播和分镜页点开当前章会并发调用本 use case，而「冷却判断 → AI 调用 → 冷却写入」
+     * 之间不是原子的。多个并发请求都会先通过冷却检查、各自发一次完整 AI 请求（每个还带 3 次
+     * 内部重试），于是出现「同一章 AI 失败回落规则弹好几次、一直转圈」。
+     *
+     * 用按 bookUrl 的锁把整段包住：第一个请求跑 AI，其余在锁上等待，进入后发现冷却已置位就直接
+     * 回落规则，不再重发 AI。
+     */
+    private val bookLocks = ConcurrentHashMap<String, Mutex>()
 
     fun clearAiCooldown(bookUrl: String) {
         bookAiCooldownUntil.remove(bookUrl)
@@ -81,58 +95,63 @@ class RefineSpeechWithAiUseCase(
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
         val bookUrl = analysisResult.analysis.bookUrl
-        if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return analysisResult
-        if (
-            mode == SpeechAnalysisMode.AiUnderstanding &&
-            analysisResult.fromCache &&
-            analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
-        ) return analysisResult
-        val profiles = knownProfiles(analysisResult.analysis.bookUrl)
-        val preset = resolvePreset()
-        val refined = try {
-            when (mode) {
-                SpeechAnalysisMode.Rule -> analysisResult.segments
-                SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
-                    analysisResult = analysisResult,
-                    profiles = profiles,
-                    preset = preset,
-                    now = now,
-                )
-                SpeechAnalysisMode.AiUnderstanding -> {
-                    if (analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
-                        completeRuleSegments(analysisResult, profiles, preset, now)
-                    } else {
-                        understandAtoms(analysisResult, paragraphs, profiles, preset, now)
+        // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
+        // 避免朗读与分镜页并发各自发一次 AI（竞态下冷却还没写入就都通过了检查）。
+        val guard = bookLocks.getOrPut(bookUrl) { Mutex() }
+        return guard.withLock {
+            if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return@withLock analysisResult
+            if (
+                mode == SpeechAnalysisMode.AiUnderstanding &&
+                analysisResult.fromCache &&
+                analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
+            ) return@withLock analysisResult
+            val profiles = knownProfiles(analysisResult.analysis.bookUrl)
+            val preset = resolvePreset()
+            val refined = try {
+                when (mode) {
+                    SpeechAnalysisMode.Rule -> analysisResult.segments
+                    SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
+                        analysisResult = analysisResult,
+                        profiles = profiles,
+                        preset = preset,
+                        now = now,
+                    )
+                    SpeechAnalysisMode.AiUnderstanding -> {
+                        if (analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
+                            completeRuleSegments(analysisResult, profiles, preset, now)
+                        } else {
+                            understandAtoms(analysisResult, paragraphs, profiles, preset, now)
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却
+                throw e
+            } catch (e: Throwable) {
+                markAiFailed(analysisResult, e, now)
+                bookAiCooldownUntil[bookUrl] = now + AI_FAILURE_COOLDOWN_MS
+                throw e
             }
-        } catch (e: CancellationException) {
-            // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却
-            throw e
-        } catch (e: Throwable) {
-            markAiFailed(analysisResult, e, now)
-            bookAiCooldownUntil[bookUrl] = now + AI_FAILURE_COOLDOWN_MS
-            throw e
+            val status = if (refined.any { segment ->
+                    segment.characterId == null && segment.roleType in setOf(
+                        SpeechRoleType.Character,
+                        SpeechRoleType.Thought,
+                    )
+                }) {
+                SpeechAnalysisStatus.Partial
+            } else {
+                SpeechAnalysisStatus.Success
+            }
+            val analysis = analysisResult.analysis.copy(status = status, error = "", updatedAt = now)
+            chapterSpeechGateway.saveAnalysis(analysis, refined)
+            // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
+            bookAiCooldownUntil.remove(bookUrl)
+            analysisResult.copy(
+                analysis = analysis,
+                segments = refined,
+                fromCache = false,
+            )
         }
-        val status = if (refined.any { segment ->
-                segment.characterId == null && segment.roleType in setOf(
-                    SpeechRoleType.Character,
-                    SpeechRoleType.Thought,
-                )
-            }) {
-            SpeechAnalysisStatus.Partial
-        } else {
-            SpeechAnalysisStatus.Success
-        }
-        val analysis = analysisResult.analysis.copy(status = status, error = "", updatedAt = now)
-        chapterSpeechGateway.saveAnalysis(analysis, refined)
-        // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
-        bookAiCooldownUntil.remove(bookUrl)
-        return analysisResult.copy(
-            analysis = analysis,
-            segments = refined,
-            fromCache = false,
-        )
     }
 
     /**

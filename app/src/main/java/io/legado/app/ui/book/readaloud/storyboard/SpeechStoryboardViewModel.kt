@@ -132,10 +132,22 @@ class SpeechStoryboardViewModel(
             }
             try {
                 val isCurrent = chapterIndex == currentChapterIndex()
-                val plan = if (isCurrent) {
-                    currentChapterPlan(chapterIndex, reanalyze)
-                } else {
-                    cachedChapterPlan(chapterIndex)
+                val plan = when {
+                    reanalyze && isCurrent -> currentChapterPlan(chapterIndex, true)
+                    isCurrent -> {
+                        // 朗读期间这章的分析已经落在库里，直接读缓存即可，
+                        // 避免和正在进行的朗读并发再发一次 AI（重复生成 / 一直转圈）。
+                        // 只有库里还没有这章分析结果（比如还没起播就先进分镜页看）时才跑完整链路。
+                        val cached = withContext(Dispatchers.IO) {
+                            chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
+                        }
+                        if (cached.isNotEmpty()) {
+                            cachedChapterPlan(chapterIndex)
+                        } else {
+                            currentChapterPlan(chapterIndex, false)
+                        }
+                    }
+                    else -> cachedChapterPlan(chapterIndex)
                 }
                 _uiState.update {
                     it.copy(
