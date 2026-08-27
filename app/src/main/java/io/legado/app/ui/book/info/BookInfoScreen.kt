@@ -3,6 +3,7 @@ package io.legado.app.ui.book.info
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -15,6 +16,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -78,6 +80,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -86,6 +89,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -94,6 +98,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -1512,6 +1517,15 @@ private fun BookInfoIntro(
     val collapsedMaxHeight = 132.dp
     val density = LocalDensity.current
     var isOverflowing by remember(intro) { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val copyText = when (val c = content) {
+        is BookInfoIntroContent.Web -> c.html
+        is BookInfoIntroContent.Html -> c.html
+        is BookInfoIntroContent.Markdown -> c.markdown
+        is BookInfoIntroContent.Plain -> c.text
+        null -> ""
+    }
 
     val introContent: @Composable () -> Unit = {
         when (val c = content) {
@@ -1540,7 +1554,19 @@ private fun BookInfoIntro(
                 collapsedMaxHeight = collapsedMaxHeight,
                 density = density,
                 onOverflowingChange = { isOverflowing = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = { if (isOverflowing) expanded = !expanded },
+                        onLongClick = {
+                            if (copyText.isNotBlank()) {
+                                clipboardManager.setText(AnnotatedString(copyText))
+                                Toast
+                                    .makeText(context, R.string.copy_complete, Toast.LENGTH_SHORT)
+                                    .show()
+                            }
+                        },
+                    ),
                 content = introContent,
             )
             if (!expanded && isOverflowing) {
@@ -1596,9 +1622,10 @@ private fun IntroCollapsibleLayout(
 ) {
     val maxHeightPx = with(density) { collapsedMaxHeight.roundToPx() }
     val lastOverflowing = remember { mutableStateOf(false) }
+    // 同一 Measurable 只能 measure 一次，折叠态溢出用裁剪截断，不能再 measure 一次。
     Layout(
         content = content,
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
     ) { measurables, constraints ->
         val measurable = measurables.first()
         val natural = measurable.measure(constraints.copy(maxHeight = Constraints.Infinity))
@@ -1608,17 +1635,12 @@ private fun IntroCollapsibleLayout(
             !overflowing -> natural.height
             else -> maxHeightPx
         }
-        val placeable = if (finalHeight == natural.height) {
-            natural
-        } else {
-            measurable.measure(constraints.copy(maxHeight = finalHeight))
-        }
         if (overflowing != lastOverflowing.value) {
             lastOverflowing.value = overflowing
             onOverflowingChange(overflowing)
         }
-        layout(placeable.width, finalHeight) {
-            placeable.placeRelative(0, 0)
+        layout(natural.width, finalHeight) {
+            natural.placeRelative(0, 0)
         }
     }
 }

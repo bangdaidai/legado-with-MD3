@@ -600,13 +600,13 @@ internal fun MemoryBookCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
                         .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 4.dp),
+                        .padding(top = 4.dp, bottom = 0.dp),
                 ) { tagsContent() }
             } else {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 0.dp),
                 ) { tagsContent() }
             }
             val showIntroInline = showIntro && intro != null
@@ -620,7 +620,7 @@ internal fun MemoryBookCard(
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = resolvedInlineIntroMaxLines,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
                 )
             }
             if (showIntroInline && showReviewInline) {
@@ -635,7 +635,7 @@ internal fun MemoryBookCard(
                     text = memory.review.orEmpty(),
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
                 )
             }
         },
