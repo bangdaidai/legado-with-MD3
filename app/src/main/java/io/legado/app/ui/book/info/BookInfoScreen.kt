@@ -3,7 +3,6 @@ package io.legado.app.ui.book.info
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.widget.Toast
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -19,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,7 +89,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -1427,7 +1426,7 @@ private fun BookInfoSummary(
         modifier = Modifier
             .fillMaxWidth()
             .background(LegadoTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         AnimatedTextLine(
@@ -1537,14 +1536,6 @@ private fun BookInfoIntro(
     val collapsedMaxHeight = 132.dp
     val density = LocalDensity.current
     var isOverflowing by remember(intro) { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
-    val copyText = when (val c = content) {
-        is BookInfoIntroContent.Web -> c.html
-        is BookInfoIntroContent.Html -> c.html
-        is BookInfoIntroContent.Markdown -> c.markdown
-        is BookInfoIntroContent.Plain -> c.text
-        null -> ""
-    }
 
     val introContent: @Composable () -> Unit = {
         when (val c = content) {
@@ -1594,26 +1585,16 @@ private fun BookInfoIntro(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            IntroCollapsibleLayout(
-                expanded = expanded,
-                collapsedMaxHeight = collapsedMaxHeight,
-                density = density,
-                onOverflowingChange = { isOverflowing = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = { if (isOverflowing) expanded = !expanded },
-                        onLongClick = {
-                            if (copyText.isNotBlank()) {
-                                clipboardManager.setText(AnnotatedString(copyText))
-                                Toast
-                                    .makeText(context, R.string.copy_complete, Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        },
-                    ),
-                content = introContent,
-            )
+            SelectionContainer {
+                IntroCollapsibleLayout(
+                    expanded = expanded,
+                    collapsedMaxHeight = collapsedMaxHeight,
+                    density = density,
+                    onOverflowingChange = { isOverflowing = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    content = introContent,
+                )
+            }
             if (!expanded && isOverflowing) {
                 Box(
                     modifier = Modifier
@@ -1631,7 +1612,17 @@ private fun BookInfoIntro(
                 )
             }
         }
-
+        if (isOverflowing) {
+            AppText(
+                text = stringResource(if (expanded) R.string.collapse else R.string.expand),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 4.dp)
+            )
+        }
     }
 }
 
@@ -1924,7 +1915,7 @@ private fun RelatedBooksBanner(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(
@@ -1985,7 +1976,7 @@ private fun OtherWorksSection(
             onPickScope = onPickScope,
         )
         when (val s = state) {
-            OtherWorksState.Idle -> WorksHint(stringResource(R.string.author_works_idle))
+            OtherWorksState.Idle -> { /* 未发起搜索时不显示提示语 */ }
             is OtherWorksState.Searching -> WorksHint(
                 stringResource(R.string.author_works_searching, s.processed, s.total),
             )
