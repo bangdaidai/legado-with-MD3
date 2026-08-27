@@ -11,7 +11,7 @@ data class ShareCardManageUiState(
     val groups: ImmutableList<String> = persistentListOf(),
     val selectedGroup: String? = null,
     val templates: ImmutableList<ShareCardTemplate> = persistentListOf(),
-    val defaultTemplateId: Long = 0L,
+    val defaultByGroup: Map<String, Long> = emptyMap(),
     val editing: ShareCardTemplate? = null,
     val previewTemplate: ShareCardTemplate? = null,
     val showGroupManage: Boolean = false,

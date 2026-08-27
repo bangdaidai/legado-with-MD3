@@ -202,12 +202,12 @@ fun ShareCardManageScreen(
                                 if (isNotEmpty()) append(" · ")
                                 append("内置")
                             }
-                            if (template.id == state.defaultTemplateId) {
+                            if (template.id == state.defaultByGroup[template.groupName]) {
                                 if (isNotEmpty()) append(" · ")
                                 append("默认")
                             }
                         }.ifBlank { null },
-                        isSelected = template.id == state.defaultTemplateId,
+                        isSelected = template.id == state.defaultByGroup[template.groupName],
                         onToggleSelection = {
                             onIntent(ShareCardManageIntent.SetDefault(template.id))
                         },

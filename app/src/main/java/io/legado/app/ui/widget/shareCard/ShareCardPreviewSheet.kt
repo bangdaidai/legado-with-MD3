@@ -189,9 +189,13 @@ fun ShareCardPreviewSheet(
             templates.filter { allowedGroups.contains(it.groupName) }
         }
         if (selectedTemplateId == 0L) {
-            val saved = withContext(Dispatchers.IO) {
-                shareCardRepository.getSelectedTemplateId(scene?.key)
-            }
+            val groupDefault = if (scene != null) {
+                withContext(Dispatchers.IO) {
+                    shareCardRepository.getFirstGroupDefaultForScene(scene.key)
+                }
+            } else 0L
+            val saved = groupDefault.takeIf { it != 0L }
+                ?: withContext(Dispatchers.IO) { shareCardRepository.getSelectedTemplateId(scene?.key) }
             selectedTemplateId = visibleTemplates.firstOrNull { it.id == saved }?.id
                 ?: visibleTemplates.firstOrNull {
                     it.isBuiltin && it.groupName == ShareCardTemplate.DEFAULT_GROUP_BOOK

@@ -60,7 +60,7 @@ class ShareCardRepository(
 
     // endregion
 
-    // region 偏好：选中的模板 ID（支持按场景区分）
+    // region 偏好：选中的模板 ID（按场景记忆上次使用的模板）
 
     fun getSelectedTemplateId(sceneKey: String? = null): Long {
         val key = if (sceneKey != null) "${PREF_SELECTED_TEMPLATE_ID}_$sceneKey" else PREF_SELECTED_TEMPLATE_ID
@@ -74,13 +74,55 @@ class ShareCardRepository(
 
     // endregion
 
-    // region 偏好：选中的模板 ID
+    // region 偏好：每个分组的默认模板（分组名 -> 默认模板 ID；空分组名 "" 表示未分组/全局默认）
 
-    fun getSelectedTemplateId(): Long =
-        AppConfigStore.getLong(PREF_SELECTED_TEMPLATE_ID) ?: 0L
+    private const val PREF_GROUP_DEFAULT_MAP = "shareCardGroupDefaultMap"
 
-    fun setSelectedTemplateId(id: Long) {
-        AppConfigStore.putLong(PREF_SELECTED_TEMPLATE_ID, id)
+    /** 分组名 -> 该分组的默认模板 ID。 */
+    fun getGroupDefaultMap(): Map<String, Long> {
+        val json = AppConfigStore.getString(PREF_GROUP_DEFAULT_MAP) ?: return emptyMap()
+        return GSON.fromJsonObject<Map<String, Long>>(json).getOrNull() ?: emptyMap()
+    }
+
+    private fun setGroupDefaultMap(map: Map<String, Long>) {
+        AppConfigStore.putString(PREF_GROUP_DEFAULT_MAP, GSON.toJson(map))
+    }
+
+    /** 取某分组的默认模板 ID；空分组未设置时回退到旧版全局默认。 */
+    fun getSelectedTemplateIdForGroup(group: String): Long {
+        val map = getGroupDefaultMap()
+        map[group]?.let { return it }
+        if (group == "") return AppConfigStore.getLong(PREF_SELECTED_TEMPLATE_ID) ?: 0L
+        return 0L
+    }
+
+    fun setSelectedTemplateIdForGroup(group: String, id: Long) {
+        val map = getGroupDefaultMap().toMutableMap()
+        map[group] = id
+        setGroupDefaultMap(map)
+        // 空分组（未分组）默认同时写旧版全局键，保证无分组场景的回退一致
+        if (group == "") AppConfigStore.putLong(PREF_SELECTED_TEMPLATE_ID, id)
+    }
+
+    fun renameGroupDefaultKey(oldName: String, newName: String) {
+        val map = getGroupDefaultMap().toMutableMap()
+        val value = map.remove(oldName) ?: return
+        map[newName] = value
+        setGroupDefaultMap(map)
+    }
+
+    fun removeGroupDefaultKey(group: String) {
+        val map = getGroupDefaultMap().toMutableMap()
+        if (map.remove(group) != null) setGroupDefaultMap(map)
+    }
+
+    /** 场景绑定的分组里取第一个有默认的分组默认；未绑定分组则取空分组（全局）默认。 */
+    fun getFirstGroupDefaultForScene(sceneKey: String): Long {
+        val map = getGroupDefaultMap()
+        for (group in getGroupsForScene(sceneKey)) {
+            map[group]?.let { return it }
+        }
+        return map[""] ?: (AppConfigStore.getLong(PREF_SELECTED_TEMPLATE_ID) ?: 0L)
     }
 
     // endregion

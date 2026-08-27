@@ -22,7 +22,7 @@ class ShareCardManageViewModel(
 
     private val _uiState = MutableStateFlow(
         ShareCardManageUiState(
-            defaultTemplateId = repository.getSelectedTemplateId()
+            defaultByGroup = repository.getGroupDefaultMap()
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -86,6 +86,7 @@ class ShareCardManageViewModel(
                     groups = groups.toImmutableList(),
                     templates = templates.toImmutableList(),
                     sceneGroupMap = sceneMap,
+                    defaultByGroup = repository.getGroupDefaultMap(),
                 )
             }
         }
@@ -104,8 +105,12 @@ class ShareCardManageViewModel(
     }
 
     private fun setDefault(id: Long) {
-        _uiState.update { it.copy(defaultTemplateId = id) }
-        repository.setSelectedTemplateId(id)
+        val template = _uiState.value.templates.firstOrNull { it.id == id } ?: return
+        val group = template.groupName
+        repository.setSelectedTemplateIdForGroup(group, id)
+        _uiState.update {
+            it.copy(defaultByGroup = it.defaultByGroup.toMutableMap().apply { put(group, id) })
+        }
     }
 
     private fun saveTemplate(name: String, html: String, group: String) {
@@ -152,6 +157,7 @@ class ShareCardManageViewModel(
             withContext(Dispatchers.IO) {
                 repository.updateGroupName(oldName, newName)
                 repository.renameSceneGroupKey(oldName, newName)
+                repository.renameGroupDefaultKey(oldName, newName)
             }
             // update selectedGroup if it was renamed
             _uiState.update {
@@ -166,6 +172,7 @@ class ShareCardManageViewModel(
             withContext(Dispatchers.IO) {
                 repository.deleteByGroupName(group)
                 repository.removeSceneGroupKey(group)
+                repository.removeGroupDefaultKey(group)
             }
             _uiState.update {
                 it.copy(selectedGroup = if (it.selectedGroup == group) null else it.selectedGroup)
@@ -213,6 +220,7 @@ class ShareCardManageViewModel(
                 groups = groups.toImmutableList(),
                 templates = templates.toImmutableList(),
                 sceneGroupMap = sceneMap,
+                defaultByGroup = repository.getGroupDefaultMap(),
             )
         }
     }
