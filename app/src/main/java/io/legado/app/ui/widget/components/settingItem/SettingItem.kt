@@ -111,7 +111,7 @@ fun SettingItem(
                         onLongClick?.invoke()
                     }
                 ),
-            verticalAlignment = if (hasSupporting) Alignment.Top else Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (painter != null || imageVector != null) {
                 when {

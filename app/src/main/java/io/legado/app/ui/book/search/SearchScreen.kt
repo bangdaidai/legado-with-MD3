@@ -43,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -714,57 +713,52 @@ fun SearchScreen(
             )
 
             NormalCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(vertical = 12.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppIcon(Icons.Default.Layers, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        AppText(
-                            text = stringResource(R.string.search_type),
-                            style = LegadoTheme.typography.titleSmall
-                        )
-                    }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIcon(Icons.Default.Layers, contentDescription = null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    AppText(
+                        text = stringResource(R.string.search_type),
+                        style = LegadoTheme.typography.titleMedium
+                    )
+                }
+            }
 
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        SelectionItemCard(
-                            title = stringResource(R.string.all),
-                            isSelected = state.selectedSourceTypes.isEmpty(),
-                            containerColor = Color.Transparent,
-                            elevation = 0.dp,
-                            inSelectionMode = true,
-                            onToggleSelection = {
-                                if (state.selectedSourceTypes.isNotEmpty()) {
-                                    state.selectedSourceTypes.forEach {
-                                        onIntent(SearchIntent.ToggleSourceType(it))
-                                    }
-                                }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                SelectionItemCard(
+                    title = stringResource(R.string.all),
+                    isSelected = state.selectedSourceTypes.isEmpty(),
+                    containerColor = LegadoTheme.colorScheme.onSheetContent,
+                    inSelectionMode = true,
+                    onToggleSelection = {
+                        if (state.selectedSourceTypes.isNotEmpty()) {
+                            state.selectedSourceTypes.forEach {
+                                onIntent(SearchIntent.ToggleSourceType(it))
                             }
-                        )
-
-                        listOf(
-                            0 to stringResource(R.string.noval),
-                            2 to stringResource(R.string.manga),
-                            1 to stringResource(R.string.audio),
-                        ).forEach { (type, label) ->
-                            SelectionItemCard(
-                                title = label,
-                                isSelected = state.selectedSourceTypes.contains(type),
-                                containerColor = Color.Transparent,
-                                elevation = 0.dp,
-                                inSelectionMode = true,
-                                onToggleSelection = {
-                                    onIntent(SearchIntent.ToggleSourceType(type))
-                                }
-                            )
                         }
                     }
+                )
+
+                listOf(
+                    0 to stringResource(R.string.noval),
+                    2 to stringResource(R.string.manga),
+                    1 to stringResource(R.string.audio),
+                ).forEach { (type, label) ->
+                    SelectionItemCard(
+                        title = label,
+                        isSelected = state.selectedSourceTypes.contains(type),
+                        containerColor = LegadoTheme.colorScheme.onSheetContent,
+                        inSelectionMode = true,
+                        onToggleSelection = {
+                            onIntent(SearchIntent.ToggleSourceType(type))
+                        }
+                    )
                 }
             }
 
