@@ -9,17 +9,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -81,120 +82,117 @@ fun SettingItem(
             containerColor = color ?: MaterialTheme.colorScheme.surfaceContainerLow
         ),
     ) {
-        Column {
-            ListItem(
-                modifier = Modifier
-                    .semantics(mergeDescendants = true) {
-                        semanticRole?.let { role = it }
-                        semanticStateDescription?.let { stateDescription = it }
-                        semanticToggleState?.let {
-                            toggleableState = if (it) ToggleableState.On else ToggleableState.Off
-                        }
-                        if (!enabled) disabled()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = if (hasSupporting) 12.dp else 14.dp
+                )
+                .semantics(mergeDescendants = true) {
+                    semanticRole?.let { role = it }
+                    semanticStateDescription?.let { stateDescription = it }
+                    semanticToggleState?.let {
+                        toggleableState = if (it) ToggleableState.On else ToggleableState.Off
                     }
-                    .combinedClickable(
-                        enabled = enabled,
-                        role = semanticRole,
-                        onClick = {
-                            when {
-                                dropdownMenu != null -> showMenu = true
-                                isExpandable -> onExpandChange.invoke(!expanded)
-                                else -> onClick?.invoke()
-                            }
-                        },
-                        onLongClick = {
-                            if (dropdownMenu != null) showMenu = true
-                            onLongClick?.invoke()
+                    if (!enabled) disabled()
+                }
+                .combinedClickable(
+                    enabled = enabled,
+                    role = semanticRole,
+                    onClick = {
+                        when {
+                            dropdownMenu != null -> showMenu = true
+                            isExpandable -> onExpandChange.invoke(!expanded)
+                            else -> onClick?.invoke()
                         }
-                    ),
-                leadingContent = if (painter != null || imageVector != null) {
-                    {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .wrapContentHeight(
-                                    if (hasSupporting) Alignment.Top else Alignment.CenterVertically
-                                )
-                        ) {
-                            if (painter != null) {
-                                Icon(
-                                    painter = painter,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else if (imageVector != null) {
-                                Icon(
-                                    imageVector = imageVector,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    },
+                    onLongClick = {
+                        if (dropdownMenu != null) showMenu = true
+                        onLongClick?.invoke()
                     }
-                } else null,
-                supportingContent = null,
-                trailingContent = {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (isExpandable && trailingContent == null) {
-                            val rotation by animateFloatAsState(
-                                if (expanded) 180f else 0f,
-                                label = "arrow"
-                            )
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = null,
-                                modifier = Modifier.rotate(rotation)
-                            )
-                        } else {
-                            trailingContent?.invoke()
-                        }
-
-                        dropdownMenu?.let { menu ->
-                            RoundDropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false }) {
-                                menu { showMenu = false }
-                            }
-                        }
-                    }
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    AppText(
-                        text = title,
-                        style = LegadoTheme.typography.titleMedium
+                ),
+            verticalAlignment = if (hasSupporting) Alignment.Top else Alignment.CenterVertically,
+        ) {
+            if (painter != null || imageVector != null) {
+                if (painter != null) {
+                    Icon(
+                        painter = painter,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
                     )
-                    description?.let {
-                        AppText(
-                            it,
-                            style = LegadoTheme.typography.bodySmallEmphasized,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                    option?.let {
-                        AppText(
-                            it,
-                            style = LegadoTheme.typography.labelMediumEmphasized,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                } else {
+                    Icon(
+                        imageVector = imageVector,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                AppText(
+                    text = title,
+                    style = LegadoTheme.typography.titleMedium
+                )
+                description?.let {
+                    AppText(
+                        it,
+                        style = LegadoTheme.typography.bodySmallEmphasized,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                option?.let {
+                    AppText(
+                        it,
+                        style = LegadoTheme.typography.labelMediumEmphasized,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(contentAlignment = Alignment.Center) {
+                if (isExpandable && trailingContent == null) {
+                    val rotation by animateFloatAsState(
+                        if (expanded) 180f else 0f,
+                        label = "arrow"
+                    )
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        modifier = Modifier.rotate(rotation)
+                    )
+                } else {
+                    trailingContent?.invoke()
+                }
+
+                dropdownMenu?.let { menu ->
+                    RoundDropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }) {
+                        menu { showMenu = false }
                     }
                 }
             }
+        }
 
-            if (isExpandable) {
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically(expandFrom = Alignment.Top),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Top)
+        if (isExpandable) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(expandFrom = Alignment.Top),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 8.dp)
-                    ) {
-                        expandContent.invoke(this)
-                    }
+                    expandContent.invoke(this)
                 }
             }
         }
