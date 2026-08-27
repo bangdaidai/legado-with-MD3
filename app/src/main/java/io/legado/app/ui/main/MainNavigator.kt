@@ -157,7 +157,8 @@ object MainNavigator {
                     currentRoute is MainRouteSearch ||
                     currentRoute is MainRouteReadingMemory ||
                     currentRoute is MainRouteReadingMemoryDetail ||
-                    currentRoute is MainRouteAuthorDetail
+                    currentRoute is MainRouteAuthorDetail ||
+                    currentRoute is MainRouteBookSourceManage
                 ) {
                     backStack.add(route)
                 } else {
@@ -176,7 +177,8 @@ object MainNavigator {
                     currentRoute is MainRouteReadingMemory ||
                     currentRoute is MainRouteReadingMemoryDetail ||
                     currentRoute is MainRouteReadManga ||
-                    currentRoute is MainRouteAuthorDetail
+                    currentRoute is MainRouteAuthorDetail ||
+                    currentRoute is MainRouteCache
                 ) {
                     backStack.add(route)
                 } else {

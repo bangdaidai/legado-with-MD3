@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -49,8 +48,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,8 +94,8 @@ import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.SettingCard
 import io.legado.app.ui.widget.components.card.TextCard
-import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.checkBox.AppCheckbox
+import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.heatmap.HeatmapCalendarEndAction
 import io.legado.app.ui.widget.components.heatmap.HeatmapCalendarStartAction
 import io.legado.app.ui.widget.components.heatmap.HeatmapMode
@@ -117,10 +116,10 @@ import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.StringUtils.formatFriendlyDate
 import io.legado.app.utils.formatReadDuration
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -388,7 +387,7 @@ fun ReadRecordScreen(
 
                 "CONTENT" -> {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
+                        FastScrollLazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = adaptiveContentPaddingOnlyVertical(
@@ -635,8 +634,12 @@ fun ReadRecordScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
                         ) {
-                            Box(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                Column(modifier = Modifier.fillMaxWidth().padding(end = 48.dp)) {
+                            Box(modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)) {
+                                Column(modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 48.dp)) {
                                     AppText(text = candidate.bookName)
                                     AppText(
                                         text = author,
