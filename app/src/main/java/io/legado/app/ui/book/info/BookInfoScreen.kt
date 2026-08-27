@@ -1587,22 +1587,6 @@ private fun BookInfoIntro(
             }
         }
 
-        if (isOverflowing) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                SmallTonalButton(
-                    onClick = { expanded = !expanded },
-                    icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) {
-                        stringResource(R.string.collapse)
-                    } else {
-                        stringResource(R.string.expand)
-                    },
-                )
-            }
-        }
     }
 }
 
@@ -1966,7 +1950,7 @@ private fun OtherWorksSection(
             )
             is OtherWorksState.Success -> Column(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 s.books.forEach { book ->
                     SearchBookListItem(
