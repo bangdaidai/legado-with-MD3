@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -115,15 +114,15 @@ fun SettingItem(
             verticalAlignment = if (hasSupporting) Alignment.Top else Alignment.CenterVertically,
         ) {
             if (painter != null || imageVector != null) {
-                if (painter != null) {
-                    Icon(
+                when {
+                    painter != null -> Icon(
                         painter = painter,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(24.dp)
                     )
-                } else {
-                    Icon(
+
+                    imageVector != null -> Icon(
                         imageVector = imageVector,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,

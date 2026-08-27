@@ -76,7 +76,7 @@ class ShareCardRepository(
 
     // region 偏好：每个分组的默认模板（分组名 -> 默认模板 ID；空分组名 "" 表示未分组/全局默认）
 
-    private const val PREF_GROUP_DEFAULT_MAP = "shareCardGroupDefaultMap"
+    private val PREF_GROUP_DEFAULT_MAP = "shareCardGroupDefaultMap"
 
     /** 分组名 -> 该分组的默认模板 ID。 */
     fun getGroupDefaultMap(): Map<String, Long> {
