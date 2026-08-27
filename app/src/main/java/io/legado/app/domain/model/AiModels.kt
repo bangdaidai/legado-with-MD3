@@ -374,7 +374,33 @@ data class AiGenerateRequest(
     val params: AiGenerationParams = AiGenerationParams(),
     val tools: List<AiToolDefinition> = emptyList(),
     val toolContext: AiToolContext? = null,
+    /**
+     * 业务场景标识（见 [AiTaskType]）。用于 AI 日志区分「这次调用是为了什么」，
+     * 与底层协议/调用方式（generate/stream）无关。落库时由仓库层映射成中文场景名。
+     */
+    val taskType: String? = null,
 )
+
+/**
+ * 把业务场景标识（[AiTaskType]）映射成日志展示用的中文场景名。
+ * 返回 null 表示无法识别，调用方应回退到技术调用类型标签。
+ */
+fun aiTaskSceneLabel(taskType: String?): String? = when (taskType) {
+    AiTaskType.CHAT -> "AI 对话"
+    AiTaskType.TRANSLATE_CHAPTER -> "章节翻译"
+    AiTaskType.SUMMARIZE_CHAPTER -> "章节摘要"
+    AiTaskType.SUMMARIZE_BOOK -> "书籍摘要"
+    AiTaskType.EXPLAIN_SELECTION -> "选中内容讲解"
+    AiTaskType.CLEAN_SELECTION -> "清理选中文本"
+    AiTaskType.TEXT_FACTORY -> "文本工厂"
+    AiTaskType.REWRITE_TEXT -> "文本改写"
+    AiTaskType.ANALYZE_SPEECH -> "语音润色"
+    AiTaskType.IDENTIFY_CHARACTERS -> "角色识别"
+    AiTaskType.BOOKSHELF_AUTO_GROUP -> "书架自动分组"
+    AiTaskType.AUTHOR_BIO -> "作者简介生成"
+    AiTaskType.TOC_RULE -> "目录规则生成"
+    else -> null
+}
 
 @Keep
 data class AiToolContext(

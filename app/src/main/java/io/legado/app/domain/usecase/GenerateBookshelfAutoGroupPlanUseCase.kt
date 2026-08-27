@@ -180,6 +180,7 @@ class GenerateBookshelfAutoGroupPlanUseCase(
                     AiMessage(AiMessageRole.USER, prompt),
                 ),
                 params = autoGroupParams(preset, options),
+                taskType = AiTaskType.BOOKSHELF_AUTO_GROUP,
             )
         ).getOrThrow().text
         return parser.parse(

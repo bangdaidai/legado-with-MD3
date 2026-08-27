@@ -61,6 +61,7 @@ class GenerateAuthorBioUseCase(
                         ),
                     ),
                     params = preset.params.copy(webSearch = hasNativeWebSearch),
+                    taskType = AiTaskType.AUTHOR_BIO,
                 )
             ).getOrThrow()
             val bio = response.text.trim().ifEmpty { error("AI returned empty text") }

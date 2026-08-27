@@ -77,6 +77,7 @@ class GenerateTocRuleUseCase(
                     AiMessage(AiMessageRole.USER, userContent),
                 ),
                 params = preset.params,
+                taskType = AiTaskType.TOC_RULE,
             )
         ).getOrThrow()
         return response.text.ifBlank { error("AI returned empty text") }

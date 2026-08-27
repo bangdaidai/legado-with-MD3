@@ -47,7 +47,8 @@ class AiChatGenerationUseCase(
             params = preset.params.copy(
                 reasoningLevel = reasoningLevel.resolveModelDefault(preset.params.reasoningLevel)
             ),
-            tools = aiToolGateway.availableTools()
+            tools = aiToolGateway.availableTools(),
+            taskType = AiTaskType.CHAT,
         )
     }
 
@@ -137,7 +138,8 @@ class AiChatGenerationUseCase(
             messages = listOf(AiMessage(AiMessageRole.USER, prompt)),
             params = preset.params.copy(
                 reasoningLevel = reasoningLevel.resolveModelDefault(preset.params.reasoningLevel)
-            )
+            ),
+            taskType = AiTaskType.CHAT,
         )
         val result = aiTextGateway.generate(request)
         return result.getOrNull()?.text?.trim()?.take(30) ?: userContent.take(20)

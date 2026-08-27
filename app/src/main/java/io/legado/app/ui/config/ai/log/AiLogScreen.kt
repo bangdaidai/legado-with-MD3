@@ -129,7 +129,7 @@ fun AiLogScreen(
     }
 }
 
-private fun AiLogItemUi.stableKey(): String = "$timeText|$kind|$provider|$model"
+private fun AiLogItemUi.stableKey(): String = "$timeText|$scenario|$kind|$provider|$model"
 
 private fun formatRelativeMs(ms: Long): String = when {
     ms < 1000 -> "${ms}ms"
@@ -175,6 +175,12 @@ private fun LogCard(
                     color = statusColor,
                 )
             }
+            Text(
+                text = item.scenario,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
             Text(
                 text = "${item.provider} / ${item.model}",
                 style = MaterialTheme.typography.bodyMedium,

@@ -364,6 +364,7 @@ class RefineSpeechWithAiUseCase(
                 reasoningLevel = AiReasoningLevel.OFF,
                 maxOutputTokens = maxOf(preset.params.maxOutputTokens ?: 0, MIN_OUTPUT_TOKENS),
             ),
+            taskType = AiTaskType.ANALYZE_SPEECH,
         )
     ).getOrThrow().text
 

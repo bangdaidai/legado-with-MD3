@@ -10,6 +10,7 @@ import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
+import io.legado.app.domain.model.aiTaskSceneLabel
 import io.legado.app.domain.model.AiProviderConfig
 import io.legado.app.domain.model.RecordingTrace
 import io.legado.app.help.config.AppConfigStore
@@ -83,6 +84,7 @@ class AiTextRepositoryImpl(
                     success = cancellation == null && error == null,
                     durationMillis = System.currentTimeMillis() - start,
                     error = error,
+                    scenario = aiTaskSceneLabel(request.taskType),
                     steps = recording.steps,
                 )
             )
@@ -126,6 +128,7 @@ class AiTextRepositoryImpl(
                         success = success,
                         durationMillis = System.currentTimeMillis() - start,
                         error = logError,
+                        scenario = aiTaskSceneLabel(request.taskType),
                         steps = recording.steps,
                     )
                 )

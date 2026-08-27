@@ -55,6 +55,7 @@ class AiLogViewModel(
                 AiLogItemUi(
                     timeText = timeFormat.format(Date(entry.timeMillis)),
                     kind = kindLabel(entry.kind),
+                    scenario = entry.scenario ?: kindLabel(entry.kind),
                     provider = entry.providerName ?: entry.providerProtocol ?: "-",
                     model = entry.modelDisplayName ?: entry.modelId ?: "-",
                     summary = entry.summary,
@@ -84,7 +85,7 @@ class AiLogViewModel(
         }
         val text = state.logs.joinToString("\n\n") { item ->
             buildString {
-                append("[${item.timeText}] ${item.kind} ${if (item.success) "成功" else "失败"}")
+                append("[${item.timeText}] ${item.scenario} · ${item.kind} ${if (item.success) "成功" else "失败"}")
                 append(" | ${item.provider} / ${item.model}")
                 append(" | ${item.durationText}")
                 if (item.summary.isNotBlank()) append("\n${item.summary}")

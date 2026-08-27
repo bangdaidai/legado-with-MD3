@@ -157,6 +157,7 @@ class CleanSelectedTextUseCase(
                         chapterIndex = chapterIndex,
                         chapterTitle = chapterTitle,
                     ),
+                    taskType = AiTaskType.CLEAN_SELECTION,
                 )
             )
             val replacement = parseCleanReplacement(responseText)
@@ -243,6 +244,7 @@ class CleanSelectedTextUseCase(
                     chapterIndex = chapterIndex,
                     chapterTitle = chapterTitle,
                 ),
+                taskType = AiTaskType.CLEAN_SELECTION,
             )
         ).collect { event ->
             when (event) {

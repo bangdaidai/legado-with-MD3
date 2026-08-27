@@ -21,6 +21,7 @@ data class AiLogStepUi(
 data class AiLogItemUi(
     val timeText: String,
     val kind: String,
+    val scenario: String,
     val provider: String,
     val model: String,
     val summary: String,

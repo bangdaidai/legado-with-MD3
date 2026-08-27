@@ -33,6 +33,8 @@ data class AiLogEntry(
     val success: Boolean = true,
     val durationMillis: Long = 0,
     val error: String? = null,
+    /** 业务场景中文名（如「作者简介生成」），由仓库层按 taskType 映射，区分于底层调用类型 [kind]。 */
+    val scenario: String? = null,
     val steps: List<AiLogStep> = emptyList(),
 )
 

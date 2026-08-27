@@ -262,6 +262,7 @@ class GenerateChapterSummaryUseCase(
                         ?: preset.params.reasoningLevel,
                 ),
                 toolContext = toolContext,
+                taskType = AiTaskType.SUMMARIZE_CHAPTER,
             )
         )
     }
@@ -287,6 +288,7 @@ class GenerateChapterSummaryUseCase(
                         ?: preset.params.reasoningLevel,
                 ),
                 toolContext = toolContext,
+                taskType = AiTaskType.SUMMARIZE_CHAPTER,
             )
         ).collect { event ->
             when (event) {

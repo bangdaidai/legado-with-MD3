@@ -385,6 +385,7 @@ class TranslateChapterUseCase(
                 AiMessage(AiMessageRole.USER, "Translate the following text:\n\n$text"),
             ),
             params = params,
+            taskType = AiTaskType.TRANSLATE_CHAPTER,
         )
         val rawContent = StringBuilder()
         val previewParser = TranslationResultPreviewParser()
