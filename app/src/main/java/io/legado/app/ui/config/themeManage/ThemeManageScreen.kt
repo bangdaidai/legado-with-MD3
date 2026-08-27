@@ -269,18 +269,12 @@ private fun SavedThemeItem(
     val lightScheme = scheme[0]
     val darkScheme = scheme[1]
 
-    val lightPrimary = data.themeColor.takeIf { it != 0 }?.let(::Color)
-        ?: lightScheme.primary
-    val darkPrimary = data.themeColorNight.takeIf { it != 0 }?.let(::Color)
-        ?: darkScheme.primary
-    val lightSecondary = data.secondaryThemeColor.takeIf { it != 0 }?.let(::Color)
-        ?: lightScheme.secondary
-    val darkSecondary = data.secondaryThemeColorNight.takeIf { it != 0 }?.let(::Color)
-        ?: darkScheme.secondary
-    val lightSurface = data.themeBackgroundColor.takeIf { it != 0 }?.let(::Color)
-        ?: lightScheme.surface
-    val darkSurface = data.themeBackgroundColorNight.takeIf { it != 0 }?.let(::Color)
-        ?: darkScheme.surface
+    val lightPrimary = lightScheme.primary
+    val darkPrimary = darkScheme.primary
+    val lightSecondary = lightScheme.secondary
+    val darkSecondary = darkScheme.secondary
+    val lightTertiary = lightScheme.tertiary
+    val darkTertiary = darkScheme.tertiary
 
     GlassCard(
         onClick = onApply,
@@ -305,9 +299,9 @@ private fun SavedThemeItem(
                     modifier = Modifier.padding(top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    ThemeColorGroup(lightPrimary, lightSecondary, lightSurface)
+                    ThemeColorGroup(lightPrimary, lightSecondary, lightTertiary)
                     Spacer(Modifier.width(8.dp))
-                    ThemeColorGroup(darkPrimary, darkSecondary, darkSurface)
+                    ThemeColorGroup(darkPrimary, darkSecondary, darkTertiary)
                 }
             }
             SmallPlainButton(
@@ -333,10 +327,10 @@ private fun SavedThemeItem(
 private fun ThemeColorGroup(
     primary: Color,
     secondary: Color,
-    surface: Color,
+    tertiary: Color,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        listOf(primary, secondary, surface).forEach { color ->
+        listOf(primary, secondary, tertiary).forEach { color ->
             Box(
                 modifier = Modifier
                     .size(12.dp)
