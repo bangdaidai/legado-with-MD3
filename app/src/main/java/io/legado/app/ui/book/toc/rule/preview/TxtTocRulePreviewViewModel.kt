@@ -648,8 +648,8 @@ class TxtTocRulePreviewViewModel(
 
     /**
      * 只作用于标题，不碰正文：这条规则是为净化目录生成的。
-     * 作用范围默认限定到本书：规则是从这一本的真实标题反推出来的，
-     * 放开成全局容易误伤别的书；用户要全局生效可以在替换规则管理页清空作用范围。
+     * 作用范围不限定到具体书籍，规则默认全局生效；用户要限定到某一本，
+     * 可以在替换规则管理页手动填写作用范围。
      */
     private fun AiTitleCleanRuleDraft.toReplaceRule(scope: String? = null) = ReplaceRule(
         name = name,
@@ -673,7 +673,7 @@ class TxtTocRulePreviewViewModel(
         }
         // 与替换规则编辑页同一套校验：除了正则能编译，还挡住结尾裸 | 这类会替换超时的写法
         val (valid, invalid) = items
-            .map { it.draft.toReplaceRule(scope = currentBook.name) }
+            .map { it.draft.toReplaceRule() }
             .partition { it.isValid() }
         if (valid.isEmpty()) {
             toastAiFailure(context.getString(R.string.replace_rule_invalid))
