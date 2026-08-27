@@ -125,6 +125,7 @@ class AiTextFactoryUseCase(
             val toolContext = request.toToolContext()
             val partialOutputs = chunks.map { chunk ->
                 generate(
+                    request = request,
                     preset = preset,
                     systemPrompt = systemPrompt,
                     userContent = buildUserInput(
@@ -140,6 +141,7 @@ class AiTextFactoryUseCase(
                 partialOutputs.first()
             } else {
                 generate(
+                    request = request,
                     preset = preset,
                     systemPrompt = systemPrompt,
                     userContent = buildMergeUserInput(partialOutputs),
@@ -213,6 +215,7 @@ class AiTextFactoryUseCase(
 
         if (chunks.size == 1) {
             collectGenerateStream(
+                request = request,
                 preset = preset,
                 systemPrompt = systemPrompt,
                 userContent = userInput,
@@ -225,6 +228,7 @@ class AiTextFactoryUseCase(
         } else {
             val partialOutputs = chunks.map { chunk ->
                 generate(
+                    request = request,
                     preset = preset,
                     systemPrompt = systemPrompt,
                     userContent = buildUserInput(
@@ -237,6 +241,7 @@ class AiTextFactoryUseCase(
                 )
             }
             val merged = generate(
+                request = request,
                 preset = preset,
                 systemPrompt = systemPrompt,
                 userContent = buildMergeUserInput(partialOutputs),
@@ -325,6 +330,7 @@ class AiTextFactoryUseCase(
     }
 
     private suspend fun generate(
+        request: Request,
         preset: AiTaskPresetConfig,
         systemPrompt: String,
         userContent: String,
@@ -349,6 +355,7 @@ class AiTextFactoryUseCase(
     }
 
     private suspend fun collectGenerateStream(
+        request: Request,
         preset: AiTaskPresetConfig,
         systemPrompt: String,
         userContent: String,
