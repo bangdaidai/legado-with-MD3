@@ -267,8 +267,8 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
     legacyUiDaoAccessBaseline.set(
         mapOf(
             "io/legado/app/ui/association/AddToBookshelfDialog.kt" to 5,
-            "io/legado/app/ui/association/ImportReplaceRuleDialog.kt" to 1,
-            "io/legado/app/ui/association/ImportRssSourceDialog.kt" to 1,
+            "io/legado/app/ui/association/ImportReplaceRuleDialog.kt" to 0,
+            "io/legado/app/ui/association/ImportRssSourceDialog.kt" to 0,
             "io/legado/app/ui/book/changesource/ChangeBookSourceDialog.kt" to 1,
             "io/legado/app/ui/book/group/GroupManageDialog.kt" to 2,
             "io/legado/app/ui/book/group/GroupSelectDialog.kt" to 1,
