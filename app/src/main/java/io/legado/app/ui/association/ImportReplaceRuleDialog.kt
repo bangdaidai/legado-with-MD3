@@ -22,7 +22,7 @@ import androidx.lifecycle.compose.observeAsState
 import io.legado.app.R
 import io.legado.app.base.BaseComposeDialogFragment
 import io.legado.app.data.entities.ReplaceRule
-import io.legado.app.ui.theme.AppIcons
+import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
@@ -146,24 +146,25 @@ class ImportReplaceRuleDialog() : BaseComposeDialogFragment() {
             confirmText = stringResource(android.R.string.ok),
             onConfirm = { onConfirm(name.trim(), addGroup) },
             dismissText = stringResource(android.R.string.cancel),
-            onDismiss = onDismissRequest
-        ) {
-            Column {
-                AppTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = stringResource(R.string.group_name),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                )
-                SwitchSettingItem(
-                    title = stringResource(R.string.add_to_group),
-                    checked = addGroup,
-                    onCheckedChange = { addGroup = it }
-                )
-                Spacer(Modifier.height(8.dp))
+            onDismiss = onDismissRequest,
+            content = {
+                Column {
+                    AppTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = stringResource(R.string.group_name),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                    SwitchSettingItem(
+                        title = stringResource(R.string.add_to_group),
+                        checked = addGroup,
+                        onCheckedChange = { addGroup = it }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
             }
-        }
+        )
     }
 }
