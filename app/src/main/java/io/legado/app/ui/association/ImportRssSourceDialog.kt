@@ -25,7 +25,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseComposeDialogFragment
 import io.legado.app.data.entities.RssSource
 import io.legado.app.domain.gateway.OtherSettingsGateway
-import io.legado.app.ui.widget.components.icon.AppIcons
+import io.legado.app.ui.theme.AppIcons
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
@@ -208,8 +208,8 @@ class ImportRssSourceDialog() : BaseComposeDialogFragment() {
             confirmText = stringResource(android.R.string.ok),
             onConfirm = { onConfirm(name.trim(), addGroup) },
             dismissText = stringResource(android.R.string.cancel),
-            onDismiss = onDismissRequest,
-            content = {
+            onDismiss = onDismissRequest
+            ) {
                 Column {
                     AppTextField(
                         value = name,
@@ -227,6 +227,5 @@ class ImportRssSourceDialog() : BaseComposeDialogFragment() {
                     Spacer(Modifier.height(8.dp))
                 }
             }
-        )
     }
 }
