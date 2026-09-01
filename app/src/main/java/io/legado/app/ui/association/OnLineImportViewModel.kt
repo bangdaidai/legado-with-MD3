@@ -57,6 +57,12 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
         }
     }
 
+    fun readConfig(url: String, finally: (title: String, msg: String) -> Unit) {
+        getBytes(url) { bytes ->
+            importReadConfig(bytes, finally)
+        }
+    }
+
     fun importReadConfig(bytes: ByteArray, finally: (title: String, msg: String) -> Unit) {
         execute {
             readStyleGateway.importOrReplaceStyle(bytes)

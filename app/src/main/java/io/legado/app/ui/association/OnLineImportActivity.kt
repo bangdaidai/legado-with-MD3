@@ -1,111 +1,236 @@
 package io.legado.app.ui.association
 
 import android.os.Bundle
-import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
-import io.legado.app.databinding.ActivityTranslucenceBinding
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.ui.main.MainActivity
-import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.base.BaseComposeActivity
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
+import org.koin.androidx.compose.koinViewModel
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 /**
  * 网络一键导入
  * 格式: legado://import/{path}?src={url}
+ *
+ * 从 [VMBaseActivity] + DialogFragment 迁移为 [BaseComposeActivity] + 直接 Compose 渲染，
+ * 将 Import*Screen 直接渲染在 Activity 的 Compose 层级中，不再通过 showDialogFragment 弹出。
  */
 class OnLineImportActivity :
-    VMBaseActivity<ActivityTranslucenceBinding, OnLineImportViewModel>() {
+    BaseComposeActivity(transparent = true, imageBg = false) {
 
-    override val binding by viewBinding(ActivityTranslucenceBinding::inflate)
-    override val viewModel by viewModels<OnLineImportViewModel>()
+    private val viewModel by viewModel<OnLineImportViewModel>()
+
+    private var errorTitle by mutableStateOf("")
+    private var errorMsg by mutableStateOf("")
+    private var showError by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         viewModel.successLive.observe(this) {
             when (it.first) {
                 "bookSource" -> openComposeBookSourceImport(it.second)
-                "rssSource" -> showDialogFragment(
-                    ImportRssSourceDialog(it.second, true)
-                )
-                "replaceRule" -> showDialogFragment(
-                    ImportReplaceRuleDialog(it.second, true)
-                )
-                "httpTts" -> showDialogFragment(
-                    ImportHttpTtsDialog(it.second, true)
-                )
-                "theme" -> showDialogFragment(
-                    ImportThemeDialog(it.second, true)
-                )
-                "txtRule" -> showDialogFragment(
-                    ImportTxtTocRuleDialog(it.second, true)
-                )
-                "dictRule" -> showDialogFragment(
-                    ImportDictRuleDialog(it.second, true)
-                )
+                "theme" -> showThemeImportDialog(it.second)
+                else -> {
+                    currentImportType = it.first
+                    currentImportUrl = it.second
+                }
             }
         }
         viewModel.errorLive.observe(this) {
-            finallyDialog(getString(R.string.error), it)
+            errorTitle = getString(R.string.error)
+            errorMsg = it
+            showError = true
         }
-        intent.data?.let {
-            val url = it.getQueryParameter("src")
+
+        intent.data?.let { uri ->
+            val url = uri.getQueryParameter("src")
             if (url.isNullOrEmpty()) {
                 finish()
                 return
             }
-            when (it.path) {
+            when (uri.path) {
                 "/bookSource" -> openComposeBookSourceImport(url)
-
-                "/rssSource" -> showDialogFragment(
-                    ImportRssSourceDialog(url, true)
-                )
-
-                "/replaceRule" -> showDialogFragment(
-                    ImportReplaceRuleDialog(url, true)
-                )
-                "/textTocRule" -> showDialogFragment(
-                    ImportTxtTocRuleDialog(url, true)
-                )
-                "/httpTTS" -> showDialogFragment(
-                    ImportHttpTtsDialog(url, true)
-                )
-                "/dictRule" -> showDialogFragment(
-                    ImportDictRuleDialog(url, true)
-                )
-                "/theme" -> showDialogFragment(
-                    ImportThemeDialog(url, true)
-                )
-                "/readConfig" -> viewModel.getBytes(url) { bytes ->
-                    viewModel.importReadConfig(bytes, this::finallyDialog)
+                "/rssSource" -> {
+                    currentImportType = "rssSource"
+                    currentImportUrl = url
                 }
-                "/addToBookshelf" -> showDialogFragment(
-                    AddToBookshelfDialog(url, true)
-                )
-                "/importonline" -> when (it.host) {
+                "/replaceRule" -> {
+                    currentImportType = "replaceRule"
+                    currentImportUrl = url
+                }
+                "/textTocRule" -> {
+                    currentImportType = "txtRule"
+                    currentImportUrl = url
+                }
+                "/httpTTS" -> {
+                    currentImportType = "httpTts"
+                    currentImportUrl = url
+                }
+                "/dictRule" -> {
+                    currentImportType = "dictRule"
+                    currentImportUrl = url
+                }
+                "/theme" -> showThemeImportDialog(url)
+                "/readConfig" -> viewModel.readConfig(url) { title, msg ->
+                    errorTitle = title
+                    errorMsg = msg
+                    showError = true
+                }
+                "/addToBookshelf" -> showAddToBookshelfDialog(url)
+                "/importonline" -> when (uri.host) {
                     "booksource" -> openComposeBookSourceImport(url)
-                    "rsssource" -> showDialogFragment(
-                        ImportRssSourceDialog(url, true)
-                    )
-                    "replace" -> showDialogFragment(
-                        ImportReplaceRuleDialog(url, true)
-                    )
+                    "rsssource" -> {
+                        currentImportType = "rssSource"
+                        currentImportUrl = url
+                    }
+                    "replace" -> {
+                        currentImportType = "replaceRule"
+                        currentImportUrl = url
+                    }
                     else -> {
-                        viewModel.determineType(url, this::finallyDialog)
+                        viewModel.determineType(url) { title, msg ->
+                            errorTitle = title
+                            errorMsg = msg
+                            showError = true
+                        }
                     }
                 }
-                else -> viewModel.determineType(url, this::finallyDialog)
+                else -> {
+                    viewModel.determineType(url) { title, msg ->
+                        errorTitle = title
+                        errorMsg = msg
+                        showError = true
+                    }
+                }
+            }
+        } ?: finish()
+    }
+
+    private var currentImportType by mutableStateOf<String?>(null)
+    private var currentImportUrl by mutableStateOf<String?>(null)
+
+    @Composable
+    override fun Content() {
+        val importType = currentImportType
+        val importUrl = currentImportUrl
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (importType != null && importUrl != null) {
+                ImportScreen(type = importType, url = importUrl)
+            } else {
+                AppCircularProgressIndicator()
+            }
+        }
+
+        val titleStr = errorTitle
+        val msgStr = errorMsg
+        AppAlertDialog(
+            show = showError,
+            onDismissRequest = { showError = false; finish() },
+            title = titleStr,
+            text = msgStr,
+            confirmText = stringResource(R.string.ok),
+            onConfirm = { showError = false; finish() },
+        )
+    }
+
+    @Composable
+    private fun ImportScreen(type: String, url: String) {
+        when (type) {
+            "rssSource" -> {
+                val viewModel = koinViewModel<ImportRssSourceViewModel>()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) { viewModel.importSource(url) }
+                LaunchedEffect(Unit) {
+                    viewModel.effects.collect {
+                        finish()
+                    }
+                }
+                ImportRssSourceScreen(
+                    state = uiState,
+                    onIntent = viewModel::onIntent,
+                )
+            }
+            "replaceRule" -> {
+                val viewModel = koinViewModel<ImportReplaceRuleViewModel>()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) { viewModel.import(url) }
+                LaunchedEffect(Unit) {
+                    viewModel.effects.collect {
+                        finish()
+                    }
+                }
+                ImportReplaceRuleScreen(
+                    state = uiState,
+                    onIntent = viewModel::onIntent,
+                )
+            }
+            "httpTts" -> {
+                val viewModel = koinViewModel<ImportHttpTtsViewModel>()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) { viewModel.importSource(url) }
+                LaunchedEffect(Unit) {
+                    viewModel.effects.collect {
+                        finish()
+                    }
+                }
+                ImportHttpTtsScreen(
+                    state = uiState,
+                    onIntent = viewModel::onIntent,
+                )
+            }
+            "dictRule" -> {
+                val viewModel = koinViewModel<ImportDictRuleViewModel>()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) { viewModel.importSource(url) }
+                LaunchedEffect(Unit) {
+                    viewModel.effects.collect {
+                        finish()
+                    }
+                }
+                ImportDictRuleScreen(
+                    state = uiState,
+                    onIntent = viewModel::onIntent,
+                )
+            }
+            "txtRule" -> {
+                val viewModel = koinViewModel<ImportTxtTocRuleViewModel>()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) { viewModel.importSource(url) }
+                LaunchedEffect(Unit) {
+                    viewModel.effects.collect {
+                        finish()
+                    }
+                }
+                ImportTxtTocRuleScreen(
+                    state = uiState,
+                    onIntent = viewModel::onIntent,
+                )
             }
         }
     }
 
-    private fun finallyDialog(title: String, msg: String) {
-        alert(title, msg) {
-            okButton()
-            onDismiss {
-                finish()
-            }
-        }
+    private fun showThemeImportDialog(url: String) {
+        ImportThemeDialog(url, true).show(supportFragmentManager, "importTheme")
+    }
+
+    private fun showAddToBookshelfDialog(url: String) {
+        AddToBookshelfDialog(url, true).show(supportFragmentManager, "addToBookshelf")
     }
 
     private fun openComposeBookSourceImport(source: String) {
