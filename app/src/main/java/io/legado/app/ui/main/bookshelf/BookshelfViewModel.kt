@@ -115,6 +115,17 @@ class BookshelfViewModel(
     private val pendingUploadUrlFlow = MutableStateFlow<String?>(null)
     private val selectedTagIdsFlow = MutableStateFlow<Set<Long>>(emptySet())
 
+    /** 选中标签对应的书籍 URL 集合（AND 语义），用于书架筛选 */
+    private val filteredTagBookUrlsFlow: Flow<Set<String>> =
+        selectedTagIdsFlow.map { selectedIds ->
+            if (selectedIds.isEmpty()) {
+                emptySet()
+            } else {
+                val tagIdList = selectedIds.toList()
+                appDb.bookTagRelationDao.getBookUrlsByAllTags(tagIdList, tagIdList.size).toSet()
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     private data class BookshelfSortConfig(
         val sort: Int,
         val sortOrder: Int
@@ -560,15 +571,22 @@ class BookshelfViewModel(
         },
         hiddenGroupIdsFlow,
         bookshelfTagsFlow,
-        selectedTagIdsFlow
-    ) { (data, interaction, isInitialLoading), hiddenIds, bookshelfTags, selectedTagIds ->
+        selectedTagIdsFlow,
+        filteredTagBookUrlsFlow
+    ) { (data, interaction, isInitialLoading), hiddenIds, bookshelfTags, selectedTagIds, filteredTagBookUrls ->
         val selectedBooks = data.selectedBooks
         val groups = data.groups.filter { it.groupId !in hiddenIds }
         val allGroups = data.allGroups
         val previews = data.previews
         val internal = data.internal
         val visibleGroupBooks =
-            if (!selectedBooks.isSearchMode || selectedBooks.searchKey.isBlank()) {
+            if (selectedTagIds.isNotEmpty() && filteredTagBookUrls.isNotEmpty()) {
+                data.allGroupBooks.mapValues { (_, books) ->
+                    books.filter { it.book.bookUrl in filteredTagBookUrls }.toImmutableList()
+                }.toImmutableMap()
+            } else if (selectedTagIds.isNotEmpty() && filteredTagBookUrls.isEmpty()) {
+                data.allGroupBooks.mapValues { emptyList<BookUiItem>().toImmutableList() }
+            } else if (!selectedBooks.isSearchMode || selectedBooks.searchKey.isBlank()) {
                 data.allGroupBooks
             } else {
                 data.allGroupBooks.mapValues { (_, books) ->
