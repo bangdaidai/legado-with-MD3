@@ -234,7 +234,6 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
             "io/legado/app/help/storage/Restore.kt" to 2,
             "io/legado/app/receiver/MediaButtonReceiver.kt" to 2,
             "io/legado/app/service/WebService.kt" to 2,
-            "io/legado/app/ui/association/ImportReplaceRuleDialog.kt" to 1,
             "io/legado/app/ui/book/explore/ExploreShowViewModel.kt" to 2,
             "io/legado/app/ui/book/read/ReadBookViewModel.kt" to 2,
             "io/legado/app/ui/book/readRecord/ReadRecordViewModel.kt" to 1,
@@ -267,8 +266,6 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
     legacyUiDaoAccessBaseline.set(
         mapOf(
             "io/legado/app/ui/association/AddToBookshelfDialog.kt" to 5,
-            "io/legado/app/ui/association/ImportReplaceRuleDialog.kt" to 1,
-            "io/legado/app/ui/association/ImportRssSourceDialog.kt" to 1,
             "io/legado/app/ui/book/changesource/ChangeBookSourceDialog.kt" to 1,
             "io/legado/app/ui/book/group/GroupManageDialog.kt" to 2,
             "io/legado/app/ui/book/group/GroupSelectDialog.kt" to 1,
