@@ -181,9 +181,19 @@ class BookshelfViewModel(
     /** 标签配置（分组顺序、映射、排除等）变更版本号，驱动书架重算 displayTags。 */
     private val tagConfigVersionFlow = MutableStateFlow(0)
 
-    /** 展示在书架标签筛选中的标签列表 */
+    /** 展示在书架标签筛选中的标签列表（已过滤无效标签和排除标签） */
     val bookshelfTagsFlow: StateFlow<List<io.legado.app.data.entities.BookTag>> =
-        bookshelfTagGateway.observeShowOnBookshelf()
+        combine(
+            bookshelfTagGateway.observeShowOnBookshelf(),
+            excludedTagsFlow
+        ) { tags, excludedTags ->
+            tags.filter { tag ->
+                val name = tag.name
+                // 过滤无效标签：空白、纯标点符号（如"/"）
+                name.isNotBlank() && TAG_NAME_PATTERN.containsMatchIn(name) &&
+                    !TagManager.isExcluded(name, excludedTags)
+            }
+        }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
@@ -1286,6 +1296,11 @@ class BookshelfViewModel(
 
     private fun showMessage(message: String) {
         _effects.tryEmit(BookshelfEffect.ShowSnackbar(message))
+    }
+
+    companion object {
+        /** 标签名必须包含至少一个字母或汉字，过滤掉纯标点/符号（如"/"） */
+        private val TAG_NAME_PATTERN = Regex("[\\p{L}\\p{Han}]")
     }
 
 }

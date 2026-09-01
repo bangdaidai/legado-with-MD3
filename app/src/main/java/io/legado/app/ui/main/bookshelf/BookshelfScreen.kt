@@ -56,9 +56,9 @@ import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Link
@@ -287,6 +287,7 @@ fun BookshelfScreen(
     val selectedBookUrls = uiState.selectedBookUrls
     val isInFolderRoot = uiState.isInFolderRoot
     val bookGroupStyle = uiState.bookGroupStyle
+    var tagFilterExpanded by remember { mutableStateOf(true) }
 
     val transitionState = remember { SeekableTransitionState(isInFolderRoot) }
     val folderTransition = rememberTransition(transitionState, label = "FolderTransition")
@@ -745,6 +746,20 @@ fun BookshelfScreen(
                                     }
                                 }
                             }
+
+                            // 标签筛选折叠按钮
+                            val showTagFilterToggle = uiState.settings.showBookshelfTagFilter
+                                && uiState.bookshelfTags.isNotEmpty()
+                                && !uiState.isSearch
+                            if (showTagFilterToggle) {
+                                SmallToggleButton(
+                                    checked = tagFilterExpanded,
+                                    onCheckedChange = { tagFilterExpanded = it },
+                                    style = ToggleStyle.Outlined,
+                                    icon = Icons.Default.FilterList,
+                                    contentDescription = stringResource(R.string.show_bookshelf_tag_filter)
+                                )
+                            }
                         }
                     }
 
@@ -753,15 +768,12 @@ fun BookshelfScreen(
                         && bookGroupStyle == 0
                         && uiState.bookshelfTags.isNotEmpty()
                         && !uiState.isSearch
-                    if (showTagFilter) {
+                    AnimatedVisibility(visible = showTagFilter && tagFilterExpanded) {
                         TagFilterRow(
                             tags = uiState.bookshelfTags,
                             selectedTagIds = uiState.selectedTagIds,
                             onTagClick = { tagId ->
                                 onIntent(BookshelfIntent.ToggleTagSelection(tagId))
-                            },
-                            onClearClick = {
-                                onIntent(BookshelfIntent.ClearTagSelection)
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1545,7 +1557,6 @@ private fun TagFilterRow(
     tags: ImmutableList<io.legado.app.data.entities.BookTag>,
     selectedTagIds: ImmutableSet<Long>,
     onTagClick: (Long) -> Unit,
-    onClearClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
@@ -1553,19 +1564,6 @@ private fun TagFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp)
     ) {
-        // 清除按钮（有选中时显示）
-        if (selectedTagIds.isNotEmpty()) {
-            item {
-                SmallToggleButton(
-                    checked = true,
-                    onCheckedChange = { onClearClick() },
-                    style = ToggleStyle.Outlined,
-                    icon = Icons.Default.Clear,
-                    contentDescription = "清除筛选"
-                )
-            }
-        }
-
         items(tags, key = { it.id }) { tag ->
             val isSelected = tag.id in selectedTagIds
             ToggleChip(
