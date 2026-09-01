@@ -619,7 +619,7 @@ fun BookshelfScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = (-16).dp)
-                                .adaptiveHorizontalPaddingTab(),
+                                .adaptiveHorizontalPadding(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val selectedTabIndex =
@@ -770,7 +770,10 @@ fun BookshelfScreen(
                         && bookGroupStyle == 0
                         && uiState.bookshelfTags.isNotEmpty()
                         && !uiState.isSearch
-                    AnimatedVisibility(visible = showTagFilter && tagFilterExpanded) {
+                    AnimatedVisibility(
+                        visible = showTagFilter && tagFilterExpanded,
+                        modifier = Modifier.adaptiveHorizontalPadding()
+                    ) {
                         TagFilterRow(
                             tags = uiState.bookshelfTags,
                             selectedTagIds = uiState.selectedTagIds,
@@ -1563,8 +1566,7 @@ private fun TagFilterRow(
 ) {
     LazyRow(
         modifier = modifier.padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(tags, key = { it.id }) { tag ->
             val isSelected = tag.id in selectedTagIds
