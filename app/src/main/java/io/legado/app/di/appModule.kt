@@ -41,6 +41,7 @@ import io.legado.app.data.repository.BookshelfAutoGroupRepository
 import io.legado.app.data.repository.BookshelfRepository
 import io.legado.app.data.repository.ShareCardRepository
 import io.legado.app.data.repository.BookshelfSettingsRepository
+import io.legado.app.data.repository.BookshelfTagRepository
 import io.legado.app.data.repository.CacheBookDownloadRepository
 import io.legado.app.data.repository.ChangeSourceSettingsRepository
 import io.legado.app.data.repository.ChapterSpeechRepository
@@ -134,6 +135,7 @@ import io.legado.app.domain.gateway.BookSourceCheckGateway
 import io.legado.app.domain.gateway.BookshelfAutoGroupGateway
 import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.gateway.BookshelfTagGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.gateway.CheckSourceSettingsGateway
@@ -422,6 +424,7 @@ val appModule = module {
     single<TranslationSettingsGateway> { TranslationSettingsRepository() }
     single<WebSearchSettingsGateway> { WebSearchSettingsRepository() }
     single<BookshelfSettingsGateway> { BookshelfSettingsRepository() }
+    single<BookshelfTagGateway> { BookshelfTagRepository() }
     single { ReadSettingsRepository(settingsRepository = get()) }
     single<ReadSettingsGateway> { get<ReadSettingsRepository>() }
     singleOf(::ReadAloudSettingsRepository)

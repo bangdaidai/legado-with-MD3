@@ -23,6 +23,7 @@ import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
 import io.legado.app.domain.usecase.UpdateBooksGroupUseCase
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.gateway.BookshelfTagGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.exception.NoStackTraceException
@@ -91,6 +92,7 @@ class BookshelfViewModel(
     private val importBookshelfUseCase: ImportBookshelfUseCase,
     private val exportBookshelfUseCase: ExportBookshelfUseCase,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+    private val bookshelfTagGateway: BookshelfTagGateway,
     private val appShellSettingsGateway: AppShellSettingsGateway,
     private val themeSettingsGateway: ThemeSettingsGateway,
 ) : BaseViewModel(application) {
@@ -181,7 +183,7 @@ class BookshelfViewModel(
 
     /** 展示在书架标签筛选中的标签列表 */
     val bookshelfTagsFlow: StateFlow<List<io.legado.app.data.entities.BookTag>> =
-        appDb.bookTagDao.observeShowOnBookshelf()
+        bookshelfTagGateway.observeShowOnBookshelf()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
@@ -299,7 +301,7 @@ class BookshelfViewModel(
                 flowOf(list)
             } else {
                 // 同时包含所有选中标签的书籍 URL（AND 筛选）
-                appDb.bookTagRelationDao.flowBookUrlsByAllTags(
+                bookshelfTagGateway.flowBookUrlsByAllTags(
                     tagIds.toList(),
                     tagIds.size
                 ).map { filteredUrls ->
