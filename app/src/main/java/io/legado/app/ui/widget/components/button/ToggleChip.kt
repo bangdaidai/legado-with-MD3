@@ -69,7 +69,7 @@ fun ToggleChip(
             cornerRadius = cornerRadius ?: 12.dp,
             onClick = onToggle,
             containerColor = if (selected) {
-                MiuixTheme.colorScheme.secondaryContainer
+                MiuixTheme.colorScheme.primaryContainer
             } else {
                 MiuixTheme.colorScheme.surfaceContainer
             }
@@ -100,7 +100,7 @@ fun ToggleChip(
                     style = LegadoTheme.typography.labelMediumEmphasized,
                     maxLines = 1,
                     softWrap = false,
-                    color = if (selected) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface
+                    color = if (selected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface
                 )
             }
         }
@@ -131,7 +131,7 @@ fun ToggleChip(
                 .clip(resolvedShape)
                 .background(
                     if (selected) {
-                        MaterialTheme.colorScheme.secondaryContainer
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
                         MaterialTheme.colorScheme.surfaceContainer
                     }
@@ -151,7 +151,7 @@ fun ToggleChip(
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 softWrap = false,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             )
         }
     } else {

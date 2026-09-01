@@ -752,6 +752,7 @@ fun BookshelfScreen(
                                 && uiState.bookshelfTags.isNotEmpty()
                                 && !uiState.isSearch
                             if (showTagFilterToggle) {
+                                Spacer(modifier = Modifier.width(4.dp))
                                 SmallToggleButton(
                                     checked = tagFilterExpanded,
                                     onCheckedChange = { tagFilterExpanded = it },
