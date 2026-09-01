@@ -100,6 +100,10 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
                     importJson(file.toUri())
                 }
             }
+        }.onError {
+            errorLive.postValue(
+                it.localizedMessage ?: context.getString(R.string.unknown_error)
+            )
         }
     }
 

@@ -173,15 +173,19 @@ class ImportRssSourceViewModel(
                 url(url)
             }
         }.decompressed().byteStream().use { body ->
-            val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
+            val items = jsonPath.parse(body).read<List<*>>("$")
             for (item in items) {
+                if (item !is Map<*, *>) {
+                    throw NoStackTraceException("不是订阅源")
+                }
                 if (!item.containsKey("sourceUrl")) {
                     throw NoStackTraceException("不是订阅源")
                 }
                 val jsonItem = jsonPath.parse(item)
-                GSON.fromJsonObject<RssSource>(jsonItem.jsonString()).getOrThrow().let { source ->
-                    allSources.add(source)
-                }
+                GSON.fromJsonObject<RssSource>(jsonItem.jsonString()).getOrThrow()
+                    .let { source ->
+                        allSources.add(source)
+                    }
             }
         }
     }
