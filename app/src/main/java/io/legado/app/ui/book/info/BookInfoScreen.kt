@@ -1426,7 +1426,7 @@ private fun BookInfoSummary(
         modifier = Modifier
             .fillMaxWidth()
             .background(LegadoTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, bottom = 12.dp),
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         AnimatedTextLine(

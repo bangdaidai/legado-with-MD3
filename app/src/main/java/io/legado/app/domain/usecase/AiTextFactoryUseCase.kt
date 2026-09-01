@@ -343,7 +343,7 @@ class AiTextFactoryUseCase(
                         ?: preset.params.reasoningLevel,
                 ),
                 toolContext = toolContext,
-                taskType = request.taskType,
+                taskType = preset.taskType,
             )
         )
     }
@@ -370,7 +370,7 @@ class AiTextFactoryUseCase(
                         ?: preset.params.reasoningLevel,
                 ),
                 toolContext = toolContext,
-                taskType = request.taskType,
+                taskType = preset.taskType,
             )
         ).collect { event ->
             when (event) {
