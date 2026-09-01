@@ -21,7 +21,7 @@ sealed interface TagDetailIntent {
         val name: String,
         val groupId: Long,
         val color: Long,
-        val showOnBookshelf: Boolean = true,
+        val showOnBookshelf: Boolean = false,
     ) : TagDetailIntent
     data object Delete : TagDetailIntent
     data object Refresh : TagDetailIntent

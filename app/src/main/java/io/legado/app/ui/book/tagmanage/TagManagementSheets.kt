@@ -95,7 +95,7 @@ data class TagEditData(
     val groupId: Long = 0L,
     val color: Long = 0xFF6200EE,
     /** 是否展示在书架标签筛选中 */
-    val showOnBookshelf: Boolean = true,
+    val showOnBookshelf: Boolean = false,
 )
 
 @Composable
@@ -174,7 +174,8 @@ fun TagEditSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 56.dp / 2 - 20.dp / 2),
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
