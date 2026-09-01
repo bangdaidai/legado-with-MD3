@@ -5,10 +5,11 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.DialogFragment
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.ui.theme.AppTheme
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -47,7 +48,7 @@ class ImportHttpTtsDialog() : DialogFragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 AppTheme {
-                    val state by viewModel.uiState.collectAsStateWithLifecycle()
+                    val state by viewModel.uiState.collectAsState()
                     ImportHttpTtsScreen(
                         state = state,
                         onIntent = viewModel::onIntent
