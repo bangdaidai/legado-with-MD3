@@ -1584,7 +1584,11 @@ private fun BookInfoIntro(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = isOverflowing) { expanded = !expanded }
+        ) {
             SelectionContainer {
                 IntroCollapsibleLayout(
                     expanded = expanded,
@@ -1611,17 +1615,6 @@ private fun BookInfoIntro(
                         )
                 )
             }
-        }
-        if (isOverflowing) {
-            AppText(
-                text = stringResource(if (expanded) R.string.collapse else R.string.expand),
-                style = LegadoTheme.typography.labelMedium,
-                color = LegadoTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .clickable { expanded = !expanded }
-                    .padding(vertical = 4.dp)
-            )
         }
     }
 }
