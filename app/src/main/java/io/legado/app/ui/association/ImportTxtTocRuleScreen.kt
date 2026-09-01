@@ -21,6 +21,6 @@ fun ImportTxtTocRuleScreen(
         onToggleAll = { onIntent(ImportTxtTocRuleIntent.ToggleAll(it)) },
         onUpdateItem = { index, rule -> onIntent(ImportTxtTocRuleIntent.UpdateItem(index, rule)) },
         itemTitle = { it.name },
-        itemSubtitle = { it.rulePattern }
+        itemSubtitle = { it.chapterRule }
     )
 }

@@ -21,6 +21,6 @@ fun ImportDictRuleScreen(
         onToggleAll = { onIntent(ImportDictRuleIntent.ToggleAll(it)) },
         onUpdateItem = { index, rule -> onIntent(ImportDictRuleIntent.UpdateItem(index, rule)) },
         itemTitle = { it.name },
-        itemSubtitle = { it.url }
+        itemSubtitle = { it.urlRule }
     )
 }

@@ -50,7 +50,9 @@ class ImportRssSourceDialog() : DialogFragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 AppTheme {
-                    val state by viewModel.uiState.collectAsStateWithLifecycle()
+                    val state by viewModel.uiState.collectAsStateWithLifecycle(
+                        lifecycleOwner = viewLifecycleOwner
+                    )
                     ImportRssSourceScreen(
                         state = state,
                         onIntent = viewModel::onIntent
