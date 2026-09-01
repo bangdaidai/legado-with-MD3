@@ -134,6 +134,7 @@ class ImportRssSourceViewModel(
             }
             SourceHelp.insertRssSource(*selectSource.toTypedArray())
         }.onSuccess {
+            _uiState.value = BaseImportUiState.Idle
             _effects.emit(ImportRssSourceEffect.ImportFinished)
         }
     }

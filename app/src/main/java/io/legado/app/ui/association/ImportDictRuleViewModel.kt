@@ -89,6 +89,7 @@ class ImportDictRuleViewModel(
         execute {
             repository.insert(*items.toTypedArray())
         }.onSuccess {
+            _uiState.value = BaseImportUiState.Idle
             _effects.emit(ImportDictRuleEffect.ImportFinished)
         }
     }

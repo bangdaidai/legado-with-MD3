@@ -112,6 +112,7 @@ class ImportReplaceRuleViewModel(
             }
             repository.insert(*selectRules.toTypedArray())
         }.onSuccess {
+            _uiState.value = BaseImportUiState.Idle
             _effects.emit(ImportReplaceRuleEffect.ImportFinished)
         }
     }

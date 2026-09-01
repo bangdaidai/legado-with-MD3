@@ -1,10 +1,13 @@
 package io.legado.app.ui.association
 
 import android.content.DialogInterface
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
@@ -30,10 +33,13 @@ class ImportTxtTocRuleDialog() : DialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        dialog?.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        dialog?.window?.let { window ->
+            window.setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
@@ -55,6 +61,13 @@ class ImportTxtTocRuleDialog() : DialogFragment() {
                     .collectAsStateWithLifecycle(appUiConfigurationGateway.currentConfiguration)
                 AppTheme(configuration = uiConfiguration) {
                     val state by viewModel.uiState.collectAsState()
+                    LaunchedEffect(Unit) {
+                        viewModel.effects.collect { effect ->
+                            when (effect) {
+                                is ImportTxtTocRuleEffect.ImportFinished -> dismiss()
+                            }
+                        }
+                    }
                     ImportTxtTocRuleScreen(
                         state = state,
                         onIntent = viewModel::onIntent
