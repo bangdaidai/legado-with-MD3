@@ -584,7 +584,7 @@ class BookshelfViewModel(
                     books.filter { it.book.bookUrl in filteredTagBookUrls }.toImmutableList()
                 }.toImmutableMap()
             } else if (selectedTagIds.isNotEmpty() && filteredTagBookUrls.isEmpty()) {
-                data.allGroupBooks.mapValues { emptyList<BookUiItem>().toImmutableList() }
+                data.allGroupBooks.mapValues { emptyList<BookUiItem>().toImmutableList() }.toImmutableMap()
             } else if (!selectedBooks.isSearchMode || selectedBooks.searchKey.isBlank()) {
                 data.allGroupBooks
             } else {
