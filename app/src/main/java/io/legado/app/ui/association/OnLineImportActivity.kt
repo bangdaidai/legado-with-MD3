@@ -132,7 +132,7 @@ class OnLineImportActivity :
             contentAlignment = Alignment.Center,
         ) {
             if (importType != null && importUrl != null) {
-                ImportScreen(type = importType, url = importUrl)
+                ImportScreen(type = importType, url = importUrl, onDismiss = { finish() })
             } else {
                 AppCircularProgressIndicator()
             }
