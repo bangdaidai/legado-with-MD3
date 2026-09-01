@@ -618,6 +618,7 @@ fun BookshelfScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(top = (-16).dp)
                                 .adaptiveHorizontalPaddingTab(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
