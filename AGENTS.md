@@ -207,8 +207,9 @@ KMP 任务名在模块实际创建后才存在；不要假装运行尚未定义�
 ## 重要项目约束
 
 - 不将 jsoup 升级到 1.16.2 以上；新版行为会影响 `AnalyzeByJSoup.kt` 与 JsoupXpath。
-- 不重新引入 Hutool；加密、编码与日期使用现有 JCA、`java.time` 和 `help/crypto/CryptoUtils.kt` 路径，KMP
-  抽取时再通过能力契约替换 JVM API。
+- 应用代码不依赖 Hutool；Hutool 仅作为书源 JS 的运行时加密库保留在 classpath（书源会直接调用
+  `Packages.cn.hutool.*`），版本固定 5.8.22 勿升级。应用内部加密、编码与日期使用现有 JCA、
+  `java.time` 和 `help/crypto/CryptoUtils.kt` 路径，KMP 抽取时再通过能力契约替换 JVM API。
 - 代码 namespace 为 `io.legado.app`，Android `applicationId` 为 `io.legato.kazusa`，不要混用。
 - `AppDatabase.version` 必须与上游保持一致，不得自行提升。本 fork 的 schema 变更（新增列、新增表）追加到与
   上游最新版本对应的手写迁移里（当前是 `DatabaseMigrations.kt` 的 `migration_102_103`，对应

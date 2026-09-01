@@ -86,6 +86,22 @@ object SharedJsScope {
         if (jsLib.isNullOrBlank()) {
             return
         }
+        if (jsLib.isJsonObject()) {
+            val jsMap: Map<String, String> = GSON.fromJson(
+                jsLib,
+                TypeToken.getParameterized(
+                    Map::class.java,
+                    String::class.java,
+                    String::class.java
+                ).type
+            )
+            jsMap.values.forEach { value ->
+                if (value.isAbsUrl()) {
+                    val fileName = MD5Utils.md5Encode(value)
+                    aCache.remove(fileName)
+                }
+            }
+        }
         val key = MD5Utils.md5Encode(jsLib)
         scopeMap.remove(key)
     }
