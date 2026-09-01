@@ -77,6 +77,7 @@ import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.R
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.reorderAccessibility
 import io.legado.app.ui.widget.components.settingItem.SettingItem
@@ -164,20 +165,28 @@ fun TagEditSheet(
                     onSelect = { onChange(d.copy(groupId = it)) },
                 )
 
-                // 展示在书架
-                Row(
+                // 展示在书架（卡片包裹）
+                NormalCard(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    cornerRadius = 12.dp,
+                    containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
                 ) {
-                    Text(
-                        text = "展示在书架",
-                        style = LegadoTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = d.showOnBookshelf,
-                        onCheckedChange = { onChange(d.copy(showOnBookshelf = it)) }
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 56.dp / 2 - 20.dp / 2),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "展示在书架",
+                            style = LegadoTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = d.showOnBookshelf,
+                            onCheckedChange = { onChange(d.copy(showOnBookshelf = it)) }
+                        )
+                    }
                 }
 
                 // 别名
