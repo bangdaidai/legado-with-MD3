@@ -3,6 +3,7 @@ package io.legado.app.ui.main.bookshelf
 import androidx.compose.runtime.Stable
 import android.net.Uri
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookTag
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.ui.widget.components.list.ListUiState
 import kotlinx.collections.immutable.ImmutableList
@@ -64,6 +65,10 @@ sealed interface BookshelfIntent {
     ) : BookshelfIntent
     data class SetCustomTagColorsEnabled(val enabled: Boolean) : BookshelfIntent
     data object UploadResultConsumed : BookshelfIntent
+    /** 切换标签筛选选中状态 */
+    data class ToggleTagSelection(val tagId: Long) : BookshelfIntent
+    /** 清空标签筛选 */
+    data object ClearTagSelection : BookshelfIntent
 }
 
 sealed interface BookshelfEffect {
@@ -112,4 +117,8 @@ data class BookshelfUiState(
     val enableCustomTagColors: Boolean = false,
     val themeColor: Int = 0,
     val pendingUploadUrl: String? = null,
+    /** 展示在书架标签筛选中的标签列表 */
+    val bookshelfTags: ImmutableList<BookTag> = persistentListOf(),
+    /** 书架标签筛选中选中的标签 ID 集合 */
+    val selectedTagIds: ImmutableSet<Long> = persistentSetOf(),
 ) : ListUiState<BookUiItem>

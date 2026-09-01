@@ -44,4 +44,12 @@ interface BookTagDao {
 
     @Query("SELECT * FROM bookTags ORDER BY name COLLATE NOCASE")
     fun observeAll(): Flow<List<BookTag>>
+
+    /** 观察展示在书架标签筛选中的标签 */
+    @Query("SELECT * FROM bookTags WHERE showOnBookshelf = 1 ORDER BY name COLLATE NOCASE")
+    fun observeShowOnBookshelf(): Flow<List<BookTag>>
+
+    /** 获取展示在书架标签筛选中的标签（一次性） */
+    @Query("SELECT * FROM bookTags WHERE showOnBookshelf = 1 ORDER BY name COLLATE NOCASE")
+    suspend fun getShowOnBookshelf(): List<BookTag>
 }

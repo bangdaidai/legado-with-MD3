@@ -111,6 +111,7 @@ class BookshelfViewModel(
     private val pendingSavedBooksFlow = MutableStateFlow<List<BookUiItem>?>(null)
     private val isInitialLoadingFlow = MutableStateFlow(true)
     private val pendingUploadUrlFlow = MutableStateFlow<String?>(null)
+    private val selectedTagIdsFlow = MutableStateFlow<Set<Long>>(emptySet())
 
     private data class BookshelfSortConfig(
         val sort: Int,
@@ -177,6 +178,11 @@ class BookshelfViewModel(
 
     /** 标签配置（分组顺序、映射、排除等）变更版本号，驱动书架重算 displayTags。 */
     private val tagConfigVersionFlow = MutableStateFlow(0)
+
+    /** 展示在书架标签筛选中的标签列表 */
+    val bookshelfTagsFlow: StateFlow<List<io.legado.app.data.entities.BookTag>> =
+        appDb.bookTagDao.observeShowOnBookshelf()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
     private val hideEmptyGroupsFlow: StateFlow<Boolean> = bookshelfSettings
@@ -282,26 +288,37 @@ class BookshelfViewModel(
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val selectedGroupBooksFlow: SharedFlow<SelectedGroupBooksState> = groupIdFlow
-        .flatMapLatest { groupId ->
-            combine(
-                bookRepository.flowBookShelfByGroup(groupId),
-                groupsFlow,
-                sortConfigFlow,
-                tagConfigVersionFlow
-            ) { list, groups, sortConfig, _ ->
-                SelectedGroupBooksState(
-                    groupId = groupId,
-                    books = bookshelfRepository.sortBooks(
-                        list,
-                        groups.find { it.groupId == groupId },
-                        sortConfig.sort,
-                        sortConfig.sortOrder
-                    ).map { it.toUiItem() },
-                    sortConfig = sortConfig
-                )
+    private val selectedGroupBooksFlow: SharedFlow<SelectedGroupBooksState> = combine(
+        groupIdFlow,
+        selectedTagIdsFlow
+    ) { groupId, tagIds ->
+        groupId to tagIds
+    }.flatMapLatest { (groupId, tagIds) ->
+        bookRepository.flowBookShelfByGroup(groupId).flatMapLatest { list ->
+            if (tagIds.isEmpty()) {
+                flowOf(list)
+            } else {
+                // 同时包含所有选中标签的书籍 URL（AND 筛选）
+                appDb.bookTagRelationDao.flowBookUrlsByAllTags(
+                    tagIds.toList(),
+                    tagIds.size
+                ).map { filteredUrls ->
+                    list.filter { it.bookUrl in filteredUrls }
+                }
             }
-        }.distinctUntilChanged()
+        }.combine(groupsFlow, sortConfigFlow, tagConfigVersionFlow) { list, groups, sortConfig, _ ->
+            SelectedGroupBooksState(
+                groupId = groupId,
+                books = bookshelfRepository.sortBooks(
+                    list,
+                    groups.find { it.groupId == groupId },
+                    sortConfig.sort,
+                    sortConfig.sortOrder
+                ).map { it.toUiItem() },
+                sortConfig = sortConfig
+            )
+        }
+    }.distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
 
@@ -527,8 +544,10 @@ class BookshelfViewModel(
         dataStateFlow,
         interactionStateFlow,
         isInitialLoadingFlow,
-        hiddenGroupIdsFlow
-    ) { data, interaction, isInitialLoading, hiddenIds ->
+        hiddenGroupIdsFlow,
+        bookshelfTagsFlow,
+        selectedTagIdsFlow
+    ) { data, interaction, isInitialLoading, hiddenIds, bookshelfTags, selectedTagIds ->
         val selectedBooks = data.selectedBooks
         val groups = data.groups.filter { it.groupId !in hiddenIds }
         val allGroups = data.allGroups
@@ -603,7 +622,9 @@ class BookshelfViewModel(
             currentGroupName = currentGroupName,
             draggingBooks = interaction.draggingBooks?.toImmutableList(),
             pendingSavedBooks = interaction.pendingSavedBooks?.toImmutableList(),
-            visibleGroupBooks = visibleGroupBooks
+            visibleGroupBooks = visibleGroupBooks,
+            bookshelfTags = bookshelfTags.toImmutableList(),
+            selectedTagIds = selectedTagIds.toImmutableSet()
         )
     }
 
@@ -660,6 +681,10 @@ class BookshelfViewModel(
                     groupIdFlow.value = settings.saveTabPosition
                     clearSelection()
                     clearDragState()
+                }
+                // 恢复持久化的标签筛选状态
+                if (selectedTagIdsFlow.value != settings.selectedBookshelfTagIds) {
+                    selectedTagIdsFlow.value = settings.selectedBookshelfTagIds
                 }
                 updateBookGroupStyle(settings.bookGroupStyle)
                 postUpBooksCount()
@@ -722,6 +747,8 @@ class BookshelfViewModel(
                 }
             }
             BookshelfIntent.UploadResultConsumed -> pendingUploadUrlFlow.value = null
+            is BookshelfIntent.ToggleTagSelection -> toggleTagSelection(intent.tagId)
+            BookshelfIntent.ClearTagSelection -> clearTagSelection()
         }
     }
 
@@ -768,8 +795,15 @@ class BookshelfViewModel(
     fun changeGroup(groupId: Long) {
         if (groupIdFlow.value != groupId) {
             groupIdFlow.value = groupId
+            // 切换分组时清空标签筛选
+            selectedTagIdsFlow.value = emptySet()
             viewModelScope.launch {
-                bookshelfSettingsGateway.update { it.copy(saveTabPosition = groupId) }
+                bookshelfSettingsGateway.update {
+                    it.copy(
+                        saveTabPosition = groupId,
+                        selectedBookshelfTagIds = emptySet()
+                    )
+                }
             }
             clearSelection()
             clearDragState()
@@ -816,6 +850,32 @@ class BookshelfViewModel(
 
     fun clearSelection() {
         selectedBookUrlsFlow.value = emptySet()
+    }
+
+    private fun toggleTagSelection(tagId: Long) {
+        val current = selectedTagIdsFlow.value
+        selectedTagIdsFlow.value = if (tagId in current) {
+            current - tagId
+        } else {
+            current + tagId
+        }
+        // 持久化选中的标签
+        viewModelScope.launch {
+            bookshelfSettingsGateway.update {
+                it.copy(selectedBookshelfTagIds = selectedTagIdsFlow.value)
+            }
+        }
+        clearSelection()
+    }
+
+    private fun clearTagSelection() {
+        selectedTagIdsFlow.value = emptySet()
+        viewModelScope.launch {
+            bookshelfSettingsGateway.update {
+                it.copy(selectedBookshelfTagIds = emptySet())
+            }
+        }
+        clearSelection()
     }
 
     fun selectAllVisible() {

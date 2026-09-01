@@ -118,6 +118,7 @@ class TagDetailViewModel(private val tagId: Long) : ViewModel() {
                 name = newName,
                 groupId = intent.groupId,
                 color = intent.color,
+                showOnBookshelf = intent.showOnBookshelf,
                 updateTime = System.currentTimeMillis(),
             ),
         )

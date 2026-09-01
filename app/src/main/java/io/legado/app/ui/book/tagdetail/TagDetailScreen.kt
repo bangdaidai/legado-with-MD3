@@ -76,7 +76,13 @@ fun TagDetailScreen(
                 actions = {
                     MediumTonalButton(onClick = {
                         tag?.let {
-                            tagEdit = TagEditData(id = it.id, name = it.name, groupId = it.groupId, color = it.color)
+                            tagEdit = TagEditData(
+                                id = it.id,
+                                name = it.name,
+                                groupId = it.groupId,
+                                color = it.color,
+                                showOnBookshelf = it.showOnBookshelf
+                            )
                         }
                     }, text = "编辑")
                 },
@@ -138,7 +144,7 @@ fun TagDetailScreen(
             onRemoveAlias = { mapping -> onIntent(TagDetailIntent.RemoveAlias(mapping.oldTagName)) },
             onChange = { tagEdit = it },
             onConfirm = {
-                onIntent(TagDetailIntent.Save(it.name, it.groupId, it.color))
+                onIntent(TagDetailIntent.Save(it.name, it.groupId, it.color, it.showOnBookshelf))
                 tagEdit = null
             },
             onExclude = { name ->

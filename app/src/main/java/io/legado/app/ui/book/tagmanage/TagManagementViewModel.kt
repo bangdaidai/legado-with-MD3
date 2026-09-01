@@ -134,7 +134,12 @@ class TagManagementViewModel(
             }
             try {
                 appDb.bookTagDao.insert(
-                    BookTag(name = name, groupId = intent.groupId, color = intent.color),
+                    BookTag(
+                        name = name,
+                        groupId = intent.groupId,
+                        color = intent.color,
+                        showOnBookshelf = intent.showOnBookshelf
+                    ),
                 )
             } catch (e: SQLiteConstraintException) {
                 _effect.emit(TagManagementEffect.ShowMessage("标签「$name」已存在"))
@@ -155,6 +160,7 @@ class TagManagementViewModel(
                             name = name,
                             groupId = intent.groupId,
                             color = intent.color,
+                            showOnBookshelf = intent.showOnBookshelf,
                             updateTime = System.currentTimeMillis(),
                         ),
                     )

@@ -56,4 +56,8 @@ data class BookshelfSettings(
     val allowSameNameAuthorType: Boolean = false,
     val autoRefreshBook: Boolean = false,
     val saveTabPosition: Long = BookGroup.IdAll,
+    /** 是否显示书架标签筛选行 */
+    val showBookshelfTagFilter: Boolean = false,
+    /** 书架标签筛选中选中的标签 ID 集合 */
+    val selectedBookshelfTagIds: Set<Long> = emptySet(),
 )

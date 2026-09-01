@@ -17,7 +17,12 @@ data class TagDetailUiState(
 )
 
 sealed interface TagDetailIntent {
-    data class Save(val name: String, val groupId: Long, val color: Long) : TagDetailIntent
+    data class Save(
+        val name: String,
+        val groupId: Long,
+        val color: Long,
+        val showOnBookshelf: Boolean = true,
+    ) : TagDetailIntent
     data object Delete : TagDetailIntent
     data object Refresh : TagDetailIntent
     data class OpenBook(val bookUrl: String) : TagDetailIntent

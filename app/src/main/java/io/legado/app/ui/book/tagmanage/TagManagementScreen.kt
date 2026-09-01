@@ -157,7 +157,7 @@ fun TagManagementScreen(
         groups = state.groups,
         onChange = { tagEdit = it },
         onConfirm = {
-            onIntent(TagManagementIntent.SaveTag(it.id, it.name, it.groupId, it.color))
+            onIntent(TagManagementIntent.SaveTag(it.id, it.name, it.groupId, it.color, it.showOnBookshelf))
             tagEdit = null
         },
         onPickColor = { showColorPicker = true },

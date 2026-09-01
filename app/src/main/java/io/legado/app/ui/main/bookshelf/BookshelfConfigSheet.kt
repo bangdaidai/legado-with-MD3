@@ -645,6 +645,15 @@ fun BookshelfConfigSheet(
                 }
             )
 
+            CompactSwitchSettingItem(
+                title = stringResource(R.string.show_bookshelf_tag_filter),
+                checked = settings.showBookshelfTagFilter,
+                color = LegadoTheme.colorScheme.surface,
+                onCheckedChange = { value ->
+                    onUpdate { it.copy(showBookshelfTagFilter = value) }
+                }
+            )
+
             CompactSliderSettingItem(
                 title = stringResource(R.string.bookshelf_update_limit),
                 description = if (settings.bookshelfRefreshingLimit <= 0) stringResource(R.string.refresh_limit_unlimited) else stringResource(R.string.refresh_limit_books, settings.bookshelfRefreshingLimit),

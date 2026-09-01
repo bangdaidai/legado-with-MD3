@@ -43,6 +43,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -54,6 +56,7 @@ import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
@@ -100,6 +103,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookTag
 import io.legado.app.ui.book.group.GroupEditSheet
 import io.legado.app.ui.book.info.GroupSelectSheet
 import io.legado.app.ui.main.bookCoverSharedElementKey
@@ -117,6 +121,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.button.series.SmallToggleButton
 import io.legado.app.ui.widget.components.button.series.ToggleStyle
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.divider.PillHeaderDivider
@@ -741,6 +746,25 @@ fun BookshelfScreen(
                                 }
                             }
                         }
+                    }
+
+                    // 标签筛选行（仅 Tab 模式且开启标签筛选时显示，搜索模式下不显示）
+                    val showTagFilter = uiState.settings.showBookshelfTagFilter
+                        && bookGroupStyle == 0
+                        && uiState.bookshelfTags.isNotEmpty()
+                        && !uiState.isSearch
+                    if (showTagFilter) {
+                        TagFilterRow(
+                            tags = uiState.bookshelfTags,
+                            selectedTagIds = uiState.selectedTagIds,
+                            onTagClick = { tagId ->
+                                onIntent(BookshelfIntent.ToggleTagSelection(tagId))
+                            },
+                            onClearClick = {
+                                onIntent(BookshelfIntent.ClearTagSelection)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             )
@@ -1509,6 +1533,47 @@ fun BookshelfPage(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * 书架标签筛选行：横向滚动的标签 Chip 列表
+ */
+@Composable
+private fun TagFilterRow(
+    tags: ImmutableList<io.legado.app.data.entities.BookTag>,
+    selectedTagIds: ImmutableSet<Long>,
+    onTagClick: (Long) -> Unit,
+    onClearClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        // 清除按钮（有选中时显示）
+        if (selectedTagIds.isNotEmpty()) {
+            item {
+                SmallToggleButton(
+                    checked = true,
+                    onCheckedChange = { onClearClick() },
+                    style = ToggleStyle.Outlined,
+                    icon = Icons.Default.Clear,
+                    contentDescription = "清除筛选"
+                )
+            }
+        }
+
+        items(tags, key = { it.id }) { tag ->
+            val isSelected = tag.id in selectedTagIds
+            ToggleChip(
+                label = tag.name,
+                selected = isSelected,
+                onToggle = { onTagClick(tag.id) },
+                compact = true
+            )
         }
     }
 }

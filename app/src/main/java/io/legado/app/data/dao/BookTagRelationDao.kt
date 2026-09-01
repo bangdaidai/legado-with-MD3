@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import io.legado.app.data.entities.BookTagRelation
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BookTagRelationDao {
@@ -51,6 +52,30 @@ interface BookTagRelationDao {
 
     @Query("SELECT * FROM bookTagRelations")
     suspend fun getAllSync(): List<BookTagRelation>
+
+    /**
+     * 查询同时包含所有指定标签的书籍 URL（AND 筛选）
+     * @param tagIds 选中的标签 ID 列表
+     * @param tagCount 标签数量，用于 HAVING COUNT(DISTINCT tagId) = :tagCount
+     */
+    @Query("""
+        SELECT DISTINCT r.bookUrl FROM bookTagRelations r
+        WHERE r.tagId IN (:tagIds)
+        GROUP BY r.bookUrl
+        HAVING COUNT(DISTINCT r.tagId) = :tagCount
+    """)
+    suspend fun getBookUrlsByAllTags(tagIds: List<Long>, tagCount: Int): List<String>
+
+    /**
+     * 观察同时包含所有指定标签的书籍 URL（AND 筛选）
+     */
+    @Query("""
+        SELECT DISTINCT r.bookUrl FROM bookTagRelations r
+        WHERE r.tagId IN (:tagIds)
+        GROUP BY r.bookUrl
+        HAVING COUNT(DISTINCT r.tagId) = :tagCount
+    """)
+    fun flowBookUrlsByAllTags(tagIds: List<Long>, tagCount: Int): Flow<List<String>>
 
     data class TagCount(val tagId: Long, val cnt: Int)
 }

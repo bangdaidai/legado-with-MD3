@@ -40,6 +40,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -92,6 +93,8 @@ data class TagEditData(
     val name: String = "",
     val groupId: Long = 0L,
     val color: Long = 0xFF6200EE,
+    /** 是否展示在书架标签筛选中 */
+    val showOnBookshelf: Boolean = true,
 )
 
 @Composable
@@ -160,6 +163,22 @@ fun TagEditSheet(
                     selectedId = d.groupId,
                     onSelect = { onChange(d.copy(groupId = it)) },
                 )
+
+                // 展示在书架
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "展示在书架",
+                        style = LegadoTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = d.showOnBookshelf,
+                        onCheckedChange = { onChange(d.copy(showOnBookshelf = it)) }
+                    )
+                }
 
                 // 别名
                 if (aliases.isNotEmpty()) {

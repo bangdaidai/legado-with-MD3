@@ -15,6 +15,8 @@ data class BookTag(
     val name: String = "",
     val color: Long = 0,
     val groupId: Long = 0,
+    /** 是否展示在书架标签筛选中 */
+    val showOnBookshelf: Boolean = true,
     val createTime: Long = System.currentTimeMillis(),
     val updateTime: Long = System.currentTimeMillis(),
 ) {

@@ -30,6 +30,7 @@ sealed interface TagManagementIntent {
         val name: String,
         val groupId: Long,
         val color: Long,
+        val showOnBookshelf: Boolean = true,
     ) : TagManagementIntent
 
     data class DeleteTag(val tag: BookTag) : TagManagementIntent

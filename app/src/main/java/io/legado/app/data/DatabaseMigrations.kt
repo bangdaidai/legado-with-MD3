@@ -899,6 +899,9 @@ object DatabaseMigrations {
             database.execSQL(
                 "CREATE UNIQUE INDEX IF NOT EXISTS `index_bookTags_name` ON `bookTags` (`name`)"
             )
+
+            // 书架标签筛选：bookTags.showOnBookshelf
+            database.execSQL("ALTER TABLE bookTags ADD COLUMN showOnBookshelf INTEGER NOT NULL DEFAULT 1")
         }
     }
 }
