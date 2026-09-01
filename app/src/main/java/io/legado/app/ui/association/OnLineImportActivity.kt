@@ -1,6 +1,8 @@
 package io.legado.app.ui.association
 
 import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -18,7 +20,6 @@ import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import org.koin.androidx.compose.koinViewModel
-import androidx.activity.viewModels
 
 /**
  * 网络一键导入
@@ -38,6 +39,12 @@ class OnLineImportActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                finish()
+            }
+        })
 
         viewModel.successLive.observe(this) {
             when (it.first) {
@@ -132,7 +139,11 @@ class OnLineImportActivity :
             contentAlignment = Alignment.Center,
         ) {
             if (importType != null && importUrl != null) {
-                ImportScreen(type = importType, url = importUrl, onDismiss = { finish() })
+                ImportScreen(
+                    type = importType,
+                    url = importUrl,
+                    onDismiss = { finish() },
+                )
             } else {
                 AppCircularProgressIndicator()
             }
@@ -151,20 +162,21 @@ class OnLineImportActivity :
     }
 
     @Composable
-    private fun ImportScreen(type: String, url: String) {
+    private fun ImportScreen(type: String, url: String, onDismiss: () -> Unit) {
         when (type) {
             "rssSource" -> {
                 val viewModel = koinViewModel<ImportRssSourceViewModel>()
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(Unit) { viewModel.importSource(url) }
                 LaunchedEffect(Unit) {
-                    viewModel.effects.collect {
-                        finish()
-                    }
+                    viewModel.effects.collect { onDismiss() }
                 }
                 ImportRssSourceScreen(
                     state = uiState,
-                    onIntent = viewModel::onIntent,
+                    onIntent = { intent ->
+                        if (intent is ImportRssSourceIntent.Dismiss) onDismiss()
+                        else viewModel.onIntent(intent)
+                    },
                 )
             }
             "replaceRule" -> {
@@ -172,13 +184,14 @@ class OnLineImportActivity :
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(Unit) { viewModel.import(url) }
                 LaunchedEffect(Unit) {
-                    viewModel.effects.collect {
-                        finish()
-                    }
+                    viewModel.effects.collect { onDismiss() }
                 }
                 ImportReplaceRuleScreen(
                     state = uiState,
-                    onIntent = viewModel::onIntent,
+                    onIntent = { intent ->
+                        if (intent is ImportReplaceRuleIntent.Dismiss) onDismiss()
+                        else viewModel.onIntent(intent)
+                    },
                 )
             }
             "httpTts" -> {
@@ -186,13 +199,14 @@ class OnLineImportActivity :
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(Unit) { viewModel.importSource(url) }
                 LaunchedEffect(Unit) {
-                    viewModel.effects.collect {
-                        finish()
-                    }
+                    viewModel.effects.collect { onDismiss() }
                 }
                 ImportHttpTtsScreen(
                     state = uiState,
-                    onIntent = viewModel::onIntent,
+                    onIntent = { intent ->
+                        if (intent is ImportHttpTtsIntent.Dismiss) onDismiss()
+                        else viewModel.onIntent(intent)
+                    },
                 )
             }
             "dictRule" -> {
@@ -200,13 +214,14 @@ class OnLineImportActivity :
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(Unit) { viewModel.importSource(url) }
                 LaunchedEffect(Unit) {
-                    viewModel.effects.collect {
-                        finish()
-                    }
+                    viewModel.effects.collect { onDismiss() }
                 }
                 ImportDictRuleScreen(
                     state = uiState,
-                    onIntent = viewModel::onIntent,
+                    onIntent = { intent ->
+                        if (intent is ImportDictRuleIntent.Dismiss) onDismiss()
+                        else viewModel.onIntent(intent)
+                    },
                 )
             }
             "txtRule" -> {
@@ -214,13 +229,14 @@ class OnLineImportActivity :
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(Unit) { viewModel.importSource(url) }
                 LaunchedEffect(Unit) {
-                    viewModel.effects.collect {
-                        finish()
-                    }
+                    viewModel.effects.collect { onDismiss() }
                 }
                 ImportTxtTocRuleScreen(
                     state = uiState,
-                    onIntent = viewModel::onIntent,
+                    onIntent = { intent ->
+                        if (intent is ImportTxtTocRuleIntent.Dismiss) onDismiss()
+                        else viewModel.onIntent(intent)
+                    },
                 )
             }
         }
