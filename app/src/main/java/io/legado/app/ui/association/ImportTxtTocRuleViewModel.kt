@@ -2,7 +2,6 @@ package io.legado.app.ui.association
 
 import android.app.Application
 import androidx.core.net.toUri
-import androidx.lifecycle.MutableLiveData
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
@@ -14,6 +13,9 @@ import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
+import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
+import io.legado.app.ui.widget.components.importComponents.ImportStatus
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -22,6 +24,11 @@ import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
 import io.legado.app.utils.readText
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import splitties.init.appCtx
 
 class ImportTxtTocRuleViewModel(
@@ -29,53 +36,69 @@ class ImportTxtTocRuleViewModel(
     private val repository: TxtTocRuleRepository,
 ) : BaseViewModel(app) {
 
-    val errorLiveData = MutableLiveData<String>()
-    val successLiveData = MutableLiveData<Int>()
+    private val _uiState = MutableStateFlow<BaseImportUiState<TxtTocRule>>(BaseImportUiState.Idle)
+    val uiState = _uiState.asStateFlow()
 
-    val allSources = arrayListOf<TxtTocRule>()
-    val checkSources = arrayListOf<TxtTocRule?>()
-    val selectStatus = arrayListOf<Boolean>()
+    private val _effects = MutableSharedFlow<ImportTxtTocRuleEffect>()
+    val effects = _effects.asSharedFlow()
 
-    val isSelectAll: Boolean
-        get() {
-            selectStatus.forEach {
-                if (!it) {
-                    return false
-                }
-            }
-            return true
+    private val allSources = arrayListOf<TxtTocRule>()
+    private val checkSources = arrayListOf<TxtTocRule?>()
+
+    fun onIntent(intent: ImportTxtTocRuleIntent) {
+        when (intent) {
+            is ImportTxtTocRuleIntent.ToggleItem -> toggleItem(intent.index)
+            is ImportTxtTocRuleIntent.ToggleAll -> toggleAll(intent.isSelected)
+            is ImportTxtTocRuleIntent.UpdateItem -> updateItem(intent.index, intent.data)
+            is ImportTxtTocRuleIntent.Import -> importSelect(intent.items)
+            ImportTxtTocRuleIntent.Dismiss -> {}
         }
+    }
 
-    val selectCount: Int
-        get() {
-            var count = 0
-            selectStatus.forEach {
-                if (it) {
-                    count++
-                }
+    private fun toggleItem(index: Int) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(isSelected = !items[index].isSelected)
             }
-            return count
+            success.copy(items = items)
         }
+    }
 
-    fun importSelect(finally: () -> Unit) {
+    private fun toggleAll(isSelected: Boolean) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.map { it.copy(isSelected = isSelected) }
+            success.copy(items = items)
+        }
+    }
+
+    private fun updateItem(index: Int, data: TxtTocRule) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(data = data)
+            }
+            success.copy(items = items)
+        }
+    }
+
+    private fun importSelect(items: List<TxtTocRule>) {
         execute {
-            val selectSource = arrayListOf<TxtTocRule>()
-            selectStatus.forEachIndexed { index, b ->
-                if (b) {
-                    selectSource.add(allSources[index])
-                }
-            }
-            repository.insert(*selectSource.toTypedArray())
-        }.onFinally {
-            finally.invoke()
+            repository.insert(*items.toTypedArray())
+        }.onSuccess {
+            _effects.emit(ImportTxtTocRuleEffect.ImportFinished)
         }
     }
 
     fun importSource(text: String) {
         execute {
+            _uiState.value = BaseImportUiState.Loading
             importSourceAwait(text.trim())
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            _uiState.value = BaseImportUiState.Error("ImportError:${it.localizedMessage}")
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
@@ -118,13 +141,39 @@ class ImportTxtTocRuleViewModel(
 
     private fun comparisonSource() {
         execute {
-            allSources.forEach {
-                val source = repository.findById(it.id)
-                checkSources.add(source)
-                selectStatus.add(source == null || it != source)
+            val wrappers = allSources.map { source ->
+                val localSource = repository.findById(source.id)
+                checkSources.add(localSource)
+                val status = if (localSource == null) {
+                    ImportStatus.New
+                } else if (source != localSource) {
+                    ImportStatus.Update
+                } else {
+                    ImportStatus.Existing
+                }
+                ImportItemWrapper(
+                    data = source,
+                    oldData = localSource,
+                    isSelected = status != ImportStatus.Existing,
+                    status = status
+                )
             }
-            successLiveData.postValue(allSources.size)
+            _uiState.value = BaseImportUiState.Success(
+                source = "",
+                items = wrappers
+            )
         }
     }
+}
 
+sealed interface ImportTxtTocRuleIntent {
+    data class ToggleItem(val index: Int) : ImportTxtTocRuleIntent
+    data class ToggleAll(val isSelected: Boolean) : ImportTxtTocRuleIntent
+    data class UpdateItem(val index: Int, val data: TxtTocRule) : ImportTxtTocRuleIntent
+    data class Import(val items: List<TxtTocRule>) : ImportTxtTocRuleIntent
+    data object Dismiss : ImportTxtTocRuleIntent
+}
+
+sealed interface ImportTxtTocRuleEffect {
+    data object ImportFinished : ImportTxtTocRuleEffect
 }

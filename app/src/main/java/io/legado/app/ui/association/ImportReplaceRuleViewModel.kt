@@ -2,7 +2,6 @@ package io.legado.app.ui.association
 
 import android.app.Application
 import androidx.core.net.toUri
-import androidx.lifecycle.MutableLiveData
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
@@ -15,81 +14,114 @@ import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
+import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
+import io.legado.app.ui.widget.components.importComponents.ImportStatus
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
 import io.legado.app.utils.readText
 import io.legado.app.utils.splitNotBlank
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import splitties.init.appCtx
 
 class ImportReplaceRuleViewModel(
     app: Application,
     private val repository: ReplaceRuleRepository,
 ) : BaseViewModel(app) {
+
+    private val _uiState = MutableStateFlow<BaseImportUiState<ReplaceRule>>(BaseImportUiState.Idle)
+    val uiState = _uiState.asStateFlow()
+
+    private val _effects = MutableSharedFlow<ImportReplaceRuleEffect>()
+    val effects = _effects.asSharedFlow()
+
     var isAddGroup = false
     var groupName: String? = null
-    val errorLiveData = MutableLiveData<String>()
-    val successLiveData = MutableLiveData<Int>()
 
-    val allRules = arrayListOf<ReplaceRule>()
-    val checkRules = arrayListOf<ReplaceRule?>()
-    val selectStatus = arrayListOf<Boolean>()
+    private val allRules = arrayListOf<ReplaceRule>()
+    private val checkRules = arrayListOf<ReplaceRule?>()
 
-    val isSelectAll: Boolean
-        get() {
-            selectStatus.forEach {
-                if (!it) {
-                    return false
-                }
+    fun onIntent(intent: ImportReplaceRuleIntent) {
+        when (intent) {
+            is ImportReplaceRuleIntent.ToggleItem -> toggleItem(intent.index)
+            is ImportReplaceRuleIntent.ToggleAll -> toggleAll(intent.isSelected)
+            is ImportReplaceRuleIntent.UpdateItem -> updateItem(intent.index, intent.data)
+            is ImportReplaceRuleIntent.SetCustomGroup -> {
+                isAddGroup = intent.isAdd
+                groupName = intent.group
             }
-            return true
+            is ImportReplaceRuleIntent.Import -> importSelect(intent.items)
+            ImportReplaceRuleIntent.Dismiss -> {}
         }
+    }
 
-    val selectCount: Int
-        get() {
-            var count = 0
-            selectStatus.forEach {
-                if (it) {
-                    count++
-                }
+    private fun toggleItem(index: Int) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(isSelected = !items[index].isSelected)
             }
-            return count
+            success.copy(items = items)
         }
+    }
 
-    fun importSelect(finally: () -> Unit) {
+    private fun toggleAll(isSelected: Boolean) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.map { it.copy(isSelected = isSelected) }
+            success.copy(items = items)
+        }
+    }
+
+    private fun updateItem(index: Int, data: ReplaceRule) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(data = data)
+            }
+            success.copy(items = items)
+        }
+    }
+
+    private fun importSelect(items: List<ReplaceRule>) {
         execute {
             val group = groupName?.trim()
             val selectRules = arrayListOf<ReplaceRule>()
-            selectStatus.forEachIndexed { index, b ->
-                if (b) {
-                    val rule = allRules[index]
-                    if (!group.isNullOrEmpty()) {
-                        if (isAddGroup) {
-                            val groups = linkedSetOf<String>()
-                            rule.group?.splitNotBlank(AppPattern.splitGroupRegex)?.let {
-                                groups.addAll(it)
-                            }
-                            groups.add(group)
-                            rule.group = groups.joinToString(",")
-                        } else {
-                            rule.group = group
+            items.forEach { rule ->
+                if (!group.isNullOrEmpty()) {
+                    if (isAddGroup) {
+                        val groups = linkedSetOf<String>()
+                        rule.group?.splitNotBlank(AppPattern.splitGroupRegex)?.let {
+                            groups.addAll(it)
                         }
+                        groups.add(group)
+                        rule.group = groups.joinToString(",")
+                    } else {
+                        rule.group = group
                     }
-                    selectRules.add(rule)
                 }
+                selectRules.add(rule)
             }
             repository.insert(*selectRules.toTypedArray())
-        }.onFinally {
-            finally.invoke()
+        }.onSuccess {
+            _effects.emit(ImportReplaceRuleEffect.ImportFinished)
         }
     }
 
     fun import(text: String) {
         execute {
+            _uiState.value = BaseImportUiState.Loading
             importAwait(text.trim())
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            _uiState.value = BaseImportUiState.Error("ImportError:${it.localizedMessage}")
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
@@ -132,13 +164,44 @@ class ImportReplaceRuleViewModel(
 
     private fun comparisonSource() {
         execute {
-            allRules.forEach {
-                val rule = repository.findById(it.id)
-                checkRules.add(rule)
-                selectStatus.add(rule == null)
+            val wrappers = allRules.map { rule ->
+                val localRule = repository.findById(rule.id)
+                checkRules.add(localRule)
+                val status = if (localRule == null) {
+                    ImportStatus.New
+                } else if (rule.pattern != localRule.pattern ||
+                    rule.replacement != localRule.replacement ||
+                    rule.isRegex != localRule.isRegex ||
+                    rule.scope != localRule.scope
+                ) {
+                    ImportStatus.Update
+                } else {
+                    ImportStatus.Existing
+                }
+                ImportItemWrapper(
+                    data = rule,
+                    oldData = localRule,
+                    isSelected = status != ImportStatus.Existing,
+                    status = status
+                )
             }
-        }.onSuccess {
-            successLiveData.postValue(allRules.size)
+            _uiState.value = BaseImportUiState.Success(
+                source = "",
+                items = wrappers
+            )
         }
     }
+}
+
+sealed interface ImportReplaceRuleIntent {
+    data class ToggleItem(val index: Int) : ImportReplaceRuleIntent
+    data class ToggleAll(val isSelected: Boolean) : ImportReplaceRuleIntent
+    data class UpdateItem(val index: Int, val data: ReplaceRule) : ImportReplaceRuleIntent
+    data class SetCustomGroup(val group: String, val isAdd: Boolean) : ImportReplaceRuleIntent
+    data class Import(val items: List<ReplaceRule>) : ImportReplaceRuleIntent
+    data object Dismiss : ImportReplaceRuleIntent
+}
+
+sealed interface ImportReplaceRuleEffect {
+    data object ImportFinished : ImportReplaceRuleEffect
 }

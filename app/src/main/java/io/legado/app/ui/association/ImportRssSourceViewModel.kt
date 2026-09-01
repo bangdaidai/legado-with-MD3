@@ -2,7 +2,6 @@ package io.legado.app.ui.association
 
 import android.app.Application
 import androidx.core.net.toUri
-import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
@@ -17,6 +16,9 @@ import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.source.SourceHelp
+import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
+import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
+import io.legado.app.ui.widget.components.importComponents.ImportStatus
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -27,90 +29,121 @@ import io.legado.app.utils.isUri
 import io.legado.app.utils.jsonPath
 import io.legado.app.utils.readText
 import io.legado.app.utils.splitNotBlank
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import splitties.init.appCtx
 
 class ImportRssSourceViewModel(
     app: Application,
     private val repository: RssRepository,
 ) : BaseViewModel(app) {
+
+    private val _uiState = MutableStateFlow<BaseImportUiState<RssSource>>(BaseImportUiState.Idle)
+    val uiState = _uiState.asStateFlow()
+
+    private val _effects = MutableSharedFlow<ImportRssSourceEffect>()
+    val effects = _effects.asSharedFlow()
+
     var isAddGroup = false
     var groupName: String? = null
-    val errorLiveData = MutableLiveData<String>()
-    val successLiveData = MutableLiveData<Int>()
 
-    val allSources = arrayListOf<RssSource>()
-    val checkSources = arrayListOf<RssSource?>()
-    val selectStatus = arrayListOf<Boolean>()
+    private val allSources = arrayListOf<RssSource>()
+    private val checkSources = arrayListOf<RssSource?>()
 
-    val isSelectAll: Boolean
-        get() {
-            selectStatus.forEach {
-                if (!it) {
-                    return false
-                }
+    fun onIntent(intent: ImportRssSourceIntent) {
+        when (intent) {
+            is ImportRssSourceIntent.ToggleItem -> toggleItem(intent.index)
+            is ImportRssSourceIntent.ToggleAll -> toggleAll(intent.isSelected)
+            is ImportRssSourceIntent.UpdateItem -> updateItem(intent.index, intent.data)
+            is ImportRssSourceIntent.SetCustomGroup -> {
+                isAddGroup = intent.isAdd
+                groupName = intent.group
             }
-            return true
+            is ImportRssSourceIntent.Import -> importSelect(intent.items)
+            ImportRssSourceIntent.Dismiss -> {}
         }
+    }
 
-    val selectCount: Int
-        get() {
-            var count = 0
-            selectStatus.forEach {
-                if (it) {
-                    count++
-                }
+    private fun toggleItem(index: Int) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(isSelected = !items[index].isSelected)
             }
-            return count
+            success.copy(items = items)
         }
+    }
 
-    fun importSelect(finally: () -> Unit) {
+    private fun toggleAll(isSelected: Boolean) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.map { it.copy(isSelected = isSelected) }
+            success.copy(items = items)
+        }
+    }
+
+    private fun updateItem(index: Int, data: RssSource) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(data = data)
+            }
+            success.copy(items = items)
+        }
+    }
+
+    private fun importSelect(items: List<RssSource>) {
         execute {
             val group = groupName?.trim()
             val keepName = AppConfig.importKeepName
             val keepGroup = AppConfig.importKeepGroup
             val keepEnable = AppConfig.importKeepEnable
             val selectSource = arrayListOf<RssSource>()
-            selectStatus.forEachIndexed { index, b ->
-                if (b) {
-                    val source = allSources[index]
-                    checkSources[index]?.let {
-                        if (keepName) {
-                            source.sourceName = it.sourceName
-                        }
-                        if (keepGroup) {
-                            source.sourceGroup = it.sourceGroup
-                        }
-                        if (keepEnable) {
-                            source.enabled = it.enabled
-                        }
-                        source.customOrder = it.customOrder
+            items.forEach { source ->
+                val checkSource = checkSources.find { it?.sourceUrl == source.sourceUrl }
+                checkSource?.let {
+                    if (keepName) {
+                        source.sourceName = it.sourceName
                     }
-                    if (!group.isNullOrEmpty()) {
-                        if (isAddGroup) {
-                            val groups = linkedSetOf<String>()
-                            source.sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.let {
-                                groups.addAll(it)
-                            }
-                            groups.add(group)
-                            source.sourceGroup = groups.joinToString(",")
-                        } else {
-                            source.sourceGroup = group
-                        }
+                    if (keepGroup) {
+                        source.sourceGroup = it.sourceGroup
                     }
-                    selectSource.add(source)
+                    if (keepEnable) {
+                        source.enabled = it.enabled
+                    }
+                    source.customOrder = it.customOrder
                 }
+                if (!group.isNullOrEmpty()) {
+                    if (isAddGroup) {
+                        val groups = linkedSetOf<String>()
+                        source.sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.let {
+                            groups.addAll(it)
+                        }
+                        groups.add(group)
+                        source.sourceGroup = groups.joinToString(",")
+                    } else {
+                        source.sourceGroup = group
+                    }
+                }
+                selectSource.add(source)
             }
             SourceHelp.insertRssSource(*selectSource.toTypedArray())
-        }.onFinally {
-            finally.invoke()
+        }.onSuccess {
+            _effects.emit(ImportRssSourceEffect.ImportFinished)
         }
     }
 
     fun importSource(text: String) {
         execute {
+            _uiState.value = BaseImportUiState.Loading
             importSourceAwait(text)
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            _uiState.value = BaseImportUiState.Error("ImportError:${it.localizedMessage}")
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
@@ -133,8 +166,6 @@ class ImportRssSourceViewModel(
                     val source = it.firstOrNull() ?: return@let
                     if (source.sourceUrl.isEmpty()) {
                         throw NoStackTraceException("不是订阅源")
-
-
                     }
                     allSources.addAll(it)
                 }
@@ -159,8 +190,6 @@ class ImportRssSourceViewModel(
             }
 
             else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
-
-
         }
     }
 
@@ -192,13 +221,38 @@ class ImportRssSourceViewModel(
 
     private fun comparisonSource() {
         execute {
-            allSources.forEach {
-                val has = repository.getByKey(it.sourceUrl)
-                checkSources.add(has)
-                selectStatus.add(has == null || has.lastUpdateTime < it.lastUpdateTime)
+            val wrappers = allSources.map { source ->
+                val localSource = repository.getByKey(source.sourceUrl)
+                checkSources.add(localSource)
+                val status = when {
+                    localSource == null -> ImportStatus.New
+                    source.lastUpdateTime > localSource.lastUpdateTime -> ImportStatus.Update
+                    else -> ImportStatus.Existing
+                }
+                ImportItemWrapper(
+                    data = source,
+                    oldData = localSource,
+                    isSelected = status != ImportStatus.Existing,
+                    status = status
+                )
             }
-            successLiveData.postValue(allSources.size)
+            _uiState.value = BaseImportUiState.Success(
+                source = "",
+                items = wrappers
+            )
         }
     }
+}
 
+sealed interface ImportRssSourceIntent {
+    data class ToggleItem(val index: Int) : ImportRssSourceIntent
+    data class ToggleAll(val isSelected: Boolean) : ImportRssSourceIntent
+    data class UpdateItem(val index: Int, val data: RssSource) : ImportRssSourceIntent
+    data class SetCustomGroup(val group: String, val isAdd: Boolean) : ImportRssSourceIntent
+    data class Import(val items: List<RssSource>) : ImportRssSourceIntent
+    data object Dismiss : ImportRssSourceIntent
+}
+
+sealed interface ImportRssSourceEffect {
+    data object ImportFinished : ImportRssSourceEffect
 }

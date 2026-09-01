@@ -3,7 +3,6 @@ package io.legado.app.ui.association
 import android.app.Application
 import android.util.Base64
 import androidx.core.net.toUri
-import androidx.lifecycle.MutableLiveData
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
@@ -16,12 +15,20 @@ import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
+import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
+import io.legado.app.ui.widget.components.importComponents.ImportStatus
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isDataUrl
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
 import io.legado.app.utils.readText
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import splitties.init.appCtx
 
 class ImportHttpTtsViewModel(
@@ -29,53 +36,69 @@ class ImportHttpTtsViewModel(
     private val repository: HttpTtsRepository,
 ) : BaseViewModel(app) {
 
-    val errorLiveData = MutableLiveData<String>()
-    val successLiveData = MutableLiveData<Int>()
+    private val _uiState = MutableStateFlow<BaseImportUiState<HttpTTS>>(BaseImportUiState.Idle)
+    val uiState = _uiState.asStateFlow()
 
-    val allSources = arrayListOf<HttpTTS>()
-    val checkSources = arrayListOf<HttpTTS?>()
-    val selectStatus = arrayListOf<Boolean>()
+    private val _effects = MutableSharedFlow<ImportHttpTtsEffect>()
+    val effects = _effects.asSharedFlow()
 
-    val isSelectAll: Boolean
-        get() {
-            selectStatus.forEach {
-                if (!it) {
-                    return false
-                }
-            }
-            return true
+    private val allSources = arrayListOf<HttpTTS>()
+    private val checkSources = arrayListOf<HttpTTS?>()
+
+    fun onIntent(intent: ImportHttpTtsIntent) {
+        when (intent) {
+            is ImportHttpTtsIntent.ToggleItem -> toggleItem(intent.index)
+            is ImportHttpTtsIntent.ToggleAll -> toggleAll(intent.isSelected)
+            is ImportHttpTtsIntent.UpdateItem -> updateItem(intent.index, intent.data)
+            is ImportHttpTtsIntent.Import -> importSelect(intent.items)
+            ImportHttpTtsIntent.Dismiss -> {}
         }
+    }
 
-    val selectCount: Int
-        get() {
-            var count = 0
-            selectStatus.forEach {
-                if (it) {
-                    count++
-                }
+    private fun toggleItem(index: Int) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(isSelected = !items[index].isSelected)
             }
-            return count
+            success.copy(items = items)
         }
+    }
 
-    fun importSelect(finally: () -> Unit) {
+    private fun toggleAll(isSelected: Boolean) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.map { it.copy(isSelected = isSelected) }
+            success.copy(items = items)
+        }
+    }
+
+    private fun updateItem(index: Int, data: HttpTTS) {
+        _uiState.update { state ->
+            val success = state as? BaseImportUiState.Success ?: return@update state
+            val items = success.items.toMutableList()
+            if (index in items.indices) {
+                items[index] = items[index].copy(data = data)
+            }
+            success.copy(items = items)
+        }
+    }
+
+    private fun importSelect(items: List<HttpTTS>) {
         execute {
-            val selectSource = arrayListOf<HttpTTS>()
-            selectStatus.forEachIndexed { index, b ->
-                if (b) {
-                    selectSource.add(allSources[index])
-                }
-            }
-            repository.insert(*selectSource.toTypedArray())
-        }.onFinally {
-            finally.invoke()
+            repository.insert(*items.toTypedArray())
+        }.onSuccess {
+            _effects.emit(ImportHttpTtsEffect.ImportFinished)
         }
     }
 
     fun importSource(text: String) {
         execute {
+            _uiState.value = BaseImportUiState.Loading
             importSourceAwait(text.trim())
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            _uiState.value = BaseImportUiState.Error("ImportError:${it.localizedMessage}")
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
@@ -122,13 +145,37 @@ class ImportHttpTtsViewModel(
 
     private fun comparisonSource() {
         execute {
-            allSources.forEach {
-                val source = repository.findById(it.id)
-                checkSources.add(source)
-                selectStatus.add(source == null || source.lastUpdateTime < it.lastUpdateTime)
+            val wrappers = allSources.map { source ->
+                val localSource = repository.findById(source.id)
+                checkSources.add(localSource)
+                val status = when {
+                    localSource == null -> ImportStatus.New
+                    source.lastUpdateTime > localSource.lastUpdateTime -> ImportStatus.Update
+                    else -> ImportStatus.Existing
+                }
+                ImportItemWrapper(
+                    data = source,
+                    oldData = localSource,
+                    isSelected = status != ImportStatus.Existing,
+                    status = status
+                )
             }
-            successLiveData.postValue(allSources.size)
+            _uiState.value = BaseImportUiState.Success(
+                source = "",
+                items = wrappers
+            )
         }
     }
+}
 
+sealed interface ImportHttpTtsIntent {
+    data class ToggleItem(val index: Int) : ImportHttpTtsIntent
+    data class ToggleAll(val isSelected: Boolean) : ImportHttpTtsIntent
+    data class UpdateItem(val index: Int, val data: HttpTTS) : ImportHttpTtsIntent
+    data class Import(val items: List<HttpTTS>) : ImportHttpTtsIntent
+    data object Dismiss : ImportHttpTtsIntent
+}
+
+sealed interface ImportHttpTtsEffect {
+    data object ImportFinished : ImportHttpTtsEffect
 }
