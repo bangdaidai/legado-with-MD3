@@ -18,7 +18,7 @@ import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import org.koin.androidx.compose.koinViewModel
-import org.koin.androidx.viewmodel.ext.android.viewModel
+import androidx.activity.viewModels
 
 /**
  * 网络一键导入
@@ -30,7 +30,7 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 class OnLineImportActivity :
     BaseComposeActivity(transparent = true, imageBg = false) {
 
-    private val viewModel by viewModel<OnLineImportViewModel>()
+    private val viewModel by viewModels<OnLineImportViewModel>()
 
     private var errorTitle by mutableStateOf("")
     private var errorMsg by mutableStateOf("")
