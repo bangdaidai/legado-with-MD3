@@ -67,7 +67,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import io.legado.app.data.appDb
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
@@ -117,12 +116,12 @@ class BookshelfViewModel(
 
     /** 选中标签对应的书籍 URL 集合（AND 语义），用于书架筛选 */
     private val filteredTagBookUrlsFlow: Flow<Set<String>> =
-        selectedTagIdsFlow.map { selectedIds ->
+        selectedTagIdsFlow.flatMapLatest { selectedIds ->
             if (selectedIds.isEmpty()) {
-                emptySet()
+                flowOf(emptySet())
             } else {
-                val tagIdList = selectedIds.toList()
-                appDb.bookTagRelationDao.getBookUrlsByAllTags(tagIdList, tagIdList.size).toSet()
+                bookshelfTagGateway.flowBookUrlsByAllTags(selectedIds.toList(), selectedIds.size)
+                    .map { it.toSet() }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
@@ -180,13 +179,13 @@ class BookshelfViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** 标签管理中设置的标签名 -> 颜色（Long），供书架标签按标签系统配色。 */
-    val tagColorMapFlow: StateFlow<Map<String, Long>> = appDb.bookTagDao.observeAll()
+    val tagColorMapFlow: StateFlow<Map<String, Long>> = bookshelfTagGateway.observeAllBookTags()
         .map { list -> list.associate { it.name to it.color } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /** 排除标签规则（普通关键字 / 正则），供书架标签过滤。 */
     val excludedTagsFlow: StateFlow<List<io.legado.app.data.entities.ExcludedTag>> =
-        appDb.excludedTagDao.observeAll()
+        bookshelfTagGateway.observeAllExcludedTags()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** 标签配置（分组顺序、映射、排除等）变更版本号，驱动书架重算 displayTags。 */
