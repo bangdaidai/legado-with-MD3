@@ -308,17 +308,19 @@ class BookshelfViewModel(
                     list.filter { it.bookUrl in filteredUrls }
                 }
             }
-        }.combine(groupsFlow, sortConfigFlow, tagConfigVersionFlow) { list, groups, sortConfig, _ ->
-            SelectedGroupBooksState(
-                groupId = groupId,
-                books = bookshelfRepository.sortBooks(
-                    list,
-                    groups.find { it.groupId == groupId },
-                    sortConfig.sort,
-                    sortConfig.sortOrder
-                ).map { it.toUiItem() },
-                sortConfig = sortConfig
-            )
+        }.let { booksFlow ->
+            combine(booksFlow, groupsFlow, sortConfigFlow, tagConfigVersionFlow) { list, groups, sortConfig, _ ->
+                SelectedGroupBooksState(
+                    groupId = groupId,
+                    books = bookshelfRepository.sortBooks(
+                        list,
+                        groups.find { it.groupId == groupId },
+                        sortConfig.sort,
+                        sortConfig.sortOrder
+                    ).map { it.toUiItem() },
+                    sortConfig = sortConfig
+                )
+            }
         }
     }.distinctUntilChanged()
         .flowOn(Dispatchers.Default)
@@ -543,13 +545,13 @@ class BookshelfViewModel(
     )
 
     private val contentUiState: Flow<BookshelfUiState> = combine(
-        dataStateFlow,
-        interactionStateFlow,
-        isInitialLoadingFlow,
+        combine(dataStateFlow, interactionStateFlow, isInitialLoadingFlow) { data, interaction, isInitialLoading ->
+            Triple(data, interaction, isInitialLoading)
+        },
         hiddenGroupIdsFlow,
         bookshelfTagsFlow,
         selectedTagIdsFlow
-    ) { data, interaction, isInitialLoading, hiddenIds, bookshelfTags, selectedTagIds ->
+    ) { (data, interaction, isInitialLoading), hiddenIds, bookshelfTags, selectedTagIds ->
         val selectedBooks = data.selectedBooks
         val groups = data.groups.filter { it.groupId !in hiddenIds }
         val allGroups = data.allGroups

@@ -10,7 +10,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.DialogFragment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.legado.app.domain.gateway.AppUiConfigurationGateway
 import io.legado.app.ui.theme.AppTheme
+import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 /**
@@ -26,6 +29,7 @@ class ImportRssSourceDialog() : DialogFragment() {
     }
 
     private val viewModel by viewModel<ImportRssSourceViewModel>()
+    private val appUiConfigurationGateway by inject<AppUiConfigurationGateway>()
 
     override fun onStart() {
         super.onStart()
@@ -50,7 +54,9 @@ class ImportRssSourceDialog() : DialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                AppTheme {
+                val uiConfiguration by appUiConfigurationGateway.configuration
+                    .collectAsStateWithLifecycle(appUiConfigurationGateway.currentConfiguration)
+                AppTheme(configuration = uiConfiguration) {
                     val state by viewModel.uiState.collectAsState()
                     ImportRssSourceScreen(
                         state = state,
