@@ -9,6 +9,7 @@ import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.config.compatDsBoolean
 import io.legado.app.help.config.compatDsInt
 import io.legado.app.help.config.compatDsLong
+import io.legado.app.help.config.compatDsStringSet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -84,6 +85,10 @@ internal fun Preferences.toBookshelfSettings() = BookshelfSettings(
     allowSameNameAuthorType = compatDsBoolean(PreferKey.allowSameNameAuthorType) ?: false,
     autoRefreshBook = compatDsBoolean(PreferKey.autoRefresh) ?: false,
     saveTabPosition = compatDsLong(PreferKey.saveTabPosition) ?: BookGroup.IdAll,
+    showBookshelfTagFilter = compatDsBoolean(PreferKey.showBookshelfTagFilter) ?: false,
+    selectedBookshelfTagIds = compatDsStringSet(PreferKey.selectedBookshelfTagIds)
+        ?.mapNotNullTo(mutableSetOf()) { it.toLongOrNull() }
+        ?: emptySet(),
 )
 
 internal fun BookshelfSettings.toPrefMap(): Map<String, Any?> = mapOf(
@@ -139,4 +144,6 @@ internal fun BookshelfSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.allowSameNameAuthorType to allowSameNameAuthorType,
     PreferKey.autoRefresh to autoRefreshBook,
     PreferKey.saveTabPosition to saveTabPosition,
+    PreferKey.showBookshelfTagFilter to showBookshelfTagFilter,
+    PreferKey.selectedBookshelfTagIds to selectedBookshelfTagIds.mapTo(mutableSetOf()) { it.toString() },
 )

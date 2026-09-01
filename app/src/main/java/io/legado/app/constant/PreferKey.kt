@@ -432,6 +432,8 @@ object PreferKey {
     const val disableMangaCrossFade = "disableMangaCrossFade"
     const val titleBarMode = "titleBarMode"
     const val shouldShowExpandButton = "shouldShowExpandButton"
+    const val showBookshelfTagFilter = "showBookshelfTagFilter"
+    const val selectedBookshelfTagIds = "selectedBookshelfTagIds"
 
     const val exploreFilterState = "explore_filter_state"
 
