@@ -1,4 +1,4 @@
-name: Build Signed Release APK
+name: Build APK
 on:
   push:
     branches: [main]
@@ -358,6 +358,30 @@ jobs:
           path: app/build/outputs/mapping/appRelease/mapping.txt
           retention-days: 30
           compression-level: 9
+
+  build-debug:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Build Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleAppDebug -x lint --no-daemon
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: legado-debug-apk
+          path: app/build/outputs/apk/app/debug/*.apk
+          retention-days: 7
 
   release:
     name: Create GitHub Release
