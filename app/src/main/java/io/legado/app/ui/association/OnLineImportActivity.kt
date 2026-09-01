@@ -14,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.base.BaseComposeActivity
+import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import org.koin.androidx.compose.koinViewModel
