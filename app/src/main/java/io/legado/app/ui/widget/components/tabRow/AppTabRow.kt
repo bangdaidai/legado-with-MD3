@@ -57,23 +57,8 @@ fun AppTabRow(
                 containerColor = Color.Transparent,
                 minTabWidth = 0.dp,
                 indicator = {
-                    if (!useDefaultTabPadding) {
-                        //自定义指示器：宽度仅匹配文字，排除标签末尾间距
-                        TabRowDefaults.PrimaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex),
-                            width = if (selectedTabIndex < tabTitles.lastIndex) {
-                                TabRowDefaults.ScrollableTabRowMinTabWidth
-                            } else {
-                                androidx.compose.ui.unit.Dp.Unspecified
-                            },
-                            height = 3.dp,
-                        )
-                    } else {
-                        //使用 Material 3 默认指示器
-                        TabRowDefaults.PrimaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex)
-                        )
-                    }
+                    //使用 Material 3 默认指示器
+                    TabRowDefaults.PrimaryIndicator()
                 },
                 modifier = modifier
             ) {
