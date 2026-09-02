@@ -3078,6 +3078,7 @@
     <string name="cloud_tts_manual_voice_hint">适用于厂商自定义、复刻音色，或目录中尚未列出的音色。</string>
     <string name="cloud_tts_step_preset">音色预设</string>
     <string name="cloud_tts_preset_name">预设名称</string>
+    <string name="cloud_tts_preset_notes">备注（覆盖风格标签）</string>
     <string name="cloud_tts_style_value">风格/情感：%1$s</string>
     <string name="cloud_tts_role_value">角色风格：%1$s</string>
     <string name="cloud_tts_default">默认</string>

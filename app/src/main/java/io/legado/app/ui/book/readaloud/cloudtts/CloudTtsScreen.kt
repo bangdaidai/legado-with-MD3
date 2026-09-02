@@ -979,9 +979,9 @@ private fun TtsVoicePresetEditorContent(
                         )
                     }
                     if (state.discovering) {
-                        AppText(stringResource(R.string.cloud_tts_loading_voices), Modifier.padding(24.dp, 12.dp))
+                        AppText(stringResource(R.string.cloud_tts_loading_voices), Modifier.padding(horizontal = 12.dp, vertical = 12.dp))
                     } else if (editor.editingVoiceId == null && filteredVoices.isEmpty()) {
-                        AppText(stringResource(R.string.cloud_tts_no_matching_voice), Modifier.padding(24.dp, 12.dp))
+                        AppText(stringResource(R.string.cloud_tts_no_matching_voice), Modifier.padding(horizontal = 12.dp, vertical = 12.dp))
                     }
                 }
                 if (editor.editingVoiceId == null) {
@@ -1025,14 +1025,14 @@ private fun TtsVoicePresetEditorContent(
                         MediumTonalButton(
                             onClick = { onIntent(CloudTtsIntent.DiscoverVoices) },
                             enabled = !state.discovering,
-                            modifier = Modifier.padding(horizontal = 12.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             text = stringResource(R.string.cloud_tts_refresh_catalog),
                         )
                     }
                     if (editor.editingVoiceId == null && editor.engineType == ReadAloudVoice.ENGINE_CLOUD) {
                         MediumTonalButton(
                             onClick = { manualVoiceIdVisible = !manualVoiceIdVisible },
-                            modifier = Modifier.padding(horizontal = 12.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             text = stringResource(if (manualVoiceIdVisible) R.string.cloud_tts_hide_manual_voice else R.string.cloud_tts_manual_voice_action),
                         )
                     }
@@ -1052,6 +1052,30 @@ private fun TtsVoicePresetEditorContent(
                     }
                     EngineSectionTitle(R.string.cloud_tts_step_preset)
                     Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
+                    Row(
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        ToggleChip(
+                            label = stringResource(R.string.voice_gender_male),
+                            selected = editor.gender == ReadAloudVoiceTraits.GENDER_MALE,
+                            onToggle = { update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_MALE)) },
+                            compact = true,
+                        )
+                        ToggleChip(
+                            label = stringResource(R.string.voice_gender_female),
+                            selected = editor.gender == ReadAloudVoiceTraits.GENDER_FEMALE,
+                            onToggle = { update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_FEMALE)) },
+                            compact = true,
+                        )
+                        ToggleChip(
+                            label = stringResource(R.string.voice_gender_unknown),
+                            selected = editor.gender == ReadAloudVoiceTraits.GENDER_UNKNOWN,
+                            onToggle = { update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_UNKNOWN)) },
+                            compact = true,
+                        )
+                    }
+                    Field(editor.notes, { update(editor.copy(notes = it)) }, stringResource(R.string.cloud_tts_preset_notes))
                     if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD) {
                         if (!selectedVoice?.styles.isNullOrEmpty()) {
                             MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
@@ -1137,7 +1161,7 @@ private fun TtsVoicePresetEditorContent(
                         enabled = editor.voiceId.isNotBlank() && !state.testing,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp),
                         text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
                     )
                 }
@@ -1151,7 +1175,7 @@ private fun Field(value: String, onValueChange: (String) -> Unit, label: String)
         value = value,
         onValueChange = onValueChange,
         label = label,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         singleLine = true,
     )
 }
@@ -1163,7 +1187,7 @@ private fun MenuButton(
 ) {
     MediumTonalButton(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         text = text,
     )
 }

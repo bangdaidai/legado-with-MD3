@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readaloud.cloudtts
 import android.net.Uri
 import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.HttpTTS
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -99,6 +100,8 @@ data class TtsVoicePresetEditorUi(
     val engineName: String = "",
     val voiceId: String = "",
     val voiceName: String = "",
+    val gender: String = ReadAloudVoiceTraits.GENDER_UNKNOWN,
+    val notes: String = "",
     val locale: String = "",
     val style: String = "",
     val role: String = "",

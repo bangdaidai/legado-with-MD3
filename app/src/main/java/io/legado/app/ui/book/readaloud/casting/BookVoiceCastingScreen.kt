@@ -488,7 +488,7 @@ private fun voiceDescription(voice: VoiceOptionUi): String {
             ReadAloudVoiceTraits.GENDER_FEMALE -> stringResource(R.string.voice_gender_female)
             else -> ""
         }
-        (listOf(engineType, voice.engineName, gender) + voice.descriptors)
+        (listOf(gender) + voice.descriptors)
             .filter(String::isNotBlank).joinToString(" · ")
     } else {
         stringResource(R.string.voice_unavailable_named, engineType)

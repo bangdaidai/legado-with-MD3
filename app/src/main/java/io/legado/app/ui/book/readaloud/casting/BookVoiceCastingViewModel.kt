@@ -141,7 +141,7 @@ class BookVoiceCastingViewModel(
                 id = voice.id,
                 name = voice.displayName,
                 engineType = voice.engineType,
-                engineName = voice.engineId,
+                engineName = "",
                 selectable = voice.available && voice.enabled,
                 gender = traits.gender,
                 // 一行装不下太多标签, 只取前 3 条

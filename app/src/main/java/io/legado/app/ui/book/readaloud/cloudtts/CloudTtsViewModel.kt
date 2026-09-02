@@ -308,6 +308,9 @@ class CloudTtsViewModel(
                     if (voice.engineType == ReadAloudVoice.ENGINE_HTTP) DEFAULT_ENGINE_VOICE_ID else ""
                 },
                 voiceName = voice.displayName,
+                gender = cloudConfig?.gender?.takeIf(String::isNotBlank)
+                    ?: ReadAloudVoiceTraits.of(voice).gender,
+                notes = cloudConfig?.notes.orEmpty(),
                 locale = cloudConfig?.locale.orEmpty(),
                 style = cloudConfig?.style.orEmpty(),
                 role = cloudConfig?.role.orEmpty(),
@@ -669,6 +672,8 @@ class CloudTtsViewModel(
             speakerId = speakerId.trim(),
             displayName = editor.voiceName.trim().ifBlank { engineName(editor.engineType, editor.engineId) },
             traitsJson = request?.let { value -> GSON.toJson(CloudTtsVoiceConfig(
+                gender = editor.gender,
+                notes = editor.notes,
                 locale = value.locale,
                 style = value.style,
                 role = value.role,

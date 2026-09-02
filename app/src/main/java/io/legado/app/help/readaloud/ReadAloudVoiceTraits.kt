@@ -47,6 +47,7 @@ object ReadAloudVoiceTraits {
                 GSON.fromJsonObject<CloudTtsVoiceConfig>(voice.traitsJson).getOrNull()
             }.getOrNull()?.let {
                 VoiceTraits(
+                    gender = normalizeGender(it.gender),
                     language = it.locale,
                     style = it.style,
                     tags = listOf(it.role),

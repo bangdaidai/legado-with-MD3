@@ -1,6 +1,8 @@
 package io.legado.app.domain.model.readaloud
 
 data class CloudTtsVoiceConfig(
+    val gender: String = "",
+    val notes: String = "",
     val locale: String = "",
     val style: String = "",
     val role: String = "",
