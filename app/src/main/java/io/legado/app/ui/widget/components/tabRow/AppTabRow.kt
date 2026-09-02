@@ -3,7 +3,6 @@ package io.legado.app.ui.widget.components.tabRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -57,9 +56,9 @@ fun AppTabRow(
                 divider = { },
                 containerColor = Color.Transparent,
                 minTabWidth = 0.dp,
-                indicator = { tabPositions ->
+                indicator = {
                     //自定义指示器：宽度为文字宽度，位置对齐文字
-                    val selectedTab = tabPositions[selectedTabIndex]
+                    val selectedTab = currentTabPosition
                     TabRowDefaults.PrimaryIndicator(
                         modifier = Modifier
                             .offset(x = selectedTab.left)  // 定位到 Tab 左边缘
@@ -128,13 +127,13 @@ private fun AppTab(
             selected = selected,
             onClick = onClick,
             modifier = Modifier.padding(end = endPadding),
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
             text = {
                 AppText(
                     text = title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = LegadoTheme.typography.labelLargeEmphasized,
+                    modifier = Modifier.padding(horizontal = 0.dp, vertical = 8.dp),
                     color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
                 )
             }

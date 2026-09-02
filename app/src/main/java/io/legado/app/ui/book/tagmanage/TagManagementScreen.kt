@@ -216,11 +216,11 @@ fun TagManagementScreen(
         tags = state.tags.filter { (state.tagCounts[it.id] ?: 0) > 0 },
         groups = state.groups,
         tagCounts = state.tagCounts,
-        selectedTagIds = state.selectedTagIds,
-        onToggleTag = { onIntent(TagManagementIntent.ToggleBatchTagSelection(it)) },
+        showOnBookshelfIds = state.showOnBookshelfIds,
+        onToggleTag = { onIntent(TagManagementIntent.ToggleBookshelfShowTag(it)) },
         onSelectAll = { onIntent(TagManagementIntent.BatchSelectAllVisibleTags) },
         onDeselectAll = { onIntent(TagManagementIntent.BatchDeselectAllTags) },
-        onUpdateShow = { onIntent(TagManagementIntent.BatchUpdateShowOnBookshelf(it)) },
+        onSave = { onIntent(TagManagementIntent.SaveBookshelfShowConfig) },
         onDismiss = { onIntent(TagManagementIntent.ToggleBatchEditShowOnBookshelf) },
     )
 }
