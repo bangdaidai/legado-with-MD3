@@ -12,7 +12,9 @@ import io.legado.app.data.entities.TagMapping
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -70,6 +72,13 @@ class TagManagementViewModel(
             is TagManagementIntent.ReorderGroups -> viewModelScope.launch(Dispatchers.IO) { reorderGroups(intent.groups) }
             is TagManagementIntent.DeleteMapping -> viewModelScope.launch(Dispatchers.IO) { deleteMapping(intent.mapping) }
             is TagManagementIntent.ExcludeTag -> viewModelScope.launch(Dispatchers.IO) { excludeTag(intent) }
+            TagManagementIntent.ToggleBatchEditShowOnBookshelf -> toggleBatchEditSheet()
+            is TagManagementIntent.ToggleBatchTagSelection -> toggleBatchTagSelection(intent.tagId)
+            TagManagementIntent.BatchSelectAllVisibleTags -> batchSelectAllVisible()
+            TagManagementIntent.BatchDeselectAllTags -> batchDeselectAll()
+            is TagManagementIntent.BatchUpdateShowOnBookshelf -> viewModelScope.launch(Dispatchers.IO) {
+                batchUpdateShowOnBookshelf(intent.show)
+            }
         }
     }
 
@@ -253,5 +262,67 @@ class TagManagementViewModel(
         loadDataBody()
         FlowEventBus.post(EventBus.TAGS_UPDATED, name)
         _effect.emit(TagManagementEffect.ShowMessage("已添加到排除列表"))
+    }
+
+    private fun toggleBatchEditSheet() {
+        _uiState.update {
+            it.copy(
+                batchEditShowOnBookshelf = !it.batchEditShowOnBookshelf,
+                selectedTagIds = persistentSetOf(),
+            )
+        }
+    }
+
+    private fun toggleBatchTagSelection(tagId: Long) {
+        _uiState.update { state ->
+            val newSelected = if (state.selectedTagIds.contains(tagId)) {
+                state.selectedTagIds - tagId
+            } else {
+                state.selectedTagIds + tagId
+            }
+            state.copy(selectedTagIds = newSelected)
+        }
+    }
+
+    private fun batchSelectAllVisible() {
+        val state = _uiState.value
+        val query = state.searchQuery
+        val allFiltered = if (query.isBlank()) {
+            state.tags
+        } else {
+            state.tags.filter { it.name.contains(query, ignoreCase = true) }
+        }
+        _uiState.update {
+            it.copy(selectedTagIds = allFiltered.map { tag -> tag.id }.toImmutableSet())
+        }
+    }
+
+    private fun batchDeselectAll() {
+        _uiState.update {
+            it.copy(selectedTagIds = persistentSetOf())
+        }
+    }
+
+    private suspend fun batchUpdateShowOnBookshelf(show: Boolean) {
+        val selectedIds = _uiState.value.selectedTagIds
+        if (selectedIds.isEmpty()) {
+            _effect.emit(TagManagementEffect.ShowMessage("请先选择标签"))
+            return
+        }
+        val tags = appDb.bookTagDao.getByIds(selectedIds.toList())
+        for (tag in tags) {
+            if (tag.showOnBookshelf != show) {
+                appDb.bookTagDao.update(tag.copy(showOnBookshelf = show, updateTime = System.currentTimeMillis()))
+            }
+        }
+        loadDataBody()
+        FlowEventBus.post(EventBus.TAGS_UPDATED, 0L)
+        _uiState.update {
+            it.copy(
+                batchEditShowOnBookshelf = false,
+                selectedTagIds = persistentSetOf(),
+            )
+        }
+        _effect.emit(TagManagementEffect.ShowMessage("已更新 ${tags.size} 个标签"))
     }
 }

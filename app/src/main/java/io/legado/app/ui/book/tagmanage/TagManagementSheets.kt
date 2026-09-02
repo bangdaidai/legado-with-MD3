@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -610,6 +612,180 @@ fun ExcludedEditSheet(
                     PrimaryButton(
                         onClick = { onSave(d.copy(name = name.trim(), isRegex = isRegex)) },
                         text = "保存",
+                    )
+                }
+            }
+        }
+    }
+}
+
+/* ---------------- 批量编辑标签展示（流式 chip 布局） ---------------- */
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun BatchShowOnBookshelfSheet(
+    show: Boolean,
+    tags: List<BookTag>,
+    groups: List<BookTagGroup>,
+    tagCounts: Map<Long, Int>,
+    selectedTagIds: Set<Long>,
+    onToggleTag: (Long) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onUpdateShow: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AppModalBottomSheet(
+        show = show,
+        onDismissRequest = onDismiss,
+        title = "批量编辑标签展示",
+    ) {
+        // 按分组组织标签
+        val grouped = tags.filter { it.groupId != 0L }.groupBy { it.groupId }
+        val ungrouped = tags.filter { it.groupId == 0L }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            // 未分组标签
+            if (ungrouped.isNotEmpty()) {
+                item(key = "section_ungrouped") {
+                    Text(
+                        "未分组",
+                        style = LegadoTheme.typography.titleSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+                item(key = "ungrouped") {
+                    BatchTagChipRow(
+                        tags = ungrouped,
+                        tagCounts = tagCounts,
+                        selectedTagIds = selectedTagIds,
+                        onToggleTag = onToggleTag,
+                    )
+                }
+            }
+            // 按分组展示
+            groups.forEach { group ->
+                val items = grouped[group.id].orEmpty()
+                if (items.isNotEmpty()) {
+                    item(key = "section_${group.id}") {
+                        Text(
+                            group.name,
+                            style = LegadoTheme.typography.titleSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                    item(key = "group_${group.id}") {
+                        BatchTagChipRow(
+                            tags = items,
+                            tagCounts = tagCounts,
+                            selectedTagIds = selectedTagIds,
+                            onToggleTag = onToggleTag,
+                        )
+                    }
+                }
+            }
+        }
+
+        // 底部操作栏
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SecondaryButton(
+                onClick = onSelectAll,
+                text = "全选",
+                modifier = Modifier.weight(1f),
+            )
+            SecondaryButton(
+                onClick = onDeselectAll,
+                text = "取消",
+                modifier = Modifier.weight(1f),
+            )
+            PrimaryButton(
+                onClick = { onUpdateShow(true) },
+                text = "显示",
+                modifier = Modifier.weight(1f),
+                enabled = selectedTagIds.isNotEmpty(),
+            )
+            PrimaryButton(
+                onClick = { onUpdateShow(false) },
+                text = "隐藏",
+                modifier = Modifier.weight(1f),
+                enabled = selectedTagIds.isNotEmpty(),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BatchTagChipRow(
+    tags: List<BookTag>,
+    tagCounts: Map<Long, Int>,
+    selectedTagIds: Set<Long>,
+    onToggleTag: (Long) -> Unit,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        val cs = LegadoTheme.colorScheme
+        tags.forEach { tag ->
+            val isSelected = selectedTagIds.contains(tag.id)
+            val color = if (tag.color != 0L) Color(tag.color.toInt()) else cs.primary
+            val count = tagCounts[tag.id] ?: 0
+            val bgAlpha = if (isSelected) 0.25f else 0.12f
+            val borderColor = if (isSelected) color else Color.Transparent
+
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(color.copy(alpha = bgAlpha))
+                    .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(16.dp))
+                    .clickable { onToggleTag(tag.id) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                // 颜色点
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(color),
+                )
+                // 标签名
+                Text(
+                    tag.name,
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurface,
+                )
+                // 数量
+                if (count > 0) {
+                    Text(
+                        "$count",
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // 选中标记
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = color,
                     )
                 }
             }

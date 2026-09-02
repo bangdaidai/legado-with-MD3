@@ -124,6 +124,11 @@ fun TagManagementScreen(
                             leadingIcon = { MenuItemIcon(Icons.Filled.Block) },
                             onClick = { dismiss(); onNavigateToExcludedTag() },
                         )
+                        RoundDropdownMenuItem(
+                            text = "批量编辑展示",
+                            leadingIcon = { MenuItemIcon(Icons.Filled.Check) },
+                            onClick = { dismiss(); onIntent(TagManagementIntent.ToggleBatchEditShowOnBookshelf) },
+                        )
                     }
                 },
                 bottomContent = {
@@ -202,6 +207,20 @@ fun TagManagementScreen(
         tags = state.tags,
         onDismissRequest = { showMappingManage = false },
         onDelete = { onIntent(TagManagementIntent.DeleteMapping(it)); showMappingManage = false },
+    )
+
+    // 批量编辑标签展示
+    BatchShowOnBookshelfSheet(
+        show = state.batchEditShowOnBookshelf,
+        tags = state.tags,
+        groups = state.groups,
+        tagCounts = state.tagCounts,
+        selectedTagIds = state.selectedTagIds,
+        onToggleTag = { onIntent(TagManagementIntent.ToggleBatchTagSelection(it)) },
+        onSelectAll = { onIntent(TagManagementIntent.BatchSelectAllVisibleTags) },
+        onDeselectAll = { onIntent(TagManagementIntent.BatchDeselectAllTags) },
+        onUpdateShow = { onIntent(TagManagementIntent.BatchUpdateShowOnBookshelf(it)) },
+        onDismiss = { onIntent(TagManagementIntent.ToggleBatchEditShowOnBookshelf) },
     )
 }
 

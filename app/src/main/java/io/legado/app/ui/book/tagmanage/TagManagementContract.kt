@@ -5,7 +5,9 @@ import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 
 data class TagManagementUiState(
     val version: Long = 0L, // 每次加载数据递增，绕过 BookTag.equals 只比 id 导致的重组丢失
@@ -17,6 +19,10 @@ data class TagManagementUiState(
     val tagCounts: Map<Long, Int> = emptyMap(),
     val groupTagCounts: Map<Long, Int> = emptyMap(),
     val bookshelfTagBorder: Boolean = false,
+    /** 批量编辑标签展示 Sheet 是否打开 */
+    val batchEditShowOnBookshelf: Boolean = false,
+    /** 批量编辑中选中的标签 ID */
+    val selectedTagIds: ImmutableSet<Long> = persistentSetOf(),
 )
 
 sealed interface TagManagementIntent {
@@ -44,6 +50,17 @@ sealed interface TagManagementIntent {
     data class DeleteMapping(val mapping: TagMapping) : TagManagementIntent
 
     data class ExcludeTag(val name: String) : TagManagementIntent
+
+    /** 打开/关闭批量编辑标签展示 Sheet */
+    data object ToggleBatchEditShowOnBookshelf : TagManagementIntent
+    /** 切换单个标签的选中状态 */
+    data class ToggleBatchTagSelection(val tagId: Long) : TagManagementIntent
+    /** 全选当前可见标签 */
+    data object BatchSelectAllVisibleTags : TagManagementIntent
+    /** 取消全选 */
+    data object BatchDeselectAllTags : TagManagementIntent
+    /** 批量更新选中标签的 showOnBookshelf 状态 */
+    data class BatchUpdateShowOnBookshelf(val show: Boolean) : TagManagementIntent
 }
 
 sealed interface TagManagementEffect {
