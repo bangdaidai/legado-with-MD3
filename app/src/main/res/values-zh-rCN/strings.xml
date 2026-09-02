@@ -1977,6 +1977,8 @@
     <string name="search_book_source_count">%1$d</string>
     <string name="search_layout_list">列表布局</string>
     <string name="search_layout_source_grouped">来源分组</string>
+    <string name="search_suppress_popup">禁止弹窗</string>
+    <string name="search_suppress_popup_summary">搜索时跳过需要验证的书源，不再弹出浏览器窗口</string>
     <string name="content_quality_detection">内容质量检测</string>
     <string name="content_quality_detection_summary">过滤章节内容异常或与目标书籍无关书源</string>
     <string name="content_quality_chapters">指定检测章节</string>

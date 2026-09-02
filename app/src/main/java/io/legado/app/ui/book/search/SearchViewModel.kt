@@ -62,6 +62,9 @@ class SearchViewModel(
         .getPreference(LocalPreferencesKeys.SEARCH_LAYOUT_MODE, 0)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    private val suppressSearchPopupFlow = localPreferencesRepository
+        .getPreference(LocalPreferencesKeys.SUPPRESS_SEARCH_POPUP, false)
+
     fun toggleSearchLayout() {
         viewModelScope.launch {
             val newMode = if (searchLayoutMode.value == 0) 1 else 0
@@ -121,6 +124,11 @@ class SearchViewModel(
         observeMatchMode()
         viewModelScope.launch {
             searchLayoutMode.collect { mode -> _uiState.update { it.copy(layoutMode = mode) } }
+        }
+        viewModelScope.launch {
+            suppressSearchPopupFlow.collect { enabled ->
+                _uiState.update { it.copy(suppressSearchPopup = enabled) }
+            }
         }
     }
 
@@ -247,6 +255,16 @@ class SearchViewModel(
                     localPreferencesRepository.updatePreference(
                         LocalPreferencesKeys.SEARCH_LAYOUT_MODE,
                         intent.mode,
+                    )
+                }
+            }
+
+            is SearchIntent.ToggleSuppressSearchPopup -> {
+                _uiState.update { it.copy(suppressSearchPopup = intent.enabled) }
+                viewModelScope.launch {
+                    localPreferencesRepository.updatePreference(
+                        LocalPreferencesKeys.SUPPRESS_SEARCH_POPUP,
+                        intent.enabled,
                     )
                 }
             }
@@ -592,6 +610,7 @@ class SearchViewModel(
                             matchMode = _uiState.value.matchMode,
                             concurrency = OtherConfig.threadCount,
                             types = _uiState.value.selectedSourceTypes.takeIf { it.isNotEmpty() },
+                            suppressPopup = _uiState.value.suppressSearchPopup,
                         ),
                         searchControl
                     )

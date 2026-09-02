@@ -20,6 +20,13 @@ object SourceVerificationHelp {
 
     private val waitTime = 1.minutes.inWholeNanoseconds
 
+    /**
+     * 搜索期间禁止弹窗标志。
+     * 为 true 时 [getVerificationResult] 会立即抛出异常，跳过浏览器/验证码弹窗。
+     */
+    @Volatile
+    var suppressPopup = false
+
     private fun getVerificationResultKey(source: BaseSource) =
         getVerificationResultKey(source.getKey())
 
@@ -42,6 +49,10 @@ object SourceVerificationHelp {
             ?: throw NoStackTraceException("getVerificationResult parameter source cannot be null")
         require(url.length < 64 * 1024) { "getVerificationResult parameter url too long" }
         check(!isMainThread) { "getVerificationResult must be called on a background thread" }
+
+        if (suppressPopup) {
+            throw NoStackTraceException("搜索期间禁止弹窗，跳过验证")
+        }
 
         clearResult(source.getKey())
 

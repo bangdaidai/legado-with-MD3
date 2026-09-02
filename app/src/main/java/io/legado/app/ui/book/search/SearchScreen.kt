@@ -86,6 +86,7 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.CompactClickableSettingItem
+import io.legado.app.ui.widget.components.settingItem.CompactSwitchSettingItem
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
@@ -710,6 +711,13 @@ fun SearchScreen(
                 description = stringResource(R.string.content_quality_detection_summary),
                 imageVector = Icons.Default.Book,
                 onClick = { onIntent(SearchIntent.OpenContentQuality) },
+            )
+
+            CompactSwitchSettingItem(
+                title = stringResource(R.string.search_suppress_popup),
+                description = stringResource(R.string.search_suppress_popup_summary),
+                checked = state.suppressSearchPopup,
+                onCheckedChange = { onIntent(SearchIntent.ToggleSuppressSearchPopup(it)) },
             )
 
             NormalCard(modifier = Modifier.fillMaxWidth()) {

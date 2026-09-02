@@ -85,6 +85,7 @@ data class SearchUiState(
     val expandedSourceSavedScrollIndex: Int = 0,
     val expandedSourceSavedScrollOffset: Int = 0,
     val contentQuality: ContentQualityUiState = ContentQualityUiState(),
+    val suppressSearchPopup: Boolean = false,
 )
 
 data class SearchEmptyScopeAction(
@@ -122,6 +123,7 @@ sealed interface SearchIntent {
     data class UpdateContentQualitySkipHeadChars(val value: String) : SearchIntent
     data object StartContentQuality : SearchIntent
     data class SetLayoutMode(val mode: Int) : SearchIntent
+    data class ToggleSuppressSearchPopup(val enabled: Boolean) : SearchIntent
     data class ToggleSourceType(val type: Int) : SearchIntent
     data object ClearAllSourceTypes : SearchIntent
     data object SelectAllScope : SearchIntent

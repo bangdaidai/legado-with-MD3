@@ -2036,6 +2036,8 @@
     <string name="search_book_source_count">%1$d</string>
     <string name="search_layout_list">List layout</string>
     <string name="search_layout_source_grouped">Source grouped</string>
+    <string name="search_suppress_popup">Suppress verification popups</string>
+    <string name="search_suppress_popup_summary">Skip browser verification during search, sources requiring verification will fail silently</string>
     <string name="content_quality_detection">Content quality detection</string>
     <string name="content_quality_detection_summary">Filter sources with suspicious or unrelated chapter content</string>
     <string name="content_quality_chapters">Chapters to sample</string>

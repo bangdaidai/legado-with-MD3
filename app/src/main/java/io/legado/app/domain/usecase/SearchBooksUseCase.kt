@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.BookSearchGateway
 import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.domain.model.MatchMode
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.source.SourceVerificationHelp
 import io.legado.app.model.webBook.WebBook
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,7 @@ data class BookSearchRequest(
     val matchMode: MatchMode,
     val concurrency: Int,
     val types: Set<Int>? = null,
+    val suppressPopup: Boolean = false,
 )
 
 sealed interface SearchRunEvent {
@@ -80,6 +82,13 @@ class SearchBooksUseCase(
     ): Flow<SearchRunEvent> = flow {
         val keyword = request.keyword.trim()
         if (keyword.isBlank()) return@flow
+
+        // 搜索期间按需设置禁止弹窗标志
+        val previousSuppress = SourceVerificationHelp.suppressPopup
+        if (request.suppressPopup) {
+            SourceVerificationHelp.suppressPopup = true
+        }
+        try {
 
         val sourceParts = gateway.getBookSourceParts(request.scope)
         if (sourceParts.isEmpty()) {
@@ -172,6 +181,12 @@ class SearchBooksUseCase(
                 hasMore = hasMore && !merger.resultLimitReached,
             )
         )
+        } finally {
+            // 恢复禁止弹窗标志
+            if (request.suppressPopup) {
+                SourceVerificationHelp.suppressPopup = previousSuppress
+            }
+        }
     }.flowOn(Dispatchers.IO)
 
     private suspend fun searchSource(
