@@ -371,10 +371,34 @@ jobs:
           distribution: 'temurin'
           java-version: 21
 
+      - name: Resolve version name
+        id: appversion
+        run: |
+          BASE=$(grep -oP 'VERSION_MAJOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_MINOR=\K[0-9]+' app/version.properties).$(grep -oP 'VERSION_PATCH=\K[0-9]+' app/version.properties)
+          SUFFIX=$(grep -oP 'VERSION_SUFFIX=\K[0-9]+' app/version.properties)
+          if [ "$SUFFIX" = "1" ]; then
+            BASE="${BASE}-beta"
+          fi
+          NAME="${BASE}.${{ github.run_number }}-$(date -u '+%Y%m%d')"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "APP_VERSION_NAME=$NAME" >> $GITHUB_ENV
+          echo "构建版本号: $NAME"
+
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleAppDebug -x lint --no-daemon
+          ./gradlew assembleAppDebug -PabiSplits=arm64-v8a -PuniversalApk=false -x lint --no-daemon
+
+      - name: Rename Debug APK
+        env:
+          APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
+        run: |
+          APK_DIR=app/build/outputs/apk/app/debug
+          for f in "$APK_DIR"/*.apk; do
+            abi=$(basename "$f" | sed -n 's/.*\(armeabi-v7a\|arm64-v8a\|universal\).*/-\1/p')
+            mv -- "$f" "$APK_DIR/legado-debug-${APP_VERSION_NAME}${abi}.apk"
+          done
+          ls -la "$APK_DIR"
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -385,7 +409,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, build-debug]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
@@ -398,6 +422,12 @@ jobs:
         with:
           name: legado_release_signed_apk
           path: apk_nested
+
+      - name: Download Debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: legado-debug-apk
+          path: debug_nested
 
       - name: Download Mapping
         uses: actions/download-artifact@v4
@@ -416,6 +446,7 @@ jobs:
         run: |
           mkdir -p artifacts
           find apk_nested -name "*.apk" -type f -exec cp {} artifacts/ \;
+          find debug_nested -name "*.apk" -type f -exec cp {} artifacts/ \;
           # mapping.txt 体积很大（数百 MB），gzip 后再随 Release 分发
           MAPPING=$(find mapping_dir -name "mapping.txt" -type f | head -n 1)
           if [ -n "$MAPPING" ]; then
