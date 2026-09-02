@@ -1941,7 +1941,7 @@
     <string name="replace_purify_badge">Count Replacements and Purify Rules</string>
     <string name="page_anim_fade">Fade</string>
     <string name="show_bookshelf_tab_menu">Show More Bookshelf Tab</string>
-    <string name="show_bookshelf_tag_filter">Show Tag Filter</string>
+    <string name="show_bookshelf_tag_filter">Long Press Group Button to Show Tag Filter</string>
     <string name="show_unread_new">Show New Chapter Flag</string>
     <string name="read_change_all">Source Change Default Applies to Entire Book</string>
     <string name="read_change_all_s">Otherwise, Only Applies to Single Chapter.</string>

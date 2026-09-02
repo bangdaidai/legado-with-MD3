@@ -1,10 +1,14 @@
 package io.legado.app.ui.widget.components.tabRow
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
@@ -21,7 +25,8 @@ fun AppTabRow(
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    isScrollable: Boolean = true
+    isScrollable: Boolean = true,
+    useDefaultTabPadding: Boolean = true
 ) {
     val composeEngine = LegadoTheme.composeEngine
 
@@ -50,7 +55,8 @@ fun AppTabRow(
                     AppTab(
                         selected = selectedTabIndex == index,
                         onClick = { onTabSelected(index) },
-                        title = title
+                        title = title,
+                        useDefaultTabPadding = useDefaultTabPadding
                     )
                 }
             }
@@ -65,7 +71,8 @@ fun AppTabRow(
                     AppTab(
                         selected = selectedTabIndex == index,
                         onClick = { onTabSelected(index) },
-                        title = title
+                        title = title,
+                        useDefaultTabPadding = useDefaultTabPadding
                     )
                 }
             }
@@ -77,20 +84,39 @@ fun AppTabRow(
 private fun AppTab(
     selected: Boolean,
     onClick: () -> Unit,
-    title: String
+    title: String,
+    useDefaultTabPadding: Boolean = true
 ) {
-    Tab(
-        selected = selected,
-        onClick = onClick,
-        text = {
+    if (useDefaultTabPadding) {
+        Tab(
+            selected = selected,
+            onClick = onClick,
+            text = {
+                AppText(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = LegadoTheme.typography.labelLargeEmphasized,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .defaultMinSize(minHeight = 64.dp)
+                .padding(end = 16.dp)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
             AppText(
                 text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = LegadoTheme.typography.labelLargeEmphasized,
-                modifier = Modifier.padding(horizontal = 4.dp),
                 color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
             )
         }
-    )
+    }
 }

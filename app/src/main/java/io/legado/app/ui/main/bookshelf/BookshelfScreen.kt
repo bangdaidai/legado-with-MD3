@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -620,7 +621,13 @@ fun BookshelfScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .offset(y = (-16).dp)
-                                .adaptiveHorizontalPadding(),
+                                .adaptiveHorizontalPadding()
+                                .layout { measurable, constraints ->
+                                    val placeable = measurable.measure(constraints)
+                                    layout(placeable.width, placeable.height - 16.dp.roundToPx()) {
+                                        placeable.place(0, 0)
+                                    }
+                                },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val selectedTabIndex =
@@ -635,7 +642,8 @@ fun BookshelfScreen(
                                 onTabSelected = { index ->
                                     scope.launch { pagerState.animateScrollToPage(index) }
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                useDefaultTabPadding = false
                             )
 
                             val showExpandButton = uiState.settings.shouldShowExpandButton
@@ -648,6 +656,14 @@ fun BookshelfScreen(
                                                 onIntent(BookshelfIntent.ShowOverlay(BookshelfOverlay.GroupMenu))
                                             } else {
                                                 onIntent(BookshelfIntent.DismissOverlay)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            if (uiState.settings.showBookshelfTagFilter
+                                                && uiState.bookshelfTags.isNotEmpty()
+                                                && !uiState.isSearch
+                                            ) {
+                                                tagFilterExpanded = !tagFilterExpanded
                                             }
                                         },
                                         style = ToggleStyle.Outlined,
@@ -749,20 +765,7 @@ fun BookshelfScreen(
                                 }
                             }
 
-                            // 标签筛选折叠按钮
-                            val showTagFilterToggle = uiState.settings.showBookshelfTagFilter
-                                && uiState.bookshelfTags.isNotEmpty()
-                                && !uiState.isSearch
-                            if (showTagFilterToggle) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                SmallToggleButton(
-                                    checked = tagFilterExpanded,
-                                    onCheckedChange = { tagFilterExpanded = it },
-                                    style = ToggleStyle.Outlined,
-                                    icon = Icons.Default.FilterList,
-                                    contentDescription = stringResource(R.string.show_bookshelf_tag_filter)
-                                )
-                            }
+
                         }
                     }
 
