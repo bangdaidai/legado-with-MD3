@@ -278,9 +278,9 @@ class TagManagementViewModel(
     private fun toggleBatchTagSelection(tagId: Long) {
         _uiState.update { state ->
             val newSelected = if (state.selectedTagIds.contains(tagId)) {
-                state.selectedTagIds - tagId
+                (state.selectedTagIds - tagId).toImmutableSet()
             } else {
-                state.selectedTagIds + tagId
+                (state.selectedTagIds + tagId).toImmutableSet()
             }
             state.copy(selectedTagIds = newSelected)
         }
