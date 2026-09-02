@@ -19,4 +19,10 @@ interface BookshelfTagGateway {
 
     /** 观察所有排除标签规则 */
     fun observeAllExcludedTags(): Flow<List<ExcludedTag>>
+
+    /** 根据 ID 列表获取标签 */
+    suspend fun getTagsByIds(ids: List<Long>): List<BookTag>
+
+    /** 批量更新标签的展示在书架状态 */
+    suspend fun batchUpdateShowOnBookshelf(tagIds: Set<Long>, show: Boolean): Int
 }

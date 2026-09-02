@@ -10,6 +10,7 @@ import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.data.entities.TagMapping
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.gateway.BookshelfTagGateway
 import io.legado.app.help.book.TagManager
 import io.legado.app.utils.eventBus.FlowEventBus
 import kotlinx.collections.immutable.persistentSetOf
@@ -28,6 +29,7 @@ import kotlinx.coroutines.withContext
 
 class TagManagementViewModel(
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+    private val bookshelfTagGateway: BookshelfTagGateway,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TagManagementUiState())
@@ -309,12 +311,7 @@ class TagManagementViewModel(
             _effect.emit(TagManagementEffect.ShowMessage("请先选择标签"))
             return
         }
-        val tags = appDb.bookTagDao.getByIds(selectedIds.toList())
-        for (tag in tags) {
-            if (tag.showOnBookshelf != show) {
-                appDb.bookTagDao.update(tag.copy(showOnBookshelf = show, updateTime = System.currentTimeMillis()))
-            }
-        }
+        val updatedCount = bookshelfTagGateway.batchUpdateShowOnBookshelf(selectedIds, show)
         loadDataBody()
         FlowEventBus.post(EventBus.TAGS_UPDATED, 0L)
         _uiState.update {
@@ -323,6 +320,6 @@ class TagManagementViewModel(
                 selectedTagIds = persistentSetOf(),
             )
         }
-        _effect.emit(TagManagementEffect.ShowMessage("已更新 ${tags.size} 个标签"))
+        _effect.emit(TagManagementEffect.ShowMessage("已更新 $updatedCount 个标签"))
     }
 }

@@ -22,4 +22,20 @@ class BookshelfTagRepository : BookshelfTagGateway {
 
     override fun observeAllExcludedTags(): Flow<List<ExcludedTag>> =
         appDb.excludedTagDao.observeAll()
+
+    override suspend fun getTagsByIds(ids: List<Long>): List<BookTag> =
+        appDb.bookTagDao.getByIds(ids)
+
+    override suspend fun batchUpdateShowOnBookshelf(tagIds: Set<Long>, show: Boolean): Int {
+        if (tagIds.isEmpty()) return 0
+        val tags = appDb.bookTagDao.getByIds(tagIds.toList())
+        var updatedCount = 0
+        for (tag in tags) {
+            if (tag.showOnBookshelf != show) {
+                appDb.bookTagDao.update(tag.copy(showOnBookshelf = show, updateTime = System.currentTimeMillis()))
+                updatedCount++
+            }
+        }
+        return updatedCount
+    }
 }
