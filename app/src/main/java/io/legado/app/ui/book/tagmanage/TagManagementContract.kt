@@ -21,8 +21,8 @@ data class TagManagementUiState(
     val bookshelfTagBorder: Boolean = false,
     /** 批量编辑标签展示 Sheet 是否打开 */
     val batchEditShowOnBookshelf: Boolean = false,
-    /** 批量编辑中选中的标签 ID */
-    val selectedTagIds: ImmutableSet<Long> = persistentSetOf(),
+    /** 批量编辑中选中的标签 ID（表示哪些标签应该展示在书架） */
+    val showOnBookshelfIds: ImmutableSet<Long> = persistentSetOf(),
 )
 
 sealed interface TagManagementIntent {
@@ -53,14 +53,14 @@ sealed interface TagManagementIntent {
 
     /** 打开/关闭批量编辑标签展示 Sheet */
     data object ToggleBatchEditShowOnBookshelf : TagManagementIntent
-    /** 切换单个标签的选中状态 */
-    data class ToggleBatchTagSelection(val tagId: Long) : TagManagementIntent
+    /** 切换单个标签的选中状态（选中=开启展示，取消=关闭展示） */
+    data class ToggleBookshelfShowTag(val tagId: Long) : TagManagementIntent
     /** 全选当前可见标签 */
     data object BatchSelectAllVisibleTags : TagManagementIntent
     /** 取消全选 */
     data object BatchDeselectAllTags : TagManagementIntent
-    /** 批量更新选中标签的 showOnBookshelf 状态 */
-    data class BatchUpdateShowOnBookshelf(val show: Boolean) : TagManagementIntent
+    /** 保存书架展示配置 */
+    data object SaveBookshelfShowConfig : TagManagementIntent
 }
 
 sealed interface TagManagementEffect {

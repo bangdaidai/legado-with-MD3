@@ -620,7 +620,7 @@ fun ExcludedEditSheet(
     }
 }
 
-/* ---------------- 批量编辑标签展示（流式 chip 布局） ---------------- */
+/* ---------------- 批量编辑标签展示（选中=开启展示，取消=关闭展示） ---------------- */
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -629,17 +629,26 @@ fun BatchShowOnBookshelfSheet(
     tags: List<BookTag>,
     groups: List<BookTagGroup>,
     tagCounts: Map<Long, Int>,
-    selectedTagIds: Set<Long>,
+    showOnBookshelfIds: Set<Long>,
     onToggleTag: (Long) -> Unit,
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
-    onUpdateShow: (Boolean) -> Unit,
+    onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismiss,
         title = "批量编辑标签展示",
+        endAction = {
+            IconButton(onClick = onSave) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "保存",
+                    tint = LegadoTheme.colorScheme.primary,
+                )
+            }
+        },
     ) {
         // 按分组组织标签
         val grouped = tags.filter { it.groupId != 0L }.groupBy { it.groupId }
@@ -657,14 +666,13 @@ fun BatchShowOnBookshelfSheet(
                         "未分组",
                         style = LegadoTheme.typography.titleSmall,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 item(key = "ungrouped") {
                     BatchTagChipRow(
                         tags = ungrouped,
                         tagCounts = tagCounts,
-                        selectedTagIds = selectedTagIds,
+                        showOnBookshelfIds = showOnBookshelfIds,
                         onToggleTag = onToggleTag,
                     )
                 }
@@ -678,14 +686,13 @@ fun BatchShowOnBookshelfSheet(
                             group.name,
                             style = LegadoTheme.typography.titleSmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
                     item(key = "group_${group.id}") {
                         BatchTagChipRow(
                             tags = items,
                             tagCounts = tagCounts,
-                            selectedTagIds = selectedTagIds,
+                            showOnBookshelfIds = showOnBookshelfIds,
                             onToggleTag = onToggleTag,
                         )
                     }
@@ -697,7 +704,7 @@ fun BatchShowOnBookshelfSheet(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SecondaryButton(
@@ -707,20 +714,8 @@ fun BatchShowOnBookshelfSheet(
             )
             SecondaryButton(
                 onClick = onDeselectAll,
-                text = "取消",
+                text = "取消全选",
                 modifier = Modifier.weight(1f),
-            )
-            PrimaryButton(
-                onClick = { onUpdateShow(true) },
-                text = "显示",
-                modifier = Modifier.weight(1f),
-                enabled = selectedTagIds.isNotEmpty(),
-            )
-            PrimaryButton(
-                onClick = { onUpdateShow(false) },
-                text = "隐藏",
-                modifier = Modifier.weight(1f),
-                enabled = selectedTagIds.isNotEmpty(),
             )
         }
     }
@@ -731,19 +726,17 @@ fun BatchShowOnBookshelfSheet(
 private fun BatchTagChipRow(
     tags: List<BookTag>,
     tagCounts: Map<Long, Int>,
-    selectedTagIds: Set<Long>,
+    showOnBookshelfIds: Set<Long>,
     onToggleTag: (Long) -> Unit,
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         val cs = LegadoTheme.colorScheme
         tags.forEach { tag ->
-            val isSelected = selectedTagIds.contains(tag.id)
+            val isSelected = showOnBookshelfIds.contains(tag.id)
             val color = if (tag.color != 0L) Color(tag.color.toInt()) else cs.primary
             val count = tagCounts[tag.id] ?: 0
             val bgAlpha = if (isSelected) 0.25f else 0.12f

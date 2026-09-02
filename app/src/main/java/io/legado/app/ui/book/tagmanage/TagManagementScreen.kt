@@ -210,10 +210,10 @@ fun TagManagementScreen(
         onDelete = { onIntent(TagManagementIntent.DeleteMapping(it)); showMappingManage = false },
     )
 
-    // 批量编辑标签展示
+    // 批量编辑标签展示（只显示有关联书籍的标签）
     BatchShowOnBookshelfSheet(
         show = state.batchEditShowOnBookshelf,
-        tags = state.tags,
+        tags = state.tags.filter { (state.tagCounts[it.id] ?: 0) > 0 },
         groups = state.groups,
         tagCounts = state.tagCounts,
         selectedTagIds = state.selectedTagIds,

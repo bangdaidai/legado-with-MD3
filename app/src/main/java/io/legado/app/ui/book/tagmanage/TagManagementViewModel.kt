@@ -75,11 +75,11 @@ class TagManagementViewModel(
             is TagManagementIntent.DeleteMapping -> viewModelScope.launch(Dispatchers.IO) { deleteMapping(intent.mapping) }
             is TagManagementIntent.ExcludeTag -> viewModelScope.launch(Dispatchers.IO) { excludeTag(intent) }
             TagManagementIntent.ToggleBatchEditShowOnBookshelf -> toggleBatchEditSheet()
-            is TagManagementIntent.ToggleBatchTagSelection -> toggleBatchTagSelection(intent.tagId)
+            is TagManagementIntent.ToggleBookshelfShowTag -> toggleBookshelfShowTag(intent.tagId)
             TagManagementIntent.BatchSelectAllVisibleTags -> batchSelectAllVisible()
             TagManagementIntent.BatchDeselectAllTags -> batchDeselectAll()
-            is TagManagementIntent.BatchUpdateShowOnBookshelf -> viewModelScope.launch(Dispatchers.IO) {
-                batchUpdateShowOnBookshelf(intent.show)
+            TagManagementIntent.SaveBookshelfShowConfig -> viewModelScope.launch(Dispatchers.IO) {
+                saveBookshelfShowConfig()
             }
         }
     }
@@ -267,57 +267,75 @@ class TagManagementViewModel(
     }
 
     private fun toggleBatchEditSheet() {
-        _uiState.update {
-            it.copy(
-                batchEditShowOnBookshelf = !it.batchEditShowOnBookshelf,
-                selectedTagIds = persistentSetOf(),
+        _uiState.update { state ->
+            val newBatchEdit = !state.batchEditShowOnBookshelf
+            // 打开时加载当前书架展示配置
+            val newShowOnBookshelfIds = if (newBatchEdit) {
+                state.tags
+                    .filter { it.showOnBookshelf }
+                    .map { it.id }
+                    .toImmutableSet()
+            } else {
+                persistentSetOf()
+            }
+            state.copy(
+                batchEditShowOnBookshelf = newBatchEdit,
+                showOnBookshelfIds = newShowOnBookshelfIds,
             )
         }
     }
 
-    private fun toggleBatchTagSelection(tagId: Long) {
+    private fun toggleBookshelfShowTag(tagId: Long) {
         _uiState.update { state ->
-            val newSelected = if (state.selectedTagIds.contains(tagId)) {
-                (state.selectedTagIds - tagId).toImmutableSet()
+            val newShowOnBookshelfIds = if (state.showOnBookshelfIds.contains(tagId)) {
+                (state.showOnBookshelfIds - tagId).toImmutableSet()
             } else {
-                (state.selectedTagIds + tagId).toImmutableSet()
+                (state.showOnBookshelfIds + tagId).toImmutableSet()
             }
-            state.copy(selectedTagIds = newSelected)
+            state.copy(showOnBookshelfIds = newShowOnBookshelfIds)
         }
     }
 
     private fun batchSelectAllVisible() {
         val state = _uiState.value
         val query = state.searchQuery
+        // 只选择有关联书籍的标签，与 UI 显示保持一致
+        val visibleTags = state.tags.filter { (state.tagCounts[it.id] ?: 0) > 0 }
         val allFiltered = if (query.isBlank()) {
-            state.tags
+            visibleTags
         } else {
-            state.tags.filter { it.name.contains(query, ignoreCase = true) }
+            visibleTags.filter { it.name.contains(query, ignoreCase = true) }
         }
         _uiState.update {
-            it.copy(selectedTagIds = allFiltered.map { tag -> tag.id }.toImmutableSet())
+            it.copy(showOnBookshelfIds = allFiltered.map { tag -> tag.id }.toImmutableSet())
         }
     }
 
     private fun batchDeselectAll() {
         _uiState.update {
-            it.copy(selectedTagIds = persistentSetOf())
+            it.copy(showOnBookshelfIds = persistentSetOf())
         }
     }
 
-    private suspend fun batchUpdateShowOnBookshelf(show: Boolean) {
-        val selectedIds = _uiState.value.selectedTagIds
-        if (selectedIds.isEmpty()) {
-            _effect.emit(TagManagementEffect.ShowMessage("请先选择标签"))
-            return
-        }
-        val updatedCount = bookshelfTagGateway.batchUpdateShowOnBookshelf(selectedIds, show)
+    private suspend fun saveBookshelfShowConfig() {
+        val targetIds = _uiState.value.showOnBookshelfIds
+        // 获取所有有关联书籍的标签 ID
+        val visibleTagIds = _uiState.value.tags
+            .filter { (_uiState.value.tagCounts[it.id] ?: 0) > 0 }
+            .map { it.id }
+            .toSet()
+        // 需要设置为 true 的标签
+        val toShow = targetIds intersect visibleTagIds
+        // 需要设置为 false 的标签（有关联书籍但不在选中列表中的）
+        val toHide = visibleTagIds - targetIds
+        val updatedCount = bookshelfTagGateway.batchUpdateShowOnBookshelf(toShow, true) +
+            bookshelfTagGateway.batchUpdateShowOnBookshelf(toHide, false)
         loadDataBody()
         FlowEventBus.post(EventBus.TAGS_UPDATED, 0L)
         _uiState.update {
             it.copy(
                 batchEditShowOnBookshelf = false,
-                selectedTagIds = persistentSetOf(),
+                showOnBookshelfIds = persistentSetOf(),
             )
         }
         _effect.emit(TagManagementEffect.ShowMessage("已更新 $updatedCount 个标签"))
