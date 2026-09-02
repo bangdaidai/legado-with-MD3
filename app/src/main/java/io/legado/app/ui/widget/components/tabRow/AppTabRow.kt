@@ -11,7 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.tabIndicatorOffset
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.text.AppText
-import top.yukonga.miuix.kmp.basic.TabRowDefaults
+import top.yukonga.miuix.kmp.basic.TabRowDefaults as MiuixTabRowDefaults
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 
 @Composable
@@ -42,7 +42,7 @@ fun AppTabRow(
             onTabSelected = onTabSelected,
             modifier = modifier
                 .padding(vertical = 4.dp),
-            colors = TabRowDefaults.tabRowColors(
+            colors = MiuixTabRowDefaults.tabRowColors(
                 backgroundColor = Color.Transparent
             )
         )
@@ -56,33 +56,23 @@ fun AppTabRow(
                 divider = { },
                 containerColor = Color.Transparent,
                 minTabWidth = 0.dp,
-                indicator = { tabPositions ->
-                    if (selectedTabIndex < tabPositions.size) {
-                        val selectedTabPosition = tabPositions[selectedTabIndex]
-                        if (!useDefaultTabPadding) {
-                            //自定义指示器：宽度仅匹配文字，排除标签末尾间距
-                            val indicatorWidth = if (selectedTabIndex < tabTitles.lastIndex) {
-                                selectedTabPosition.width - tabEndSpacing
+                indicator = {
+                    if (!useDefaultTabPadding) {
+                        //自定义指示器：宽度仅匹配文字，排除标签末尾间距
+                        TabRowDefaults.PrimaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex),
+                            width = if (selectedTabIndex < tabTitles.lastIndex) {
+                                TabRowDefaults.ScrollableTabRowMinTabWidth
                             } else {
-                                selectedTabPosition.width
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .tabIndicatorOffset(selectedTabPosition)
-                                    .width(indicatorWidth)
-                                    .height(3.dp)
-                                    .offset(y = (-4).dp)
-                                    .background(
-                                        LegadoTheme.colorScheme.primary,
-                                        shape = RoundedCornerShape(percent = 50)
-                                    )
-                            )
-                        } else {
-                            //使用 Material 3 默认指示器
-                            androidx.compose.material3.TabRowDefaults.PrimaryIndicator(
-                                modifier = Modifier.tabIndicatorOffset(selectedTabPosition)
-                            )
-                        }
+                                androidx.compose.ui.unit.Dp.Unspecified
+                            },
+                            height = 3.dp,
+                        )
+                    } else {
+                        //使用 Material 3 默认指示器
+                        TabRowDefaults.PrimaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex)
+                        )
                     }
                 },
                 modifier = modifier
