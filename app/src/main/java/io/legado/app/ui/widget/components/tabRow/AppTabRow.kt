@@ -2,10 +2,8 @@ package io.legado.app.ui.widget.components.tabRow
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -58,11 +56,9 @@ fun AppTabRow(
                         selected = selectedTabIndex == index,
                         onClick = { onTabSelected(index) },
                         title = title,
-                        useDefaultTabPadding = useDefaultTabPadding
+                        useDefaultTabPadding = useDefaultTabPadding,
+                        showEndSpacing = !useDefaultTabPadding && index < tabTitles.lastIndex
                     )
-                    if (!useDefaultTabPadding && index < tabTitles.lastIndex) {
-                        Spacer(modifier = Modifier.width(24.dp))
-                    }
                 }
             }
         } else {
@@ -77,11 +73,9 @@ fun AppTabRow(
                         selected = selectedTabIndex == index,
                         onClick = { onTabSelected(index) },
                         title = title,
-                        useDefaultTabPadding = useDefaultTabPadding
+                        useDefaultTabPadding = useDefaultTabPadding,
+                        showEndSpacing = !useDefaultTabPadding && index < tabTitles.lastIndex
                     )
-                    if (!useDefaultTabPadding && index < tabTitles.lastIndex) {
-                        Spacer(modifier = Modifier.width(24.dp))
-                    }
                 }
             }
         }
@@ -93,7 +87,8 @@ private fun AppTab(
     selected: Boolean,
     onClick: () -> Unit,
     title: String,
-    useDefaultTabPadding: Boolean = true
+    useDefaultTabPadding: Boolean = true,
+    showEndSpacing: Boolean = false
 ) {
     if (useDefaultTabPadding) {
         Tab(
@@ -111,9 +106,11 @@ private fun AppTab(
             }
         )
     } else {
+        val endPadding = if (showEndSpacing) 24.dp else 0.dp
         Box(
             modifier = Modifier
                 .height(48.dp)
+                .padding(end = endPadding)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
