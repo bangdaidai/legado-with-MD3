@@ -290,6 +290,11 @@ fun BookshelfScreen(
     val isInFolderRoot = uiState.isInFolderRoot
     val bookGroupStyle = uiState.bookGroupStyle
     var tagFilterExpanded by remember { mutableStateOf(true) }
+    LaunchedEffect(uiState.settings.showBookshelfTagFilter) {
+        if (!uiState.settings.showBookshelfTagFilter) {
+            tagFilterExpanded = false
+        }
+    }
 
     val transitionState = remember { SeekableTransitionState(isInFolderRoot) }
     val folderTransition = rememberTransition(transitionState, label = "FolderTransition")

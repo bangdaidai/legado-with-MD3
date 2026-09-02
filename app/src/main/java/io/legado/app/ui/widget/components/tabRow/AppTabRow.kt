@@ -1,12 +1,21 @@
 package io.legado.app.ui.widget.components.tabRow
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRowDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +58,16 @@ fun AppTabRow(
                 divider = { },
                 containerColor = Color.Transparent,
                 minTabWidth = 0.dp,
-                modifier = modifier
+                modifier = modifier,
+                indicator = { tabPositions ->
+                    if (selectedTabIndex < tabPositions.size) {
+                        PrimaryScrollableTabRowDefaults.Indicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                            height = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             ) {
                 tabTitles.forEachIndexed { index, title ->
                     AppTab(
@@ -58,6 +76,9 @@ fun AppTabRow(
                         title = title,
                         useDefaultTabPadding = useDefaultTabPadding
                     )
+                    if (!useDefaultTabPadding && index < tabTitles.lastIndex) {
+                        Spacer(modifier = Modifier.width(24.dp))
+                    }
                 }
             }
         } else {
@@ -74,6 +95,9 @@ fun AppTabRow(
                         title = title,
                         useDefaultTabPadding = useDefaultTabPadding
                     )
+                    if (!useDefaultTabPadding && index < tabTitles.lastIndex) {
+                        Spacer(modifier = Modifier.width(24.dp))
+                    }
                 }
             }
         }
@@ -105,8 +129,7 @@ private fun AppTab(
     } else {
         Box(
             modifier = Modifier
-                .defaultMinSize(minHeight = 64.dp)
-                .padding(end = 16.dp)
+                .height(48.dp)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
