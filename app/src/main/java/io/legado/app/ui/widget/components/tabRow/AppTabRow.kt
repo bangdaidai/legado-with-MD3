@@ -57,12 +57,9 @@ fun AppTabRow(
                 containerColor = Color.Transparent,
                 minTabWidth = 0.dp,
                 indicator = {
-                    //自定义指示器：宽度为文字宽度，位置对齐文字
-                    val selectedTab = currentTabPosition
+                    //自定义指示器：宽度匹配文字内容，对齐文字
                     TabRowDefaults.PrimaryIndicator(
-                        modifier = Modifier
-                            .offset(x = selectedTab.left)  // 定位到 Tab 左边缘
-                            .width(selectedTab.width - tabEndSpacing)  // 宽度 = 文字宽度
+                        modifier = Modifier.tabIndicatorOffset(selectedTabIndex, matchContentSize = true)
                     )
                 },
                 modifier = modifier
