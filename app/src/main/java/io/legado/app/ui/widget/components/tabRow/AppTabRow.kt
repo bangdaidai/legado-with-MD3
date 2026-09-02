@@ -1,12 +1,17 @@
 package io.legado.app.ui.widget.components.tabRow
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
+import androidx.compose.material3.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,12 +48,43 @@ fun AppTabRow(
         )
     } else {
         if (isScrollable) {
+            //非默认 Tab 样式时，标签之间的间距（与 AppTab 中 endPadding 一致）
+            val tabEndSpacing = if (!useDefaultTabPadding) 24.dp else 0.dp
             PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
                 edgePadding = 0.dp,
                 divider = { },
                 containerColor = Color.Transparent,
                 minTabWidth = 0.dp,
+                indicator = { tabPositions ->
+                    if (selectedTabIndex < tabPositions.size) {
+                        val selectedTabPosition = tabPositions[selectedTabIndex]
+                        if (!useDefaultTabPadding) {
+                            //自定义指示器：宽度仅匹配文字，排除标签末尾间距
+                            val indicatorWidth = if (selectedTabIndex < tabTitles.lastIndex) {
+                                selectedTabPosition.width - tabEndSpacing
+                            } else {
+                                selectedTabPosition.width
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .tabIndicatorOffset(selectedTabPosition)
+                                    .width(indicatorWidth)
+                                    .height(3.dp)
+                                    .offset(y = (-4).dp)
+                                    .background(
+                                        LegadoTheme.colorScheme.primary,
+                                        shape = RoundedCornerShape(percent = 50)
+                                    )
+                            )
+                        } else {
+                            //使用 Material 3 默认指示器
+                            androidx.compose.material3.TabRowDefaults.PrimaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(selectedTabPosition)
+                            )
+                        }
+                    }
+                },
                 modifier = modifier
             ) {
                 tabTitles.forEachIndexed { index, title ->
