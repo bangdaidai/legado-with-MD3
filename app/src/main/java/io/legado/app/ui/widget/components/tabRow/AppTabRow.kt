@@ -26,11 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextOverflow
+import kotlin.math.roundToInt
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.text.AppText
@@ -210,7 +212,7 @@ private fun PreciseTabRow(
 
         val selectedOffset = tabOffsets.getOrNull(selectedTabIndex)
         val selectedWidth = tabWidths.getOrNull(selectedTabIndex)
-        if (selectedOffset != null && selectedWidth > 0f) {
+        if (selectedOffset != null && selectedWidth != null && selectedWidth > 0f) {
             val targetLeft = selectedOffset - indicatorContainerX
             val animLeft by animateFloatAsState(
                 targetValue = targetLeft,
