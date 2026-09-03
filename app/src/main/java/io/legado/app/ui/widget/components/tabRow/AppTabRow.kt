@@ -1,6 +1,5 @@
 package io.legado.app.ui.widget.components.tabRow
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
@@ -83,8 +82,7 @@ private fun AppTab(
     Tab(
         selected = selected,
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
-        text = {
+        content = {
             AppText(
                 text = title,
                 maxLines = 1,
