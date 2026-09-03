@@ -1,16 +1,36 @@
 package io.legado.app.ui.widget.components.tabRow
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.text.AppText
@@ -40,48 +60,60 @@ fun AppTabRow(
             )
         )
     } else {
-        if (isScrollable) {
-            PrimaryScrollableTabRow(
-                selectedTabIndex = selectedTabIndex,
-                edgePadding = 0.dp,
-                divider = { },
-                containerColor = Color.Transparent,
-                minTabWidth = 0.dp,
-                indicator = {
-                    //自定义指示器：宽度匹配文字内容，对齐文字
-                    TabRowDefaults.PrimaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(selectedTabIndex, matchContentSize = true)
-                    )
-                },
-                modifier = modifier
-            ) {
-                tabTitles.forEachIndexed { index, title ->
-                    AppTab(
-                        selected = selectedTabIndex == index,
-                        onClick = { onTabSelected(index) },
-                        title = title,
-                        useDefaultTabPadding = useDefaultTabPadding,
-                        showEndSpacing = !useDefaultTabPadding && index < tabTitles.lastIndex
-                    )
+        if (useDefaultTabPadding) {
+            // 老逻辑：保持原样
+            if (isScrollable) {
+                PrimaryScrollableTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    edgePadding = 0.dp,
+                    divider = { },
+                    containerColor = Color.Transparent,
+                    minTabWidth = 0.dp,
+                    indicator = {
+                        //自定义指示器：宽度匹配文字内容，对齐文字
+                        TabRowDefaults.PrimaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex, matchContentSize = true)
+                        )
+                    },
+                    modifier = modifier
+                ) {
+                    tabTitles.forEachIndexed { index, title ->
+                        AppTab(
+                            selected = selectedTabIndex == index,
+                            onClick = { onTabSelected(index) },
+                            title = title,
+                            useDefaultTabPadding = useDefaultTabPadding,
+                            showEndSpacing = false
+                        )
+                    }
+                }
+            } else {
+                PrimaryTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    divider = { },
+                    containerColor = Color.Transparent,
+                    modifier = modifier
+                ) {
+                    tabTitles.forEachIndexed { index, title ->
+                        AppTab(
+                            selected = selectedTabIndex == index,
+                            onClick = { onTabSelected(index) },
+                            title = title,
+                            useDefaultTabPadding = useDefaultTabPadding,
+                            showEndSpacing = false
+                        )
+                    }
                 }
             }
         } else {
-            PrimaryTabRow(
+            // 新逻辑：精确对齐（方案 A）
+            PreciseTabRow(
+                tabTitles = tabTitles,
                 selectedTabIndex = selectedTabIndex,
-                divider = { },
-                containerColor = Color.Transparent,
-                modifier = modifier
-            ) {
-                tabTitles.forEachIndexed { index, title ->
-                    AppTab(
-                        selected = selectedTabIndex == index,
-                        onClick = { onTabSelected(index) },
-                        title = title,
-                        useDefaultTabPadding = useDefaultTabPadding,
-                        showEndSpacing = !useDefaultTabPadding && index < tabTitles.lastIndex
-                    )
-                }
-            }
+                onTabSelected = onTabSelected,
+                modifier = modifier,
+                isScrollable = isScrollable
+            )
         }
     }
 }
@@ -129,5 +161,83 @@ private fun AppTab(
                 )
             }
         )
+    }
+}
+
+@Composable
+private fun PreciseTabRow(
+    tabTitles: List<String>,
+    selectedTabIndex: Int,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    isScrollable: Boolean
+) {
+    val density = LocalDensity.current
+    var tabOffsets by remember { mutableStateOf(FloatArray(tabTitles.size) { 0f }) }
+    var tabWidths by remember { mutableStateOf(FloatArray(tabTitles.size) { 0f }) }
+    var indicatorContainerX by remember { mutableFloatStateOf(0f) }
+
+    Column(modifier = modifier) {
+        PrimaryScrollableTabRow(
+            selectedTabIndex = selectedTabIndex,
+            edgePadding = 16.dp,
+            divider = { },
+            indicator = { },
+            containerColor = Color.Transparent,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            tabTitles.forEachIndexed { index, title ->
+                AppText(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = LegadoTheme.typography.labelLargeEmphasized,
+                    color = if (index == selectedTabIndex)
+                        LegadoTheme.colorScheme.primary
+                    else
+                        LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clickable { onTabSelected(index) }
+                        .padding(vertical = 12.dp, horizontal = 12.dp)
+                        .onGloballyPositioned { coords ->
+                            val rootPos = coords.positionInRoot()
+                            tabOffsets = tabOffsets.copyOf().also { it[index] = rootPos.x }
+                            tabWidths = tabWidths.copyOf().also { it[index] = coords.size.width.toFloat() }
+                        }
+                )
+            }
+        }
+
+        val selectedOffset = tabOffsets.getOrNull(selectedTabIndex)
+        val selectedWidth = tabWidths.getOrNull(selectedTabIndex)
+        if (selectedOffset != null && selectedWidth > 0f) {
+            val targetLeft = selectedOffset - indicatorContainerX
+            val animLeft by animateFloatAsState(
+                targetValue = targetLeft,
+                animationSpec = tween(250)
+            )
+            val animWidth by animateFloatAsState(
+                targetValue = selectedWidth,
+                animationSpec = tween(250)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .onGloballyPositioned { coords ->
+                        indicatorContainerX = coords.positionInRoot().x
+                    }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(animLeft.roundToInt(), 0) }
+                        .width(with(density) { animWidth.toDp() })
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                        .background(LegadoTheme.colorScheme.primary)
+                )
+            }
+        }
     }
 }
