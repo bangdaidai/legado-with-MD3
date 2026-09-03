@@ -138,7 +138,7 @@ fun ToggleChip(
                 )
                 .then(borderModifier)
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 6.dp, vertical = 4.dp)
                 .semantics {
                     toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
                     stateDescription = if (selected) checkedContentDescription else uncheckedContentDescription

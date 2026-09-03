@@ -75,6 +75,7 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.PrimaryButton
 import io.legado.app.ui.widget.components.button.SecondaryButton
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -641,13 +642,11 @@ fun BatchShowOnBookshelfSheet(
         onDismissRequest = onDismiss,
         title = "批量编辑标签展示",
         endAction = {
-            IconButton(onClick = onSave) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "保存",
-                    tint = LegadoTheme.colorScheme.primary,
-                )
-            }
+            MediumTonalButton(
+                onClick = onSave,
+                icon = Icons.Default.Check,
+                contentDescription = "保存",
+            )
         },
     ) {
         // 按分组组织标签

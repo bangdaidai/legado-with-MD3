@@ -122,7 +122,7 @@ fun adaptiveContentPaddingBookshelf(
     val horizontal =
         if (ThemeResolver.isMiuixEngine(composeEngine)) 6.dp + horizontal else 4.dp + horizontal
     return PaddingValues(
-        top = top + ContentTopGap,
+        top = top + 4.dp,
         bottom = bottom,
         start = horizontal,
         end = horizontal
