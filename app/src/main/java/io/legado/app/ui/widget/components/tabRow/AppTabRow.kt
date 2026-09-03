@@ -1,13 +1,6 @@
 package io.legado.app.ui.widget.components.tabRow
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -117,19 +110,21 @@ private fun AppTab(
             }
         )
     } else {
-        // 间距通过 contentPadding 水平值控制（两侧各12dp = 总间距24dp）
-        // 不使用 modifier.padding(end)，让 matchContentSize 能正确扣除 contentPadding 对齐文字
+        // 对称 padding 提供间距，matchContentSize 自动对齐 indicator 与文字
+        // 旧方案用 modifier.padding(end=24.dp) 导致 indicator 在 Tab 内居中偏移
+        // 对称 padding 让 Tab 中心 = 内容中心，indicator 和文字都居中对齐
         val horizontalPadding = if (showEndSpacing) 12.dp else 0.dp
         Tab(
             selected = selected,
             onClick = onClick,
-            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = horizontalPadding),
             text = {
                 AppText(
                     text = title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = LegadoTheme.typography.labelLargeEmphasized,
+                    modifier = Modifier.padding(vertical = 8.dp),
                     color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
                 )
             }
