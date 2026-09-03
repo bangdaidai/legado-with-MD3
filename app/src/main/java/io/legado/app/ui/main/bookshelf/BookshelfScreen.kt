@@ -625,13 +625,7 @@ fun BookshelfScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .offset(y = (-16).dp)
-                                .layout { measurable, constraints ->
-                                    val placeable = measurable.measure(constraints)
-                                    layout(placeable.width, placeable.height - 16.dp.roundToPx()) {
-                                        placeable.place(0, 0)
-                                    }
-                                },
+                                .adaptiveHorizontalPaddingTab(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val selectedTabIndex =

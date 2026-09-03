@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.components.tabRow
 
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
@@ -82,13 +83,14 @@ private fun AppTab(
     Tab(
         selected = selected,
         onClick = onClick,
-        content = {
+        modifier = Modifier.height(32.dp),
+        text = {
             AppText(
                 text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = LegadoTheme.typography.labelLargeEmphasized,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 8.dp),
                 color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
             )
         }
