@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -26,7 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -175,7 +174,9 @@ private fun PreciseTabRow(
     isScrollable: Boolean
 ) {
     val density = LocalDensity.current
+    val horizontalPaddingPx = with(density) { 12.dp.toPx() }
     var tabPositions by remember { mutableStateOf(List(tabTitles.size) { TabPosition(0f, 0f) }) }
+    var indicatorContainerX by remember { mutableStateOf(0f) }
 
     Column(modifier = modifier) {
         PrimaryScrollableTabRow(
@@ -187,9 +188,7 @@ private fun PreciseTabRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             tabTitles.forEachIndexed { index, title ->
-                if (index > 0) {
-                    Spacer(modifier = Modifier.width(24.dp))
-                }
+                val isFirst = index == 0
                 AppText(
                     text = title,
                     maxLines = 1,
@@ -200,14 +199,19 @@ private fun PreciseTabRow(
                     else
                         LegadoTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
-                        .padding(vertical = 12.dp)
+                        .padding(
+                            start = if (isFirst) 0.dp else 12.dp,
+                            end = 12.dp,
+                            vertical = 12.dp
+                        )
                         .clickable { onTabSelected(index) }
                         .onGloballyPositioned { coords ->
-                            val posInParent = coords.positionInParent()
+                            val rootX = coords.positionInRoot().x
+                            val startPad = if (isFirst) 0f else horizontalPaddingPx
                             tabPositions = tabPositions.toMutableList().also {
                                 it[index] = TabPosition(
-                                    offset = posInParent.x,
-                                    width = coords.size.width.toFloat()
+                                    offset = rootX + startPad,
+                                    width = coords.size.width.toFloat() - startPad - horizontalPaddingPx
                                 )
                             }
                         }
@@ -218,7 +222,7 @@ private fun PreciseTabRow(
         val selected = tabPositions.getOrNull(selectedTabIndex)
         if (selected != null && selected.width > 0f) {
             val animOffset by animateFloatAsState(
-                targetValue = selected.offset,
+                targetValue = selected.offset - indicatorContainerX,
                 animationSpec = tween(250)
             )
             val animWidth by animateFloatAsState(
@@ -230,7 +234,9 @@ private fun PreciseTabRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .padding(horizontal = 16.dp)
+                    .onGloballyPositioned { coords ->
+                        indicatorContainerX = coords.positionInRoot().x
+                    }
             ) {
                 Box(
                     modifier = Modifier
