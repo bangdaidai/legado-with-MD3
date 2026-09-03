@@ -201,8 +201,9 @@ private fun PreciseTabRow(
                     modifier = Modifier
                         .padding(
                             start = if (isFirst) 0.dp else 12.dp,
+                            top = 12.dp,
                             end = 12.dp,
-                            vertical = 12.dp
+                            bottom = 12.dp
                         )
                         .clickable { onTabSelected(index) }
                         .onGloballyPositioned { coords ->
