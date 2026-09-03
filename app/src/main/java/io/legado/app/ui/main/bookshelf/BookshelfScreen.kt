@@ -626,7 +626,6 @@ fun BookshelfScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .offset(y = (-16).dp)
-                                .adaptiveHorizontalPadding()
                                 .layout { measurable, constraints ->
                                     val placeable = measurable.measure(constraints)
                                     layout(placeable.width, placeable.height - 16.dp.roundToPx()) {

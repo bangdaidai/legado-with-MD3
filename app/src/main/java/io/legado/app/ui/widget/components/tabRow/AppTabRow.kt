@@ -88,7 +88,7 @@ private fun AppTab(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = LegadoTheme.typography.labelLargeEmphasized,
-                modifier = Modifier.padding(horizontal = 8.dp),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
                 color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
             )
         }
