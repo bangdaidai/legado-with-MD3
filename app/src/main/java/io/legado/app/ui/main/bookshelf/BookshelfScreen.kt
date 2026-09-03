@@ -647,8 +647,7 @@ fun BookshelfScreen(
                                 onTabSelected = { index ->
                                     scope.launch { pagerState.animateScrollToPage(index) }
                                 },
-                                modifier = Modifier.weight(1f),
-                                useDefaultTabPadding = false
+                                modifier = Modifier.weight(1f)
                             )
 
                             val showExpandButton = uiState.settings.shouldShowExpandButton
