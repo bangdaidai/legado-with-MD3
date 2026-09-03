@@ -2751,6 +2751,7 @@
     <string name="cloud_tts_manual_voice_hint">適用於廠商自訂、複刻音色，或目錄中尚未列出的音色。</string>
     <string name="cloud_tts_step_preset">音色預設</string>
     <string name="cloud_tts_preset_name">預設名稱</string>
+    <string name="cloud_tts_gender_value">性別：%1$s</string>
     <string name="cloud_tts_style_value">風格/情感：%1$s</string>
     <string name="cloud_tts_role_value">角色風格：%1$s</string>
     <string name="cloud_tts_default">預設</string>

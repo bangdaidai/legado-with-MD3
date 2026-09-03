@@ -56,7 +56,6 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -945,6 +944,7 @@ private fun TtsVoicePresetEditorContent(
     editor: TtsVoicePresetEditorUi,
     onIntent: (CloudTtsIntent) -> Unit,
 ) {
+    var genderMenu by remember { mutableStateOf(false) }
     var styleMenu by remember { mutableStateOf(false) }
     var roleMenu by remember { mutableStateOf(false) }
     var formatMenu by remember { mutableStateOf(false) }
@@ -1052,43 +1052,49 @@ private fun TtsVoicePresetEditorContent(
                     }
                     EngineSectionTitle(R.string.cloud_tts_step_preset)
                     Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
-                    Row(
-                        modifier = Modifier.padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        ToggleChip(
-                            label = stringResource(R.string.voice_gender_male),
-                            selected = editor.gender == ReadAloudVoiceTraits.GENDER_MALE,
-                            onToggle = { update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_MALE)) },
-                            compact = true,
-                        )
-                        ToggleChip(
-                            label = stringResource(R.string.voice_gender_female),
-                            selected = editor.gender == ReadAloudVoiceTraits.GENDER_FEMALE,
-                            onToggle = { update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_FEMALE)) },
-                            compact = true,
-                        )
-                        ToggleChip(
-                            label = stringResource(R.string.voice_gender_unknown),
-                            selected = editor.gender == ReadAloudVoiceTraits.GENDER_UNKNOWN,
-                            onToggle = { update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_UNKNOWN)) },
-                            compact = true,
-                        )
-                    }
                     Field(editor.notes, { update(editor.copy(notes = it)) }, stringResource(R.string.cloud_tts_preset_notes))
                     if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD) {
-                        if (!selectedVoice?.styles.isNullOrEmpty()) {
-                            MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
-                            RoundDropdownMenu(styleMenu, { styleMenu = false }) {
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.cloud_tts_default),
-                                    onClick = { styleMenu = false; update(editor.copy(style = "")) },
-                                )
-                                selectedVoice.styles.forEach { style ->
-                                    RoundDropdownMenuItem(
-                                        text = style,
-                                        onClick = { styleMenu = false; update(editor.copy(style = style)) },
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                MenuButton(
+                                    stringResource(
+                                        R.string.cloud_tts_gender_value,
+                                        editor.gender.toGenderLabel()
                                     )
+                                ) { genderMenu = true }
+                                RoundDropdownMenu(genderMenu, { genderMenu = false }) {
+                                    RoundDropdownMenuItem(
+                                        text = stringResource(R.string.voice_gender_male),
+                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_MALE)) },
+                                    )
+                                    RoundDropdownMenuItem(
+                                        text = stringResource(R.string.voice_gender_female),
+                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_FEMALE)) },
+                                    )
+                                    RoundDropdownMenuItem(
+                                        text = stringResource(R.string.voice_gender_unknown),
+                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_UNKNOWN)) },
+                                    )
+                                }
+                            }
+                            if (!selectedVoice?.styles.isNullOrEmpty()) {
+                                Column(modifier = Modifier.weight(2f)) {
+                                    MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
+                                    RoundDropdownMenu(styleMenu, { styleMenu = false }) {
+                                        RoundDropdownMenuItem(
+                                            text = stringResource(R.string.cloud_tts_default),
+                                            onClick = { styleMenu = false; update(editor.copy(style = "")) },
+                                        )
+                                        selectedVoice.styles.forEach { style ->
+                                            RoundDropdownMenuItem(
+                                                text = style,
+                                                onClick = { styleMenu = false; update(editor.copy(style = style)) },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1129,14 +1135,27 @@ private fun TtsVoicePresetEditorContent(
                         Field(editor.speed, { update(editor.copy(speed = it)) }, stringResource(R.string.cloud_tts_speed))
                         Field(editor.pitch, { update(editor.copy(pitch = it)) }, stringResource(R.string.cloud_tts_pitch))
                         Field(editor.volume, { update(editor.copy(volume = it)) }, stringResource(R.string.cloud_tts_volume))
-                        MenuButton(stringResource(R.string.cloud_tts_audio_format, editor.format)) { formatMenu = true }
-                        RoundDropdownMenu(formatMenu, { formatMenu = false }) {
-                            editor.formatOptions.forEach { format ->
-                                RoundDropdownMenuItem(
-                                    text = format,
-                                    onClick = { formatMenu = false; update(editor.copy(format = format)) },
-                                )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                MenuButton(stringResource(R.string.cloud_tts_audio_format, editor.format)) { formatMenu = true }
+                                RoundDropdownMenu(formatMenu, { formatMenu = false }) {
+                                    editor.formatOptions.forEach { format ->
+                                        RoundDropdownMenuItem(
+                                            text = format,
+                                            onClick = { formatMenu = false; update(editor.copy(format = format)) },
+                                        )
+                                    }
+                                }
                             }
+                            MediumTonalButton(
+                                onClick = { onIntent(CloudTtsIntent.Preview) },
+                                enabled = editor.voiceId.isNotBlank() && !state.testing,
+                                modifier = Modifier.weight(2f).padding(bottom = 4.dp),
+                                text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+                            )
                         }
                     } else if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
                         AppText(
@@ -1147,6 +1166,12 @@ private fun TtsVoicePresetEditorContent(
                         )
                         Field(editor.speed, { update(editor.copy(speed = it)) }, stringResource(R.string.cloud_tts_speed_multiplier))
                         Field(editor.pitch, { update(editor.copy(pitch = it)) }, stringResource(R.string.cloud_tts_pitch_multiplier))
+                        MediumTonalButton(
+                            onClick = { onIntent(CloudTtsIntent.Preview) },
+                            enabled = editor.voiceId.isNotBlank() && !state.testing,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+                        )
                     }
                     if (editor.engineType == ReadAloudVoice.ENGINE_HTTP) {
                         AppText(
@@ -1155,18 +1180,22 @@ private fun TtsVoicePresetEditorContent(
                             style = LegadoTheme.typography.labelSmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
+                        MediumTonalButton(
+                            onClick = { onIntent(CloudTtsIntent.Preview) },
+                            enabled = editor.voiceId.isNotBlank() && !state.testing,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+                        )
                     }
-                    MediumTonalButton(
-                        onClick = { onIntent(CloudTtsIntent.Preview) },
-                        enabled = editor.voiceId.isNotBlank() && !state.testing,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                        text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
-                    )
                 }
             }
     }
+}
+
+private fun String.toGenderLabel(): String = when (this) {
+    ReadAloudVoiceTraits.GENDER_MALE -> "男"
+    ReadAloudVoiceTraits.GENDER_FEMALE -> "女"
+    else -> "未知"
 }
 
 @Composable

@@ -3130,6 +3130,7 @@
     <string name="cloud_tts_step_preset">Voice preset</string>
     <string name="cloud_tts_preset_name">Preset name</string>
     <string name="cloud_tts_preset_notes">Notes (overrides style tags)</string>
+    <string name="cloud_tts_gender_value">Gender: %1$s</string>
     <string name="cloud_tts_style_value">Style/emotion: %1$s</string>
     <string name="cloud_tts_role_value">Role style: %1$s</string>
     <string name="cloud_tts_default">Default</string>
