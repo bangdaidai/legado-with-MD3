@@ -48,8 +48,6 @@ fun AppTabRow(
         )
     } else {
         if (isScrollable) {
-            //非默认 Tab 样式时，标签之间的间距（与 AppTab 中 endPadding 一致）
-            val tabEndSpacing = if (!useDefaultTabPadding) 24.dp else 0.dp
             PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
                 edgePadding = 0.dp,
@@ -119,18 +117,19 @@ private fun AppTab(
             }
         )
     } else {
-        val endPadding = if (showEndSpacing) 24.dp else 0.dp
+        // 间距通过 contentPadding 水平值控制（两侧各12dp = 总间距24dp）
+        // 不使用 modifier.padding(end)，让 matchContentSize 能正确扣除 contentPadding 对齐文字
+        val horizontalPadding = if (showEndSpacing) 12.dp else 0.dp
         Tab(
             selected = selected,
             onClick = onClick,
-            modifier = Modifier.padding(end = endPadding),
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 8.dp),
             text = {
                 AppText(
                     text = title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = LegadoTheme.typography.labelLargeEmphasized,
-                    modifier = Modifier.padding(horizontal = 0.dp, vertical = 8.dp),
                     color = if (selected) LegadoTheme.colorScheme.primary else LegadoTheme.colorScheme.onSurfaceVariant
                 )
             }
