@@ -634,16 +634,17 @@ fun BookshelfScreen(
 
                             // 分组标签行的 16dp 视口边距、24dp 标签间距、指示器对齐
                             // 全部由组件内部处理，外层不要再加水平 padding
+                            val showExpandButton = uiState.settings.shouldShowExpandButton
                             BookshelfGroupTabRow(
                                 tabTitles = tabTitles,
                                 selectedTabIndex = selectedTabIndex,
                                 onTabSelected = { index ->
                                     scope.launch { pagerState.animateScrollToPage(index) }
                                 },
+                                hasTrailingButton = showExpandButton,
                                 modifier = Modifier.weight(1f)
                             )
 
-                            val showExpandButton = uiState.settings.shouldShowExpandButton
                             if (showExpandButton) {
                                 Box(
                                     modifier = Modifier.padding(

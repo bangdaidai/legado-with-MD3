@@ -34,7 +34,9 @@ import top.yukonga.miuix.kmp.basic.TabRowWithContour
  * 书架分组标签行。
  *
  * M3 引擎的布局契约：
- * - 整个滚动视口左右内缩 16dp，内容在视口内被裁切，滑动中标签永远到不了屏幕边缘；
+ * - 滚动视口左内缩 16dp，内容在视口内被裁切，滑动中标签永远到不了屏幕左边缘；
+ * - 尾部没有按钮时右内缩 16dp；有按钮时右侧不留边距，视口直接顶到按钮左侧
+ *   （按钮自身负责与屏幕边缘保持距离）；
  * - 标签之间间距 24dp，标签盒子宽度严格等于文字宽度；
  * - 指示器放在"文字宽度"的列内 fillMaxWidth，因此宽度与文字完全一致、
  *   且只随文字居中对齐，不受视口边距和标签间距影响。
@@ -47,6 +49,7 @@ internal fun BookshelfGroupTabRow(
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    hasTrailingButton: Boolean = false,
 ) {
     val composeEngine = LegadoTheme.composeEngine
 
@@ -57,7 +60,7 @@ internal fun BookshelfGroupTabRow(
             onTabSelected = onTabSelected,
             modifier = modifier.padding(
                 start = 12.dp,
-                end = 12.dp,
+                end = if (hasTrailingButton) 0.dp else 12.dp,
                 top = 4.dp,
                 bottom = 4.dp
             ),
@@ -84,10 +87,13 @@ internal fun BookshelfGroupTabRow(
 
         LazyRow(
             state = listState,
-            // 先内缩 16dp 再裁切：裁切边界即内缩后的视口，
-            // 滑动中标签内容在距屏幕 16dp 处被切掉，永远到不了屏幕边缘
+            // 先内缩再裁切：裁切边界即内缩后的视口，滑动中标签内容在视口边缘被切掉。
+            // 右侧有分组按钮时视口直接顶到按钮左侧，没有按钮时右内缩 16dp
             modifier = modifier
-                .padding(horizontal = 16.dp)
+                .padding(
+                    start = 16.dp,
+                    end = if (hasTrailingButton) 0.dp else 16.dp
+                )
                 .clipToBounds(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically,
