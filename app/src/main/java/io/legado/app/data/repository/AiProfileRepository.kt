@@ -151,23 +151,26 @@ class AiProfileRepository(
 
     override suspend fun setDefaultModel(modelProfileId: String): AiTaskPresetConfig = withContext(Dispatchers.IO) {
         val model = aiProfileDao.getModel(modelProfileId) ?: error("Model is required")
-        // 对话预设是"默认模型"的代表；切换前先记下旧默认，用于带动跟随它的任务预设
-        val previousDefaultModelId = aiProfileDao.getPreset(DEFAULT_CHAT_PRESET_ID)?.modelProfileId
         val params = parseParams(model.defaultParamsJson)
         saveDefaultPresets(modelProfileId, params)
-        // 只切换仍指向旧默认的任务预设；用户单独指定过其它模型的预设保持不动
-        if (!previousDefaultModelId.isNullOrBlank() && previousDefaultModelId != modelProfileId) {
-            val followers = aiProfileDao.getAllPresets()
-                .filter { it.modelProfileId == previousDefaultModelId }
-            if (followers.isNotEmpty()) {
-                val now = System.currentTimeMillis()
-                aiProfileDao.insertPresets(
-                    followers.map { it.copy(modelProfileId = modelProfileId, updatedAt = now) }
-                )
-            }
-        }
+        switchAllPresetsToModel(modelProfileId)
         aiProfileDao.getPreset(DEFAULT_TRANSLATE_PRESET_ID)?.toConfig()
             ?: error("Failed to save default model")
+    }
+
+    /**
+     * 设置页的默认模型就是全部 AI 功能的模型：把所有任务预设统一指向新默认模型，
+     * 不保留旧的单独绑定（提示词、参数等其余字段原样保留）。重复设置同一模型也执行，
+     * 用于纠正历史遗留的悬空绑定。
+     */
+    private suspend fun switchAllPresetsToModel(modelProfileId: String) {
+        val presets = aiProfileDao.getAllPresets()
+            .filter { it.modelProfileId != modelProfileId }
+        if (presets.isEmpty()) return
+        val now = System.currentTimeMillis()
+        aiProfileDao.insertPresets(
+            presets.map { it.copy(modelProfileId = modelProfileId, updatedAt = now) }
+        )
     }
 
     override suspend fun setTaskPresetModel(
@@ -338,6 +341,7 @@ class AiProfileRepository(
             )
         )
         saveDefaultPresets(modelProfileId, params, translationRuntimeOptions)
+        switchAllPresetsToModel(modelProfileId)
         aiProfileDao.getPreset(DEFAULT_TRANSLATE_PRESET_ID)?.toConfig()
             ?: error("Failed to save AI profile")
     }
