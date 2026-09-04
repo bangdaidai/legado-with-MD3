@@ -196,6 +196,10 @@ class AiProfileRepository(
             updatedAt = now
         )
         aiProfileDao.insertPreset(preset)
+        // 对话页切换模型与设置默认模型是同一语义：其余任务预设一并跟随新模型
+        if (taskType == AiTaskType.CHAT) {
+            switchAllPresetsToModel(modelProfileId)
+        }
         preset.toConfig() ?: error("Failed to set task preset model")
     }
 
