@@ -484,7 +484,10 @@ class SearchViewModel(
 
     private fun observeQueryHistory() {
         viewModelScope.launch {
-            repository.searchHistory("")
+            queryFlow
+                .map { it.trim() }
+                .distinctUntilChanged()
+                .flatMapLatest { repository.searchHistory(it) }
                 .catch { emit(emptyList()) }
                 .collect { history ->
                     _uiState.update { it.copy(history = history.toImmutableList()) }
