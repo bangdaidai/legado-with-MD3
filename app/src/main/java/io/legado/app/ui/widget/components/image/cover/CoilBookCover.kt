@@ -413,6 +413,18 @@ private fun CoverTextOverlay(
                     }
                 } else null
 
+                val authorPaint = if (showAuthor && !author.isNullOrBlank()) {
+                    Paint().apply {
+                        isAntiAlias = true
+                        textAlign = Paint.Align.CENTER
+                        textSize = viewWidth / 12f
+                        color = textColor
+                        if (coverSettings.showShadow) {
+                            setShadowLayer(4f, 1f, 1f, shadowColor)
+                        }
+                    }
+                } else null
+
                 val nameMaxWidth = (viewWidth * 0.8f).toInt().coerceAtLeast(1)
                 val nameTextPaint = if (namePaint != null && isHorizontal) {
                     TextPaint(namePaint).apply { textAlign = Paint.Align.LEFT }
@@ -466,18 +478,6 @@ private fun CoverTextOverlay(
                         draw
                     }
                 } else emptyList()
-
-                val authorPaint = if (showAuthor && !author.isNullOrBlank()) {
-                    Paint().apply {
-                        isAntiAlias = true
-                        textAlign = Paint.Align.CENTER
-                        textSize = viewWidth / 12f
-                        color = textColor
-                        if (coverSettings.showShadow) {
-                            setShadowLayer(4f, 1f, 1f, shadowColor)
-                        }
-                    }
-                } else null
 
                 val authorText = if (authorPaint != null && author != null && isHorizontal) {
                     TextUtils.ellipsize(
