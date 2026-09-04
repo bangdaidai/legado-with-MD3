@@ -10,6 +10,7 @@ object PreferKey {
     const val userAgent = "userAgent"
     const val showUnread = "showUnread"
     const val showUnreadNew = "showUnreadNew"
+    const val showReadingProgress = "showReadingProgress"
     const val bookGroupStyle = "bookGroupStyle"
     const val hideEmptyGroups = "hideEmptyGroups"
     const val useDefaultCover = "useDefaultCover"

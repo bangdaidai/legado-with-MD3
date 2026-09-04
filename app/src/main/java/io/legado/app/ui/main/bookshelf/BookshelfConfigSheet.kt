@@ -616,6 +616,15 @@ fun BookshelfConfigSheet(
                 }
             )
 
+            CompactSwitchSettingItem(
+                title = stringResource(R.string.show_reading_progress),
+                checked = settings.showReadingProgress,
+                color = LegadoTheme.colorScheme.surface,
+                onCheckedChange = { value ->
+                    onUpdate { it.copy(showReadingProgress = value) }
+                }
+            )
+
             PillHeaderDivider(title = stringResource(R.string.other))
 
             CompactSwitchSettingItem(

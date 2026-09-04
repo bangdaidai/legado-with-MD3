@@ -1988,6 +1988,7 @@
     <string name="page_anim_fade">淡入淡出</string>
     <string name="show_bookshelf_tab_menu">顯示更多書架分頁</string>
     <string name="show_unread_new">顯示新章節標記</string>
+    <string name="show_reading_progress">顯示閱讀進度</string>
     <string name="read_change_all">換源預設套用到整本書</string>
     <string name="read_change_all_s">否則僅套用於單一章節。</string>
     <string name="show_tip">顯示書籍類型</string>

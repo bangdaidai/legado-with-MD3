@@ -2225,6 +2225,7 @@
     <string name="show_tip">顯示書籍類型</string>
     <string name="show_title_bar_icons">顯示浮動圖標</string>
     <string name="show_unread_new">顯示新章節標記</string>
+    <string name="show_reading_progress">顯示閱讀進度</string>
     <string name="show_web_log">輸出日誌</string>
     <string name="show_word_count">顯示字數</string>
     <string name="slider">滑桿</string>

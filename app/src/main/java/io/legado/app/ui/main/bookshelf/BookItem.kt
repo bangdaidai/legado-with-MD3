@@ -81,10 +81,12 @@ import io.legado.app.ui.widget.components.card.TicketShape
 import io.legado.app.ui.widget.components.card.rememberTicketNotchRegistry
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
+import io.legado.app.ui.widget.components.image.cover.BookshelfProgressBar
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.HtmlFormatter
 import io.legado.app.utils.toTimeAgo
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -761,6 +763,14 @@ fun BookItem(
     val ticketStyle = showIntroBelowContent && settings.bookshelfTicketStyle
     val unreadCount = book.getUnreadChapterNum()
     val unreadText = if (settings.showUnread && unreadCount > 0) unreadCount.toString() else null
+    // 阅读进度按章节计算，与分享卡片 "已读 x/y" 口径一致；无章节目录时不显示
+    val readingProgress = if (book.totalChapterNum > 0) {
+        (book.durChapterIndex + 1).toFloat() / book.totalChapterNum
+    } else {
+        null
+    }
+    val showReadingProgress = settings.showReadingProgress && readingProgress != null
+    val progressPercent = readingProgress?.let { (it * 100).roundToInt() }
     val showUpdateBadge = settings.showUnread && settings.showUnreadNew && book.isNew
     val bookTypeLabel = if (settings.showTip) {
         when {
@@ -795,6 +805,8 @@ fun BookItem(
                 .aspectRatio(5f / 7f),
             sourceOrigin = book.origin,
             badgeText = if (layoutMode != 0) unreadText else null,
+            // 网格封面底部进度条；gridStyle==1 书名覆盖封面底部，不叠加
+            progress = if (layoutMode != 0 && gridStyle != 1 && showReadingProgress) readingProgress else null,
             showBadgeDot = showUpdateBadge,
             leftBottomText = matchedSourceLabel ?: bookTypeLabel,
             showLoadingPlaceholder = true,
@@ -872,7 +884,7 @@ fun BookItem(
                 val intro = remember(book.intro) {
                     HtmlFormatter.formatDisplayText(book.intro).takeIf { it.isNotBlank() }
                 }
-                if (settings.bookshelfShowTag && kindList.isNotEmpty()) {
+                if ((settings.bookshelfShowTag && kindList.isNotEmpty()) || showReadingProgress) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -881,14 +893,16 @@ fun BookItem(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        kindList.forEach { label ->
-                            val tagColor = tagColorMap[label]
-                            TagChip(
-                                tag = label,
-                                color = tagColor,
-                                size = TagChipSize.Small,
-                                showColoredBorder = settings.bookshelfTagBorder,
-                            )
+                        if (settings.bookshelfShowTag) {
+                            kindList.forEach { label ->
+                                val tagColor = tagColorMap[label]
+                                TagChip(
+                                    tag = label,
+                                    color = tagColor,
+                                    size = TagChipSize.Small,
+                                    showColoredBorder = settings.bookshelfTagBorder,
+                                )
+                            }
                         }
                         val wc = bookUi.book.wordCount
                         if (!wc.isNullOrBlank()) {
@@ -898,7 +912,21 @@ fun BookItem(
                                 showColoredBorder = settings.bookshelfTagBorder,
                             )
                         }
+                        if (showReadingProgress) {
+                            TagChip(
+                                tag = "$progressPercent%",
+                                size = TagChipSize.Small,
+                                showColoredBorder = settings.bookshelfTagBorder,
+                            )
+                        }
                     }
+                    BookshelfProgressBar(
+                        progress = readingProgress!!,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp)
+                            .height(3.dp)
+                    )
                 }
                 if (showIntro && !showIntroBelowContent) {
                     BookItemIntro(

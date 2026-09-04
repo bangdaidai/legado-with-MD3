@@ -9,6 +9,8 @@ data class BookshelfSettings(
     val bookshelfSortOrder: Int = 1,
     val showUnread: Boolean = true,
     val showUnreadNew: Boolean = true,
+    /** 是否在书架显示阅读进度（列表标签行百分比+进度条、网格封面底部进度条） */
+    val showReadingProgress: Boolean = false,
     val showTip: Boolean = false,
     val showBookCount: Boolean = true,
     val showLastUpdateTime: Boolean = false,
