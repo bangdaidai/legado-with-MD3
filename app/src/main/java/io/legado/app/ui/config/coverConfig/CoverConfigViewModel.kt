@@ -64,6 +64,8 @@ class CoverConfigViewModel(
                 updateSettings { it.copy(useDefaultColor = intent.value) }
             is CoverConfigIntent.SetInfoOrientation ->
                 updateSettings { it.copy(infoOrientation = intent.value) }
+            is CoverConfigIntent.SetCenterInfo ->
+                updateSettings { it.copy(centerInfo = intent.value) }
             is CoverConfigIntent.SetExploreFilterState ->
                 updateSettings { it.copy(exploreFilterState = intent.value) }
             is CoverConfigIntent.SetShowName ->

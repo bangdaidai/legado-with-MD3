@@ -169,6 +169,15 @@ fun CoverConfigScreen(
                         onIntent(CoverConfigIntent.SetInfoOrientation(value))
                     }
                 )
+
+                SwitchSettingItem(
+                    title = stringResource(R.string.cover_center_info),
+                    description = stringResource(R.string.cover_center_info_summary),
+                    checked = settings.centerInfo,
+                    onCheckedChange = { value ->
+                        onIntent(CoverConfigIntent.SetCenterInfo(value))
+                    }
+                )
             }
 
             SplicedColumnGroup(title = stringResource(R.string.network_book_badge_setting)) {

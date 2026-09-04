@@ -2003,6 +2003,8 @@
 
     <!-- Missing strings -->
     <string name="cover_info_orientation">Cover orientation</string>
+    <string name="cover_center_info">Center info</string>
+    <string name="cover_center_info_summary">Center title and author vertically in landscape mode</string>
     <string name="network_book_badge_setting">Network Book Badge</string>
     <string name="filter_show_all">Show All</string>
     <string name="filter_hide_in_shelf">Hide Same Source Books in Shelf</string>

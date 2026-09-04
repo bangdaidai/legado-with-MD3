@@ -386,6 +386,7 @@ private fun CoverTextOverlay(
     val configIsHorizontal = coverSettings.infoOrientation == "1"
     // If text contains Latin letters, force horizontal layout
     val isHorizontal = configIsHorizontal || isLatinBasedText(name)
+    val centerInfo = coverSettings.centerInfo
 
     // Paints, StaticLayout and per-character positions are built in the cache block so they are
     // rebuilt only when the size or the settings above change, not on every draw pass.
@@ -425,7 +426,22 @@ private fun CoverTextOverlay(
                         .build()
                 } else null
                 val nameLayoutX = (viewWidth - nameMaxWidth) / 2f
-                val nameLayoutY = viewHeight * 0.08f
+                val nameLayoutY = if (centerInfo && isHorizontal) {
+                    // 计算书名和作者的整体高度，然后垂直居中
+                    val nameHeight = nameLayout?.height?.toFloat() ?: 0f
+                    val authorHeight = authorPaint?.let {
+                        it.fontMetrics.let { fm -> fm.bottom - fm.top }
+                    } ?: 0f
+                    val gap = if (showAuthor && !author.isNullOrBlank()) {
+                        viewWidth / 24f
+                    } else {
+                        0f
+                    }
+                    val totalHeight = nameHeight + gap + authorHeight
+                    (viewHeight - totalHeight) / 2f
+                } else {
+                    viewHeight * 0.08f
+                }
 
                 val nameStrokePaint =
                     if (namePaint != null && !isHorizontal && coverSettings.showStroke) {
@@ -525,18 +541,24 @@ private fun CoverTextOverlay(
 
                         if (authorPaint != null) {
                             if (authorText != null) {
+                                val authorY = if (centerInfo && isHorizontal && nameLayout != null) {
+                                    // 作者在书名下方
+                                    nameLayoutY + nameLayout.height + viewWidth / 24f + authorPaint.fontMetrics.let { it.bottom - it.top }
+                                } else {
+                                    viewHeight * 0.75f
+                                }
                                 if (authorStrokePaint != null) {
                                     nativeCanvas.drawText(
                                         authorText,
                                         viewWidth / 2,
-                                        viewHeight * 0.75f,
+                                        authorY,
                                         authorStrokePaint
                                     )
                                 }
                                 nativeCanvas.drawText(
                                     authorText,
                                     viewWidth / 2,
-                                    viewHeight * 0.75f,
+                                    authorY,
                                     authorPaint
                                 )
                             } else {
