@@ -1579,7 +1579,8 @@ private fun TagFilterRow(
                 label = tag.name,
                 selected = isSelected,
                 onToggle = { onTagClick(tag.id) },
-                compact = true
+                compact = true,
+                light = true
             )
         }
     }

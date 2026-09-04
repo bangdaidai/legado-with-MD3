@@ -45,6 +45,7 @@ fun ToggleChip(
     modifier: Modifier = Modifier,
     cornerRadius: Dp? = null,
     compact: Boolean = false,
+    light: Boolean = false,
     checkedContentDescription: String = "已选择",
     uncheckedContentDescription: String = "未选择"
 ) {
@@ -70,6 +71,8 @@ fun ToggleChip(
             onClick = onToggle,
             containerColor = if (selected) {
                 MiuixTheme.colorScheme.primaryContainer
+            } else if (light) {
+                Color.Transparent
             } else {
                 MiuixTheme.colorScheme.surfaceContainer
             }
@@ -100,7 +103,11 @@ fun ToggleChip(
                     style = LegadoTheme.typography.labelMediumEmphasized,
                     maxLines = 1,
                     softWrap = false,
-                    color = if (selected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface
+                    color = when {
+                        selected -> MiuixTheme.colorScheme.onPrimaryContainer
+                        light -> LegadoTheme.colorScheme.onSurfaceVariant
+                        else -> MiuixTheme.colorScheme.onSurface
+                    }
                 )
             }
         }
@@ -130,10 +137,10 @@ fun ToggleChip(
             modifier = modifier
                 .clip(resolvedShape)
                 .background(
-                    if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainer
+                    when {
+                        selected -> MaterialTheme.colorScheme.primaryContainer
+                        light -> Color.Transparent
+                        else -> MaterialTheme.colorScheme.surfaceContainer
                     }
                 )
                 .then(borderModifier)
@@ -151,7 +158,11 @@ fun ToggleChip(
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 softWrap = false,
-                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                color = when {
+                    selected -> MaterialTheme.colorScheme.onPrimaryContainer
+                    light -> LegadoTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
             )
         }
     } else {
