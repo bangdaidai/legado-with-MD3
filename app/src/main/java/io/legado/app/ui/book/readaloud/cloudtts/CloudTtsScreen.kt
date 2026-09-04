@@ -1055,6 +1055,22 @@ private fun TtsVoicePresetEditorContent(
                     Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
                     Field(editor.notes, { update(editor.copy(notes = it)) }, stringResource(R.string.cloud_tts_preset_notes))
                     if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD) {
+                        if (!selectedVoice?.roles.isNullOrEmpty()) {
+                            MenuButton(stringResource(R.string.cloud_tts_role_value, editor.role.ifBlank { stringResource(R.string.cloud_tts_default) })) { roleMenu = true }
+                            RoundDropdownMenu(roleMenu, { roleMenu = false }) {
+                                RoundDropdownMenuItem(
+                                    text = stringResource(R.string.cloud_tts_default),
+                                    onClick = { roleMenu = false; update(editor.copy(role = "")) },
+                                )
+                                selectedVoice.roles.forEach { role ->
+                                    RoundDropdownMenuItem(
+                                        text = role,
+                                        onClick = { roleMenu = false; update(editor.copy(role = role)) },
+                                    )
+                                }
+                            }
+                        }
+                        Field(editor.instructions, { update(editor.copy(instructions = it)) }, stringResource(R.string.cloud_tts_instructions))
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1082,7 +1098,7 @@ private fun TtsVoicePresetEditorContent(
                                 }
                             }
                             if (!selectedVoice?.styles.isNullOrEmpty()) {
-                                Column(modifier = Modifier.weight(2f)) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
                                     RoundDropdownMenu(styleMenu, { styleMenu = false }) {
                                         RoundDropdownMenuItem(
@@ -1099,22 +1115,6 @@ private fun TtsVoicePresetEditorContent(
                                 }
                             }
                         }
-                        if (!selectedVoice?.roles.isNullOrEmpty()) {
-                            MenuButton(stringResource(R.string.cloud_tts_role_value, editor.role.ifBlank { stringResource(R.string.cloud_tts_default) })) { roleMenu = true }
-                            RoundDropdownMenu(roleMenu, { roleMenu = false }) {
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.cloud_tts_default),
-                                    onClick = { roleMenu = false; update(editor.copy(role = "")) },
-                                )
-                                selectedVoice.roles.forEach { role ->
-                                    RoundDropdownMenuItem(
-                                        text = role,
-                                        onClick = { roleMenu = false; update(editor.copy(role = role)) },
-                                    )
-                                }
-                            }
-                        }
-                        Field(editor.instructions, { update(editor.copy(instructions = it)) }, stringResource(R.string.cloud_tts_instructions))
                         TinySwitchSettingItem(
                             title = stringResource(R.string.cloud_tts_automatic_emotion),
                             description = stringResource(R.string.cloud_tts_automatic_emotion_summary),
@@ -1154,7 +1154,7 @@ private fun TtsVoicePresetEditorContent(
                             MediumTonalButton(
                                 onClick = { onIntent(CloudTtsIntent.Preview) },
                                 enabled = editor.voiceId.isNotBlank() && !state.testing,
-                                modifier = Modifier.weight(2f).padding(bottom = 4.dp),
+                                modifier = Modifier.weight(1f).padding(bottom = 4.dp),
                                 text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
                             )
                         }
