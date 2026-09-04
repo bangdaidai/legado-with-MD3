@@ -148,6 +148,9 @@ private fun LogCard(
         MaterialTheme.colorScheme.error
     }
     val hasLongContent = item.summary.isNotBlank() ||
+        item.prompt.isNotBlank() ||
+        item.reasoning.isNotBlank() ||
+        item.output.isNotBlank() ||
         (!item.success && !item.error.isNullOrBlank())
     Card(
         modifier = Modifier
@@ -211,6 +214,11 @@ private fun LogCard(
                     maxLines = if (expanded) Int.MAX_VALUE else 4,
                 )
             }
+            if (expanded) {
+                LogSection(stringResource(R.string.ai_log_prompt), item.prompt)
+                LogSection(stringResource(R.string.ai_log_reasoning), item.reasoning)
+                LogSection(stringResource(R.string.ai_log_output), item.output)
+            }
             Text(
                 text = item.durationText,
                 style = MaterialTheme.typography.labelSmall,
@@ -249,6 +257,23 @@ private fun LogCard(
             }
         }
     }
+}
+
+@Composable
+private fun LogSection(title: String, text: String) {
+    if (text.isBlank()) return
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 2.dp),
+    )
 }
 
 @Composable

@@ -2228,6 +2228,9 @@
     <string name="ai_log_copy_all">Copy</string>
     <string name="ai_log_error_format">Error: %1$s</string>
     <string name="ai_log_steps">Steps</string>
+    <string name="ai_log_prompt">Prompt</string>
+    <string name="ai_log_reasoning">Reasoning</string>
+    <string name="ai_log_output">Output</string>
     <string name="ai_call_timeout">AI call timeout (seconds)</string>
     <string name="ai_call_timeout_desc">Abort an AI call if it takes longer than this. Range 5-600, default 60</string>
     <string name="ai_generate_timeout">AI generation timed out. Check your network or try again later</string>

@@ -2,6 +2,8 @@ package io.legado.app.domain.usecase
 
 import io.legado.app.data.repository.ai.AiLogEntry
 import io.legado.app.data.repository.ai.AiLogRepository
+import io.legado.app.data.repository.ai.formatAiPromptForLog
+import io.legado.app.data.repository.ai.truncateForLog
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiToolGateway
@@ -37,6 +39,9 @@ class AiToolAwareGenerationUseCase(
         var currentRequest = request.withReadOnlyTools()
         var lastError: String? = null
         var success = false
+        // 整个工具循环的思考与输出聚合，供 finally 里写入 AI 日志
+        val reasoningBuilder = StringBuilder()
+        val outputBuilder = StringBuilder()
         try {
             while (true) {
                 val toolTrace = ToolTraceBuilder()
@@ -49,10 +54,14 @@ class AiToolAwareGenerationUseCase(
                     when (event) {
                         is AiStreamEvent.Content -> {
                             roundContent.append(event.text)
+                            outputBuilder.append(event.text)
                             emit(event)
                         }
 
-                        is AiStreamEvent.Reasoning -> emit(event)
+                        is AiStreamEvent.Reasoning -> {
+                            reasoningBuilder.append(event.text)
+                            emit(event)
+                        }
                         is AiStreamEvent.ToolCallDelta -> {
                             toolTrace.append(event)
                             emit(event)
@@ -104,6 +113,10 @@ class AiToolAwareGenerationUseCase(
                     durationMillis = System.currentTimeMillis() - start,
                     error = lastError,
                     scenario = aiTaskSceneLabel(request.taskType),
+                    // 记录最终一轮的完整请求：包含工具调用历史，才是实际发给模型的内容
+                    prompt = formatAiPromptForLog(currentRequest.messages),
+                    reasoning = reasoningBuilder.toString().truncateForLog().ifEmpty { null },
+                    output = outputBuilder.toString().truncateForLog().ifEmpty { null },
                 )
             )
         }

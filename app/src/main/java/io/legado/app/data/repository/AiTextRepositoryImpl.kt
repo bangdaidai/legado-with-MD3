@@ -16,6 +16,8 @@ import io.legado.app.domain.model.RecordingTrace
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.data.repository.ai.AiLogEntry
 import io.legado.app.data.repository.ai.AiLogRepository
+import io.legado.app.data.repository.ai.formatAiPromptForLog
+import io.legado.app.data.repository.ai.truncateForLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -51,6 +53,7 @@ class AiTextRepositoryImpl(
         val provider = request.model.provider
         val model = request.model
         val summary = summarizeRequest(request)
+        val promptForLog = formatAiPromptForLog(request.messages)
         val recording = RecordingTrace(start)
 
         var response: AiGenerateResponse? = null
@@ -107,8 +110,20 @@ class AiTextRepositoryImpl(
         val summary = summarizeRequest(request)
         val recording = RecordingTrace(start)
         val suppressLog = request.suppressLog
+        // suppressLog 的调用方（工具感知生成）会自己合并落一条日志，这里不再格式化提示词
+        val promptForLog = if (suppressLog) null else formatAiPromptForLog(request.messages)
+        // 事件在发给上层的同时留一份聚合，调用结束后写进 AI 日志
+        val reasoningBuilder = StringBuilder()
+        val outputBuilder = StringBuilder()
         return flow {
-            registry.handlerFor(provider.protocol).stream(request, { emit(it) }, recording)
+            registry.handlerFor(provider.protocol).stream(request, { event ->
+                when (event) {
+                    is AiStreamEvent.Reasoning -> reasoningBuilder.append(event.text)
+                    is AiStreamEvent.Content -> outputBuilder.append(event.text)
+                    else -> Unit
+                }
+                emit(event)
+            }, recording)
         }.flowOn(Dispatchers.IO)
             .onCompletion { cause ->
                 if (suppressLog) return@onCompletion
@@ -135,6 +150,9 @@ class AiTextRepositoryImpl(
                         error = logError,
                         scenario = aiTaskSceneLabel(request.taskType),
                         steps = recording.steps,
+                        prompt = promptForLog,
+                        reasoning = reasoningBuilder.toString().truncateForLog().ifEmpty { null },
+                        output = outputBuilder.toString().truncateForLog().ifEmpty { null },
                     )
                 )
             }

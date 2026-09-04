@@ -29,6 +29,12 @@ data class AiLogItemUi(
     val durationText: String,
     val error: String?,
     val steps: List<AiLogStepUi> = emptyList(),
+    /** 实际发给模型的全部消息，供对照优化提示词；空串表示该记录没有（如拉取模型）。 */
+    val prompt: String = "",
+    /** 模型思考内容；空串表示模型没有输出思考。 */
+    val reasoning: String = "",
+    /** 模型最终输出正文。 */
+    val output: String = "",
 )
 
 sealed interface AiLogIntent {

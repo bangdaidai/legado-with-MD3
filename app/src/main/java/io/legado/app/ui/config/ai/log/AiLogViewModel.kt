@@ -63,6 +63,9 @@ class AiLogViewModel(
                     durationText = formatDuration(entry.durationMillis),
                     error = entry.error,
                     steps = entry.steps.map { AiLogStepUi(relativeMs = it.relativeMs, label = it.label) },
+                    prompt = entry.prompt.orEmpty(),
+                    reasoning = entry.reasoning.orEmpty(),
+                    output = entry.output.orEmpty(),
                 )
             }.toImmutableList()
             _uiState.update { it.copy(logs = logs, loading = false) }
@@ -89,6 +92,9 @@ class AiLogViewModel(
                 append(" | ${item.provider} / ${item.model}")
                 append(" | ${item.durationText}")
                 if (item.summary.isNotBlank()) append("\n${item.summary}")
+                if (item.prompt.isNotBlank()) append("\n提示词:\n${item.prompt}")
+                if (item.reasoning.isNotBlank()) append("\n思考:\n${item.reasoning}")
+                if (item.output.isNotBlank()) append("\n输出:\n${item.output}")
                 if (item.steps.isNotEmpty()) {
                     append("\n过程:")
                     item.steps.forEach { step ->

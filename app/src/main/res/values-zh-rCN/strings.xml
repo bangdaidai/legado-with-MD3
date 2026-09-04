@@ -3434,6 +3434,9 @@
     <string name="ai_log_copy_all">复制</string>
     <string name="ai_log_error_format">错误：%1$s</string>
     <string name="ai_log_steps">过程</string>
+    <string name="ai_log_prompt">提示词</string>
+    <string name="ai_log_reasoning">思考</string>
+    <string name="ai_log_output">输出</string>
     <string name="ai_call_timeout">AI 调用超时（秒）</string>
     <string name="ai_call_timeout_desc">若单次 AI 调用超过此时长则中止。范围 5-600，默认 60</string>
     <string name="ai_generate_timeout">AI 生成超时，请检查网络或稍后重试</string>
