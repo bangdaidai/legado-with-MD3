@@ -151,8 +151,21 @@ class AiProfileRepository(
 
     override suspend fun setDefaultModel(modelProfileId: String): AiTaskPresetConfig = withContext(Dispatchers.IO) {
         val model = aiProfileDao.getModel(modelProfileId) ?: error("Model is required")
+        // 对话预设是"默认模型"的代表；切换前先记下旧默认，用于带动跟随它的任务预设
+        val previousDefaultModelId = aiProfileDao.getPreset(DEFAULT_CHAT_PRESET_ID)?.modelProfileId
         val params = parseParams(model.defaultParamsJson)
         saveDefaultPresets(modelProfileId, params)
+        // 只切换仍指向旧默认的任务预设；用户单独指定过其它模型的预设保持不动
+        if (!previousDefaultModelId.isNullOrBlank() && previousDefaultModelId != modelProfileId) {
+            val followers = aiProfileDao.getAllPresets()
+                .filter { it.modelProfileId == previousDefaultModelId }
+            if (followers.isNotEmpty()) {
+                val now = System.currentTimeMillis()
+                aiProfileDao.insertPresets(
+                    followers.map { it.copy(modelProfileId = modelProfileId, updatedAt = now) }
+                )
+            }
+        }
         aiProfileDao.getPreset(DEFAULT_TRANSLATE_PRESET_ID)?.toConfig()
             ?: error("Failed to save default model")
     }
