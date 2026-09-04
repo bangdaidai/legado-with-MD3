@@ -115,7 +115,7 @@ import io.legado.app.ui.theme.ProvideAppDensity
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.adaptiveContentPaddingBookshelf
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
-import io.legado.app.ui.theme.adaptiveHorizontalPaddingTab
+import io.legado.app.ui.theme.adaptiveHorizontalPaddingValue
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
@@ -138,7 +138,6 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.reorderAccessibility
-import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
@@ -624,9 +623,7 @@ fun BookshelfScreen(
                 bottomContent = {
                     if (bookGroupStyle == 0 && uiState.groups.isNotEmpty()) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .adaptiveHorizontalPaddingTab(),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val selectedTabIndex =
@@ -635,7 +632,9 @@ fun BookshelfScreen(
                                 uiState.groups.map { it.groupName }
                             }
 
-                            AppTabRow(
+                            // 分组标签行的 16dp 视口边距、24dp 标签间距、指示器对齐
+                            // 全部由组件内部处理，外层不要再加水平 padding
+                            BookshelfGroupTabRow(
                                 tabTitles = tabTitles,
                                 selectedTabIndex = selectedTabIndex,
                                 onTabSelected = { index ->
@@ -646,7 +645,11 @@ fun BookshelfScreen(
 
                             val showExpandButton = uiState.settings.shouldShowExpandButton
                             if (showExpandButton) {
-                                Box(modifier = Modifier) {
+                                Box(
+                                    modifier = Modifier.padding(
+                                        end = adaptiveHorizontalPaddingValue()
+                                    )
+                                ) {
                                     SmallToggleButton(
                                         checked = showGroupMenu,
                                         onCheckedChange = {
