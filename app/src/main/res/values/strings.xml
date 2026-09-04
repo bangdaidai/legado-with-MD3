@@ -365,6 +365,7 @@
     <string name="find_empty">No content.Go to Sources management to add it!</string>
     <string name="del_all">Delete all</string>
     <string name="searchHistory">Search history</string>
+    <string name="only_this_book">This book only</string>
     <string name="clear">Clear</string>
     <string name="showTitle">Display book title on text</string>
     <string name="refresh_default">Book Sources sync</string>

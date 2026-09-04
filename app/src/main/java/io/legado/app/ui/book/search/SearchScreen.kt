@@ -77,6 +77,7 @@ import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.icon.AppIcon
@@ -953,7 +954,7 @@ private fun SearchSuggestionPanel(
 ) {
     LazyColumn(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         contentPadding = adaptiveContentPadding(
             top = 8.dp,
             bottom = 8.dp
@@ -973,7 +974,9 @@ private fun SearchSuggestionPanel(
 
             items(state.bookshelfHints, key = { it.bookUrl }) { book ->
                 SelectionItemCard(
-                    modifier = Modifier.animateItem(),
+                    modifier = Modifier
+                        .animateItem()
+                        .adaptiveHorizontalPadding(),
                     title = book.name,
                     subtitle = book.author,
                     onToggleSelection = { onOpenBook(book) }
@@ -983,27 +986,38 @@ private fun SearchSuggestionPanel(
 
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .adaptiveHorizontalPadding(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppIcon(AppIcons.History, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    AppText(
-                        text = stringResource(R.string.searchHistory),
-                        style = LegadoTheme.typography.titleSmall,
-                    )
-                }
-
+                ToggleChip(
+                    label = stringResource(R.string.searchHistory),
+                    selected = true,
+                    onToggle = { },
+                    modifier = Modifier.weight(1f),
+                    compact = true,
+                )
+                ToggleChip(
+                    label = stringResource(R.string.only_this_book),
+                    selected = !state.isAllScope,
+                    onToggle = {
+                        if (state.isAllScope) {
+                            // TODO: 实现仅本书搜索范围切换
+                        } else {
+                            onIntent(SearchIntent.SelectAllScope)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    compact = true,
+                )
                 if (state.history.isNotEmpty()) {
-                    SmallPlainButton(
-                        onClick = onClearHistory,
-                        text = stringResource(R.string.clear_all),
-                        icon = Icons.Default.Close
+                    ToggleChip(
+                        label = stringResource(R.string.clear_all),
+                        selected = false,
+                        onToggle = onClearHistory,
+                        modifier = Modifier.weight(1f),
+                        compact = true,
                     )
                 }
             }
@@ -1014,6 +1028,7 @@ private fun SearchSuggestionPanel(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .adaptiveHorizontalPadding()
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1028,7 +1043,9 @@ private fun SearchSuggestionPanel(
         } else {
             items(state.history, key = { it.word }) { history ->
                 SelectionItemCard(
-                    modifier = Modifier.animateItem(),
+                    modifier = Modifier
+                        .animateItem()
+                        .adaptiveHorizontalPadding(),
                     title = history.word,
                     onToggleSelection = { onUseHistory(history.word) },
                     trailingAction = {
