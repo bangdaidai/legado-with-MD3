@@ -99,7 +99,11 @@ class OpenAiResponsesHandler : AiProtocolHandler {
             if (text.isNullOrBlank()) {
                 throw Exception("Empty AI response")
             } else {
-                AiGenerateResponse(text = text, rawBody = response.body)
+                AiGenerateResponse(
+                    text = text,
+                    reasoning = root?.extractResponsesReasoning(),
+                    rawBody = response.body
+                )
             }
         }
     }
@@ -353,6 +357,27 @@ private fun JsonObject.extractResponsesOutputText(): String? {
                 ?.mapNotNull { content ->
                     content.asJsonObjectOrNull()
                         ?.takeIf { it.getString("type") == "output_text" }
+                        ?.getString("text")
+                }
+                .orEmpty()
+        }
+        ?.joinToString("")
+        ?.takeIf { it.isNotBlank() }
+}
+
+/** Responses 非流式响应的 reasoning 元素把思考放在 summary 数组里，逐段拼出来仅用于 AI 日志。 */
+private fun JsonObject.extractResponsesReasoning(): String? {
+    return get("output")
+        ?.asJsonArrayOrNull()
+        ?.asSequence()
+        ?.filter { it.asJsonObjectOrNull()?.getString("type") == "reasoning" }
+        ?.flatMap { reasoning ->
+            reasoning.asJsonObjectOrNull()
+                ?.get("summary")
+                ?.asJsonArrayOrNull()
+                ?.mapNotNull { item ->
+                    item.asJsonObjectOrNull()
+                        ?.takeIf { it.getString("type") == "summary_text" }
                         ?.getString("text")
                 }
                 .orEmpty()

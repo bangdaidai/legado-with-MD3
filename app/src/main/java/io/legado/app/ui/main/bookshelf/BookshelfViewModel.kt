@@ -826,14 +826,11 @@ class BookshelfViewModel(
     fun changeGroup(groupId: Long) {
         if (groupIdFlow.value != groupId) {
             groupIdFlow.value = groupId
-            // 切换分组时清空标签筛选
-            selectedTagIdsFlow.value = emptySet()
+            // 标签筛选跨分组保留：selectedBookshelfTagIds 不在此处清空，
+            // 同一筛选条件继续作用于新分组内的书籍
             viewModelScope.launch {
                 bookshelfSettingsGateway.update {
-                    it.copy(
-                        saveTabPosition = groupId,
-                        selectedBookshelfTagIds = emptySet()
-                    )
+                    it.copy(saveTabPosition = groupId)
                 }
             }
             clearSelection()

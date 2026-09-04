@@ -417,6 +417,8 @@ data class AiToolContext(
 @Keep
 data class AiGenerateResponse(
     val text: String,
+    /** 非流式响应里解析出的模型思考内容；流式思考走 [io.legado.app.domain.gateway.AiStreamEvent.Reasoning]。 */
+    val reasoning: String? = null,
     val rawBody: String? = null
 )
 

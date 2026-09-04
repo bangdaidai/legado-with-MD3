@@ -3,6 +3,8 @@ package io.legado.app.data.repository.ai
 import androidx.annotation.Keep
 import io.legado.app.constant.PreferKey
 import io.legado.app.domain.model.AiLogStep
+import io.legado.app.domain.model.AiMessage
+import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -36,7 +38,52 @@ data class AiLogEntry(
     /** 业务场景中文名（如「作者简介生成」），由仓库层按 taskType 映射，区分于底层调用类型 [kind]。 */
     val scenario: String? = null,
     val steps: List<AiLogStep> = emptyList(),
+    /**
+     * 实际发给模型的全部消息（含 system 提示词、历史与工具结果），供用户对照优化提示词。
+     * 截断规则见 [truncateForLog]；null 表示该次调用没有消息（如拉取模型列表）。
+     */
+    val prompt: String? = null,
+    /**
+     * 模型思考内容：流式调用聚合 [io.legado.app.domain.gateway.AiStreamEvent.Reasoning]，
+     * 非流式调用取响应中的 reasoning 字段。null 表示模型没有输出思考。
+     */
+    val reasoning: String? = null,
+    /** 模型最终输出正文，与提示词、思考三者对照看提示词效果。 */
+    val output: String? = null,
 )
+
+/** 单个日志文本字段的最大保留字符数，防止完整提示词把 ai_log.json 撑爆。 */
+private const val MAX_LOG_TEXT_CHARS = 12_000
+
+/**
+ * 日志文本字段超长时截断，尾部标注原始长度。
+ */
+internal fun String.truncateForLog(maxChars: Int = MAX_LOG_TEXT_CHARS): String {
+    if (length <= maxChars) return this
+    return take(maxChars) + "\n…[已截断，完整长度 $length 字符]"
+}
+
+/**
+ * 把一次 AI 请求的全部消息格式化成日志里的「提示词」全文：逐条带角色标签，
+ * 工具调用与调用参数原样保留。这是发给模型的真实内容（可能因截断而不完整），
+ * 不是用户在设置里填的模板。
+ */
+fun formatAiPromptForLog(messages: List<AiMessage>): String {
+    if (messages.isEmpty()) return ""
+    return messages.joinToString("\n\n") { message ->
+        buildString {
+            append("[${message.role}]")
+            if (message.role == AiMessageRole.TOOL) {
+                message.name?.takeIf { it.isNotBlank() }?.let { append(" $it") }
+            }
+            append('\n')
+            append(message.content)
+            message.toolCalls.forEach { call ->
+                append("\n调用工具 ${call.name}: ${call.arguments}")
+            }
+        }
+    }.truncateForLog()
+}
 
 /**
  * 净化从 ai_log.json 恢复的条目。

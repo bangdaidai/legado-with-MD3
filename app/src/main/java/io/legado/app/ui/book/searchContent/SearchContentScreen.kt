@@ -2,11 +2,9 @@ package io.legado.app.ui.book.searchContent
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,7 +22,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.FindReplace
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -33,8 +30,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.animateFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,19 +43,19 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.SearchContentHistory
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
-import io.legado.app.ui.widget.components.button.ToggleChip
+import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -69,6 +64,7 @@ import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressInd
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarAnimatedActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import kotlinx.coroutines.launch
@@ -199,9 +195,9 @@ fun SearchContentScreen(
                             inactiveText = "全部书源"
                         )
                         if (searchHistory.isNotEmpty()) {
-                            SmallPlainButton(
+                            TopBarActionButton(
                                 onClick = { onIntent(SearchContentIntent.ClearHistory) },
-                                icon = Icons.Outlined.DeleteSweep,
+                                imageVector = Icons.Outlined.DeleteSweep,
                                 contentDescription = "清除搜索历史"
                             )
                         }
@@ -362,32 +358,21 @@ fun SearchHistoryList(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = PaddingValues(vertical = 4.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = adaptiveContentPadding(top = 8.dp, bottom = 8.dp)
             ) {
                 items(history, key = { it.id }) { item ->
-                    ListItem(
-                        modifier = Modifier
-                            .clickable { onHistoryClick(item) }
-                            .adaptiveHorizontalPadding()
-                            .animateItem(),
-                        headlineContent = {
-                            AppText(
-                                text = item.query,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.History, contentDescription = null)
-                        },
-                        trailingContent = {
+                    SelectionItemCard(
+                        modifier = Modifier.animateItem(),
+                        title = item.query,
+                        onToggleSelection = { onHistoryClick(item) },
+                        trailingAction = {
                             SmallPlainButton(
                                 onClick = { onDeleteHistory(item) },
                                 icon = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.delete)
                             )
-                        },
+                        }
                     )
                 }
             }

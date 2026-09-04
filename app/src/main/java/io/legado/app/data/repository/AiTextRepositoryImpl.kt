@@ -86,6 +86,9 @@ class AiTextRepositoryImpl(
                     error = error,
                     scenario = aiTaskSceneLabel(request.taskType),
                     steps = recording.steps,
+                    prompt = promptForLog,
+                    reasoning = response?.reasoning?.truncateForLog()?.ifEmpty { null },
+                    output = response?.text?.truncateForLog()?.ifEmpty { null },
                 )
             )
         }

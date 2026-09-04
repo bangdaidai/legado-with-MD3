@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -91,6 +92,7 @@ import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.M3GlassScrollBehavior
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarAnimatedActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
@@ -323,6 +325,15 @@ fun SearchScreen(
                     )
                 },
                 actions = {
+                    if (showSuggestionPanel && state.history.isNotEmpty()) {
+                        TopBarActionButton(
+                            onClick = {
+                                onIntent(SearchIntent.SetClearHistoryDialogVisible(true))
+                            },
+                            imageVector = Icons.Outlined.DeleteSweep,
+                            contentDescription = stringResource(R.string.clear_all)
+                        )
+                    }
                     TopBarAnimatedActionButton(
                         checked = isSourceGroupedMode || state.selectedSourceTypes.isNotEmpty(),
                         onCheckedChange = {
@@ -426,9 +437,6 @@ fun SearchScreen(
                         onDeleteHistory = { onIntent(SearchIntent.DeleteHistory(it)) },
                         onOpenBook = {
                             onIntent(SearchIntent.OpenBookshelfBook(it))
-                        },
-                        onClearHistory = {
-                            onIntent(SearchIntent.SetClearHistoryDialogVisible(true))
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -948,7 +956,6 @@ private fun SearchSuggestionPanel(
     onUseHistory: (String) -> Unit,
     onDeleteHistory: (SearchKeyword) -> Unit,
     onOpenBook: (BookShelfItem) -> Unit,
-    onClearHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -978,34 +985,6 @@ private fun SearchSuggestionPanel(
                     subtitle = book.author,
                     onToggleSelection = { onOpenBook(book) }
                 )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppIcon(AppIcons.History, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    AppText(
-                        text = stringResource(R.string.searchHistory),
-                        style = LegadoTheme.typography.titleSmall,
-                    )
-                }
-
-                if (state.history.isNotEmpty()) {
-                    SmallPlainButton(
-                        onClick = onClearHistory,
-                        text = stringResource(R.string.clear_all),
-                        icon = Icons.Default.Close
-                    )
-                }
             }
         }
 

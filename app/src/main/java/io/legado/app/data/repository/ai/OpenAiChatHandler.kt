@@ -98,14 +98,15 @@ class OpenAiChatHandler : AiProtocolHandler {
                 val json = GSON.fromJson(response.body, OpenAiChatResponse::class.java)
                 val message = json?.choices?.firstOrNull()?.message
                 val text = message?.content
+                val reasoning = message?.reasoningContent?.takeIf { it.isNotBlank() }
                 if (text.isNullOrBlank()) {
-                    if (!message?.reasoningContent.isNullOrBlank()) {
+                    if (reasoning != null) {
                         null
                     } else {
                         throw Exception("Empty AI response")
                     }
                 } else {
-                    AiGenerateResponse(text = text, rawBody = response.body)
+                    AiGenerateResponse(text = text, reasoning = reasoning, rawBody = response.body)
                 }
             }
 

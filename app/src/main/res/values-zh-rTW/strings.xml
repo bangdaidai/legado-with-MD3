@@ -283,7 +283,6 @@
     <string name="find_source_manage">發現管理</string>
     <string name="find_empty">沒有內容，去書源裡自訂吧！</string>
     <string name="del_all">刪除所有</string>
-    <string name="searchHistory">搜尋歷史</string>
     <string name="clear">清除</string>
     <string name="showTitle">正文顯示標題</string>
     <string name="refresh_default">書源同步</string>

@@ -118,10 +118,15 @@ class AnthropicHandler : AiProtocolHandler {
             val text = json?.content
                 ?.mapNotNull { it.text?.takeIf { text -> text.isNotBlank() } }
                 ?.joinToString("")
+            val reasoning = json?.content
+                ?.filter { it.type == "thinking" }
+                ?.mapNotNull { it.thinking?.takeIf(String::isNotBlank) }
+                ?.joinToString("")
+                ?.takeIf { it.isNotBlank() }
             if (text.isNullOrBlank()) {
                 throw Exception("Empty AI response")
             } else {
-                AiGenerateResponse(text = text, rawBody = response.body)
+                AiGenerateResponse(text = text, reasoning = reasoning, rawBody = response.body)
             }
         }
     }
@@ -415,7 +420,9 @@ internal data class AnthropicMessageResponse(
 @Keep
 internal data class AnthropicMessageContent(
     val type: String?,
-    val text: String?
+    val text: String?,
+    /** thinking 类型 block 携带的思考正文，仅用于 AI 日志记录。 */
+    val thinking: String?
 )
 
 @Keep
