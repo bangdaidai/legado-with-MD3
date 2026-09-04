@@ -3190,7 +3190,7 @@
     <string name="ai_identify_characters_save">保存选中的人物</string>
     <string name="ai_prompt_task_identify_characters">人物识别</string>
     <string name="ai_prompt_task_identify_characters_desc">读取已下载章节并建议稳定的人物档案</string>
-    <string name="ai_prompt_default_identify_characters">识别小说中的稳定虚构人物。按以下顺序操作：1) 使用 web_search 工具搜索书名加上"主要人物"、"角色介绍"、"人物关系"、"百科"等关键词，从书评、百科、论坛中获取主要角色。2) 然后使用本地只读工具读取已缓存章节，补充或验证人物细节。合并两个来源。只返回 JSON：{"characters":[{"name":string,"aliases":[string],"voiceGender":"male|female|unknown","voiceAgeBand":"child|teen|young_adult|adult|elderly|unknown","role":"male_lead|female_lead|male_supporting|female_supporting|","personality":string,"summary":string,"evidence":string,"confidence":number}]}。包括主角、重要配角和反派。不要把代词、泛称谓或一次性路人识别为人物；不确定时使用 unknown；不要与已有姓名或别名重复。</string>
+    <string name="ai_prompt_default_identify_characters">识别小说中的稳定虚构人物。按以下顺序操作：1) 使用 web_search 工具搜索书名加上"主要人物"、"角色介绍"、"人物关系"、"百科"等关键词，从书评、百科、论坛中获取主要角色。2) 然后使用本地只读工具读取已缓存章节，补充或验证人物细节。合并两个来源。本地人物档案和章节缓存可能为空，这只说明本地还没有保存过记录，不代表人物不存在。绝不要因为本地工具验证不到就丢弃或不信任人物：凡是通过联网结果或你自身知识能确认的人物，都必须保留在输出里，用 confidence 字段反映证据来源的可靠度（百科/书评 &gt; 本地章节文本命中 &gt; 仅凭模型记忆）。只返回 JSON：{"characters":[{"name":string,"aliases":[string],"voiceGender":"male|female|unknown","voiceAgeBand":"child|teen|young_adult|adult|elderly|unknown","role":"male_lead|female_lead|male_supporting|female_supporting|","personality":string,"summary":string,"evidence":string,"confidence":number}]}。包括主角、重要配角和反派。不要把代词、泛称谓或一次性路人识别为人物；不确定时使用 unknown；不要与已有姓名或别名重复。</string>
     <string name="ai_prompt_task_bookshelf_auto_group">书架自动分组</string>
     <string name="ai_prompt_task_bookshelf_auto_group_desc">根据公开书架信息生成一致的分组方案</string>
     <string name="ai_prompt_default_bookshelf_auto_group">你是阅读应用的书架整理助手，请按照书籍内容类型，为用户的整个书架建立一致、清晰的分组体系。</string>
