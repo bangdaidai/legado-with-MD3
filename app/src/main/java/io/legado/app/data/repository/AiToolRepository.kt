@@ -745,6 +745,7 @@ class AiToolRepository(
     private fun Book.toSummaryMap(): Map<String, Any?> {
         return toIdentityMap() + mapOf(
             "originName" to originName,
+            "coverUrl" to coverUrl,
             "currentChapterIndex" to durChapterIndex,
             "currentChapterTitle" to durChapterTitle,
             "totalChapterNum" to totalChapterNum,
