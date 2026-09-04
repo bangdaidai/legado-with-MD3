@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.theme.LegadoTheme
@@ -47,11 +48,13 @@ fun ToggleChip(
     compact: Boolean = false,
     light: Boolean = false,
     checkedContentDescription: String = "已选择",
-    uncheckedContentDescription: String = "未选择"
+    uncheckedContentDescription: String = "未选择",
+    textStyle: TextStyle? = null,
+    horizontalPadding: Dp? = null
 ) {
     if (ThemeResolver.isMiuixEngine(composeEngine)) {
         val verticalPad = if (compact) 6.dp else 8.dp
-        val horizontalPad = if (compact) 8.dp else 12.dp
+        val horizontalPad = horizontalPadding ?: if (compact) 8.dp else 12.dp
         NormalCard (
             modifier = modifier
                 .padding(vertical = if (compact) 0.dp else 2.dp)
@@ -100,7 +103,7 @@ fun ToggleChip(
                     modifier = Modifier
                         .padding(vertical = verticalPad),
                     text = label,
-                    style = LegadoTheme.typography.labelMediumEmphasized,
+                    style = textStyle ?: LegadoTheme.typography.labelMediumEmphasized,
                     maxLines = 1,
                     softWrap = false,
                     color = when {
@@ -145,7 +148,7 @@ fun ToggleChip(
                 )
                 .then(borderModifier)
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .padding(horizontal = horizontalPadding ?: 6.dp, vertical = 4.dp)
                 .semantics {
                     toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
                     stateDescription = if (selected) checkedContentDescription else uncheckedContentDescription
@@ -155,7 +158,7 @@ fun ToggleChip(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                style = textStyle ?: MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 softWrap = false,
                 color = when {

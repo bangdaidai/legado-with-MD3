@@ -1572,7 +1572,8 @@ private fun TagFilterRow(
 ) {
     LazyRow(
         modifier = modifier.padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // 与分组标签行同节奏：盒子间距 16dp + 盒内水平 4dp，视觉文字间距 24dp
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(tags, key = { it.id }) { tag ->
             val isSelected = tag.id in selectedTagIds
@@ -1581,7 +1582,9 @@ private fun TagFilterRow(
                 selected = isSelected,
                 onToggle = { onTagClick(tag.id) },
                 compact = true,
-                light = true
+                light = true,
+                textStyle = LegadoTheme.typography.labelLargeEmphasized,
+                horizontalPadding = 4.dp
             )
         }
     }

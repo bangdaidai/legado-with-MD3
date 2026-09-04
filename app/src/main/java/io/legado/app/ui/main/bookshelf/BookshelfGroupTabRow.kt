@@ -95,7 +95,7 @@ internal fun BookshelfGroupTabRow(
                     end = if (hasTrailingButton) 0.dp else 16.dp
                 )
                 .clipToBounds(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             itemsIndexed(tabTitles) { index, title ->
@@ -119,7 +119,10 @@ private fun GroupTabItem(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            // 水平 4dp：Tab 盒宽 = 文字 + 8dp，文字与指示器仍居中。
+            // 垂直上 10 = 下 3 + 指示器区 7，让文字恰好位于盒子垂直中心，
+            // 与右侧分组按钮（Row 垂直居中）视觉对齐
+            .padding(top = 10.dp, bottom = 3.dp, start = 4.dp, end = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // 内层列以文字的 intrinsic 宽度为列宽，指示器在列内 fillMaxWidth：
