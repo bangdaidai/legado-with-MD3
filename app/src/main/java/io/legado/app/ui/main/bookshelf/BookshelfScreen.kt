@@ -778,7 +778,7 @@ fun BookshelfScreen(
                         && !uiState.isSearch
                     AnimatedVisibility(
                         visible = showTagFilter && tagFilterExpanded,
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                        modifier = Modifier.padding(horizontal = adaptiveHorizontalPaddingValue())
                     ) {
                         TagFilterRow(
                             tags = uiState.bookshelfTags,
