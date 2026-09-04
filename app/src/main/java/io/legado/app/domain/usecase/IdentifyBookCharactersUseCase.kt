@@ -225,6 +225,9 @@ class IdentifyBookCharactersUseCase(
     companion object {
         private const val MIN_CONFIDENCE = 0.65f
         const val DEFAULT_PROMPT =
-            """You identify stable fictional characters from downloaded local chapters. Use read-only tools to list and read cached chapters and inspect existing characters. Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"child|teen|young_adult|adult|elderly|unknown\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing age or gender. Do not create duplicates of existing names or aliases."""
+            """You identify stable fictional characters from a novel. Follow this order:
+1) First use the web_search tool to search for the book title plus keywords like "主要人物", "角色介绍", "人物关系", "百科" to find the main cast from reviews, wikis, forums, or encyclopedias.
+2) Then use local read-only tools to read cached chapters and fill in or verify character details. Merge both sources.
+Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"child|teen|young_adult|adult|elderly/unknown\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. Include main characters, recurring supporting characters, and important antagonists. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing age or gender. Do not create duplicates of existing names or aliases."""
     }
 }

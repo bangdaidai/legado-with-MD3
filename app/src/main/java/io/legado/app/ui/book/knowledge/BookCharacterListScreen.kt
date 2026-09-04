@@ -215,12 +215,6 @@ private fun CharacterIdentifySheet(
         when {
             sheet == null -> Unit
             sheet.loading -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) { AppCircularProgressIndicator() }
                 sheet.toolNames.forEach { toolName ->
                     TextCard(text = toolName)
                 }
@@ -264,35 +258,48 @@ private fun CharacterIdentifyCandidateRow(
             onCheckedChange = { onIntent(CharacterListIntent.ToggleAiCandidate(candidate.id)) },
         )
         if (candidate.summary.isNotBlank()) {
+            // 收起行显示第一行简介，展开区只补充剩余行，避免首行重复
+            val summaryLines = remember(candidate.summary) { candidate.summary.lines() }
+            val extraSummary = remember(candidate.summary) {
+                summaryLines.drop(1).joinToString("\n").trim()
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded.value = !expanded.value }
+                    .then(
+                        if (extraSummary.isNotBlank()) {
+                            Modifier.clickable { expanded.value = !expanded.value }
+                        } else Modifier
+                    )
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AnimatedTextLine(
-                    text = candidate.summary.lineSequence().firstOrNull().orEmpty(),
+                    text = summaryLines.firstOrNull().orEmpty(),
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
-                AppIcon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
+                if (extraSummary.isNotBlank()) {
+                    AppIcon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = expanded.value,
-                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-            ) {
-                AnimatedTextLine(
-                    candidate.summary,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
+            if (extraSummary.isNotBlank()) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = expanded.value,
+                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+                ) {
+                    AnimatedTextLine(
+                        extraSummary,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
             }
         }
     }
