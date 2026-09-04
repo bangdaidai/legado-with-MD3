@@ -1583,7 +1583,8 @@ private fun TagFilterRow(
                 onToggle = { onTagClick(tag.id) },
                 compact = true,
                 light = true,
-                textStyle = LegadoTheme.typography.labelLargeEmphasized,
+                // 比第一行分组标签（labelLargeEmphasized）小一档，形成主次层级
+                textStyle = LegadoTheme.typography.labelMediumEmphasized,
                 horizontalPadding = 4.dp
             )
         }
