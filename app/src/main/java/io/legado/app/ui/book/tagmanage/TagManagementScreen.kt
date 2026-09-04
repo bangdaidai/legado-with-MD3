@@ -126,7 +126,7 @@ fun TagManagementScreen(
                             onClick = { dismiss(); onNavigateToExcludedTag() },
                         )
                         RoundDropdownMenuItem(
-                            text = "批量编辑展示",
+                            text = "批量展示",
                             leadingIcon = { MenuItemIcon(Icons.Filled.Check) },
                             onClick = { dismiss(); onIntent(TagManagementIntent.ToggleBatchEditShowOnBookshelf) },
                         )
