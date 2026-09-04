@@ -33,6 +33,7 @@ private const val PUBLIC_BOOK_FILTER =
 
 private const val TAG_FINISHED = "完结"
 private const val TAG_PIT = "坑"
+private const val TAG_SERIAL = "连载"
 
 private const val HAS_FINISHED_TAG =
     "EXISTS (SELECT 1 FROM bookTagRelations r INNER JOIN bookTags t ON r.tagId = t.id " +
@@ -41,6 +42,18 @@ private const val HAS_FINISHED_TAG =
 private const val HAS_PIT_TAG =
     "EXISTS (SELECT 1 FROM bookTagRelations r INNER JOIN bookTags t ON r.tagId = t.id " +
         "WHERE r.bookUrl = books.bookUrl AND t.name = '$TAG_PIT')"
+
+private const val HAS_SERIAL_TAG =
+    "EXISTS (SELECT 1 FROM bookTagRelations r INNER JOIN bookTags t ON r.tagId = t.id " +
+        "WHERE r.bookUrl = books.bookUrl AND t.name = '$TAG_SERIAL')"
+
+// 已读三个子分组互斥判定，优先级：完本 > 坑书 > 连载。
+// 无任何状态标签的已读书不进子分组，只保留在「已读」总分组。
+private const val READ_FINISHED_SERIAL_CONDITION =
+    "NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG AND $HAS_SERIAL_TAG"
+private const val READ_FINISHED_COMPLETE_CONDITION = HAS_FINISHED_TAG
+private const val READ_FINISHED_PIT_CONDITION =
+    "NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG"
 
 /** 书架投影行的评分列：评分存在 readingMemory 而不是 books，按 bookUrl 关联取出 */
 private const val RATING_SUBQUERY =
@@ -584,7 +597,7 @@ FROM books
     fun flowBookShelfReadFinished(): Flow<List<BookShelfItem>>
 
     @Query(
-        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG"""
+        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_SERIAL_CONDITION"""
     )
     fun flowReadFinishedUpdate(): Flow<List<Book>>
 
@@ -617,14 +630,14 @@ FROM books
             $RATING_SUBQUERY
     FROM books
 
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_SERIAL_CONDITION
         AND $PUBLIC_BOOK_FILTER
         """
     )
     fun flowBookShelfReadFinishedUpdate(): Flow<List<BookShelfItem>>
 
     @Query(
-        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG"""
+        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_COMPLETE_CONDITION"""
     )
     fun flowReadFinishedComplete(): Flow<List<Book>>
 
@@ -657,14 +670,14 @@ FROM books
             $RATING_SUBQUERY
     FROM books
 
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_COMPLETE_CONDITION
         AND $PUBLIC_BOOK_FILTER
         """
     )
     fun flowBookShelfReadFinishedComplete(): Flow<List<BookShelfItem>>
 
     @Query(
-        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG"""
+        """SELECT * FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_PIT_CONDITION"""
     )
     fun flowReadFinishedPit(): Flow<List<Book>>
 
@@ -697,7 +710,7 @@ FROM books
             $RATING_SUBQUERY
     FROM books
 
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_PIT_CONDITION
         AND $PUBLIC_BOOK_FILTER
         """
     )
@@ -1044,9 +1057,9 @@ FROM books
         UNION ALL SELECT ${BookGroup.IdUnread}, COUNT(*) FROM books WHERE durChapterIndex = 0 AND durChapterPos = 0 AND $PUBLIC_BOOK_FILTER
         UNION ALL SELECT ${BookGroup.IdReading}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1 AND $PUBLIC_BOOK_FILTER
         UNION ALL SELECT ${BookGroup.IdReadFinished}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $PUBLIC_BOOK_FILTER
-        UNION ALL SELECT ${BookGroup.IdReadFinishedUpdate}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG AND $PUBLIC_BOOK_FILTER
-        UNION ALL SELECT ${BookGroup.IdReadFinishedComplete}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG AND $PUBLIC_BOOK_FILTER
-        UNION ALL SELECT ${BookGroup.IdReadFinishedPit}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdReadFinishedUpdate}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_SERIAL_CONDITION AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdReadFinishedComplete}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_COMPLETE_CONDITION AND $PUBLIC_BOOK_FILTER
+        UNION ALL SELECT ${BookGroup.IdReadFinishedPit}, COUNT(*) FROM books WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_PIT_CONDITION AND $PUBLIC_BOOK_FILTER
         """
     )
     fun flowSystemGroupCounts(): Flow<List<GroupBookCount>>
@@ -1331,7 +1344,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             $RATING_SUBQUERY
         FROM books
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND NOT $HAS_PIT_TAG
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_SERIAL_CONDITION
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
@@ -1349,7 +1362,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             $RATING_SUBQUERY
         FROM books
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $HAS_FINISHED_TAG
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_COMPLETE_CONDITION
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
@@ -1367,7 +1380,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
             $RATING_SUBQUERY
         FROM books
-        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND NOT $HAS_FINISHED_TAG AND $HAS_PIT_TAG
+        WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_PIT_CONDITION
             AND $PUBLIC_BOOK_FILTER
         ORDER BY durChapterTime DESC
         LIMIT 10
