@@ -431,7 +431,6 @@ fun SearchScreen(
                         onClearHistory = {
                             onIntent(SearchIntent.SetClearHistoryDialogVisible(true))
                         },
-                        onIntent = onIntent,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -951,7 +950,6 @@ private fun SearchSuggestionPanel(
     onDeleteHistory: (SearchKeyword) -> Unit,
     onOpenBook: (BookShelfItem) -> Unit,
     onClearHistory: () -> Unit,
-    onIntent: (SearchIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
