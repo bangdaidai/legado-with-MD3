@@ -40,6 +40,7 @@ data class SearchContentUiState(
 
 sealed interface SearchContentIntent {
     data class UpdateQuery(val value: String) : SearchContentIntent
+    data object SubmitSearch : SearchContentIntent
     data class ToggleReplace(val enabled: Boolean) : SearchContentIntent
     data class ToggleRegex(val enabled: Boolean) : SearchContentIntent
     data object ToggleHistoryScope : SearchContentIntent
@@ -107,6 +108,9 @@ class SearchContentViewModel(
                 _uiState.update { it.copy(searchQuery = intent.value) }
                 executeSearch()
             }
+            SearchContentIntent.SubmitSearch -> {
+                executeSearch(saveHistory = true)
+            }
             is SearchContentIntent.ToggleReplace -> {
                 _uiState.update { it.copy(replaceEnabled = intent.enabled) }
                 executeSearch()
@@ -167,7 +171,7 @@ class SearchContentViewModel(
         }
     }
 
-    private fun executeSearch() {
+    private fun executeSearch(saveHistory: Boolean = false) {
         searchJob?.cancel()
         val state = _uiState.value
         if (state.searchQuery.isBlank()) {
@@ -186,7 +190,9 @@ class SearchContentViewModel(
         )
         searchJob = viewModelScope.launch {
             state.book?.let { book ->
-                searchContentRepository.saveHistory(book, state.searchQuery)
+                if (saveHistory) {
+                    searchContentRepository.saveHistory(book, state.searchQuery)
+                }
                 searchContentRepository.search(
                     book,
                     state.searchQuery,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,7 +35,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.animateFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -59,10 +59,8 @@ import io.legado.app.ui.widget.components.AppFloatingActionButton
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
-import io.legado.app.ui.widget.components.button.series.MediumOutlinedButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
-import io.legado.app.ui.widget.components.button.series.SmallToggleButton
-import io.legado.app.ui.widget.components.button.series.ToggleStyle
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -190,6 +188,24 @@ fun SearchContentScreen(
                         activeText = "正则开启",
                         inactiveText = "正则关闭"
                     )
+
+                    if (contentState == SearchContentState.History) {
+                        TopBarAnimatedActionButton(
+                            checked = historyOnlyThisBook,
+                            onCheckedChange = { onIntent(SearchContentIntent.ToggleHistoryScope) },
+                            iconChecked = Icons.Default.Book,
+                            iconUnchecked = Icons.Default.CollectionsBookmark,
+                            activeText = "仅本书",
+                            inactiveText = "全部书源"
+                        )
+                        if (searchHistory.isNotEmpty()) {
+                            SmallPlainButton(
+                                onClick = { onIntent(SearchContentIntent.ClearHistory) },
+                                icon = Icons.Outlined.DeleteSweep,
+                                contentDescription = "清除搜索历史"
+                            )
+                        }
+                    }
                 },
                 scrollBehavior = scrollBehavior,
                 bottomContent = {
@@ -201,6 +217,7 @@ fun SearchContentScreen(
                             autoFocus = autoFocus,
                             scrollState = listState,
                             onQueryChange = { onIntent(SearchContentIntent.UpdateQuery(it)) },
+                            onSearch = { onIntent(SearchContentIntent.SubmitSearch) },
                             trailingIcon = {
                                 if (searchQuery.isNotEmpty()) {
                                     SmallPlainButton(
@@ -335,29 +352,6 @@ fun SearchHistoryList(
     onToggleScope: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .adaptiveHorizontalPadding()
-                .padding(vertical = 4.dp),
-        ) {
-            AppText(
-                text = "搜索历史",
-                style = LegadoTheme.typography.titleSmallEmphasized,
-                color = LegadoTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.Center)
-            )
-            SmallToggleButton(
-                modifier = Modifier.align(Alignment.CenterEnd),
-                checked = onlyThisBook,
-                onCheckedChange = { onToggleScope() },
-                style = ToggleStyle.Tonal,
-                iconChecked = Icons.Default.Book,
-                icon = Icons.Default.CollectionsBookmark,
-                text = "仅本书"
-            )
-        }
-
         if (history.isEmpty()) {
             EmptyMessage(
                 message = "暂无搜索历史",
@@ -366,11 +360,16 @@ fun SearchHistoryList(
                     .wrapContentSize()
             )
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
                 items(history, key = { it.id }) { item ->
                     ListItem(
                         modifier = Modifier
                             .clickable { onHistoryClick(item) }
+                            .adaptiveHorizontalPadding()
                             .animateItem(),
                         headlineContent = {
                             AppText(
@@ -389,27 +388,7 @@ fun SearchHistoryList(
                                 contentDescription = stringResource(R.string.delete)
                             )
                         },
-                        colors = ListItemDefaults.colors(
-                            containerColor = LegadoTheme.colorScheme.surface,
-                            contentColor = LegadoTheme.colorScheme.onSurface
-                        )
                     )
-                }
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp, horizontal = 16.dp)
-                            .animateItem(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        MediumOutlinedButton(
-                            onClick = onClearHistory,
-                            modifier = Modifier.fillMaxWidth(0.6f),
-                            icon = Icons.Outlined.DeleteSweep,
-                            text = "清除搜索历史"
-                        )
-                    }
                 }
             }
         }
