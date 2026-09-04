@@ -123,7 +123,7 @@ class IdentifyBookCharactersUseCase(
                     AiMessage(AiMessageRole.SYSTEM, prompt),
                     AiMessage(
                         AiMessageRole.USER,
-                        "识别本书已下载章节中的人物。请先用工具读取已缓存章节，再只返回要求的 JSON。"
+                        "识别本书的主要人物。优先联网搜索，再用本地工具验证。只返回要求的 JSON。"
                     ),
                 ),
                 params = preset.params.copy(
