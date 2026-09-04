@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.knowledge
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +33,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -58,6 +61,7 @@ import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.text.AnimatedTextLine
+import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
@@ -192,7 +196,7 @@ private fun CharacterIdentifySheet(
         } else null,
         endAction = if (sheet != null) {
             {
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     AiReasoningModeButton(
                         level = sheet.reasoningLevel,
                         enabled = !sheet.loading,
@@ -258,46 +262,32 @@ private fun CharacterIdentifyCandidateRow(
             onCheckedChange = { onIntent(CharacterListIntent.ToggleAiCandidate(candidate.id)) },
         )
         if (candidate.summary.isNotBlank()) {
-            // 收起行显示第一行简介，展开区只补充剩余行，避免首行重复
-            val summaryLines = remember(candidate.summary) { candidate.summary.lines() }
-            val extraSummary = remember(candidate.summary) {
-                summaryLines.drop(1).joinToString("\n").trim()
-            }
+            // 一段完整简介自然展开：收起时单行省略，展开时全文，避免拆成两块导致间距不一致
+            val overflowed = remember(candidate.summary) { mutableStateOf(false) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (extraSummary.isNotBlank()) {
-                            Modifier.clickable { expanded.value = !expanded.value }
-                        } else Modifier
-                    )
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .clickable { expanded.value = !expanded.value }
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .animateContentSize(),
+                verticalAlignment = Alignment.Top,
             ) {
-                AnimatedTextLine(
-                    text = summaryLines.firstOrNull().orEmpty(),
+                AppText(
+                    text = candidate.summary,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = if (expanded.value) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { result ->
+                        if (!expanded.value) overflowed.value = result.hasVisualOverflow
+                    },
                     modifier = Modifier.weight(1f),
                 )
-                if (extraSummary.isNotBlank()) {
+                if (expanded.value || overflowed.value) {
                     AppIcon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = null,
                         tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (extraSummary.isNotBlank()) {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = expanded.value,
-                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-                ) {
-                    AnimatedTextLine(
-                        extraSummary,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 12.dp),
+                        modifier = Modifier.rotate(if (expanded.value) 180f else 0f),
                     )
                 }
             }
