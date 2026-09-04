@@ -12,6 +12,7 @@ import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.AiToolContext
+import io.legado.app.domain.model.nativeWebSearchSupport
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonArray
@@ -130,6 +131,10 @@ class IdentifyBookCharactersUseCase(
                     temperature = 0f,
                     reasoningLevel = reasoningLevel.takeUnless { it == AiReasoningLevel.AUTO }
                         ?: preset.params.reasoningLevel,
+                    // 供应商自带联网（智谱/通义/Anthropic/Responses 直连）时显式开启，请求里
+                    // 才会下发对应内置工具；否则靠 Tavily 的 search_web 工具兜底（配置好后
+                    // AiToolRepository 会自动追加到工具列表）。
+                    webSearch = preset.model.provider.nativeWebSearchSupport().isSupported,
                 ),
                 toolContext = AiToolContext(bookUrl = bookUrl),
             )
@@ -225,9 +230,10 @@ class IdentifyBookCharactersUseCase(
     companion object {
         private const val MIN_CONFIDENCE = 0.65f
         const val DEFAULT_PROMPT =
-            """You identify stable fictional characters from a novel. Follow this order:
-1) First use the web_search tool to search for the book title plus keywords like "主要人物", "角色介绍", "人物关系", "百科" to find the main cast from reviews, wikis, forums, or encyclopedias.
+            """You identify stable fictional characters from a novel. If you do not already know the book title and author, get them via get_book_detail or search_books first. Follow this order:
+1) If web search is available (a built-in web search capability or the search_web tool), search for the book title plus keywords like "主要人物", "角色介绍", "人物关系", "百科" to find the main cast from reviews, wikis, forums, or encyclopedias.
 2) Then use local read-only tools to read cached chapters and fill in or verify character details. Merge both sources.
+If no web search is available, skip the web step silently and never explain tool availability or say you cannot search the web; rely on local tools and your own knowledge.
 Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"child|teen|young_adult|adult|elderly/unknown\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. Include main characters, recurring supporting characters, and important antagonists. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing age or gender. Do not create duplicates of existing names or aliases."""
     }
 }
