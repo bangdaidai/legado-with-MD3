@@ -103,10 +103,12 @@ class AiTextRepositoryImpl(
         val model = request.model
         val summary = summarizeRequest(request)
         val recording = RecordingTrace(start)
+        val suppressLog = request.suppressLog
         return flow {
             registry.handlerFor(provider.protocol).stream(request, { emit(it) }, recording)
         }.flowOn(Dispatchers.IO)
             .onCompletion { cause ->
+                if (suppressLog) return@onCompletion
                 val success = cause == null
                 val cancelled = cause is CancellationException
                 val logError = if (success) {

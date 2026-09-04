@@ -1,5 +1,7 @@
 package io.legado.app.domain.usecase
 
+import io.legado.app.data.repository.ai.AiLogEntry
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiToolGateway
@@ -7,12 +9,14 @@ import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiToolContext
+import io.legado.app.domain.model.aiTaskSceneLabel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
 class AiToolAwareGenerationUseCase(
     private val aiTextGateway: AiTextGateway,
     private val aiToolGateway: AiToolGateway,
+    private val aiLogRepository: AiLogRepository,
 ) {
 
     suspend fun generate(request: AiGenerateRequest): String {
@@ -27,51 +31,91 @@ class AiToolAwareGenerationUseCase(
     }
 
     fun generateStream(request: AiGenerateRequest): Flow<AiStreamEvent> = flow {
+        val start = System.currentTimeMillis()
+        val provider = request.model.provider
+        val model = request.model
         var currentRequest = request.withReadOnlyTools()
-        while (true) {
-            val toolTrace = ToolTraceBuilder()
-            val roundContent = StringBuilder()
-            toolTrace.beginResponse()
+        var lastError: String? = null
+        var success = false
+        try {
+            while (true) {
+                val toolTrace = ToolTraceBuilder()
+                val roundContent = StringBuilder()
+                toolTrace.beginResponse()
 
-            aiTextGateway.generateStream(currentRequest).collect { event ->
-                when (event) {
-                    is AiStreamEvent.Content -> {
-                        roundContent.append(event.text)
-                        emit(event)
-                    }
+                aiTextGateway.generateStream(
+                    currentRequest.copy(suppressLog = true)
+                ).collect { event ->
+                    when (event) {
+                        is AiStreamEvent.Content -> {
+                            roundContent.append(event.text)
+                            emit(event)
+                        }
 
-                    is AiStreamEvent.Reasoning -> emit(event)
-                    is AiStreamEvent.ToolCallDelta -> {
-                        toolTrace.append(event)
-                        emit(event)
+                        is AiStreamEvent.Reasoning -> emit(event)
+                        is AiStreamEvent.ToolCallDelta -> {
+                            toolTrace.append(event)
+                            emit(event)
+                        }
                     }
                 }
-            }
 
-            val toolCalls = toolTrace.pendingToolCalls()
-            if (toolCalls.isEmpty()) {
-                return@flow
-            }
+                val toolCalls = toolTrace.pendingToolCalls()
+                if (toolCalls.isEmpty()) {
+                    success = true
+                    return@flow
+                }
 
-            val toolResultMessages = toolCalls.map { toolCall ->
-                val result = aiToolGateway.execute(toolCall)
-                AiMessage(
-                    role = AiMessageRole.TOOL,
-                    content = result.content.truncateToolOutput(),
-                    toolCallId = result.callId,
-                    name = result.name,
+                val toolResultMessages = toolCalls.map { toolCall ->
+                    val result = aiToolGateway.execute(toolCall)
+                    AiMessage(
+                        role = AiMessageRole.TOOL,
+                        content = result.content.truncateToolOutput(),
+                        toolCallId = result.callId,
+                        name = result.name,
+                    )
+                }
+                currentRequest = currentRequest.copy(
+                    messages = currentRequest.messages +
+                        AiMessage(
+                            role = AiMessageRole.ASSISTANT,
+                            content = roundContent.toString(),
+                            toolCalls = toolCalls,
+                        ) +
+                        toolResultMessages,
                 )
             }
-            currentRequest = currentRequest.copy(
-                messages = currentRequest.messages +
-                    AiMessage(
-                        role = AiMessageRole.ASSISTANT,
-                        content = roundContent.toString(),
-                        toolCalls = toolCalls,
-                    ) +
-                    toolResultMessages,
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            lastError = e.message?.takeIf { it.isNotBlank() } ?: "已取消"
+            throw e
+        } catch (e: Throwable) {
+            lastError = e.message ?: e.javaClass.simpleName
+        } finally {
+            aiLogRepository.record(
+                AiLogEntry(
+                    timeMillis = start,
+                    kind = "generateStream",
+                    providerName = provider.name,
+                    providerProtocol = provider.protocol,
+                    modelId = model.modelId,
+                    modelDisplayName = model.displayName,
+                    summary = summarizeRequest(request),
+                    success = success,
+                    durationMillis = System.currentTimeMillis() - start,
+                    error = lastError,
+                    scenario = aiTaskSceneLabel(request.taskType),
+                )
             )
         }
+    }
+
+    private fun summarizeRequest(request: AiGenerateRequest): String {
+        val content = request.messages
+            .lastOrNull { it.role == "user" || it.role == "system" }
+            ?.content
+            ?: request.messages.lastOrNull()?.content
+            .orEmpty()
+        return content.replace("\\s+".toRegex(), " ").trim()
     }
 
     private fun AiGenerateRequest.withReadOnlyTools(): AiGenerateRequest {

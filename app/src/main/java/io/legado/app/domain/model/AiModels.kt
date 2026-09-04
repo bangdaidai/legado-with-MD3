@@ -379,6 +379,10 @@ data class AiGenerateRequest(
      * 与底层协议/调用方式（generate/stream）无关。落库时由仓库层映射成中文场景名。
      */
     val taskType: String? = null,
+    /**
+     * 为 true 时跳过 AI 日志记录，由调用方自行合并多轮工具调用后统一落一条日志。
+     */
+    val suppressLog: Boolean = false,
 )
 
 /**
