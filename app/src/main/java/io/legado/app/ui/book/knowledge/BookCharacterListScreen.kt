@@ -19,9 +19,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -46,7 +46,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.compose.AsyncImage
 import io.legado.app.R
 import io.legado.app.data.entities.BookCharacterProfile
-import io.legado.app.ui.ai.AiModelSwitchButton
+import io.legado.app.ui.ai.AiModelSwitchSheet
 import io.legado.app.ui.ai.AiReasoningModeButton
 import io.legado.app.ui.ai.AiTaskResultSheet
 import io.legado.app.ui.ai.chat.AiThinkingStepsCard
@@ -182,24 +182,21 @@ private fun CharacterIdentifySheet(
     visible: Boolean,
     onIntent: (CharacterListIntent) -> Unit,
 ) {
+    // 点按重试、长按切换模型，替代原先"切换模型 + 刷新 + 思考模式"三个按钮
+    var showModelPicker by rememberSaveable { mutableStateOf(false) }
     AiTaskResultSheet(
         show = visible && sheet != null,
         onDismissRequest = { onIntent(CharacterListIntent.DismissAiIdentify) },
         title = stringResource(R.string.ai_identify_characters),
         startAction = if (sheet != null) {
             {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AiModelSwitchButton(
-                        enabled = !sheet.loading,
-                        onSelected = { onIntent(CharacterListIntent.RunAiIdentify) },
-                    )
-                    MediumTonalButton(
-                        onClick = { onIntent(CharacterListIntent.RunAiIdentify) },
-                        icon = Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.retry),
-                        enabled = !sheet.loading,
-                    )
-                }
+                MediumTonalButton(
+                    onClick = { onIntent(CharacterListIntent.RunAiIdentify) },
+                    onLongClick = { showModelPicker = true },
+                    icon = Icons.Default.AutoAwesome,
+                    contentDescription = stringResource(R.string.ai_identify_retry_or_switch),
+                    enabled = !sheet.loading,
+                )
             }
         } else null,
         endAction = if (sheet != null) {
@@ -265,6 +262,12 @@ private fun CharacterIdentifySheet(
             }
         }
     }
+    AiModelSwitchSheet(
+        show = showModelPicker,
+        onDismissRequest = { showModelPicker = false },
+        // 与原"切换模型"按钮一致：选完模型自动重试当前任务
+        onSelected = { onIntent(CharacterListIntent.RunAiIdentify) },
+    )
 }
 
 @Composable

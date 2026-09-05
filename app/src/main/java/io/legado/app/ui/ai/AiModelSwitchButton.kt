@@ -51,18 +51,36 @@ fun AiModelSwitchButton(
     onSelected: (() -> Unit)? = null,
     viewModel: AiModelSwitchViewModel = koinViewModel(),
 ) {
-    val models by viewModel.uiState.collectAsStateWithLifecycle()
-    val state by viewModel.sheetState.collectAsStateWithLifecycle()
-
     MediumTonalButton(
         onClick = viewModel::showPicker,
         icon = Icons.Default.AutoAwesome,
         enabled = enabled,
         contentDescription = stringResource(R.string.ai_select_model),
     )
-    AppModalBottomSheet(
-        show = state,
+    val sheetVisible by viewModel.sheetState.collectAsStateWithLifecycle()
+    AiModelSwitchSheet(
+        show = sheetVisible,
         onDismissRequest = viewModel::dismissPicker,
+        onSelected = onSelected,
+        viewModel = viewModel,
+    )
+}
+
+/**
+ * 模型选择弹层的独立形态，供想要自定义触发方式（如长按）的调用方使用；
+ * [AiModelSwitchButton] 是"按钮 + 此弹层"的默认组合。
+ */
+@Composable
+fun AiModelSwitchSheet(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    onSelected: (() -> Unit)? = null,
+    viewModel: AiModelSwitchViewModel = koinViewModel(),
+) {
+    val models by viewModel.uiState.collectAsStateWithLifecycle()
+    AppModalBottomSheet(
+        show = show,
+        onDismissRequest = onDismissRequest,
         title = stringResource(R.string.ai_select_model),
     ) {
         AiModelPickerContent(
