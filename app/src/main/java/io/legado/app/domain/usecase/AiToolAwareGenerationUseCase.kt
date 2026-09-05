@@ -99,6 +99,9 @@ class AiToolAwareGenerationUseCase(
             throw e
         } catch (e: Throwable) {
             lastError = e.message ?: e.javaClass.simpleName
+            // 重抛而不是吞掉：下游任务需要把 HTTP 429/超时等真实原因透出给用户，
+            // 否则只剩"JSON 解析失败"这类指代不清的次生错误
+            throw e
         } finally {
             aiLogRepository.record(
                 AiLogEntry(
