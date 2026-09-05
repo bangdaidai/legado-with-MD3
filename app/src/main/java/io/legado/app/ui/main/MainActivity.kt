@@ -569,16 +569,15 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
             },
             onClear = {
                 lifecycleScope.launch {
-                    FileUtils.delete(
-                        externalCacheDir?.let { getFile(it, "crash") },
-                        false
-                    )
+                    externalCacheDir?.let { root ->
+                        FileUtils.delete(root.getFile("crash"), false)
+                    }
                     val backupPath = backupSettingsGateway.currentSettings.backupPath
                     if (!backupPath.isNullOrEmpty()) {
                         val uri = android.net.Uri.parse(backupPath)
                         FileDoc.fromUri(uri, true)
-                            ?.let { find(it, "crash") }
-                            ?.let { delete(it) }
+                            ?.let { it.find("crash") }
+                            ?.let { it.delete() }
                     }
                     crashLogSheet.value = emptyList()
                 }
@@ -676,16 +675,16 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
     private fun loadCrashLogFiles(): List<FileDoc> {
         val list = arrayListOf<FileDoc>()
         externalCacheDir
-            ?.let { getFile(it, "crash") }
+            ?.let { it.getFile("crash") }
             ?.listFiles(java.io.FileFilter { it.isFile })
             ?.forEach { list.add(FileDoc.fromFile(it)) }
         val backupPath = backupSettingsGateway.currentSettings.backupPath
         if (!backupPath.isNullOrEmpty()) {
             val uri = android.net.Uri.parse(backupPath)
             FileDoc.fromUri(uri, true)
-                ?.let { find(it, "crash") }
+                ?.let { it.find("crash") }
                 ?.let { crashDir ->
-                    list(crashDir) { !it.isDir }
+                    crashDir.list { !it.isDir }
                 }?.let { list.addAll(it) }
         }
         return list.sortedByDescending { it.name }.distinctBy { it.name }

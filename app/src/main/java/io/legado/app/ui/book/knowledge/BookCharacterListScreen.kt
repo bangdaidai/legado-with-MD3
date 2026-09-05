@@ -1,5 +1,4 @@
 package io.legado.app.ui.book.knowledge
-
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,8 +26,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +72,6 @@ import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BookCharacterListScreen(
@@ -85,7 +85,6 @@ fun BookCharacterListScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
     val roleFilterLabels = remember {
         listOf(
             "" to R.string.knowledge_type_all,
@@ -98,7 +97,6 @@ fun BookCharacterListScreen(
     val tabTitles = roleFilterLabels.map { stringResource(it.second) }
     val selectedTabIndex =
         roleFilterLabels.indexOfFirst { it.first == state.roleFilter }.coerceAtLeast(0)
-
     LaunchedEffect(effects) {
         effects.collectLatest { effect ->
             when (effect) {
@@ -107,7 +105,6 @@ fun BookCharacterListScreen(
             }
         }
     }
-
     DisposableEffect(lifecycleOwner, onRefresh) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -117,7 +114,6 @@ fun BookCharacterListScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -175,7 +171,6 @@ fun BookCharacterListScreen(
     }
     CharacterIdentifySheet(state.aiSheet, state.isAiSheetVisible, onIntent)
 }
-
 @Composable
 private fun CharacterIdentifySheet(
     sheet: CharacterIdentifySheet?,
@@ -237,7 +232,6 @@ private fun CharacterIdentifySheet(
                     messageCreatedAt = sheet.startedAt,
                 )
             }
-
             sheet.error != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AnimatedTextLine(
                     sheet.error,
@@ -246,7 +240,6 @@ private fun CharacterIdentifySheet(
                     style = LegadoTheme.typography.bodyMedium,
                 )
             }
-
             sheet.candidates.isEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AnimatedTextLine(
                     stringResource(R.string.ai_identify_characters_hint),
@@ -254,7 +247,6 @@ private fun CharacterIdentifySheet(
                     style = LegadoTheme.typography.bodyMedium,
                 )
             }
-
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 sheet.candidates.forEach { candidate ->
                     CharacterIdentifyCandidateRow(candidate, onIntent)
@@ -269,7 +261,6 @@ private fun CharacterIdentifySheet(
         onSelected = { onIntent(CharacterListIntent.RunAiIdentify) },
     )
 }
-
 @Composable
 private fun CharacterIdentifyCandidateRow(
     candidate: CharacterIdentifyCandidateUi,
@@ -315,7 +306,6 @@ private fun CharacterIdentifyCandidateRow(
         }
     }
 }
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CharacterListContent(
@@ -359,14 +349,12 @@ private fun CharacterListContent(
         }
     }
 }
-
 @Composable
 private fun CharacterListItem(
     character: CharacterListItemUi,
     onClick: () -> Unit,
 ) {
     val avatarLoadFailed = remember(character.avatarUri) { mutableStateOf(false) }
-
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,

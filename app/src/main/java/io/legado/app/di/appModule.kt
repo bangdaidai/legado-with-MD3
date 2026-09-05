@@ -699,7 +699,8 @@ val appModule = module {
         AiProviderEditViewModel(
             initialProviderId = providerId,
             aiProfileGateway = get(),
-            aiTextGateway = get()
+            aiTextGateway = get(),
+            webSearchSettingsGateway = get()
         )
     }
     viewModel { (providerId: String?, modelProfileId: String?) ->

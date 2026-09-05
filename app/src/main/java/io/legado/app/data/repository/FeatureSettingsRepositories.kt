@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.Preferences
 import io.legado.app.BuildConfig
 import io.legado.app.constant.PreferKey
 import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.gateway.CoverSettingsGateway

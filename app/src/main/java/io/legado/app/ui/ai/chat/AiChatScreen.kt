@@ -188,7 +188,8 @@ fun AiChatScreen(
         generationGradientProgress
     )
 
-    val onClickLink: (String) -> Unit = remember(onSearchBook) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val onClickLink: (String) -> Unit = remember(onSearchBook, context) {
         { link ->
             if (link.startsWith(BOOK_SEARCH_PREFIX)) {
                 val bookName = link.removePrefix(BOOK_SEARCH_PREFIX)
@@ -196,7 +197,6 @@ fun AiChatScreen(
                     onSearchBook(bookName)
                 }
             } else {
-                val context = androidx.compose.ui.platform.LocalContext.current
                 val uri = link.toUri()
                 context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
             }
