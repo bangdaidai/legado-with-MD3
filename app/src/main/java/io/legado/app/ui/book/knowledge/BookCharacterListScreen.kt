@@ -235,13 +235,19 @@ private fun CharacterIdentifySheet(
             }
 
             sheet.error != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AnimatedTextLine(sheet.error, color = LegadoTheme.colorScheme.error)
+                AnimatedTextLine(
+                    sheet.error,
+                    color = LegadoTheme.colorScheme.error,
+                    // 环境样式偏大，错误提示按正文字号渲染
+                    style = LegadoTheme.typography.bodyMedium,
+                )
             }
 
             sheet.candidates.isEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AnimatedTextLine(
                     stringResource(R.string.ai_identify_characters_hint),
-                    color = LegadoTheme.colorScheme.onSurfaceVariant
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    style = LegadoTheme.typography.bodyMedium,
                 )
             }
 
