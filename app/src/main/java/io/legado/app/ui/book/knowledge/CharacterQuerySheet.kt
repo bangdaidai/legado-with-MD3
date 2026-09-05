@@ -29,6 +29,7 @@ import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
+import io.legado.app.ui.ai.AiModelSwitchButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
@@ -71,6 +72,12 @@ fun CharacterQuerySheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = state.name.ifBlank { name },
+        startAction = {
+            AiModelSwitchButton(onSelected = {
+                // 切换模型后自动重跑当前查询，与新模型的归纳缓存键不冲突
+                viewModel.onIntent(CharacterQueryIntent.Retry)
+            })
+        },
         endAction = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 从头追查：对话框级动作（更新原文出处 + 重跑 AI 归纳），与保存在一起放标题栏
@@ -367,18 +374,20 @@ private fun AiSummaryCard(
 
             state.error != null -> {
                 SectionLabel(text = stringResource(R.string.character_ai_summary_label))
-                Text(
-                    text = state.error,
-                    style = LegadoTheme.typography.bodySmall,
-                    color = LegadoTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
                 Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.End,
                 ) {
+                    Text(
+                        text = state.error,
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
                     SmallPlainButton(
                         onClick = { onIntent(CharacterQueryIntent.Retry) },
                         text = stringResource(R.string.retry),

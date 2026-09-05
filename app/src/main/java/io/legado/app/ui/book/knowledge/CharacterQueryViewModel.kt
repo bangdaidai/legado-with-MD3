@@ -120,8 +120,20 @@ class CharacterQueryViewModel(
     }
 
     private fun retry() {
-        val name = _uiState.value.name
-        if (name.isNotBlank()) load(name)
+        val state = _uiState.value
+        if (state.name.isBlank()) return
+        // 本地档案命中时没有任何模型相关的计算，切模型后无需重试
+        if (state.profile != null) return
+        // 锚点已就绪：只重跑 AI 归纳（检索结果与模型无关，不重扫）
+        if (state.firstAppearance != null || state.latestAppearance != null) {
+            queryJob?.cancel()
+            viewModelScope.launch {
+                explainWithAi(ReadBook.book?.bookUrl ?: return@launch, state.name)
+            }
+            return
+        }
+        // 锚点都还没有（首查失败等）：退回全量加载
+        load(state.name)
     }
 
     private fun load(name: String) {

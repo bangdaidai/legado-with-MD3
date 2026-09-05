@@ -318,6 +318,7 @@ import io.legado.app.ui.config.themeManage.ThemeManageViewModel
 import io.legado.app.ui.config.translation.TranslationConfigViewModel
 import io.legado.app.ui.dict.DictViewModel
 import io.legado.app.ui.book.knowledge.CharacterQueryViewModel
+import io.legado.app.ui.ai.AiModelSwitchViewModel
 import io.legado.app.ui.dict.rule.DictRuleViewModel
 import io.legado.app.ui.highlightTagRule.HighlightTagRuleViewModel
 import io.legado.app.ui.login.SourceLoginViewModel
@@ -617,6 +618,7 @@ val appModule = module {
     }
     viewModelOf(::DictViewModel)
     viewModelOf(::CharacterQueryViewModel)
+    viewModelOf(::AiModelSwitchViewModel)
     viewModelOf(::RssSourceViewModel)
     viewModelOf(::BookSourceViewModel)
     viewModelOf(::BookSourceEditViewModel)

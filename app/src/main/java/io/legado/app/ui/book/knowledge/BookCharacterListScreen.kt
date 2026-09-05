@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.compose.AsyncImage
 import io.legado.app.R
 import io.legado.app.data.entities.BookCharacterProfile
+import io.legado.app.ui.ai.AiModelSwitchButton
 import io.legado.app.ui.ai.AiReasoningModeButton
 import io.legado.app.ui.ai.AiTaskResultSheet
 import io.legado.app.ui.ai.chat.AiThinkingStepsCard
@@ -187,12 +188,18 @@ private fun CharacterIdentifySheet(
         title = stringResource(R.string.ai_identify_characters),
         startAction = if (sheet != null) {
             {
-                MediumTonalButton(
-                    onClick = { onIntent(CharacterListIntent.RunAiIdentify) },
-                    icon = Icons.Default.Refresh,
-                    contentDescription = stringResource(R.string.retry),
-                    enabled = !sheet.loading,
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AiModelSwitchButton(
+                        enabled = !sheet.loading,
+                        onSelected = { onIntent(CharacterListIntent.RunAiIdentify) },
+                    )
+                    MediumTonalButton(
+                        onClick = { onIntent(CharacterListIntent.RunAiIdentify) },
+                        icon = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.retry),
+                        enabled = !sheet.loading,
+                    )
+                }
             }
         } else null,
         endAction = if (sheet != null) {
