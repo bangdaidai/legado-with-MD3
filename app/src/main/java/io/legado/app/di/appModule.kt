@@ -523,7 +523,7 @@ val appModule = module {
     single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get(), get()) }
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
     single<BookMarkingGateway> { BookMarkingRepository(get()) }
-    single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
+    single<BookKnowledgeGateway> { BookKnowledgeRepository(get(), get()) }
     singleOf(::ReadingMemoryRepository)
     singleOf(::AuthorProfileRepository)
     singleOf(::ShareCardRepository)

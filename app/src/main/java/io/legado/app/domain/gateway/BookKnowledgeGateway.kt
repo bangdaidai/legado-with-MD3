@@ -7,6 +7,9 @@ import io.legado.app.data.entities.BookKnowledgeEntry
 import io.legado.app.data.entities.BookOutlineNode
 
 interface BookKnowledgeGateway {
+    /** 供 AI 工具上下文等场景按 bookUrl 取书名，避免模型为了确认书名去全书架搜索。 */
+    suspend fun getBookName(bookUrl: String): String?
+
     suspend fun searchCharacterProfiles(
         bookUrl: String,
         query: String,

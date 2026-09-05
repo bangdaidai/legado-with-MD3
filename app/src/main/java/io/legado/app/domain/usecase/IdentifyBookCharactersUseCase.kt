@@ -136,7 +136,11 @@ class IdentifyBookCharactersUseCase(
                     // AiToolRepository 会自动追加到工具列表）。
                     webSearch = preset.model.provider.nativeWebSearchSupport().isSupported,
                 ),
-                toolContext = AiToolContext(bookUrl = bookUrl),
+                // bookUrl 可能是不透明编码串，带上书名让模型无需先全书架搜索确认当前书籍
+                toolContext = AiToolContext(
+                    bookUrl = bookUrl,
+                    bookName = bookKnowledgeGateway.getBookName(bookUrl),
+                ),
             )
         ).collect { event ->
             when (event) {

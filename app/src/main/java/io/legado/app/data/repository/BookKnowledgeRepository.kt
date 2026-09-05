@@ -1,5 +1,6 @@
 package io.legado.app.data.repository
 
+import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.entities.BookCharacterEvent
 import io.legado.app.data.entities.BookCharacterProfile
@@ -12,7 +13,12 @@ import kotlinx.coroutines.withContext
 
 class BookKnowledgeRepository(
     private val dao: BookKnowledgeDao,
+    private val bookDao: BookDao,
 ) : BookKnowledgeGateway {
+
+    override suspend fun getBookName(bookUrl: String): String? = withContext(Dispatchers.IO) {
+        bookDao.getBook(bookUrl)?.name
+    }
 
     override suspend fun searchCharacterProfiles(
         bookUrl: String,
