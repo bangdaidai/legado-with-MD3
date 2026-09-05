@@ -2227,7 +2227,7 @@
     <string name="ai_toc_rule_hits">Matches %1$d of %2$d chapters</string>
     <string name="ai_toc_rule_adopt_selected">Adopt selected (%1$d)</string>
     <string name="ai_web_search_service">Search Service</string>
-    <string name="ai_web_search_desc">Tavily search; if not configured, a configured Zhipu provider\'s standalone web search is used as fallback (billed per call to your Zhipu account)</string>
+    <string name="ai_web_search_desc">Tavily search, used for models without built-in web search</string>
 
     <string name="fail">Failed</string>
     <string name="ai_log">AI Log</string>

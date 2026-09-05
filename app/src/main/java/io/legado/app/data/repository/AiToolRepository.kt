@@ -972,7 +972,7 @@ class AiToolRepository(
         private val tools = listOf(
             AiToolDefinition(
                 name = TOOL_SEARCH_BOOKS,
-                description = "Search the local bookshelf by book title, author, or source name.",
+                description = "Search the user's local bookshelf (not the web, not book content) by book title, author, or source name.",
                 inputSchema = objectSchema(
                     "query" to stringSchema("Search keyword. Leave empty to list recently read books."),
                     "limit" to intSchema("Maximum number of books to return.")
