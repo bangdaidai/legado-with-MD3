@@ -63,7 +63,8 @@ class WatchRecordReceiver : BroadcastReceiver() {
                     appDb.readRecordDao.update(existing.copy(
                         readTime = existing.readTime + duration,
                         lastRead = System.currentTimeMillis(),
-                        bookType = BookType.video
+                        bookType = BookType.video,
+                        coverUrl = record.coverUrl.ifBlank { existing.coverUrl }
                     ))
                 } else {
                     appDb.readRecordDao.insert(ReadRecord(
@@ -72,7 +73,8 @@ class WatchRecordReceiver : BroadcastReceiver() {
                         bookAuthor = record.author,
                         readTime = duration,
                         lastRead = System.currentTimeMillis(),
-                        bookType = BookType.video
+                        bookType = BookType.video,
+                        coverUrl = record.coverUrl
                     ))
                 }
 

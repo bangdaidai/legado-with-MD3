@@ -7,6 +7,7 @@ import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
 import io.legado.app.data.entities.readRecord.ReadRecordRepairReport
+import io.legado.app.data.appDb
 import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.data.repository.BookRepository
@@ -29,6 +30,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -321,7 +324,14 @@ class ReadRecordViewModel(
     }
 
     suspend fun getBookCover(bookName: String, bookAuthor: String): String? {
-        return bookRepository.getBookCoverByNameAndAuthor(bookName, bookAuthor)
+        // 优先从书架获取封面
+        val bookCover = bookRepository.getBookCoverByNameAndAuthor(bookName, bookAuthor)
+        if (!bookCover.isNullOrEmpty()) return bookCover
+        // 书架无封面时，从阅读记录获取封面（影视等不在书架的记录）
+        return withContext(Dispatchers.IO) {
+            appDb.readRecordDao.getReadRecordByNameAndAuthor(bookName, bookAuthor)?.coverUrl
+                ?.takeIf { it.isNotBlank() }
+        }
     }
 
     suspend fun getMergeCandidates(targetRecord: ReadRecord): List<ReadRecord> {

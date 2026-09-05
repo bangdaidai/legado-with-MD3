@@ -27,16 +27,22 @@ class HomeDashboardRepository(
     override fun observeRecentBooks(limit: Int): Flow<List<HomeReadingBook>> =
         readRecordDao.observeRecentHomeBooks(limit).map { rows ->
             rows.map { row ->
+                // 封面回退逻辑：优先使用书架上的封面，否则使用阅读记录中的封面
+                val coverPath = when {
+                    // 书架上有封面时，优先使用 customCoverUrl 或 coverUrl
+                    !row.coverUrl.isNullOrEmpty() || !row.customCoverUrl.isNullOrEmpty() ->
+                        if (row.customCoverUrl.isNullOrEmpty()) row.coverUrl else row.customCoverUrl
+                    // 书架无封面时，使用阅读记录中的封面
+                    !row.recordCoverUrl.isNullOrEmpty() -> row.recordCoverUrl
+                    // 都没有时返回 null
+                    else -> null
+                }
                 HomeReadingBook(
                     bookUrl = row.bookUrl,
                     name = row.recordName,
                     author = row.recordAuthor,
                     origin = row.origin,
-                    coverPath = if (row.customCoverUrl.isNullOrEmpty()) {
-                        row.coverUrl
-                    } else {
-                        row.customCoverUrl
-                    },
+                    coverPath = coverPath,
                     chapterTitle = row.chapterTitle,
                     chapterProgress = if (
                         row.totalChapterNum != null &&

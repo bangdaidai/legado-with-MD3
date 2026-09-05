@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.data.appDb
 import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -132,7 +133,14 @@ class ReadRecordOverviewViewModel(
         }
     }
 
-    suspend fun getBookCover(name: String, author: String) = bookRepository.getBookCoverByNameAndAuthor(name, author)
+    suspend fun getBookCover(name: String, author: String): String? {
+        // 优先从书架获取封面
+        val bookCover = bookRepository.getBookCoverByNameAndAuthor(name, author)
+        if (!bookCover.isNullOrEmpty()) return bookCover
+        // 书架无封面时，从阅读记录获取封面（影视等不在书架的记录）
+        return appDb.readRecordDao.getReadRecordByNameAndAuthor(name, author)?.coverUrl
+            ?.takeIf { it.isNotBlank() }
+    }
 }
 
 sealed interface ReadRecordOverviewIntent {

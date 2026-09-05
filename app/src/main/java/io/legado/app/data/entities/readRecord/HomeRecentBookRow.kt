@@ -10,5 +10,7 @@ data class HomeRecentBookRow(
     val chapterTitle: String?,
     val totalChapterNum: Int?,
     val chapterIndex: Int?,
+    // 阅读记录表中的封面URL（不在书架时的回退封面）
+    val recordCoverUrl: String?,
 )
 

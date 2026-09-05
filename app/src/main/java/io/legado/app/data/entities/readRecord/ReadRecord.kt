@@ -14,5 +14,8 @@ data class ReadRecord(
     @ColumnInfo(defaultValue = "0")
     var lastRead: Long = System.currentTimeMillis(),
     @ColumnInfo(defaultValue = "8")
-    var bookType: Int = io.legado.app.constant.BookType.text
+    var bookType: Int = io.legado.app.constant.BookType.text,
+    // 封面URL（影视记录等不在书架的记录用于显示封面）
+    @ColumnInfo(defaultValue = "")
+    var coverUrl: String = ""
 )

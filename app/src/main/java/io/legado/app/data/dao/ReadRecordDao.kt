@@ -65,7 +65,8 @@ interface ReadRecordDao {
             book.customCoverUrl AS customCoverUrl,
             book.durChapterTitle AS chapterTitle,
             book.totalChapterNum AS totalChapterNum,
-            book.durChapterIndex AS chapterIndex
+            book.durChapterIndex AS chapterIndex,
+            record.coverUrl AS recordCoverUrl
         FROM recent
         LEFT JOIN books AS book ON book.bookUrl = (
             SELECT candidate.bookUrl
@@ -75,6 +76,9 @@ interface ReadRecordDao {
             ORDER BY candidate.durChapterTime DESC, candidate.bookUrl ASC
             LIMIT 1
         )
+        LEFT JOIN readRecord AS record ON record.bookName = recent.bookName
+            AND record.bookAuthor = recent.bookAuthor
+            AND record.lastRead = recent.lastRead
         ORDER BY recent.lastRead DESC
         """
     )
@@ -181,6 +185,12 @@ interface ReadRecordDao {
         bookName: String,
         excludeAuthor: String
     ): List<ReadRecord>
+
+    /**
+     * 按书名和作者获取最新的阅读记录（不包含 deviceId），用于获取封面。
+     */
+    @Query("SELECT * FROM readRecord WHERE bookName = :bookName AND bookAuthor = :bookAuthor ORDER BY lastRead DESC LIMIT 1")
+    suspend fun getReadRecordByNameAndAuthor(bookName: String, bookAuthor: String): ReadRecord?
 
     @Query(
         """
