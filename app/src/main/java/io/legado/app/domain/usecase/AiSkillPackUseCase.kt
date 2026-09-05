@@ -20,7 +20,6 @@ import io.legado.app.domain.model.AiSkillPackCodec
 import io.legado.app.domain.model.AiSkillPackDecodeResult
 import io.legado.app.domain.model.AiSkillPackItem
 import io.legado.app.domain.model.AiTaskRuntimeOptions
-import io.legado.app.domain.model.AiTaskType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
