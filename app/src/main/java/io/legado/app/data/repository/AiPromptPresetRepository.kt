@@ -30,10 +30,6 @@ class AiPromptPresetRepository(
         dao.countByTaskType(taskType)
     }
 
-    override suspend fun getAll(): List<AiPromptPreset> = withContext(Dispatchers.IO) {
-        dao.getAll()
-    }
-
     override suspend fun savePreset(preset: AiPromptPreset) = withContext(Dispatchers.IO) {
         dao.upsert(preset)
     }

@@ -86,9 +86,6 @@ interface AiProfileDao {
     @Query("DELETE FROM ai_model_profiles WHERE providerId = :providerId")
     suspend fun deleteModelsByProvider(providerId: String)
 
-    @Query("DELETE FROM ai_task_presets WHERE id = :presetId")
-    suspend fun deletePreset(presetId: String)
-
     @Transaction
     suspend fun upsertProfile(
         provider: AiProviderProfile,

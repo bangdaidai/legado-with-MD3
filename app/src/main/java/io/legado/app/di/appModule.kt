@@ -176,7 +176,6 @@ import io.legado.app.domain.repository.BookDomainRepository
 import io.legado.app.domain.usecase.AddBookUseCase
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.AiChatGenerationUseCase
-import io.legado.app.domain.usecase.AiSkillPackUseCase
 import io.legado.app.domain.usecase.AiTaskManager
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.AiToolAwareGenerationUseCase
@@ -299,7 +298,6 @@ import io.legado.app.ui.config.ai.AiConfigViewModel
 import io.legado.app.ui.config.ai.AiModelEditViewModel
 import io.legado.app.ui.config.ai.AiProviderEditViewModel
 import io.legado.app.ui.config.ai.log.AiLogViewModel
-import io.legado.app.ui.config.ai.skills.SkillsViewModel
 import io.legado.app.ui.config.ai.prompt.AiPromptConfigViewModel
 import io.legado.app.ui.config.ai.summary.AiSummaryConfigViewModel
 import io.legado.app.ui.config.ai.websearch.AiWebSearchConfigViewModel
@@ -469,7 +467,6 @@ val appModule = module {
     singleOf(::AutoAssignVoiceBindingsUseCase)
     singleOf(::PrepareChapterSpeechPlanUseCase)
     singleOf(::RefineSpeechWithAiUseCase)
-    singleOf(::AiSkillPackUseCase)
     singleOf(::SyncReadAloudVoicesUseCase)
     singleOf(::CacheBookChaptersUseCase)
     singleOf(::ChangeBookSourceUseCase)
@@ -690,7 +687,6 @@ val appModule = module {
     viewModelOf(::AiWebSearchConfigViewModel)
     viewModelOf(::AiLogViewModel)
     viewModelOf(::AiChatViewModel)
-    viewModelOf(::SkillsViewModel)
     viewModel { (providerId: String?) ->
         AiProviderEditViewModel(
             initialProviderId = providerId,
