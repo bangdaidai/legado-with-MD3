@@ -110,14 +110,6 @@ fun UpdateSheet(
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
-            } else {
-                AppText(
-                    text = BuildConfig.VERSION_NAME,
-                    style = LegadoTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = LegadoTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
             }
 
             val updateLog = updateInfo.updateLog
