@@ -5,6 +5,7 @@ import io.legado.app.data.entities.AiArtifact
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.AiArtifactGateway
 import io.legado.app.domain.gateway.AiProfileGateway
+import io.legado.app.domain.gateway.AiToolGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
@@ -27,6 +28,7 @@ class IdentifyBookCharactersUseCase(
     private val aiArtifactGateway: AiArtifactGateway,
     private val aiTaskManager: AiTaskManager,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
+    private val aiToolGateway: AiToolGateway,
 ) {
     data class Candidate(
         val name: String,
@@ -117,11 +119,19 @@ class IdentifyBookCharactersUseCase(
             ?: error("No AI model configured for character identification")
         val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: DEFAULT_PROMPT
         val response = StringBuilder()
+        // 无论用户自定义提示词怎么写，都按真实能力下发一条联网说明，
+        // 避免模型按提示词去调用根本不存在的 web_search 函数
+        val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported
+        val searchToolAvailable = aiToolGateway.availableTools().any { it.name == SEARCH_WEB_TOOL }
         aiToolAwareGenerationUseCase.generateStream(
             AiGenerateRequest(
                 model = preset.model,
                 messages = listOf(
                     AiMessage(AiMessageRole.SYSTEM, prompt),
+                    AiMessage(
+                        AiMessageRole.SYSTEM,
+                        webSearchGuidance(nativeWebSearch, searchToolAvailable),
+                    ),
                     AiMessage(
                         AiMessageRole.USER,
                         "识别本书的主要人物。优先联网搜索，再用本地工具验证。只返回要求的 JSON。"
@@ -134,7 +144,7 @@ class IdentifyBookCharactersUseCase(
                     // 供应商自带联网（智谱/通义/Anthropic/Responses 直连）时显式开启，请求里
                     // 才会下发对应内置工具；否则靠 Tavily 的 search_web 工具兜底（配置好后
                     // AiToolRepository 会自动追加到工具列表）。
-                    webSearch = preset.model.provider.nativeWebSearchSupport().isSupported,
+                    webSearch = nativeWebSearch,
                 ),
                 // bookUrl 可能是不透明编码串，带上书名让模型无需先全书架搜索确认当前书籍
                 toolContext = AiToolContext(
@@ -233,12 +243,40 @@ class IdentifyBookCharactersUseCase(
 
     companion object {
         private const val MIN_CONFIDENCE = 0.65f
+
+        /** 与 AiToolRepository.TOOL_SEARCH_WEB 保持一致；domain 层不反向依赖 data 层，故本地声明 */
+        private const val SEARCH_WEB_TOOL = "search_web"
+
+        /**
+         * 按本次请求的真实联网能力生成一条系统说明。只正面描述"有什么可用"，
+         * 不提及任何不存在的工具名：
+         * - 供应商内置联网（如智谱 web_search 内置工具）是服务端行为，检索自动完成、
+         *   结果直接注入上下文，模型无需调用任何函数；
+         * - Tavily 配置好后 search_web 是真正的 function 工具，可以点名调用；
+         * - 都没有时要求直接依据本地工具与自身知识完成，不作解释。
+         */
+        fun webSearchGuidance(nativeEnabled: Boolean, searchToolAvailable: Boolean): String = when {
+            nativeEnabled && searchToolAvailable ->
+                "Web search: enabled server-side — search runs automatically and results are injected " +
+                    "into this conversation; use those results directly, no function call is needed. " +
+                    "You may also call the \"$SEARCH_WEB_TOOL\" tool for additional searches."
+
+            nativeEnabled ->
+                "Web search: enabled server-side — search runs automatically and results are injected " +
+                    "into this conversation; use those results directly, no function call is needed."
+
+            searchToolAvailable ->
+                "Web search: call the \"$SEARCH_WEB_TOOL\" tool whenever web results would help."
+
+            else ->
+                "Web search: not available in this request; work from local tools and your own " +
+                    "knowledge, and move on without mentioning search."
+        }
         const val DEFAULT_PROMPT =
             """You identify stable fictional characters from a novel. If you do not already know the book title and author, get them via get_book_detail or search_books first. Follow this order:
-1) If web search is available (a built-in web search capability or the search_web tool), search for the book title plus keywords like "主要人物", "角色介绍", "人物关系", "百科" to find the main cast from reviews, wikis, forums, or encyclopedias.
-2) Then use local read-only tools to read cached chapters and fill in or verify character details. Merge both sources.
-Local character profiles and cached chapters may be empty; that only means nothing is stored locally yet, NOT that a character does not exist. Never drop or distrust a character just because local tools could not verify it: keep every character confirmed by web results or your own knowledge, and reflect the evidence source in confidence instead (wiki/encyclopedia/reviews > local chapter text hit > model memory alone).
-If no web search is available, skip the web step silently and never explain tool availability or say you cannot search the web; rely on local tools and your own knowledge.
-Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"child|teen|young_adult|adult|elderly/unknown\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. Include main characters, recurring supporting characters, and important antagonists. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing age or gender. Do not create duplicates of existing names or aliases."""
+1) If web information is available (search results injected by the server, or a usable web search tool), find the main cast from reviews, wikis, forums, or encyclopedias using the book title plus keywords like "主要人物", "角色介绍", "人物关系", "百科"; if none is available, move on to the next step without explanation.
+2) For local identification, work in this order: check the intro from get_book_detail, the outline from get_book_outline, and existing profiles from search_book_characters, then read chapters from the beginning (get_chapter_window) and extract names that actually appear in the text; use chapter search only to verify and enrich names confirmed from those sources, never probe chapter text with names recalled from memory, and failing local verification does not affect inclusion. Merge both sources.
+Local character profiles and cached chapters may be empty; that only means nothing is stored locally yet, NOT that a character does not exist. Never drop or distrust a character just because local tools could not verify it: keep every character confirmed by web results or your own knowledge, and reflect the evidence source in confidence instead (wiki/encyclopedia/reviews > local chapter text hit > model memory alone; suggested values: web sources 0.9 or higher, local text hit about 0.8, own knowledge about 0.7).
+Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"child|teen|young_adult|adult|elderly|unknown\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|unknown\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. Include main characters, recurring supporting characters, and important antagonists; classify antagonists into the role values above by gender and importance, and note their antagonist status in personality and summary. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing age or gender. Do not create duplicates of existing names or aliases."""
     }
 }

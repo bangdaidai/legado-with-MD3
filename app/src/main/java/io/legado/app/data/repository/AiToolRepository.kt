@@ -79,7 +79,16 @@ class AiToolRepository(
             TOOL_SAVE_MEMORY -> saveMemory(args)
             TOOL_RECALL_MEMORY -> recallMemory(args)
             TOOL_DELETE_MEMORY -> deleteMemory(args)
-            else -> """{"error":"Unknown tool: ${call.name}"}"""
+            else -> {
+                // 模型点名调用了不存在的工具时，顺手告诉它联网工具的真实状态，
+                // 让它一轮就能纠正方向，而不是反复重试同一个错误名字
+                val hint = if (aiWebSearchGateway.isConfigured) {
+                    "for web search call the \"search_web\" tool instead"
+                } else {
+                    "no web search tool is available in this session; use local tools only"
+                }
+                """{"error":"Unknown tool: ${call.name}","hint":"$hint"}"""
+            }
         }
         AiToolResult(
             callId = call.id,
@@ -239,14 +248,19 @@ class AiToolRepository(
                 "truncated" to (excerpt.length < content.length)
             )
         }
-        return GSON.toJson(
-            mapOf(
-                "book" to book.toIdentityMap(),
-                "query" to query,
-                "aroundChapterIndex" to aroundChapterIndex,
-                "matches" to matches
-            )
+        // 空命中是模型"拿猜的名字来验证"时的常见死路，顺手告诉它正确的取证路径
+        val result = linkedMapOf<String, Any?>(
+            "book" to book.toIdentityMap(),
+            "query" to query,
+            "aroundChapterIndex" to aroundChapterIndex,
+            "matches" to matches
         )
+        if (matches.isEmpty()) {
+            result["hint"] = "no occurrence in cached chapters; an empty result only means the term " +
+                "is absent from cached text. To discover character names, read chapters directly " +
+                "via get_chapter_window or check search_book_characters, instead of searching guessed names"
+        }
+        return GSON.toJson(result)
     }
 
     private fun searchBookmarks(args: JsonObject): String {
