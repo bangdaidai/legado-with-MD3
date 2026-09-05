@@ -82,7 +82,7 @@ fun UpdateSheet(
             if (mode == UpdateMode.UPDATE) {
                 AppText(
                     text = stringResource(R.string.about_current_version) + " " + BuildConfig.VERSION_NAME,
-                    style = LegadoTheme.typography.titleSmall,
+                    style = LegadoTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
@@ -96,7 +96,7 @@ fun UpdateSheet(
                 )
                 AppText(
                     text = stringResource(R.string.about_new_version) + " " + updateInfo.tagName,
-                    style = LegadoTheme.typography.titleSmall,
+                    style = LegadoTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = LegadoTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -105,7 +105,7 @@ fun UpdateSheet(
                 if (downloadUrl.isNotBlank()) {
                     AppText(
                         text = downloadUrl,
-                        style = LegadoTheme.typography.bodySmall,
+                        style = LegadoTheme.typography.labelLarge,
                         color = LegadoTheme.colorScheme.primary,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
