@@ -67,10 +67,7 @@ fun UpdateSheet(
     onDismissRequest: () -> Unit,
     onStartDownload: () -> Unit,
 ) {
-    val title = when (mode) {
-        UpdateMode.UPDATE -> stringResource(R.string.check_update)
-        UpdateMode.VIEW_LOG -> stringResource(R.string.about_installed_version_title)
-    }
+    val title = stringResource(R.string.update_log)
 
     AppModalBottomSheet(
         show = show,
@@ -122,13 +119,6 @@ fun UpdateSheet(
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
             }
-
-            AppText(
-                text = stringResource(R.string.update_log),
-                style = LegadoTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 8.dp),
-            )
 
             val updateLog = updateInfo.updateLog
             if (updateLog.isNotBlank()) {
