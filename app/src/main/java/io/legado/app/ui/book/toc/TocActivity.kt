@@ -24,6 +24,7 @@ class TocActivity : BaseComposeActivity() {
             onChapterClick = { index ->
                 val data = Intent().apply {
                     putExtra("index", index)
+                    putExtra("chapterChanged", true)
                 }
                 setResult(RESULT_OK, data)
                 finish()
