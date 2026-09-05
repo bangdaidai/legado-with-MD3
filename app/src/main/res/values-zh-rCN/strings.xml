@@ -1077,7 +1077,6 @@
     <string name="character_first_appearance">最初登场</string>
     <string name="character_latest_appearance">最近出场</string>
     <string name="character_profile_hit">已有档案</string>
-    <string name="character_partial_cache_hint">部分章节未缓存，可能存在更早登场</string>
     <string name="character_ai_loading">正在根据原文归纳…</string>
     <string name="character_save_profile">保存到人物档案</string>
     <string name="character_trace_start">从头追查</string>

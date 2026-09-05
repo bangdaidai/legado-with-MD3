@@ -207,9 +207,6 @@ private fun AnchorCard(
             AppearanceRow(
                 title = stringResource(R.string.character_first_appearance),
                 appearance = appearance,
-                hint = if (!state.searchFullyCovered) {
-                    stringResource(R.string.character_partial_cache_hint)
-                } else null,
                 onJump = { onIntent(CharacterQueryIntent.JumpTo(it)) },
             )
         } ?: run {
@@ -232,7 +229,6 @@ private fun AnchorCard(
             AppearanceRow(
                 title = stringResource(R.string.character_latest_appearance),
                 appearance = appearance,
-                hint = null,
                 onJump = { onIntent(CharacterQueryIntent.JumpTo(it)) },
             )
         }
@@ -293,7 +289,6 @@ private fun TraceStatusArea(state: CharacterQueryUiState) {
 private fun AppearanceRow(
     title: String,
     appearance: CharacterQueryUiState.CharacterAppearance,
-    hint: String?,
     onJump: (chapterIndex: Int) -> Unit,
 ) {
     Column(
@@ -321,14 +316,6 @@ private fun AppearanceRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp),
         )
-        hint?.let {
-            Text(
-                text = it,
-                style = LegadoTheme.typography.labelSmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
     }
 }
 
