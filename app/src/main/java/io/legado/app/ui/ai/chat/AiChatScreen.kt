@@ -104,11 +104,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import androidx.core.net.toUri
+
+private const val BOOK_SEARCH_PREFIX = "book-search://"
 
 @Composable
 fun AiChatRouteScreen(
     onBackClick: () -> Unit,
     onOpenBookInfo: (AiChatBookResultUi) -> Unit,
+    onSearchBook: (String) -> Unit,
     viewModel: AiChatViewModel = koinViewModel()
 ) {
     AiChatScreen(
@@ -116,7 +120,8 @@ fun AiChatRouteScreen(
         effects = viewModel.effects,
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
-        onOpenBookInfo = onOpenBookInfo
+        onOpenBookInfo = onOpenBookInfo,
+        onSearchBook = onSearchBook,
     )
 }
 
@@ -127,7 +132,8 @@ fun AiChatScreen(
     effects: Flow<AiChatEffect>,
     onIntent: (AiChatIntent) -> Unit,
     onBackClick: () -> Unit,
-    onOpenBookInfo: (AiChatBookResultUi) -> Unit
+    onOpenBookInfo: (AiChatBookResultUi) -> Unit,
+    onSearchBook: (String) -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -181,6 +187,21 @@ fun AiChatScreen(
         LegadoTheme.colorScheme.secondaryContainer,
         generationGradientProgress
     )
+
+    val onClickLink: (String) -> Unit = remember(onSearchBook) {
+        { link ->
+            if (link.startsWith(BOOK_SEARCH_PREFIX)) {
+                val bookName = link.removePrefix(BOOK_SEARCH_PREFIX)
+                if (bookName.isNotBlank()) {
+                    onSearchBook(bookName)
+                }
+            } else {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val uri = link.toUri()
+                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         effects.collectLatest { effect ->
@@ -333,6 +354,7 @@ fun AiChatScreen(
                             isStreaming = false,
                             assistantLabel = assistantLabel,
                             onOpenBookInfo = onOpenBookInfo,
+                            onClickLink = onClickLink,
                             onCopy = {
                                 clipboardManager.setText(AnnotatedString(message.content))
                             },
@@ -366,6 +388,7 @@ fun AiChatScreen(
                                 isStreaming = true,
                                 assistantLabel = assistantLabel,
                                 onOpenBookInfo = onOpenBookInfo,
+                                onClickLink = onClickLink,
                                 onCopy = {}
                             )
                         }
@@ -878,6 +901,7 @@ private fun ChatMessageItem(
     isStreaming: Boolean,
     assistantLabel: String = "",
     onOpenBookInfo: (AiChatBookResultUi) -> Unit,
+    onClickLink: ((String) -> Unit)? = null,
     onCopy: () -> Unit,
     onRegenerate: (() -> Unit)? = null,
     onSwitchBranch: ((direction: Int) -> Unit)? = null
@@ -900,6 +924,7 @@ private fun ChatMessageItem(
                     isStreaming = isStreaming,
                     message = message,
                     onOpenBookInfo = onOpenBookInfo,
+                    onClickLink = onClickLink,
                     onCopy = onCopy,
                     onRegenerate = onRegenerate,
                     onSwitchBranch = onSwitchBranch,
@@ -914,6 +939,7 @@ private fun ChatMessageItem(
                 message = message,
                 assistantLabel = assistantLabel,
                 onOpenBookInfo = onOpenBookInfo,
+                onClickLink = onClickLink,
                 onCopy = onCopy,
                 onRegenerate = onRegenerate,
                 onSwitchBranch = onSwitchBranch,

@@ -573,6 +573,9 @@ fun MainActivity.mainEntryProvider(
                         coverPath = book.coverPath
                     )
                 )
+            },
+            onSearchBook = { bookName ->
+                onNavigateToRoute(MainRouteSearch(key = bookName))
             }
         )
     }

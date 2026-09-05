@@ -48,6 +48,9 @@ import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.text.MarkdownBlock
 
+private val BOOK_TITLE_PATTERN = Regex("《([^》]+)》")
+private const val BOOK_SEARCH_PREFIX = "book-search://"
+
 @Composable
 fun AiGeneratedMessageContent(
     isUser: Boolean,
@@ -59,6 +62,7 @@ fun AiGeneratedMessageContent(
     showHeader: Boolean = true,
     reasoningAutoExpandWhileStreaming: Boolean = true,
     onOpenBookInfo: (AiChatBookResultUi) -> Unit = {},
+    onClickLink: ((String) -> Unit)? = null,
     onCopy: (() -> Unit)? = null,
     onRegenerate: (() -> Unit)? = null,
     onSwitchBranch: ((direction: Int) -> Unit)? = null,
@@ -115,6 +119,7 @@ fun AiGeneratedMessageContent(
                         text = part.text,
                         isUser = isUser,
                         isStreaming = isStreaming,
+                        onClickLink = onClickLink,
                     )
                 }
 
@@ -178,9 +183,10 @@ fun AiGeneratedMessageContent(
                     text = displayContent,
                     isUser = isUser,
                     isStreaming = isStreaming,
+                    onClickLink = onClickLink,
                 )
             } else if (isStreaming) {
-                MessageTextContent(text = "", isUser = isUser, isStreaming = true)
+                MessageTextContent(text = "", isUser = isUser, isStreaming = true, onClickLink = onClickLink)
             }
             if (message.bookResults.isNotEmpty()) {
                 BookResultsList(books = message.bookResults, onOpenBookInfo = onOpenBookInfo)
@@ -239,6 +245,7 @@ private fun MessageTextContent(
     text: String,
     isUser: Boolean,
     isStreaming: Boolean,
+    onClickLink: ((String) -> Unit)? = null,
 ) {
     SelectionContainer {
         if (isUser) {
@@ -247,10 +254,17 @@ private fun MessageTextContent(
                 style = LegadoTheme.typography.bodyMedium
             )
         } else if (text.isNotBlank()) {
+            val processedText = remember(text) {
+                BOOK_TITLE_PATTERN.replace(text) { match ->
+                    val bookName = match.groupValues[1]
+                    "[《${bookName}》]($BOOK_SEARCH_PREFIX${bookName})"
+                }
+            }
             MarkdownBlock(
-                content = text,
+                content = processedText,
                 modifier = Modifier.fillMaxWidth(),
-                style = LegadoTheme.typography.bodyMedium
+                style = LegadoTheme.typography.bodyMedium,
+                onClickLink = onClickLink,
             )
         } else if (isStreaming) {
             StreamingDots()

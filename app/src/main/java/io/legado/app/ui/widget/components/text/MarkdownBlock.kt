@@ -797,8 +797,12 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.appendMarkdownInlin
             val linkDest = node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_DESTINATION)?.getTextInNode(content) ?: ""
             val linkText = node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_TEXT)?.getTextInNode(content)
                 ?.trim { it == '[' || it == ']' } ?: linkDest
+            val isBookSearch = linkDest.startsWith("book-search://")
             withLink(LinkAnnotation.Url(linkDest)) {
-                withStyle(SpanStyle(color = colorScheme.primary, textDecoration = TextDecoration.Underline)) {
+                withStyle(SpanStyle(
+                    color = colorScheme.primary,
+                    textDecoration = if (isBookSearch) TextDecoration.None else TextDecoration.Underline
+                )) {
                     append(linkText)
                 }
             }
