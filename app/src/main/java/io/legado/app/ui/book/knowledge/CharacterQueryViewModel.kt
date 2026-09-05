@@ -289,7 +289,8 @@ class CharacterQueryViewModel(
         CharacterQueryUiState.CharacterAppearance(
             chapterIndex = chapterIndex,
             chapterTitle = chapterTitle,
-            excerpt = resultText,
+            // 原文截取常带换行/缩进，压成单行空格分隔，避免卡内排版错乱
+            excerpt = resultText.replace(Regex("\\s+"), " ").trim(),
         )
 
     companion object {
