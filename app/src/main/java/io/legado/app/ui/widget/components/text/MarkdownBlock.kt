@@ -395,11 +395,13 @@ private fun MarkdownHeading(
         MarkdownElementTypes.ATX_5 -> 5
         else -> 6
     }
+    val baseFontSize = LocalTextStyle.current.fontSize
     val fontSize = when (level) {
-        1 -> 24.sp; 2 -> 22.sp; 3 -> 20.sp; 4 -> 18.sp; 5 -> 16.sp; else -> 14.sp
+        1 -> baseFontSize * 1.5f; 2 -> baseFontSize * 1.375f; 3 -> baseFontSize * 1.143f
+        4 -> baseFontSize; 5 -> baseFontSize * 0.857f; else -> baseFontSize * 0.714f
     }
     val verticalPadding = when (level) {
-        1 -> 16.dp; 2 -> 14.dp; 3 -> 12.dp; 4 -> 10.dp; 5 -> 8.dp; else -> 6.dp
+        1 -> 12.dp; 2 -> 10.dp; 3 -> 8.dp; 4 -> 6.dp; 5 -> 4.dp; else -> 4.dp
     }
     val headingStyle = TextStyle(
         fontWeight = FontWeight.Bold,

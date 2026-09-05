@@ -118,6 +118,7 @@ fun UpdateSheet(
             if (updateLog.isNotBlank()) {
                 MarkdownBlock(
                     content = updateLog,
+                    style = LegadoTheme.typography.labelLarge,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
