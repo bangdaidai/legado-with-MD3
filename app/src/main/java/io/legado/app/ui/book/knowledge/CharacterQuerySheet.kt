@@ -1,17 +1,18 @@
 package io.legado.app.ui.book.knowledge
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
-import io.legado.app.ui.theme.LegadoTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,19 +20,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
+import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.icon.AppIcons
 import org.koin.androidx.compose.koinViewModel
 
 /**
  * 人物速查卡：划词菜单入口弹出。档案命中直接展示；未命中展示检索锚点
  * （最初登场 / 最近出场，点击跳章节）并让 AI 依据摘录归纳介绍。
+ * 排版跟随 AppModalBottomSheet 规范：组件自带 16dp 水平内边距，内部只做纵向节奏；
+ * 保存动作放标题栏 endAction 槽位，操作反馈走 Toast。
  */
 @Composable
 fun CharacterQuerySheet(
@@ -42,6 +48,7 @@ fun CharacterQuerySheet(
     viewModel: CharacterQueryViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(show, name) {
         if (show && name.isNotBlank()) {
@@ -52,7 +59,8 @@ fun CharacterQuerySheet(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is CharacterQueryEffect.JumpToChapter -> onJumpToChapter(effect.chapterIndex)
-                is CharacterQueryEffect.ShowToast -> Unit
+                is CharacterQueryEffect.ShowToast ->
+                    Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -61,13 +69,22 @@ fun CharacterQuerySheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = state.name.ifBlank { name },
+        endAction = {
+            if (state.profile == null && state.aiSummary.isNotBlank()) {
+                MediumTonalButton(
+                    onClick = { viewModel.onIntent(CharacterQueryIntent.SaveProfile) },
+                    enabled = state.saveState != CharacterQueryUiState.SaveState.Saving &&
+                        state.saveState != CharacterQueryUiState.SaveState.Saved,
+                    icon = AppIcons.Check,
+                    contentDescription = stringResource(R.string.character_save_profile),
+                )
+            }
+        },
     ) {
         CharacterQueryContent(
             state = state,
             onIntent = viewModel::onIntent,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -125,12 +142,8 @@ private fun CharacterQueryContent(
 
 @Composable
 private fun ProfileSection(profile: io.legado.app.data.entities.BookCharacterProfile) {
-    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-        Text(
-            text = stringResource(R.string.character_profile_hit),
-            style = LegadoTheme.typography.labelMedium,
-            color = LegadoTheme.colorScheme.primary,
-        )
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        SectionLabel(text = stringResource(R.string.character_profile_hit))
         if (profile.role.isNotBlank() || profile.personality.isNotBlank()) {
             Text(
                 text = listOf(profile.role, profile.personality)
@@ -138,7 +151,7 @@ private fun ProfileSection(profile: io.legado.app.data.entities.BookCharacterPro
                     .joinToString(" · "),
                 style = LegadoTheme.typography.bodySmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
         if (profile.summary.isNotBlank()) {
@@ -149,6 +162,16 @@ private fun ProfileSection(profile: io.legado.app.data.entities.BookCharacterPro
             )
         }
     }
+}
+
+/** 分区小标题：标签样式统一收口，层级为「标签 → 正文 → 辅文」三级。 */
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = LegadoTheme.typography.labelMedium,
+        color = LegadoTheme.colorScheme.primary,
+    )
 }
 
 @Composable
@@ -163,15 +186,11 @@ private fun AppearanceSection(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onJump(appearance.chapterIndex) }
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = title,
-                style = LegadoTheme.typography.labelMedium,
-                color = LegadoTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f, fill = false),
-            )
+            SectionLabel(text = title)
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = appearance.chapterTitle,
                 style = LegadoTheme.typography.labelMedium,
@@ -206,7 +225,7 @@ private fun TraceSection(
     onIntent: (CharacterQueryIntent) -> Unit,
 ) {
     if (state.searchFullyCovered) return
-    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         state.traceProgress?.let { progress ->
             Text(
                 text = stringResource(
@@ -220,7 +239,18 @@ private fun TraceSection(
             )
         }
         when {
-            state.tracing -> Unit
+            state.tracing -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                AppCircularProgressIndicator()
+                Text(
+                    text = stringResource(R.string.character_trace_running),
+                    style = LegadoTheme.typography.bodySmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             state.traceFinished && state.firstAppearance == null -> Text(
                 text = stringResource(R.string.character_trace_not_found),
                 style = LegadoTheme.typography.labelSmall,
@@ -241,7 +271,7 @@ private fun AiSummarySection(
     state: CharacterQueryUiState,
     onIntent: (CharacterQueryIntent) -> Unit,
 ) {
-    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
         when {
             state.aiLoading -> {
                 Row(
@@ -259,10 +289,30 @@ private fun AiSummarySection(
 
             state.aiSummary.isNotBlank() -> {
                 Text(
+                    text = stringResource(R.string.character_ai_summary_label),
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.primary,
+                )
+                Text(
                     text = state.aiSummary,
                     style = LegadoTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 6.dp),
                 )
-                SaveAction(state = state, onIntent = onIntent)
+                when (state.saveState) {
+                    CharacterQueryUiState.SaveState.Saving -> Text(
+                        text = stringResource(R.string.character_saving),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    CharacterQueryUiState.SaveState.Saved -> Text(
+                        text = stringResource(R.string.character_saved),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    else -> Unit
+                }
             }
 
             state.error != null -> {
@@ -280,34 +330,9 @@ private fun AiSummarySection(
 }
 
 @Composable
-private fun SaveAction(
-    state: CharacterQueryUiState,
-    onIntent: (CharacterQueryIntent) -> Unit,
-) {
-    if (state.profile != null) return
-    when (state.saveState) {
-        CharacterQueryUiState.SaveState.Saved -> Text(
-            text = stringResource(R.string.character_saved),
-            style = LegadoTheme.typography.labelMedium,
-            color = LegadoTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        CharacterQueryUiState.SaveState.Saving,
-        CharacterQueryUiState.SaveState.Idle,
-        CharacterQueryUiState.SaveState.Failed,
-        -> TextButton(
-            onClick = { onIntent(CharacterQueryIntent.SaveProfile) },
-            enabled = state.saveState != CharacterQueryUiState.SaveState.Saving,
-        ) {
-            Text(text = stringResource(R.string.character_save_profile))
-        }
-    }
-}
-
-@Composable
 private fun SectionDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
         color = LegadoTheme.colorScheme.outlineVariant,
     )
 }

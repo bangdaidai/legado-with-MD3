@@ -146,9 +146,9 @@ class CharacterQueryViewModel(
                 return@launch
             }
             runCatching {
-                // 第一级：本地档案（先精确 name，再用别名兜底，网文称呼变体多）
+                // 第一级：本地档案（先精确 name，再归一化兜底：中间点等符号变体在正文与档案里常不一致）
                 val profile = bookKnowledgeGateway.getCharacterProfile(book.bookUrl, name)
-                    ?: matchByAlias(book.bookUrl, name)
+                    ?: matchProfile(book.bookUrl, name)
 
                 // 第二级：确定性全文检索锚点（从头找最初登场，从尾找最近出场）
                 val firstAppearance = withContext(Dispatchers.IO) {
@@ -184,13 +184,31 @@ class CharacterQueryViewModel(
         }
     }
 
-    /** 精确名未命中时，按别名（称呼/绰号）匹配已保存的档案。 */
-    private suspend fun matchByAlias(bookUrl: String, name: String): BookCharacterProfile? {
-        val profiles = bookKnowledgeGateway.getCharacterProfiles(bookUrl, limit = 200)
+    /** 精确名未命中时做归一化匹配：正文与档案里中间点等符号常不一致（·／・／•），先统一再比对。 */
+    private suspend fun matchProfile(bookUrl: String, name: String): BookCharacterProfile? {
+        val profiles = bookKnowledgeGateway.getCharacterProfiles(bookUrl, limit = 500)
+        val target = normalizeName(name)
+        if (target.isEmpty()) return null
+        profiles.firstOrNull { normalizeName(it.name) == target }?.let { return it }
         return profiles.firstOrNull { profile ->
-            GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
-                .any { it.isNotBlank() && (it == name || it.contains(name) || name.contains(it)) }
+            candidateNames(profile).any { alias ->
+                val normalized = normalizeName(alias)
+                // 包含式匹配要求两边至少 2 字符，避免「爷」「叔」这类称呼误命中
+                normalized.length >= 2 &&
+                    (normalized.contains(target) || target.contains(normalized))
+            }
         }
+    }
+
+    private fun candidateNames(profile: BookCharacterProfile): List<String> =
+        listOf(profile.name) +
+            GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
+
+    private fun normalizeName(name: String): String {
+        val normalized = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFKC)
+            .replace(MIDDLE_DOT_REGEX, MIDDLE_DOT_CANONICAL)
+            .replace(CJK_ADJACENT_DOT_REGEX, MIDDLE_DOT_CANONICAL)
+        return normalized.filterNot { it.isWhitespace() }.lowercase()
     }
 
     private suspend fun explainWithAi(bookUrl: String, name: String) {
@@ -234,23 +252,26 @@ class CharacterQueryViewModel(
         _uiState.update { it.copy(saveState = CharacterQueryUiState.SaveState.Saving) }
         saveJob = viewModelScope.launch {
             runCatching {
+                // 归一化匹配已有档案（中间点等符号变体算同一人），有则更新而非新增
                 val existing = bookKnowledgeGateway.getCharacterProfile(book.bookUrl, state.name)
-                bookKnowledgeGateway.upsertCharacterProfile(
-                    BookCharacterProfile(
-                        id = existing?.id ?: Uuid.random().toString(),
-                        bookUrl = book.bookUrl,
-                        name = state.name,
-                        summary = state.aiSummary.ifBlank { existing?.summary.orEmpty() },
-                        source = BookCharacterProfile.SOURCE_AI,
-                        confidence = 0.8f,
-                        status = BookCharacterProfile.STATUS_ACTIVE,
-                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                    )
+                    ?: matchProfile(book.bookUrl, state.name)
+                val saved = BookCharacterProfile(
+                    id = existing?.id ?: Uuid.random().toString(),
+                    bookUrl = book.bookUrl,
+                    name = existing?.name ?: state.name,
+                    aliasesJson = existing?.aliasesJson ?: "[]",
+                    summary = state.aiSummary.ifBlank { existing?.summary.orEmpty() },
+                    source = BookCharacterProfile.SOURCE_AI,
+                    confidence = existing?.confidence ?: 0.8f,
+                    status = BookCharacterProfile.STATUS_ACTIVE,
+                    createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
                 )
+                bookKnowledgeGateway.upsertCharacterProfile(saved)
+                saved
             }.fold(
-                onSuccess = {
-                    _uiState.update { it.copy(saveState = CharacterQueryUiState.SaveState.Saved) }
+                onSuccess = { saved ->
+                    _uiState.update { it.copy(saveState = CharacterQueryUiState.SaveState.Saved, profile = saved) }
                     _effects.tryEmit(CharacterQueryEffect.ShowToast(SAVE_SUCCESS))
                 },
                 onFailure = { error ->
@@ -273,6 +294,19 @@ class CharacterQueryViewModel(
 
     companion object {
         const val SAVE_SUCCESS = "已保存到人物档案"
+
+        /** 中间点类分隔符的全部常见变体：拉丁中点、全角点、片假名中点、项目符号等 */
+        private val MIDDLE_DOT_REGEX =
+            Regex("[\u00B7\u2022\u2027\u2219\u22C5\u30FB\uFF65\uFF0E\u2024]")
+
+        /**
+         * ASCII 半角句点单独处理：仅在紧邻汉字/假名时才视为人名分隔点（如「奥黛丽.赫本」），
+         * 避免「3.14」「J.K.」这类非人名用法被误替换。
+         */
+        private val CJK_ADJACENT_DOT_REGEX =
+            Regex("(?<=[\u4E00-\u9FFF\u3040-\u30FF])\\.|\\.(?=[\u4E00-\u9FFF])")
+
+        private const val MIDDLE_DOT_CANONICAL = "·"
     }
 }
 
