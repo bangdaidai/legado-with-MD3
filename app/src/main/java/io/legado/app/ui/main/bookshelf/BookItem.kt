@@ -913,8 +913,13 @@ fun BookItem(
                             )
                         }
                         if (showReadingProgress) {
+                            val progressText = when (progressPercent) {
+                                0 -> stringResource(R.string.is_unread)
+                                100 -> stringResource(R.string.progress_read_finished)
+                                else -> "$progressPercent%"
+                            }
                             TagChip(
-                                tag = "$progressPercent%",
+                                tag = progressText,
                                 size = TagChipSize.Small,
                                 showColoredBorder = settings.bookshelfTagBorder,
                             )

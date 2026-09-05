@@ -1963,6 +1963,7 @@
     <string name="is_reading">Reading</string>
     <string name="is_unread">Unread</string>
     <string name="is_read_finished">Finished</string>
+    <string name="progress_read_finished">Read Finished</string>
     <string name="is_read_finished_update">Finished (Serial)</string>
     <string name="is_read_finished_complete">Finished (Completed)</string>
     <string name="is_read_finished_pit">Finished (Dropped)</string>

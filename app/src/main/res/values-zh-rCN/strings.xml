@@ -1906,6 +1906,7 @@
     <string name="is_reading">在读</string>
     <string name="is_unread">未读</string>
     <string name="is_read_finished">已读</string>
+    <string name="progress_read_finished">读完</string>
     <string name="is_read_finished_update">连载已读</string>
     <string name="is_read_finished_complete">完本已读</string>
     <string name="is_read_finished_pit">坑书已读</string>
