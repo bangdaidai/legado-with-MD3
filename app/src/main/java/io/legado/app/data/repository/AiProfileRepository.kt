@@ -1,5 +1,6 @@
 package io.legado.app.data.repository
 
+import io.legado.app.R
 import io.legado.app.data.dao.AiProfileDao
 import io.legado.app.data.entities.AiModelProfile
 import io.legado.app.data.entities.AiProviderProfile
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
+import splitties.init.appCtx
 
 class AiProfileRepository(
     private val aiProfileDao: AiProfileDao
@@ -37,6 +39,26 @@ class AiProfileRepository(
     override fun observeModels(): Flow<List<AiModelProfile>> = aiProfileDao.observeModels()
 
     override fun observePresets(): Flow<List<AiTaskPreset>> = aiProfileDao.observePresets()
+
+    /**
+     * 任务类型到出厂默认提示词资源的映射，与提示词配置页的任务清单一一对应。
+     * 资源文件（ai_prompt_default_*）是默认文案的唯一事实来源，改文案只改资源。
+     */
+    override fun defaultPrompt(taskType: String): String = appCtx.getString(
+        when (taskType) {
+            AiTaskType.CHAT -> R.string.ai_prompt_default_chat
+            AiTaskType.TRANSLATE_CHAPTER -> R.string.ai_prompt_default_translate
+            AiTaskType.SUMMARIZE_CHAPTER -> R.string.ai_prompt_default_summary
+            AiTaskType.CLEAN_SELECTION -> R.string.ai_prompt_default_clean
+            AiTaskType.TEXT_FACTORY -> R.string.ai_prompt_default_text_factory
+            AiTaskType.ANALYZE_SPEECH -> R.string.ai_prompt_default_analyze_speech
+            AiTaskType.IDENTIFY_CHARACTERS -> R.string.ai_prompt_default_identify_characters
+            AiTaskType.BOOKSHELF_AUTO_GROUP -> R.string.ai_prompt_default_bookshelf_auto_group
+            AiTaskType.AUTHOR_BIO -> R.string.ai_prompt_default_author_bio
+            AiTaskType.TOC_RULE -> R.string.ai_prompt_default_toc_rule
+            else -> error("No default prompt resource for task type: $taskType")
+        }
+    )
 
     override suspend fun getProvider(id: String): AiProviderProfile? = withContext(Dispatchers.IO) {
         aiProfileDao.getProvider(id)

@@ -30,7 +30,6 @@ class AiPromptConfigViewModel(
         val taskType: String,
         val nameResId: Int,
         val descResId: Int,
-        val defaultPromptResId: Int
     )
 
     private val taskPromptMetas = listOf(
@@ -38,74 +37,61 @@ class AiPromptConfigViewModel(
             taskType = AiTaskType.CHAT,
             nameResId = R.string.ai_prompt_task_chat,
             descResId = R.string.ai_prompt_task_chat_desc,
-            defaultPromptResId = R.string.ai_prompt_default_chat
         ),
         TaskPromptMeta(
             taskType = AiTaskType.TRANSLATE_CHAPTER,
             nameResId = R.string.ai_prompt_task_translate,
             descResId = R.string.ai_prompt_task_translate_desc,
-            defaultPromptResId = R.string.ai_prompt_default_translate
         ),
         TaskPromptMeta(
             taskType = AiTaskType.SUMMARIZE_CHAPTER,
             nameResId = R.string.ai_prompt_task_summary,
             descResId = R.string.ai_prompt_task_summary_desc,
-            defaultPromptResId = R.string.ai_prompt_default_summary
         ),
         TaskPromptMeta(
             taskType = AiTaskType.CLEAN_SELECTION,
             nameResId = R.string.ai_prompt_task_clean,
             descResId = R.string.ai_prompt_task_clean_desc,
-            defaultPromptResId = R.string.ai_prompt_default_clean
         ),
         TaskPromptMeta(
             taskType = AiTaskType.TEXT_FACTORY,
             nameResId = R.string.ai_prompt_task_text_factory,
             descResId = R.string.ai_prompt_task_text_factory_desc,
-            defaultPromptResId = R.string.ai_prompt_default_text_factory
         ),
         TaskPromptMeta(
             taskType = AiTaskType.ANALYZE_SPEECH,
             nameResId = R.string.ai_prompt_task_analyze_speech,
             descResId = R.string.ai_prompt_task_analyze_speech_desc,
-            defaultPromptResId = R.string.ai_prompt_default_analyze_speech
         ),
         TaskPromptMeta(
             taskType = AiTaskType.IDENTIFY_CHARACTERS,
             nameResId = R.string.ai_prompt_task_identify_characters,
             descResId = R.string.ai_prompt_task_identify_characters_desc,
-            defaultPromptResId = R.string.ai_prompt_default_identify_characters
         ),
         TaskPromptMeta(
             taskType = AiTaskType.BOOKSHELF_AUTO_GROUP,
             nameResId = R.string.ai_prompt_task_bookshelf_auto_group,
             descResId = R.string.ai_prompt_task_bookshelf_auto_group_desc,
-            defaultPromptResId = R.string.ai_prompt_default_bookshelf_auto_group
         ),
         TaskPromptMeta(
             taskType = AiTaskType.AUTHOR_BIO,
             nameResId = R.string.ai_prompt_task_author_bio,
             descResId = R.string.ai_prompt_task_author_bio_desc,
-            defaultPromptResId = R.string.ai_prompt_default_author_bio
         ),
         TaskPromptMeta(
             taskType = AiTaskType.TOC_RULE,
             nameResId = R.string.ai_prompt_task_toc_rule,
             descResId = R.string.ai_prompt_task_toc_rule_desc,
-            defaultPromptResId = R.string.ai_prompt_default_toc_rule
         )
     )
 
-    private fun resolveDefaultPrompt(meta: TaskPromptMeta): String {
-        return appCtx.getString(meta.defaultPromptResId)
-    }
 
     init {
         viewModelScope.launch {
             val items = taskPromptMetas.map { meta ->
                 val config =
                     runCatching { aiProfileGateway.getTaskPreset(meta.taskType) }.getOrNull()
-                val defaultPrompt = resolveDefaultPrompt(meta)
+                val defaultPrompt = aiProfileGateway.defaultPrompt(meta.taskType)
                 AiPromptTaskItem(
                     taskType = meta.taskType,
                     nameResId = meta.nameResId,
@@ -188,7 +174,7 @@ class AiPromptConfigViewModel(
 
     private fun resetPrompt(taskType: String) {
         val meta = taskPromptMetas.find { it.taskType == taskType } ?: return
-        val defaultPrompt = resolveDefaultPrompt(meta)
+        val defaultPrompt = aiProfileGateway.defaultPrompt(meta.taskType)
         viewModelScope.launch {
             runCatching {
                 val existingConfig = aiProfileGateway.getTaskPreset(taskType)
@@ -223,7 +209,7 @@ class AiPromptConfigViewModel(
             var allSuccess = true
             for (meta in taskPromptMetas) {
                 runCatching {
-                    val defaultPrompt = resolveDefaultPrompt(meta)
+                    val defaultPrompt = aiProfileGateway.defaultPrompt(meta.taskType)
                     val existingConfig = aiProfileGateway.getTaskPreset(meta.taskType)
                     aiProfileGateway.saveTaskPreset(
                         taskType = meta.taskType,
@@ -239,7 +225,7 @@ class AiPromptConfigViewModel(
             _uiState.update { current ->
                 current.copy(
                     items = taskPromptMetas.map { meta ->
-                        val defaultPrompt = resolveDefaultPrompt(meta)
+                        val defaultPrompt = aiProfileGateway.defaultPrompt(meta.taskType)
                         AiPromptTaskItem(
                             taskType = meta.taskType,
                             nameResId = meta.nameResId,

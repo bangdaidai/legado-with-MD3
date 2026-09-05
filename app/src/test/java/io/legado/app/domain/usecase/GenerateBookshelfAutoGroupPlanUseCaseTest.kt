@@ -431,6 +431,7 @@ class GenerateBookshelfAutoGroupPlanUseCaseTest {
         override fun observeProviders(): Flow<List<AiProviderProfile>> = emptyFlow()
         override fun observeModels(): Flow<List<AiModelProfile>> = emptyFlow()
         override fun observePresets(): Flow<List<AiTaskPreset>> = emptyFlow()
+        override fun defaultPrompt(taskType: String): String = ""
         override suspend fun getProvider(id: String): AiProviderProfile? = null
         override suspend fun getModel(id: String): AiModelProfile? = null
         override suspend fun getTaskPreset(taskType: String) = preset

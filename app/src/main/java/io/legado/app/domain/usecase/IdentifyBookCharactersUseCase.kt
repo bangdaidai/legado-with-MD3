@@ -83,7 +83,8 @@ class IdentifyBookCharactersUseCase(
         val preset = identifyPreset
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: error("还没有配置可用的 AI 模型，请先到 AI 设置里为人物识别任务选择模型")
-        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: DEFAULT_PROMPT
+        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank)
+            ?: aiProfileGateway.defaultPrompt(AiTaskType.IDENTIFY_CHARACTERS)
         val now = System.currentTimeMillis()
         val contentHash = MD5Utils.md5Encode(bookUrl)
         val promptHash =
@@ -122,7 +123,8 @@ class IdentifyBookCharactersUseCase(
         val preset = identifyPreset
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: error("还没有配置可用的 AI 模型，请先到 AI 设置里为人物识别任务选择模型")
-        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: DEFAULT_PROMPT
+        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank)
+            ?: aiProfileGateway.defaultPrompt(AiTaskType.IDENTIFY_CHARACTERS)
         val response = StringBuilder()
         val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported
         val searchToolAvailable = aiToolGateway.availableTools().any { it.name == SEARCH_WEB_TOOL }
@@ -346,11 +348,5 @@ class IdentifyBookCharactersUseCase(
                 "Web search: not available in this request; work from local tools and your own " +
                     "knowledge, and move on without mentioning search."
         }
-        const val DEFAULT_PROMPT =
-            """You identify stable fictional characters from a novel. If you do not already know the book title and author, get them via get_book_detail or search_books first. Follow this order:
-1) If web information is available (search results injected by the server, or a usable web search tool), find the main cast from reviews, wikis, forums, or encyclopedias using the book title plus keywords like "主要人物", "角色介绍", "人物关系", "百科"; if none is available, move on to the next step without explanation.
-2) For local identification, work in this order: check the intro from get_book_detail, the outline from get_book_outline, and existing profiles from search_book_characters, then read chapters from the beginning (get_chapter_window) and extract names that actually appear in the text; use chapter search only to verify and enrich names confirmed from those sources, never probe chapter text with names recalled from memory, and failing local verification does not affect inclusion. Merge both sources.
-Local character profiles and cached chapters may be empty; that only means nothing is stored locally yet, NOT that a character does not exist. Never drop or distrust a character just because local tools could not verify it: keep every character confirmed by web results or your own knowledge, and reflect the evidence source in confidence instead (wiki/encyclopedia/reviews > local chapter text hit > model memory alone; suggested values: web sources 0.9 or higher, local text hit about 0.8, own knowledge about 0.7).
-Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"child|teen|young_adult|adult|elderly|unknown\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|unknown\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. Include main characters, recurring supporting characters, and important antagonists; classify antagonists into the role values above by gender and importance, and note their antagonist status in personality and summary. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing age or gender. Do not create duplicates of existing names or aliases."""
     }
 }

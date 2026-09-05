@@ -14,6 +14,14 @@ interface AiProfileGateway {
     fun observeProviders(): Flow<List<AiProviderProfile>>
     fun observeModels(): Flow<List<AiModelProfile>>
     fun observePresets(): Flow<List<AiTaskPreset>>
+
+    /**
+     * 任务类型的出厂默认提示词，随系统语言返回本地化文本。
+     * 唯一事实来源是 string 资源（ai_prompt_default_*）；domain 层不读资源，
+     * 由实现方（平台侧）代取，避免默认文案在资源与常量间漂移。
+     */
+    fun defaultPrompt(taskType: String): String
+
     suspend fun getProvider(id: String): AiProviderProfile?
     suspend fun getModel(id: String): AiModelProfile?
     suspend fun getTaskPreset(taskType: String): AiTaskPresetConfig?
