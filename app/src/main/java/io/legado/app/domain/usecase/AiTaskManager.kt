@@ -14,6 +14,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
+/** 任务过程中按真实发生顺序记录的单个步骤，用于 UI 呈现交错的思考/工具时间线。 */
+sealed interface AiTaskStep {
+    data class Reasoning(val text: String) : AiTaskStep
+    data class ToolCall(val name: String) : AiTaskStep
+}
+
 data class AiTaskSnapshot(
     val id: String,
     val taskType: String,
@@ -23,6 +29,7 @@ data class AiTaskSnapshot(
     val output: String? = null,
     val reasoning: String = "",
     val toolNames: List<String> = emptyList(),
+    val steps: List<AiTaskStep> = emptyList(),
     val errorMessage: String? = null,
 )
 
@@ -115,7 +122,7 @@ class AiTaskManager(
 
     private fun AiTaskSnapshot.withProgress(taskId: String): AiTaskSnapshot {
         val active = snapshots.value[taskId] ?: return this
-        return copy(reasoning = active.reasoning, toolNames = active.toolNames)
+        return copy(reasoning = active.reasoning, toolNames = active.toolNames, steps = active.steps)
     }
 
     private inner class Reporter(
@@ -131,14 +138,28 @@ class AiTaskManager(
         override fun appendReasoning(text: String) {
             snapshots.update { current ->
                 val snapshot = current[taskId] ?: return@update current
-                current + (taskId to snapshot.copy(reasoning = snapshot.reasoning + text))
+                // 相邻思考合并为同一段，被工具调用打断后另起一段，保持与真实时序一致
+                val steps = snapshot.steps.toMutableList()
+                val last = steps.lastOrNull()
+                if (last is AiTaskStep.Reasoning) {
+                    steps[steps.lastIndex] = AiTaskStep.Reasoning(last.text + text)
+                } else {
+                    steps += AiTaskStep.Reasoning(text)
+                }
+                current + (taskId to snapshot.copy(
+                    reasoning = snapshot.reasoning + text,
+                    steps = steps,
+                ))
             }
         }
 
         override fun reportToolCall(name: String) {
             snapshots.update { current ->
                 val snapshot = current[taskId] ?: return@update current
-                current + (taskId to snapshot.copy(toolNames = (snapshot.toolNames + name).distinct()))
+                current + (taskId to snapshot.copy(
+                    toolNames = (snapshot.toolNames + name).distinct(),
+                    steps = snapshot.steps + AiTaskStep.ToolCall(name),
+                ))
             }
         }
     }

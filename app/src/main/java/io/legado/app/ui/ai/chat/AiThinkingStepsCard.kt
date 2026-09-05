@@ -2,6 +2,7 @@ package io.legado.app.ui.ai.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,13 +83,16 @@ fun AiThinkingStepsCard(
                         .clickable { expanded = !expanded },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (expanded) 0f else -90f,
+                        label = "ThinkingStepsArrowRotation"
+                    )
                     Icon(
-                        imageVector = if (expanded)
-                            Icons.Default.KeyboardArrowDown
-                        else
-                            Icons.Default.KeyboardArrowDown,
+                        imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .rotate(arrowRotation),
                         tint = LegadoTheme.colorScheme.primary,
                     )
                     AppText(
@@ -112,8 +117,7 @@ fun AiThinkingStepsCard(
                         messageCreatedAt = messageCreatedAt,
                     )
                 }
-            }
-        }
+            }        }
     }
 }
 
@@ -132,7 +136,7 @@ private fun ThinkingStepRow(
             )
         }
         is AiThinkingStep.ToolStep -> {
-            ToolStepRow(tool = step.tool)
+            ToolStepRow(tool = step.tool, running = isStreaming)
         }
     }
 }
@@ -153,6 +157,7 @@ private fun ReasoningStepRow(
 @Composable
 private fun ToolStepRow(
     tool: AiMessagePart.Tool,
+    running: Boolean,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val hasContent = tool.input.isNotBlank() || tool.output.isNotBlank()
@@ -200,9 +205,10 @@ private fun ToolStepRow(
             // Status
             val statusText = when {
                 tool.output.isNotBlank() -> stringResource(R.string.ai_tool_done)
-                tool.approvalState == io.legado.app.domain.model.AiToolApprovalState.PENDING ->
+                running && tool.approvalState == io.legado.app.domain.model.AiToolApprovalState.PENDING ->
                     stringResource(R.string.ai_tool_pending)
-                else -> stringResource(R.string.ai_tool_running)
+                running -> stringResource(R.string.ai_tool_running)
+                else -> stringResource(R.string.ai_tool_done)
             }
             AppText(
                 text = statusText,
@@ -211,10 +217,16 @@ private fun ToolStepRow(
             )
 
             if (hasContent) {
+                val arrowRotation by animateFloatAsState(
+                    targetValue = if (expanded) 0f else -90f,
+                    label = "ToolStepArrowRotation"
+                )
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .rotate(arrowRotation),
                     tint = LegadoTheme.colorScheme.outline
                 )
             }

@@ -6,7 +6,10 @@ import io.legado.app.R
 import io.legado.app.data.entities.AiArtifact
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
+import io.legado.app.domain.model.AiMessagePart
+import io.legado.app.domain.usecase.AiTaskStep
 import io.legado.app.domain.usecase.IdentifyBookCharactersUseCase
+import io.legado.app.ui.ai.chat.AiThinkingStep
 import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -176,8 +179,7 @@ class BookCharacterListViewModel(
                             aiSheet = sheet.copy(
                                 loading = true,
                                 error = null,
-                                reasoning = task.reasoning,
-                                toolNames = task.toolNames.toImmutableList(),
+                                steps = task.steps.toThinkingSteps(),
                                 startedAt = if (sheet.startedAt == 0L) System.currentTimeMillis() else sheet.startedAt,
                             )
                         )
@@ -190,9 +192,8 @@ class BookCharacterListViewModel(
                                 aiSheet = (state.aiSheet ?: CharacterIdentifySheet()).copy(
                                     loading = false,
                                     error = null,
-                                    candidates = identifiedCandidates.toCandidateUi(),
-                                    reasoning = task.reasoning,
-                                    toolNames = task.toolNames.toImmutableList(),
+                                candidates = identifiedCandidates.toCandidateUi(),
+                                steps = task.steps.toThinkingSteps(),
                                 )
                             )
                         }
@@ -294,4 +295,14 @@ private fun List<IdentifyBookCharactersUseCase.Candidate>.toCandidateUi() =
                 .filter(String::isNotBlank)
                 .joinToString("\n"),
         )
+    }.toImmutableList()
+
+private fun List<AiTaskStep>.toThinkingSteps(): ImmutableList<AiThinkingStep> =
+    map { step ->
+        when (step) {
+            is AiTaskStep.Reasoning -> AiThinkingStep.ReasoningStep(step.text)
+            is AiTaskStep.ToolCall -> AiThinkingStep.ToolStep(
+                AiMessagePart.Tool(toolCallId = step.name, toolName = step.name, input = "")
+            )
+        }
     }.toImmutableList()

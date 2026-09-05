@@ -2,6 +2,7 @@ package io.legado.app.ui.book.knowledge
 
 import androidx.compose.runtime.Stable
 import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.ui.ai.chat.AiThinkingStep
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -21,8 +22,8 @@ data class CharacterIdentifySheet(
     val loading: Boolean = false,
     val error: String? = null,
     val candidates: ImmutableList<CharacterIdentifyCandidateUi> = persistentListOf(),
-    val reasoning: String = "",
-    val toolNames: ImmutableList<String> = persistentListOf(),
+    // 按真实时序交错的思考/工具调用步骤，与 AI 聊天页的思考卡片同一套渲染
+    val steps: ImmutableList<AiThinkingStep> = persistentListOf(),
     val startedAt: Long = 0L,
 )
 

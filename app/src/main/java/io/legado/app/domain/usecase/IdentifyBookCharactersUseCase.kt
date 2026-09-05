@@ -251,19 +251,24 @@ class IdentifyBookCharactersUseCase(
          * 按本次请求的真实联网能力生成一条系统说明。只正面描述"有什么可用"，
          * 不提及任何不存在的工具名：
          * - 供应商内置联网（如智谱 web_search 内置工具）是服务端行为，检索自动完成、
-         *   结果直接注入上下文，模型无需调用任何函数；
+         *   结果直接注入上下文，模型无需调用任何函数；但网关/模型是否真正执行检索
+         *   无法在本地确认（不支持时静默无结果），措辞用"有结果就用"，不作保证；
          * - Tavily 配置好后 search_web 是真正的 function 工具，可以点名调用；
          * - 都没有时要求直接依据本地工具与自身知识完成，不作解释。
          */
         fun webSearchGuidance(nativeEnabled: Boolean, searchToolAvailable: Boolean): String = when {
             nativeEnabled && searchToolAvailable ->
-                "Web search: enabled server-side — search runs automatically and results are injected " +
-                    "into this conversation; use those results directly, no function call is needed. " +
-                    "You may also call the \"$SEARCH_WEB_TOOL\" tool for additional searches."
+                "Web search: server-side search may be active for this request — if search results " +
+                    "appear in the conversation context, use them directly, no function call is needed. " +
+                    "You may also call the \"$SEARCH_WEB_TOOL\" tool for additional searches. " +
+                    "If no search results appear, continue with local tools and your own knowledge " +
+                    "without mentioning search."
 
             nativeEnabled ->
-                "Web search: enabled server-side — search runs automatically and results are injected " +
-                    "into this conversation; use those results directly, no function call is needed."
+                "Web search: server-side search may be active for this request — if search results " +
+                    "appear in the conversation context, use them directly, no function call is needed. " +
+                    "If no search results appear, continue with local tools and your own knowledge " +
+                    "without mentioning search."
 
             searchToolAvailable ->
                 "Web search: call the \"$SEARCH_WEB_TOOL\" tool whenever web results would help."

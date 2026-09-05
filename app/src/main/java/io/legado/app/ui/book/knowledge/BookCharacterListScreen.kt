@@ -48,6 +48,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.ui.ai.AiReasoningModeButton
 import io.legado.app.ui.ai.AiTaskResultSheet
+import io.legado.app.ui.ai.chat.AiThinkingStepsCard
 import io.legado.app.ui.ai.chat.ReasoningCard
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
@@ -218,12 +219,16 @@ private fun CharacterIdentifySheet(
     ) {
         when {
             sheet == null -> Unit
-            sheet.loading -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                sheet.toolNames.forEach { toolName ->
-                    TextCard(text = toolName)
-                }
+            sheet.loading -> if (sheet.steps.isEmpty()) {
+                // 步骤尚未产生时显示"思考中"计时头部，避免面板空白
                 ReasoningCard(
-                    text = sheet.reasoning,
+                    text = "",
+                    isStreaming = true,
+                    messageCreatedAt = sheet.startedAt,
+                )
+            } else {
+                AiThinkingStepsCard(
+                    steps = sheet.steps,
                     isStreaming = true,
                     messageCreatedAt = sheet.startedAt,
                 )

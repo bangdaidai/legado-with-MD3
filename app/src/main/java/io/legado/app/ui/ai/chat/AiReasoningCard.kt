@@ -126,7 +126,8 @@ fun ReasoningCard(
     messageCreatedAt: Long,
     modifier: Modifier = Modifier,
 ) {
-    if (text.isBlank()) return
+    // 思考文本尚未到达时仍显示"思考中"头部，给调用方一个明确的进行中信号
+    if (text.isBlank() && !isStreaming) return
 
     val (state, loading) = rememberReasoningState(text, isStreaming, messageCreatedAt)
     val fadeHeight = 64f
@@ -194,7 +195,7 @@ fun ReasoningCard(
         }
 
         // Content area
-        if (state.expandState != ReasoningCardState.Collapsed) {
+        if (state.expandState != ReasoningCardState.Collapsed && text.isNotBlank()) {
             val isPreview = state.expandState == ReasoningCardState.Preview
             val contentModifier = Modifier
                 .fillMaxWidth()
