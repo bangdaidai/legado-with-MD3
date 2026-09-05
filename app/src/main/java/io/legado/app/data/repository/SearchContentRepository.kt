@@ -18,6 +18,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 
 class SearchContentRepository(
     private val titleModeProvider: () -> Int = { 0 },
@@ -138,6 +139,61 @@ class SearchContentRepository(
         cacheResults(book.bookUrl, query, replaceEnabled, regexReplace, allResults)
         emit(ArrayList(allResults))
     }.flowOn(Dispatchers.Default)
+
+    /**
+     * 人物速查：从第 0 章开始扫描已缓存/本地章节，命中即返回，用于找「最初登场」。
+     * 只扫已缓存章节，不联网下载；未缓存章节早于首个命中时，结果只能保证是
+     * 「缓存范围内最早」。不做净化替换，避免替换规则改动人名导致检索失配。
+     */
+    suspend fun findFirstFromStart(book: Book, query: String): SearchResult? =
+        scanEarlyExit(book, query, forward = true)
+
+    /** 人物速查：从最后一章向前扫描已缓存/本地章节，命中即返回，用于找「最近出场」。 */
+    suspend fun findLastFromEnd(book: Book, query: String): SearchResult? =
+        scanEarlyExit(book, query, forward = false)
+
+    /** 已缓存/本地章节数占全部章节的比例，供调用方判断检索覆盖是否完整。 */
+    suspend fun cachedChapterRatio(book: Book): Float {
+        val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+        if (chapters.isEmpty()) return 1f
+        if (book.isLocal) return 1f
+        val cachedNames = BookHelp.getChapterFiles(book).toHashSet()
+        val cachedCount = chapters.count { cachedNames.contains(it.getFileName()) }
+        return cachedCount.toFloat() / chapters.size
+    }
+
+    private suspend fun scanEarlyExit(
+        book: Book,
+        query: String,
+        forward: Boolean,
+    ): SearchResult? = withContext(Dispatchers.Default) {
+        val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+        val contentProcessor = ContentProcessor.get(book.name, book.origin)
+        val chineseConverterType = readSettingsGateway?.currentSettings?.chineseConverterType ?: 0
+        val cacheChapterNames = BookHelp.getChapterFiles(book).toHashSet()
+
+        val ordered = if (forward) chapters else chapters.asReversed()
+        for (bookChapter in ordered) {
+            currentCoroutineContext().ensureActive()
+            if (!book.isLocal && !cacheChapterNames.contains(bookChapter.getFileName())) {
+                continue
+            }
+            val results = searchChapter(
+                query = query,
+                book = book,
+                chapter = bookChapter,
+                contentProcessor = contentProcessor,
+                replaceEnabled = false,
+                regexReplace = false,
+                chineseConverterType = chineseConverterType,
+                defaultReplaceEnabled = false,
+            )
+            if (results.isNotEmpty()) {
+                return@withContext results.first()
+            }
+        }
+        null
+    }
 
     private fun cacheResults(
         bookUrl: String,

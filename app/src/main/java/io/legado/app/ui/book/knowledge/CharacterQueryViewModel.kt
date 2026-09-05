@@ -1,0 +1,213 @@
+package io.legado.app.ui.book.knowledge
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import io.legado.app.data.entities.BookCharacterProfile
+import io.legado.app.domain.gateway.BookKnowledgeGateway
+import io.legado.app.domain.usecase.ExplainBookCharacterUseCase
+import io.legado.app.data.repository.SearchContentRepository
+import io.legado.app.model.ReadBook
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonArray
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlin.uuid.Uuid
+
+/**
+ * 人物速查三级漏斗：
+ * 1. 本地 [BookCharacterProfile] 档案命中 → 直接出卡，零 token；
+ * 2. [SearchContentRepository] 早退扫描已缓存正文 → 拿到「最初登场 / 最近出场」确定性锚点；
+ * 3. 档案未命中时才让 [ExplainBookCharacterUseCase] 依据摘录归纳介绍，可保存回档案表。
+ */
+class CharacterQueryViewModel(
+    private val bookKnowledgeGateway: BookKnowledgeGateway,
+    private val searchContentRepository: SearchContentRepository,
+    private val explainBookCharacterUseCase: ExplainBookCharacterUseCase,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(CharacterQueryUiState())
+    val uiState = _uiState.asStateFlow()
+
+    private val _effects = MutableSharedFlow<CharacterQueryEffect>(extraBufferCapacity = 16)
+    val effects = _effects.asSharedFlow()
+
+    private var queryJob: Job? = null
+    private var saveJob: Job? = null
+
+    fun onIntent(intent: CharacterQueryIntent) {
+        when (intent) {
+            is CharacterQueryIntent.Load -> load(intent.name)
+            is CharacterQueryIntent.Retry -> retry()
+            is CharacterQueryIntent.JumpTo -> {
+                _effects.tryEmit(CharacterQueryEffect.JumpToChapter(intent.chapterIndex))
+            }
+            is CharacterQueryIntent.SaveProfile -> saveProfile()
+        }
+    }
+
+    private fun retry() {
+        val name = _uiState.value.name
+        if (name.isNotBlank()) load(name)
+    }
+
+    private fun load(name: String) {
+        queryJob?.cancel()
+        _uiState.update {
+            it.copy(
+                name = name,
+                isLoading = true,
+                error = null,
+                saveState = CharacterQueryUiState.SaveState.Idle,
+            )
+        }
+        queryJob = viewModelScope.launch {
+            val book = ReadBook.book
+            if (book == null) {
+                _uiState.update {
+                    it.copy(isLoading = false, error = "书籍未加载")
+                }
+                return@launch
+            }
+            runCatching {
+                // 第一级：本地档案（先精确 name，再用别名兜底，网文称呼变体多）
+                val profile = bookKnowledgeGateway.getCharacterProfile(book.bookUrl, name)
+                    ?: matchByAlias(book.bookUrl, name)
+
+                // 第二级：确定性全文检索锚点（从头找最初登场，从尾找最近出场）
+                val firstAppearance = withContext(Dispatchers.IO) {
+                    searchContentRepository.findFirstFromStart(book, name)
+                }
+                val latestAppearance = withContext(Dispatchers.IO) {
+                    searchContentRepository.findLastFromEnd(book, name)
+                }
+                val fullyCovered = withContext(Dispatchers.IO) {
+                    searchContentRepository.cachedChapterRatio(book) >= 0.999f
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        profile = profile,
+                        firstAppearance = firstAppearance?.toAppearance(),
+                        latestAppearance = latestAppearance?.toAppearance(),
+                        searchFullyCovered = fullyCovered,
+                    )
+                }
+
+                // 第三级：档案未命中才调 AI 归纳
+                if (profile == null) {
+                    explainWithAi(book.bookUrl, name)
+                }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                _uiState.update {
+                    it.copy(isLoading = false, error = error.message ?: error.toString())
+                }
+            }
+        }
+    }
+
+    /** 精确名未命中时，按别名（称呼/绰号）匹配已保存的档案。 */
+    private suspend fun matchByAlias(bookUrl: String, name: String): BookCharacterProfile? {
+        val profiles = bookKnowledgeGateway.getCharacterProfiles(bookUrl, limit = 200)
+        return profiles.firstOrNull { profile ->
+            GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
+                .any { it.isNotBlank() && (it == name || it.contains(name) || name.contains(it)) }
+        }
+    }
+
+    private suspend fun explainWithAi(bookUrl: String, name: String) {
+        _uiState.update { it.copy(aiLoading = true, aiSummary = "", error = null) }
+        val book = ReadBook.book ?: return
+        val excerpts = buildList {
+            _uiState.value.firstAppearance?.let {
+                add(ExplainBookCharacterUseCase.Excerpt(it.chapterIndex, it.chapterTitle, it.excerpt))
+            }
+            _uiState.value.latestAppearance?.let {
+                if (it.chapterIndex != _uiState.value.firstAppearance?.chapterIndex) {
+                    add(ExplainBookCharacterUseCase.Excerpt(it.chapterIndex, it.chapterTitle, it.excerpt))
+                }
+            }
+        }
+        val result = explainBookCharacterUseCase.execute(
+            book = book,
+            name = name,
+            contextText = "",
+            excerpts = excerpts,
+        )
+        _uiState.update { state ->
+            if (state.name != name) return@update state
+            result.fold(
+                onSuccess = { text ->
+                    state.copy(aiLoading = false, aiSummary = text)
+                },
+                onFailure = { error ->
+                    if (error is CancellationException) throw error
+                    state.copy(aiLoading = false, error = error.message ?: error.toString())
+                },
+            )
+        }
+    }
+
+    private fun saveProfile() {
+        val state = _uiState.value
+        val book = ReadBook.book ?: return
+        if (state.saveState == CharacterQueryUiState.SaveState.Saving) return
+        saveJob?.cancel()
+        _uiState.update { it.copy(saveState = CharacterQueryUiState.SaveState.Saving) }
+        saveJob = viewModelScope.launch {
+            runCatching {
+                val existing = bookKnowledgeGateway.getCharacterProfile(book.bookUrl, state.name)
+                bookKnowledgeGateway.upsertCharacterProfile(
+                    BookCharacterProfile(
+                        id = existing?.id ?: Uuid.random().toString(),
+                        bookUrl = book.bookUrl,
+                        name = state.name,
+                        summary = state.aiSummary.ifBlank { existing?.summary.orEmpty() },
+                        source = BookCharacterProfile.SOURCE_AI,
+                        confidence = 0.8f,
+                        status = BookCharacterProfile.STATUS_ACTIVE,
+                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                )
+            }.fold(
+                onSuccess = {
+                    _uiState.update { it.copy(saveState = CharacterQueryUiState.SaveState.Saved) }
+                    _effects.tryEmit(CharacterQueryEffect.ShowToast(SAVE_SUCCESS))
+                },
+                onFailure = { error ->
+                    if (error is CancellationException) throw error
+                    _uiState.update { it.copy(saveState = CharacterQueryUiState.SaveState.Failed) }
+                    _effects.tryEmit(
+                        CharacterQueryEffect.ShowToast(error.message ?: error.toString())
+                    )
+                },
+            )
+        }
+    }
+
+    private fun io.legado.app.ui.book.searchContent.SearchResult.toAppearance() =
+        CharacterQueryUiState.CharacterAppearance(
+            chapterIndex = chapterIndex,
+            chapterTitle = chapterTitle,
+            excerpt = resultText,
+        )
+
+    companion object {
+        const val SAVE_SUCCESS = "已保存到人物档案"
+    }
+}
+
+sealed interface CharacterQueryEffect {
+    data class JumpToChapter(val chapterIndex: Int) : CharacterQueryEffect
+    data class ShowToast(val message: String) : CharacterQueryEffect
+}

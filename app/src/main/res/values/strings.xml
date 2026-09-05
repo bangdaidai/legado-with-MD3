@@ -1105,6 +1105,14 @@
     <string name="sort_by_lastUpdateTime">Sort by update time</string>
     <string name="sort_by_respondTime">Sort by respond time</string>
     <string name="search_content">Search content</string>
+    <string name="character_query">Character lookup</string>
+    <string name="character_first_appearance">First appearance</string>
+    <string name="character_latest_appearance">Latest appearance</string>
+    <string name="character_profile_hit">Known profile</string>
+    <string name="character_partial_cache_hint">Some chapters are not cached; an earlier appearance may exist</string>
+    <string name="character_ai_loading">Summarizing from excerpts…</string>
+    <string name="character_save_profile">Save to character profiles</string>
+    <string name="character_saved">Saved to character profiles</string>
     <string name="rss_source_empty">Empty now!</string>
     <string name="explore_empty">Empty now!</string>
     <string name="page_key_set_help">Focusing on the input box and pressing a physical key will automatically enter the value of the key, and multiple keys will be automatically separated by commas.</string>

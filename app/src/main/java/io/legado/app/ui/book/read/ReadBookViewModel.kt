@@ -1588,6 +1588,12 @@ class ReadBookViewModel(
                 _uiState.update { it.copy(activeSheet = ReadBookSheet.Dict(intent.text)) }
             }
 
+            is ReadBookIntent.OpenCharacterQuery -> {
+                _uiState.update {
+                    it.copy(activeSheet = ReadBookSheet.CharacterQuery(intent.name))
+                }
+            }
+
             is ReadBookIntent.OpenAiTextClean -> {
                 aiDelegate.openAiTextClean(
                     text = intent.text,

@@ -52,6 +52,7 @@ import io.legado.app.ui.book.read.sheet.UnderlineConfigSheet
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerEffect
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.dict.DictSheet
+import io.legado.app.ui.book.knowledge.CharacterQuerySheet
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
@@ -552,6 +553,16 @@ fun ReadBookScreen(
         show = dictSheet != null,
         word = dictSheet?.word ?: "",
         onDismissRequest = dismissSheet,
+    )
+    val characterQuerySheet = state.activeSheet as? ReadBookSheet.CharacterQuery
+    CharacterQuerySheet(
+        show = characterQuerySheet != null,
+        name = characterQuerySheet?.name ?: "",
+        onDismissRequest = dismissSheet,
+        onJumpToChapter = { chapterIndex ->
+            onIntent(ReadBookIntent.DismissSheet)
+            onIntent(ReadBookIntent.OpenChapterResult(chapterIndex, 0))
+        },
     )
     val photoSheet = state.activeSheet as? ReadBookSheet.Photo
     PhotoSheet(

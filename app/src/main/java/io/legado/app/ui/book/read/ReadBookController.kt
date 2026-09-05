@@ -809,6 +809,11 @@ class ReadBookController(
                 return true
             }
 
+            R.id.menu_ai_character -> {
+                viewModel.onIntent(ReadBookIntent.OpenCharacterQuery(selectedText.trim()))
+                return true
+            }
+
             R.id.menu_set_protagonist -> {
                 setProtagonistBySelection(selectedText)
                 return true
@@ -868,6 +873,7 @@ class ReadBookController(
             items.add(ActionMenuItem(R.id.menu_bookmark, activity.getString(R.string.bookmark)))
             items.add(ActionMenuItem(R.id.menu_mark, activity.getString(R.string.menu_mark)))
             items.add(ActionMenuItem(R.id.menu_dict, activity.getString(R.string.dict)))
+            items.add(ActionMenuItem(R.id.menu_ai_character, activity.getString(R.string.character_query)))
             items.add(ActionMenuItem(R.id.menu_replace, activity.getString(R.string.replace)))
             items.add(ActionMenuItem(R.id.menu_edit, activity.getString(R.string.edit)))
             items.add(ActionMenuItem(R.id.menu_ai_clean, activity.getString(R.string.ai_text_clean)))

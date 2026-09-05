@@ -1073,6 +1073,14 @@
     <string name="select_theme">切换默认主题</string>
     <string name="sort_by_lastUpdateTime">更新时间排序</string>
     <string name="search_content">全文搜索</string>
+    <string name="character_query">人物速查</string>
+    <string name="character_first_appearance">最初登场</string>
+    <string name="character_latest_appearance">最近出场</string>
+    <string name="character_profile_hit">已有档案</string>
+    <string name="character_partial_cache_hint">部分章节未缓存，可能存在更早登场</string>
+    <string name="character_ai_loading">正在根据原文归纳…</string>
+    <string name="character_save_profile">保存到人物档案</string>
+    <string name="character_saved">已保存到人物档案</string>
     <string name="search_content_size">搜索结果</string>
     <string name="search_content_empty">搜索内容为空，请检查净化或简繁设置</string>
     <string name="rss_source_empty">RSS 源目前为空！</string>

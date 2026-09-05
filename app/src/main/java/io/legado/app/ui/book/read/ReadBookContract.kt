@@ -734,6 +734,8 @@ sealed interface ReadBookIntent {
     data class TextActionReplace(val text: String) : ReadBookIntent
     data class TextActionSearchContent(val text: String) : ReadBookIntent
     data class TextActionDict(val text: String) : ReadBookIntent
+    /** 划词人物速查：text 是选中的（疑似）人名 */
+    data class OpenCharacterQuery(val name: String) : ReadBookIntent
     data class OpenAiTextClean(
         val text: String,
         val chapterIndex: Int,
@@ -1041,6 +1043,7 @@ sealed interface ReadBookSheet {
     data object PageKeyConfig : ReadBookSheet
     data object InfoConfig : ReadBookSheet
     data class Dict(val word: String) : ReadBookSheet
+    data class CharacterQuery(val name: String) : ReadBookSheet
     data class Bookmark(
         val bookmark: io.legado.app.data.entities.Bookmark,
         val editPos: Int = -1,

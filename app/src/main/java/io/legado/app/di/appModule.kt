@@ -200,6 +200,7 @@ import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
 import io.legado.app.domain.usecase.GenerateTocRuleUseCase
 import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
+import io.legado.app.domain.usecase.ExplainBookCharacterUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.domain.usecase.GetReadingMemoryDetailUseCase
 import io.legado.app.domain.usecase.CheckBookContentQualityUseCase
@@ -316,6 +317,7 @@ import io.legado.app.ui.config.themeConfig.ThemeConfigViewModel
 import io.legado.app.ui.config.themeManage.ThemeManageViewModel
 import io.legado.app.ui.config.translation.TranslationConfigViewModel
 import io.legado.app.ui.dict.DictViewModel
+import io.legado.app.ui.book.knowledge.CharacterQueryViewModel
 import io.legado.app.ui.dict.rule.DictRuleViewModel
 import io.legado.app.ui.highlightTagRule.HighlightTagRuleViewModel
 import io.legado.app.ui.login.SourceLoginViewModel
@@ -551,6 +553,7 @@ val appModule = module {
     singleOf(::AiTaskManager)
     singleOf(::IdentifyBookCharactersUseCase)
     singleOf(::GenerateChapterSummaryUseCase)
+    singleOf(::ExplainBookCharacterUseCase)
     singleOf(::AiTextFactoryUseCase)
     singleOf(::GenerateBookshelfAutoGroupPlanUseCase)
     singleOf(::GenerateAuthorBioUseCase)
@@ -613,6 +616,7 @@ val appModule = module {
         TagDetailViewModel(tagId)
     }
     viewModelOf(::DictViewModel)
+    viewModelOf(::CharacterQueryViewModel)
     viewModelOf(::RssSourceViewModel)
     viewModelOf(::BookSourceViewModel)
     viewModelOf(::BookSourceEditViewModel)
