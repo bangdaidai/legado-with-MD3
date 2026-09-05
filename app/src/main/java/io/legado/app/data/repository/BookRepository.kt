@@ -1,6 +1,7 @@
 package io.legado.app.data.repository
 
 import io.legado.app.data.AppDatabase
+import io.legado.app.data.appDb
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.GroupBookCount
@@ -30,7 +31,12 @@ class BookRepository(
 
     suspend fun getBookCoverByNameAndAuthor(bookName: String, bookAuthor: String): String? {
         return withContext(Dispatchers.IO) {
-            bookDao.getBookMeta(bookName, bookAuthor)?.getDisplayCover()
+            // 优先从书架获取封面
+            val bookCover = bookDao.getBookMeta(bookName, bookAuthor)?.getDisplayCover()
+            if (!bookCover.isNullOrEmpty()) return@withContext bookCover
+            // 书架无封面时，从阅读记录获取封面（影视等不在书架的记录）
+            appDb.readRecordDao.getReadRecordByNameAndAuthor(bookName, bookAuthor)?.coverUrl
+                ?.takeIf { it.isNotBlank() }
         }
     }
 
