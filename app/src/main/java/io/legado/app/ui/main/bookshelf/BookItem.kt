@@ -920,13 +920,15 @@ fun BookItem(
                             )
                         }
                     }
-                    BookshelfProgressBar(
-                        progress = readingProgress!!,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 4.dp)
-                            .height(3.dp)
-                    )
+                    if (showReadingProgress) {
+                        BookshelfProgressBar(
+                            progress = readingProgress!!,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp)
+                                .height(3.dp)
+                        )
+                    }
                 }
                 if (showIntro && !showIntroBelowContent) {
                     BookItemIntro(
