@@ -3,7 +3,6 @@ package io.legado.app.ui.config.ai.prompt
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Restore
@@ -154,7 +153,6 @@ fun AiPromptConfigScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 200.dp, max = 400.dp)
-                            .imePadding()
                     )
                 }
             )
