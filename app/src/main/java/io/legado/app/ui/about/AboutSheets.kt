@@ -121,10 +121,11 @@ fun UpdateSheet(
             }
 
             val updateLog = updateInfo.updateLog
+                .replaceFirst(Regex("^#\\s*更新日志\\s*\\n?"), "")
+                .trim()
             if (updateLog.isNotBlank()) {
                 MarkdownBlock(
                     content = updateLog,
-                    style = LegadoTheme.typography.bodySmall,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
