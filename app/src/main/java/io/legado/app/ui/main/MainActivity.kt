@@ -76,7 +76,7 @@ import io.legado.app.utils.getFile
 import io.legado.app.utils.find
 import io.legado.app.utils.list
 import io.legado.app.utils.delete
-import io.legado.app.help.config.AppConfig
+
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -573,7 +573,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
                         externalCacheDir?.let { getFile(it, "crash") },
                         false
                     )
-                    val backupPath = AppConfig.backupPath
+                    val backupPath = backupSettingsGateway.currentSettings.backupPath
                     if (!backupPath.isNullOrEmpty()) {
                         val uri = android.net.Uri.parse(backupPath)
                         FileDoc.fromUri(uri, true)
@@ -679,7 +679,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
             ?.let { getFile(it, "crash") }
             ?.listFiles(java.io.FileFilter { it.isFile })
             ?.forEach { list.add(FileDoc.fromFile(it)) }
-        val backupPath = AppConfig.backupPath
+        val backupPath = backupSettingsGateway.currentSettings.backupPath
         if (!backupPath.isNullOrEmpty()) {
             val uri = android.net.Uri.parse(backupPath)
             FileDoc.fromUri(uri, true)
