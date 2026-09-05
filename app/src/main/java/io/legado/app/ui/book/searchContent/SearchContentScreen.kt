@@ -185,23 +185,20 @@ fun SearchContentScreen(
                         inactiveText = "正则关闭"
                     )
 
-                    if (contentState == SearchContentState.History) {
-                        TopBarAnimatedActionButton(
-                            checked = historyOnlyThisBook,
-                            onCheckedChange = { onIntent(SearchContentIntent.ToggleHistoryScope) },
-                            iconChecked = Icons.Default.Book,
-                            iconUnchecked = Icons.Default.CollectionsBookmark,
-                            activeText = "仅本书",
-                            inactiveText = "全部书源"
-                        )
-                        if (searchHistory.isNotEmpty()) {
-                            TopBarActionButton(
-                                onClick = { onIntent(SearchContentIntent.ClearHistory) },
-                                imageVector = Icons.Outlined.DeleteSweep,
-                                contentDescription = "清除搜索历史"
-                            )
-                        }
-                    }
+                    TopBarAnimatedActionButton(
+                        checked = historyOnlyThisBook,
+                        onCheckedChange = { onIntent(SearchContentIntent.ToggleHistoryScope) },
+                        iconChecked = Icons.Default.Book,
+                        iconUnchecked = Icons.Default.CollectionsBookmark,
+                        activeText = "仅本书",
+                        inactiveText = "全部书源"
+                    )
+
+                    TopBarActionButton(
+                        onClick = { onIntent(SearchContentIntent.ClearHistory) },
+                        imageVector = Icons.Outlined.DeleteSweep,
+                        contentDescription = "清除搜索历史"
+                    )
                 },
                 scrollBehavior = scrollBehavior,
                 bottomContent = {
