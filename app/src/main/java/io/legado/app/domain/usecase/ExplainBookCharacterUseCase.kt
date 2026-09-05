@@ -9,7 +9,6 @@ import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
-import io.legado.app.domain.model.AiToolContext
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -86,10 +85,9 @@ class ExplainBookCharacterUseCase(
                         reasoningLevel = reasoningLevel.takeUnless { it == AiReasoningLevel.AUTO }
                             ?: preset.params.reasoningLevel,
                     ),
-                    toolContext = AiToolContext(
-                        bookUrl = book.bookUrl,
-                        bookName = book.name,
-                    ),
+                    // 材料已齐（检索摘录全部随请求给出），禁用只读工具注入：
+                    // 否则模型会多轮翻书，白烧请求还容易撞免费模型限流（HTTP 429）
+                    readOnlyTools = false,
                     taskType = AiTaskType.EXPLAIN_SELECTION,
                 )
             ).trim()

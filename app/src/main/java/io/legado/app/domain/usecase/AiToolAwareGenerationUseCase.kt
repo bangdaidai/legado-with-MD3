@@ -36,7 +36,7 @@ class AiToolAwareGenerationUseCase(
         val start = System.currentTimeMillis()
         val provider = request.model.provider
         val model = request.model
-        var currentRequest = request.withReadOnlyTools()
+        var currentRequest = request.let { if (it.readOnlyTools) it.withReadOnlyTools() else it }
         var lastError: String? = null
         var success = false
         // 整个工具循环的思考与输出聚合，供 finally 里写入 AI 日志

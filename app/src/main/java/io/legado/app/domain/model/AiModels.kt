@@ -383,6 +383,12 @@ data class AiGenerateRequest(
      * 为 true 时跳过 AI 日志记录，由调用方自行合并多轮工具调用后统一落一条日志。
      */
     val suppressLog: Boolean = false,
+    /**
+     * 是否注入只读书籍工具（AiToolAwareGenerationUseCase 的默认行为）。
+     * 请求本身已带全部所需材料（如人物速查的原文摘录）时置 false，
+     * 避免模型多轮翻书浪费请求、触发免费模型限流。
+     */
+    val readOnlyTools: Boolean = true,
 )
 
 /**
