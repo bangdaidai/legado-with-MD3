@@ -30,6 +30,19 @@ interface AiProfileGateway {
         temperature: Float,
         maxOutputTokens: Int
     ): AiTaskPresetConfig
+
+    /**
+     * Skill 导入 / 新建专用：按给定实体原样落库（不套用默认预设的补全逻辑）。
+     * modelProfileId 可为空串，代表「待绑定模型」，运行时会跳过该预设。
+     */
+    suspend fun saveImportedTaskPreset(preset: AiTaskPreset)
+    suspend fun deleteTaskPreset(presetId: String)
+
+    /** 把指定预设绑定为给定模型；模型不存在时抛错 */
+    suspend fun bindTaskPresetModel(presetId: String, modelProfileId: String)
+
+    /** 把指定预设设为其任务类型的默认预设，同任务类型的其它预设取消默认 */
+    suspend fun setDefaultTaskPreset(presetId: String)
     suspend fun deleteProvider(providerId: String)
     suspend fun deleteModel(modelId: String)
 }

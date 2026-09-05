@@ -39,6 +39,7 @@ fun AiConfigRouteScreen(
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
     onNavigateToAiPrompt: () -> Unit,
+    onNavigateToAiSkills: () -> Unit,
     onNavigateToAiWebSearch: () -> Unit,
     onNavigateToAiLog: () -> Unit,
     viewModel: AiConfigViewModel = koinViewModel()
@@ -53,6 +54,7 @@ fun AiConfigRouteScreen(
         onNavigateToTranslation = onNavigateToTranslation,
         onNavigateToAiSummary = onNavigateToAiSummary,
         onNavigateToAiPrompt = onNavigateToAiPrompt,
+        onNavigateToAiSkills = onNavigateToAiSkills,
         onNavigateToAiWebSearch = onNavigateToAiWebSearch,
         onNavigateToAiLog = onNavigateToAiLog
     )
@@ -70,6 +72,7 @@ fun AiConfigScreen(
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
     onNavigateToAiPrompt: () -> Unit,
+    onNavigateToAiSkills: () -> Unit,
     onNavigateToAiWebSearch: () -> Unit,
     onNavigateToAiLog: () -> Unit
 ) {
@@ -191,7 +194,7 @@ fun AiConfigScreen(
                 SplicedColumnGroup(title = stringResource(R.string.ai_skills)) {
                     ClickableSettingItem(
                         title = stringResource(R.string.ai_new_skill),
-                        onClick = {}
+                        onClick = onNavigateToAiSkills
                     )
                 }
             }

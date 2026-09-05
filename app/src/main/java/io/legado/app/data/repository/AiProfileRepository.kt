@@ -223,6 +223,34 @@ class AiProfileRepository(
         else -> "You are a helpful AI assistant."
     }
 
+    override suspend fun saveImportedTaskPreset(preset: AiTaskPreset) = withContext(Dispatchers.IO) {
+        aiProfileDao.insertPreset(preset.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    override suspend fun deleteTaskPreset(presetId: String) = withContext(Dispatchers.IO) {
+        val preset = aiProfileDao.getPreset(presetId) ?: return@withContext
+        // 默认预设承载「设置页默认模型」等链路，不允许从 Skill 页删除
+        check(!preset.isDefault) { "默认预设不能删除" }
+        aiProfileDao.deletePreset(presetId)
+    }
+
+    override suspend fun bindTaskPresetModel(presetId: String, modelProfileId: String) = withContext(Dispatchers.IO) {
+        val model = aiProfileDao.getModel(modelProfileId) ?: error("Model is required")
+        val preset = aiProfileDao.getPreset(presetId) ?: error("Preset is required")
+        aiProfileDao.insertPreset(
+            preset.copy(modelProfileId = model.id, updatedAt = System.currentTimeMillis())
+        )
+    }
+
+    override suspend fun setDefaultTaskPreset(presetId: String) = withContext(Dispatchers.IO) {
+        val preset = aiProfileDao.getPreset(presetId) ?: error("Preset is required")
+        val now = System.currentTimeMillis()
+        val siblings = aiProfileDao.getAllPresets()
+            .filter { it.taskType == preset.taskType && (it.isDefault || it.id == presetId) }
+            .map { it.copy(isDefault = it.id == presetId, updatedAt = now) }
+        aiProfileDao.insertPresets(siblings)
+    }
+
     override suspend fun deleteProvider(providerId: String) = withContext(Dispatchers.IO) {
         aiProfileDao.deleteModelsByProvider(providerId)
         aiProfileDao.deleteProvider(providerId)

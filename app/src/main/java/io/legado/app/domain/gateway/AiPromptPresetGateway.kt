@@ -8,6 +8,7 @@ interface AiPromptPresetGateway {
     fun savePresetsSync(presets: List<AiPromptPreset>)
     fun deletePresetSync(id: String)
     suspend fun countByTaskType(taskType: String): Int
+    suspend fun getAll(): List<AiPromptPreset>
     suspend fun savePreset(preset: AiPromptPreset)
     suspend fun savePresets(presets: List<AiPromptPreset>)
     suspend fun deletePreset(id: String)
