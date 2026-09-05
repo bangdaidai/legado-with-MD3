@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.help.update.AppUpdate
@@ -86,7 +85,7 @@ fun UpdateSheet(
             if (mode == UpdateMode.UPDATE) {
                 AppText(
                     text = stringResource(R.string.about_current_version) + " " + BuildConfig.VERSION_NAME,
-                    style = LegadoTheme.typography.titleMedium,
+                    style = LegadoTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
@@ -100,7 +99,7 @@ fun UpdateSheet(
                 )
                 AppText(
                     text = stringResource(R.string.about_new_version) + " " + updateInfo.tagName,
-                    style = LegadoTheme.typography.titleMedium,
+                    style = LegadoTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = LegadoTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -117,7 +116,7 @@ fun UpdateSheet(
             } else {
                 AppText(
                     text = BuildConfig.VERSION_NAME,
-                    style = LegadoTheme.typography.titleMedium,
+                    style = LegadoTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = LegadoTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -126,7 +125,7 @@ fun UpdateSheet(
 
             AppText(
                 text = stringResource(R.string.update_log),
-                fontSize = 14.sp,
+                style = LegadoTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp),
             )
@@ -135,6 +134,7 @@ fun UpdateSheet(
             if (updateLog.isNotBlank()) {
                 MarkdownBlock(
                     content = updateLog,
+                    style = LegadoTheme.typography.bodySmall,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
