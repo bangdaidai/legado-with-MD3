@@ -45,6 +45,7 @@ class AiLogViewModel(
             is AiLogIntent.Refresh -> refresh()
             is AiLogIntent.Clear -> clear()
             is AiLogIntent.CopyAll -> copyAll()
+            is AiLogIntent.CopyItem -> copyItem(intent.item)
         }
     }
 
@@ -87,24 +88,30 @@ class AiLogViewModel(
             return
         }
         val text = state.logs.joinToString("\n\n") { item ->
-            buildString {
-                append("[${item.timeText}] ${item.scenario} · ${item.kind} ${if (item.success) "成功" else "失败"}")
-                append(" | ${item.provider} / ${item.model}")
-                append(" | ${item.durationText}")
-                if (item.summary.isNotBlank()) append("\n${item.summary}")
-                if (item.prompt.isNotBlank()) append("\n提示词:\n${item.prompt}")
-                if (item.reasoning.isNotBlank()) append("\n思考:\n${item.reasoning}")
-                if (item.output.isNotBlank()) append("\n输出:\n${item.output}")
-                if (item.steps.isNotEmpty()) {
-                    append("\n过程:")
-                    item.steps.forEach { step ->
-                        append("\n  +${formatDuration(step.relativeMs)} ${step.label}")
-                    }
-                }
-                if (!item.success && !item.error.isNullOrBlank()) append("\n错误: ${item.error}")
-            }
+            buildItemText(item)
         }
         appCtx.sendToClip(text)
+    }
+
+    private fun copyItem(item: AiLogItemUi) {
+        appCtx.sendToClip(buildItemText(item))
+    }
+
+    private fun buildItemText(item: AiLogItemUi): String = buildString {
+        append("[${item.timeText}] ${item.scenario} · ${item.kind} ${if (item.success) "成功" else "失败"}")
+        append(" | ${item.provider} / ${item.model}")
+        append(" | ${item.durationText}")
+        if (item.summary.isNotBlank()) append("\n${item.summary}")
+        if (item.prompt.isNotBlank()) append("\n提示词:\n${item.prompt}")
+        if (item.reasoning.isNotBlank()) append("\n思考:\n${item.reasoning}")
+        if (item.output.isNotBlank()) append("\n输出:\n${item.output}")
+        if (item.steps.isNotEmpty()) {
+            append("\n过程:")
+            item.steps.forEach { step ->
+                append("\n  +${formatDuration(step.relativeMs)} ${step.label}")
+            }
+        }
+        if (!item.success && !item.error.isNullOrBlank()) append("\n错误: ${item.error}")
     }
 
     private fun kindLabel(kind: String): String = when (kind) {

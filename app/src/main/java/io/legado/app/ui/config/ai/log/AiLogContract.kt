@@ -41,6 +41,7 @@ sealed interface AiLogIntent {
     data object Refresh : AiLogIntent
     data object Clear : AiLogIntent
     data object CopyAll : AiLogIntent
+    data class CopyItem(val item: AiLogItemUi) : AiLogIntent
 }
 
 sealed interface AiLogEffect {
