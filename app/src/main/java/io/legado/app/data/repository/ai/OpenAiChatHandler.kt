@@ -310,14 +310,16 @@ internal fun MutableMap<String, Any?>.applyProviderWebSearch(
         }
 
         AiNativeWebSearchSupport.ZHIPU_WEB_SEARCH_TOOL -> {
-            // 智谱这几个开关文档给的是字符串 "True"，照抄以免网关按字面量校验
+            // 对话补全 API 参考的 WebSearchObject schema 定义 enable/search_result 为 boolean；
+            // 联网搜索指南 Python 示例里的字符串 "True" 是文档笔误（Java SDK 同节用的是布尔），
+            // 按字符串发送时网关会丢弃该内置工具，模型侧表现为没有联网能力
             appendServerTool(
                 mapOf(
                     "type" to "web_search",
                     "web_search" to mapOf(
-                        "enable" to "True",
+                        "enable" to true,
                         "search_engine" to "search_std",
-                        "search_result" to "True"
+                        "search_result" to true
                     )
                 )
             )
