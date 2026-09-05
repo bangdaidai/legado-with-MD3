@@ -82,7 +82,7 @@ class IdentifyBookCharactersUseCase(
         val identifyPreset = aiProfileGateway.getTaskPreset(AiTaskType.IDENTIFY_CHARACTERS)
         val preset = identifyPreset
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
-            ?: error("No AI model configured for character identification")
+            ?: error("还没有配置可用的 AI 模型，请先到 AI 设置里为人物识别任务选择模型")
         val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: DEFAULT_PROMPT
         val now = System.currentTimeMillis()
         val contentHash = MD5Utils.md5Encode(bookUrl)
@@ -121,7 +121,7 @@ class IdentifyBookCharactersUseCase(
         val identifyPreset = aiProfileGateway.getTaskPreset(AiTaskType.IDENTIFY_CHARACTERS)
         val preset = identifyPreset
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
-            ?: error("No AI model configured for character identification")
+            ?: error("还没有配置可用的 AI 模型，请先到 AI 设置里为人物识别任务选择模型")
         val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: DEFAULT_PROMPT
         val response = StringBuilder()
         val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported
@@ -199,14 +199,15 @@ class IdentifyBookCharactersUseCase(
         val jsonStart = response.indexOf('{')
         val jsonEnd = response.lastIndexOf('}')
         require(jsonStart >= 0 && jsonEnd > jsonStart) {
-            "Character identification did not return a JSON object"
+            "AI 没有按要求返回人物列表（可能被内容安全拦截或临时故障），请重试一次"
         }
         val root = try {
             JsonParser.parseString(response.substring(jsonStart, jsonEnd + 1)).asJsonObject
         } catch (e: Exception) {
             // 输出被 max_tokens 截断时 JSON 缺尾，Gson 在字符串半截抛 EOFException
             throw IllegalStateException(
-                "Character JSON parse failed (output likely truncated by max_tokens): ${e.message}",
+                "AI 的回答写到一半被输出长度上限截断了，人物列表不完整；请重试，" +
+                    "若反复出现可在任务预设里调大输出上限，或改用输出更长的模型",
                 e,
             )
         }
