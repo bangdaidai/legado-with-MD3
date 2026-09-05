@@ -359,7 +359,8 @@ data class PendingToolRun(
     val toolCalls: List<AiToolCall>,
     val assistantTextStart: Int,
     val round: Int,
-    val parentMessageId: String? = null
+    val parentMessageId: String? = null,
+    val currentConfirmationIndex: Int = 0
 )
 
 // ---- Book result extraction helpers ----

@@ -261,17 +261,94 @@ class AiChatViewModel(
 
     private fun confirmPendingTool() {
         val pending = pendingToolRun ?: return
-        pendingToolRun = null
+        val currentIndex = pending.currentConfirmationIndex
+        val confirmationRequiredCalls = pending.toolCalls.filter { generationUseCase.requiresConfirmation(it.name) }
+        if (currentIndex >= confirmationRequiredCalls.size) {
+            pendingToolRun = null
+            streamingJob = viewModelScope.launch {
+                _uiState.update {
+                    it.copy(isSending = true, pendingToolConfirmation = null)
+                }
+                continueAfterToolApproval(pending)
+            }
+            return
+        }
+        val currentCall = confirmationRequiredCalls[currentIndex]
+        pendingToolRun = pending.copy(currentConfirmationIndex = currentIndex + 1)
         streamingJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(isSending = true, pendingToolConfirmation = null)
             }
-            continueAfterToolApproval(pending)
+            val fullText = StringBuilder(pending.fullText)
+            val fullReasoning = StringBuilder(pending.fullReasoning)
+            try {
+                val assistantContent = fullText.substring(pending.assistantTextStart)
+                val followUpRequest = generationUseCase.executeToolCalls(
+                    request = pending.request,
+                    assistantContent = assistantContent,
+                    toolTrace = pending.toolTrace,
+                    toolCalls = listOf(currentCall),
+                    onToolTraceUpdate = { updateStreamingToolTrace(pending.toolTrace) }
+                )
+                val nextAssistantTextStart = fullText.length
+                collectStream(followUpRequest, fullText, fullReasoning, pending.toolTrace)
+                val nextPending = pendingToolRun
+                if (nextPending != null && nextPending.currentConfirmationIndex < confirmationRequiredCalls.size) {
+                    _uiState.update {
+                        it.copy(isSending = false)
+                    }
+                    continueToolRounds(
+                        conversationId = pending.conversationId,
+                        request = followUpRequest,
+                        fullText = fullText,
+                        fullReasoning = fullReasoning,
+                        toolTrace = pending.toolTrace,
+                        startRound = pending.round + 1,
+                        assistantTextStart = nextAssistantTextStart,
+                        parentMessageId = pending.parentMessageId
+                    )
+                } else {
+                    continueAfterToolApproval(pending.copy(
+                        toolCalls = pending.toolCalls,
+                        request = followUpRequest,
+                        fullText = fullText.toString(),
+                        fullReasoning = fullReasoning.toString(),
+                        assistantTextStart = nextAssistantTextStart
+                    ))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _effects.tryEmit(AiChatEffect.ShowMessage(e.message ?: "AI tool failed"))
+            }
         }
     }
 
     private fun rejectPendingTool() {
         val pending = pendingToolRun ?: return
+        val currentIndex = pending.currentConfirmationIndex
+        val confirmationRequiredCalls = pending.toolCalls.filter { generationUseCase.requiresConfirmation(it.name) }
+        
+        if (currentIndex + 1 < confirmationRequiredCalls.size) {
+            pendingToolRun = pending.copy(currentConfirmationIndex = currentIndex + 1)
+            streamingJob = viewModelScope.launch {
+                _uiState.update {
+                    it.copy(isSending = false, pendingToolConfirmation = null)
+                }
+                continueToolRounds(
+                    conversationId = pending.conversationId,
+                    request = pending.request,
+                    fullText = StringBuilder(pending.fullText),
+                    fullReasoning = StringBuilder(pending.fullReasoning),
+                    toolTrace = pending.toolTrace,
+                    startRound = pending.round,
+                    assistantTextStart = pending.assistantTextStart,
+                    parentMessageId = pending.parentMessageId
+                )
+            }
+            return
+        }
+        
         pendingToolRun = null
         val rejectionText = "工具调用已被你拒绝，我不会执行这些操作。还需要我继续帮你做什么？"
         val assistantText = buildString {
@@ -566,11 +643,18 @@ class AiChatViewModel(
         var waitingForToolConfirmation = false
         try {
             val assistantContent = fullText.substring(pending.assistantTextStart)
+            val confirmationRequiredCalls = pending.toolCalls.filter { generationUseCase.requiresConfirmation(it.name) }
+            val callsToExecute = if (pending.currentConfirmationIndex >= confirmationRequiredCalls.size) {
+                pending.toolCalls.filter { !generationUseCase.requiresConfirmation(it.name) }
+            } else {
+                pending.toolCalls.filter { !generationUseCase.requiresConfirmation(it.name) } + 
+                    confirmationRequiredCalls.subList(0, pending.currentConfirmationIndex)
+            }
             val followUpRequest = generationUseCase.executeToolCalls(
                 request = pending.request,
                 assistantContent = assistantContent,
                 toolTrace = pending.toolTrace,
-                toolCalls = pending.toolCalls,
+                toolCalls = callsToExecute,
                 onToolTraceUpdate = { updateStreamingToolTrace(pending.toolTrace) }
             )
             val nextAssistantTextStart = fullText.length
@@ -632,7 +716,12 @@ class AiChatViewModel(
         while (true) {
             val toolCalls = toolTrace.pendingToolCalls()
             if (toolCalls.isEmpty()) return false
-            if (toolCalls.any { generationUseCase.requiresConfirmation(it.name) }) {
+            val confirmationRequiredCalls = toolCalls.filter { generationUseCase.requiresConfirmation(it.name) }
+            if (confirmationRequiredCalls.isNotEmpty()) {
+                val startIndex = pendingToolRun?.currentConfirmationIndex?.takeIf { it > 0 } ?: 0
+                val currentCall = confirmationRequiredCalls[startIndex]
+                val confirmationIndex = startIndex + 1
+                val totalConfirmations = confirmationRequiredCalls.size
                 pendingToolRun = PendingToolRun(
                     conversationId = conversationId,
                     request = currentRequest,
@@ -642,14 +731,15 @@ class AiChatViewModel(
                     toolCalls = toolCalls,
                     assistantTextStart = currentAssistantTextStart,
                     round = currentRound,
-                    parentMessageId = parentMessageId
+                    parentMessageId = parentMessageId,
+                    currentConfirmationIndex = startIndex
                 )
                 _uiState.update {
                     it.copy(
                         isSending = false,
                         pendingToolConfirmation = AiToolConfirmationUi(
-                            title = toolCalls.joinToString { call -> call.name },
-                            description = toolTrace.toString().take(2000)
+                            title = "[${confirmationIndex}/${totalConfirmations}] ${currentCall.name}",
+                            description = currentCall.arguments.take(2000)
                         )
                     )
                 }
