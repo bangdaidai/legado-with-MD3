@@ -2399,6 +2399,8 @@
     <string name="ai_profile_status">档案</string>
     <string name="ai_save_profile">保存默认档案</string>
     <string name="ai_test_connection">测试连接</string>
+    <string name="ai_provider_web_search">联网搜索</string>
+    <string name="ai_provider_web_search_desc">对话、人物识别等交互任务自动联网（按 token 计费，不消耗搜索资源包）。仅对支持内置联网的供应商生效（智谱、通义系列等），其他供应商开启为无害空操作</string>
     <string name="ai_test_success_no_models">AI 连接测试成功，但未找到任何模型</string>
     <string name="ai_test_success_with_models">AI 连接测试成功（共找到 %1$d 个模型）</string>
     <string name="ai_test_failed">AI 连接测试失败</string>

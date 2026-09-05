@@ -2357,6 +2357,8 @@
     <string name="ai_profile_status">Profile</string>
     <string name="ai_save_profile">Save Default Profile</string>
     <string name="ai_test_connection">Test Connection</string>
+    <string name="ai_provider_web_search">Web Search</string>
+    <string name="ai_provider_web_search_desc">Chat, character identification and other interactive tasks search the web automatically (billed as tokens, no search pack needed). Takes effect on providers with built-in web search support (Zhipu, Qwen, etc.); harmless no-op elsewhere</string>
     <string name="ai_test_success_no_models">AI connection test succeeded, but no models found</string>
     <string name="ai_test_success_with_models">AI connection test succeeded (%1$d models found)</string>
     <string name="ai_test_failed">AI connection test failed</string>

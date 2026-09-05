@@ -53,3 +53,18 @@ private fun AiProviderConfig.chatCompletionsWebSearchSupport(): AiNativeWebSearc
 
 private val QWEN_MARKERS = listOf("dashscope", "qwen", "bailian")
 private val ZHIPU_MARKERS = listOf("zhipu", "bigmodel")
+
+/**
+ * 与 [nativeWebSearchSupport] 同源的"是否具备内置联网"判定，但接受零散的身份字段，
+ * 供供应商编辑页在字段尚未组装成 [AiProviderConfig] 时实时计算联网开关的可见性。
+ * [identity] 为 id、名称、baseUrl 拼接串。
+ */
+fun nativeWebSearchCapable(protocol: String, identity: String): Boolean = when (protocol) {
+    AiProtocol.ANTHROPIC_MESSAGES, AiProtocol.OPENAI_RESPONSES -> true
+    AiProtocol.OPENAI_CHAT_COMPLETIONS -> {
+        val id = identity.lowercase()
+        QWEN_MARKERS.any { it in id } || ZHIPU_MARKERS.any { it in id }
+    }
+
+    else -> false
+}

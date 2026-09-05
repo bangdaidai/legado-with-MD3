@@ -3,6 +3,7 @@ package io.legado.app.domain.usecase
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiWebSearchGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
@@ -36,6 +37,7 @@ class GenerateAuthorBioUseCase(
     private val aiProfileGateway: AiProfileGateway,
     private val aiTextGateway: AiTextGateway,
     private val aiWebSearchGateway: AiWebSearchGateway,
+    private val webSearchSettingsGateway: WebSearchSettingsGateway,
 ) {
 
     /** 生成结果与实际使用的模型标识，后者写入简介的来源信息。 */
@@ -48,7 +50,8 @@ class GenerateAuthorBioUseCase(
         runCatching {
             require(authorName.isNotBlank()) { "Author name is empty" }
             val preset = resolvePreset() ?: error("No AI model configured")
-            val hasNativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported
+            val hasNativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported &&
+                webSearchSettingsGateway.currentSettings.isNativeWebSearchEnabled(preset.model.provider.id)
             val searchResult = if (hasNativeWebSearch) null else searchWeb(authorName, bookTitles)
             val response = aiTextGateway.generate(
                 AiGenerateRequest(

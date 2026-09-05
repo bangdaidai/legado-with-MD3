@@ -5,15 +5,12 @@ import io.legado.app.data.entities.AiArtifact
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.AiArtifactGateway
 import io.legado.app.domain.gateway.AiProfileGateway
-import io.legado.app.domain.gateway.AiStreamEvent
-import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiToolGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.model.AiGenerateRequest
-import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
-import io.legado.app.domain.model.AiModelConfig
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.AiToolContext
@@ -33,7 +30,8 @@ class IdentifyBookCharactersUseCase(
     private val aiTaskManager: AiTaskManager,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
     private val aiToolGateway: AiToolGateway,
-    private val aiTextGateway: AiTextGateway,
+    private val aiWebSearchPrefetchUseCase: AiWebSearchPrefetchUseCase,
+    private val webSearchSettingsGateway: WebSearchSettingsGateway,
 ) {
     data class Candidate(
         val name: String,
@@ -126,20 +124,26 @@ class IdentifyBookCharactersUseCase(
         val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank)
             ?: aiProfileGateway.defaultPrompt(AiTaskType.IDENTIFY_CHARACTERS)
         val response = StringBuilder()
-        val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported
+        // 内置联网开关 = 供应商能力检测 × 供应商设置（用户可在供应商编辑页关闭）
+        val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported &&
+            webSearchSettingsGateway.currentSettings
+                .isNativeWebSearchEnabled(preset.model.provider.id)
         val searchToolAvailable = aiToolGateway.availableTools().any { it.name == SEARCH_WEB_TOOL }
         val bookName = bookKnowledgeGateway.getBookName(bookUrl)
         // 智谱实测：内置联网与 function 工具调用互斥，带工具的主请求里检索永远不执行；
         // 先用一轮不带工具的纯对话预检索（搜索结果按 token 计费，不消耗按次的搜索资源包），
         // 把结果作为上下文注入主请求。已有 search_web 工具（Tavily/智谱检索兜底）时无需预检索。
         val webSearchContext = if (nativeWebSearch && !searchToolAvailable) {
-            runCatching { preSearchWeb(preset.model, bookName) }
+            runCatching {
+                preSearchQuery(bookName)?.let { query ->
+                    aiWebSearchPrefetchUseCase.prefetch(preset.model, query)
+                }
+            }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                 .getOrNull()
                 ?.takeIf(String::isNotBlank)
                 ?.let { content ->
-                    "Web search results for this book (obtained via the provider's web search):\n" +
-                        content.take(WEB_SEARCH_CONTEXT_MAX_CHARS)
+                    "Web search results for this book (obtained via the provider's web search):\n" + content
                 }
         } else {
             null
@@ -250,28 +254,12 @@ class IdentifyBookCharactersUseCase(
     }
 
     /**
-     * 供应商内置联网的预检索：不带任何 function 工具发一轮纯对话，让内置 web_search 触发。
-     * 用户消息必须是疑问式——智谱的搜索意图识别对指令式文案不触发搜索。
-     * 检索结果按 token 计费（免费模型零成本），不消耗按次的搜索资源包。
+     * 人物识别的预检索问题：必须是疑问式，否则智谱的搜索意图识别不触发搜索。
      */
-    private suspend fun preSearchWeb(model: AiModelConfig, bookName: String?): String? {
+    private fun preSearchQuery(bookName: String?): String? {
         if (bookName.isNullOrBlank()) return null
-        val request = AiGenerateRequest(
-            model = model,
-            messages = listOf(
-                AiMessage(
-                    AiMessageRole.USER,
-                    "《$bookName》这本书的主要人物有哪些？" +
-                        "请联网搜索书评、百科等，列出主要人物及其身份简介，并标明信息来源。"
-                ),
-            ),
-            params = AiGenerationParams(webSearch = true),
-        )
-        val output = StringBuilder()
-        aiTextGateway.generateStream(request).collect { event ->
-            if (event is AiStreamEvent.Content) output.append(event.text)
-        }
-        return output.toString().trim().takeIf { it.isNotEmpty() }
+        return "《$bookName》这本书的主要人物有哪些？" +
+            "请联网搜索书评、百科等，列出主要人物及其身份简介，并标明信息来源。"
     }
 
     suspend fun save(bookUrl: String, candidates: List<Candidate>) {
@@ -313,7 +301,6 @@ class IdentifyBookCharactersUseCase(
         /** 与 AiToolRepository.TOOL_SEARCH_WEB 保持一致；domain 层不反向依赖 data 层，故本地声明 */
         private const val SEARCH_WEB_TOOL = "search_web"
 
-        private const val WEB_SEARCH_CONTEXT_MAX_CHARS = 8000
 
         /** 输出上限下限：完整人物 JSON + 思考占用的预算，低于此值会被 max_tokens 截断 */
         private const val MIN_IDENTIFY_MAX_OUTPUT_TOKENS = 4096

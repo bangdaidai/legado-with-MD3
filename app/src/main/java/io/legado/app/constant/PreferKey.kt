@@ -496,6 +496,9 @@ object PreferKey {
     const val aiWebSearchDepth = "aiWebSearchDepth"
     const val aiWebSearchMaxResults = "aiWebSearchMaxResults"
 
+    // 供应商内置联网：显式关闭的供应商 ID（JSON 数组）。缺省 = 跟随供应商能力自动开启
+    const val aiNativeWebSearchDisabledIds = "aiNativeWebSearchDisabledIds"
+
 
     const val navIconHome = "navIconHome"
 

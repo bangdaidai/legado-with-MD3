@@ -3,6 +3,7 @@ package io.legado.app.data.repository
 import androidx.datastore.preferences.core.Preferences
 import io.legado.app.BuildConfig
 import io.legado.app.constant.PreferKey
+import io.legado.app.utils.GSON
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.gateway.CoverSettingsGateway
@@ -332,6 +333,10 @@ internal fun Preferences.toWebSearchSettings(): WebSearchSettings = WebSearchSet
         ?: WebSearchSettings.DEPTH_BASIC,
     maxResults = (compatDsInt(PreferKey.aiWebSearchMaxResults) ?: 5)
         .coerceIn(WebSearchSettings.MIN_RESULTS, WebSearchSettings.MAX_RESULTS),
+    nativeWebSearchDisabledIds = compatDsString(PreferKey.aiNativeWebSearchDisabledIds)
+        ?.takeIf { it.isNotBlank() }
+        ?.let { json -> GSON.fromJsonArray<String>(json).getOrNull().orEmpty().toSet() }
+        ?: emptySet(),
 )
 
 internal fun WebSearchSettings.toPrefMap(): Map<String, Any?> = mapOf(
@@ -341,6 +346,7 @@ internal fun WebSearchSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.aiWebSearchTopic to topic,
     PreferKey.aiWebSearchDepth to searchDepth,
     PreferKey.aiWebSearchMaxResults to maxResults,
+    PreferKey.aiNativeWebSearchDisabledIds to GSON.toJson(nativeWebSearchDisabledIds),
 )
 
 internal fun Preferences.toBackupSettings(): BackupSettings = BackupSettings(

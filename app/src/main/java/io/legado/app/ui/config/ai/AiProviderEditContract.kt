@@ -22,7 +22,13 @@ data class AiProviderEditUiState(
     val isTesting: Boolean = false,
     val isSaving: Boolean = false,
     val isFetchingModels: Boolean = false,
-    val initialized: Boolean = false
+    val initialized: Boolean = false,
+    /**
+     * 供应商内置联网开关，对所有供应商可见（模型/供应商日新月异，能力不写死）。
+     * 保存时写入 WebSearchSettings；实际生效范围由运行时的能力检测决定，
+     * 不支持的供应商上开启是无害的空操作。
+     */
+    val webSearchEnabled: Boolean = false
 )
 
 @Stable
@@ -74,6 +80,7 @@ sealed interface AiProviderEditIntent {
     data class UpdateBaseUrl(val value: String) : AiProviderEditIntent
     data class UpdateModelsUrl(val value: String) : AiProviderEditIntent
     data class UpdateApiKey(val value: String) : AiProviderEditIntent
+    data class SetWebSearchEnabled(val enabled: Boolean) : AiProviderEditIntent
     data object AddModel : AiProviderEditIntent
     data class EditModel(val modelProfileId: String) : AiProviderEditIntent
     data object DismissModelEditor : AiProviderEditIntent

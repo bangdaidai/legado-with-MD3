@@ -7,6 +7,7 @@ import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.gateway.AiMemoryGateway
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiToolGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessagePart
@@ -15,10 +16,12 @@ import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.AiToolApprovalState
 import io.legado.app.domain.model.AiToolCall
+import io.legado.app.domain.model.nativeWebSearchSupport
 import io.legado.app.domain.model.toolParts
 import io.legado.app.ui.ai.chat.AiChatBookResultUi
 import io.legado.app.ui.ai.chat.AiChatMessageUi
 import io.legado.app.utils.GSON
+import kotlinx.coroutines.CancellationException
 
 /**
  * Encapsulates chat generation logic: request building, streaming, tool execution loop.
@@ -29,7 +32,9 @@ class AiChatGenerationUseCase(
     private val aiToolGateway: AiToolGateway,
     private val aiProfileGateway: AiProfileGateway,
     private val aiChatGateway: AiChatGateway,
-    private val aiMemoryGateway: AiMemoryGateway
+    private val aiMemoryGateway: AiMemoryGateway,
+    private val aiWebSearchPrefetchUseCase: AiWebSearchPrefetchUseCase,
+    private val webSearchSettingsGateway: WebSearchSettingsGateway,
 ) {
 
     suspend fun buildRequest(
@@ -41,9 +46,34 @@ class AiChatGenerationUseCase(
         val preset = aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: aiProfileGateway.getTaskPreset(AiTaskType.TRANSLATE_CHAPTER)
             ?: error("Please configure a default AI model first")
+        val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported &&
+            webSearchSettingsGateway.currentSettings
+                .isNativeWebSearchEnabled(preset.model.provider.id)
+        val searchToolAvailable = aiToolGateway.availableTools().any { it.name == SEARCH_WEB_TOOL }
+        // 智谱实测：内置联网与 function 工具调用互斥（对话请求恒带工具），带工具的主请求里
+        // 检索永远不执行；先发一轮无工具纯对话预检索，把结果作为上下文注入。
+        val webSearchContext = if (nativeWebSearch && !searchToolAvailable) {
+            runCatching { aiWebSearchPrefetchUseCase.prefetch(preset.model, userContent) }
+                .onFailure { if (it is CancellationException) throw it }
+                .getOrNull()
+        } else {
+            null
+        }
         return AiGenerateRequest(
             model = preset.model,
-            messages = buildRequestMessages(userContent, history, conversationId),
+            messages = buildList {
+                addAll(buildRequestMessages(userContent, history, conversationId))
+                webSearchContext?.let {
+                    add(
+                        AiMessage(
+                            AiMessageRole.SYSTEM,
+                            "Web search results for the user's message (obtained via the " +
+                                "provider's web search; may contain errors — verify against " +
+                                "your own knowledge):\n$it"
+                        )
+                    )
+                }
+            },
             params = preset.params.copy(
                 reasoningLevel = reasoningLevel.resolveModelDefault(preset.params.reasoningLevel)
             ),
@@ -231,6 +261,9 @@ class AiChatGenerationUseCase(
     companion object {
         const val MAX_HISTORY_MESSAGES = 12
         const val MAX_TOOL_OUTPUT_CHARS = 8_000
+
+        /** 与 AiToolRepository.TOOL_SEARCH_WEB 保持一致；domain 层不反向依赖 data 层，故本地声明 */
+        private const val SEARCH_WEB_TOOL = "search_web"
     }
 }
 

@@ -179,6 +179,7 @@ import io.legado.app.domain.usecase.AiChatGenerationUseCase
 import io.legado.app.domain.usecase.AiTaskManager
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.AiToolAwareGenerationUseCase
+import io.legado.app.domain.usecase.AiWebSearchPrefetchUseCase
 import io.legado.app.domain.usecase.AnalyzeChapterSpeechUseCase
 import io.legado.app.domain.usecase.AppStartupMaintenanceUseCase
 import io.legado.app.domain.usecase.ApplyBookshelfAutoGroupPlanUseCase
@@ -555,6 +556,7 @@ val appModule = module {
     singleOf(::IdentifyBookCharactersUseCase)
     singleOf(::GenerateChapterSummaryUseCase)
     singleOf(::ExplainBookCharacterUseCase)
+    singleOf(::AiWebSearchPrefetchUseCase)
     singleOf(::AiTextFactoryUseCase)
     singleOf(::GenerateBookshelfAutoGroupPlanUseCase)
     singleOf(::GenerateAuthorBioUseCase)

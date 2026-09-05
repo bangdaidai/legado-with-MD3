@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiTextGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiModelDraft
@@ -13,6 +14,7 @@ import io.legado.app.domain.model.AiProviderDraft
 import io.legado.app.domain.model.AiProviderPresets
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.TranslationConstants
+import io.legado.app.domain.model.nativeWebSearchCapable
 import io.legado.app.utils.GSON
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
@@ -28,7 +30,8 @@ import splitties.init.appCtx
 class AiProviderEditViewModel(
     private val initialProviderId: String?,
     private val aiProfileGateway: AiProfileGateway,
-    private val aiTextGateway: AiTextGateway
+    private val aiTextGateway: AiTextGateway,
+    private val webSearchSettingsGateway: WebSearchSettingsGateway
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -91,7 +94,16 @@ class AiProviderEditViewModel(
                             apiKey = provider?.apiKey.orEmpty(),
                             providerModels = providerModels,
                             initialized = true
-                        )
+                        ).let { loaded ->
+                            // 新建供应商：具备内置联网能力时默认开启；已有供应商读用户设置
+                            val defaultEnabled = provider?.id?.let { id ->
+                                webSearchSettingsGateway.currentSettings.isNativeWebSearchEnabled(id)
+                            } ?: nativeWebSearchCapable(
+                                loaded.protocol,
+                                "${loaded.providerId.orEmpty()} ${loaded.providerName} ${loaded.baseUrl}"
+                            )
+                            loaded.copy(webSearchEnabled = defaultEnabled)
+                        }
                     }
                 }
             }
@@ -108,6 +120,9 @@ class AiProviderEditViewModel(
             is AiProviderEditIntent.UpdateBaseUrl -> _uiState.update { it.copy(baseUrl = intent.value, selectedProviderPresetId = "") }
             is AiProviderEditIntent.UpdateModelsUrl -> _uiState.update { it.copy(modelsUrl = intent.value, selectedProviderPresetId = "") }
             is AiProviderEditIntent.UpdateApiKey -> _uiState.update { it.copy(apiKey = intent.value) }
+            is AiProviderEditIntent.SetWebSearchEnabled -> _uiState.update {
+                it.copy(webSearchEnabled = intent.enabled)
+            }
             AiProviderEditIntent.AddModel -> _uiState.update {
                 it.copy(editingModel = AiProviderModelEditorUi(temperature = TranslationConstants.DEFAULT_TEMPERATURE.toString()))
             }
@@ -205,6 +220,7 @@ class AiProviderEditViewModel(
             runCatching {
                 aiProfileGateway.saveProvider(_uiState.value.toDraft())
             }.onSuccess { provider ->
+                persistWebSearchSetting(provider.id)
                 _uiState.update { it.copy(providerId = provider.id) }
                 _effects.tryEmit(AiProviderEditEffect.ShowMessage("AI provider saved"))
                 _effects.tryEmit(AiProviderEditEffect.NavigateBack)
@@ -212,6 +228,19 @@ class AiProviderEditViewModel(
                 _effects.tryEmit(AiProviderEditEffect.ShowMessage(error.message ?: "Failed to save AI provider"))
             }
             _uiState.update { it.copy(isSaving = false) }
+        }
+    }
+
+    /** 联网开关存 WebSearchSettings 的关闭名单，不在 Room 实体里加列（避开迁移雷区） */
+    private suspend fun persistWebSearchSetting(providerId: String) {
+        val state = _uiState.value
+        webSearchSettingsGateway.update { settings ->
+            val ids = settings.nativeWebSearchDisabledIds
+            if (state.webSearchEnabled) {
+                settings.copy(nativeWebSearchDisabledIds = ids - providerId)
+            } else {
+                settings.copy(nativeWebSearchDisabledIds = ids + providerId)
+            }
         }
     }
 
@@ -239,6 +268,7 @@ class AiProviderEditViewModel(
             }
         }
     }
+
 
     private fun syncModels() {
         viewModelScope.launch {
