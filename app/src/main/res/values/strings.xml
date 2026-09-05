@@ -1115,7 +1115,7 @@
     <string name="character_ai_summary_label">AI summary</string>
     <string name="character_saving">Saving…</string>
     <string name="character_trace_running">Tracing from the first chapter…</string>
-    <string name="character_trace_button">Trace earlier appearances (downloads chapters)</string>
+    <string name="character_first_not_found">Not found in cached chapters; use the refresh button above to trace</string>
     <string name="character_trace_progress">Scanned %1$d/%2$d chapters · downloaded %3$d</string>
     <string name="character_trace_not_found">Trace finished: not found within cached and downloaded range</string>
     <string name="rss_source_empty">Empty now!</string>
@@ -2227,7 +2227,7 @@
     <string name="ai_toc_rule_hits">Matches %1$d of %2$d chapters</string>
     <string name="ai_toc_rule_adopt_selected">Adopt selected (%1$d)</string>
     <string name="ai_web_search_service">Search Service</string>
-    <string name="ai_web_search_desc">Tavily search, used for models without built-in web search</string>
+    <string name="ai_web_search_desc">Tavily search; if not configured, a configured Zhipu provider\'s standalone web search is used as fallback (billed per call to your Zhipu account)</string>
 
     <string name="fail">Failed</string>
     <string name="ai_log">AI Log</string>

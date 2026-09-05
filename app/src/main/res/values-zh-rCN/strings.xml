@@ -1083,7 +1083,7 @@
     <string name="character_ai_summary_label">AI 归纳</string>
     <string name="character_saving">正在保存…</string>
     <string name="character_trace_running">正在从第一章开始追查…</string>
-    <string name="character_trace_button">从头追查更早登场（联网补下载）</string>
+    <string name="character_first_not_found">已缓存章节中未找到，可点右上角刷新按钮从头追查</string>
     <string name="character_trace_progress">已扫描 %1$d/%2$d 章 · 补下载 %3$d 章</string>
     <string name="character_trace_not_found">追查完毕：缓存与补下载范围内未找到该人物</string>
     <string name="search_content_size">搜索结果</string>
@@ -2289,7 +2289,7 @@
     <string name="ai_toc_rule_hits">命中 %1$d / %2$d 章</string>
     <string name="ai_toc_rule_adopt_selected">采用所选 (%1$d)</string>
     <string name="ai_web_search_service">检索服务</string>
-    <string name="ai_web_search_desc">Tavily 检索，给没有自带联网的模型兜底</string>
+    <string name="ai_web_search_desc">Tavily 检索；未配置 Tavily 时若存在智谱供应商，自动用智谱联网检索兜底（按次消耗智谱额度）</string>
     <string name="ai_web_search_enable">启用联网搜索</string>
     <string name="ai_web_search_enable_desc">作者名、书名和提问会被发送给 Tavily</string>
     <string name="ai_web_search_api_key">API 密钥</string>
