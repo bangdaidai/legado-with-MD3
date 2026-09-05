@@ -78,7 +78,7 @@ fun CharacterQuerySheet(
                     MediumTonalButton(
                         onClick = { viewModel.onIntent(CharacterQueryIntent.TraceFromStart) },
                         enabled = !state.tracing,
-                        icon = AppIcons.Refresh,
+                        icon = AppIcons.Replay,
                         contentDescription = stringResource(R.string.character_trace_start),
                     )
                 }

@@ -13,6 +13,7 @@ import io.legado.app.ui.ai.chat.AiThinkingStep
 import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
