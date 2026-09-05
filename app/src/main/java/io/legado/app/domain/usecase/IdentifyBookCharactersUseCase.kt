@@ -169,6 +169,12 @@ class IdentifyBookCharactersUseCase(
                     // 才会下发对应内置工具；否则靠 Tavily 的 search_web 工具兜底（配置好后
                     // AiToolRepository 会自动追加到工具列表）。
                     webSearch = nativeWebSearch,
+                    // 人物 JSON 动辄数千字符，且思考也占输出预算；预设里偏小的上限会把
+                    // 输出截断成非法 JSON（Gson 在字符串半截抛 EOFException）
+                    maxOutputTokens = maxOf(
+                        preset.params.maxOutputTokens ?: 0,
+                        MIN_IDENTIFY_MAX_OUTPUT_TOKENS,
+                    ),
                 ),
                 // bookUrl 可能是不透明编码串，带上书名让模型无需先全书架搜索确认当前书籍
                 toolContext = AiToolContext(
@@ -195,7 +201,15 @@ class IdentifyBookCharactersUseCase(
         require(jsonStart >= 0 && jsonEnd > jsonStart) {
             "Character identification did not return a JSON object"
         }
-        val root = JsonParser.parseString(response.substring(jsonStart, jsonEnd + 1)).asJsonObject
+        val root = try {
+            JsonParser.parseString(response.substring(jsonStart, jsonEnd + 1)).asJsonObject
+        } catch (e: Exception) {
+            // 输出被 max_tokens 截断时 JSON 缺尾，Gson 在字符串半截抛 EOFException
+            throw IllegalStateException(
+                "Character JSON parse failed (output likely truncated by max_tokens): ${e.message}",
+                e,
+            )
+        }
         val candidates = root.getAsJsonArray("characters").map { element ->
             val item = element.asJsonObject
             Candidate(
@@ -297,6 +311,9 @@ class IdentifyBookCharactersUseCase(
         private const val SEARCH_WEB_TOOL = "search_web"
 
         private const val WEB_SEARCH_CONTEXT_MAX_CHARS = 8000
+
+        /** 输出上限下限：完整人物 JSON + 思考占用的预算，低于此值会被 max_tokens 截断 */
+        private const val MIN_IDENTIFY_MAX_OUTPUT_TOKENS = 4096
 
         /**
          * 按本次请求的真实联网能力生成一条系统说明。只正面描述"有什么可用"，
