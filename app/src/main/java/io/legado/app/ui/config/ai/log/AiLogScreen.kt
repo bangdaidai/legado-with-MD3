@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -30,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +77,7 @@ fun AiLogScreen(
     val hasLogs = state.logs.isNotEmpty()
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val expandedKeys = remember { mutableStateMapOf<String, Boolean>() }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(Unit) {
         effects.collectLatest { effect ->
@@ -115,6 +118,7 @@ fun AiLogScreen(
             EmptyHint(stringResource(R.string.ai_log_empty))
         } else {
             LazyColumn(
+                state = listState,
                 contentPadding = adaptiveContentPadding(
                     top = paddingValues.calculateTopPadding(),
                     bottom = 120.dp,
@@ -122,9 +126,20 @@ fun AiLogScreen(
             ) {
                 items(state.logs, key = { it.stableKey() }) { item ->
                     val key = item.stableKey()
+                    val wasExpanded = remember { mutableStateOf(expandedKeys[key] == true) }
+                    val isExpanded = expandedKeys[key] == true
+                    LaunchedEffect(isExpanded) {
+                        if (wasExpanded.value && !isExpanded) {
+                            val index = state.logs.indexOfFirst { it.stableKey() == key }
+                            if (index >= 0) {
+                                listState.animateScrollToItem(index)
+                            }
+                        }
+                        wasExpanded.value = isExpanded
+                    }
                     LogCard(
                         item = item,
-                        expanded = expandedKeys[key] == true,
+                        expanded = isExpanded,
                         onToggleExpand = { expandedKeys[key] = expandedKeys[key] != true },
                         onCopy = { onIntent(AiLogIntent.CopyItem(item)) },
                     )
