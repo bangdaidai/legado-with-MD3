@@ -1080,7 +1080,9 @@
     <string name="character_partial_cache_hint">部分章节未缓存，可能存在更早登场</string>
     <string name="character_ai_loading">正在根据原文归纳…</string>
     <string name="character_save_profile">保存到人物档案</string>
-    <string name="character_saved">已保存到人物档案</string>
+    <string name="character_trace_button">从头追查更早登场（联网补下载）</string>
+    <string name="character_trace_progress">已扫描 %1$d/%2$d 章 · 补下载 %3$d 章</string>
+    <string name="character_trace_not_found">追查完毕：缓存与补下载范围内未找到该人物</string>
     <string name="search_content_size">搜索结果</string>
     <string name="search_content_empty">搜索内容为空，请检查净化或简繁设置</string>
     <string name="rss_source_empty">RSS 源目前为空！</string>

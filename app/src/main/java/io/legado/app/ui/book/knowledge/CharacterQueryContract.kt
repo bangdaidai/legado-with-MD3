@@ -13,7 +13,11 @@ data class CharacterQueryUiState(
     val firstAppearance: CharacterAppearance? = null,
     val latestAppearance: CharacterAppearance? = null,
     /** 章节缓存是否覆盖全书；不完整时提示「最初登场」可能更早。 */
-    val searchFullyCovered: Boolean = true,
+    val searchFullyCovered: Boolean = false,
+    /** 用户触发的「从头追查」进行中/已完成状态。 */
+    val tracing: Boolean = false,
+    val traceProgress: TraceProgress? = null,
+    val traceFinished: Boolean = false,
     /** 第三级：AI 归纳的介绍文字，档案命中时为空。 */
     val aiSummary: String = "",
     val aiLoading: Boolean = false,
@@ -27,6 +31,13 @@ data class CharacterQueryUiState(
         val excerpt: String,
     )
 
+    @Stable
+    data class TraceProgress(
+        val scanned: Int,
+        val total: Int,
+        val downloaded: Int,
+    )
+
     enum class SaveState { Idle, Saving, Saved, Failed }
 }
 
@@ -35,4 +46,6 @@ sealed interface CharacterQueryIntent {
     data object Retry : CharacterQueryIntent
     data class JumpTo(val chapterIndex: Int) : CharacterQueryIntent
     data object SaveProfile : CharacterQueryIntent
+    /** 缓存覆盖不全时，用户主动触发：从头联网补下载扫描，找更早的登场 */
+    data object TraceFromStart : CharacterQueryIntent
 }

@@ -6,6 +6,8 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.usecase.ExplainBookCharacterUseCase
 import io.legado.app.data.repository.SearchContentRepository
+import io.legado.app.domain.usecase.GetChapterContentUseCase
+import io.legado.app.help.book.BookHelp
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -31,6 +33,7 @@ class CharacterQueryViewModel(
     private val bookKnowledgeGateway: BookKnowledgeGateway,
     private val searchContentRepository: SearchContentRepository,
     private val explainBookCharacterUseCase: ExplainBookCharacterUseCase,
+    private val getChapterContentUseCase: GetChapterContentUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CharacterQueryUiState())
@@ -50,6 +53,69 @@ class CharacterQueryViewModel(
                 _effects.tryEmit(CharacterQueryEffect.JumpToChapter(intent.chapterIndex))
             }
             is CharacterQueryIntent.SaveProfile -> saveProfile()
+            is CharacterQueryIntent.TraceFromStart -> traceFromStart()
+        }
+    }
+
+    /**
+     * 用户主动触发的「从头追查」：顺序补下载缺失章节（上限 50 章）并逐章检索，
+     * 找到更早登场即更新锚点；下载成功的章节写入缓存，之后普通全文搜索也能搜到。
+     */
+    private var traceJob: Job? = null
+
+    private fun traceFromStart() {
+        if (_uiState.value.tracing) return
+        val book = ReadBook.book ?: return
+        val name = _uiState.value.name
+        traceJob?.cancel()
+        _uiState.update { it.copy(tracing = true, traceProgress = null) }
+        traceJob = viewModelScope.launch {
+            runCatching {
+                searchContentRepository.findFirstWithDownload(
+                    book = book,
+                    query = name,
+                    downloadChapter = { chapter, nextChapterUrl ->
+                        val content = getChapterContentUseCase.getContent(
+                            book = book,
+                            chapter = chapter,
+                            nextChapterUrl = nextChapterUrl,
+                        )
+                        BookHelp.saveText(book, chapter, content)
+                    },
+                    onProgress = { scanned, total, downloaded ->
+                        _uiState.update {
+                            it.copy(
+                                traceProgress = CharacterQueryUiState.TraceProgress(
+                                    scanned = scanned,
+                                    total = total,
+                                    downloaded = downloaded,
+                                )
+                            )
+                        }
+                    },
+                )
+            }.fold(
+                onSuccess = { result ->
+                    _uiState.update { state ->
+                        state.copy(
+                            tracing = false,
+                            traceProgress = null,
+                            traceFinished = true,
+                            firstAppearance = result?.toAppearance() ?: state.firstAppearance,
+                        )
+                    }
+                    // 追查到更早原文后，重新归纳一次（缓存键变了会真实重算）
+                    if (result != null && _uiState.value.profile == null) {
+                        explainWithAi(book.bookUrl, name)
+                    }
+                },
+                onFailure = { error ->
+                    if (error is CancellationException) throw error
+                    _uiState.update {
+                        it.copy(tracing = false, traceProgress = null, error = error.message ?: error.toString())
+                    }
+                },
+            )
         }
     }
 
@@ -60,14 +126,17 @@ class CharacterQueryViewModel(
 
     private fun load(name: String) {
         queryJob?.cancel()
-        _uiState.update {
-            it.copy(
-                name = name,
-                isLoading = true,
-                error = null,
-                saveState = CharacterQueryUiState.SaveState.Idle,
-            )
-        }
+            _uiState.update {
+                it.copy(
+                    name = name,
+                    isLoading = true,
+                    error = null,
+                    saveState = CharacterQueryUiState.SaveState.Idle,
+                    tracing = false,
+                    traceProgress = null,
+                    traceFinished = false,
+                )
+            }
         queryJob = viewModelScope.launch {
             val book = ReadBook.book
             if (book == null) {

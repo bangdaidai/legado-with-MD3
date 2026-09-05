@@ -114,6 +114,8 @@ private fun CharacterQueryContent(
                     onJump = { onIntent(CharacterQueryIntent.JumpTo(it)) },
                 )
 
+                TraceSection(state = state, onIntent = onIntent)
+
                 SectionDivider()
                 AiSummarySection(state = state, onIntent = onIntent)
             }
@@ -194,6 +196,42 @@ private fun AppearanceSection(
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun TraceSection(
+    state: CharacterQueryUiState,
+    onIntent: (CharacterQueryIntent) -> Unit,
+) {
+    if (state.searchFullyCovered) return
+    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
+        state.traceProgress?.let { progress ->
+            Text(
+                text = stringResource(
+                    R.string.character_trace_progress,
+                    progress.scanned,
+                    progress.total,
+                    progress.downloaded,
+                ),
+                style = LegadoTheme.typography.labelSmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when {
+            state.tracing -> Unit
+            state.traceFinished && state.firstAppearance == null -> Text(
+                text = stringResource(R.string.character_trace_not_found),
+                style = LegadoTheme.typography.labelSmall,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            !state.traceFinished -> TextButton(
+                onClick = { onIntent(CharacterQueryIntent.TraceFromStart) },
+            ) {
+                Text(text = stringResource(R.string.character_trace_button))
+            }
         }
     }
 }

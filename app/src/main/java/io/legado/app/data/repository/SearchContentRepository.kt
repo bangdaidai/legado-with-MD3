@@ -162,6 +162,53 @@ class SearchContentRepository(
         return cachedCount.toFloat() / chapters.size
     }
 
+    /**
+     * 人物速查「从头追查」：从第 0 章顺序扫描，未缓存章节通过 [downloadChapter] 现场补下载
+     * （由调用方决定联网方式与网络策略），命中即返回最早登场。补下载成功的章节已写入正文缓存，
+     * 之后普通全文搜索也能搜到。单章下载失败只跳过该章；[maxDownload] 限制补下载章节数防失控。
+     */
+    suspend fun findFirstWithDownload(
+        book: Book,
+        query: String,
+        maxDownload: Int = 50,
+        downloadChapter: suspend (chapter: BookChapter, nextChapterUrl: String?) -> Unit,
+        onProgress: suspend (scanned: Int, total: Int, downloaded: Int) -> Unit =
+            { _, _, _ -> },
+    ): SearchResult? = withContext(Dispatchers.Default) {
+        val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+        val contentProcessor = ContentProcessor.get(book.name, book.origin)
+        val chineseConverterType = readSettingsGateway?.currentSettings?.chineseConverterType ?: 0
+
+        var downloaded = 0
+        for (index in chapters.indices) {
+            currentCoroutineContext().ensureActive()
+            onProgress(index + 1, chapters.size, downloaded)
+            val bookChapter = chapters[index]
+            var content = BookHelp.getContent(book, bookChapter)
+            if (content == null && !book.isLocal && downloaded < maxDownload) {
+                runCatching {
+                    downloadChapter(bookChapter, chapters.getOrNull(index + 1)?.url)
+                }.onSuccess { downloaded++ }
+                content = BookHelp.getContent(book, bookChapter)
+            }
+            if (content == null) continue
+            val results = searchChapter(
+                query = query,
+                book = book,
+                chapter = bookChapter,
+                contentProcessor = contentProcessor,
+                replaceEnabled = false,
+                regexReplace = false,
+                chineseConverterType = chineseConverterType,
+                defaultReplaceEnabled = false,
+            )
+            if (results.isNotEmpty()) {
+                return@withContext results.first()
+            }
+        }
+        null
+    }
+
     private suspend fun scanEarlyExit(
         book: Book,
         query: String,
