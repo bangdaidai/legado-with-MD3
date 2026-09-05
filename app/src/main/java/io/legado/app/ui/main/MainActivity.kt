@@ -55,9 +55,9 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.Download
 import io.legado.app.service.WebService
-import io.legado.app.ui.about.CrashLogsDialog
 import io.legado.app.ui.about.UpdateMode
 import io.legado.app.ui.about.UpdateSheet
+import io.legado.app.ui.widget.components.log.CrashLogSheet
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.read.ReadBookInputHandler
@@ -70,6 +70,13 @@ import io.legado.app.utils.LogUtils
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.FileDoc
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.getFile
+import io.legado.app.utils.find
+import io.legado.app.utils.list
+import io.legado.app.utils.delete
+import io.legado.app.help.config.AppConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -105,6 +112,9 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
     )
 
     private val startupUpdateSheet = MutableStateFlow<StartupUpdateSheet?>(null)
+
+    /** 崩溃日志弹窗状态 */
+    private val crashLogSheet = MutableStateFlow<List<FileDoc>>(emptyList())
 
     companion object {
         private const val KEY_RESTORE_READ_ROUTE = "restoreReadRoute"
@@ -543,6 +553,37 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
                 },
             )
         }
+
+        val crashLogFiles by crashLogSheet.collectAsStateWithLifecycle()
+        CrashLogSheet(
+            show = crashLogFiles.isNotEmpty(),
+            logFiles = crashLogFiles,
+            onDismissRequest = { crashLogSheet.value = emptyList() },
+            onReadFile = { fileDoc ->
+                lifecycleScope.launch {
+                    val content = withContext(IO) {
+                        String(fileDoc.readBytes())
+                    }
+                    showDialogFragment(TextDialog(fileDoc.name, content))
+                }
+            },
+            onClear = {
+                lifecycleScope.launch {
+                    FileUtils.delete(
+                        externalCacheDir?.let { getFile(it, "crash") },
+                        false
+                    )
+                    val backupPath = AppConfig.backupPath
+                    if (!backupPath.isNullOrEmpty()) {
+                        val uri = android.net.Uri.parse(backupPath)
+                        FileDoc.fromUri(uri, true)
+                            ?.let { find(it, "crash") }
+                            ?.let { delete(it) }
+                    }
+                    crashLogSheet.value = emptyList()
+                }
+            },
+        )
     }
 
     private fun checkStartupRoute(): Boolean {
@@ -623,10 +664,31 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
         LocalConfig.appCrash = false
         alert(getString(R.string.draw), "检测到阅读发生了崩溃，是否打开崩溃日志以便报告问题？") {
             yesButton {
-                showDialogFragment<CrashLogsDialog>()
+                lifecycleScope.launch {
+                    val files = loadCrashLogFiles()
+                    crashLogSheet.value = files
+                }
             }
             noButton()
         }
+    }
+
+    private fun loadCrashLogFiles(): List<FileDoc> {
+        val list = arrayListOf<FileDoc>()
+        externalCacheDir
+            ?.let { getFile(it, "crash") }
+            ?.listFiles(java.io.FileFilter { it.isFile })
+            ?.forEach { list.add(FileDoc.fromFile(it)) }
+        val backupPath = AppConfig.backupPath
+        if (!backupPath.isNullOrEmpty()) {
+            val uri = android.net.Uri.parse(backupPath)
+            FileDoc.fromUri(uri, true)
+                ?.let { find(it, "crash") }
+                ?.let { crashDir ->
+                    list(crashDir) { !it.isDir }
+                }?.let { list.addAll(it) }
+        }
+        return list.sortedByDescending { it.name }.distinctBy { it.name }
     }
 
     /**
