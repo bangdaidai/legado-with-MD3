@@ -25,6 +25,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -48,12 +49,15 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.update.AppUpdate
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
+import io.legado.app.model.Download
 import io.legado.app.service.WebService
 import io.legado.app.ui.about.CrashLogsDialog
-import io.legado.app.ui.about.UpdateDialog
+import io.legado.app.ui.about.UpdateMode
+import io.legado.app.ui.about.UpdateSheet
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.read.ReadBookInputHandler
@@ -65,6 +69,7 @@ import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -90,6 +95,15 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
 
     /** 当前激活的有声书播放器 ViewModel（由有声书路由在生命周期内设置/清理） */
     internal var activeAudioPlayViewModel: AudioPlayViewModel? = null
+
+    /** 启动时的更新/更新日志弹窗状态，复用 About 的 Compose UpdateSheet */
+    private data class StartupUpdateSheet(
+        val updateInfo: AppUpdate.UpdateInfo,
+        val mode: UpdateMode,
+        val onDismiss: (() -> Unit)? = null,
+    )
+
+    private val startupUpdateSheet = MutableStateFlow<StartupUpdateSheet?>(null)
 
     companion object {
         private const val KEY_RESTORE_READ_ROUTE = "restoreReadRoute"
@@ -504,6 +518,30 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
                 MainNavigator.navigateBack(this@MainActivity, backStack)
             }
         }
+
+        val localContext = LocalContext.current
+        val startupUpdate by startupUpdateSheet.collectAsStateWithLifecycle()
+        startupUpdate?.let { sheet ->
+            UpdateSheet(
+                show = true,
+                updateInfo = sheet.updateInfo,
+                mode = sheet.mode,
+                onDismissRequest = {
+                    startupUpdateSheet.value = null
+                    sheet.onDismiss?.invoke()
+                },
+                onStartDownload = {
+                    val url = sheet.updateInfo.downloadUrl
+                    val fileName = sheet.updateInfo.fileName
+                    if (url.isBlank() || fileName.isBlank()) {
+                        localContext.toastOnUi(getString(R.string.about_download_info_incomplete))
+                    } else {
+                        Download.start(localContext, url, fileName)
+                        localContext.toastOnUi(getString(R.string.about_start_download, fileName))
+                    }
+                },
+            )
+        }
     }
 
     private fun checkStartupRoute(): Boolean {
@@ -520,7 +558,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
     private fun checkUpdateOnStart() {
         AppUpdateGitHub.check(lifecycleScope)
             .onSuccess { updateInfo ->
-                showDialogFragment(UpdateDialog(updateInfo))
+                startupUpdateSheet.value = StartupUpdateSheet(updateInfo, UpdateMode.UPDATE)
             }
     }
 
@@ -545,26 +583,36 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
                 try {
                     val info = AppUpdateGitHub.getReleaseByTag(BuildConfig.VERSION_NAME)
                     if (info != null) {
-                        val dialog = UpdateDialog(info, UpdateDialog.Mode.VIEW_LOG)
-                        dialog.setOnDismissListener { block.resume(null) }
-                        showDialogFragment(dialog)
+                        startupUpdateSheet.value =
+                            StartupUpdateSheet(info, UpdateMode.VIEW_LOG) { block.resume(null) }
                     } else {
-                        val fallback = String(assets.open("updateLog.md").readBytes())
-                        val dialog = TextDialog(getString(R.string.update_log), fallback, TextDialog.Mode.MD)
-                        dialog.setOnDismissListener { block.resume(null) }
-                        showDialogFragment(dialog)
+                        showFallbackUpdateLog { block.resume(null) }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    val fallback = String(assets.open("updateLog.md").readBytes())
-                    val dialog = TextDialog(getString(R.string.update_log), fallback, TextDialog.Mode.MD)
-                    dialog.setOnDismissListener { block.resume(null) }
-                    showDialogFragment(dialog)
+                    showFallbackUpdateLog { block.resume(null) }
                 }
             }
         } else {
             block.resume(null)
         }
+    }
+
+    /**
+     * 网络获取失败时回退展示本地 updateLog.md
+     */
+    private fun showFallbackUpdateLog(onDismiss: () -> Unit) {
+        val fallback = String(assets.open("updateLog.md").readBytes())
+        startupUpdateSheet.value = StartupUpdateSheet(
+            updateInfo = AppUpdate.UpdateInfo(
+                tagName = BuildConfig.VERSION_NAME,
+                updateLog = fallback,
+                downloadUrl = "",
+                fileName = ""
+            ),
+            mode = UpdateMode.VIEW_LOG,
+            onDismiss = onDismiss
+        )
     }
 
     private fun notifyAppCrash() {

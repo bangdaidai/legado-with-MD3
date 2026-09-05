@@ -6,7 +6,6 @@ import io.legado.app.utils.FileDoc
 
 @Stable
 data class AboutUiState(
-    val updateToVariant: String = "official_version",
     val sheet: AboutSheet = AboutSheet.None,
     val dialog: AboutDialog? = null,
     val crashLogFiles: List<FileDoc> = emptyList(),
@@ -33,6 +32,7 @@ sealed interface AboutIntent {
     data object DismissDialog : AboutIntent
     data object CheckUpdate : AboutIntent
     data class ShowMdFile(val title: String, val fileName: String) : AboutIntent
+    data object ShowUpdateLog : AboutIntent
     data object ShowCrashLogs : AboutIntent
     data object SaveLog : AboutIntent
     data object CreateHeapDump : AboutIntent

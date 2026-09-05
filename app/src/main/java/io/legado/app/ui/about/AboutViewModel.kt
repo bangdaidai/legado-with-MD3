@@ -5,10 +5,11 @@ import android.net.Uri
 import androidx.core.net.toUri
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
+import io.legado.app.BuildConfig
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
-import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.help.CrashHandler
+
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.utils.FileDoc
@@ -24,41 +25,24 @@ import io.legado.app.utils.list
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.openOutputStream
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.FileFilter
 
 class AboutViewModel(
     application: Application,
-    otherSettingsGateway: OtherSettingsGateway,
 ) : BaseViewModel(application) {
 
-    private val _uiState = MutableStateFlow(
-        AboutUiState(updateToVariant = otherSettingsGateway.currentSettings.updateToVariant)
-    )
+    private val _uiState = MutableStateFlow(AboutUiState())
     val uiState: StateFlow<AboutUiState> = _uiState.asStateFlow()
 
     private val _effects = MutableSharedFlow<AboutEffect>(extraBufferCapacity = 8)
     val effects = _effects.asSharedFlow()
-
-    init {
-        viewModelScope.launch {
-            otherSettingsGateway.settings
-                .map { it.updateToVariant }
-                .distinctUntilChanged()
-                .collect { updateToVariant ->
-                    _uiState.update { it.copy(updateToVariant = updateToVariant) }
-                }
-        }
-    }
 
     fun onIntent(intent: AboutIntent) {
         when (intent) {
@@ -66,6 +50,7 @@ class AboutViewModel(
             is AboutIntent.DismissDialog -> _uiState.update { it.copy(dialog = null) }
             is AboutIntent.CheckUpdate -> checkUpdate()
             is AboutIntent.ShowMdFile -> showMdFile(intent.title, intent.fileName)
+            is AboutIntent.ShowUpdateLog -> showUpdateLog()
             is AboutIntent.ShowCrashLogs -> showCrashLogs()
             is AboutIntent.SaveLog -> saveLog()
             is AboutIntent.CreateHeapDump -> createHeapDump()
@@ -103,6 +88,29 @@ class AboutViewModel(
             String(context.assets.open(fileName).readBytes())
         }.onSuccess { content ->
             _uiState.update { it.copy(sheet = AboutSheet.Markdown(title, content)) }
+        }
+    }
+
+    /**
+     * 更新日志复用 About 的 Compose UpdateSheet（VIEW_LOG 模式），与启动更新弹窗共用同一套 UI
+     */
+    private fun showUpdateLog() {
+        execute {
+            String(context.assets.open("updateLog.md").readBytes())
+        }.onSuccess { content ->
+            _uiState.update {
+                it.copy(
+                    sheet = AboutSheet.Update(
+                        updateInfo = AppUpdate.UpdateInfo(
+                            tagName = BuildConfig.VERSION_NAME,
+                            updateLog = content,
+                            downloadUrl = "",
+                            fileName = ""
+                        ),
+                        mode = UpdateMode.VIEW_LOG
+                    )
+                )
+            }
         }
     }
 

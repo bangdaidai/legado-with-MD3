@@ -1,24 +1,24 @@
 package io.legado.app.ui.about
 
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.help.update.AppUpdate
@@ -64,7 +64,6 @@ fun MarkdownSheet(
 fun UpdateSheet(
     show: Boolean,
     updateInfo: AppUpdate.UpdateInfo,
-    updateToVariant: String,
     mode: UpdateMode,
     onDismissRequest: () -> Unit,
     onStartDownload: () -> Unit,
@@ -85,79 +84,63 @@ fun UpdateSheet(
                 .verticalScroll(rememberScrollState())
         ) {
             if (mode == UpdateMode.UPDATE) {
-                Row(
-                    modifier = Modifier.padding(bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppText(
-                        text = stringResource(R.string.about_current_version),
-                        style = LegadoTheme.typography.bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    AppText(
-                        text = BuildConfig.VERSION_NAME,
-                        style = LegadoTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-                Row(
-                    modifier = Modifier.padding(bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppText(
-                        text = stringResource(R.string.about_new_version),
-                        style = LegadoTheme.typography.bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    AppText(
-                        text = updateInfo.tagName,
-                        style = LegadoTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Row(
-                    modifier = Modifier.padding(bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppText(
-                        text = "ABI",
-                        style = LegadoTheme.typography.bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    AppText(
-                        text = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown",
-                        style = LegadoTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-                Row(
+                AppText(
+                    text = stringResource(R.string.about_current_version) + " " + BuildConfig.VERSION_NAME,
+                    style = LegadoTheme.typography.bodyLarge,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                )
+                // 版本分隔线
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .height(2.dp)
+                        .background(LegadoTheme.colorScheme.primaryContainer)
+                )
+                AppText(
+                    text = stringResource(R.string.about_new_version) + " " + updateInfo.tagName,
+                    style = LegadoTheme.typography.headlineSmall,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = LegadoTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                val downloadUrl = updateInfo.downloadUrl
+                if (downloadUrl.isNotBlank()) {
                     AppText(
-                        text = stringResource(R.string.about_update_channel),
-                        style = LegadoTheme.typography.bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    AppText(
-                        text = updateToVariant,
-                        style = LegadoTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
+                        text = downloadUrl,
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
             } else {
                 AppText(
                     text = BuildConfig.VERSION_NAME,
-                    style = LegadoTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    style = LegadoTheme.typography.headlineSmall,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = LegadoTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
             }
+
+            AppText(
+                text = stringResource(R.string.update_log),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 8.dp),
+            )
 
             val updateLog = updateInfo.updateLog
             if (updateLog.isNotBlank()) {
                 MarkdownBlock(
                     content = updateLog,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                 )
             }
 
