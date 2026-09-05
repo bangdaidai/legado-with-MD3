@@ -2,6 +2,7 @@ package io.legado.app.ui.ai.chat
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -177,19 +179,16 @@ fun ReasoningCard(
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
+            val arrowRotation by animateFloatAsState(
+                targetValue = if (state.expandState.expanded) 0f else -90f,
+                label = "ReasoningArrowRotation"
+            )
             Icon(
-                imageVector = if (state.expandState.expanded)
-                    Icons.Default.KeyboardArrowDown
-                else
-                    Icons.Default.KeyboardArrowDown,
+                imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
                 modifier = Modifier
                     .size(18.dp)
-                    .then(
-                        if (state.expandState.expanded)
-                            Modifier  // pointing up when expanded
-                        else Modifier
-                    ),
+                    .rotate(arrowRotation),
                 tint = LegadoTheme.colorScheme.outline
             )
         }
