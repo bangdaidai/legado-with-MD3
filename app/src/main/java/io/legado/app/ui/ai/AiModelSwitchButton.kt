@@ -140,7 +140,9 @@ class AiModelSwitchViewModel(
     private val aiProfileGateway: AiProfileGateway,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(persistentListOf<AiModelOptionUi>())
+    // 用 ImmutableList 作为流类型：combine 里 toImmutableList() 产出的是接口类型，
+    // 声明成 PersistentList 会在赋值处不兼容
+    private val _uiState = MutableStateFlow<ImmutableList<AiModelOptionUi>>(persistentListOf())
     val uiState = _uiState.asStateFlow()
 
     private val _sheetVisible = MutableStateFlow(false)
