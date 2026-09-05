@@ -1606,7 +1606,7 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         val contentProcessor = ContentProcessor.get(book.name, book.origin)
         val displayTitle = chapter.getDisplayTitle(
             contentProcessor.getTitleReplaceRules(),
-            book.getUseReplaceRule(AppConfig.replaceEnableDefault),
+            book.getUseReplaceRuleToc(AppConfig.replaceEnableDefault),
             chineseConverterType = AppConfig.chineseConverterType,
         )
         val contents = contentProcessor
