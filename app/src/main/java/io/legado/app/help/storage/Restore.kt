@@ -11,6 +11,7 @@ import androidx.documentfile.provider.DocumentFile
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.BookType
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiArtifact
@@ -649,7 +650,16 @@ object Restore : KoinComponent {
         appDb.readRecordDao.insert(
             existing?.copy(
                 readTime = maxOf(existing.readTime, localRecord.readTime),
-                lastRead = maxOf(existing.lastRead, localRecord.lastRead)
+                lastRead = maxOf(existing.lastRead, localRecord.lastRead),
+                // 已有行封面为空时补上导入的封面（如 r 项目影视记录），不覆盖已有值
+                coverUrl = existing.coverUrl.ifBlank { localRecord.coverUrl },
+                // r 项目 readRecord.json 不含 bookType，先导入的行会默认成文字；
+                // 后续 readSession 会话流带真实类型时，把仍是默认文字的存量行纠正过来
+                bookType = if (existing.bookType == BookType.text && localRecord.bookType != BookType.text) {
+                    localRecord.bookType
+                } else {
+                    existing.bookType
+                }
             ) ?: localRecord
         )
     }
@@ -672,7 +682,13 @@ object Restore : KoinComponent {
                 readTime = maxOf(existing.readTime, localDetail.readTime),
                 readWords = maxOf(existing.readWords, localDetail.readWords),
                 firstReadTime = minPositive(existing.firstReadTime, localDetail.firstReadTime),
-                lastReadTime = maxOf(existing.lastReadTime, localDetail.lastReadTime)
+                lastReadTime = maxOf(existing.lastReadTime, localDetail.lastReadTime),
+                // 同 restoreReadRecord：r 的明细无 bookType，默认文字行被会话流的真实类型纠正
+                bookType = if (existing.bookType == BookType.text && localDetail.bookType != BookType.text) {
+                    localDetail.bookType
+                } else {
+                    existing.bookType
+                }
             ) ?: localDetail
         )
     }
@@ -858,7 +874,9 @@ object Restore : KoinComponent {
         val author: String? = null,
         val readTime: Long = 0L,
         val lastRead: Long = 0L,
-        val bookType: Int = io.legado.app.constant.BookType.text
+        val bookType: Int = io.legado.app.constant.BookType.text,
+        /** r 项目影视记录的封面直链，书架外记录展示用；老备份无此字段时保持空 */
+        val coverUrl: String? = null
     ) {
         fun toReadRecord(): ReadRecord = ReadRecord(
             deviceId = deviceId ?: "",
@@ -866,7 +884,8 @@ object Restore : KoinComponent {
             bookAuthor = bookAuthor ?: author ?: "",
             readTime = readTime,
             lastRead = lastRead,
-            bookType = bookType
+            bookType = bookType,
+            coverUrl = coverUrl.orEmpty()
         )
     }
 
@@ -882,7 +901,9 @@ object Restore : KoinComponent {
         val endTime: Long = 0L,
         val words: Long = 0L,
         val type: Int = io.legado.app.constant.BookType.text,
-        val durChapterTitle: String? = null
+        val durChapterTitle: String? = null,
+        /** r 项目影视记录的封面直链，随会话流入库后聚合到 readRecord 展示 */
+        val coverUrl: String? = null
     )
 
     /**
@@ -966,7 +987,8 @@ object Restore : KoinComponent {
                             bookAuthor = key.second,
                             readTime = group.sumOf { it.endTime - it.startTime },
                             lastRead = group.maxOf { it.endTime },
-                            bookType = group.first().type
+                            bookType = group.first().type,
+                            coverUrl = group.firstOrNull { !it.coverUrl.isNullOrBlank() }?.coverUrl.orEmpty()
                         )
                     )
                     recordOk++
