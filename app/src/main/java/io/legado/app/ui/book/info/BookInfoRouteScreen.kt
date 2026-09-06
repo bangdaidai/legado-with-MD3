@@ -54,8 +54,8 @@ fun BookInfoRouteScreen(
     onOpenSearch: (String) -> Unit,
     onOpenBookSourceEdit: (String) -> Unit,
     onOpenSourceLogin: (String) -> Unit,
-    onOpenReader: (bookUrl: String, inBookshelf: Boolean, chapterChanged: Boolean) -> Unit = { _, _, _ -> },
-    onOpenMangaReader: (bookUrl: String, inBookshelf: Boolean, chapterChanged: Boolean) -> Unit = { _, _, _ -> },
+    onOpenReader: (bookUrl: String, inBookshelf: Boolean, chapterChanged: Boolean, chapterIndex: Int, chapterPos: Int) -> Unit = { _, _, _, _, _ -> },
+    onOpenMangaReader: (bookUrl: String, inBookshelf: Boolean, chapterChanged: Boolean, chapterIndex: Int, chapterPos: Int) -> Unit = { _, _, _, _, _ -> },
     onOpenAudioPlay: (bookUrl: String, inBookshelf: Boolean) -> Unit = { _, _ -> },
     onNavigateToBookInfo: (name: String?, author: String?, bookUrl: String, origin: String?, coverPath: String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToExploreShow: (title: String?, sourceUrl: String, exploreUrl: String?) -> Unit = { _, _, _ -> },
@@ -141,6 +141,8 @@ fun BookInfoRouteScreen(
                                 effect.book.bookUrl,
                                 effect.inBookshelf,
                                 effect.chapterChanged,
+                                effect.chapterIndex,
+                                effect.chapterPos,
                             )
                         }
                         else -> {
@@ -148,6 +150,8 @@ fun BookInfoRouteScreen(
                             effect.book.bookUrl,
                             effect.inBookshelf,
                             effect.chapterChanged,
+                            effect.chapterIndex,
+                            effect.chapterPos,
                         )
                         }
                     }

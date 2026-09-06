@@ -1510,7 +1510,15 @@ class BookInfoViewModel(
     }
 
     private fun openReader(book: Book) {
-        emitEffect(BookInfoEffect.OpenReader(book.uiCopy(), inBookshelf, chapterChanged))
+        emitEffect(
+            BookInfoEffect.OpenReader(
+                book = book.uiCopy(),
+                inBookshelf = inBookshelf,
+                chapterChanged = chapterChanged,
+                chapterIndex = book.durChapterIndex,
+                chapterPos = book.durChapterPos,
+            )
+        )
     }
 
     private fun handleMenuAction(action: BookInfoMenuAction) {

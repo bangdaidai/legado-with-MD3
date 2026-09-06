@@ -41,17 +41,19 @@ class BookInfoActivity : BaseComposeActivity() {
                     )
                 )
             },
-            onOpenReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenReader = { bookUrl, inBookshelf, chapterChanged, chapterIndex, chapterPos ->
                 startActivity(
                     MainActivity.createReadBookIntent(
                         context = this,
                         bookUrl = bookUrl,
                         inBookshelf = inBookshelf,
                         chapterChanged = chapterChanged,
+                        chapterIndex = chapterIndex,
+                        chapterPos = chapterPos,
                     )
                 )
             },
-            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged, chapterIndex, chapterPos ->
                 startActivity(
                     MainActivity.createReadMangaIntent(
                         context = this,

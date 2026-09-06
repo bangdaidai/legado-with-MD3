@@ -1146,16 +1146,18 @@ fun MainActivity.mainEntryProvider(
             onOpenSourceLogin = { sourceUrl ->
                 onNavigateToRoute(MainRouteSourceLogin(SourceLoginType.BookSource, sourceUrl))
             },
-            onOpenReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenReader = { bookUrl, inBookshelf, chapterChanged, chapterIndex, chapterPos ->
                 onNavigateToRoute(
                     MainRouteReadBook(
                         bookUrl = bookUrl,
                         inBookshelf = inBookshelf,
                         chapterChanged = chapterChanged,
+                        chapterIndex = chapterIndex,
+                        chapterPos = chapterPos,
                     )
                 )
             },
-            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged, chapterIndex, chapterPos ->
                 onNavigateToRoute(
                     MainRouteReadManga(
                         bookUrl = bookUrl,
