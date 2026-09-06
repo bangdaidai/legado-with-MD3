@@ -97,11 +97,25 @@ data class AuthorManageUiState(
     val authors: ImmutableList<AuthorItemUi> = persistentListOf(),
     val sortBy: AuthorSort = AuthorSort.BookCount,
     val searchQuery: String = "",
+    /** 一键生成缺失简介：当前正在生成的作者与进度，null 表示未在生成 */
+    val bioGeneration: BioGenerationUi? = null,
+    /** 批量生成的结果横幅（成功/失败数量或取消提示） */
+    val bioGenerationMessage: String? = null,
+)
+
+/** 批量生成作者简介的进度。 */
+@Stable
+data class BioGenerationUi(
+    val currentAuthor: String,
+    val done: Int,
+    val total: Int,
 )
 
 sealed interface AuthorManageIntent {
     data class SetSort(val sort: AuthorSort) : AuthorManageIntent
     data class SetSearchQuery(val query: String) : AuthorManageIntent
+    data object GenerateMissingBios : AuthorManageIntent
+    data object CancelGenerateBios : AuthorManageIntent
 }
 
 @Stable

@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -89,6 +91,11 @@ fun AuthorManageScreen(
                 navigationIcon = { TopBarNavigationButton(onClick = onBack) },
                 actions = {
                     TopBarActionButton(
+                        onClick = { onIntent(AuthorManageIntent.GenerateMissingBios) },
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = stringResource(R.string.author_bio_generate_missing),
+                    )
+                    TopBarActionButton(
                         onClick = {
                             searchActive = !searchActive
                             // 关掉搜索时清空关键词，避免搜索框消失了列表还在被过滤
@@ -121,6 +128,43 @@ fun AuthorManageScreen(
                             onQueryChange = { onIntent(AuthorManageIntent.SetSearchQuery(it)) },
                             placeholder = stringResource(R.string.search),
                         )
+                    }
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = uiState.bioGeneration != null || uiState.bioGenerationMessage != null,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(LegadoTheme.colorScheme.surfaceContainer)
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppText(
+                                text = uiState.bioGeneration?.let { generation ->
+                                    stringResource(
+                                        R.string.author_bio_generating,
+                                        generation.currentAuthor,
+                                        generation.done + 1,
+                                        generation.total,
+                                    )
+                                } ?: uiState.bioGenerationMessage.orEmpty(),
+                                style = LegadoTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (uiState.bioGeneration != null) {
+                                AppText(
+                                    text = stringResource(R.string.author_bio_generate_cancel),
+                                    style = LegadoTheme.typography.bodySmall,
+                                    color = LegadoTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable {
+                                        onIntent(AuthorManageIntent.CancelGenerateBios)
+                                    }
+                                )
+                            }
+                        }
                     }
                 },
             )

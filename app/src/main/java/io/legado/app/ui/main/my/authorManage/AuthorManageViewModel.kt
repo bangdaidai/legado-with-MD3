@@ -2,21 +2,28 @@ package io.legado.app.ui.main.my.authorManage
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.data.entities.AuthorProfile
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.AuthorProfileRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
+import io.legado.app.utils.appCtx
 import io.legado.app.utils.cnCompare
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
@@ -30,8 +37,10 @@ private data class SortedAuthors(
 class AuthorManageViewModel(
     private val repository: ReadingMemoryRepository,
     private val authorProfileRepository: AuthorProfileRepository,
+    private val generateAuthorBioUseCase: GenerateAuthorBioUseCase,
 ) : ViewModel() {
 
+    private var bioGenerationJob: Job? = null
     private val _uiState = MutableStateFlow(AuthorManageUiState(loading = true))
     val uiState: StateFlow<AuthorManageUiState> = _uiState.asStateFlow()
 
@@ -66,6 +75,60 @@ class AuthorManageViewModel(
         when (intent) {
             is AuthorManageIntent.SetSort -> _sortBy.value = intent.sort
             is AuthorManageIntent.SetSearchQuery -> _searchQuery.value = intent.query
+            AuthorManageIntent.GenerateMissingBios -> generateMissingBios()
+            AuthorManageIntent.CancelGenerateBios -> cancelGenerateBios()
+        }
+    }
+
+    /** 一键生成缺失简介：逐个为没有简介的作者调用 AI，完成后写档并刷新列表 */
+    private fun generateMissingBios() {
+        if (bioGenerationJob?.isActive == true) return
+        bioGenerationJob = viewModelScope.launch {
+            val memories = repository.observeAll().first()
+            val profiles = authorProfileRepository.observeProfiles().first()
+            val targets = memories.groupBy { it.bookAuthor.trim() }
+                .filterKeys { it.isNotBlank() }
+                .map { (name, mems) -> name to mems.map { it.bookName } }
+                .filter { (name, _) -> profiles[name]?.bio.isNullOrBlank() }
+            if (targets.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        bioGeneration = null,
+                        bioGenerationMessage = appCtx.getString(R.string.author_bio_missing_none),
+                    )
+                }
+                return@launch
+            }
+            var success = 0
+            var failed = 0
+            targets.forEachIndexed { index, (name, titles) ->
+                _uiState.update {
+                    it.copy(bioGeneration = BioGenerationUi(name, index, targets.size))
+                }
+                generateAuthorBioUseCase.execute(name, titles).fold(
+                    onSuccess = { generated ->
+                        authorProfileRepository.saveAiBio(name, generated.bio, generated.modelId)
+                        success++
+                    },
+                    onFailure = { failed++ },
+                )
+            }
+            _uiState.update {
+                it.copy(
+                    bioGeneration = null,
+                    bioGenerationMessage = appCtx.getString(
+                        R.string.author_bio_generate_done, success, failed,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun cancelGenerateBios() {
+        bioGenerationJob?.cancel()
+        bioGenerationJob = null
+        _uiState.update {
+            it.copy(bioGeneration = null, bioGenerationMessage = appCtx.getString(R.string.author_bio_generate_cancelled))
         }
     }
 

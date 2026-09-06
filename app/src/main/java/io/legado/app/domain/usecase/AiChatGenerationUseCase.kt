@@ -48,7 +48,7 @@ class AiChatGenerationUseCase(
         // 智谱实测：内置联网与 function 工具调用互斥（对话请求恒带工具），带工具的主请求里
         // 检索永远不执行；先发一轮无工具纯对话预检索，把结果作为上下文注入。
         val webSearchContext = if (nativeWebSearch && !searchToolAvailable) {
-            runCatching { aiWebSearchPrefetchUseCase.prefetch(preset.model, userContent) }
+            runCatching { aiWebSearchPrefetchUseCase.prefetch(preset.model, userContent, AiTaskType.CHAT) }
                 .onFailure { if (it is CancellationException) throw it }
                 .getOrNull()
         } else {

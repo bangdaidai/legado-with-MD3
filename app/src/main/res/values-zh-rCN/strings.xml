@@ -243,6 +243,12 @@
     <string name="background">背景</string>
     <string name="author">作者</string>
     <string name="author_show">%s</string>
+    <string name="author_bio_generate_missing">一键生成缺失简介</string>
+    <string name="author_bio_generating">正在生成作者简介：%1$s（%2$d/%3$d）</string>
+    <string name="author_bio_generate_cancel">取消</string>
+    <string name="author_bio_generate_done">已为 %1$d 位作者生成简介，%2$d 位失败</string>
+    <string name="author_bio_missing_none">没有缺少简介的作者</string>
+    <string name="author_bio_generate_cancelled">已取消生成</string>
     <string name="aloud_stop">朗读停止</string>
     <string name="clear_cache">清理缓存</string>
     <string name="clear_cache_success">成功清理缓存</string>

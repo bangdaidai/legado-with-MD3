@@ -157,7 +157,7 @@ class IdentifyBookCharactersUseCase(
             )
             val fetched = runCatching {
                 preSearchQuery(bookName)?.let { query ->
-                    aiWebSearchPrefetchUseCase.prefetch(preset.model, query)
+                    aiWebSearchPrefetchUseCase.prefetch(preset.model, query, AiTaskType.IDENTIFY_CHARACTERS)
                 }
             }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
@@ -209,6 +209,8 @@ class IdentifyBookCharactersUseCase(
                     bookUrl = bookUrl,
                     bookName = bookName,
                 ),
+                // AI 日志按此标记使用场景（角色识别），不带则退化成"流式生成"
+                taskType = AiTaskType.IDENTIFY_CHARACTERS,
             )
         ).collect { event ->
             when (event) {

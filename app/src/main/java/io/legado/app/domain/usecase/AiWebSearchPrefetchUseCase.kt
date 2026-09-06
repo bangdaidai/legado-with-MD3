@@ -24,12 +24,18 @@ class AiWebSearchPrefetchUseCase(
     private val aiTextGateway: AiTextGateway,
 ) {
 
-    suspend fun prefetch(model: AiModelConfig, query: String): String? {
+    suspend fun prefetch(
+        model: AiModelConfig,
+        query: String,
+        /** 预检索是调用方任务的一部分，带上 taskType 让 AI 日志显示正确的使用场景 */
+        taskType: String? = null,
+    ): String? {
         if (query.isBlank()) return null
         val request = AiGenerateRequest(
             model = model,
             messages = listOf(AiMessage(AiMessageRole.USER, query)),
             params = AiGenerationParams(webSearch = true),
+            taskType = taskType,
         )
         val output = StringBuilder()
         try {

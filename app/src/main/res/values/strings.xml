@@ -2568,6 +2568,12 @@
     <string name="import_tag_group_rule">Import Tag Group Rules</string>
     <string name="tag_management">Tag Management</string>
     <string name="author_management">Author Management</string>
+    <string name="author_bio_generate_missing">Generate missing bios</string>
+    <string name="author_bio_generating">Generating bio: %1$s (%2$d/%3$d)</string>
+    <string name="author_bio_generate_cancel">Cancel</string>
+    <string name="author_bio_generate_done">Generated bios for %1$d authors, %2$d failed</string>
+    <string name="author_bio_missing_none">No authors are missing a bio</string>
+    <string name="author_bio_generate_cancelled">Generation cancelled</string>
     <string name="author_management_empty">No books can be grouped by author yet</string>
     <string name="author_search_empty">No matching authors</string>
     <string name="author_detail_empty">No books for this author yet</string>
