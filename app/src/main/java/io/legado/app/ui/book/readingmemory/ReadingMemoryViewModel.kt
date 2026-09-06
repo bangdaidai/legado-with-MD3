@@ -181,7 +181,7 @@ class ReadingMemoryViewModel(
         viewModelScope.launch {
             eventFlow<String>(EventBus.TAGS_UPDATED).collect { load() }
         }
-        load()
+        // 列表由 observeAll() 的数据库流驱动，进入页面不自动全量刷新，仅保留下拉手动刷新
     }
 
     private inline fun <reified T> eventFlow(tag: String): Flow<T> = callbackFlow {
