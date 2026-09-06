@@ -58,6 +58,7 @@ import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fastSum
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getTextWidthsCompat
 import io.legado.app.utils.splitNotBlank
@@ -142,7 +143,17 @@ class TextChapterLayout(
             } else {
                 // 指定了角色分类：按 role 取人，配角也算
                 bookKnowledgeDao.getCharactersByRole(book.bookUrl, role)
-            }.map { it.name }
+            }.flatMap { profile ->
+                // 主名和详情页配置的别名一起参与高亮；别名解析失败时只保留主名
+                val aliases = runCatching {
+                    GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
+                }.getOrElse { emptyList() }
+                listOf(profile.name) + aliases
+            }
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .toList()
         }
         if (names.isEmpty()) return null
         return names.joinToString("|") { java.util.regex.Pattern.quote(it) }
