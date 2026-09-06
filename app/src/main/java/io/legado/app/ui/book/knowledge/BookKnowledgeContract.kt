@@ -55,7 +55,6 @@ sealed interface CharacterDetailIntent {
     data class SetIsProtagonist(val value: Boolean) : CharacterDetailIntent
     data class SetPersonality(val value: String) : CharacterDetailIntent
     data class SetSummary(val value: String) : CharacterDetailIntent
-    data object Save : CharacterDetailIntent
     data class Delete(
         val deleteRelations: Boolean,
         val deleteEvents: Boolean,

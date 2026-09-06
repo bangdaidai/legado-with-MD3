@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,9 +18,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
@@ -100,11 +102,6 @@ fun BookCharacterDetailScreen(
                             contentDescription = stringResource(R.string.delete),
                         )
                     }
-                    TopBarActionButton(
-                        onClick = { onIntent(CharacterDetailIntent.Save) },
-                        imageVector = Icons.Default.Save,
-                        contentDescription = stringResource(R.string.save),
-                    )
                 },
                 scrollBehavior = scrollBehavior,
             )
@@ -144,7 +141,7 @@ fun BookCharacterDetailScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun CharacterDetailContent(
     state: CharacterDetailUiState,
@@ -247,7 +244,7 @@ private fun CharacterDetailContent(
         dismissText = stringResource(R.string.cancel),
         onDismiss = { showProfileDialog = false },
         content = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppTextField(
                     value = dialogName,
                     onValueChange = { dialogName = it },
@@ -262,28 +259,44 @@ private fun CharacterDetailContent(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                ProfileRoleDropdown(
-                    selectedRole = dialogRole,
-                    onRoleSelected = { dialogRole = it },
-                )
-                ProfileVoiceTraitDropdown(
-                    label = stringResource(R.string.character_voice_gender),
-                    selected = dialogVoiceGender,
-                    options = BookCharacterProfile.ALL_VOICE_GENDERS,
-                    displayName = { voiceGenderDisplayName(it) },
-                    onSelected = { dialogVoiceGender = it },
-                )
-                ProfileVoiceTraitDropdown(
-                    label = stringResource(R.string.character_voice_age_band),
-                    selected = dialogVoiceAgeBand,
-                    options = BookCharacterProfile.ALL_VOICE_AGE_BANDS,
-                    displayName = { voiceAgeBandDisplayName(it) },
-                    onSelected = { dialogVoiceAgeBand = it },
-                )
-                CheckboxItem(
-                    "主角",
-                    checked = dialogIsProtagonist,
-                ) { dialogIsProtagonist = it }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ProfileRoleDropdown(
+                        selectedRole = dialogRole,
+                        onRoleSelected = { dialogRole = it },
+                    )
+                    ProfileVoiceTraitDropdown(
+                        label = stringResource(R.string.character_voice_gender),
+                        text = voiceGenderDisplayName(dialogVoiceGender),
+                        options = BookCharacterProfile.ALL_VOICE_GENDERS,
+                        displayName = { voiceGenderDisplayName(it) },
+                        onSelected = { dialogVoiceGender = it },
+                    )
+                    ProfileVoiceTraitDropdown(
+                        label = stringResource(R.string.character_voice_age_band),
+                        text = voiceAgeBandDisplayName(dialogVoiceAgeBand),
+                        options = BookCharacterProfile.ALL_VOICE_AGE_BANDS,
+                        displayName = { voiceAgeBandDisplayName(it) },
+                        onSelected = { dialogVoiceAgeBand = it },
+                    )
+                    TextCard(
+                        text = "主角",
+                        icon = if (dialogIsProtagonist) Icons.Default.Check else null,
+                        onClick = { dialogIsProtagonist = !dialogIsProtagonist },
+                        backgroundColor = if (dialogIsProtagonist) {
+                            LegadoTheme.colorScheme.secondaryContainer
+                        } else {
+                            null
+                        },
+                        contentColor = if (dialogIsProtagonist) {
+                            LegadoTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            null
+                        },
+                    )
+                }
             }
         },
     )
@@ -293,38 +306,51 @@ private fun CharacterDetailContent(
 @Composable
 private fun ProfileVoiceTraitDropdown(
     label: String,
-    selected: String,
+    text: String,
     options: List<String>,
     displayName: @Composable (String) -> String,
     onSelected: (String) -> Unit,
 ) {
-    var showDropdown by remember { mutableStateOf(false) }
-    AppText(
-        text = label,
-        style = LegadoTheme.typography.labelMedium,
-        color = LegadoTheme.colorScheme.onSurfaceVariant
+    ProfileDropdownChip(
+        label = label,
+        text = text,
+        options = options,
+        optionLabel = { displayName(it) },
+        onOptionClick = onSelected,
     )
+}
+
+/** 弹窗里的紧凑下拉 chip：显示“标签 · 当前值”，点开菜单选择，避免每个选项独占一大行 */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun <T> ProfileDropdownChip(
+    label: String,
+    text: String,
+    options: List<T>,
+    optionLabel: @Composable (T) -> String,
+    onOptionClick: (T) -> Unit,
+) {
+    var showDropdown by remember { mutableStateOf(false) }
     Box {
-        GlassCard(
+        TextCard(
+            text = "$label · $text",
             onClick = { showDropdown = true },
-            containerColor = LegadoTheme.colorScheme.surfaceContainerLow
+        )
+        RoundDropdownMenu(
+            expanded = showDropdown,
+            onDismissRequest = { showDropdown = false },
         ) {
-            AnimatedTextLine(
-                text = displayName(selected),
-                style = LegadoTheme.typography.bodyMedium,
-                modifier = Modifier.padding(12.dp)
-            )
-        }
-        RoundDropdownMenu(expanded = showDropdown, onDismissRequest = { showDropdown = false }) {
             options.forEach { option ->
-                RoundDropdownMenuItem(text = displayName(option), onClick = {
-                    onSelected(option)
-                    showDropdown = false
-                })
+                RoundDropdownMenuItem(
+                    text = optionLabel(option),
+                    onClick = {
+                        onOptionClick(option)
+                        showDropdown = false
+                    },
+                )
             }
         }
     }
-
 }
 
 @Composable
@@ -382,48 +408,24 @@ private fun ProfileRoleDropdown(
     selectedRole: String,
     onRoleSelected: (String) -> Unit,
 ) {
-    var showDropdown by remember { mutableStateOf(false) }
     val roleDisplayNames = mapOf(
         BookCharacterProfile.ROLE_MALE_LEAD to stringResource(R.string.role_male_lead),
         BookCharacterProfile.ROLE_FEMALE_LEAD to stringResource(R.string.role_female_lead),
         BookCharacterProfile.ROLE_MALE_SUPPORTING to stringResource(R.string.role_male_supporting),
         BookCharacterProfile.ROLE_FEMALE_SUPPORTING to stringResource(R.string.role_female_supporting),
     )
-    val currentDisplay = roleDisplayNames[selectedRole] ?: "—"
-
-    AppText(
-        text = stringResource(R.string.character_role),
-        style = LegadoTheme.typography.labelMedium,
-        color = LegadoTheme.colorScheme.onSurfaceVariant,
+    ProfileDropdownChip(
+        label = stringResource(R.string.character_role),
+        text = roleDisplayNames[selectedRole] ?: "—",
+        options = BookCharacterProfile.ALL_ROLES,
+        optionLabel = { roleDisplayNames[it] ?: it },
+        onOptionClick = { role ->
+            onRoleSelected(if (selectedRole == role) "" else role)
+        },
     )
-    Box {
-        GlassCard(
-            onClick = { showDropdown = true },
-            containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
-        ) {
-            AnimatedTextLine(
-                text = currentDisplay,
-                style = LegadoTheme.typography.bodyMedium,
-                modifier = Modifier.padding(12.dp),
-            )
-        }
-        RoundDropdownMenu(
-            expanded = showDropdown,
-            onDismissRequest = { showDropdown = false },
-        ) {
-            BookCharacterProfile.ALL_ROLES.forEach { role ->
-                RoundDropdownMenuItem(
-                    text = roleDisplayNames[role] ?: role,
-                    onClick = {
-                        onRoleSelected(if (selectedRole == role) "" else role)
-                        showDropdown = false
-                    },
-                )
-            }
-        }
-    }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun CharacterHeader(
     name: String,
@@ -489,23 +491,28 @@ private fun CharacterHeader(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AnimatedTextLine(
-                    text = name.ifBlank { "—" },
-                    style = LegadoTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (resolvedRole.isNotBlank()) {
-                    TextCard(text = resolvedRole)
-                }
-                if (voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN) {
-                    TextCard(text = voiceGenderDisplayName(voiceGender))
-                }
-                if (voiceAgeBand != BookCharacterProfile.VOICE_AGE_UNKNOWN) {
-                    TextCard(text = voiceAgeBandDisplayName(voiceAgeBand))
+            AnimatedTextLine(
+                text = name.ifBlank { "—" },
+                style = LegadoTheme.typography.titleMedium,
+                maxLines = 2,
+            )
+            val hasAnyTrait = resolvedRole.isNotBlank() ||
+                voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN ||
+                voiceAgeBand != BookCharacterProfile.VOICE_AGE_UNKNOWN
+            if (hasAnyTrait) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (resolvedRole.isNotBlank()) {
+                        TextCard(text = resolvedRole)
+                    }
+                    if (voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN) {
+                        TextCard(text = voiceGenderDisplayName(voiceGender))
+                    }
+                    if (voiceAgeBand != BookCharacterProfile.VOICE_AGE_UNKNOWN) {
+                        TextCard(text = voiceAgeBandDisplayName(voiceAgeBand))
+                    }
                 }
             }
             if (aliasesText.isNotBlank()) {

@@ -48,39 +48,44 @@ class BookCharacterDetailViewModel(
 
     fun onIntent(intent: CharacterDetailIntent) {
         when (intent) {
-            is CharacterDetailIntent.SetName -> _uiState.update { it.copy(name = intent.value) }
-            is CharacterDetailIntent.SetAliasesText -> _uiState.update { it.copy(aliasesText = intent.value) }
-            is CharacterDetailIntent.SetAvatarUri -> _uiState.update { it.copy(avatarUri = intent.value) }
+            is CharacterDetailIntent.SetName -> updateAndSave { it.copy(name = intent.value) }
+            is CharacterDetailIntent.SetAliasesText -> updateAndSave { it.copy(aliasesText = intent.value) }
+            is CharacterDetailIntent.SetAvatarUri -> updateAndSave { it.copy(avatarUri = intent.value) }
             is CharacterDetailIntent.SetTagInput -> _uiState.update { it.copy(tagInput = intent.value) }
-            is CharacterDetailIntent.AddTag -> {
+            is CharacterDetailIntent.AddTag -> updateAndSave {
                 val tag = intent.tag.trim()
                 if (tag.isNotBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            tags = (it.tags + tag).distinct().toImmutableList(),
-                            tagInput = "",
-                        )
-                    }
+                    it.copy(
+                        tags = (it.tags + tag).distinct().toImmutableList(),
+                        tagInput = "",
+                    )
+                } else {
+                    it
                 }
             }
 
-            is CharacterDetailIntent.RemoveTag -> _uiState.update {
+            is CharacterDetailIntent.RemoveTag -> updateAndSave {
                 it.copy(tags = it.tags.filterIndexed { index, _ -> index != intent.index }
                     .toImmutableList())
             }
 
             // 男主/女主/男配/女配本身就带性别，选完角色定位顺手把声音性别带出来，用户之后仍可手改
-            is CharacterDetailIntent.SetRole -> _uiState.update {
+            is CharacterDetailIntent.SetRole -> updateAndSave {
                 it.copy(role = intent.value, voiceGender = intent.value.impliedVoiceGender() ?: it.voiceGender)
             }
-            is CharacterDetailIntent.SetVoiceGender -> _uiState.update { it.copy(voiceGender = intent.value) }
-            is CharacterDetailIntent.SetVoiceAgeBand -> _uiState.update { it.copy(voiceAgeBand = intent.value) }
-            is CharacterDetailIntent.SetIsProtagonist -> _uiState.update { it.copy(isProtagonist = intent.value) }
-            is CharacterDetailIntent.SetPersonality -> _uiState.update { it.copy(personality = intent.value) }
-            is CharacterDetailIntent.SetSummary -> _uiState.update { it.copy(summary = intent.value) }
-            CharacterDetailIntent.Save -> save()
+            is CharacterDetailIntent.SetVoiceGender -> updateAndSave { it.copy(voiceGender = intent.value) }
+            is CharacterDetailIntent.SetVoiceAgeBand -> updateAndSave { it.copy(voiceAgeBand = intent.value) }
+            is CharacterDetailIntent.SetIsProtagonist -> updateAndSave { it.copy(isProtagonist = intent.value) }
+            is CharacterDetailIntent.SetPersonality -> updateAndSave { it.copy(personality = intent.value) }
+            is CharacterDetailIntent.SetSummary -> updateAndSave { it.copy(summary = intent.value) }
             is CharacterDetailIntent.Delete -> delete(intent)
         }
+    }
+
+    /** 每个“应用”动作都即时落库，不再依赖统一保存入口 */
+    private fun updateAndSave(update: (CharacterDetailUiState) -> CharacterDetailUiState) {
+        _uiState.update(update)
+        save()
     }
 
     private fun load() {
@@ -165,6 +170,8 @@ class BookCharacterDetailViewModel(
         val state = _uiState.value
         val name = state.name.trim()
         if (name.isBlank()) {
+            // 新建人物尚未起名时没有可保存的内容，静默跳过；已有人物的名字不允许清空
+            if (currentProfile == null) return
             _effects.tryEmit(CharacterDetailEffect.ShowToast(appCtx.getString(R.string.character_name_empty)))
             return
         }
