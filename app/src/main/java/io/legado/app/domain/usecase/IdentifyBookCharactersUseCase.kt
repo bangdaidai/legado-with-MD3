@@ -148,9 +148,14 @@ class IdentifyBookCharactersUseCase(
         // 先用一轮不带工具的纯对话预检索（搜索结果按 token 计费，不消耗按次的搜索资源包），
         // 把结果作为上下文注入主请求。已有 search_web 工具（Tavily/智谱检索兜底）时无需预检索。
         val webSearchContext = if (nativeWebSearch && !searchToolAvailable) {
-            // 预检索的日志条目要到请求结束才落库，先在时间线里报一句，让用户看得到进展
-            emit(Progress.Reasoning("正在联网检索本书的主要人物…\n"))
-            runCatching {
+            // 预检索的日志条目要到请求结束才落库，先在时间线里报阶段，让用户知道卡在哪一步：
+            // 免费模型高峰期网关排队可能长达一两分钟，属于等待而非卡死
+            emit(
+                Progress.Reasoning(
+                    "正在联网检索本书的主要人物…（高峰期可能需要排队等待一两分钟）\n"
+                )
+            )
+            val fetched = runCatching {
                 preSearchQuery(bookName)?.let { query ->
                     aiWebSearchPrefetchUseCase.prefetch(preset.model, query)
                 }
@@ -158,9 +163,10 @@ class IdentifyBookCharactersUseCase(
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                 .getOrNull()
                 ?.takeIf(String::isNotBlank)
-                ?.let { content ->
-                    "Web search results for this book (obtained via the provider's web search):\n" + content
-                }
+            emit(Progress.Reasoning("联网检索结束，正在结合本地数据与联网结果识别…\n"))
+            fetched?.let { content ->
+                "Web search results for this book (obtained via the provider's web search):\n" + content
+            }
         } else {
             null
         }
