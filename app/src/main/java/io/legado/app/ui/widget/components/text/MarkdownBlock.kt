@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -100,8 +101,12 @@ private data class MarkdownImageHandlers(
 
 private val LocalMarkdownImageHandlers = staticCompositionLocalOf { MarkdownImageHandlers() }
 
+// MarkdownParser 单例非线程安全；流式期间多个 MarkdownBlock 会在 Default 线程并发解析，
+// 必须串行化，否则可能产出瞬时坏 AST 导致链接样式/文本闪烁
 private fun parseMarkdown(content: String): MarkdownParseResult {
-    return MarkdownParseResult(content, parser.buildMarkdownTreeFromString(content))
+    return synchronized(parser) {
+        MarkdownParseResult(content, parser.buildMarkdownTreeFromString(content))
+    }
 }
 
 // ---- Main composable ----
@@ -331,7 +336,8 @@ private fun MarkdownParagraph(
             else Modifier
         )
     ) {
-        val annotatedString = remember(content) {
+        // onClickLink 的点击监听器被闭包捕获进 AnnotatedString，必须一起作为缓存键
+        val annotatedString = remember(content, onClickLink) {
             buildAnnotatedString {
                 node.children.fastForEach { child ->
                     appendMarkdownInline(
@@ -798,13 +804,23 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.appendMarkdownInlin
             val linkText = node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_TEXT)?.getTextInNode(content)
                 ?.trim { it == '[' || it == ']' } ?: linkDest
             val isBookSearch = linkDest.startsWith("book-search://")
-            withLink(LinkAnnotation.Url(linkDest)) {
-                withStyle(SpanStyle(
+            // 样式必须显式传给链接注解：不传 TextLinkStyles 时链接会回落到系统默认样式（下划线），
+            // 与外层 SpanStyle 冲突导致下划线闪现
+            val linkStyles = TextLinkStyles(
+                style = SpanStyle(
                     color = colorScheme.primary,
                     textDecoration = if (isBookSearch) TextDecoration.None else TextDecoration.Underline
-                )) {
-                    append(linkText)
-                }
+                )
+            )
+            val annotation = if (onClickLink != null) {
+                // 自定义 scheme（如 book-search://）无法被系统 UriHandler 处理，
+                // 必须走 Clickable 才能回调宿主传入的 onClickLink
+                LinkAnnotation.Clickable(linkDest, linkStyles) { onClickLink(linkDest) }
+            } else {
+                LinkAnnotation.Url(linkDest, linkStyles)
+            }
+            withLink(annotation) {
+                append(linkText)
             }
         }
 
