@@ -180,48 +180,39 @@ fun HighlightRuleConfigSheet(
             }
         },
     ) {
+        // 笔记默认样式：点「笔记」直接套用的独立默认，不是下面这些正则自动高亮规则
+        var showDefaultMarkingStyle by remember { mutableStateOf(false) }
+        var defaultMarkingStyle by remember { mutableStateOf(DefaultMarkingStyle.get()) }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
         ) {
-            // 笔记默认样式：点「笔记」直接套用的独立默认，不是下面这些正则自动高亮规则
-            var showDefaultMarkingStyle by remember { mutableStateOf(false) }
-            var defaultMarkingStyle by remember { mutableStateOf(DefaultMarkingStyle.get()) }
-            // 与下面的规则项同样用 TinySettingItem，保持卡片外观一致
-            TinySettingItem(
-                title = stringResource(R.string.default_marking_style),
-                description = stringResource(
-                    MarkingEffect.fromStyle(defaultMarkingStyle).labelRes()
-                ),
-                onClick = { showDefaultMarkingStyle = true },
-                trailingContent = {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(Color(MarkingEffect.colorOf(defaultMarkingStyle)))
-                    )
-                },
-            )
-            DefaultMarkingStyleSheet(
-                show = showDefaultMarkingStyle,
-                initialStyle = defaultMarkingStyle,
-                onDismissRequest = { showDefaultMarkingStyle = false },
-                onSave = { style ->
-                    DefaultMarkingStyle.set(style)
-                    defaultMarkingStyle = style
-                    showDefaultMarkingStyle = false
-                },
-            )
-            // 补 8dp：规则卡之间的间距是 LazyColumn 的 spacedBy 8dp 加卡片自带的 4dp 下边距＝12dp，
-            // 这里只有 TinySettingItem 自带的 4dp，不补就比下面窄一截。
-            Spacer(Modifier.height(8.dp))
             LazyColumn(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f, fill = false),
             ) {
+                // 笔记默认样式作为第一个项目
+                item(key = "default_marking_style") {
+                    // 与下面的规则项同样用 TinySettingItem，保持卡片外观一致
+                    TinySettingItem(
+                        title = stringResource(R.string.default_marking_style),
+                        description = stringResource(
+                            MarkingEffect.fromStyle(defaultMarkingStyle).labelRes()
+                        ),
+                        onClick = { showDefaultMarkingStyle = true },
+                        trailingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(MarkingEffect.colorOf(defaultMarkingStyle)))
+                            )
+                        },
+                    )
+                }
                 itemsIndexed(state.rules, key = { _, rule -> rule.id }) { index, rule ->
                     ReorderableItem(reorderableState, key = rule.id) { isDragging ->
                         HighlightRuleItem(
@@ -251,6 +242,17 @@ fun HighlightRuleConfigSheet(
                 }
             }
         }
+
+        DefaultMarkingStyleSheet(
+            show = showDefaultMarkingStyle,
+            initialStyle = defaultMarkingStyle,
+            onDismissRequest = { showDefaultMarkingStyle = false },
+            onSave = { style ->
+                DefaultMarkingStyle.set(style)
+                defaultMarkingStyle = style
+                showDefaultMarkingStyle = false
+            },
+        )
     }
 
     val editingRuleValue = state.editingRule
