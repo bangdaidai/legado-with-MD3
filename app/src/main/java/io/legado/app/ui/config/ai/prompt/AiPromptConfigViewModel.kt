@@ -49,6 +49,11 @@ class AiPromptConfigViewModel(
             descResId = R.string.ai_prompt_task_summary_desc,
         ),
         TaskPromptMeta(
+            taskType = AiTaskType.RECAP_RECENT,
+            nameResId = R.string.ai_prompt_task_recap,
+            descResId = R.string.ai_prompt_task_recap_desc,
+        ),
+        TaskPromptMeta(
             taskType = AiTaskType.CLEAN_SELECTION,
             nameResId = R.string.ai_prompt_task_clean,
             descResId = R.string.ai_prompt_task_clean_desc,

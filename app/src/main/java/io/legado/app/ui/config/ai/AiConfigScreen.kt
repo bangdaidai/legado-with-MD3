@@ -144,10 +144,6 @@ fun AiConfigScreen(
                         onClick = onNavigateToTranslation
                     )
                     ClickableSettingItem(
-                        title = stringResource(R.string.ai_chapter_summary),
-                        onClick = onNavigateToAiSummary
-                    )
-                    ClickableSettingItem(
                         title = stringResource(R.string.ai_prompt_config),
                         description = stringResource(R.string.ai_prompt_config_desc),
                         onClick = onNavigateToAiPrompt

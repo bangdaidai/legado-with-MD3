@@ -1248,7 +1248,7 @@ class TextChapterLayout(
                     nsNpRight = prevStyle.npRight
                     nsBgPadStart = prevStyle.bgMarginStart
                     nsBgPadEnd = prevStyle.bgMarginEnd
-                    val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                    val (marginLeft, _) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
                 }
@@ -1265,11 +1265,11 @@ class TextChapterLayout(
                     nsNpRight = style.npRight
                     nsBgPadStart = style.bgMarginStart
                     nsBgPadEnd = style.bgMarginEnd
-                    val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                    val (marginLeft, _) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
                 } else if (!isNineSlice && inNineSlice) {
-                    val (_, marginRight) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                    val (_, marginRight) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                     x += marginRight
                     inNineSlice = false
                 }
@@ -1301,7 +1301,7 @@ class TextChapterLayout(
                     nsNpRight = prevStyle.npRight
                     nsBgPadStart = prevStyle.bgMarginStart
                     nsBgPadEnd = prevStyle.bgMarginEnd
-                    val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                    val (marginLeft, _) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
                 }
@@ -1318,11 +1318,11 @@ class TextChapterLayout(
                     nsNpRight = style.npRight
                     nsBgPadStart = style.bgMarginStart
                     nsBgPadEnd = style.bgMarginEnd
-                    val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                    val (marginLeft, _) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                     x += marginLeft
                     inNineSlice = true
                 } else if (!isNineSlice && inNineSlice) {
-                    val (_, marginRight) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                    val (_, marginRight) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                     x += marginRight
                     inNineSlice = false
                 }
@@ -1339,7 +1339,7 @@ class TextChapterLayout(
         // 行末处理：传递 margin-right 给 exceed
         var extraRightMargin = 0f
         if (inNineSlice) {
-            val (_, marginRight) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+            val (_, marginRight) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
             extraRightMargin = marginRight
         }
         exceed(absStartX, textLine, words, extraRightMargin)
@@ -1358,9 +1358,6 @@ class TextChapterLayout(
      * 计算九宫格左右 margin（即边4/6的真实渲染宽度），与渲染层 NinePatchDrawHelper 保持一致
      */
     private fun calcNineSliceMargin(
-        bgImage: String,
-        npLeft: Float,
-        npRight: Float,
         padStartDp: Float = 0f,
         padEndDp: Float = 0f,
     ): Pair<Float, Float> {
@@ -1450,7 +1447,7 @@ class TextChapterLayout(
                 nsNpRight = prevStyle.npRight
                 nsBgPadStart = prevStyle.bgMarginStart
                 nsBgPadEnd = prevStyle.bgMarginEnd
-                val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                val (marginLeft, _) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                 x += marginLeft
                 inNineSlice = true
             }
@@ -1469,12 +1466,12 @@ class TextChapterLayout(
                 nsNpRight = style.npRight
                 nsBgPadStart = style.bgMarginStart
                 nsBgPadEnd = style.bgMarginEnd
-                val (marginLeft, _) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                val (marginLeft, _) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                 x += marginLeft
                 inNineSlice = true
             } else if (!isNineSlice && inNineSlice) {
                 // 离开九宫格段落：添加 margin-right（边6宽度）
-                val (_, marginRight) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+                val (_, marginRight) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
                 x += marginRight
                 inNineSlice = false
             }
@@ -1492,7 +1489,7 @@ class TextChapterLayout(
         // 行末处理：计算 margin-right 并传递给 exceed，确保右侧边框有足够空间
         var extraRightMargin = 0f
         if (inNineSlice) {
-            val (_, marginRight) = calcNineSliceMargin(nsBgImage, nsNpLeft, nsNpRight, nsBgPadStart, nsBgPadEnd)
+            val (_, marginRight) = calcNineSliceMargin(nsBgPadStart, nsBgPadEnd)
             extraRightMargin = marginRight
         }
         exceed(absStartX, textLine, words, extraRightMargin)
