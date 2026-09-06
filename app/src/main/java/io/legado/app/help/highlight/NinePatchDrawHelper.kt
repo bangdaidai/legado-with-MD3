@@ -21,6 +21,26 @@ import android.graphics.RectF
 object NinePatchDrawHelper {
 
     /**
+     * 从角块占比转换为绝对线位置（供外部调用简化转换）
+     * @param npLeft 左角块占比（0~0.5）
+     * @param npRight 右角块占比（0~0.5）
+     * @param npTop 上角块占比（0~0.5）
+     * @param npBottom 下角块占比（0~0.5）
+     * @return Triple(leftX, rightX, topY, bottomY) 绝对线位置
+     */
+    fun toLinePositions(
+        npLeft: Float,
+        npRight: Float,
+        npTop: Float,
+        npBottom: Float,
+    ): FloatArray = floatArrayOf(
+        npLeft,           // leftX = npLeft（左角块占比 = 左线绝对位置）
+        1f - npRight,     // rightX = 1 - npRight（右角块占比转换为右线绝对位置）
+        npTop,            // topY = npTop（上角块占比 = 上线绝对位置）
+        1f - npBottom,    // bottomY = 1 - npBottom（下角块占比转换为下线绝对位置）
+    )
+
+    /**
      * 九宫格背景相对文字矩形的布局结果：
      * box 为背景图目标框（文字矩形外扩四角与 padding），corner* 为四角的目标像素尺寸
      */

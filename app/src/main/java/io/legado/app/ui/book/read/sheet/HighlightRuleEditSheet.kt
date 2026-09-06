@@ -1326,10 +1326,7 @@ internal fun HighlightRulePreview(
                                         bgRawBitmap,
                                         box.left, box.top, box.right, box.bottom,
                                         ninePatchPaint,
-                                        npLeft,
-                                        1f - npRight,
-                                        npTop,
-                                        1f - npBottom,
+                                        *io.legado.app.help.highlight.NinePatchDrawHelper.toLinePositions(npLeft, npRight, npTop, npBottom),
                                         box.cornerL, box.cornerR, box.cornerT, box.cornerB,
                                     )
                                 }
@@ -1598,10 +1595,11 @@ private fun NinePatchEditorDialog(
                                 .fillMaxWidth(0.8f),
                         ) {
                             // 长图高度封顶后由 Canvas 做 contain 居中，避免细长一条没法拖
+                            // 设置最小高度，确保细长条图片也能拖动四根线
                             val boxHeight = minOf(
                                 280.dp,
                                 maxWidth * (bitmap.height.toFloat() / bitmap.width),
-                            )
+                            ).coerceAtLeast(100.dp)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1749,25 +1747,28 @@ private fun NineSlicePreview(
     ) {
         val canvasW = size.width
         val canvasH = size.height
-        // 背景图铺占 canvas 大部分（四周各留 8%），直观表达"背景包住文字"
-        val bgLeft = canvasW * 0.08f
-        val bgRight = canvasW * 0.92f
-        val bgTop = canvasH * 0.08f
-        val bgBottom = canvasH * 0.92f
-        val bgW = bgRight - bgLeft
-        val bgH = bgBottom - bgTop
         val bw = bitmap.width.toFloat()
         val bh = bitmap.height.toFloat()
+        if (bw <= 0f || bh <= 0f) return@Canvas
 
-        // 与渲染层同一套几何：背景框 = 文字高 ×(1+上角占比+下角占比)，
-        // 由背景框高度反解文字行高，四角尺寸与虚线框（= 中段拉伸区）严格对齐
-        val textH = bgH / (1f + npTop + npBottom)
-        val s = if (bh > 0f) textH / bh else 1f
-        val cornerT = (npTop * bh * s).coerceAtMost(textH * 0.5f)
-        val cornerB = (npBottom * bh * s).coerceAtMost(textH * 0.5f)
+        // 按 contain 模式将背景图等比缩放到 Canvas 内（四周留 8% 边距）
+        val maxW = canvasW * 0.84f
+        val maxH = canvasH * 0.84f
+        val fitScale = minOf(maxW / bw, maxH / bh)
+        val bgW = bw * fitScale
+        val bgH = bh * fitScale
+        val bgLeft = (canvasW - bgW) / 2f
+        val bgTop = (canvasH - bgH) / 2f
+        val bgRight = bgLeft + bgW
+        val bgBottom = bgTop + bgH
+
+        // 缩放比以背景框高度为锚，让四角图案获得合理大小
+        val s = fitScale
+        val cornerT = (npTop * bh * s).coerceAtMost(bgH * 0.5f)
+        val cornerB = (npBottom * bh * s).coerceAtMost(bgH * 0.5f)
         var cornerL = npLeft * bw * s
         var cornerR = npRight * bw * s
-        // 水平放不下四角时按比例缩角（与 NinePatchDrawHelper 内部保护一致）
+        // 水平放不下四角时按比例缩角
         if (cornerL + cornerR > bgW && cornerL + cornerR > 0f) {
             val ratio = bgW / (cornerL + cornerR)
             cornerL *= ratio
@@ -1785,7 +1786,7 @@ private fun NineSlicePreview(
         io.legado.app.help.highlight.NinePatchDrawHelper.draw(
             drawContext.canvas.nativeCanvas, bitmap,
             bgLeft, textTop - cornerT, bgRight, textBottom + cornerB,
-            paint, npLeft, 1f - npRight, npTop, 1f - npBottom,
+            paint, *io.legado.app.help.highlight.NinePatchDrawHelper.toLinePositions(npLeft, npRight, npTop, npBottom),
             cornerL, cornerR, cornerT, cornerB,
         )
         // 文字行虚线：正好落在九宫格中段拉伸区内

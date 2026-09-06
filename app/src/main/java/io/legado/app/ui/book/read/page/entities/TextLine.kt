@@ -723,7 +723,7 @@ data class TextLine(
                 )?.let { box ->
                     NinePatchDrawHelper.draw(
                         canvas, bitmap, box.left, box.top, box.right, box.bottom, paint,
-                        npLeft, 1f - npRight, npTop, 1f - npBottom,
+                        *NinePatchDrawHelper.toLinePositions(npLeft, npRight, npTop, npBottom),
                         box.cornerL, box.cornerR, box.cornerT, box.cornerB,
                     )
                 }
