@@ -8,7 +8,7 @@ import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.AuthorProfileRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
-import io.legado.app.utils.appCtx
+import splitties.init.appCtx
 import io.legado.app.utils.cnCompare
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList

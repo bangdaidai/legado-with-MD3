@@ -7,6 +7,7 @@ import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.gateway.AiMemoryGateway
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiToolGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessagePart
@@ -15,10 +16,12 @@ import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.AiToolApprovalState
 import io.legado.app.domain.model.AiToolCall
+import io.legado.app.domain.model.nativeWebSearchSupport
 import io.legado.app.domain.model.toolParts
 import io.legado.app.ui.ai.chat.AiChatBookResultUi
 import io.legado.app.ui.ai.chat.AiChatMessageUi
 import io.legado.app.utils.GSON
+import kotlinx.coroutines.CancellationException
 
 /**
  * Encapsulates chat generation logic: request building, streaming, tool execution loop.
@@ -30,6 +33,8 @@ class AiChatGenerationUseCase(
     private val aiProfileGateway: AiProfileGateway,
     private val aiChatGateway: AiChatGateway,
     private val aiMemoryGateway: AiMemoryGateway,
+    private val webSearchSettingsGateway: WebSearchSettingsGateway,
+    private val aiWebSearchPrefetchUseCase: AiWebSearchPrefetchUseCase,
 ) {
 
     suspend fun buildRequest(
