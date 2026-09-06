@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.ui.main.MainIntent
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
@@ -109,6 +110,19 @@ fun AllBookmarkRouteScreen(
             when (effect) {
                 is AllBookmarkEffect.ShowMessage ->
                     Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+
+                is AllBookmarkEffect.OpenReader -> {
+                    context.startActivity(
+                        MainIntent.createReadBookIntent(
+                            context,
+                            bookUrl = effect.bookUrl,
+                            // 一次性定位：置 chapterChanged 避免开书进度同步覆盖目标位置
+                            chapterChanged = true,
+                            chapterIndex = effect.chapterIndex,
+                            chapterPos = effect.chapterPos,
+                        )
+                    )
+                }
             }
         }
     }
@@ -348,8 +362,11 @@ fun AllBookmarkScreen(
                                                         modifier = Modifier.fillMaxWidth(),
                                                         isDur = false,
                                                         onClick = {
-                                                            editingBookmark = bookmarkUi.rawBookmark
-                                                            showBottomSheet = true
+                                                            onIntent(
+                                                                AllBookmarkIntent.NavigateToBookmark(
+                                                                    bookmarkUi.rawBookmark
+                                                                )
+                                                            )
                                                         },
                                                         onLongClick = {
                                                             editingBookmark = bookmarkUi.rawBookmark

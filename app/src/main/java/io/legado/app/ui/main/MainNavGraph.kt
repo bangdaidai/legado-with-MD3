@@ -666,6 +666,8 @@ fun MainActivity.mainEntryProvider(
                 bookUrl = route.bookUrl,
                 inBookshelf = route.inBookshelf,
                 chapterChanged = route.chapterChanged,
+                chapterIndex = route.chapterIndex,
+                chapterPos = route.chapterPos,
             )
         }
         val effectsReady = remember(readBookViewModel) { CompletableDeferred<Unit>() }

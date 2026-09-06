@@ -21,6 +21,8 @@ object MainIntent {
     const val EXTRA_READ_ALOUD = "readAloud"
     const val EXTRA_IN_BOOKSHELF = "inBookshelf"
     const val EXTRA_CHAPTER_CHANGED = "chapterChanged"
+    const val EXTRA_CHAPTER_INDEX = "chapterIndex"
+    const val EXTRA_CHAPTER_POS = "chapterPos"
     const val EXTRA_EXPLORE_NAME = "exploreName"
     const val EXTRA_SOURCE_URL = "sourceUrl"
     const val EXTRA_BOOK_SOURCE_IMPORT = "bookSourceImport"
@@ -204,6 +206,8 @@ object MainIntent {
         readAloud: Boolean = false,
         inBookshelf: Boolean = true,
         chapterChanged: Boolean = false,
+        chapterIndex: Int = -1,
+        chapterPos: Int = -1,
     ): Intent {
         return createLauncherIntent(context).apply {
             putExtra(EXTRA_START_ROUTE, MainRouteConst.ROUTE_READ_BOOK)
@@ -211,6 +215,8 @@ object MainIntent {
             putExtra(EXTRA_READ_ALOUD, readAloud)
             putExtra(EXTRA_IN_BOOKSHELF, inBookshelf)
             putExtra(EXTRA_CHAPTER_CHANGED, chapterChanged)
+            putExtra(EXTRA_CHAPTER_INDEX, chapterIndex)
+            putExtra(EXTRA_CHAPTER_POS, chapterPos)
         }
     }
 

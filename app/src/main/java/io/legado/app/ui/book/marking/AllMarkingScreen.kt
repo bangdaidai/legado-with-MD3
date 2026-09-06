@@ -14,7 +14,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.ui.book.read.sheet.MarkingSheet
+import io.legado.app.ui.main.MainIntent
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.ThemeResolver
@@ -110,6 +110,19 @@ fun AllMarkingRouteScreen(
             when (effect) {
                 is AllMarkingEffect.ShowMessage ->
                     Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+
+                is AllMarkingEffect.OpenReader -> {
+                    context.startActivity(
+                        MainIntent.createReadBookIntent(
+                            context,
+                            bookUrl = effect.bookUrl,
+                            // 一次性定位：置 chapterChanged 避免开书进度同步覆盖目标位置
+                            chapterChanged = true,
+                            chapterIndex = effect.chapterIndex,
+                            chapterPos = effect.chapterPos,
+                        )
+                    )
+                }
             }
         }
     }
@@ -299,6 +312,13 @@ fun AllMarkingScreen(
                                                     item = item,
                                                     modifier = Modifier.fillMaxWidth(),
                                                     onClick = {
+                                                        onIntent(
+                                                            AllMarkingIntent.NavigateToMarking(
+                                                                item.raw
+                                                            )
+                                                        )
+                                                    },
+                                                    onLongClick = {
                                                         onIntent(AllMarkingIntent.OpenEdit(item.id))
                                                     },
                                                 )
@@ -364,15 +384,17 @@ fun AllMarkingScreen(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MarkingRow(
     item: MarkingItemUi,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

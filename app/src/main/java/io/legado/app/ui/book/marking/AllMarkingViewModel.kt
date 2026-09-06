@@ -1,10 +1,13 @@
 package io.legado.app.ui.book.marking
 
+import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.data.entities.BookMarking
+import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.model.TextProcessAnchor
@@ -74,6 +77,7 @@ sealed interface AllMarkingIntent {
     data class ToggleGroupCollapse(val group: MarkingGroupHeader) : AllMarkingIntent
     data class ToggleAllCollapse(val groups: Set<MarkingGroupHeader>) : AllMarkingIntent
     data class DeleteMarking(val id: String) : AllMarkingIntent
+    data class NavigateToMarking(val marking: BookMarking) : AllMarkingIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllMarkingIntent
     data class OpenEdit(val id: String) : AllMarkingIntent
     data object CloseEdit : AllMarkingIntent
@@ -84,11 +88,20 @@ sealed interface AllMarkingIntent {
 
 sealed interface AllMarkingEffect {
     data class ShowMessage(val message: String) : AllMarkingEffect
+
+    /** 跳转到指定书的指定章节位置（笔记点击） */
+    data class OpenReader(
+        val bookUrl: String,
+        val chapterIndex: Int,
+        val chapterPos: Int,
+    ) : AllMarkingEffect
 }
 
 class AllMarkingViewModel(
+    private val application: Application,
     private val bookMarkingGateway: BookMarkingGateway,
     private val readingMemoryRepository: ReadingMemoryRepository,
+    private val bookRepository: BookRepository,
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -175,6 +188,7 @@ class AllMarkingViewModel(
             is AllMarkingIntent.ToggleGroupCollapse -> toggleGroupCollapse(intent.group)
             is AllMarkingIntent.ToggleAllCollapse -> toggleAllCollapse(intent.groups)
             is AllMarkingIntent.DeleteMarking -> deleteMarking(intent.id)
+            is AllMarkingIntent.NavigateToMarking -> navigateToMarking(intent.marking)
             is AllMarkingIntent.Export -> exportMarking(intent.treeUri, intent.isMarkdown)
             is AllMarkingIntent.OpenEdit -> openEdit(intent.id)
             is AllMarkingIntent.CloseEdit -> _editing.value = null
@@ -208,6 +222,32 @@ class AllMarkingViewModel(
     private fun deleteMarking(id: String) {
         viewModelScope.launch(Dispatchers.IO) {
             bookMarkingGateway.delete(id)
+        }
+    }
+
+    /**
+     * 笔记按「书名+作者」跨源关联，跳转前用当前书架里的 bookUrl（换源后旧 bookUrl 会失效）；
+     * 章节位置从锚点 JSON 取（换源/正文变动后由阅读器侧校验兜底）。
+     */
+    private fun navigateToMarking(marking: BookMarking) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val book = bookRepository.getBook(marking.bookName, marking.bookAuthor)
+            if (book == null) {
+                _effects.tryEmit(
+                    AllMarkingEffect.ShowMessage(
+                        application.getString(R.string.book_not_found)
+                    )
+                )
+                return@launch
+            }
+            val anchor = GSON.fromJsonObject<TextProcessAnchor>(marking.anchorJson).getOrNull()
+            _effects.tryEmit(
+                AllMarkingEffect.OpenReader(
+                    bookUrl = book.bookUrl,
+                    chapterIndex = marking.chapterIndex ?: anchor?.chapterIndex ?: 0,
+                    chapterPos = anchor?.chapterPosition ?: 0,
+                )
+            )
         }
     }
 

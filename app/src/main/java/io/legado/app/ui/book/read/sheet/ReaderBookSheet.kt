@@ -1229,9 +1229,9 @@ private fun ReaderSheetBookmarkList(
         ) { bookmark ->
             ReaderSheetBookmarkItem(
                 item = bookmark,
-                onClick = { onEditBookmark(bookmark.raw) },
+                onClick = { onBookmarkNavigate(bookmark.raw) },
                 onLongClick = {
-                    onBookmarkNavigate(bookmark.raw)
+                    onEditBookmark(bookmark.raw)
                 },
                 modifier = Modifier.animateItem(),
             )
@@ -1308,7 +1308,7 @@ private fun ReaderSheetBookmarkItem(
 }
 
 /**
- * 划线/高亮笔记页：与书签一致，点按进入编辑（MarkingSheet），长按跳转到标记位置。
+ * 划线/高亮笔记页：与书签一致，点按跳转到标记位置，长按进入编辑（MarkingSheet）。
  */
 @Composable
 private fun ReaderBookMarkingsPage(
@@ -1343,8 +1343,8 @@ private fun ReaderBookMarkingsPage(
                 isOtherSource = currentBookUrl != null &&
                         marking.bookUrl.isNotBlank() &&
                         marking.bookUrl != currentBookUrl,
-                onClick = { onMarkingEdit(marking.id) },
-                onLongClick = { onMarkingNavigate(marking) },
+                onClick = { onMarkingNavigate(marking) },
+                onLongClick = { onMarkingEdit(marking.id) },
                 modifier = Modifier.animateItem(),
             )
         }

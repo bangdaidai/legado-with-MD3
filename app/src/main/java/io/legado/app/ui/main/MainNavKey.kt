@@ -141,6 +141,9 @@ data class MainRouteReadBook(
     val readAloud: Boolean = false,
     val inBookshelf: Boolean = true,
     val chapterChanged: Boolean = false,
+    /** 一次性定位参数（书签/笔记跳转）：>=0 时开书后直接跳到该章节位置 */
+    val chapterIndex: Int = -1,
+    val chapterPos: Int = -1,
 ) : MainRoute
 
 @Serializable

@@ -692,8 +692,8 @@ fun TocScreen(
                     1 -> BookmarkListContent(
                         bookmarks = uiState.bookmarks,
                         book = book,
-                        onBookmarkLongClick = onBookmarkClick,
-                        onBookmarkClick = { bookmark ->
+                        onBookmarkClick = onBookmarkClick,
+                        onBookmarkLongClick = { bookmark ->
                             editingBookmark = bookmark
                         },
                         contentPadding = adaptiveContentPaddingOnlyVertical(
@@ -1019,8 +1019,8 @@ fun ChapterItem(
 fun BookmarkListContent(
     bookmarks: List<TocBookmarkItemUi>,
     book: Book?,
-    onBookmarkLongClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
-    onBookmarkClick: (Bookmark) -> Unit,
+    onBookmarkClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
+    onBookmarkLongClick: (Bookmark) -> Unit,
     contentPadding: PaddingValues
 ) {
     val listState = rememberLazyListState()
@@ -1068,10 +1068,10 @@ fun BookmarkListContent(
                         .fillMaxWidth(),
                     isDur = book?.durChapterIndex == bookmark.chapterIndex,
                     onClick = {
-                        onBookmarkClick(bookmark.raw)
+                        onBookmarkClick(bookmark.chapterIndex, bookmark.chapterPos)
                     },
                     onLongClick = {
-                        onBookmarkLongClick(bookmark.chapterIndex, bookmark.chapterPos)
+                        onBookmarkLongClick(bookmark.raw)
                     }
                 )
             }

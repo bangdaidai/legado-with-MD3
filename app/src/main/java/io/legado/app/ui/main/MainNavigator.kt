@@ -527,6 +527,8 @@ object MainNavigator {
                     MainIntent.EXTRA_CHAPTER_CHANGED,
                     false
                 ) == true,
+                chapterIndex = intent?.getIntExtra(MainIntent.EXTRA_CHAPTER_INDEX, -1) ?: -1,
+                chapterPos = intent?.getIntExtra(MainIntent.EXTRA_CHAPTER_POS, -1) ?: -1,
             )
             MainRouteConst.ROUTE_READ_MANGA -> MainRouteReadManga(
                 bookUrl = intent?.getStringExtra(MainIntent.EXTRA_BOOK_URL),

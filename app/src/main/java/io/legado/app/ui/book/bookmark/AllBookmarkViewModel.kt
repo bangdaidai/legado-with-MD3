@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
@@ -70,18 +71,27 @@ sealed interface AllBookmarkIntent {
     data class ToggleAllCollapse(val groups: Set<BookmarkGroupHeader>) : AllBookmarkIntent
     data class UpdateBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class DeleteBookmark(val bookmark: Bookmark) : AllBookmarkIntent
+    data class NavigateToBookmark(val bookmark: Bookmark) : AllBookmarkIntent
     data class Export(val treeUri: Uri, val isMarkdown: Boolean) : AllBookmarkIntent
     data object ClearAll : AllBookmarkIntent
 }
 
 sealed interface AllBookmarkEffect {
     data class ShowMessage(val message: String) : AllBookmarkEffect
+
+    /** 跳转到指定书的指定章节位置（书签点击） */
+    data class OpenReader(
+        val bookUrl: String,
+        val chapterIndex: Int,
+        val chapterPos: Int,
+    ) : AllBookmarkEffect
 }
 
 
 class AllBookmarkViewModel(
     application: Application,
     private val bookmarkRepository: BookmarkRepository,
+    private val bookRepository: BookRepository,
 ) : AndroidViewModel(application) {
 
     private val _searchQuery = MutableStateFlow("")
@@ -148,8 +158,33 @@ class AllBookmarkViewModel(
             is AllBookmarkIntent.ToggleAllCollapse -> toggleAllCollapse(intent.groups)
             is AllBookmarkIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is AllBookmarkIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
+            is AllBookmarkIntent.NavigateToBookmark -> navigateToBookmark(intent.bookmark)
             is AllBookmarkIntent.Export -> exportBookmark(intent.treeUri, intent.isMarkdown)
             AllBookmarkIntent.ClearAll -> clearAllBookmarks()
+        }
+    }
+
+    /**
+     * 书签按「书名+作者」跨源关联，跳转前用当前书架里的 bookUrl（换源后旧 bookUrl 会失效）。
+     */
+    private fun navigateToBookmark(bookmark: Bookmark) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val book = bookRepository.getBook(bookmark.bookName, bookmark.bookAuthor)
+            if (book == null) {
+                _effects.tryEmit(
+                    AllBookmarkEffect.ShowMessage(
+                        getApplication<Application>().getString(R.string.book_not_found)
+                    )
+                )
+                return@launch
+            }
+            _effects.tryEmit(
+                AllBookmarkEffect.OpenReader(
+                    bookUrl = book.bookUrl,
+                    chapterIndex = bookmark.chapterIndex,
+                    chapterPos = bookmark.chapterPos,
+                )
+            )
         }
     }
 

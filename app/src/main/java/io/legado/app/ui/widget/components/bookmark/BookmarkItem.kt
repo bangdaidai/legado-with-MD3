@@ -50,12 +50,13 @@ fun BookmarkItem(
         }
     ).joinToString()
     val editLabel = stringResource(R.string.edit)
+    val navigateLabel = stringResource(R.string.locate_current)
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClickLabel = editLabel,
+                onClickLabel = navigateLabel,
                 onLongClickLabel = editLabel,
                 onClick = onClick,
                 onLongClick = onLongClick
