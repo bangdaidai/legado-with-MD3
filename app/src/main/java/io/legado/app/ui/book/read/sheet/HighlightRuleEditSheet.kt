@@ -1326,7 +1326,8 @@ internal fun HighlightRulePreview(
                                         bgRawBitmap,
                                         box.left, box.top, box.right, box.bottom,
                                         ninePatchPaint,
-                                        *io.legado.app.help.highlight.NinePatchDrawHelper.toLinePositions(npLeft, npRight, npTop, npBottom),
+                                        leftX = npLeft, rightX = 1f - npRight,
+                                        topY = npTop, bottomY = 1f - npBottom,
                                         box.cornerL, box.cornerR, box.cornerT, box.cornerB,
                                     )
                                 }
@@ -1786,7 +1787,9 @@ private fun NineSlicePreview(
         io.legado.app.help.highlight.NinePatchDrawHelper.draw(
             drawContext.canvas.nativeCanvas, bitmap,
             bgLeft, textTop - cornerT, bgRight, textBottom + cornerB,
-            paint, *io.legado.app.help.highlight.NinePatchDrawHelper.toLinePositions(npLeft, npRight, npTop, npBottom),
+            paint,
+            leftX = npLeft, rightX = 1f - npRight,
+            topY = npTop, bottomY = 1f - npBottom,
             cornerL, cornerR, cornerT, cornerB,
         )
         // 文字行虚线：正好落在九宫格中段拉伸区内

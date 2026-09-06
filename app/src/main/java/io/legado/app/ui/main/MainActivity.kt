@@ -209,12 +209,16 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack,
             readAloud: Boolean = false,
             inBookshelf: Boolean = true,
             chapterChanged: Boolean = false,
+            chapterIndex: Int = -1,
+            chapterPos: Int = -1,
         ): Intent = MainIntent.createReadBookIntent(
             context = context,
             bookUrl = bookUrl,
             readAloud = readAloud,
             inBookshelf = inBookshelf,
             chapterChanged = chapterChanged,
+            chapterIndex = chapterIndex,
+            chapterPos = chapterPos,
         )
 
         fun createReadBookMediaControlIntent(context: Context): Intent =

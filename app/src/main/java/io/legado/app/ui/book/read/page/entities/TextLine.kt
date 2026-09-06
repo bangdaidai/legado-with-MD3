@@ -315,8 +315,9 @@ data class TextLine(
             val bgPadBottom = textColumn?.bgPadBottom ?: 0f
             when {
                 bgImage.isEmpty() && active -> {
-                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom, currentBgPadStart, currentBgPadEnd, currentBgPadTop, currentBgPadBottom)
-                    active = false
+                    // 没有背景图的列不打断背景图的连续性，扩展范围但不绘制
+                    // 背景图会在遇到下一个不同背景图或遍历结束时统一绘制
+                    rangeEnd = textColumn!!.end
                 }
                 bgImage.isNotEmpty() && !active -> {
                     rangeStart = textColumn!!.start
@@ -377,6 +378,12 @@ data class TextLine(
             var j = i + 1
             while (j < columns.size) {
                 val next = columns[j] as? TextBaseColumn ?: break
+                if (next.bgColor == null) {
+                    // 没有背景色的列不打断连续性，扩展范围
+                    right = next.end
+                    j++
+                    continue
+                }
                 if (next.bgColor != color) break
                 right = next.end
                 j++
@@ -442,8 +449,8 @@ data class TextLine(
                 currentDashGap == dashGap
             when {
                 effectiveMode == 0 && active -> {
-                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather, dashLen, dashGap)
-                    active = false
+                    // 没有下划线的列不打断连续性，扩展范围但不绘制
+                    rangeEnd = textColumn!!.end
                 }
                 effectiveMode != 0 && !active -> {
                     rangeStart = textColumn!!.start
@@ -723,7 +730,8 @@ data class TextLine(
                 )?.let { box ->
                     NinePatchDrawHelper.draw(
                         canvas, bitmap, box.left, box.top, box.right, box.bottom, paint,
-                        *NinePatchDrawHelper.toLinePositions(npLeft, npRight, npTop, npBottom),
+                        leftX = npLeft, rightX = 1f - npRight,
+                        topY = npTop, bottomY = 1f - npBottom,
                         box.cornerL, box.cornerR, box.cornerT, box.cornerB,
                     )
                 }
