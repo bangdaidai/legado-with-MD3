@@ -112,31 +112,28 @@ fun ReadRecordOverviewScreen(
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     TopBarNavigationButton(onClick = onBackClick)
+                },
+                // 周期 tab 与日期行放进 bottomContent,与标题栏共用同一层玻璃背景,上滑收起后固定
+                bottomContent = {
+                    PeriodSelector(
+                        selectedPeriod = state.period,
+                        onPeriodSelected = { onIntent(ReadRecordOverviewIntent.SetPeriod(it)) }
+                    )
+
+                    DateNavigator(
+                        period = state.period,
+                        referenceDate = state.referenceDate,
+                        onPrevClick = { onIntent(ReadRecordOverviewIntent.PreviousDate) },
+                        onNextClick = { onIntent(ReadRecordOverviewIntent.NextDate) }
+                    )
                 }
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            PeriodSelector(
-                selectedPeriod = state.period,
-                onPeriodSelected = { onIntent(ReadRecordOverviewIntent.SetPeriod(it)) }
-            )
-
-            DateNavigator(
-                period = state.period,
-                referenceDate = state.referenceDate,
-                onPrevClick = { onIntent(ReadRecordOverviewIntent.PreviousDate) },
-                onNextClick = { onIntent(ReadRecordOverviewIntent.NextDate) }
-            )
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
 
                 item {
                     val readingTime = ReadRecordFormatter.hourMinuteDuration(state.totalTime)
@@ -193,7 +190,6 @@ fun ReadRecordOverviewScreen(
                     }
                 }
             }
-        }
     }
 }
 
@@ -232,7 +228,7 @@ fun DateNavigator(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp, horizontal = 12.dp),
+            .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
