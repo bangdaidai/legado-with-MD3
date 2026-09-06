@@ -104,6 +104,26 @@ class AiTaskManager(
         return artifact.id
     }
 
+    /** 取消某本书某类任务的运行中协程，快照置为失败（已取消），让面板立即脱离执行中状态 */
+    fun cancelBookTask(bookUrl: String, taskType: String) {
+        val snapshot = snapshots.value.values.lastOrNull {
+            it.bookUrl == bookUrl && it.taskType == taskType
+        } ?: return
+        cancel(snapshot.id)
+    }
+
+    fun cancel(taskId: String) {
+        jobs.remove(taskId)?.cancel()
+        snapshots.update { current ->
+            val snapshot = current[taskId] ?: return@update current
+            if (snapshot.status != AiArtifact.STATUS_RUNNING) return@update current
+            current + (taskId to snapshot.copy(
+                status = AiArtifact.STATUS_FAILED,
+                errorMessage = "已取消",
+            ))
+        }
+    }
+
     private fun publish(snapshot: AiTaskSnapshot) {
         snapshots.update { it + (snapshot.id to snapshot) }
     }

@@ -7,6 +7,8 @@ import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiModelConfig
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 /**
  * 供应商内置联网的预检索：不带任何 function 工具发一轮纯对话，让内置 web_search 触发。
@@ -30,13 +32,25 @@ class AiWebSearchPrefetchUseCase(
             params = AiGenerationParams(webSearch = true),
         )
         val output = StringBuilder()
-        aiTextGateway.generateStream(request).collect { event ->
-            if (event is AiStreamEvent.Content) output.append(event.text)
+        try {
+            // aiOkHttpClient 的读超时是 0（为流式长响应），预检索必须自带超时，
+            // 否则服务端挂起连接时整个任务会永远停在执行中
+            withTimeout(PREFETCH_TIMEOUT_MS) {
+                aiTextGateway.generateStream(request).collect { event ->
+                    if (event is AiStreamEvent.Content) output.append(event.text)
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            // 预检索失败按无联网结果处理，调用方静默降级
+            return null
         }
         return output.toString().trim().takeIf { it.isNotEmpty() }?.take(MAX_CHARS)
     }
 
     companion object {
         const val MAX_CHARS = 8000
+
+        /** 预检索是最多几十秒的短请求，超时视为失败并静默降级 */
+        private const val PREFETCH_TIMEOUT_MS = 90_000L
     }
 }

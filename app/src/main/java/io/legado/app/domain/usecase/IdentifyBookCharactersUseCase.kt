@@ -18,9 +18,11 @@ import io.legado.app.domain.model.nativeWebSearchSupport
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonArray
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withTimeout
 import kotlin.uuid.Uuid
 
 class IdentifyBookCharactersUseCase(
@@ -73,6 +75,10 @@ class IdentifyBookCharactersUseCase(
         taskType = AiTaskType.IDENTIFY_CHARACTERS,
     )
 
+    /** 用户关闭面板或点停止时取消运行中的识别任务，避免任务在后台永远挂起 */
+    fun cancelRunning(bookUrl: String) =
+        aiTaskManager.cancelBookTask(bookUrl, AiTaskType.IDENTIFY_CHARACTERS)
+
     suspend fun start(
         bookUrl: String,
         reasoningLevel: AiReasoningLevel = AiReasoningLevel.AUTO,
@@ -99,12 +105,20 @@ class IdentifyBookCharactersUseCase(
         )
         return aiTaskManager.submit(artifact) {
             var candidates = emptyList<Candidate>()
-            identifyStream(bookUrl, reasoningLevel).collect { progress ->
-                when (progress) {
-                    is Progress.Reasoning -> appendReasoning(progress.text)
-                    is Progress.ToolCall -> reportToolCall(progress.name)
-                    is Progress.Done -> candidates = progress.candidates
+            try {
+                // 看门狗：识别是多轮工具循环 + 联网预检索的长任务，任何一环挂起都不能让任务
+                // 永远停在执行中（submit 的去重会挡住重试）；超时转成明确报错
+                withTimeout(TASK_TIMEOUT_MS) {
+                    identifyStream(bookUrl, reasoningLevel).collect { progress ->
+                        when (progress) {
+                            is Progress.Reasoning -> appendReasoning(progress.text)
+                            is Progress.ToolCall -> reportToolCall(progress.name)
+                            is Progress.Done -> candidates = progress.candidates
+                        }
+                    }
                 }
+            } catch (e: TimeoutCancellationException) {
+                error("识别超时（超过 ${TASK_TIMEOUT_MS / 60000} 分钟无响应），请重试；若反复出现请检查网络或更换模型")
             }
             GSON.toJson(candidates)
         }
@@ -134,6 +148,8 @@ class IdentifyBookCharactersUseCase(
         // 先用一轮不带工具的纯对话预检索（搜索结果按 token 计费，不消耗按次的搜索资源包），
         // 把结果作为上下文注入主请求。已有 search_web 工具（Tavily/智谱检索兜底）时无需预检索。
         val webSearchContext = if (nativeWebSearch && !searchToolAvailable) {
+            // 预检索的日志条目要到请求结束才落库，先在时间线里报一句，让用户看得到进展
+            emit(Progress.Reasoning("正在联网检索本书的主要人物…\n"))
             runCatching {
                 preSearchQuery(bookName)?.let { query ->
                     aiWebSearchPrefetchUseCase.prefetch(preset.model, query)
@@ -297,6 +313,47 @@ class IdentifyBookCharactersUseCase(
 
     companion object {
         private const val MIN_CONFIDENCE = 0.65f
+
+        /**
+         * 批量导入的人物 JSON 解析。兼容三种形态：{"characters":[…]}、裸数组 […]、单个人物对象 {…}。
+         * 字段缺失按识别流程的同一套默认值兜底；没有 name 的条目跳过。
+         */
+        fun parseImportJson(json: String): List<Candidate> {
+            val trimmed = json.trim()
+            if (trimmed.isEmpty()) return emptyList()
+            val root = runCatching { JsonParser.parseString(trimmed) }.getOrElse {
+                error("JSON 格式不正确：${it.message}")
+            }
+            val array = when {
+                root.isJsonObject && root.asJsonObject.has("characters") ->
+                    root.asJsonObject.getAsJsonArray("characters")
+                root.isJsonArray -> root.asJsonArray
+                root.isJsonObject -> JsonParser.parseString("[$trimmed]").asJsonArray
+                else -> error("JSON 应为 {\"characters\":[…]}、人物数组或单个人物对象")
+            }
+            return array.mapNotNull { element ->
+                val item = element.asJsonObject
+                val name = item.get("name")?.asString?.trim().orEmpty()
+                if (name.isEmpty()) return@mapNotNull null
+                Candidate(
+                    name = name,
+                    aliases = item.getAsJsonArray("aliases")
+                        ?.map { it.asString.trim() }
+                        ?.filter(String::isNotBlank)
+                        .orEmpty(),
+                    voiceGender = item.get("voiceGender")?.asString ?: "unknown",
+                    voiceAgeBand = item.get("voiceAgeBand")?.asString ?: "unknown",
+                    role = item.get("role")?.asString.orEmpty(),
+                    personality = item.get("personality")?.asString.orEmpty(),
+                    summary = item.get("summary")?.asString.orEmpty(),
+                    evidence = item.get("evidence")?.asString ?: "手动导入",
+                    confidence = item.get("confidence")?.asFloat?.coerceIn(0f, 1f) ?: 0.8f,
+                )
+            }
+        }
+
+        /** 任务看门狗：预检索 + 多轮工具循环 + 弱模型慢响应的总预算 */
+        private const val TASK_TIMEOUT_MS = 5 * 60_000L
 
         /** 与 AiToolRepository.TOOL_SEARCH_WEB 保持一致；domain 层不反向依赖 data 层，故本地声明 */
         private const val SEARCH_WEB_TOOL = "search_web"

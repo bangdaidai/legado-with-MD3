@@ -14,6 +14,7 @@ data class CharacterListUiState(
     val characters: ImmutableList<CharacterListItemUi> = persistentListOf(),
     val aiSheet: CharacterIdentifySheet? = null,
     val isAiSheetVisible: Boolean = false,
+    val showImportDialog: Boolean = false,
 )
 
 @Stable
@@ -55,6 +56,10 @@ sealed interface CharacterListIntent {
     data class ToggleAiCandidate(val id: String) : CharacterListIntent
     data object SaveAiCandidates : CharacterListIntent
     data object DismissAiIdentify : CharacterListIntent
+    data object CancelAiIdentify : CharacterListIntent
+    data object ShowImportDialog : CharacterListIntent
+    data object HideImportDialog : CharacterListIntent
+    data class ImportCharacters(val json: String) : CharacterListIntent
 }
 
 sealed interface CharacterListEffect {

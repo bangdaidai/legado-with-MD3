@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -56,6 +58,8 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.text.AppTextField
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
@@ -124,6 +128,11 @@ fun BookCharacterListScreen(
                 },
                 actions = {
                     TopBarActionButton(
+                        onClick = { onIntent(CharacterListIntent.ShowImportDialog) },
+                        imageVector = Icons.Default.UploadFile,
+                        contentDescription = stringResource(R.string.character_import),
+                    )
+                    TopBarActionButton(
                         onClick = { onIntent(CharacterListIntent.OpenAiIdentify) },
                         imageVector = Icons.Default.Person,
                         contentDescription = stringResource(R.string.ai_identify_characters),
@@ -170,6 +179,31 @@ fun BookCharacterListScreen(
         }
     }
     CharacterIdentifySheet(state.aiSheet, state.isAiSheetVisible, onIntent)
+
+    if (state.showImportDialog) {
+        var importText by remember { mutableStateOf("") }
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { onIntent(CharacterListIntent.HideImportDialog) },
+            title = stringResource(R.string.character_import),
+            text = stringResource(R.string.character_import_hint),
+            content = {
+                AppTextField(
+                    value = importText,
+                    onValueChange = { importText = it },
+                    singleLine = false,
+                    maxLines = 15,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp, max = 400.dp),
+                )
+            },
+            confirmText = stringResource(R.string.ok),
+            onConfirm = { onIntent(CharacterListIntent.ImportCharacters(importText)) },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { onIntent(CharacterListIntent.HideImportDialog) }
+        )
+    }
 }
 @Composable
 private fun CharacterIdentifySheet(
@@ -218,18 +252,24 @@ private fun CharacterIdentifySheet(
     ) {
         when {
             sheet == null -> Unit
-            sheet.loading -> if (sheet.steps.isEmpty()) {
-                // 步骤尚未产生时显示"思考中"计时头部，避免面板空白
-                ReasoningCard(
-                    text = "",
-                    isStreaming = true,
-                    messageCreatedAt = sheet.startedAt,
-                )
-            } else {
-                AiThinkingStepsCard(
-                    steps = sheet.steps,
-                    isStreaming = true,
-                    messageCreatedAt = sheet.startedAt,
+            sheet.loading -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (sheet.steps.isEmpty()) {
+                    // 步骤尚未产生时显示"思考中"计时头部，避免面板空白
+                    ReasoningCard(
+                        text = "",
+                        isStreaming = true,
+                        messageCreatedAt = sheet.startedAt,
+                    )
+                } else {
+                    AiThinkingStepsCard(
+                        steps = sheet.steps,
+                        isStreaming = true,
+                        messageCreatedAt = sheet.startedAt,
+                    )
+                }
+                MediumTonalButton(
+                    onClick = { onIntent(CharacterListIntent.CancelAiIdentify) },
+                    text = stringResource(R.string.ai_identify_characters_stop),
                 )
             }
             sheet.error != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

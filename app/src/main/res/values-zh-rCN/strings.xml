@@ -2869,6 +2869,10 @@
     <string name="book_info_knowledge">知识</string>
     <string name="character_network">关系网</string>
     <string name="add_character">新增人物</string>
+    <string name="character_import">批量导入人物</string>
+    <string name="character_import_hint">粘贴人物 JSON 批量导入，支持 {\"characters\":[…]}、人物数组或单个人物对象；同名人物会合并更新。role 可选 male_lead / female_lead / male_supporting / female_supporting / unknown。</string>
+    <string name="character_import_success">已导入 %1$d 个人物</string>
+    <string name="character_import_empty">没有解析到有效的人物条目</string>
     <string name="add_character_hint">创建人物档案</string>
     <string name="character_empty_hint">还没有人物档案</string>
     <string name="character_no_summary">暂无简介</string>
@@ -3204,6 +3208,7 @@
     <string name="ai_identify_characters_hint">AI 将读取已下载章节并给出人物候选，确认前不会保存。</string>
     <string name="ai_identify_characters_start">开始识别</string>
     <string name="ai_identify_characters_save">保存选中的人物</string>
+    <string name="ai_identify_characters_stop">停止识别</string>
     <string name="ai_identify_retry_or_switch">重试，长按切换模型</string>
     <string name="ai_prompt_task_identify_characters">人物识别</string>
     <string name="ai_prompt_task_identify_characters_desc">读取已下载章节并建议稳定的人物档案</string>

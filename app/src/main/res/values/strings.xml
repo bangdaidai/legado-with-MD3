@@ -2924,6 +2924,10 @@
     <string name="book_info_knowledge">Knowledge</string>
     <string name="character_network">Character network</string>
     <string name="add_character">Add character</string>
+    <string name="character_import">Batch import characters</string>
+    <string name="character_import_hint">Paste character JSON to import. Accepts {\"characters\":[…]}, a character array, or a single character object; entries with the same name are merged. role: male_lead / female_lead / male_supporting / female_supporting / unknown.</string>
+    <string name="character_import_success">Imported %1$d characters</string>
+    <string name="character_import_empty">No valid character entries found</string>
     <string name="add_character_hint">Create a profile</string>
     <string name="character_empty_hint">No character profiles yet</string>
     <string name="character_no_summary">No summary</string>
@@ -3259,6 +3263,7 @@
     <string name="ai_identify_characters_hint">AI will read downloaded chapters and suggest characters. Nothing is saved until you confirm.</string>
     <string name="ai_identify_characters_start">Start identification</string>
     <string name="ai_identify_characters_save">Save selected characters</string>
+    <string name="ai_identify_characters_stop">Stop identification</string>
     <string name="ai_identify_retry_or_switch">Retry; long-press to switch model</string>
     <string name="ai_prompt_task_identify_characters">Character Identification</string>
     <string name="ai_prompt_task_identify_characters_desc">Read downloaded chapters and suggest stable character profiles</string>

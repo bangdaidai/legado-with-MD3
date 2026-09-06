@@ -88,7 +88,13 @@ class BookCharacterListViewModel(
                 )
             }
 
+            // 关闭面板不取消任务：识别在应用级后台继续跑，结果落库后面板重开自动加载；
+            // 需要中止时用面板里的"停止识别"按钮
             CharacterListIntent.DismissAiIdentify -> _uiState.update { it.copy(isAiSheetVisible = false) }
+            CharacterListIntent.CancelAiIdentify -> identifyBookCharacters.cancelRunning(_uiState.value.bookUrl)
+            CharacterListIntent.ShowImportDialog -> _uiState.update { it.copy(showImportDialog = true) }
+            CharacterListIntent.HideImportDialog -> _uiState.update { it.copy(showImportDialog = false) }
+            is CharacterListIntent.ImportCharacters -> importCharacters(intent.json)
             CharacterListIntent.RunAiIdentify -> identifyCharacters()
             is CharacterListIntent.SetAiIdentifyReasoningLevel -> _uiState.update { state ->
                 state.copy(aiSheet = state.aiSheet?.copy(reasoningLevel = intent.level))
@@ -248,6 +254,52 @@ class BookCharacterListViewModel(
                         isAiSheetVisible = true,
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * 批量导入：解析用户粘贴的人物 JSON（兼容 {"characters":[…]}、数组、单对象），
+     * 复用识别结果的保存逻辑按名字合并档案。
+     */
+    private fun importCharacters(json: String) {
+        viewModelScope.launch {
+            val candidates = try {
+                withContext(Dispatchers.IO) {
+                    IdentifyBookCharactersUseCase.parseImportJson(json)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _effects.tryEmit(
+                    CharacterListEffect.ShowToast(e.message ?: appCtx.getString(R.string.save_failed))
+                )
+                return@launch
+            }
+            if (candidates.isEmpty()) {
+                _effects.tryEmit(CharacterListEffect.ShowToast(appCtx.getString(R.string.character_import_empty)))
+                return@launch
+            }
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                withContext(Dispatchers.IO) {
+                    identifyBookCharacters.save(_uiState.value.bookUrl, candidates)
+                }
+                TextChapterLayout.invalidateRegexCache()
+                _uiState.update { it.copy(showImportDialog = false, isLoading = false) }
+                load()
+                _effects.tryEmit(
+                    CharacterListEffect.ShowToast(
+                        appCtx.getString(R.string.character_import_success, candidates.size)
+                    )
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _uiState.update { it.copy(isLoading = false) }
+                _effects.tryEmit(
+                    CharacterListEffect.ShowToast(e.localizedMessage ?: appCtx.getString(R.string.save_failed))
+                )
             }
         }
     }
