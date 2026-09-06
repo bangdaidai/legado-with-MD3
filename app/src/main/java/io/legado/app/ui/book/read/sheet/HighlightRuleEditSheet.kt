@@ -1695,6 +1695,7 @@ private fun NinePatchEditorDialog(
                             }
                         }
                         }
+                        }
                 Text(
                     text = "拖动线条调整切分位置",
                     style = MaterialTheme.typography.bodySmall,
