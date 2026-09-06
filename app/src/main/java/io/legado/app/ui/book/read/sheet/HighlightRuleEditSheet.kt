@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1313,35 +1312,27 @@ internal fun HighlightRulePreview(
                             val rectT = top
                             val rectB = bottom
                             if (bgImageFit == 3 && bgRawBitmap != null) {
-                                // 让文字落在九宫格中段拉伸区内，四角自然落在文字外部；padding 再向外扩
-                                val textW = rectR - rectL
-                                val textH = rectB - rectT
-                                val bw = bgRawBitmap.width.toFloat()
-                                val bh = bgRawBitmap.height.toFloat()
-                                val s = if (bh > 0f) textH / bh else 1f
-                                val maxCornerV = textH * 0.5f
-                                val maxCornerH = (rectR - rectL) * 0.5f
-                                val cornerL = (npLeft * bw * s).coerceAtMost(maxCornerH)
-                                val cornerR = (npRight * bw * s).coerceAtMost(maxCornerH)
-                                val cornerT = (npTop * bh * s).coerceAtMost(maxCornerV)
-                                val cornerB = (npBottom * bh * s).coerceAtMost(maxCornerV)
-                                val drawLeft = rectL - cornerL - bgPadStart * density
-                                val drawTop = rectT - cornerT - bgPadTop * density
-                                val drawRight = rectR + cornerR + bgPadEnd * density
-                                val drawBottom = rectB + cornerB + bgPadBottom * density
-                                io.legado.app.help.highlight.NinePatchDrawHelper.draw(
-                                    drawContext.canvas.nativeCanvas,
-                                    bgRawBitmap,
-                                    drawLeft,
-                                    drawTop,
-                                    drawRight,
-                                    drawBottom,
-                                    ninePatchPaint,
-                                    npLeft,
-                                    1f - npRight,
-                                    npTop,
-                                    1f - npBottom,
-                                )
+                                // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
+                                // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内
+                                io.legado.app.help.highlight.NinePatchDrawHelper.layout(
+                                    rectL, rectT, rectR, rectB,
+                                    bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
+                                    npLeft, npRight, npTop, npBottom,
+                                    bgPadStart * density, bgPadEnd * density,
+                                    bgPadTop * density, bgPadBottom * density,
+                                )?.let { box ->
+                                    io.legado.app.help.highlight.NinePatchDrawHelper.draw(
+                                        drawContext.canvas.nativeCanvas,
+                                        bgRawBitmap,
+                                        box.left, box.top, box.right, box.bottom,
+                                        ninePatchPaint,
+                                        npLeft,
+                                        1f - npRight,
+                                        npTop,
+                                        1f - npBottom,
+                                        box.cornerL, box.cornerR, box.cornerT, box.cornerB,
+                                    )
+                                }
                             } else {
                                 drawImage(
                                     image = bgBitmap,
@@ -1585,9 +1576,8 @@ private fun NinePatchEditorDialog(
                 .padding(bottom = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // 切分卡片：图片保持原始宽高比
+            // 切分卡片：长图限高 letterbox 居中显示
             if (bitmap != null) {
-                val bmpAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
                 var imageRect by remember { mutableStateOf(Rect.Zero) }
                 val splitLineColor = MaterialTheme.colorScheme.primary
                 NormalCard(
@@ -1603,11 +1593,20 @@ private fun NinePatchEditorDialog(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Box(
+                        androidx.compose.foundation.layout.BoxWithConstraints(
                             modifier = Modifier
-                                .fillMaxWidth(0.8f)
-                                .aspectRatio(bmpAspect),
+                                .fillMaxWidth(0.8f),
                         ) {
+                            // 长图高度封顶后由 Canvas 做 contain 居中，避免细长一条没法拖
+                            val boxHeight = minOf(
+                                280.dp,
+                                maxWidth * (bitmap.height.toFloat() / bitmap.width),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(boxHeight),
+                            ) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1642,10 +1641,12 @@ private fun NinePatchEditorDialog(
                                         val relX = ((change.position.x - ir.left) / ir.width).coerceIn(0.02f, 0.98f)
                                         val relY = ((change.position.y - ir.top) / ir.height).coerceIn(0.02f, 0.98f)
                                         when (dragTarget) {
-                                            0 -> left = relX
-                                            1 -> right = relX
-                                            2 -> top = relY
-                                            3 -> bottom = relY
+                                            // np* 存的是角块占比（≤0.5，与保存时的 sanitize 一致）：
+                                            // 左/上两条线不超过中线，右/下两条线不小于中线
+                                            0 -> left = relX.coerceAtMost(0.5f)
+                                            1 -> right = relX.coerceAtLeast(0.5f)
+                                            2 -> top = relY.coerceAtMost(0.5f)
+                                            3 -> bottom = relY.coerceAtLeast(0.5f)
                                         }
                                     },
                                     onDragEnd = { dragTarget = -1 },
@@ -1653,28 +1654,34 @@ private fun NinePatchEditorDialog(
                                 )
                             }
                     ) {
-                        // 图片填满 Canvas（已用 aspectRatio 保证比例）
+                        // contain 适配：图片在框内等比居中，命中与线坐标都基于实际显示矩形
                         val canvasW = size.width
                         val canvasH = size.height
-                        imageRect = Rect(0f, 0f, canvasW, canvasH)
+                        val scale = minOf(canvasW / bitmap.width, canvasH / bitmap.height)
+                        val drawW = bitmap.width * scale
+                        val drawH = bitmap.height * scale
+                        val offX = (canvasW - drawW) / 2f
+                        val offY = (canvasH - drawH) / 2f
+                        val ir = Rect(offX, offY, offX + drawW, offY + drawH)
+                        imageRect = ir
 
                         drawImage(
                             image = bitmap.asImageBitmap(),
-                            dstOffset = androidx.compose.ui.unit.IntOffset(0, 0),
-                            dstSize = androidx.compose.ui.unit.IntSize(canvasW.toInt(), canvasH.toInt()),
+                            dstOffset = androidx.compose.ui.unit.IntOffset(ir.left.toInt(), ir.top.toInt()),
+                            dstSize = androidx.compose.ui.unit.IntSize(drawW.toInt(), drawH.toInt()),
                         )
 
                         val lineColor = splitLineColor
                         val lineWidth = 2.dp.toPx()
                         // left/right/top/bottom 都是从左/上数的绝对位置(0~1)
-                        val lx = canvasW * left
-                        val rx = canvasW * right
-                        val ty = canvasH * top
-                        val by2 = canvasH * bottom
-                        drawLine(lineColor, Offset(lx, 0f), Offset(lx, canvasH), lineWidth)
-                        drawLine(lineColor, Offset(rx, 0f), Offset(rx, canvasH), lineWidth)
-                        drawLine(lineColor, Offset(0f, ty), Offset(canvasW, ty), lineWidth)
-                        drawLine(lineColor, Offset(0f, by2), Offset(canvasW, by2), lineWidth)
+                        val lx = ir.left + ir.width * left
+                        val rx = ir.left + ir.width * right
+                        val ty = ir.top + ir.height * top
+                        val by2 = ir.top + ir.height * bottom
+                        drawLine(lineColor, Offset(lx, ir.top), Offset(lx, ir.bottom), lineWidth)
+                        drawLine(lineColor, Offset(rx, ir.top), Offset(rx, ir.bottom), lineWidth)
+                        drawLine(lineColor, Offset(ir.left, ty), Offset(ir.right, ty), lineWidth)
+                        drawLine(lineColor, Offset(ir.left, by2), Offset(ir.right, by2), lineWidth)
                         // 中间矩形（可拉伸区）描边
                         val minX = minOf(lx, rx); val maxX = maxOf(lx, rx)
                         val minY = minOf(ty, by2); val maxY = maxOf(ty, by2)
@@ -1685,9 +1692,9 @@ private fun NinePatchEditorDialog(
                             style = Stroke(width = 1.dp.toPx()),
                         )
                     }
-                }
-                }
-                }
+                            }
+                        }
+                        }
                 Text(
                     text = "拖动线条调整切分位置",
                     style = MaterialTheme.typography.bodySmall,
@@ -1746,6 +1753,29 @@ private fun NineSlicePreview(
         val bgRight = canvasW * 0.92f
         val bgTop = canvasH * 0.08f
         val bgBottom = canvasH * 0.92f
+        val bgW = bgRight - bgLeft
+        val bgH = bgBottom - bgTop
+        val bw = bitmap.width.toFloat()
+        val bh = bitmap.height.toFloat()
+
+        // 与渲染层同一套几何：背景框 = 文字高 ×(1+上角占比+下角占比)，
+        // 由背景框高度反解文字行高，四角尺寸与虚线框（= 中段拉伸区）严格对齐
+        val textH = bgH / (1f + npTop + npBottom)
+        val s = if (bh > 0f) textH / bh else 1f
+        val cornerT = (npTop * bh * s).coerceAtMost(textH * 0.5f)
+        val cornerB = (npBottom * bh * s).coerceAtMost(textH * 0.5f)
+        var cornerL = npLeft * bw * s
+        var cornerR = npRight * bw * s
+        // 水平放不下四角时按比例缩角（与 NinePatchDrawHelper 内部保护一致）
+        if (cornerL + cornerR > bgW && cornerL + cornerR > 0f) {
+            val ratio = bgW / (cornerL + cornerR)
+            cornerL *= ratio
+            cornerR *= ratio
+        }
+        val textLeft = bgLeft + cornerL
+        val textRight = bgRight - cornerR
+        val textTop = bgTop + cornerT
+        val textBottom = bgBottom - cornerB
 
         val paint = android.graphics.Paint().apply {
             isAntiAlias = true
@@ -1753,14 +1783,11 @@ private fun NineSlicePreview(
         }
         io.legado.app.help.highlight.NinePatchDrawHelper.draw(
             drawContext.canvas.nativeCanvas, bitmap,
-            bgLeft, bgTop, bgRight, bgBottom,
+            bgLeft, textTop - cornerT, bgRight, textBottom + cornerB,
             paint, npLeft, 1f - npRight, npTop, 1f - npBottom,
+            cornerL, cornerR, cornerT, cornerB,
         )
-        // 文字行虚线：根据切分线位置，正好落在九宫格中段拉伸区内
-        val textLeft = bgLeft + (bgRight - bgLeft) * npLeft
-        val textRight = bgRight - (bgRight - bgLeft) * npRight
-        val textTop = bgTop + (bgBottom - bgTop) * npTop
-        val textBottom = bgBottom - (bgBottom - bgTop) * npBottom
+        // 文字行虚线：正好落在九宫格中段拉伸区内
         drawRect(
             color = Color(0x66000000),
             topLeft = Offset(textLeft, textTop),

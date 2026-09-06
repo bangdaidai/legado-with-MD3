@@ -10,14 +10,77 @@ import android.graphics.RectF
  * 九宫格背景绘制。移植自 readdai `NinePatchHelper`。
  *
  * 参数 [leftX] / [rightX] / [topY] / [bottomY] 均为**图片宽/高的归一化绝对位置** (0~1)：
- *  - leftX / rightX 为两条竖线相对图宽的位置
- *  - topY / bottomY 为两条横线相对图高的位置
+ *  - leftX / rightX 为两条竖线相对图宽的位置（从左数）
+ *  - topY / bottomY 为两条横线相对图高的位置（从上数）
  *  - 允许两条线重合（借 1px 源图当拉伸中心带）
  *
- * 四角按目标框高度贴合缩放 s = rectH/bh，绝不变形；
- * 中段沿水平/垂直方向拉伸填满剩余空间。
+ * 目标角块尺寸优先取 [draw] 的 cornerL/cornerR/cornerT/cornerB（调用方经 [layout]
+ * 算出，与文字外扩预留完全一致）；未传时退回按 s = rectH/bh 推导（图片高度贴合目标框）。
+ * 目标框放不下四角之和时按比例缩小四角、中段允许为 0，短文字高亮不再压扁角块。
  */
 object NinePatchDrawHelper {
+
+    /**
+     * 九宫格背景相对文字矩形的布局结果：
+     * box 为背景图目标框（文字矩形外扩四角与 padding），corner* 为四角的目标像素尺寸
+     */
+    data class Box(
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+        val cornerL: Float,
+        val cornerR: Float,
+        val cornerT: Float,
+        val cornerB: Float,
+    )
+
+    /**
+     * 以文字矩形为基准计算背景框：缩放比锚定行高（s = 文字高/图高），
+     * 四角目标尺寸 = 切分占比 × 源尺寸 × s（各不超过文字宽/高的一半），
+     * 背景框 = 文字矩形向外扩四角与 padding。
+     * 绘制时把返回的角尺寸原样传给 [draw]，即可保证文字落在中段拉伸区内。
+     */
+    fun layout(
+        textLeft: Float,
+        textTop: Float,
+        textRight: Float,
+        textBottom: Float,
+        bitmapWidth: Float,
+        bitmapHeight: Float,
+        npLeft: Float,
+        npRight: Float,
+        npTop: Float,
+        npBottom: Float,
+        padStart: Float = 0f,
+        padEnd: Float = 0f,
+        padTop: Float = 0f,
+        padBottom: Float = 0f,
+    ): Box? {
+        val textW = textRight - textLeft
+        val textH = textBottom - textTop
+        if (textW <= 0f || textH <= 0f) return null
+        if (bitmapWidth <= 0f || bitmapHeight <= 0f) return null
+
+        val s = textH / bitmapHeight
+        val maxCornerV = textH * 0.5f
+        val maxCornerH = textW * 0.5f
+        val cornerL = (npLeft * bitmapWidth * s).coerceIn(0f, maxCornerH)
+        val cornerR = (npRight * bitmapWidth * s).coerceIn(0f, maxCornerH)
+        val cornerT = (npTop * bitmapHeight * s).coerceIn(0f, maxCornerV)
+        val cornerB = (npBottom * bitmapHeight * s).coerceIn(0f, maxCornerV)
+
+        return Box(
+            left = textLeft - cornerL - padStart,
+            top = textTop - cornerT - padTop,
+            right = textRight + cornerR + padEnd,
+            bottom = textBottom + cornerB + padBottom,
+            cornerL = cornerL,
+            cornerR = cornerR,
+            cornerT = cornerT,
+            cornerB = cornerB,
+        )
+    }
 
     fun draw(
         canvas: Canvas,
@@ -31,6 +94,10 @@ object NinePatchDrawHelper {
         rightX: Float,
         topY: Float,
         bottomY: Float,
+        cornerL: Float = 0f,
+        cornerR: Float = 0f,
+        cornerT: Float = 0f,
+        cornerB: Float = 0f,
     ) {
         val rectW = right - left
         val rectH = bottom - top
@@ -50,22 +117,31 @@ object NinePatchDrawHelper {
         val tyN = ty0.coerceAtMost(by0)
         val byN = ty0.coerceAtLeast(by0)
 
-        // 四角按目标框高度贴合缩放：横向文字行以行高为基准，水平中段拉伸铺满宽度。
-        // 不用 min(rectW/bw, rectH/bh)（contain 整图），否则命中文字较短时四角会被缩成细线，
-        // 观感上"背景图很小盖不住文字"。
+        // 目标角块尺寸：优先用调用方预留的尺寸；未传时退回按目标框高度贴合缩放推导
         val s = rectH / bh
-
         val wLsrc = lxN * bw
         val wRsrc = (1f - rxN) * bw
         val hTsrc = tyN * bh
         val hBsrc = (1f - byN) * bh
+        var wL = if (cornerL > 0f) cornerL else wLsrc * s
+        var wR = if (cornerR > 0f) cornerR else wRsrc * s
+        var hT = if (cornerT > 0f) cornerT else hTsrc * s
+        var hB = if (cornerB > 0f) cornerB else hBsrc * s
 
-        val wL = wLsrc * s
-        val wR = wRsrc * s
-        val hT = hTsrc * s
-        val hB = hBsrc * s
-        val wM = (rectW - wL - wR).let { if (it > 0f) it else 0f }
-        val hM = (rectH - hT - hB).let { if (it > 0f) it else 0f }
+        // 目标框放不下四角之和时按比例缩小四角（同 TextLine.drawNinePatchBitmap 的处理），
+        // 否则中段坐标反转，短文字高亮时角块会被压扁
+        if (wL + wR > rectW && wL + wR > 0f) {
+            val ratio = rectW / (wL + wR)
+            wL *= ratio
+            wR *= ratio
+        }
+        if (hT + hB > rectH && hT + hB > 0f) {
+            val ratio = rectH / (hT + hB)
+            hT *= ratio
+            hB *= ratio
+        }
+        val wM = (rectW - wL - wR).coerceAtLeast(0f)
+        val hM = (rectH - hT - hB).coerceAtLeast(0f)
 
         val x0 = left
         val x1 = left + wL

@@ -334,7 +334,8 @@ data class TextLine(
                     currentBgPadBottom = bgPadBottom
                     active = true
                 }
-                bgImage.isNotEmpty() && bgImage == currentBgImage && bgImageFit == currentBgImageFit && bgImageScale == currentBgImageScale && npLeft == currentNpLeft && npRight == currentNpRight && npTop == currentNpTop && npBottom == currentNpBottom -> {
+                bgImage.isNotEmpty() && bgImage == currentBgImage && bgImageFit == currentBgImageFit && bgImageScale == currentBgImageScale && npLeft == currentNpLeft && npRight == currentNpRight && npTop == currentNpTop && npBottom == currentNpBottom &&
+                    bgPadStart == currentBgPadStart && bgPadEnd == currentBgPadEnd && bgPadTop == currentBgPadTop && bgPadBottom == currentBgPadBottom -> {
                     rangeEnd = textColumn!!.end
                 }
                 bgImage.isNotEmpty() -> {
@@ -711,26 +712,19 @@ data class TextLine(
                 val padEndPx = bgPadEnd.dpToPx()
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
-                // 文字落在九宫格的"中段拉伸区"内，四角自然落在文字外部。
-                // 用行高作为基准计算四角像素尺寸，但限制四角不超过行高的一半，
-                // 避免线重合时 s 爆炸。NinePatchDrawHelper 内部会借 1px 处理重合。
-                val bw = bitmap.width.toFloat()
-                val bh = bitmap.height.toFloat()
-                val s = if (bh > 0f) height / bh else 1f
-                val maxCornerV = height * 0.5f
-                val maxCornerH = (endX - startX) * 0.5f
-                val cornerL = (npLeft * bw * s).coerceAtMost(maxCornerH)
-                val cornerR = (npRight * bw * s).coerceAtMost(maxCornerH)
-                val cornerT = (npTop * bh * s).coerceAtMost(maxCornerV)
-                val cornerB = (npBottom * bh * s).coerceAtMost(maxCornerV)
-                val drawLeft = startX - cornerL - padStartPx
-                val drawRight = endX + cornerR + padEndPx
-                val drawTop = 0f - cornerT - padTopPx
-                val drawBottom = height + cornerB + padBottomPx
-                if (drawRight > drawLeft && drawBottom > drawTop) {
+                // 以行高为锚计算四角尺寸并外扩背景框（见 NinePatchDrawHelper.layout），
+                // 预留量与实际绘制量一致，文字必然落在九宫格中段拉伸区内；
+                // 短文字放不下四角时由 draw 内部按比例缩角，不再压扁图案
+                NinePatchDrawHelper.layout(
+                    startX, top, endX, bottom,
+                    bitmap.width.toFloat(), bitmap.height.toFloat(),
+                    npLeft, npRight, npTop, npBottom,
+                    padStartPx, padEndPx, padTopPx, padBottomPx,
+                )?.let { box ->
                     NinePatchDrawHelper.draw(
-                        canvas, bitmap, drawLeft, drawTop, drawRight, drawBottom, paint,
+                        canvas, bitmap, box.left, box.top, box.right, box.bottom, paint,
                         npLeft, 1f - npRight, npTop, 1f - npBottom,
+                        box.cornerL, box.cornerR, box.cornerT, box.cornerB,
                     )
                 }
             }
