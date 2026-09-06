@@ -281,6 +281,15 @@ class IdentifyBookCharactersUseCase(
     suspend fun save(bookUrl: String, candidates: List<Candidate>) {
         candidates.forEach { candidate ->
             val existing = bookKnowledgeGateway.getCharacterProfile(bookUrl, candidate.name)
+            // 新条目留空的字段不覆盖已有档案：手动批量导入常只填部分字段
+            val role = candidate.role.ifBlank { existing?.role.orEmpty() }
+            val voiceGender = candidate.voiceGender.ifBlank { existing?.voiceGender ?: "unknown" }
+            val voiceAgeBand = candidate.voiceAgeBand.ifBlank { existing?.voiceAgeBand ?: "unknown" }
+            val personality = candidate.personality.ifBlank { existing?.personality.orEmpty() }
+            val summary = candidate.summary.ifBlank { existing?.summary.orEmpty() }
+            val confidence =
+                if (candidate.confidence > 0f) candidate.confidence
+                else existing?.confidence ?: candidate.confidence
             bookKnowledgeGateway.upsertCharacterProfile(
                 BookCharacterProfile(
                     id = existing?.id ?: Uuid.random().toString(),
@@ -294,16 +303,16 @@ class IdentifyBookCharactersUseCase(
                             .filter(String::isNotBlank)
                             .distinct(),
                     ),
-                    role = candidate.role,
-                    voiceGender = candidate.voiceGender,
-                    voiceAgeBand = candidate.voiceAgeBand,
-                    personality = candidate.personality,
-                    summary = candidate.summary,
+                    role = role,
+                    voiceGender = voiceGender,
+                    voiceAgeBand = voiceAgeBand,
+                    personality = personality,
+                    summary = summary,
                     // 男主/女主自动成为主角；已手动标记过的不因重新识别而丢失
                     isProtagonist = existing?.isProtagonist == true ||
                             candidate.role in BookCharacterProfile.LEAD_ROLES,
                     source = BookCharacterProfile.SOURCE_AI,
-                    confidence = candidate.confidence,
+                    confidence = confidence,
                     createdAt = existing?.createdAt ?: System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis(),
                 )
