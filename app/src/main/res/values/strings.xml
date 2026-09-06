@@ -2121,6 +2121,8 @@
     <string name="ai_model_database">Models</string>
     <string name="ai_provider_database">Providers</string>
     <string name="ai_tasks">Tasks</string>
+    <string name="ai_chapter_recap">Previous Recap</string>
+    <string name="ai_chapter_recap_loading">Generating previous recap…</string>
     <string name="ai_chapter_summary">Chapter Summary</string>
     <string name="ai_chapter_summary_config">Chapter Summary Configuration</string>
     <string name="ai_prompt_setting">Prompt Settings</string>

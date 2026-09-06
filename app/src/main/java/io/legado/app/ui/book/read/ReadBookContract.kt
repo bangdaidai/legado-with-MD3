@@ -421,6 +421,7 @@ data class ReadBookButtonConfigItem(
 )
 
 internal val ReadBookButtonIds = listOf(
+    "ai_recap",
     "ai_summary",
     "ai_rewrite",
     "more_actions",
@@ -511,6 +512,7 @@ sealed interface ReadBookIntent {
     data class MoveReplaceRule(val draggedId: Long, val anchorId: Long, val afterAnchor: Boolean) :
         ReadBookIntent
     data object ToggleTranslation : ReadBookIntent
+    data object OpenChapterRecap : ReadBookIntent
     data object OpenChapterSummary : ReadBookIntent
     data object OpenAiCurrentChapterRewrite : ReadBookIntent
     data object RetryChapterSummary : ReadBookIntent

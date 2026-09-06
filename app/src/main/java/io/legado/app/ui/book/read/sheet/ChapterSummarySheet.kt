@@ -20,6 +20,7 @@ import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.ui.ai.AiReasoningModeButton
 import io.legado.app.ui.ai.chat.AiChatMessageUi
 import io.legado.app.ui.ai.chat.AiGeneratedMessageContent
+import io.legado.app.ui.book.read.AiChapterInsightMode
 import io.legado.app.ui.book.read.ChapterSummaryUiState
 import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.ui.theme.LegadoTheme
@@ -40,8 +41,11 @@ fun ChapterSummarySheet(
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
-        title = state.chapterTitle.ifBlank {
-            stringResource(R.string.ai_chapter_summary)
+        title = when (state.mode) {
+            AiChapterInsightMode.RECAP -> stringResource(R.string.ai_chapter_recap)
+            AiChapterInsightMode.SUMMARY -> state.chapterTitle.ifBlank {
+                stringResource(R.string.ai_chapter_summary)
+            }
         },
         endAction = {
             AiReasoningModeButton(
@@ -105,7 +109,12 @@ fun ChapterSummarySheet(
                         AppCircularProgressIndicator()
                         Spacer(Modifier.height(16.dp))
                         AppText(
-                            text = stringResource(R.string.ai_chapter_summary_loading),
+                            text = stringResource(
+                                when (state.mode) {
+                                    AiChapterInsightMode.RECAP -> R.string.ai_chapter_recap_loading
+                                    AiChapterInsightMode.SUMMARY -> R.string.ai_chapter_summary_loading
+                                }
+                            ),
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
                     }

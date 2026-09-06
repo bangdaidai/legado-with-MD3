@@ -20,11 +20,18 @@ data class ReadAiUiState(
     val aiRewritePresetConfig: AiRewritePresetConfigUiState = AiRewritePresetConfigUiState(),
 )
 
+/** 阅读页 AI 弹窗的两种生成模式：前文回顾（默认入口）与本章梗概。 */
+enum class AiChapterInsightMode {
+    RECAP,
+    SUMMARY,
+}
+
 @Stable
 data class ChapterSummaryUiState(
     val bookUrl: String = "",
     val chapterIndex: Int = -1,
     val chapterTitle: String = "",
+    val mode: AiChapterInsightMode = AiChapterInsightMode.RECAP,
     val reasoningLevel: AiReasoningLevel = AiReasoningLevel.AUTO,
     val isLoading: Boolean = false,
     val summary: String = "",

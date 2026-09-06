@@ -2189,6 +2189,8 @@
     <string name="ai_model_database">模型</string>
     <string name="ai_provider_database">供应商</string>
     <string name="ai_tasks">任务</string>
+    <string name="ai_chapter_recap">前情回顾</string>
+    <string name="ai_chapter_recap_loading">正在生成前情回顾…</string>
     <string name="ai_chapter_summary">章节梗概</string>
     <string name="ai_chapter_summary_config">章节梗概配置</string>
     <string name="ai_prompt_setting">提示词设置</string>

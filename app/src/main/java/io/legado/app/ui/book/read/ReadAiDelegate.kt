@@ -13,7 +13,9 @@ import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.CleanSelectedTextUseCase
+import io.legado.app.domain.usecase.GenerateChapterRecapUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
+import io.legado.app.domain.usecase.AiTaskSnapshot
 import io.legado.app.domain.usecase.SaveBookContentProcessUseCase
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
@@ -50,6 +52,7 @@ class ReadAiDelegate(
     private val scope: CoroutineScope,
     private val host: Host,
     private val generateChapterSummaryUseCase: GenerateChapterSummaryUseCase,
+    private val generateChapterRecapUseCase: GenerateChapterRecapUseCase,
     private val cleanSelectedTextUseCase: CleanSelectedTextUseCase,
     private val aiTextFactoryUseCase: AiTextFactoryUseCase,
     private val saveBookContentProcessUseCase: SaveBookContentProcessUseCase,
@@ -112,9 +115,17 @@ class ReadAiDelegate(
         }
     }
 
-    // --- 章节摘要 ---
+    // --- 前文回顾 / 章节摘要 ---
+
+    fun openChapterRecap() {
+        openChapterInsight(AiChapterInsightMode.RECAP)
+    }
 
     fun openChapterSummary() {
+        openChapterInsight(AiChapterInsightMode.SUMMARY)
+    }
+
+    private fun openChapterInsight(mode: AiChapterInsightMode) {
         val book = ReadBook.book ?: return
         val chapterIndex = ReadBook.durChapterIndex
         val chapterTitle = host.chapterName
@@ -125,12 +136,13 @@ class ReadAiDelegate(
                     bookUrl = book.bookUrl,
                     chapterIndex = chapterIndex,
                     chapterTitle = chapterTitle,
+                    mode = mode,
                     isLoading = true,
                 ),
             )
         }
         host.setActiveSheet(ReadBookSheet.ChapterSummary)
-        generateChapterSummary(book.bookUrl, chapterIndex)
+        generateChapterInsight(book.bookUrl, chapterIndex, mode)
     }
 
     fun retryChapterSummary() {
@@ -147,10 +159,14 @@ class ReadAiDelegate(
                 )
             )
         }
-        generateChapterSummary(summary.bookUrl, summary.chapterIndex)
+        generateChapterInsight(summary.bookUrl, summary.chapterIndex, summary.mode)
     }
 
-    private fun generateChapterSummary(bookUrl: String, chapterIndex: Int) {
+    private fun generateChapterInsight(
+        bookUrl: String,
+        chapterIndex: Int,
+        mode: AiChapterInsightMode,
+    ) {
         chapterSummaryJob?.cancel()
         chapterSummaryJob = scope.launch {
             val book = ReadBook.book
@@ -158,8 +174,64 @@ class ReadAiDelegate(
                 updateChapterSummaryError(
                     bookUrl,
                     chapterIndex,
+                    mode,
                     context.getString(R.string.ai_chapter_changed),
                 )
+                return@launch
+            }
+            if (mode == AiChapterInsightMode.RECAP) {
+                val previousChapters = withContext(IO) {
+                    host.listChapters(bookUrl)
+                        .filter { it.index < chapterIndex }
+                        .takeLast(RECAP_CHAPTER_COUNT)
+                }
+                if (previousChapters.isEmpty()) {
+                    updateChapterSummaryError(
+                        bookUrl,
+                        chapterIndex,
+                        mode,
+                        context.getString(R.string.ai_recap_no_previous_chapter),
+                    )
+                    return@launch
+                }
+                val chapter = withContext(IO) { host.findChapter(bookUrl, chapterIndex) }
+                if (chapter == null) {
+                    updateChapterSummaryError(
+                        bookUrl,
+                        chapterIndex,
+                        mode,
+                        context.getString(R.string.no_chapter),
+                    )
+                    return@launch
+                }
+                try {
+                    withContext(IO) {
+                        generateChapterRecapUseCase.start(
+                            book = book,
+                            currentChapter = chapter,
+                            previousChapters = previousChapters,
+                            reasoningLevel = _uiState.value.chapterSummary.reasoningLevel,
+                        )
+                    }
+                    generateChapterRecapUseCase.observeTask(bookUrl, chapterIndex)
+                        .collect { task ->
+                            collectChapterInsightTask(
+                                bookUrl,
+                                chapterIndex,
+                                mode,
+                                task,
+                            )
+                        }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    updateChapterSummaryError(
+                        bookUrl,
+                        chapterIndex,
+                        mode,
+                        aiErrorMessage(error),
+                    )
+                }
                 return@launch
             }
             val chapter = withContext(IO) {
@@ -169,6 +241,7 @@ class ReadAiDelegate(
                 updateChapterSummaryError(
                     bookUrl,
                     chapterIndex,
+                    mode,
                     context.getString(R.string.no_chapter),
                 )
                 return@launch
@@ -180,6 +253,7 @@ class ReadAiDelegate(
                 updateChapterSummaryError(
                     bookUrl,
                     chapterIndex,
+                    mode,
                     context.getString(R.string.ai_chapter_content_unavailable),
                 )
                 return@launch
@@ -194,43 +268,7 @@ class ReadAiDelegate(
                     )
                 }
                 generateChapterSummaryUseCase.observeTask(bookUrl, chapterIndex).collect { task ->
-                    if (!isCurrentChapterSummary(
-                            bookUrl,
-                            chapterIndex
-                        ) || task == null
-                    ) return@collect
-                    _uiState.update { state ->
-                        val summary = state.chapterSummary
-                        when (task.status) {
-                            AiArtifact.STATUS_RUNNING -> state.copy(
-                                chapterSummary = summary.copy(
-                                    isLoading = true,
-                                    summary = task.output.orEmpty(),
-                                    reasoningText = task.reasoning,
-                                    errorMessage = null,
-                                ),
-                            )
-
-                            AiArtifact.STATUS_SUCCESS -> state.copy(
-                                chapterSummary = summary.copy(
-                                    isLoading = false,
-                                    summary = task.output.orEmpty(),
-                                    reasoningText = task.reasoning,
-                                    errorMessage = null,
-                                ),
-                            )
-
-                            AiArtifact.STATUS_FAILED -> state.copy(
-                                chapterSummary = summary.copy(
-                                    isLoading = false,
-                                    errorMessage = task.errorMessage
-                                        ?: context.getString(R.string.load_failed),
-                                ),
-                            )
-
-                            else -> state
-                        }
-                    }
+                    collectChapterInsightTask(bookUrl, chapterIndex, mode, task)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -238,8 +276,50 @@ class ReadAiDelegate(
                 updateChapterSummaryError(
                     bookUrl,
                     chapterIndex,
+                    mode,
                     aiErrorMessage(error),
                 )
+            }
+        }
+    }
+
+    private fun collectChapterInsightTask(
+        bookUrl: String,
+        chapterIndex: Int,
+        mode: AiChapterInsightMode,
+        task: AiTaskSnapshot?,
+    ) {
+        if (!isCurrentChapterSummary(bookUrl, chapterIndex, mode) || task == null) return
+        _uiState.update { state ->
+            val summary = state.chapterSummary
+            when (task.status) {
+                AiArtifact.STATUS_RUNNING -> state.copy(
+                    chapterSummary = summary.copy(
+                        isLoading = true,
+                        summary = task.output.orEmpty(),
+                        reasoningText = task.reasoning,
+                        errorMessage = null,
+                    ),
+                )
+
+                AiArtifact.STATUS_SUCCESS -> state.copy(
+                    chapterSummary = summary.copy(
+                        isLoading = false,
+                        summary = task.output.orEmpty(),
+                        reasoningText = task.reasoning,
+                        errorMessage = null,
+                    ),
+                )
+
+                AiArtifact.STATUS_FAILED -> state.copy(
+                    chapterSummary = summary.copy(
+                        isLoading = false,
+                        errorMessage = task.errorMessage
+                            ?: context.getString(R.string.load_failed),
+                    ),
+                )
+
+                else -> state
             }
         }
     }
@@ -256,19 +336,25 @@ class ReadAiDelegate(
             .toString()
     }
 
-    private fun isCurrentChapterSummary(bookUrl: String, chapterIndex: Int): Boolean {
+    private fun isCurrentChapterSummary(
+        bookUrl: String,
+        chapterIndex: Int,
+        mode: AiChapterInsightMode,
+    ): Boolean {
         val summary = _uiState.value.chapterSummary
         return host.activeSheet is ReadBookSheet.ChapterSummary &&
                 summary.bookUrl == bookUrl &&
-                summary.chapterIndex == chapterIndex
+                summary.chapterIndex == chapterIndex &&
+                summary.mode == mode
     }
 
     private fun updateChapterSummaryError(
         bookUrl: String,
         chapterIndex: Int,
+        mode: AiChapterInsightMode,
         message: String,
     ) {
-        if (!isCurrentChapterSummary(bookUrl, chapterIndex)) return
+        if (!isCurrentChapterSummary(bookUrl, chapterIndex, mode)) return
         _uiState.update {
             it.copy(
                 chapterSummary = it.chapterSummary.copy(
@@ -1336,6 +1422,7 @@ class ReadAiDelegate(
 }
 
 private const val AI_TEXT_CONTEXT_CHARS = 1000
+private const val RECAP_CHAPTER_COUNT = 3
 private const val AI_REWRITE_REFERENCE_SCAN_CHAPTERS = 80
 private const val AI_REWRITE_REFERENCE_MAX_EXCERPTS = 6
 private const val AI_REWRITE_REFERENCE_EXCERPT_CHARS = 600

@@ -923,6 +923,11 @@ internal fun readMenuButtonInfos(context: Context): List<ReadMenuButtonInfo> = l
         context.getString(R.string.menu_refresh_dur)
     ),
     ReadMenuButtonInfo(
+        "ai_recap",
+        Icons.Default.History,
+        context.getString(R.string.ai_chapter_recap)
+    ),
+    ReadMenuButtonInfo(
         "ai_summary",
         Icons.Default.AutoAwesome,
         context.getString(R.string.ai_chapter_summary)

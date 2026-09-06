@@ -279,6 +279,8 @@ sealed interface BookInfoEffect {
         val book: Book,
         val inBookshelf: Boolean,
         val chapterChanged: Boolean,
+        val chapterIndex: Int = -1,
+        val chapterPos: Int = -1,
     ) : BookInfoEffect
     data class OpenBookSourceEdit(val sourceUrl: String) : BookInfoEffect
     data class OpenSourceLogin(val sourceUrl: String) : BookInfoEffect

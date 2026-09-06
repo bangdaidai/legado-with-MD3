@@ -201,6 +201,7 @@ import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
 import io.legado.app.domain.usecase.GenerateTocRuleUseCase
 import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
+import io.legado.app.domain.usecase.GenerateChapterRecapUseCase
 import io.legado.app.domain.usecase.ExplainBookCharacterUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.domain.usecase.GetReadingMemoryDetailUseCase
@@ -555,6 +556,7 @@ val appModule = module {
     singleOf(::AiTaskManager)
     singleOf(::IdentifyBookCharactersUseCase)
     singleOf(::GenerateChapterSummaryUseCase)
+    singleOf(::GenerateChapterRecapUseCase)
     singleOf(::ExplainBookCharacterUseCase)
     singleOf(::AiWebSearchPrefetchUseCase)
     singleOf(::AiTextFactoryUseCase)
@@ -833,6 +835,7 @@ val appModule = module {
             uploadRepository = get(),
             changeBookSourceUseCase = get(),
             generateChapterSummaryUseCase = get(),
+            generateChapterRecapUseCase = get(),
             cleanSelectedTextUseCase = get(),
             aiTextFactoryUseCase = get(),
             saveBookContentProcessUseCase = get(),

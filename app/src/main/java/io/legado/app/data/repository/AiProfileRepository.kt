@@ -49,6 +49,7 @@ class AiProfileRepository(
             AiTaskType.CHAT -> R.string.ai_prompt_default_chat
             AiTaskType.TRANSLATE_CHAPTER -> R.string.ai_prompt_default_translate
             AiTaskType.SUMMARIZE_CHAPTER -> R.string.ai_prompt_default_summary
+            AiTaskType.RECAP_RECENT -> R.string.ai_prompt_default_recap
             AiTaskType.CLEAN_SELECTION -> R.string.ai_prompt_default_clean
             AiTaskType.TEXT_FACTORY -> R.string.ai_prompt_default_text_factory
             AiTaskType.ANALYZE_SPEECH -> R.string.ai_prompt_default_analyze_speech
@@ -228,6 +229,7 @@ class AiProfileRepository(
     private fun defaultPresetId(taskType: String): String = when (taskType) {
         AiTaskType.TRANSLATE_CHAPTER -> DEFAULT_TRANSLATE_PRESET_ID
         AiTaskType.SUMMARIZE_CHAPTER -> DEFAULT_SUMMARY_PRESET_ID
+        AiTaskType.RECAP_RECENT -> DEFAULT_RECAP_PRESET_ID
         AiTaskType.CHAT -> DEFAULT_CHAT_PRESET_ID
         else -> newId("preset")
     }
@@ -235,6 +237,7 @@ class AiProfileRepository(
     private fun defaultPresetName(taskType: String): String = when (taskType) {
         AiTaskType.TRANSLATE_CHAPTER -> "Default Translation"
         AiTaskType.SUMMARIZE_CHAPTER -> "Default Chapter Summary"
+        AiTaskType.RECAP_RECENT -> "Default Chapter Recap"
         AiTaskType.CHAT -> "Default Chat"
         else -> "Default Preset"
     }
@@ -242,6 +245,7 @@ class AiProfileRepository(
     private fun defaultPresetPromptTemplate(taskType: String): String = when (taskType) {
         AiTaskType.TRANSLATE_CHAPTER -> TranslationConstants.DEFAULT_PROMPT
         AiTaskType.SUMMARIZE_CHAPTER -> AiPromptTemplate.DEFAULT_CHAPTER_SUMMARY
+        AiTaskType.RECAP_RECENT -> AiPromptTemplate.DEFAULT_CHAPTER_RECAP
         else -> "You are a helpful AI assistant."
     }
 
@@ -265,6 +269,7 @@ class AiProfileRepository(
             val presetId = existingPreset?.id ?: when (taskType) {
                 AiTaskType.TRANSLATE_CHAPTER -> DEFAULT_TRANSLATE_PRESET_ID
                 AiTaskType.SUMMARIZE_CHAPTER -> DEFAULT_SUMMARY_PRESET_ID
+                AiTaskType.RECAP_RECENT -> DEFAULT_RECAP_PRESET_ID
                 AiTaskType.CHAT -> DEFAULT_CHAT_PRESET_ID
                 else -> newId("preset")
             }
@@ -284,6 +289,7 @@ class AiProfileRepository(
                 name = existingPreset?.name ?: when (taskType) {
                     AiTaskType.TRANSLATE_CHAPTER -> "Default Translation"
                     AiTaskType.SUMMARIZE_CHAPTER -> "Default Chapter Summary"
+                    AiTaskType.RECAP_RECENT -> "Default Chapter Recap"
                     AiTaskType.CHAT -> "Default Chat"
                     else -> "Default Preset"
                 },
@@ -292,6 +298,7 @@ class AiProfileRepository(
                     when (taskType) {
                         AiTaskType.TRANSLATE_CHAPTER -> TranslationConstants.DEFAULT_PROMPT
                         AiTaskType.SUMMARIZE_CHAPTER -> AiPromptTemplate.DEFAULT_CHAPTER_SUMMARY
+                        AiTaskType.RECAP_RECENT -> AiPromptTemplate.DEFAULT_CHAPTER_RECAP
                         else -> "You are a helpful AI assistant."
                     }
                 },
@@ -412,6 +419,21 @@ class AiProfileRepository(
                 updatedAt = now
             )
         )
+        val existingRecapPreset = aiProfileDao.getPreset(DEFAULT_RECAP_PRESET_ID)
+        aiProfileDao.insertPreset(
+            AiTaskPreset(
+                id = DEFAULT_RECAP_PRESET_ID,
+                taskType = AiTaskType.RECAP_RECENT,
+                name = "Default Chapter Recap",
+                modelProfileId = modelProfileId,
+                promptTemplate = existingRecapPreset?.promptTemplate
+                    ?: AiPromptTemplate.DEFAULT_CHAPTER_RECAP,
+                paramsJson = existingRecapPreset?.paramsJson ?: GSON.toJson(params),
+                isDefault = true,
+                createdAt = existingRecapPreset?.createdAt ?: now,
+                updatedAt = now
+            )
+        )
         val existingChatPreset = aiProfileDao.getPreset(DEFAULT_CHAT_PRESET_ID)
         aiProfileDao.insertPreset(
             AiTaskPreset(
@@ -513,6 +535,7 @@ class AiProfileRepository(
     private companion object {
         const val DEFAULT_TRANSLATE_PRESET_ID = "default_translate_chapter"
         const val DEFAULT_SUMMARY_PRESET_ID = "default_summarize_chapter"
+        const val DEFAULT_RECAP_PRESET_ID = "default_recap_recent"
         const val DEFAULT_CHAT_PRESET_ID = "default_chat"
 
         fun newId(prefix: String): String = "${prefix}_${Uuid.random().toString().replace("-", "")}"

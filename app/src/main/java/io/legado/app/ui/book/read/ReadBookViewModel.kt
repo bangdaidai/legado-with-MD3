@@ -45,6 +45,7 @@ import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.CleanSelectedTextUseCase
+import io.legado.app.domain.usecase.GenerateChapterRecapUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
 import io.legado.app.domain.usecase.GetReadingProgressUseCase
 import io.legado.app.domain.usecase.RelocateMarkingTargetUseCase
@@ -127,6 +128,7 @@ class ReadBookViewModel(
     private val uploadRepository: UploadRepository,
     private val changeBookSourceUseCase: ChangeBookSourceUseCase,
     private val generateChapterSummaryUseCase: GenerateChapterSummaryUseCase,
+    private val generateChapterRecapUseCase: GenerateChapterRecapUseCase,
     private val cleanSelectedTextUseCase: CleanSelectedTextUseCase,
     private val aiTextFactoryUseCase: AiTextFactoryUseCase,
     private val saveBookContentProcessUseCase: SaveBookContentProcessUseCase,
@@ -372,6 +374,7 @@ class ReadBookViewModel(
         scope = viewModelScope,
         host = aiHost,
         generateChapterSummaryUseCase = generateChapterSummaryUseCase,
+        generateChapterRecapUseCase = generateChapterRecapUseCase,
         cleanSelectedTextUseCase = cleanSelectedTextUseCase,
         aiTextFactoryUseCase = aiTextFactoryUseCase,
         saveBookContentProcessUseCase = saveBookContentProcessUseCase,
@@ -964,6 +967,7 @@ class ReadBookViewModel(
                 _uiState.update { it.copy(reSegment = false) }
             }
             is ReadBookIntent.ToggleTranslation -> toggleTranslation()
+            is ReadBookIntent.OpenChapterRecap -> aiDelegate.openChapterRecap()
             is ReadBookIntent.OpenChapterSummary -> aiDelegate.openChapterSummary()
             is ReadBookIntent.OpenAiCurrentChapterRewrite -> aiDelegate.openAiCurrentChapterRewrite()
             is ReadBookIntent.RetryChapterSummary -> aiDelegate.retryChapterSummary()
