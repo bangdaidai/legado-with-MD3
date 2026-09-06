@@ -1706,9 +1706,9 @@ private fun NinePatchEditorDialog(
                 NineSlicePreview(
                     imagePath = imagePath,
                     npLeft = left,
-                    npRight = right,
+                    npRight = 1f - right,
                     npTop = top,
-                    npBottom = bottom,
+                    npBottom = 1f - bottom,
                 )
             }
         }
