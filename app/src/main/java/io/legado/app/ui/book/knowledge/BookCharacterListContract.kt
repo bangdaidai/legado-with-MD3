@@ -15,6 +15,8 @@ data class CharacterListUiState(
     val aiSheet: CharacterIdentifySheet? = null,
     val isAiSheetVisible: Boolean = false,
     val showImportDialog: Boolean = false,
+    /** 批量导入帮助文档内容，非空时显示 Markdown 底部弹层 */
+    val importHelp: String? = null,
 )
 
 @Stable
@@ -60,6 +62,8 @@ sealed interface CharacterListIntent {
     data object ShowImportDialog : CharacterListIntent
     data object HideImportDialog : CharacterListIntent
     data class ImportCharacters(val json: String) : CharacterListIntent
+    data object ShowImportHelp : CharacterListIntent
+    data object HideImportHelp : CharacterListIntent
 }
 
 sealed interface CharacterListEffect {

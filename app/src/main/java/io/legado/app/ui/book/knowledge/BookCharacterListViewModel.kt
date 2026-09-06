@@ -94,6 +94,14 @@ class BookCharacterListViewModel(
             CharacterListIntent.CancelAiIdentify -> identifyBookCharacters.cancelRunning(_uiState.value.bookUrl)
             CharacterListIntent.ShowImportDialog -> _uiState.update { it.copy(showImportDialog = true) }
             CharacterListIntent.HideImportDialog -> _uiState.update { it.copy(showImportDialog = false) }
+            CharacterListIntent.ShowImportHelp -> viewModelScope.launch(Dispatchers.IO) {
+                val content = runCatching {
+                    appCtx.assets.open("web/help/md/characterImportHelp.md")
+                        .bufferedReader().use { it.readText() }
+                }.getOrNull()
+                _uiState.update { it.copy(importHelp = content) }
+            }
+            CharacterListIntent.HideImportHelp -> _uiState.update { it.copy(importHelp = null) }
             is CharacterListIntent.ImportCharacters -> importCharacters(intent.json)
             CharacterListIntent.RunAiIdentify -> identifyCharacters()
             is CharacterListIntent.SetAiIdentifyReasoningLevel -> _uiState.update { state ->
@@ -260,7 +268,7 @@ class BookCharacterListViewModel(
 
     /**
      * 批量导入：解析用户粘贴的人物 JSON（兼容 {"characters":[…]}、数组、单对象），
-     * 复用识别结果的保存逻辑按名字合并档案。
+     * 解析结果进入与 AI 识别相同的候选确认面板，勾选后才保存。
      */
     private fun importCharacters(json: String) {
         viewModelScope.launch {
@@ -280,25 +288,13 @@ class BookCharacterListViewModel(
                 _effects.tryEmit(CharacterListEffect.ShowToast(appCtx.getString(R.string.character_import_empty)))
                 return@launch
             }
-            _uiState.update { it.copy(isLoading = true) }
-            try {
-                withContext(Dispatchers.IO) {
-                    identifyBookCharacters.save(_uiState.value.bookUrl, candidates)
-                }
-                TextChapterLayout.invalidateRegexCache()
-                _uiState.update { it.copy(showImportDialog = false, isLoading = false) }
-                load()
-                _effects.tryEmit(
-                    CharacterListEffect.ShowToast(
-                        appCtx.getString(R.string.character_import_success, candidates.size)
-                    )
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                _uiState.update { it.copy(isLoading = false) }
-                _effects.tryEmit(
-                    CharacterListEffect.ShowToast(e.localizedMessage ?: appCtx.getString(R.string.save_failed))
+            identifiedCandidates = candidates
+            _uiState.update {
+                it.copy(
+                    showImportDialog = false,
+                    importHelp = null,
+                    isAiSheetVisible = true,
+                    aiSheet = CharacterIdentifySheet(candidates = candidates.toCandidateUi()),
                 )
             }
         }

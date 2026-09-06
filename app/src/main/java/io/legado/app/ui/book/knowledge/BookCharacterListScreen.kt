@@ -186,22 +186,40 @@ fun BookCharacterListScreen(
             show = true,
             onDismissRequest = { onIntent(CharacterListIntent.HideImportDialog) },
             title = stringResource(R.string.character_import),
-            text = stringResource(R.string.character_import_hint),
             content = {
-                AppTextField(
-                    value = importText,
-                    onValueChange = { importText = it },
-                    singleLine = false,
-                    maxLines = 15,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 200.dp, max = 400.dp),
-                )
+                Column {
+                    AppText(
+                        text = stringResource(R.string.character_import_help_link),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(bottom = 8.dp)
+                            .clickable { onIntent(CharacterListIntent.ShowImportHelp) }
+                    )
+                    AppTextField(
+                        value = importText,
+                        onValueChange = { importText = it },
+                        singleLine = false,
+                        maxLines = 15,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 200.dp, max = 400.dp),
+                    )
+                }
             },
             confirmText = stringResource(R.string.ok),
             onConfirm = { onIntent(CharacterListIntent.ImportCharacters(importText)) },
             dismissText = stringResource(R.string.cancel),
             onDismiss = { onIntent(CharacterListIntent.HideImportDialog) }
+        )
+    }
+
+    state.importHelp?.let { help ->
+        MarkdownSheet(
+            show = true,
+            title = stringResource(R.string.character_import),
+            content = help,
+            onDismissRequest = { onIntent(CharacterListIntent.HideImportHelp) },
         )
     }
 }

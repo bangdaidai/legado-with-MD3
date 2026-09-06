@@ -2925,8 +2925,7 @@
     <string name="character_network">Character network</string>
     <string name="add_character">Add character</string>
     <string name="character_import">Batch import characters</string>
-    <string name="character_import_hint">Paste character JSON to import. Accepts {\"characters\":[…]}, a character array, or a single character object; entries with the same name are merged. role: male_lead / female_lead / male_supporting / female_supporting / unknown.</string>
-    <string name="character_import_success">Imported %1$d characters</string>
+    <string name="character_import_help_link">Full template &amp; field reference</string>
     <string name="character_import_empty">No valid character entries found</string>
     <string name="add_character_hint">Create a profile</string>
     <string name="character_empty_hint">No character profiles yet</string>

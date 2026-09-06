@@ -2870,8 +2870,7 @@
     <string name="character_network">关系网</string>
     <string name="add_character">新增人物</string>
     <string name="character_import">批量导入人物</string>
-    <string name="character_import_hint">粘贴人物 JSON 批量导入，支持 {\"characters\":[…]}、人物数组或单个人物对象；同名人物会合并更新。role 可选 male_lead / female_lead / male_supporting / female_supporting / unknown。</string>
-    <string name="character_import_success">已导入 %1$d 个人物</string>
+    <string name="character_import_help_link">完整模板与字段说明</string>
     <string name="character_import_empty">没有解析到有效的人物条目</string>
     <string name="add_character_hint">创建人物档案</string>
     <string name="character_empty_hint">还没有人物档案</string>
