@@ -315,9 +315,9 @@ data class TextLine(
             val bgPadBottom = textColumn?.bgPadBottom ?: 0f
             when {
                 bgImage.isEmpty() && active -> {
-                    // 没有背景图的列不打断背景图的连续性，扩展范围但不绘制
-                    // 背景图会在遇到下一个不同背景图或遍历结束时统一绘制
-                    rangeEnd = textColumn!!.end
+                    // 没有背景图的列打断背景图的连续性，绘制当前段并重置状态
+                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom, currentBgPadStart, currentBgPadEnd, currentBgPadTop, currentBgPadBottom)
+                    active = false
                 }
                 bgImage.isNotEmpty() && !active -> {
                     rangeStart = textColumn!!.start
@@ -719,9 +719,9 @@ data class TextLine(
                 val padEndPx = bgPadEnd.dpToPx()
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
-                // 微信气泡式九宫格（见 NinePatchDrawHelper.layout）：以行高锚定整图
-                // 等比缩放，四角保持宽高比，中段横竖双向拉伸；
-                // 短文字放不下四角时由 draw 内部按比例缩角
+                // 与九宫格切图预览同一套几何（见 NinePatchDrawHelper.layout）：
+                // 中带源高等比缩放后恰好容下文字高 + padding，整图比例不变，
+                // 只有中段水平拉伸；短文字放不下四角时由 draw 内部按比例缩角
                 NinePatchDrawHelper.layout(
                     startX, top, endX, bottom,
                     bitmap.width.toFloat(), bitmap.height.toFloat(),
@@ -813,16 +813,18 @@ data class TextLine(
             bottomHeight *= ratio
         }
 
+        // 内部分界取整到整数像素：相邻块共享同一条边，消除子像素缝隙；
+        // 否则缝隙会透出页面背景，夜间深色底上呈现为水平/垂直"切割线"
         val destinationX = floatArrayOf(
             destination.left,
-            destination.left + leftWidth,
-            destination.right - rightWidth,
+            kotlin.math.round(destination.left + leftWidth),
+            maxOf(kotlin.math.round(destination.left + leftWidth), kotlin.math.round(destination.right - rightWidth)),
             destination.right,
         )
         val destinationY = floatArrayOf(
             destination.top,
-            destination.top + topHeight,
-            destination.bottom - bottomHeight,
+            kotlin.math.round(destination.top + topHeight),
+            maxOf(kotlin.math.round(destination.top + topHeight), kotlin.math.round(destination.bottom - bottomHeight)),
             destination.bottom,
         )
 
