@@ -167,6 +167,21 @@ class HighlightRuleRepository(
                 listOf(name, pattern).joinToString("|").hashCode().toUInt().toString(16)
             }"
         }
+        // 约束：npLeft + npRight <= 1, npTop + npBottom <= 1（保证 leftX <= rightX, topY <= bottomY）
+        var npLeft = runCatching { rule.npLeft }.getOrDefault(0.1f).coerceIn(0f, 1f)
+        var npRight = runCatching { rule.npRight }.getOrDefault(0.1f).coerceIn(0f, 1f)
+        var npTop = runCatching { rule.npTop }.getOrDefault(0.1f).coerceIn(0f, 1f)
+        var npBottom = runCatching { rule.npBottom }.getOrDefault(0.1f).coerceIn(0f, 1f)
+        if (npLeft + npRight > 1f) {
+            val ratio = 1f / (npLeft + npRight)
+            npLeft *= ratio
+            npRight *= ratio
+        }
+        if (npTop + npBottom > 1f) {
+            val ratio = 1f / (npTop + npBottom)
+            npTop *= ratio
+            npBottom *= ratio
+        }
         return HighlightRule(
             id = id,
             name = name,
@@ -196,10 +211,10 @@ class HighlightRuleRepository(
             fontWeight = runCatching { rule.fontWeight }.getOrDefault(400).coerceIn(300, 700),
             isItalic = runCatching { rule.isItalic }.getOrDefault(false),
             fontSizeOffset = runCatching { rule.fontSizeOffset }.getOrDefault(0).coerceIn(-10, 10),
-            npLeft = runCatching { rule.npLeft }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
-            npRight = runCatching { rule.npRight }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
-            npTop = runCatching { rule.npTop }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
-            npBottom = runCatching { rule.npBottom }.getOrDefault(0.1f).coerceIn(0f, 0.5f),
+            npLeft = npLeft,
+            npRight = npRight,
+            npTop = npTop,
+            npBottom = npBottom,
             useProtagonist = runCatching { rule.useProtagonist }.getOrDefault(false),
             characterRole = runCatching { rule.characterRole }.getOrNull(),
             bgPaddingStart = runCatching { rule.bgPaddingStart }.getOrDefault(0f).coerceIn(-8f, 24f),

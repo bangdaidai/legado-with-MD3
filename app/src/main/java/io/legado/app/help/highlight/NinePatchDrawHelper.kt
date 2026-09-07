@@ -56,8 +56,8 @@ object NinePatchDrawHelper {
     )
 
     /**
-     * 以文字矩形为基准计算背景框：缩放比锚定行高（s = 文字高/图高），
-     * 四角目标尺寸 = 切分占比 × 源尺寸 × s（各不超过文字宽/高的一半），
+     * 以文字矩形为基准计算背景框：按照 Android 标准 NinePatch 实现，
+     * 四角保持原像素尺寸（不缩放），四边和中间负责拉伸。
      * 背景框 = 文字矩形向外扩四角与 padding。
      * 绘制时把返回的角尺寸原样传给 [draw]，即可保证文字落在中段拉伸区内。
      */
@@ -82,13 +82,11 @@ object NinePatchDrawHelper {
         if (textW <= 0f || textH <= 0f) return null
         if (bitmapWidth <= 0f || bitmapHeight <= 0f) return null
 
-        val s = textH / bitmapHeight
-        val maxCornerV = textH * 0.5f
-        val maxCornerH = textW * 0.5f
-        val cornerL = (npLeft * bitmapWidth * s).coerceIn(0f, maxCornerH)
-        val cornerR = (npRight * bitmapWidth * s).coerceIn(0f, maxCornerH)
-        val cornerT = (npTop * bitmapHeight * s).coerceIn(0f, maxCornerV)
-        val cornerB = (npBottom * bitmapHeight * s).coerceIn(0f, maxCornerV)
+        // Android 标准 NinePatch：四角保持原像素尺寸
+        val cornerL = (npLeft * bitmapWidth).coerceIn(0f, textW * 0.5f)
+        val cornerR = (npRight * bitmapWidth).coerceIn(0f, textW * 0.5f)
+        val cornerT = (npTop * bitmapHeight).coerceIn(0f, textH * 0.5f)
+        val cornerB = (npBottom * bitmapHeight).coerceIn(0f, textH * 0.5f)
 
         return Box(
             left = textLeft - cornerL - padStart,

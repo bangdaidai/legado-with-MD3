@@ -1596,14 +1596,18 @@ private fun NinePatchEditorDialog(
                                 .fillMaxWidth(0.8f),
                         ) {
                             // 长图高度封顶后由 Canvas 做 contain 居中，避免细长一条没法拖
-                            // 设置最小高度，确保细长条图片也能拖动四根线
+                            // 设置最小高度和最小宽度，确保细长条图片也能拖动四根线并看到效果
                             val boxHeight = minOf(
                                 280.dp,
                                 maxWidth * (bitmap.height.toFloat() / bitmap.width),
                             ).coerceAtLeast(100.dp)
+                            val boxWidth = minOf(
+                                maxWidth,
+                                maxHeight * (bitmap.width.toFloat() / bitmap.height),
+                            ).coerceAtLeast(120.dp)
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .width(boxWidth)
                                     .height(boxHeight),
                             ) {
                     Canvas(
@@ -1640,12 +1644,11 @@ private fun NinePatchEditorDialog(
                                         val relX = ((change.position.x - ir.left) / ir.width).coerceIn(0.02f, 0.98f)
                                         val relY = ((change.position.y - ir.top) / ir.height).coerceIn(0.02f, 0.98f)
                                         when (dragTarget) {
-                                            // np* 存的是角块占比（≤0.5，与保存时的 sanitize 一致）：
-                                            // 左/上两条线不超过中线，右/下两条线不小于中线
-                                            0 -> left = relX.coerceAtMost(0.5f)
-                                            1 -> right = relX.coerceAtLeast(0.5f)
-                                            2 -> top = relY.coerceAtMost(0.5f)
-                                            3 -> bottom = relY.coerceAtLeast(0.5f)
+                                            // np* 存的是角块占比，leftX <= rightX, topY <= bottomY
+                                            0 -> left = relX.coerceAtMost(right - 0.02f)
+                                            1 -> right = relX.coerceAtLeast(left + 0.02f)
+                                            2 -> top = relY.coerceAtMost(bottom - 0.02f)
+                                            3 -> bottom = relY.coerceAtLeast(top + 0.02f)
                                         }
                                     },
                                     onDragEnd = { dragTarget = -1 },
@@ -1763,18 +1766,11 @@ private fun NineSlicePreview(
         val bgRight = bgLeft + bgW
         val bgBottom = bgTop + bgH
 
-        // 缩放比以背景框高度为锚，让四角图案获得合理大小
-        val s = fitScale
-        val cornerT = (npTop * bh * s).coerceAtMost(bgH * 0.5f)
-        val cornerB = (npBottom * bh * s).coerceAtMost(bgH * 0.5f)
-        var cornerL = npLeft * bw * s
-        var cornerR = npRight * bw * s
-        // 水平放不下四角时按比例缩角
-        if (cornerL + cornerR > bgW && cornerL + cornerR > 0f) {
-            val ratio = bgW / (cornerL + cornerR)
-            cornerL *= ratio
-            cornerR *= ratio
-        }
+        // Android 标准 NinePatch：四角保持原像素尺寸（缩放后）
+        val cornerL = (npLeft * bw * fitScale).coerceAtMost(bgW * 0.5f)
+        val cornerR = (npRight * bw * fitScale).coerceAtMost(bgW * 0.5f)
+        val cornerT = (npTop * bh * fitScale).coerceAtMost(bgH * 0.5f)
+        val cornerB = (npBottom * bh * fitScale).coerceAtMost(bgH * 0.5f)
         val textLeft = bgLeft + cornerL
         val textRight = bgRight - cornerR
         val textTop = bgTop + cornerT
