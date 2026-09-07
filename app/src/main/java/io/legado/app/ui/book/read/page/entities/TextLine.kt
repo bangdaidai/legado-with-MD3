@@ -719,9 +719,9 @@ data class TextLine(
                 val padEndPx = bgPadEnd.dpToPx()
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
-                // 与九宫格切图预览同一套几何（见 NinePatchDrawHelper.layout）：
-                // 中带源高等比缩放后恰好容下文字高 + padding，整图比例不变，
-                // 只有中段水平拉伸；短文字放不下四角时由 draw 内部按比例缩角
+                // 微信气泡式九宫格（见 NinePatchDrawHelper.layout）：以行高锚定整图
+                // 等比缩放，四角保持宽高比，中段横竖双向拉伸；
+                // 短文字放不下四角时由 draw 内部按比例缩角
                 NinePatchDrawHelper.layout(
                     startX, top, endX, bottom,
                     bitmap.width.toFloat(), bitmap.height.toFloat(),

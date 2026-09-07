@@ -1766,6 +1766,9 @@ private fun NineSlicePreview(
     }
     if (bitmap == null) return
 
+    // 中段虚线框颜色：跟随主题前景色，明暗模式都可见
+    val guideColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+
     NormalCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -1827,9 +1830,10 @@ private fun NineSlicePreview(
             topY = npTop, bottomY = 1f - npBottom,
             cornerL, cornerR, cornerT, cornerB,
         )
-        // 文字行虚线：正好落在九宫格中段拉伸区内
+        // 文字行虚线：正好落在九宫格中段拉伸区内；
+        // 跟随主题前景色，夜间模式深色底上也能看清（写死黑色在深色背景不可见）
         drawRect(
-            color = Color(0x66000000),
+            color = guideColor,
             topLeft = Offset(textLeft, textTop),
             size = androidx.compose.ui.geometry.Size(textRight - textLeft, textBottom - textTop),
             style = Stroke(width = 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))),

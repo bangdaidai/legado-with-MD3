@@ -56,12 +56,11 @@ object NinePatchDrawHelper {
     )
 
     /**
-     * 以文字矩形为基准计算背景框（与九宫格切图预览 NineSlicePreview 同一套语义）：
-     * 1. 整张图等比缩放，锚点是"中带源高 ((1-npTop-npBottom)×图高) 缩放后恰好
-     *    等于 文字高 + 上下 padding"，因此背景框高度 = 图高 × scale，
-     *    图案整体比例不变，只有中段做水平拉伸，不会被纵向拉变形
-     * 2. 缩放后的角块尺寸 = 源角块 × scale（宽高比天然一致）
-     * 3. 背景框 = 文字矩形向外扩角块与 padding
+     * 以文字矩形为基准计算背景框（微信气泡式九宫格）：
+     * 1. 按文字高度算出整体缩放比例 scale = textH / bitmapHeight，整张图等比缩放
+     * 2. 缩放后的角块尺寸 = 源角块 × scale（宽高比天然一致，不随中段膨胀）
+     * 3. 背景框 = 文字矩形向外扩角块与 padding；中段横竖双向拉伸，
+     *    内容变多时气泡像微信气泡一样随内容长高
      * 4. 安全回退：若角块总宽超出文字宽度，统一缩小（保持宽高比）
      *
      * 绘制时把返回的角尺寸传给 [draw]，draw 内部只拉伸中段，四角保持缩放后尺寸不变。
@@ -87,16 +86,13 @@ object NinePatchDrawHelper {
         if (textW <= 0f || textH <= 0f) return null
         if (bitmapWidth <= 0f || bitmapHeight <= 0f) return null
 
-        // 与切图预览一致：中带源高缩放后恰好容下"文字高 + 上下 padding"，
-        // 整张图等比缩放（背景框高 = 图高 × scale），只有中段水平拉伸；
-        // 两线过近时中带源高夹一个最小值，防止 scale 发散
-        val middleSrcH = (1f - npTop - npBottom).coerceIn(0.02f, 1f) * bitmapHeight
-        val middleDstH = (textH + padTop + padBottom).coerceAtLeast(1f)
-        val scale = middleDstH / middleSrcH
+        // 按高度等比缩放整张图，角块尺寸同步缩放，宽高比天然一致；
+        // 中段横竖双向拉伸，纵向拉伸幅度 = (文字高+上下padding) / 中带源高
+        val scale = textH / bitmapHeight
         var cornerL = npLeft * bitmapWidth * scale
         var cornerR = npRight * bitmapWidth * scale
-        var cornerT = npTop * bitmapHeight * scale
-        var cornerB = npBottom * bitmapHeight * scale
+        var cornerT = npTop * bitmapHeight * scale   // = npTop * textH
+        var cornerB = npBottom * bitmapHeight * scale // = npBottom * textH
 
         // 安全回退：角块总宽超出文字宽度时统一缩小（保持宽高比）
         val totalCornerW = cornerL + cornerR
@@ -181,13 +177,15 @@ object NinePatchDrawHelper {
         val wM = (rectW - wL - wR).coerceAtLeast(0f)
         val hM = (rectH - hT - hB).coerceAtLeast(0f)
 
+        // 内部分界取整到整数像素：相邻块共享同一条边，消除子像素缝隙；
+        // 否则缝隙会透出页面背景，夜间深色底上呈现为四条"切割线"
         val x0 = left
-        val x1 = left + wL
-        val x2 = left + wL + wM
+        val x1 = kotlin.math.round(left + wL)
+        val x2 = maxOf(x1, kotlin.math.round(right - wR))
         val x3 = right
         val y0 = top
-        val y1 = top + hT
-        val y2 = top + hT + hM
+        val y1 = kotlin.math.round(top + hT)
+        val y2 = maxOf(y1, kotlin.math.round(bottom - hB))
         val y3 = bottom
 
         val sxLi = wLsrc.toInt().coerceAtLeast(0)
