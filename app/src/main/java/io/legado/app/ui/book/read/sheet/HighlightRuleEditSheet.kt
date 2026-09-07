@@ -701,7 +701,7 @@ fun HighlightRuleEditSheet(
                                     }
                                     // 选中方向的滑块
                                     AnimatedVisibility(visible = activeInset >= 0) {
-                                        val range = -16f..24f
+                                        val range = -32f..64f
                                         val currentVal = when (activeInset) {
                                             0 -> bgPaddingStart; 1 -> bgPaddingEnd
                                             2 -> bgPaddingTop; else -> bgPaddingBottom
@@ -772,7 +772,7 @@ fun HighlightRuleEditSheet(
                                                     3 -> bgMarginBottom = rounded
                                                 }
                                             },
-                                            valueRange = -8f..32f,
+                                            valueRange = -16f..64f,
                                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         )
                                     }
@@ -1270,8 +1270,28 @@ internal fun HighlightRulePreview(
                 maxLines = 5,
                 constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
             )
+            // 九宫格背景会向外扩角块与 padding，超出行高的部分要给 Canvas 预留空间，否则预览被裁掉
+            var ninePatchTopOverhang = 0f
+            var ninePatchBottomOverhang = 0f
+            if (bgImageFit == 3 && bgRawBitmap != null) {
+                val maxLineHeight = (0 until previewTextResult.lineCount)
+                    .maxOf { previewTextResult.getLineBottom(it) - previewTextResult.getLineTop(it) }
+                    .coerceAtLeast(1f)
+                // 用足够宽的矩形探测：角块只在文字放不下时才缩小，宽矩形给出上下外扩的最大值
+                val probeBox = io.legado.app.help.highlight.NinePatchDrawHelper.layout(
+                    0f, 0f, 10000f, maxLineHeight,
+                    bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
+                    npLeft, npRight, npTop, npBottom,
+                    bgPadStart * density.density, bgPadEnd * density.density,
+                    bgPadTop * density.density, bgPadBottom * density.density,
+                )
+                if (probeBox != null) {
+                    ninePatchTopOverhang = -probeBox.top
+                    ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
+                }
+            }
             val canvasHeightDp = with(density) {
-                previewTextResult.size.height.toDp()
+                (previewTextResult.size.height + ninePatchTopOverhang + ninePatchBottomOverhang).toDp()
             }
             Canvas(
                 modifier = Modifier
@@ -1289,6 +1309,11 @@ internal fun HighlightRulePreview(
                         maxWidth = size.width.toInt()
                     ),
                 )
+
+                // 九宫格背景外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
+                if (ninePatchTopOverhang != 0f) {
+                    drawContext.canvas.translate(0f, ninePatchTopOverhang)
+                }
 
                 // 在匹配区域画背景图
                 if (bgBitmap != null && matchRanges.isNotEmpty()) {
@@ -1384,6 +1409,11 @@ internal fun HighlightRulePreview(
                 if (underlineBelowText) drawUnderlinesBlock()
                 drawText(textResult)
                 if (!underlineBelowText) drawUnderlinesBlock()
+
+                // 恢复画布，避免平移泄漏到后续绘制
+                if (ninePatchTopOverhang != 0f) {
+                    drawContext.canvas.translate(0f, -ninePatchTopOverhang)
+                }
             }
         }
     }

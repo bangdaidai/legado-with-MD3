@@ -719,9 +719,9 @@ data class TextLine(
                 val padEndPx = bgPadEnd.dpToPx()
                 val padTopPx = bgPadTop.dpToPx()
                 val padBottomPx = bgPadBottom.dpToPx()
-                // 以行高为锚计算四角尺寸并外扩背景框（见 NinePatchDrawHelper.layout），
-                // 预留量与实际绘制量一致，文字必然落在九宫格中段拉伸区内；
-                // 短文字放不下四角时由 draw 内部按比例缩角，不再压扁图案
+                // 与九宫格切图预览同一套几何（见 NinePatchDrawHelper.layout）：
+                // 中带源高等比缩放后恰好容下文字高 + padding，整图比例不变，
+                // 只有中段水平拉伸；短文字放不下四角时由 draw 内部按比例缩角
                 NinePatchDrawHelper.layout(
                     startX, top, endX, bottom,
                     bitmap.width.toFloat(), bitmap.height.toFloat(),

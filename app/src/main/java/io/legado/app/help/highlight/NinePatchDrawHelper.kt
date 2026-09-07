@@ -56,8 +56,10 @@ object NinePatchDrawHelper {
     )
 
     /**
-     * 以文字矩形为基准计算背景框：
-     * 1. 按文字高度算出整体缩放比例 scale = textH / bitmapHeight，整张图等比缩放
+     * 以文字矩形为基准计算背景框（与九宫格切图预览 NineSlicePreview 同一套语义）：
+     * 1. 整张图等比缩放，锚点是"中带源高 ((1-npTop-npBottom)×图高) 缩放后恰好
+     *    等于 文字高 + 上下 padding"，因此背景框高度 = 图高 × scale，
+     *    图案整体比例不变，只有中段做水平拉伸，不会被纵向拉变形
      * 2. 缩放后的角块尺寸 = 源角块 × scale（宽高比天然一致）
      * 3. 背景框 = 文字矩形向外扩角块与 padding
      * 4. 安全回退：若角块总宽超出文字宽度，统一缩小（保持宽高比）
@@ -85,12 +87,16 @@ object NinePatchDrawHelper {
         if (textW <= 0f || textH <= 0f) return null
         if (bitmapWidth <= 0f || bitmapHeight <= 0f) return null
 
-        // 按高度等比缩放整张图，角块尺寸同步缩放，宽高比天然一致
-        val scale = textH / bitmapHeight
+        // 与切图预览一致：中带源高缩放后恰好容下"文字高 + 上下 padding"，
+        // 整张图等比缩放（背景框高 = 图高 × scale），只有中段水平拉伸；
+        // 两线过近时中带源高夹一个最小值，防止 scale 发散
+        val middleSrcH = (1f - npTop - npBottom).coerceIn(0.02f, 1f) * bitmapHeight
+        val middleDstH = (textH + padTop + padBottom).coerceAtLeast(1f)
+        val scale = middleDstH / middleSrcH
         var cornerL = npLeft * bitmapWidth * scale
         var cornerR = npRight * bitmapWidth * scale
-        var cornerT = npTop * bitmapHeight * scale   // = npTop * textH
-        var cornerB = npBottom * bitmapHeight * scale // = npBottom * textH
+        var cornerT = npTop * bitmapHeight * scale
+        var cornerB = npBottom * bitmapHeight * scale
 
         // 安全回退：角块总宽超出文字宽度时统一缩小（保持宽高比）
         val totalCornerW = cornerL + cornerR
