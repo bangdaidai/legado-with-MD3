@@ -1878,13 +1878,65 @@ class TextChapterLayout(
                     styles = it
                 }
                 for (i in start..end) {
-                    // 后来的规则覆盖先前的（与 Legado_Max 行为一致）
-                    activeStyles[i] = activeStyle
+                    val existing = activeStyles[i]
+                    if (existing == null) {
+                        activeStyles[i] = activeStyle
+                    } else {
+                        // 属性级合并：后规则的空值保留前规则的值
+                        activeStyles[i] = existing.mergeWith(activeStyle)
+                    }
                 }
             }
         }
         return styles
     }
+
+    private fun CharStyle.mergeWith(newer: CharStyle): CharStyle = CharStyle(
+        textColor = newer.textColor ?: textColor,
+        bgColor = newer.bgColor ?: bgColor,
+        underlineMode = newer.underlineMode.ifZero { underlineMode },
+        underlineColor = newer.underlineColor ?: underlineColor,
+        underlineWidth = newer.underlineWidth.ifDefault(1f) { underlineWidth },
+        underlineOffset = newer.underlineOffset.ifDefault(2f) { underlineOffset },
+        underlineSvgPath = newer.underlineSvgPath.ifEmpty { underlineSvgPath },
+        underlineRoundCap = newer.underlineRoundCap || underlineRoundCap,
+        underlineFeather = newer.underlineFeather.ifZero { underlineFeather },
+        underlineDashLen = newer.underlineDashLen.ifDefault(8f) { underlineDashLen },
+        underlineDashGap = newer.underlineDashGap.ifDefault(5f) { underlineDashGap },
+        bgImage = newer.bgImage.ifEmpty { bgImage },
+        bgImageFit = newer.bgImageFit.ifZero { bgImageFit },
+        bgImageScale = newer.bgImageScale.ifDefault(1f) { bgImageScale },
+        fontPath = newer.fontPath.ifEmpty { fontPath },
+        fontWeight = newer.fontWeight.ifDefault(400) { fontWeight },
+        isItalic = newer.isItalic || isItalic,
+        fontSizeOffset = newer.fontSizeOffset.ifZero { fontSizeOffset },
+        npLeft = newer.npLeft.ifDefault(0.1f) { npLeft },
+        npRight = newer.npRight.ifDefault(0.1f) { npRight },
+        npTop = newer.npTop.ifDefault(0.1f) { npTop },
+        npBottom = newer.npBottom.ifDefault(0.1f) { npBottom },
+        bgPadStart = newer.bgPadStart.ifZero { bgPadStart },
+        bgPadEnd = newer.bgPadEnd.ifZero { bgPadEnd },
+        bgPadTop = newer.bgPadTop.ifZero { bgPadTop },
+        bgPadBottom = newer.bgPadBottom.ifZero { bgPadBottom },
+        bgMarginStart = newer.bgMarginStart.ifZero { bgMarginStart },
+        bgMarginEnd = newer.bgMarginEnd.ifZero { bgMarginEnd },
+        bgMarginTop = newer.bgMarginTop.ifZero { bgMarginTop },
+        bgMarginBottom = newer.bgMarginBottom.ifZero { bgMarginBottom },
+        underlineBelowText = newer.underlineBelowText || underlineBelowText,
+        markingId = newer.markingId ?: markingId,
+    )
+
+    private fun Float.ifZero(block: () -> Float): Float = if (this == 0f) block() else this
+
+    private fun Float.ifDefault(default: Float, block: () -> Float): Float =
+        if (this == default) block() else this
+
+    private fun Int.ifZero(block: () -> Int): Int = if (this == 0) block() else this
+
+    private fun Int.ifDefault(default: Int, block: () -> Int): Int =
+        if (this == default) block() else this
+
+    private fun String.ifEmpty(block: () -> String): String = if (this.isEmpty()) block() else this
 
     private fun HighlightRule.toCharStyle(): CharStyle {
         val isNight = ReadStyleResolver.isNightTheme()
