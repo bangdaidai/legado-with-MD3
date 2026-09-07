@@ -1766,11 +1766,20 @@ private fun NineSlicePreview(
         val bgRight = bgLeft + bgW
         val bgBottom = bgTop + bgH
 
-        // Android 标准 NinePatch：四角保持原像素尺寸（缩放后）
-        val cornerL = (npLeft * bw * fitScale).coerceAtMost(bgW * 0.5f)
-        val cornerR = (npRight * bw * fitScale).coerceAtMost(bgW * 0.5f)
-        val cornerT = (npTop * bh * fitScale).coerceAtMost(bgH * 0.5f)
-        val cornerB = (npBottom * bh * fitScale).coerceAtMost(bgH * 0.5f)
+        // 整张图按 contain 缩放后的角块尺寸（统一比例，宽高比不变）
+        var cornerL = npLeft * bw * fitScale
+        var cornerR = npRight * bw * fitScale
+        var cornerT = npTop * bh * fitScale
+        var cornerB = npBottom * bh * fitScale
+        // 安全回退：角块总宽超出图片宽度时统一缩小（保持宽高比）
+        val totalCornerW = cornerL + cornerR
+        if (totalCornerW > bgW && totalCornerW > 0f) {
+            val ratio = bgW / totalCornerW
+            cornerL *= ratio
+            cornerR *= ratio
+            cornerT *= ratio
+            cornerB *= ratio
+        }
         val textLeft = bgLeft + cornerL
         val textRight = bgRight - cornerR
         val textTop = bgTop + cornerT

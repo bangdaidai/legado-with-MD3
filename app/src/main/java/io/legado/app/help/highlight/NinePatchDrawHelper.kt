@@ -56,10 +56,13 @@ object NinePatchDrawHelper {
     )
 
     /**
-     * 以文字矩形为基准计算背景框：按照 Android 标准 NinePatch 实现，
-     * 四角保持原像素尺寸（不缩放），四边和中间负责拉伸。
-     * 背景框 = 文字矩形向外扩四角与 padding。
-     * 绘制时把返回的角尺寸原样传给 [draw]，即可保证文字落在中段拉伸区内。
+     * 以文字矩形为基准计算背景框：
+     * 1. 按文字高度算出整体缩放比例 scale = textH / bitmapHeight，整张图等比缩放
+     * 2. 缩放后的角块尺寸 = 源角块 × scale（宽高比天然一致）
+     * 3. 背景框 = 文字矩形向外扩角块与 padding
+     * 4. 安全回退：若角块总宽超出文字宽度，统一缩小（保持宽高比）
+     *
+     * 绘制时把返回的角尺寸传给 [draw]，draw 内部只拉伸中段，四角保持缩放后尺寸不变。
      */
     fun layout(
         textLeft: Float,
@@ -82,11 +85,22 @@ object NinePatchDrawHelper {
         if (textW <= 0f || textH <= 0f) return null
         if (bitmapWidth <= 0f || bitmapHeight <= 0f) return null
 
-        // Android 标准 NinePatch：四角保持原像素尺寸
-        val cornerL = (npLeft * bitmapWidth).coerceIn(0f, textW * 0.5f)
-        val cornerR = (npRight * bitmapWidth).coerceIn(0f, textW * 0.5f)
-        val cornerT = (npTop * bitmapHeight).coerceIn(0f, textH * 0.5f)
-        val cornerB = (npBottom * bitmapHeight).coerceIn(0f, textH * 0.5f)
+        // 按高度等比缩放整张图，角块尺寸同步缩放，宽高比天然一致
+        val scale = textH / bitmapHeight
+        var cornerL = npLeft * bitmapWidth * scale
+        var cornerR = npRight * bitmapWidth * scale
+        var cornerT = npTop * bitmapHeight * scale   // = npTop * textH
+        var cornerB = npBottom * bitmapHeight * scale // = npBottom * textH
+
+        // 安全回退：角块总宽超出文字宽度时统一缩小（保持宽高比）
+        val totalCornerW = cornerL + cornerR
+        if (totalCornerW > textW && totalCornerW > 0f) {
+            val ratio = textW / totalCornerW
+            cornerL *= ratio
+            cornerR *= ratio
+            cornerT *= ratio
+            cornerB *= ratio
+        }
 
         return Box(
             left = textLeft - cornerL - padStart,
