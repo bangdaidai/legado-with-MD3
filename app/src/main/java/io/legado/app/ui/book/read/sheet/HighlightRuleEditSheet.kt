@@ -1755,18 +1755,18 @@ private fun NineSlicePreview(
         val bh = bitmap.height.toFloat()
         if (bw <= 0f || bh <= 0f) return@Canvas
 
-        // 按 contain 模式将背景图等比缩放到 Canvas 内（四周留 8% 边距）
-        val maxW = canvasW * 0.84f
+        // 按高度等比缩放，宽度给最小值保证窄图也能看清九宫格效果
         val maxH = canvasH * 0.84f
-        val fitScale = minOf(maxW / bw, maxH / bh)
-        val bgW = bw * fitScale
+        val fitScale = maxH / bh
+        val minW = canvasW * 0.6f
+        var bgW = (bw * fitScale).coerceAtLeast(minW)
         val bgH = bh * fitScale
         val bgLeft = (canvasW - bgW) / 2f
         val bgTop = (canvasH - bgH) / 2f
         val bgRight = bgLeft + bgW
         val bgBottom = bgTop + bgH
 
-        // 整张图按 contain 缩放后的角块尺寸（统一比例，宽高比不变）
+        // 角块按高度缩放（与 layout() 一致），宽度拉伸不影响角块
         var cornerL = npLeft * bw * fitScale
         var cornerR = npRight * bw * fitScale
         var cornerT = npTop * bh * fitScale
