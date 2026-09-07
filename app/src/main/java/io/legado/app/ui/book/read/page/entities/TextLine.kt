@@ -315,7 +315,7 @@ data class TextLine(
             val bgPadBottom = textColumn?.bgPadBottom ?: 0f
             when {
                 bgImage.isEmpty() && active -> {
-                    // 没有背景图的列打断背景图的连续性，绘制当前段并重置状态
+                    // 没有背景图的列，背景图连续性在引号结束时就结束了，绘制当前段并重置状态
                     drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale, currentNpLeft, currentNpRight, currentNpTop, currentNpBottom, currentBgPadStart, currentBgPadEnd, currentBgPadTop, currentBgPadBottom)
                     active = false
                 }
