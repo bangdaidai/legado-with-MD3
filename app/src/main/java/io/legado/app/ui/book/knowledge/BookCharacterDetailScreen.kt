@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -47,6 +48,7 @@ import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.icon.AppIcon
@@ -259,20 +261,68 @@ private fun CharacterDetailContent(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
+                // 一行两个选项卡片：角色+主角、声音性别+年龄段
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProfileRoleDropdown(
                         selectedRole = dialogRole,
                         onRoleSelected = { dialogRole = it },
+                        modifier = Modifier.weight(1f),
                     )
+                    NormalCard(
+                        modifier = Modifier.weight(1f),
+                        onClick = { dialogIsProtagonist = !dialogIsProtagonist },
+                        cornerRadius = 12.dp,
+                        containerColor = if (dialogIsProtagonist) {
+                            LegadoTheme.colorScheme.secondaryContainer
+                        } else {
+                            LegadoTheme.colorScheme.surfaceContainerLow
+                        },
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                AppText(
+                                    text = "主角",
+                                    style = LegadoTheme.typography.labelSmall,
+                                    color = if (dialogIsProtagonist) {
+                                        LegadoTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        LegadoTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                                AppText(
+                                    text = if (dialogIsProtagonist) "是" else "否",
+                                    style = LegadoTheme.typography.bodyMedium,
+                                    color = if (dialogIsProtagonist) {
+                                        LegadoTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        LegadoTheme.colorScheme.onSurface
+                                    },
+                                )
+                            }
+                            if (dialogIsProtagonist) {
+                                AppIcon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = LegadoTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProfileVoiceTraitDropdown(
                         label = stringResource(R.string.character_voice_gender),
                         text = voiceGenderDisplayName(dialogVoiceGender),
                         options = BookCharacterProfile.ALL_VOICE_GENDERS,
                         displayName = { voiceGenderDisplayName(it) },
                         onSelected = { dialogVoiceGender = it },
+                        modifier = Modifier.weight(1f),
                     )
                     ProfileVoiceTraitDropdown(
                         label = stringResource(R.string.character_voice_age_band),
@@ -280,21 +330,7 @@ private fun CharacterDetailContent(
                         options = BookCharacterProfile.ALL_VOICE_AGE_BANDS,
                         displayName = { voiceAgeBandDisplayName(it) },
                         onSelected = { dialogVoiceAgeBand = it },
-                    )
-                    TextCard(
-                        text = "主角",
-                        icon = if (dialogIsProtagonist) Icons.Default.Check else null,
-                        onClick = { dialogIsProtagonist = !dialogIsProtagonist },
-                        backgroundColor = if (dialogIsProtagonist) {
-                            LegadoTheme.colorScheme.secondaryContainer
-                        } else {
-                            null
-                        },
-                        contentColor = if (dialogIsProtagonist) {
-                            LegadoTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            null
-                        },
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -310,32 +346,63 @@ private fun ProfileVoiceTraitDropdown(
     options: List<String>,
     displayName: @Composable (String) -> String,
     onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    ProfileDropdownChip(
+    ProfileDropdownCard(
         label = label,
         text = text,
         options = options,
         optionLabel = { displayName(it) },
         onOptionClick = onSelected,
+        modifier = modifier,
     )
 }
 
-/** 弹窗里的紧凑下拉 chip：显示“标签 · 当前值”，点开菜单选择，避免每个选项独占一大行 */
+/** 弹窗里的选项卡片：上标签下当前值，点卡片弹出菜单选择 */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun <T> ProfileDropdownChip(
+private fun <T> ProfileDropdownCard(
     label: String,
     text: String,
     options: List<T>,
     optionLabel: @Composable (T) -> String,
     onOptionClick: (T) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var showDropdown by remember { mutableStateOf(false) }
-    Box {
-        TextCard(
-            text = "$label · $text",
+    Box(modifier = modifier) {
+        NormalCard(
+            modifier = Modifier.fillMaxWidth(),
             onClick = { showDropdown = true },
-        )
+            cornerRadius = 12.dp,
+            containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    AppText(
+                        text = label,
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppText(
+                        text = text,
+                        style = LegadoTheme.typography.bodyMedium,
+                        color = LegadoTheme.colorScheme.onSurface,
+                    )
+                }
+                AppIcon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         RoundDropdownMenu(
             expanded = showDropdown,
             onDismissRequest = { showDropdown = false },
@@ -407,6 +474,7 @@ private fun voiceAgeBandDisplayName(value: String): String = when (value) {
 private fun ProfileRoleDropdown(
     selectedRole: String,
     onRoleSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val roleDisplayNames = mapOf(
         BookCharacterProfile.ROLE_MALE_LEAD to stringResource(R.string.role_male_lead),
@@ -414,7 +482,7 @@ private fun ProfileRoleDropdown(
         BookCharacterProfile.ROLE_MALE_SUPPORTING to stringResource(R.string.role_male_supporting),
         BookCharacterProfile.ROLE_FEMALE_SUPPORTING to stringResource(R.string.role_female_supporting),
     )
-    ProfileDropdownChip(
+    ProfileDropdownCard(
         label = stringResource(R.string.character_role),
         text = roleDisplayNames[selectedRole] ?: "—",
         options = BookCharacterProfile.ALL_ROLES,
@@ -422,6 +490,7 @@ private fun ProfileRoleDropdown(
         onOptionClick = { role ->
             onRoleSelected(if (selectedRole == role) "" else role)
         },
+        modifier = modifier,
     )
 }
 
