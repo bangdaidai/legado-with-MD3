@@ -82,6 +82,7 @@ import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FontFolderState
 import io.legado.app.ui.widget.components.FontSelectSheet
 import io.legado.app.ui.widget.components.SectionTitle
+import io.legado.app.ui.widget.components.ValueStepper
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
@@ -706,20 +707,31 @@ fun HighlightRuleEditSheet(
                                             0 -> bgPaddingStart; 1 -> bgPaddingEnd
                                             2 -> bgPaddingTop; else -> bgPaddingBottom
                                         }
-                                        Slider(
-                                            value = currentVal,
-                                            onValueChange = { v ->
-                                                val rounded = v.toInt().toFloat()
-                                                when (activeInset) {
-                                                    0 -> bgPaddingStart = rounded
-                                                    1 -> bgPaddingEnd = rounded
-                                                    2 -> bgPaddingTop = rounded
-                                                    3 -> bgPaddingBottom = rounded
-                                                }
-                                            },
-                                            valueRange = range,
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        )
+                                        val updateInset: (Float) -> Unit = { v ->
+                                            val rounded = v.toInt().toFloat()
+                                            when (activeInset) {
+                                                0 -> bgPaddingStart = rounded
+                                                1 -> bgPaddingEnd = rounded
+                                                2 -> bgPaddingTop = rounded
+                                                else -> bgPaddingBottom = rounded
+                                            }
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Slider(
+                                                value = currentVal,
+                                                onValueChange = updateInset,
+                                                valueRange = range,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            // 步进按钮：1dp 精调，滑块粗调
+                                            ValueStepper(
+                                                value = currentVal,
+                                                displayValue = currentVal,
+                                                valueRange = range,
+                                                onValueChange = updateInset,
+                                                stepSize = 1f,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -761,20 +773,31 @@ fun HighlightRuleEditSheet(
                                             0 -> bgMarginStart; 1 -> bgMarginEnd
                                             2 -> bgMarginTop; else -> bgMarginBottom
                                         }
-                                        Slider(
-                                            value = currentVal,
-                                            onValueChange = { v ->
-                                                val rounded = v.toInt().toFloat()
-                                                when (activeMargin) {
-                                                    0 -> bgMarginStart = rounded
-                                                    1 -> bgMarginEnd = rounded
-                                                    2 -> bgMarginTop = rounded
-                                                    3 -> bgMarginBottom = rounded
-                                                }
-                                            },
-                                            valueRange = -16f..64f,
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        )
+                                        val updateMargin: (Float) -> Unit = { v ->
+                                            val rounded = v.toInt().toFloat()
+                                            when (activeMargin) {
+                                                0 -> bgMarginStart = rounded
+                                                1 -> bgMarginEnd = rounded
+                                                2 -> bgMarginTop = rounded
+                                                else -> bgMarginBottom = rounded
+                                            }
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Slider(
+                                                value = currentVal,
+                                                onValueChange = updateMargin,
+                                                valueRange = -16f..64f,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            // 步进按钮：1dp 精调，滑块粗调
+                                            ValueStepper(
+                                                value = currentVal,
+                                                displayValue = currentVal,
+                                                valueRange = -16f..64f,
+                                                onValueChange = updateMargin,
+                                                stepSize = 1f,
+                                            )
+                                        }
                                     }
                                 }
                             }
