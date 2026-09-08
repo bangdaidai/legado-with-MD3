@@ -1879,7 +1879,29 @@ class TextChapterLayout(
                 }
                 for (i in start..end) {
                     // 后来的规则覆盖先前的（与 Legado_Max 行为一致）
-                    activeStyles[i] = activeStyle
+                    // 但后规则没有设置bgImage时，保留前规则的bgImage，避免背景图被截断
+                    val prev = activeStyles[i]
+                    activeStyles[i] = if (prev != null && activeStyle.bgImage.isEmpty() && prev.bgImage.isNotEmpty()) {
+                        activeStyle.copy(
+                            bgImage = prev.bgImage,
+                            bgImageFit = prev.bgImageFit,
+                            bgImageScale = prev.bgImageScale,
+                            npLeft = prev.npLeft,
+                            npRight = prev.npRight,
+                            npTop = prev.npTop,
+                            npBottom = prev.npBottom,
+                            bgPadStart = prev.bgPadStart,
+                            bgPadEnd = prev.bgPadEnd,
+                            bgPadTop = prev.bgPadTop,
+                            bgPadBottom = prev.bgPadBottom,
+                            bgMarginStart = prev.bgMarginStart,
+                            bgMarginEnd = prev.bgMarginEnd,
+                            bgMarginTop = prev.bgMarginTop,
+                            bgMarginBottom = prev.bgMarginBottom,
+                        )
+                    } else {
+                        activeStyle
+                    }
                 }
             }
         }
