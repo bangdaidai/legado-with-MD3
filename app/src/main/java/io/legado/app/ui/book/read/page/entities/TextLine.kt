@@ -380,10 +380,8 @@ data class TextLine(
                 val next = columns[j] as? TextBaseColumn ?: break
                 val nextColor = resolveModeColor(next.bgColor, next.bgColorNight, next.bgImage)
                 if (nextColor == null) {
-                    // 没有背景色的列不打断连续性，扩展范围
-                    right = next.end
-                    j++
-                    continue
+                    // 没有背景色的列打断连续性，停止当前段
+                    break
                 }
                 if (nextColor != color) break
                 right = next.end
@@ -452,8 +450,9 @@ data class TextLine(
                 currentDashGap == dashGap
             when {
                 effectiveMode == 0 && active -> {
-                    // 没有下划线的列不打断连续性，扩展范围但不绘制
-                    rangeEnd = textColumn!!.end
+                    // 没有下划线的列打断连续性，绘制当前段并停止
+                    drawUnderlineSegment(canvas, rangeStart, rangeEnd, mode, color, width, offset, svgPath, roundCap, feather, dashLen, dashGap)
+                    active = false
                 }
                 effectiveMode != 0 && !active -> {
                     rangeStart = textColumn!!.start
