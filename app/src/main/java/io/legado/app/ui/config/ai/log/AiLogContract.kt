@@ -19,6 +19,7 @@ data class AiLogStepUi(
 
 @Stable
 data class AiLogItemUi(
+    val id: Long,
     val timeText: String,
     val kind: String,
     val scenario: String,

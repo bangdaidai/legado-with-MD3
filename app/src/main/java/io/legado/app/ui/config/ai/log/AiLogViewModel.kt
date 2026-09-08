@@ -54,6 +54,7 @@ class AiLogViewModel(
             _uiState.update { it.copy(loading = true) }
             val logs = aiLogRepository.getLogs().map { entry ->
                 AiLogItemUi(
+                    id = entry.timeMillis,
                     timeText = timeFormat.format(Date(entry.timeMillis)),
                     kind = kindLabel(entry.kind),
                     scenario = entry.scenario ?: kindLabel(entry.kind),

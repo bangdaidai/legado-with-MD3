@@ -124,13 +124,13 @@ fun AiLogScreen(
                     bottom = 120.dp,
                 )
             ) {
-                items(state.logs, key = { it.stableKey() }) { item ->
-                    val key = item.stableKey()
+                items(state.logs, key = { it.id }) { item ->
+                    val key = item.id.toString()
                     val wasExpanded = remember { mutableStateOf(expandedKeys[key] == true) }
                     val isExpanded = expandedKeys[key] == true
                     LaunchedEffect(isExpanded) {
                         if (wasExpanded.value && !isExpanded) {
-                            val index = state.logs.indexOfFirst { it.stableKey() == key }
+                            val index = state.logs.indexOfFirst { it.id == item.id }
                             if (index >= 0) {
                                 listState.animateScrollToItem(index)
                             }
@@ -148,8 +148,6 @@ fun AiLogScreen(
         }
     }
 }
-
-private fun AiLogItemUi.stableKey(): String = "$timeText|$scenario|$kind|$provider|$model"
 
 private fun formatRelativeMs(ms: Long): String = when {
     ms < 1000 -> "${ms}ms"
