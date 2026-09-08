@@ -1321,19 +1321,7 @@ internal fun HighlightRulePreview(
                     .fillMaxWidth()
                     .height(canvasHeightDp)
             ) {
-                val textResult = textMeasurer.measure(
-                    text = annotated,
-                    style = TextStyle(
-                        fontSize = previewBaseFontSize.sp,
-                        color = defaultTextColor,
-                    ),
-                    maxLines = 5,
-                    constraints = androidx.compose.ui.unit.Constraints(
-                        maxWidth = size.width.toInt()
-                    ),
-                )
-
-                // 九宫格背景外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
+                // 九宫格外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
                 if (ninePatchTopOverhang != 0f) {
                     drawContext.canvas.translate(0f, ninePatchTopOverhang)
                 }
@@ -1347,14 +1335,14 @@ internal fun HighlightRulePreview(
                         if (start >= endExclusive) return@forEach
                         var offset = start
                         while (offset < endExclusive) {
-                            val line = textResult.getLineForOffset(offset)
-                            val lineEnd = textResult.getLineEnd(line, visibleEnd = true)
+                            val line = previewTextResult.getLineForOffset(offset)
+                            val lineEnd = previewTextResult.getLineEnd(line, visibleEnd = true)
                             val segEnd = minOf(endExclusive, lineEnd)
                             if (segEnd <= offset) break
-                            val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
-                            val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
-                            val top = textResult.getLineTop(line)
-                            val bottom = textResult.getLineBottom(line)
+                            val left = previewTextResult.getHorizontalPosition(offset, usePrimaryDirection = true)
+                            val right = previewTextResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
+                            val top = previewTextResult.getLineTop(line)
+                            val bottom = previewTextResult.getLineBottom(line)
                             val rectL = minOf(left, right)
                             val rectR = maxOf(left, right)
                             val rectT = top
@@ -1404,13 +1392,13 @@ internal fun HighlightRulePreview(
                             if (start >= endExclusive) return@forEach
                             var offset = start
                             while (offset < endExclusive) {
-                                val line = textResult.getLineForOffset(offset)
-                                val lineEnd = textResult.getLineEnd(line, visibleEnd = true)
+                                val line = previewTextResult.getLineForOffset(offset)
+                                val lineEnd = previewTextResult.getLineEnd(line, visibleEnd = true)
                                 val segEnd = minOf(endExclusive, lineEnd)
                                 if (segEnd <= offset) break
-                                val left = textResult.getHorizontalPosition(offset, usePrimaryDirection = true)
-                                val right = textResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
-                                val y = textResult.getLineBottom(line) + underlineOffset.dp.toPx()
+                                val left = previewTextResult.getHorizontalPosition(offset, usePrimaryDirection = true)
+                                val right = previewTextResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
+                                val y = previewTextResult.getLineBottom(line) + underlineOffset.dp.toPx()
                                 drawUnderlineSegment(
                                     mode = underlineMode,
                                     color = resolvedUnderlineColor,
@@ -1430,7 +1418,7 @@ internal fun HighlightRulePreview(
                 }
 
                 if (underlineBelowText) drawUnderlinesBlock()
-                drawText(textResult)
+                drawText(previewTextResult)
                 if (!underlineBelowText) drawUnderlinesBlock()
 
                 // 恢复画布，避免平移泄漏到后续绘制
