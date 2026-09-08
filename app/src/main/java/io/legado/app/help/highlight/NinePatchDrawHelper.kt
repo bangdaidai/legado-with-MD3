@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import kotlin.math.roundToInt
 
 /**
  * 九宫格背景绘制。移植自 readdai `NinePatchHelper`。
@@ -190,17 +191,17 @@ object NinePatchDrawHelper {
         val y2 = bottom - hB
         val y3 = bottom
 
-        val sxLi = wLsrc.toInt().coerceAtLeast(0)
-        val sxR = rxN * bw
-        val sxTi = hTsrc.toInt().coerceAtLeast(0)
-        val sxB = byN * bh
         val bwI = bw.toInt()
         val bhI = bh.toInt()
+        val sxLi = wLsrc.roundToInt().coerceIn(0, bwI)
+        val sxR = rxN * bw
+        val sxTi = hTsrc.roundToInt().coerceIn(0, bhI)
+        val sxB = byN * bh
         // 两条线重合时中带 src 宽为 0，借 1px 作为可拉伸中心带，避免空白
-        val sxRi = if (rxN > lxN) sxR.toInt().coerceAtLeast(0)
-        else (lxN * bw + 1f).toInt().coerceAtMost(bwI)
-        val sxBii = if (byN > tyN) sxB.toInt().coerceAtLeast(0)
-        else (tyN * bh + 1f).toInt().coerceAtMost(bhI)
+        val sxRi = if (rxN > lxN) sxR.roundToInt().coerceIn(0, bwI)
+        else (lxN * bw + 1f).roundToInt().coerceIn(0, bwI)
+        val sxBii = if (byN > tyN) sxB.roundToInt().coerceIn(0, bhI)
+        else (tyN * bh + 1f).roundToInt().coerceIn(0, bhI)
 
         val srcRects = arrayOf(
             Rect(0, 0, sxLi, sxTi),
