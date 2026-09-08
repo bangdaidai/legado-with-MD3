@@ -166,17 +166,16 @@ object NinePatchDrawHelper {
         var hT = if (cornerT > 0f) cornerT else hTsrc * s
         var hB = if (cornerB > 0f) cornerB else hBsrc * s
 
-        // 目标框放不下四角之和时按比例缩小四角（同 TextLine.drawNinePatchBitmap 的处理），
-        // 否则中段坐标反转，短文字高亮时角块会被压扁
-        if (wL + wR > rectW && wL + wR > 0f) {
-            val ratio = rectW / (wL + wR)
-            wL *= ratio
-            wR *= ratio
-        }
-        if (hT + hB > rectH && hT + hB > 0f) {
-            val ratio = rectH / (hT + hB)
-            hT *= ratio
-            hB *= ratio
+        // 目标框放不下四角之和时统一缩小（保持宽高比），
+        // 否则短文字高亮时角块宽高比被破坏导致变形
+        val wRatio = if (wL + wR > rectW && wL + wR > 0f) rectW / (wL + wR) else 1f
+        val hRatio = if (hT + hB > rectH && hT + hB > 0f) rectH / (hT + hB) else 1f
+        val cornerRatio = minOf(wRatio, hRatio)
+        if (cornerRatio < 1f) {
+            wL *= cornerRatio
+            wR *= cornerRatio
+            hT *= cornerRatio
+            hB *= cornerRatio
         }
         val wM = (rectW - wL - wR).coerceAtLeast(0f)
         val hM = (rectH - hT - hB).coerceAtLeast(0f)
