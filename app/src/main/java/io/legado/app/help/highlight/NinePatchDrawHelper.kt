@@ -99,15 +99,8 @@ object NinePatchDrawHelper {
         var cornerT = npTop * bitmapHeight * scale
         var cornerB = npBottom * bitmapHeight * scale
 
-        // 安全回退：角块总宽超出文字宽度时统一缩小（保持宽高比）
-        val totalCornerW = cornerL + cornerR
-        if (totalCornerW > textW && totalCornerW > 0f) {
-            val ratio = textW / totalCornerW
-            cornerL *= ratio
-            cornerR *= ratio
-            cornerT *= ratio
-            cornerB *= ratio
-        }
+        // 角块宽高比天然一致，不做额外处理
+        // 九宫格中段负责水平拉伸，角块超出文字宽度时自然溢出由 clipRect 裁切
 
         return Box(
             left = textLeft - cornerL - padStart,
