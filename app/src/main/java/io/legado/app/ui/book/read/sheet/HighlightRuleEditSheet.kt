@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -1330,21 +1331,7 @@ internal fun HighlightRulePreview(
                     matchRanges.forEach { range ->
                         val start = range.first
                         val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
-                        if (start >= endExclusive) return@forEach
-                        var offset = start
-                        while (offset < endExclusive) {
-                            val line = previewTextResult.getLineForOffset(offset)
-                            val lineEnd = previewTextResult.getLineEnd(line, visibleEnd = true)
-                            val segEnd = minOf(endExclusive, lineEnd)
-                            if (segEnd <= offset) break
-                            val left = previewTextResult.getHorizontalPosition(offset, usePrimaryDirection = true)
-                            val right = previewTextResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
-                            val top = previewTextResult.getLineTop(line)
-                            val bottom = previewTextResult.getLineBottom(line)
-                            val rectL = minOf(left, right)
-                            val rectR = maxOf(left, right)
-                            val rectT = top
-                            val rectB = bottom
+                        previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
                             if (bgImageFit == 3 && bgRawBitmap != null) {
                                 // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
                                 // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内
@@ -1375,7 +1362,6 @@ internal fun HighlightRulePreview(
                                     ),
                                 )
                             }
-                            offset = segEnd
                         }
                     }
                 }
@@ -1387,29 +1373,19 @@ internal fun HighlightRulePreview(
                         matchRanges.forEach { range ->
                             val start = range.first
                             val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
-                            if (start >= endExclusive) return@forEach
-                            var offset = start
-                            while (offset < endExclusive) {
-                                val line = previewTextResult.getLineForOffset(offset)
-                                val lineEnd = previewTextResult.getLineEnd(line, visibleEnd = true)
-                                val segEnd = minOf(endExclusive, lineEnd)
-                                if (segEnd <= offset) break
-                                val left = previewTextResult.getHorizontalPosition(offset, usePrimaryDirection = true)
-                                val right = previewTextResult.getHorizontalPosition(segEnd, usePrimaryDirection = true)
-                                val y = previewTextResult.getLineBottom(line) + underlineOffset.dp.toPx()
+                            previewTextResult.forEachLineSegment(start, endExclusive) { left, right, _, bottom, _ ->
                                 drawUnderlineSegment(
                                     mode = underlineMode,
                                     color = resolvedUnderlineColor,
                                     strokeWidth = strokeWidth,
-                                    startX = minOf(left, right),
-                                    endX = maxOf(left, right),
-                                    y = y,
+                                    startX = left,
+                                    endX = right,
+                                    y = bottom + underlineOffset.dp.toPx(),
                                     roundCap = underlineRoundCap,
                                     feather = underlineFeather,
                                     dashLen = underlineDashLen,
                                     dashGap = underlineDashGap,
                                 )
-                                offset = segEnd
                             }
                         }
                     }
@@ -1425,6 +1401,40 @@ internal fun HighlightRulePreview(
                 }
             }
         }
+    }
+}
+
+/**
+ * 把匹配区间按行切开，用每字包围盒算这一行的左右边界。
+ * [TextLayoutResult.getHorizontalPosition] 在换行边界会给出下一行行首，
+ * 跨行引用会把下划线/背景图画到行首未匹配文字上。
+ */
+private inline fun TextLayoutResult.forEachLineSegment(
+    start: Int,
+    endExclusive: Int,
+    action: (left: Float, right: Float, top: Float, bottom: Float, line: Int) -> Unit,
+) {
+    if (start >= endExclusive) return
+    var offset = start
+    while (offset < endExclusive) {
+        val line = getLineForOffset(offset)
+        val visibleEnd = getLineEnd(line, visibleEnd = true)
+        val rawEnd = getLineEnd(line, visibleEnd = false)
+        val segEnd = minOf(endExclusive, visibleEnd)
+        if (segEnd > offset) {
+            var left = Float.POSITIVE_INFINITY
+            var right = Float.NEGATIVE_INFINITY
+            for (i in offset until segEnd) {
+                val box = getBoundingBox(i)
+                left = minOf(left, box.left)
+                right = maxOf(right, box.right)
+            }
+            if (left < right) {
+                action(left, right, getLineTop(line), getLineBottom(line), line)
+            }
+        }
+        // 软换行时 visibleEnd==rawEnd；硬换行时 visibleEnd 停在 \\n 前，必须跳过否则死循环
+        offset = maxOf(segEnd, rawEnd).coerceAtLeast(offset + 1)
     }
 }
 
