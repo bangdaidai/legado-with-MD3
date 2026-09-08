@@ -8,9 +8,12 @@ interface TextBaseColumn : BaseColumn {
     override var end: Float
     val charData: String
     val textColor: Int?
+    val textColorNight: Int?
     val bgColor: Int?
+    val bgColorNight: Int?
     val underlineMode: Int
     val underlineColor: Int?
+    val underlineColorNight: Int?
     val underlineWidth: Float
     val underlineOffset: Float
     val underlineSvgPath: String

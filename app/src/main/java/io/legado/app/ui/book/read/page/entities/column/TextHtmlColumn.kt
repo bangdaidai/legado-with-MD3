@@ -21,8 +21,10 @@ data class TextHtmlColumn(
     val mTextColor: Int?,
     val linkUrl: String?,
     override val bgColor: Int? = null,
+    override val bgColorNight: Int? = null,
     override val underlineMode: Int = 0,
     override val underlineColor: Int? = null,
+    override val underlineColorNight: Int? = null,
     override val underlineWidth: Float = 1f,
     override val underlineOffset: Float = 2f,
     override val underlineSvgPath: String = "",
@@ -53,6 +55,7 @@ data class TextHtmlColumn(
 ) : TextBaseColumn {
 
     override val textColor: Int? get() = mTextColor
+    override val textColorNight: Int? get() = null
 
     override var textLine: TextLine = emptyTextLine
 

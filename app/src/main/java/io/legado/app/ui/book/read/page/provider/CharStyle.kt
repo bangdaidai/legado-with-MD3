@@ -5,9 +5,12 @@ package io.legado.app.ui.book.read.page.provider
  */
 data class CharStyle(
     val textColor: Int? = null,
+    val textColorNight: Int? = null,
     val bgColor: Int? = null,
+    val bgColorNight: Int? = null,
     val underlineMode: Int = 0,
     val underlineColor: Int? = null,
+    val underlineColorNight: Int? = null,
     val underlineWidth: Float = 1f,
     val underlineOffset: Float = 2f,
     val underlineSvgPath: String = "",

@@ -54,7 +54,6 @@ import io.legado.app.ui.book.read.page.provider.ChapterProvider.srcReplaceCharC
 import io.legado.app.ui.book.read.page.provider.ChapterProvider.srcReplaceCharD
 import io.legado.app.ui.config.readConfig.ReadConfig
 import io.legado.app.utils.GSON
-import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fastSum
@@ -1532,9 +1531,12 @@ class TextChapterLayout(
                     end = absStartX + xEnd,
                     charData = char,
                     textColor = style?.textColor,
+                    textColorNight = style?.textColorNight,
                     bgColor = style?.bgColor,
+                    bgColorNight = style?.bgColorNight,
                     underlineMode = style?.underlineMode ?: 0,
                     underlineColor = style?.underlineColor,
+                    underlineColorNight = style?.underlineColorNight,
                     underlineWidth = style?.underlineWidth ?: 1f,
                     underlineOffset = style?.underlineOffset ?: 2f,
                     underlineSvgPath = style?.underlineSvgPath ?: "",
@@ -1909,18 +1911,14 @@ class TextChapterLayout(
     }
 
     private fun HighlightRule.toCharStyle(): CharStyle {
-        val isNight = ReadStyleResolver.isNightTheme()
-        // 有背景图时高亮区域底色恒定，不做夜间派生
-        val derive = isNight && bgImage.isNullOrBlank()
-        val resolvedTextColor = resolveModeColor(textColor, textColorNight, isNight, derive)
-        val resolvedBgColor = resolveModeColor(bgColor, bgColorNight, isNight, derive)
-        val resolvedUnderlineColor =
-            resolveModeColor(underlineColor, underlineColorNight, isNight, derive)
         return CharStyle(
-            textColor = resolvedTextColor,
-            bgColor = resolvedBgColor,
+            textColor = textColor,
+            textColorNight = textColorNight,
+            bgColor = bgColor,
+            bgColorNight = bgColorNight,
             underlineMode = underlineMode,
-            underlineColor = resolvedUnderlineColor ?: resolvedTextColor ?: 0xFF63C37D.toInt(),
+            underlineColor = underlineColor ?: textColor,
+            underlineColorNight = underlineColorNight ?: textColorNight,
             underlineWidth = underlineWidth,
             underlineOffset = underlineOffset,
             underlineSvgPath = underlineSvgPath.orEmpty(),
@@ -1948,23 +1946,6 @@ class TextChapterLayout(
             bgMarginTop = bgMarginTop,
             bgMarginBottom = bgMarginBottom,
         )
-    }
-
-    /**
-     * 解析当前模式下应使用的颜色。
-     * 日间直接用 [dayColor]；夜间优先用显式设置的 [nightColor]，
-     * 未设置时（[derive] 为真）由日间色明度反相自动派生。
-     */
-    private fun resolveModeColor(
-        dayColor: Int?,
-        nightColor: Int?,
-        isNight: Boolean,
-        derive: Boolean,
-    ): Int? {
-        if (!isNight) return dayColor
-        nightColor?.let { return it }
-        if (!derive) return dayColor
-        return dayColor?.let { ColorUtils.flipLightness(it) }
     }
 
     private data class HighlightStyleContext(

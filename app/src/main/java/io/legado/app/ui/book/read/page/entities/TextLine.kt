@@ -14,6 +14,7 @@ import android.os.Build
 import androidx.annotation.Keep
 import io.legado.app.help.PaintPool
 import io.legado.app.help.book.isImage
+import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.help.highlight.NinePatchDrawHelper
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.ContentTextView
@@ -370,20 +371,21 @@ data class TextLine(
         while (i < columns.size) {
             val col = columns[i] as? TextBaseColumn
             if (col == null) { i++; continue }
-            val color = col.bgColor
+            val color = resolveModeColor(col.bgColor, col.bgColorNight, col.bgImage)
             if (color == null) { i++; continue }
             val left = col.start
             var right = col.end
             var j = i + 1
             while (j < columns.size) {
                 val next = columns[j] as? TextBaseColumn ?: break
-                if (next.bgColor == null) {
+                val nextColor = resolveModeColor(next.bgColor, next.bgColorNight, next.bgImage)
+                if (nextColor == null) {
                     // 没有背景色的列不打断连续性，扩展范围
                     right = next.end
                     j++
                     continue
                 }
-                if (next.bgColor != color) break
+                if (nextColor != color) break
                 right = next.end
                 j++
             }
@@ -426,9 +428,11 @@ data class TextLine(
             val currentBelowText = textColumn?.underlineBelowText ?: false
             // 只绘制匹配当前层级（文字上/下）的下划线
             val effectiveMode = if (currentBelowText == belowText) currentMode else 0
-            val currentColor = textColumn?.underlineColor
-                ?: textColumn?.textColor
-                ?: ChapterProvider.renderStyle.textColor
+            val currentColor = resolveModeColor(
+                textColumn?.underlineColor ?: textColumn?.textColor,
+                textColumn?.underlineColorNight ?: textColumn?.textColorNight,
+                textColumn?.bgImage ?: ""
+            ) ?: ChapterProvider.renderStyle.textColor
             val currentWidth = textColumn?.underlineWidth ?: 1f
             val currentOffset = textColumn?.underlineOffset ?: 2f
             val currentSvgPath = textColumn?.underlineSvgPath ?: ""
@@ -881,6 +885,19 @@ data class TextLine(
             return false
         }
         return searchResultColumnCount == 0
+    }
+
+    /**
+     * 解析当前模式下应使用的颜色。
+     * 日间直接用 [dayColor]；夜间优先用显式设置的 [nightColor]，
+     * 未设置时由日间色明度反相自动派生（有背景图时不派生）。
+     */
+    private fun resolveModeColor(dayColor: Int?, nightColor: Int?, bgImage: String): Int? {
+        val isNight = ReadStyleResolver.isNightTheme()
+        if (!isNight) return dayColor
+        nightColor?.let { return it }
+        if (bgImage.isNotEmpty()) return dayColor
+        return dayColor?.let { io.legado.app.utils.ColorUtils.flipLightness(it) }
     }
 
     fun invalidate() {

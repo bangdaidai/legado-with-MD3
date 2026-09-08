@@ -9,7 +9,9 @@ import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.ResourceLoadFailureCache
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextLine.Companion.emptyTextLine
+import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.spToPx
 import splitties.init.appCtx
@@ -21,9 +23,12 @@ data class TextColumn(
     override var end: Float,
     override val charData: String,
     override val textColor: Int? = null,
+    override val textColorNight: Int? = null,
     override val bgColor: Int? = null,
+    override val bgColorNight: Int? = null,
     override val underlineMode: Int = 0,
     override val underlineColor: Int? = null,
+    override val underlineColorNight: Int? = null,
     override val underlineWidth: Float = 1f,
     override val underlineOffset: Float = 2f,
     override val underlineSvgPath: String = "",
@@ -83,10 +88,11 @@ data class TextColumn(
             ChapterProvider.contentPaint
         }
         val renderStyle = ChapterProvider.renderStyle
+        val resolvedTextColor = resolveModeColor(textColor, textColorNight)
         val drawColor = if (textLine.isReadAloud || isSearchResult) {
             renderStyle.textAccentColor
         } else {
-            textColor ?: if (textLine.isTitle && renderStyle.titleColor != 0) {
+            resolvedTextColor ?: if (textLine.isTitle && renderStyle.titleColor != 0) {
                 renderStyle.titleColor
             } else {
                 renderStyle.textColor
@@ -129,6 +135,14 @@ data class TextColumn(
         if (selected) {
             canvas.drawRect(start, 0f, end, textLine.height, view.selectedPaint)
         }
+    }
+
+    private fun resolveModeColor(dayColor: Int?, nightColor: Int?): Int? {
+        val isNight = ReadStyleResolver.isNightTheme()
+        if (!isNight) return dayColor
+        nightColor?.let { return it }
+        if (bgImage.isNotEmpty()) return dayColor
+        return dayColor?.let { ColorUtils.flipLightness(it) }
     }
 
     private fun drawText(canvas: Canvas, y: Float, textPaint: android.text.TextPaint) {
