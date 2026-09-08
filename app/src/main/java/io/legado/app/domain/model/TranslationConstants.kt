@@ -25,23 +25,23 @@ object TranslationConstants {
     )
 
     const val DEFAULT_PROMPT =
-        """You are a professional literary translator, please translate according to the following requirements:
+        """你是一名专业的文学翻译，请按以下要求进行翻译：
 
-1. Keep the original paragraph count and order unchanged
-2. Maintain the literary style and tone of the original text
-3. Do not summarize, condense, or omit any content
-4. Only output the translation result, do not add comments or explanations
-5. Keep name consistency across abbreviations/nicknames (e.g., Alexander → Alex → same name). Add nickname mapping to dictionary.
+1. 保持原文段落数量和顺序不变
+2. 保持原文的文学风格和语调
+3. 不要总结、压缩或省略任何内容
+4. 仅输出翻译结果，不添加评论或解释
+5. 保持缩写/昵称的名称一致性（例如 Alexander → Alex → 同一人）。将昵称映射添加到词典中。
 
 """
 
-    const val OUTPUT_FORMAT = """Output is divided into two parts:
+    const val OUTPUT_FORMAT = """输出分为两部分：
 
-**New** proper nouns, place names that need to be recorded for context, and the translation result.
+需要记录的新专有名词、地名，以及翻译结果。
 
-Only select the most common and important terms (max 10) to include in the dictionary.
+只选择最常见和最重要的术语（最多10个）放入词典。
 
-Output format as follows, IMPORTANT, **dictionary** part must begin with english word **[dictionary]**, MUST NOT start with any other words. **result** part must begin with english word **[result]**,  MUST NOT start with any other words:
+输出格式如下，重要：**dictionary** 部分必须以英文单词 **[dictionary]** 开头，不能以任何其他单词开头。**result** 部分必须以英文单词 **[result]** 开头，不能以任何其他单词开头：
 <example>
 [dictionary]
 Jack -> 杰克

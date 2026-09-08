@@ -246,7 +246,7 @@ class AiProfileRepository(
         AiTaskType.TRANSLATE_CHAPTER -> TranslationConstants.DEFAULT_PROMPT
         AiTaskType.SUMMARIZE_CHAPTER -> AiPromptTemplate.DEFAULT_CHAPTER_SUMMARY
         AiTaskType.RECAP_RECENT -> AiPromptTemplate.DEFAULT_CHAPTER_RECAP
-        else -> "You are a helpful AI assistant."
+        else -> "你是一个有帮助的 AI 助手。"
     }
 
     override suspend fun deleteProvider(providerId: String) = withContext(Dispatchers.IO) {
@@ -299,7 +299,7 @@ class AiProfileRepository(
                         AiTaskType.TRANSLATE_CHAPTER -> TranslationConstants.DEFAULT_PROMPT
                         AiTaskType.SUMMARIZE_CHAPTER -> AiPromptTemplate.DEFAULT_CHAPTER_SUMMARY
                         AiTaskType.RECAP_RECENT -> AiPromptTemplate.DEFAULT_CHAPTER_RECAP
-                        else -> "You are a helpful AI assistant."
+                        else -> "你是一个有帮助的 AI 助手。"
                     }
                 },
                 paramsJson = GSON.toJson(updatedParams),
@@ -441,7 +441,7 @@ class AiProfileRepository(
                 taskType = AiTaskType.CHAT,
                 name = "Default Chat",
                 modelProfileId = modelProfileId,
-                promptTemplate = "You are a helpful AI assistant.",
+                promptTemplate = "你是一个有帮助的 AI 助手。",
                 paramsJson = GSON.toJson(params),
                 isDefault = true,
                 createdAt = existingChatPreset?.createdAt ?: now,
