@@ -139,7 +139,13 @@ data class TextColumn(
 
     private fun resolveModeColor(dayColor: Int?, nightColor: Int?): Int? {
         val isNight = ReadStyleResolver.isNightTheme()
-        if (!isNight) return dayColor
+        if (!isNight) {
+            // 日间模式：优先用日间色，否则反向派生夜间色
+            dayColor?.let { return it }
+            nightColor?.let { return ColorUtils.flipLightness(it) }
+            return null
+        }
+        // 夜间模式：优先用夜间色，否则正向派生日间色
         nightColor?.let { return it }
         if (bgImage.isNotEmpty()) return dayColor
         return dayColor?.let { ColorUtils.flipLightness(it) }

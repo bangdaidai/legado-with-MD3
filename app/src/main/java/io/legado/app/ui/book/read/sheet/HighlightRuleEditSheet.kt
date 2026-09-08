@@ -126,28 +126,18 @@ fun HighlightRuleEditSheet(
     }
 
     // Style state
-    var textColor by remember(show, rule) {
-        mutableIntStateOf(
-            initial.textColor ?: 0xFF63C37D.toInt()
-        )
-    }
-    var hasTextColor by remember(show, rule) { mutableStateOf(initial.textColor != null) }
-    // 夜间色：null 表示自动派生（跟随日间色明度反相）
+    // 日间色：null 表示自动派生（从夜间色反向派生）
+    var textColor by remember(show, rule) { mutableStateOf(initial.textColor) }
+    // 夜间色：null 表示自动派生（从日间色正向派生）
     var textColorNight by remember(show, rule) { mutableStateOf(initial.textColorNight) }
-    var bgColor by remember(show, rule) { mutableIntStateOf(initial.bgColor ?: 0x20FFEB3B) }
-    var hasBgColor by remember(show, rule) { mutableStateOf(initial.bgColor != null) }
+    var bgColor by remember(show, rule) { mutableStateOf(initial.bgColor) }
     var bgColorNight by remember(show, rule) { mutableStateOf(initial.bgColorNight) }
     var hasUnderline by remember(show, rule) { mutableStateOf(initial.underlineMode > 0) }
     var underlineMode by remember(
         show,
         rule
     ) { mutableIntStateOf(if (initial.underlineMode > 0) initial.underlineMode else 1) }
-    var underlineColor by remember(show, rule) {
-        mutableIntStateOf(
-            initial.underlineColor ?: 0xFF63C37D.toInt()
-        )
-    }
-    var hasUnderlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor != null) }
+    var underlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor) }
     var underlineColorNight by remember(show, rule) { mutableStateOf(initial.underlineColorNight) }
     var underlineWidth by remember(show, rule) { mutableFloatStateOf(initial.underlineWidth) }
     var underlineOffset by remember(show, rule) { mutableFloatStateOf(initial.underlineOffset) }
@@ -285,13 +275,13 @@ fun HighlightRuleEditSheet(
                             targetScope = targetScope,
                             enabled = enabled,
                             position = initial.position,
-                            textColor = if (hasTextColor) textColor else null,
-                            textColorNight = if (hasTextColor) textColorNight else null,
-                            bgColor = if (hasBgColor) bgColor else null,
-                            bgColorNight = if (hasBgColor) bgColorNight else null,
+                            textColor = textColor,
+                            textColorNight = textColorNight,
+                            bgColor = bgColor,
+                            bgColorNight = bgColorNight,
                             underlineMode = if (hasUnderline) underlineMode else 0,
-                            underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
-                            underlineColorNight = if (hasUnderlineColor && hasUnderline) underlineColorNight else null,
+                            underlineColor = if (hasUnderline) underlineColor else null,
+                            underlineColorNight = if (hasUnderline) underlineColorNight else null,
                             underlineWidth = underlineWidth,
                             underlineOffset = underlineOffset,
                             underlineSvgPath = underlineSvgPath.ifBlank { null },
@@ -439,25 +429,20 @@ fun HighlightRuleEditSheet(
             }
 
             // Text color
-            TinySwitchSettingItem(
+            TinyClearColorModeSettingItem(
                 title = stringResource(R.string.text_color),
-                checked = hasTextColor,
-                onCheckedChange = { hasTextColor = it },
+                dayColor = textColor,
+                nightColor = textColorNight,
+                onClickColor = { isNight ->
+                    if (isNight) showTextColorNightPicker = true
+                    else showTextColorPicker = true
+                },
+                onClearColor = { isNight ->
+                    // 刷新：清除另一方颜色，由当前颜色派生
+                    if (isNight) textColor = null    // 夜间模式刷新 → 清除日间色，由夜间色派生
+                    else textColorNight = null       // 日间模式刷新 → 清除夜间色，由日间色派生
+                },
             )
-            AnimatedVisibility(visible = hasTextColor) {
-                TinyClearColorModeSettingItem(
-                    title = stringResource(R.string.select_color),
-                    dayColor = textColor,
-                    nightColor = textColorNight ?: ColorUtils.flipLightness(textColor),
-                    onClickColor = { isNight ->
-                        if (isNight) showTextColorNightPicker = true
-                        else showTextColorPicker = true
-                    },
-                    onClearColor = { isNight ->
-                        if (isNight) textColorNight = null
-                    },
-                )
-            }
 
             // Font weight — three options: Regular(400), Bold(700), Light(300)
             val weightEntries = stringArrayResource(R.array.text_font_weight)
@@ -523,26 +508,20 @@ fun HighlightRuleEditSheet(
                         )
                     }
 
-                    TinySwitchSettingItem(
+                    TinyClearColorModeSettingItem(
                         title = stringResource(R.string.underline_color),
-                        checked = hasUnderlineColor,
-                        onCheckedChange = { hasUnderlineColor = it },
+                        dayColor = underlineColor,
+                        nightColor = underlineColorNight,
+                        onClickColor = { isNight ->
+                            if (isNight) showUnderlineColorNightPicker = true
+                            else showUnderlineColorPicker = true
+                        },
+                        onClearColor = { isNight ->
+                            // 刷新：清除另一方颜色，由当前颜色派生
+                            if (isNight) underlineColor = null    // 夜间模式刷新 → 清除日间色
+                            else underlineColorNight = null       // 日间模式刷新 → 清除夜间色
+                        },
                     )
-                    AnimatedVisibility(visible = hasUnderlineColor) {
-                        TinyClearColorModeSettingItem(
-                            title = stringResource(R.string.select_color),
-                            dayColor = underlineColor,
-                            nightColor = underlineColorNight
-                                ?: ColorUtils.flipLightness(underlineColor),
-                            onClickColor = { isNight ->
-                                if (isNight) showUnderlineColorNightPicker = true
-                                else showUnderlineColorPicker = true
-                            },
-                            onClearColor = { isNight ->
-                                if (isNight) underlineColorNight = null
-                            },
-                        )
-                    }
 
                     TinySliderSettingItem(
                         title = stringResource(R.string.underline_width),
@@ -606,25 +585,20 @@ fun HighlightRuleEditSheet(
             }
 
             // Background color
-            TinySwitchSettingItem(
+            TinyClearColorModeSettingItem(
                 title = stringResource(R.string.bg_color),
-                checked = hasBgColor,
-                onCheckedChange = { hasBgColor = it },
+                dayColor = bgColor,
+                nightColor = bgColorNight,
+                onClickColor = { isNight ->
+                    if (isNight) showBgColorNightPicker = true
+                    else showBgColorPicker = true
+                },
+                onClearColor = { isNight ->
+                    // 刷新：清除另一方颜色，由当前颜色派生
+                    if (isNight) bgColor = null    // 夜间模式刷新 → 清除日间色
+                    else bgColorNight = null       // 日间模式刷新 → 清除夜间色
+                },
             )
-            AnimatedVisibility(visible = hasBgColor) {
-                TinyClearColorModeSettingItem(
-                    title = stringResource(R.string.select_color),
-                    dayColor = bgColor,
-                    nightColor = bgColorNight ?: ColorUtils.flipLightness(bgColor),
-                    onClickColor = { isNight ->
-                        if (isNight) showBgColorNightPicker = true
-                        else showBgColorPicker = true
-                    },
-                    onClearColor = { isNight ->
-                        if (isNight) bgColorNight = null
-                    },
-                )
-            }
 
             // Background image
             TinySwitchSettingItem(
@@ -884,13 +858,13 @@ fun HighlightRuleEditSheet(
                 label = stringResource(R.string.day),
                 sampleText = sampleText,
                 pattern = pattern,
-                textColor = if (hasTextColor) textColor else null,
-                bgColor = if (hasBgColor) bgColor else null,
+                textColor = textColor,
+                bgColor = bgColor,
                 bgImage = if (hasBgImage) bgImage else "",
                 bgImageFit = bgImageFit,
                 bgImageScale = bgImageScale,
                 underlineMode = if (hasUnderline) underlineMode else 0,
-                underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
+                underlineColor = if (hasUnderline) underlineColor else null,
                 underlineWidth = underlineWidth,
                 underlineOffset = underlineOffset,
                 pageBgColor = previewDayBgColor,
@@ -923,12 +897,12 @@ fun HighlightRuleEditSheet(
 
             // Night preview — hidden when bgImage is active
             if (!hasBgImage || bgImage.isBlank()) {
-                val nightTextColor = if (hasTextColor)
-                    (textColorNight ?: ColorUtils.flipLightness(textColor)) else null
-                val nightBgColor = if (hasBgColor)
-                    (bgColorNight ?: ColorUtils.flipLightness(bgColor)) else null
-                val nightUnderlineColor = if (hasUnderlineColor && hasUnderline)
-                    (underlineColorNight ?: ColorUtils.flipLightness(underlineColor)) else null
+                // 夜间预览：夜间色优先，否则从日间色派生
+                val nightTextColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) }
+                val nightBgColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) }
+                val nightUnderlineColor = if (hasUnderline) {
+                    underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) }
+                } else null
                 val previewNightBgImage = pageBgImagePathOf(
                     previewConfig.bgTypeNight, previewConfig.bgStrNight
                 )

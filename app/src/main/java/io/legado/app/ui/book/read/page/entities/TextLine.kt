@@ -888,12 +888,18 @@ data class TextLine(
 
     /**
      * 解析当前模式下应使用的颜色。
-     * 日间直接用 [dayColor]；夜间优先用显式设置的 [nightColor]，
-     * 未设置时由日间色明度反相自动派生（有背景图时不派生）。
+     * 日间优先用 [dayColor]，未设置时反向派生 [nightColor]；
+     * 夜间优先用 [nightColor]，未设置时正向派生 [dayColor]（有背景图时不派生）。
      */
     private fun resolveModeColor(dayColor: Int?, nightColor: Int?, bgImage: String): Int? {
         val isNight = ReadStyleResolver.isNightTheme()
-        if (!isNight) return dayColor
+        if (!isNight) {
+            // 日间模式：优先用日间色，否则反向派生夜间色
+            dayColor?.let { return it }
+            nightColor?.let { return io.legado.app.utils.ColorUtils.flipLightness(it) }
+            return null
+        }
+        // 夜间模式：优先用夜间色，否则正向派生日间色
         nightColor?.let { return it }
         if (bgImage.isNotEmpty()) return dayColor
         return dayColor?.let { io.legado.app.utils.ColorUtils.flipLightness(it) }

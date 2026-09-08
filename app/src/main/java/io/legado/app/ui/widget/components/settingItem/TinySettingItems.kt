@@ -460,15 +460,15 @@ fun TinyColorSettingItem(
  * A color setting item with an integrated light/dark mode pill toggle.
  *
  * @param title The title text.
- * @param dayColor The color value for light mode (ARGB int).
- * @param nightColor The color value for dark mode (ARGB int).
+ * @param dayColor The color value for light mode (ARGB int), nullable for auto-derive.
+ * @param nightColor The color value for dark mode (ARGB int), nullable for auto-derive.
  * @param onClickColor Called when the color knob is clicked (passes current mode's selection).
  */
 @Composable
 fun TinyColorModeSettingItem(
     title: String,
-    dayColor: Int,
-    nightColor: Int,
+    dayColor: Int?,
+    nightColor: Int?,
     onClickColor: (isNight: Boolean) -> Unit,
     description: String? = null,
     imageVector: ImageVector? = null,
@@ -501,8 +501,8 @@ fun TinyColorModeSettingItem(
 
 @Composable
 private fun ColorModePill(
-    dayColor: Int,
-    nightColor: Int,
+    dayColor: Int?,
+    nightColor: Int?,
     isNightMode: Boolean,
     onToggleMode: () -> Unit,
     onClickColor: () -> Unit,
@@ -569,7 +569,7 @@ private fun ColorModePill(
                 .clip(CircleShape)
                 .background(LegadoTheme.colorScheme.surfaceContainerLow)
                 .then(
-                    if (currentColor != 0) Modifier.background(Color(currentColor))
+                    if (currentColor != null) Modifier.background(Color(currentColor))
                     else Modifier
                 )
                 .clickable(
@@ -578,7 +578,7 @@ private fun ColorModePill(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            if (currentColor == 0) {
+            if (currentColor == null) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
@@ -597,8 +597,8 @@ private fun ColorModePill(
 @Composable
 fun TinyClearColorModeSettingItem(
     title: String,
-    dayColor: Int,
-    nightColor: Int,
+    dayColor: Int?,
+    nightColor: Int?,
     onClickColor: (isNight: Boolean) -> Unit,
     onClearColor: (isNight: Boolean) -> Unit,
     description: String? = null,
@@ -633,8 +633,8 @@ fun TinyClearColorModeSettingItem(
 
 @Composable
 private fun ClearColorModePill(
-    dayColor: Int,
-    nightColor: Int,
+    dayColor: Int?,
+    nightColor: Int?,
     isNightMode: Boolean,
     enabled: Boolean,
     onToggleMode: () -> Unit,
@@ -642,14 +642,15 @@ private fun ClearColorModePill(
     onReset: () -> Unit,
 ) {
     val currentColor = if (isNightMode) nightColor else dayColor
-    val hasCustomColor = currentColor != 0
+    // 刷新按钮：任一颜色有值时显示（刷新会清除另一方颜色）
+    val hasAnyColor = dayColor != null || nightColor != null
     val knobSize = 32.dp
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (hasCustomColor) {
+        if (hasAnyColor) {
             Box(
                 modifier = Modifier
                     .size(knobSize)
