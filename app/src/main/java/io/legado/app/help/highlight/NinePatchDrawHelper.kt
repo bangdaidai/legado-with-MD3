@@ -233,7 +233,16 @@ object NinePatchDrawHelper {
         for (i in 0 until 9) {
             val src = srcRects[i]
             if (src.width() <= 0 || src.height() <= 0) continue
-            canvas.drawBitmap(bitmap, src, dstRects[i], paint)
+            val dst = dstRects[i]
+            // 扩展目标矩形边界 0.5px，消除亚像素缝隙导致的切割线
+            canvas.drawBitmap(
+                bitmap, src,
+                android.graphics.RectF(
+                    dst.left - 0.5f, dst.top - 0.5f,
+                    dst.right + 0.5f, dst.bottom + 0.5f,
+                ),
+                paint,
+            )
         }
         canvas.restore()
     }
