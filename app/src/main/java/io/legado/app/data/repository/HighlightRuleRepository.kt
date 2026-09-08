@@ -195,9 +195,12 @@ class HighlightRuleRepository(
             enabled = runCatching { rule.enabled }.getOrDefault(true),
             position = runCatching { rule.position }.getOrDefault(0),
             textColor = runCatching { rule.textColor }.getOrNull(),
+            textColorNight = runCatching { rule.textColorNight }.getOrNull(),
             bgColor = runCatching { rule.bgColor }.getOrNull(),
+            bgColorNight = runCatching { rule.bgColorNight }.getOrNull(),
             underlineMode = runCatching { rule.underlineMode }.getOrDefault(0).coerceIn(0, 5),
             underlineColor = runCatching { rule.underlineColor }.getOrNull(),
+            underlineColorNight = runCatching { rule.underlineColorNight }.getOrNull(),
             underlineWidth = runCatching { rule.underlineWidth }.getOrDefault(1f)
                 .coerceIn(0.1f, 10f),
             underlineOffset = runCatching { rule.underlineOffset }.getOrDefault(2f)
