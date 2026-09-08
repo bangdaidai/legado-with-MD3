@@ -183,11 +183,11 @@ object NinePatchDrawHelper {
 
         val x0 = left
         val x1 = left + wL
-        val x2 = left + wL + wM
+        val x2 = right - wR
         val x3 = right
         val y0 = top
         val y1 = top + hT
-        val y2 = top + hT + hM
+        val y2 = bottom - hB
         val y3 = bottom
 
         val sxLi = wLsrc.toInt().coerceAtLeast(0)
