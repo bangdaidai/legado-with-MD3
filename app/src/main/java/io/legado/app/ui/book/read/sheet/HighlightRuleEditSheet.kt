@@ -1098,7 +1098,7 @@ fun HighlightRuleEditSheet(
     )
 }
 
-private const val PREVIEW_BASE_FONT_SIZE = 16
+private val previewBaseFontSize: Int get() = ReadBookConfig.textSize
 
 /** 排版背景图的加载地址；bgType 0 是纯色，1 是 assets 内置图，2 是外部图片 */
 private fun pageBgImagePathOf(bgType: Int, bgStr: String): String? = when (bgType) {
@@ -1205,7 +1205,7 @@ internal fun HighlightRulePreview(
                         fontStyle = if (isItalic) androidx.compose.ui.text.font.FontStyle.Italic else null,
                         // 字号偏移只作用于命中文字，不影响整行
                         fontSize = if (fontSizeOffset != 0) {
-                            (PREVIEW_BASE_FONT_SIZE + fontSizeOffset).sp
+                            (previewBaseFontSize + fontSizeOffset).sp
                         } else {
                             androidx.compose.ui.unit.TextUnit.Unspecified
                         },
@@ -1287,7 +1287,7 @@ internal fun HighlightRulePreview(
             val previewTextResult = textMeasurer.measure(
                 text = annotated,
                 style = TextStyle(
-                    fontSize = PREVIEW_BASE_FONT_SIZE.sp,
+                    fontSize = previewBaseFontSize.sp,
                     color = defaultTextColor,
                 ),
                 maxLines = 5,
@@ -1324,7 +1324,7 @@ internal fun HighlightRulePreview(
                 val textResult = textMeasurer.measure(
                     text = annotated,
                     style = TextStyle(
-                        fontSize = PREVIEW_BASE_FONT_SIZE.sp,
+                        fontSize = previewBaseFontSize.sp,
                         color = defaultTextColor,
                     ),
                     maxLines = 5,
