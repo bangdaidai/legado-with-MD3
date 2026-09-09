@@ -437,10 +437,10 @@ fun HighlightRuleEditSheet(
                     if (isNight) showTextColorNightPicker = true
                     else showTextColorPicker = true
                 },
-                onClearColor = { isNight ->
-                    // 刷新：清除另一方颜色，由当前颜色派生
-                    if (isNight) textColor = null    // 夜间模式刷新 → 清除日间色，由夜间色派生
-                    else textColorNight = null       // 日间模式刷新 → 清除夜间色，由日间色派生
+                onClearColor = { _ ->
+                    // 刷新：同时清除日间色和夜间色
+                    textColor = null
+                    textColorNight = null
                 },
             )
 
@@ -516,10 +516,10 @@ fun HighlightRuleEditSheet(
                             if (isNight) showUnderlineColorNightPicker = true
                             else showUnderlineColorPicker = true
                         },
-                        onClearColor = { isNight ->
-                            // 刷新：清除另一方颜色，由当前颜色派生
-                            if (isNight) underlineColor = null    // 夜间模式刷新 → 清除日间色
-                            else underlineColorNight = null       // 日间模式刷新 → 清除夜间色
+                        onClearColor = { _ ->
+                            // 刷新：同时清除日间色和夜间色
+                            underlineColor = null
+                            underlineColorNight = null
                         },
                     )
 
@@ -593,10 +593,10 @@ fun HighlightRuleEditSheet(
                     if (isNight) showBgColorNightPicker = true
                     else showBgColorPicker = true
                 },
-                onClearColor = { isNight ->
-                    // 刷新：清除另一方颜色，由当前颜色派生
-                    if (isNight) bgColor = null    // 夜间模式刷新 → 清除日间色
-                    else bgColorNight = null       // 日间模式刷新 → 清除夜间色
+                onClearColor = { _ ->
+                    // 刷新：同时清除日间色和夜间色
+                    bgColor = null
+                    bgColorNight = null
                 },
             )
 
@@ -963,6 +963,10 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showTextColorPicker = false },
         onColorSelected = { color ->
             textColor = color
+            // 自动派生夜间色（如果夜间色未被用户手动设置过）
+            if (textColorNight == null) {
+                textColorNight = ColorUtils.flipLightness(color)
+            }
             showTextColorPicker = false
         },
     )
@@ -972,6 +976,10 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showBgColorPicker = false },
         onColorSelected = { color ->
             bgColor = color
+            // 自动派生夜间色（如果夜间色未被用户手动设置过）
+            if (bgColorNight == null) {
+                bgColorNight = ColorUtils.flipLightness(color)
+            }
             showBgColorPicker = false
         },
     )
@@ -981,6 +989,10 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showUnderlineColorPicker = false },
         onColorSelected = { color ->
             underlineColor = color
+            // 自动派生夜间色（如果夜间色未被用户手动设置过）
+            if (underlineColorNight == null) {
+                underlineColorNight = ColorUtils.flipLightness(color)
+            }
             showUnderlineColorPicker = false
         },
     )
@@ -991,6 +1003,10 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showTextColorNightPicker = false },
         onColorSelected = { color ->
             textColorNight = color
+            // 自动派生日间色（如果日间色未被用户手动设置过）
+            if (textColor == null) {
+                textColor = ColorUtils.flipLightness(color)
+            }
             showTextColorNightPicker = false
         },
     )
@@ -1000,6 +1016,10 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showBgColorNightPicker = false },
         onColorSelected = { color ->
             bgColorNight = color
+            // 自动派生日间色（如果日间色未被用户手动设置过）
+            if (bgColor == null) {
+                bgColor = ColorUtils.flipLightness(color)
+            }
             showBgColorNightPicker = false
         },
     )
@@ -1009,6 +1029,10 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showUnderlineColorNightPicker = false },
         onColorSelected = { color ->
             underlineColorNight = color
+            // 自动派生日间色（如果日间色未被用户手动设置过）
+            if (underlineColor == null) {
+                underlineColor = ColorUtils.flipLightness(color)
+            }
             showUnderlineColorNightPicker = false
         },
     )
