@@ -183,13 +183,22 @@ data class TextColumn(
 
         private fun applyStyleTypeface(typeface: Typeface?, fontWeight: Int, isItalic: Boolean): Typeface? {
             if (fontWeight == 400 && !isItalic) return typeface
-            val style = when {
-                isItalic && fontWeight == 700 -> Typeface.BOLD_ITALIC
-                isItalic -> Typeface.ITALIC
-                fontWeight == 700 -> Typeface.BOLD
-                else -> Typeface.NORMAL // 300 (Light) falls back to NORMAL via Typeface.create
+            val base = typeface ?: Typeface.DEFAULT
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                // Android P+ 使用精确字重，与正文 ChapterProvider 实现一致
+                val actualWeight = if (fontWeight == 700) 900 else fontWeight
+                Typeface.create(base, actualWeight, isItalic)
+            } else {
+                // Android P 以下回退到传统样式
+                val style = when {
+                    isItalic && fontWeight == 700 -> Typeface.BOLD_ITALIC
+                    isItalic -> Typeface.ITALIC
+                    fontWeight == 700 -> Typeface.BOLD
+                    fontWeight < 400 -> Typeface.NORMAL // 细体回退到常规
+                    else -> Typeface.NORMAL
+                }
+                Typeface.create(base, style)
             }
-            return Typeface.create(typeface ?: Typeface.DEFAULT, style)
         }
 
         private fun loadTypeface(fontPath: String): Typeface? {
