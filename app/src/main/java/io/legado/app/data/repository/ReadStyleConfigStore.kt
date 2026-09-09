@@ -31,8 +31,6 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
         val configs = readStyleRepository.readConfigs()
         synchronized(lock) {
             configList.clear()
-            // 重置所有配置的颜色缓存，确保下次访问时重新解析
-            configs.forEach { it.invalidateColorCache() }
             configList.addAll(configs)
         }
     }
@@ -40,11 +38,7 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
     fun initShareConfig() {
         val fallback = synchronized(lock) { configList.getOrNull(5) } ?: ReadBookConfig.Config()
         val config = readStyleRepository.readShareConfig(fallback)
-        synchronized(lock) {
-            // 重置颜色缓存，确保下次访问时重新解析
-            config.invalidateColorCache()
-            shareConfigRef = config
-        }
+        synchronized(lock) { shareConfigRef = config }
     }
 
     /** 按下标取用。配置文件为空时先恢复默认，保证至少 1 份可用。 */
@@ -58,8 +52,6 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
     /** 整份替换（应用预设 / 导入）。共享排版开着时，共享那份跟着换。 */
     fun replaceConfigAt(index: Int, config: ReadBookConfig.Config, alsoShare: Boolean) {
         synchronized(lock) {
-            // 重置颜色缓存，确保下次访问时重新解析
-            config.invalidateColorCache()
             configList[index] = config
             if (alsoShare) {
                 shareConfigRef = config
@@ -80,13 +72,7 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
                 resetAllLocked()
             }
             val target = if (index in configList.indices) index else 0
-            val oldConfig = configList[target]
-            val newConfig = transform(oldConfig)
-            // 重置颜色缓存，确保下次访问时重新解析
-            if (oldConfig !== newConfig) {
-                newConfig.invalidateColorCache()
-            }
-            configList[target] = newConfig
+            configList[target] = transform(configList[target])
         }
     }
 
@@ -97,15 +83,7 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
         transform: (ReadBookConfig.Config) -> ReadBookConfig.Config,
     ) {
         if (useShare) {
-            synchronized(lock) {
-                val oldConfig = shareConfigRef
-                val newConfig = transform(oldConfig)
-                // 重置颜色缓存，确保下次访问时重新解析
-                if (oldConfig !== newConfig) {
-                    newConfig.invalidateColorCache()
-                }
-                shareConfigRef = newConfig
-            }
+            synchronized(lock) { shareConfigRef = transform(shareConfigRef) }
         } else {
             updateStyleAt(index, transform)
         }
@@ -119,15 +97,11 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
     fun shareConfigSnapshot(): ReadBookConfig.Config = synchronized(lock) { shareConfigRef }
 
     fun addConfig(config: ReadBookConfig.Config): Int = synchronized(lock) {
-        // 重置颜色缓存，确保下次访问时重新解析
-        config.invalidateColorCache()
         configList.add(config)
         configList.lastIndex
     }
 
     fun importOrReplaceConfig(config: ReadBookConfig.Config): String = synchronized(lock) {
-        // 重置颜色缓存，确保下次访问时重新解析
-        config.invalidateColorCache()
         val index = configList.indexOfFirst { it.name == config.name }
         if (index >= 0) {
             configList[index] = config
@@ -154,8 +128,6 @@ class ReadStyleConfigStore(private val readStyleRepository: ReadStyleRepository)
 
     private fun resetAllLocked() {
         configList.clear()
-        // 重置所有配置的颜色缓存，确保下次访问时重新解析
-        DefaultData.readConfigs.forEach { it.invalidateColorCache() }
         configList.addAll(DefaultData.readConfigs)
         save()
     }

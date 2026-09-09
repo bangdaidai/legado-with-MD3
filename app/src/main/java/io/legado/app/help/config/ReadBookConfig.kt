@@ -801,15 +801,6 @@ object ReadBookConfig {
             return runCatching { toColorInt() }.getOrDefault(fallback)
         }
 
-        /**
-         * 重置颜色缓存，确保下次访问颜色时重新解析字符串。
-         * 在日夜模式切换或配置更新后调用，避免使用过期的缓存值。
-         */
-        fun invalidateColorCache() {
-            initColorInt = false
-            initAccentColorInt = false
-        }
-
         private fun ensureColorInts() {
             if (initColorInt) {
                 return

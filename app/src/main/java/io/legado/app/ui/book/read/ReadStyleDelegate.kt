@@ -320,6 +320,9 @@ class ReadStyleDelegate(
         lastSwitchDayNightReminderTime = System.currentTimeMillis()
         resetDayNightReminderDismissal()
         val nextMode = if (host.isNightTheme) "1" else "2"
+        scope.launch {
+            appShellSettingsGateway.update { it.copy(themeMode = nextMode) }
+        }
         host.updateState {
             val newActiveReminder = if (it.activeReminder?.type is ReminderType.DayNightReminder) {
                 null
@@ -330,21 +333,16 @@ class ReadStyleDelegate(
         }
         // 排版值没变但解析后的生效值变了（颜色按模式取），经 gateway 统一重新发布，
         // 由 collectReadStyle 重建 styleConfig + sheetConfig。
-        // 必须在 appShellSettingsGateway.update 完成后执行，否则 curTextColor() 等
-        // 读到的仍是旧模式的值，导致排版设置页的颜色组件不刷新。
-        scope.launch {
-            appShellSettingsGateway.update { it.copy(themeMode = nextMode) }
-            readStyleGateway.notifyModeChanged()
-            reminderQueue.removeAll { it.type is ReminderType.DayNightReminder }
-            emitConfigUpdate(
-                ConfigUpdateAction.UpdateBackground,
-                ConfigUpdateAction.UpdateStyle,
-                ConfigUpdateAction.UpdateContent,
-                ConfigUpdateAction.InvalidateTextPage,
-                ConfigUpdateAction.SubmitRenderTask,
-                ConfigUpdateAction.UpdateSystemUi,
-            )
-        }
+        readStyleGateway.notifyModeChanged()
+        reminderQueue.removeAll { it.type is ReminderType.DayNightReminder }
+        emitConfigUpdate(
+            ConfigUpdateAction.UpdateBackground,
+            ConfigUpdateAction.UpdateStyle,
+            ConfigUpdateAction.UpdateContent,
+            ConfigUpdateAction.InvalidateTextPage,
+            ConfigUpdateAction.SubmitRenderTask,
+            ConfigUpdateAction.UpdateSystemUi,
+        )
     }
 
     fun resetDayNightReminderDismissal() {
