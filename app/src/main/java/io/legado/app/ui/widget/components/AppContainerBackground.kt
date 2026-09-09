@@ -8,7 +8,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -64,14 +67,33 @@ fun Modifier.appContainerBackground(
     val ninePatch by produceState<NinePatchDrawable?>(initialValue = null, path) {
         value = withContext(Dispatchers.IO) { loadNinePatch(path) }
     }
+    val resolvedAlpha = alpha.coerceIn(0f, 1f)
+
+    if (ninePatch != null) {
+        val patch = ninePatch!!
+        return this.drawWithContent {
+            drawIntoCanvas { canvas ->
+                val androidCanvas = canvas.nativeCanvas
+                val saveCount = androidCanvas.saveLayerAlpha(
+                    0f, 0f, size.width, size.height,
+                    (resolvedAlpha * 255).toInt()
+                )
+                patch.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+                patch.draw(androidCanvas)
+                androidCanvas.restoreToCount(saveCount)
+            }
+            drawContent()
+        }
+    }
+
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val requestWidth = with(density) { configuration.screenWidthDp.dp.roundToPx() }
     val requestHeight = with(density) { configuration.screenHeightDp.dp.roundToPx() }
-    val request = remember(context, path, ninePatch, requestWidth, requestHeight) {
+    val request = remember(context, path, requestWidth, requestHeight) {
         ImageRequest.Builder(context)
-            .data(ninePatch ?: path)
+            .data(path)
             .size(requestWidth.coerceAtLeast(1), requestHeight.coerceAtLeast(1))
             .build()
     }
@@ -83,8 +105,8 @@ fun Modifier.appContainerBackground(
         .paint(
             painter = painter,
             sizeToIntrinsics = false,
-            contentScale = if (ninePatch != null) ContentScale.FillBounds else contentScale,
-            alpha = alpha.coerceIn(0f, 1f),
+            contentScale = contentScale,
+            alpha = resolvedAlpha,
         )
 }
 
