@@ -959,7 +959,7 @@ fun HighlightRuleEditSheet(
     // Color pickers
     ColorPickerSheet(
         show = showTextColorPicker,
-        initialColor = textColor,
+        initialColor = textColor ?: 0,
         onDismissRequest = { showTextColorPicker = false },
         onColorSelected = { color ->
             textColor = color
@@ -968,7 +968,7 @@ fun HighlightRuleEditSheet(
     )
     ColorPickerSheet(
         show = showBgColorPicker,
-        initialColor = bgColor,
+        initialColor = bgColor ?: 0,
         onDismissRequest = { showBgColorPicker = false },
         onColorSelected = { color ->
             bgColor = color
@@ -977,7 +977,7 @@ fun HighlightRuleEditSheet(
     )
     ColorPickerSheet(
         show = showUnderlineColorPicker,
-        initialColor = underlineColor,
+        initialColor = underlineColor ?: 0,
         onDismissRequest = { showUnderlineColorPicker = false },
         onColorSelected = { color ->
             underlineColor = color
@@ -987,7 +987,7 @@ fun HighlightRuleEditSheet(
     // Night color pickers
     ColorPickerSheet(
         show = showTextColorNightPicker,
-        initialColor = textColorNight ?: ColorUtils.flipLightness(textColor),
+        initialColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) } ?: 0,
         onDismissRequest = { showTextColorNightPicker = false },
         onColorSelected = { color ->
             textColorNight = color
@@ -996,7 +996,7 @@ fun HighlightRuleEditSheet(
     )
     ColorPickerSheet(
         show = showBgColorNightPicker,
-        initialColor = bgColorNight ?: ColorUtils.flipLightness(bgColor),
+        initialColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) } ?: 0,
         onDismissRequest = { showBgColorNightPicker = false },
         onColorSelected = { color ->
             bgColorNight = color
@@ -1005,7 +1005,7 @@ fun HighlightRuleEditSheet(
     )
     ColorPickerSheet(
         show = showUnderlineColorNightPicker,
-        initialColor = underlineColorNight ?: ColorUtils.flipLightness(underlineColor),
+        initialColor = underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) } ?: 0,
         onDismissRequest = { showUnderlineColorNightPicker = false },
         onColorSelected = { color ->
             underlineColorNight = color
