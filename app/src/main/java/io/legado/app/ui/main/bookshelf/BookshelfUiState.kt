@@ -69,6 +69,8 @@ sealed interface BookshelfIntent {
     data class ToggleTagSelection(val tagId: Long) : BookshelfIntent
     /** 清空标签筛选 */
     data object ClearTagSelection : BookshelfIntent
+    /** 长按分组按钮，切换标签筛选行展开/收起并持久化 */
+    data object ToggleTagFilterExpanded : BookshelfIntent
 }
 
 sealed interface BookshelfEffect {

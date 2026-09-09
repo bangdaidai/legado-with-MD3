@@ -8,8 +8,8 @@ import org.junit.Test
 class BookshelfSettingsMappingTest {
 
     @Test
-    fun `Bookshelf 48 键写读映射逐字段对应`() {
-        assertEquals(48, BookshelfSettings().toPrefMap().size)
+    fun `Bookshelf 56 键写读映射逐字段对应`() {
+        assertEquals(56, BookshelfSettings().toPrefMap().size)
         bookshelfMappingSamples().forEach { expected ->
             assertEquals(expected.expectedPrefMap(), expected.toPrefMap())
             assertEquals(
@@ -117,12 +117,14 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfSortOrder to bookshelfSortOrder,
     PreferKey.showUnread to showUnread,
     PreferKey.showUnreadNew to showUnreadNew,
+    PreferKey.showReadingProgress to showReadingProgress,
     PreferKey.showTip to showTip,
     PreferKey.showBookCount to showBookCount,
     PreferKey.showLastUpdateTime to showLastUpdateTime,
     PreferKey.showBookIntro to showBookIntro,
     PreferKey.bookshelfShowIntro to bookshelfShowIntro,
     PreferKey.bookshelfShowTag to bookshelfShowTag,
+    PreferKey.bookshelfTagBorder to bookshelfTagBorder,
     PreferKey.bookshelfShowLatestChapter to bookshelfShowLatestChapter,
     PreferKey.bookshelfIntroMaxLines to bookshelfIntroMaxLines,
     PreferKey.showWaitUpCount to showWaitUpCount,
@@ -145,6 +147,8 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfLayoutCompact to bookshelfLayoutCompact,
     PreferKey.bookshelfListCoverCenter to bookshelfListCoverCenter,
     PreferKey.bookshelfListIntroBelowContent to bookshelfListIntroBelowContent,
+    PreferKey.bookshelfTicketStyle to bookshelfTicketStyle,
+    PreferKey.bookshelfTicketDotted to bookshelfTicketDotted,
     PreferKey.bookshelfShowDivider to bookshelfShowDivider,
     PreferKey.bookshelfTitleSmallFont to bookshelfTitleSmallFont,
     PreferKey.bookshelfTitleCenter to bookshelfTitleCenter,
@@ -157,6 +161,10 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfListCoverWidth to bookshelfListCoverWidth,
     PreferKey.bookshelfGridCoverWidth to bookshelfGridCoverWidth,
     PreferKey.bookshelfSearchActionDirectToSearch to bookshelfSearchActionDirectToSearch,
+    PreferKey.allowSameNameAuthorType to allowSameNameAuthorType,
     PreferKey.autoRefresh to autoRefreshBook,
     PreferKey.saveTabPosition to saveTabPosition,
+    PreferKey.showBookshelfTagFilter to showBookshelfTagFilter,
+    PreferKey.selectedBookshelfTagIds to selectedBookshelfTagIds.mapTo(mutableSetOf()) { it.toString() },
+    PreferKey.bookshelfTagFilterExpanded to bookshelfTagFilterExpanded,
 )

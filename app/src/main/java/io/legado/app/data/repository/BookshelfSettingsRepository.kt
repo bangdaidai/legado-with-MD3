@@ -90,6 +90,7 @@ internal fun Preferences.toBookshelfSettings() = BookshelfSettings(
     selectedBookshelfTagIds = compatDsStringSet(PreferKey.selectedBookshelfTagIds)
         ?.mapNotNullTo(mutableSetOf()) { it.toLongOrNull() }
         ?: emptySet(),
+    bookshelfTagFilterExpanded = compatDsBoolean(PreferKey.bookshelfTagFilterExpanded) ?: true,
 )
 
 internal fun BookshelfSettings.toPrefMap(): Map<String, Any?> = mapOf(
@@ -148,4 +149,5 @@ internal fun BookshelfSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.saveTabPosition to saveTabPosition,
     PreferKey.showBookshelfTagFilter to showBookshelfTagFilter,
     PreferKey.selectedBookshelfTagIds to selectedBookshelfTagIds.mapTo(mutableSetOf()) { it.toString() },
+    PreferKey.bookshelfTagFilterExpanded to bookshelfTagFilterExpanded,
 )

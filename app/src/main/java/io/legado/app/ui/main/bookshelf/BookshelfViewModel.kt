@@ -780,6 +780,7 @@ class BookshelfViewModel(
             BookshelfIntent.UploadResultConsumed -> pendingUploadUrlFlow.value = null
             is BookshelfIntent.ToggleTagSelection -> toggleTagSelection(intent.tagId)
             BookshelfIntent.ClearTagSelection -> clearTagSelection()
+            BookshelfIntent.ToggleTagFilterExpanded -> toggleTagFilterExpanded()
         }
     }
 
@@ -904,6 +905,14 @@ class BookshelfViewModel(
             }
         }
         clearSelection()
+    }
+
+    private fun toggleTagFilterExpanded() {
+        viewModelScope.launch {
+            bookshelfSettingsGateway.update {
+                it.copy(bookshelfTagFilterExpanded = !it.bookshelfTagFilterExpanded)
+            }
+        }
     }
 
     fun selectAllVisible() {
