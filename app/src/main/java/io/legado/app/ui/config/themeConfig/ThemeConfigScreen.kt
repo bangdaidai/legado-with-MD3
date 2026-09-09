@@ -624,7 +624,9 @@ fun ThemeConfigScreen(
                         }
                     )
                     AnimatedVisibility(visible = theme.overrideBaseCardBorder) {
-                        Column {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             SliderSettingItem(
                                 title = stringResource(R.string.border_width),
                                 description = "${theme.baseCardBorderWidth}dp",

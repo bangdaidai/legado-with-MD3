@@ -62,4 +62,6 @@ data class BookshelfSettings(
     val showBookshelfTagFilter: Boolean = false,
     /** 书架标签筛选中选中的标签 ID 集合 */
     val selectedBookshelfTagIds: Set<Long> = emptySet(),
+    /** 标签筛选行是否展开；长按分组按钮切换，进程重启后恢复 */
+    val bookshelfTagFilterExpanded: Boolean = true,
 )

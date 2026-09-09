@@ -84,7 +84,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -289,12 +288,7 @@ fun BookshelfScreen(
     val selectedBookUrls = uiState.selectedBookUrls
     val isInFolderRoot = uiState.isInFolderRoot
     val bookGroupStyle = uiState.bookGroupStyle
-    var tagFilterExpanded by rememberSaveable { mutableStateOf(true) }
-    LaunchedEffect(uiState.settings.showBookshelfTagFilter) {
-        if (!uiState.settings.showBookshelfTagFilter) {
-            tagFilterExpanded = false
-        }
-    }
+    val tagFilterExpanded = uiState.settings.bookshelfTagFilterExpanded
 
     val transitionState = remember { SeekableTransitionState(isInFolderRoot) }
     val folderTransition = rememberTransition(transitionState, label = "FolderTransition")
@@ -665,7 +659,7 @@ fun BookshelfScreen(
                                                 && uiState.bookshelfTags.isNotEmpty()
                                                 && !uiState.isSearch
                                             ) {
-                                                tagFilterExpanded = !tagFilterExpanded
+                                                onIntent(BookshelfIntent.ToggleTagFilterExpanded)
                                             }
                                         },
                                         style = ToggleStyle.Outlined,
