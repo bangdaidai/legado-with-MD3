@@ -1,7 +1,6 @@
 package io.legado.app.ui.widget.components
 
-import android.graphics.BitmapFactory
-import android.graphics.NinePatch
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.NinePatchDrawable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import java.io.File
+import java.io.FileInputStream
 
 enum class AppContainerBackgroundType {
     Large,
@@ -64,13 +64,13 @@ fun Modifier.appContainerBackground(
         AppContainerBackgroundType.Large -> theme.appColumnBackgroundOpacity / 100f
         AppContainerBackgroundType.Item -> theme.glassCardBackgroundOpacity / 100f
     }
-    val ninePatch by produceState<NinePatchDrawable?>(initialValue = null, path) {
+    val ninePatch by produceState<Drawable?>(initialValue = null, path) {
         value = withContext(Dispatchers.IO) { loadNinePatch(path) }
     }
     val resolvedAlpha = alpha.coerceIn(0f, 1f)
 
     if (ninePatch != null) {
-        val patch = ninePatch!!
+        val drawable = ninePatch!!
         return this.drawWithContent {
             drawIntoCanvas { canvas ->
                 val androidCanvas = canvas.nativeCanvas
@@ -78,8 +78,8 @@ fun Modifier.appContainerBackground(
                     0f, 0f, size.width, size.height,
                     (resolvedAlpha * 255).toInt()
                 )
-                patch.setBounds(0, 0, size.width.toInt(), size.height.toInt())
-                patch.draw(androidCanvas)
+                drawable.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+                drawable.draw(androidCanvas)
                 androidCanvas.restoreToCount(saveCount)
             }
             drawContent()
@@ -110,12 +110,11 @@ fun Modifier.appContainerBackground(
         )
 }
 
-private fun loadNinePatch(path: String): NinePatchDrawable? {
+private fun loadNinePatch(path: String): Drawable? {
     if (!path.endsWith(".9.png", ignoreCase = true)) return null
     return runCatching {
-        val bitmap = BitmapFactory.decodeFile(File(path).absolutePath) ?: return null
-        val chunk = bitmap.ninePatchChunk
-        if (!NinePatch.isNinePatchChunk(chunk)) return null
-        NinePatchDrawable(null, bitmap, chunk, null, null)
+        FileInputStream(File(path)).use { fis ->
+            NinePatchDrawable.createFromStream(fis, null)
+        }
     }.getOrNull()
 }
