@@ -57,6 +57,7 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fastSum
+import io.legado.app.utils.spToPx
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getTextWidthsCompat
@@ -1700,8 +1701,9 @@ class TextChapterLayout(
                 i++
             }
             val segEnd = i
-            val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic) ?: continue
-            measurePaint.typeface = typeface
+            val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic)
+            if (typeface == null && fontSizeOffset == 0) continue
+            measurePaint.typeface = typeface ?: textPaint.typeface
             if (fontSizeOffset != 0) {
                 measurePaint.textSize = textPaint.textSize + fontSizeOffset.toFloat().spToPx()
             }
