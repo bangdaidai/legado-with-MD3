@@ -1688,23 +1688,30 @@ class TextChapterLayout(
             val fontPath = style?.fontPath.orEmpty()
             val fontWeight = style?.fontWeight ?: 400
             val isItalic = style?.isItalic ?: false
-            // 只要字体/字重/斜体任一非默认就需要重新测量
-            if (fontPath.isEmpty() && fontWeight == 400 && !isItalic) { i++; continue }
-            // 找连续使用同一字体且同一字重/斜体的区间
+            val fontSizeOffset = style?.fontSizeOffset ?: 0
+            // 只要字体/字重/斜体/字号偏移任一非默认就需要重新测量
+            if (fontPath.isEmpty() && fontWeight == 400 && !isItalic && fontSizeOffset == 0) { i++; continue }
+            // 找连续使用同一字体且同一字重/斜体/字号偏移的区间
             val segStart = i
             i++
             while (i < text.length) {
                 val s = charStyles[i]
-                if (s?.fontPath.orEmpty() != fontPath || (s?.fontWeight ?: 400) != fontWeight || (s?.isItalic ?: false) != isItalic) break
+                if (s?.fontPath.orEmpty() != fontPath || (s?.fontWeight ?: 400) != fontWeight || (s?.isItalic ?: false) != isItalic || (s?.fontSizeOffset ?: 0) != fontSizeOffset) break
                 i++
             }
             val segEnd = i
             val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic) ?: continue
             measurePaint.typeface = typeface
+            if (fontSizeOffset != 0) {
+                measurePaint.textSize = textPaint.textSize + fontSizeOffset.toFloat().spToPx()
+            }
             val segLen = segEnd - segStart
             val segWidths = FloatArray(segLen)
             measurePaint.getTextWidths(text, segStart, segEnd, segWidths)
             segWidths.copyInto(widthsArray, segStart)
+            if (fontSizeOffset != 0) {
+                measurePaint.textSize = textPaint.textSize
+            }
         }
     }
 
