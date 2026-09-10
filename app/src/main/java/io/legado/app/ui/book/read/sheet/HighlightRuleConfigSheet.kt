@@ -71,7 +71,12 @@ fun HighlightRuleConfigSheet(
     var orderChanged by remember { mutableStateOf(false) }
     val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
         orderChanged = true
-        onIntent(ReadBookIntent.MoveHighlightRule(from.index, to.index))
+        // LazyColumn 第一项是"笔记默认样式"（不可拖拽），索引需要减 1 对齐 rules 列表
+        val adjustedFrom = from.index - 1
+        val adjustedTo = to.index - 1
+        if (adjustedFrom in state.rules.indices && adjustedTo in state.rules.indices) {
+            onIntent(ReadBookIntent.MoveHighlightRule(adjustedFrom, adjustedTo))
+        }
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 

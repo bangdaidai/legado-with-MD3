@@ -108,7 +108,12 @@ fun HighlightTagRuleScreen(
 
 
     val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
-        onIntent(HighlightTagRuleIntent.MoveItem(from.index, to.index))
+        // LazyColumn 第一项是"字数高亮"开关（不可拖拽），索引需要减 1 对齐 rules 列表
+        val adjustedFrom = from.index - 1
+        val adjustedTo = to.index - 1
+        if (adjustedFrom in rules.indices && adjustedTo in rules.indices) {
+            onIntent(HighlightTagRuleIntent.MoveItem(adjustedFrom, adjustedTo))
+        }
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 
