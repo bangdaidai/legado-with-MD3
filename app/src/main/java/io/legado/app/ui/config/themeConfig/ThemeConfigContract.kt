@@ -77,10 +77,10 @@ sealed interface ThemeConfigIntent {
     data class SelectNavigationIcon(val destination: String, val path: String) : ThemeConfigIntent
     data class RequestNavigationIcon(val destination: String) : ThemeConfigIntent
     data class SetNavIconSize(val value: Int) : ThemeConfigIntent
-    data class RequestBackgroundImage(val dark: Boolean) : ThemeConfigIntent
+    data class RequestBackgroundImage(val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigIntent
     data class SelectBackground(val uri: String, val dark: Boolean) : ThemeConfigIntent
     data class RemoveBackground(val dark: Boolean) : ThemeConfigIntent
-    data class RequestContainerBackgroundImage(val target: ContainerBackgroundTarget, val dark: Boolean) : ThemeConfigIntent
+    data class RequestContainerBackgroundImage(val target: ContainerBackgroundTarget, val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigIntent
     data class SelectContainerBackground(val target: ContainerBackgroundTarget, val dark: Boolean, val uri: String) : ThemeConfigIntent
     data class RemoveContainerBackground(
         val target: ContainerBackgroundTarget,
@@ -104,7 +104,7 @@ sealed interface ThemeConfigEffect {
     data class ChangeLauncherIcon(val value: String) : ThemeConfigEffect
     data object OpenFontFolder : ThemeConfigEffect
     data class OpenNavigationIcon(val destination: String) : ThemeConfigEffect
-    data class OpenBackgroundImage(val dark: Boolean) : ThemeConfigEffect
-    data class OpenContainerBackgroundImage(val target: ContainerBackgroundTarget, val dark: Boolean) : ThemeConfigEffect
+    data class OpenBackgroundImage(val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigEffect
+    data class OpenContainerBackgroundImage(val target: ContainerBackgroundTarget, val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigEffect
     data class ShowToast(val stringRes: Int) : ThemeConfigEffect
 }

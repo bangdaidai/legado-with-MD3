@@ -34,6 +34,7 @@ fun ThemeConfigRouteScreen(
     var pendingNavigationDestination by remember { mutableStateOf<String?>(null) }
     var pendingBackgroundDark by remember { mutableStateOf(false) }
     var pendingContainerBackground by remember { mutableStateOf<ContainerBackgroundTarget?>(null) }
+    var pendingUseFilePicker by remember { mutableStateOf(false) }
 
     val fontFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -88,6 +89,16 @@ fun ThemeConfigRouteScreen(
             } ?: viewModel.onIntent(ThemeConfigIntent.SelectBackground(uri.toString(), pendingBackgroundDark))
         }
     }
+    val backgroundImageFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            pendingContainerBackground?.let { target ->
+                viewModel.onIntent(ThemeConfigIntent.SelectContainerBackground(target, pendingBackgroundDark, uri.toString()))
+                pendingContainerBackground = null
+            } ?: viewModel.onIntent(ThemeConfigIntent.SelectBackground(uri.toString(), pendingBackgroundDark))
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.effects.collectLatest { effect ->
@@ -104,12 +115,22 @@ fun ThemeConfigRouteScreen(
                 is ThemeConfigEffect.OpenBackgroundImage -> {
                     pendingContainerBackground = null
                     pendingBackgroundDark = effect.dark
-                    backgroundImageLauncher.launch("image/*")
+                    pendingUseFilePicker = effect.useFilePicker
+                    if (effect.useFilePicker) {
+                        backgroundImageFileLauncher.launch(arrayOf("image/*"))
+                    } else {
+                        backgroundImageLauncher.launch("image/*")
+                    }
                 }
                 is ThemeConfigEffect.OpenContainerBackgroundImage -> {
                     pendingContainerBackground = effect.target
                     pendingBackgroundDark = effect.dark
-                    backgroundImageLauncher.launch("image/*")
+                    pendingUseFilePicker = effect.useFilePicker
+                    if (effect.useFilePicker) {
+                        backgroundImageFileLauncher.launch(arrayOf("image/*"))
+                    } else {
+                        backgroundImageLauncher.launch("image/*")
+                    }
                 }
                 is ThemeConfigEffect.ShowToast -> context.toastOnUi(effect.stringRes)
             }

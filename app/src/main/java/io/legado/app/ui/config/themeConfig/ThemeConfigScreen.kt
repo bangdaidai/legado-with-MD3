@@ -771,16 +771,17 @@ fun ThemeConfigScreen(
 
     val backgroundImageSheet = state.activeSheet as? ThemeConfigSheet.BackgroundImage
     val backgroundImageTarget = backgroundImageSheet?.target
-    fun requestImage(dark: Boolean) {
+    fun requestImage(dark: Boolean, useFilePicker: Boolean = false) {
         when (backgroundImageTarget) {
             BackgroundImageTarget.App ->
-                onIntent(ThemeConfigIntent.RequestBackgroundImage(dark))
+                onIntent(ThemeConfigIntent.RequestBackgroundImage(dark, useFilePicker))
 
             BackgroundImageTarget.LargeContainer ->
                 onIntent(
                     ThemeConfigIntent.RequestContainerBackgroundImage(
                         ContainerBackgroundTarget.LargeContainer,
-                        dark
+                        dark,
+                        useFilePicker,
                     )
                 )
 
@@ -788,7 +789,8 @@ fun ThemeConfigScreen(
                 onIntent(
                     ThemeConfigIntent.RequestContainerBackgroundImage(
                         ContainerBackgroundTarget.Item,
-                        dark
+                        dark,
+                        useFilePicker,
                     )
                 )
 
@@ -865,8 +867,8 @@ fun ThemeConfigScreen(
 
             null -> null
         },
-        onSelectLight = { requestImage(false) },
-        onSelectDark = { requestImage(true) },
+        onSelectLight = { useFilePicker -> requestImage(false, useFilePicker) },
+        onSelectDark = { useFilePicker -> requestImage(true, useFilePicker) },
         onRemoveLight = { removeImage(false) },
         onRemoveDark = { removeImage(true) },
     )

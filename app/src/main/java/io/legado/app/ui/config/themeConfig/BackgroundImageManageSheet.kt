@@ -12,8 +12,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -60,15 +65,24 @@ fun BackgroundImageManageSheet(
     lightPath: String?,
     darkPath: String?,
     extraOption: BackgroundImageExtraOption? = null,
-    onSelectLight: () -> Unit,
-    onSelectDark: () -> Unit,
+    onSelectLight: (useFilePicker: Boolean) -> Unit,
+    onSelectDark: (useFilePicker: Boolean) -> Unit,
     onRemoveLight: () -> Unit,
     onRemoveDark: () -> Unit,
 ) {
+    var useFilePicker by remember { mutableStateOf(false) }
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = title,
+        endAction = {
+            SmallTonalButton(
+                onClick = { useFilePicker = !useFilePicker },
+                icon = Icons.Default.FolderOpen,
+                selected = useFilePicker,
+                contentDescription = "文件选择器",
+            )
+        },
     ) {
         Column(
             modifier = Modifier
@@ -84,14 +98,14 @@ fun BackgroundImageManageSheet(
                     label = stringResource(R.string.day),
                     path = lightPath,
                     modifier = Modifier.weight(1f),
-                    onSelect = onSelectLight,
+                    onSelect = { onSelectLight(useFilePicker) },
                     onRemove = onRemoveLight,
                 )
                 BackgroundImageTile(
                     label = stringResource(R.string.night),
                     path = darkPath,
                     modifier = Modifier.weight(1f),
-                    onSelect = onSelectDark,
+                    onSelect = { onSelectDark(useFilePicker) },
                     onRemove = onRemoveDark,
                 )
             }
