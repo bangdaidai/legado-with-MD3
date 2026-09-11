@@ -111,7 +111,6 @@ fun Modifier.appContainerBackground(
 }
 
 private fun loadNinePatch(path: String): Drawable? {
-    if (!path.endsWith(".9.png", ignoreCase = true)) return null
     return runCatching {
         FileInputStream(File(path)).use { fis ->
             NinePatchDrawable.createFromStream(fis, null)

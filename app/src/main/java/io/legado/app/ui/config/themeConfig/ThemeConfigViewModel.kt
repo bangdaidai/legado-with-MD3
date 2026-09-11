@@ -487,18 +487,24 @@ class ThemeConfigViewModel(
     private fun copyBackgroundImage(uriString: String, folderName: String): String {
         val uri = Uri.parse(uriString)
         val fileDoc = FileDoc.fromUri(uri, false)
-        val suffix = if (fileDoc.name.endsWith(".9.png", ignoreCase = true)) {
-            "9.png"
-        } else {
-            fileDoc.name.substringAfterLast(".", "jpg")
+        val bytes = uri.inputStream(appCtx).getOrThrow().use { it.readBytes() }
+        val md5 = bytes.inputStream().use(MD5Utils::md5Encode)
+        // 通过 bitmap 数据检测九宫格，不依赖文件名后缀
+        val isNinePatch = runCatching {
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            bitmap?.ninePatchChunk
+                ?.let { android.graphics.NinePatch.isNinePatchChunk(it) }
+                == true
+        }.getOrDefault(false)
+        val suffix = when {
+            isNinePatch -> "9.png"
+            fileDoc.name.endsWith(".9.png", ignoreCase = true) -> "9.png"
+            else -> fileDoc.name.substringAfterLast(".", "jpg")
         }
-        val md5 = uri.inputStream(appCtx).getOrThrow().use(MD5Utils::md5Encode)
         val file = File(File(appCtx.externalFiles, folderName), "$md5.$suffix")
         if (!file.exists()) {
             FileUtils.createFileIfNotExist(file.absolutePath)
-            uri.inputStream(appCtx).getOrThrow().use { input ->
-                FileOutputStream(file).use(input::copyTo)
-            }
+            FileOutputStream(file).use { it.write(bytes) }
         }
         return file.absolutePath
     }
