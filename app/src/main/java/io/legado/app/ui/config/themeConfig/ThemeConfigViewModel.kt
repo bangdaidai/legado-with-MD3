@@ -492,9 +492,8 @@ class ThemeConfigViewModel(
         // 通过 bitmap 数据检测九宫格，不依赖文件名后缀
         val isNinePatch = runCatching {
             val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            bitmap?.ninePatchChunk
-                ?.let { android.graphics.NinePatch.isNinePatchChunk(it) }
-                == true
+            val chunk = bitmap?.ninePatchChunk
+            chunk != null && android.graphics.NinePatch.isNinePatchChunk(chunk)
         }.getOrDefault(false)
         val suffix = when {
             isNinePatch -> "9.png"
