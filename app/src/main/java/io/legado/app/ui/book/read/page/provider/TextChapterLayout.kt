@@ -1889,29 +1889,38 @@ class TextChapterLayout(
                     styles = it
                 }
                 for (i in start..end) {
-                    // 后来的规则覆盖先前的（与 Legado_Max 行为一致）
-                    // 但后规则没有设置bgImage时，保留前规则的bgImage，避免背景图被截断
                     val prev = activeStyles[i]
-                    activeStyles[i] = if (prev != null && activeStyle.bgImage.isEmpty() && prev.bgImage.isNotEmpty()) {
-                        activeStyle.copy(
-                            bgImage = prev.bgImage,
-                            bgImageFit = prev.bgImageFit,
-                            bgImageScale = prev.bgImageScale,
-                            npLeft = prev.npLeft,
-                            npRight = prev.npRight,
-                            npTop = prev.npTop,
-                            npBottom = prev.npBottom,
-                            bgPadStart = prev.bgPadStart,
-                            bgPadEnd = prev.bgPadEnd,
-                            bgPadTop = prev.bgPadTop,
-                            bgPadBottom = prev.bgPadBottom,
-                            bgMarginStart = prev.bgMarginStart,
-                            bgMarginEnd = prev.bgMarginEnd,
-                            bgMarginTop = prev.bgMarginTop,
-                            bgMarginBottom = prev.bgMarginBottom,
-                        )
+                    if (prev == null) {
+                        activeStyles[i] = activeStyle
                     } else {
-                        activeStyle
+                        // nullable 属性：后规则为 null 时保留先规则的值
+                        // 这样不同规则的不同属性可以叠加，而不是互相覆盖
+                        val mergeBgImage = activeStyle.bgImage.isEmpty() && prev.bgImage.isNotEmpty()
+                        val mergeFontPath = activeStyle.fontPath.isEmpty() && prev.fontPath.isNotEmpty()
+                        activeStyles[i] = activeStyle.copy(
+                            textColor = activeStyle.textColor ?: prev.textColor,
+                            textColorNight = activeStyle.textColorNight ?: prev.textColorNight,
+                            bgColor = activeStyle.bgColor ?: prev.bgColor,
+                            bgColorNight = activeStyle.bgColorNight ?: prev.bgColorNight,
+                            underlineColor = activeStyle.underlineColor ?: prev.underlineColor,
+                            underlineColorNight = activeStyle.underlineColorNight ?: prev.underlineColorNight,
+                            bgImage = if (mergeBgImage) prev.bgImage else activeStyle.bgImage,
+                            bgImageFit = if (mergeBgImage) prev.bgImageFit else activeStyle.bgImageFit,
+                            bgImageScale = if (mergeBgImage) prev.bgImageScale else activeStyle.bgImageScale,
+                            npLeft = if (mergeBgImage) prev.npLeft else activeStyle.npLeft,
+                            npRight = if (mergeBgImage) prev.npRight else activeStyle.npRight,
+                            npTop = if (mergeBgImage) prev.npTop else activeStyle.npTop,
+                            npBottom = if (mergeBgImage) prev.npBottom else activeStyle.npBottom,
+                            bgPadStart = if (mergeBgImage) prev.bgPadStart else activeStyle.bgPadStart,
+                            bgPadEnd = if (mergeBgImage) prev.bgPadEnd else activeStyle.bgPadEnd,
+                            bgPadTop = if (mergeBgImage) prev.bgPadTop else activeStyle.bgPadTop,
+                            bgPadBottom = if (mergeBgImage) prev.bgPadBottom else activeStyle.bgPadBottom,
+                            bgMarginStart = if (mergeBgImage) prev.bgMarginStart else activeStyle.bgMarginStart,
+                            bgMarginEnd = if (mergeBgImage) prev.bgMarginEnd else activeStyle.bgMarginEnd,
+                            bgMarginTop = if (mergeBgImage) prev.bgMarginTop else activeStyle.bgMarginTop,
+                            bgMarginBottom = if (mergeBgImage) prev.bgMarginBottom else activeStyle.bgMarginBottom,
+                            fontPath = if (mergeFontPath) prev.fontPath else activeStyle.fontPath,
+                        )
                     }
                 }
             }
