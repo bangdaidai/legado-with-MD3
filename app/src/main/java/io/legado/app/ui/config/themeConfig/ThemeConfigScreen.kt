@@ -331,6 +331,15 @@ fun ThemeConfigScreen(
                             )
                         }
                     )
+                    ClickableSettingItem(
+                        title = stringResource(R.string.theme_config_reset_defaults),
+                        description = stringResource(R.string.theme_config_reset_defaults_summary),
+                        onClick = {
+                            onIntent(
+                                ThemeConfigIntent.ShowDialog(ThemeConfigDialog.ResetDefaults)
+                            )
+                        }
+                    )
                 }
 
                 SplicedColumnGroup(title = stringResource(R.string.main_activity)) {
@@ -719,20 +728,6 @@ fun ThemeConfigScreen(
                             }
                         )
                     }
-                }
-            }
-
-            item {
-                SplicedColumnGroup {
-                    ClickableSettingItem(
-                        title = stringResource(R.string.theme_config_reset_defaults),
-                        description = stringResource(R.string.theme_config_reset_defaults_summary),
-                        onClick = {
-                            onIntent(
-                                ThemeConfigIntent.ShowDialog(ThemeConfigDialog.ResetDefaults)
-                            )
-                        }
-                    )
                 }
             }
 

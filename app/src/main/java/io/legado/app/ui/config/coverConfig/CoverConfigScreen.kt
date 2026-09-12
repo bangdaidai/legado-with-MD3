@@ -154,9 +154,7 @@ fun CoverConfigScreen(
                         onIntent(CoverConfigIntent.SetUseDefaultColor(value))
                     }
                 )
-            }
 
-            SplicedColumnGroup {
                 DropdownListSettingItem(
                     title = stringResource(R.string.cover_info_orientation),
                     selectedValue = settings.infoOrientation,
