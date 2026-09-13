@@ -65,6 +65,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,6 +79,7 @@ import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadStyleResolver
+import io.legado.app.ui.book.read.page.entities.column.TextColumn
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FontFolderState
@@ -96,6 +98,7 @@ import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.SelectImageContract
 import io.legado.app.utils.launch
+import io.legado.app.utils.textHeight
 import io.legado.app.ui.widget.components.text.AppText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1283,11 +1286,30 @@ internal fun HighlightRulePreview(
                 // 卡片内内容宽度 ≈ 屏幕宽 - sheet水平padding*2(16*2) - 卡片内padding*2(16*2)
                 (LocalConfiguration.current.screenWidthDp.dp - 64.dp).roundToPx()
             }
+            // 与正文 ChapterProvider.contentPaint 同口径计算行高（descent - ascent + leading）：
+            // Compose 默认行高会取 CJK 回退字体的高度量，比正文 Paint 的 fontMetrics 高，
+            // 九宫格这类以行高为锚的背景会因此预览偏大、正文偏小，必须强制对齐
+            val bodyLineHeight = remember(previewBaseFontSize) {
+                val textBoldWeight = when (val bold = ReadBookConfig.textBold) {
+                    1 -> 900
+                    2 -> 300
+                    0 -> 400
+                    in 100..900 -> bold
+                    else -> 400
+                }
+                android.text.TextPaint().apply {
+                    textSize = with(density) { previewBaseFontSize.sp.toPx() }
+                    letterSpacing = ReadBookConfig.letterSpacing
+                    typeface = TextColumn.getTypeface(ReadBookConfig.textFont, textBoldWeight)
+                }.textHeight
+            }
             val previewTextResult = textMeasurer.measure(
                 text = annotated,
                 style = TextStyle(
                     fontSize = previewBaseFontSize.sp,
                     color = defaultTextColor,
+                    lineHeight = with(density) { bodyLineHeight.toSp() },
+                    letterSpacing = ReadBookConfig.letterSpacing.em,
                 ),
                 maxLines = 5,
                 constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
@@ -1334,9 +1356,11 @@ internal fun HighlightRulePreview(
                         previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
                             if (bgImageFit == 3 && bgRawBitmap != null) {
                                 // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
-                                // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内
+                                // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内；
+                                // 渲染层矩形上下各内缩 1dp（TextLine.bgPaddingTop/Bottom），这里保持一致
+                                val nineSliceInset = minOf(1.dp.toPx(), (rectB - rectT) / 4f)
                                 io.legado.app.help.highlight.NinePatchDrawHelper.layout(
-                                    rectL, rectT, rectR, rectB,
+                                    rectL, rectT + nineSliceInset, rectR, rectB - nineSliceInset,
                                     bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
                                     npLeft, npRight, npTop, npBottom,
                                     bgPadStart * density, bgPadEnd * density,
