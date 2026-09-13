@@ -332,6 +332,7 @@ import io.legado.app.ui.main.explore.ExploreViewModel
 import io.legado.app.ui.main.home.HomeViewModel
 import io.legado.app.ui.main.homepage.HomepageViewModel
 import io.legado.app.ui.main.my.MyViewModel
+import io.legado.app.ui.main.my.authorManage.AuthorBioBatchGenerator
 import io.legado.app.ui.main.my.authorManage.AuthorDetailViewModel
 import io.legado.app.ui.main.my.authorManage.AuthorManageViewModel
 import io.legado.app.ui.main.rss.RssViewModel
@@ -600,6 +601,7 @@ val appModule = module {
     viewModelOf(::HighlightTagRuleViewModel)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)
+    singleOf(::AuthorBioBatchGenerator)
     viewModelOf(::AuthorManageViewModel)
     viewModel { (name: String) ->
         AuthorDetailViewModel(

@@ -58,6 +58,10 @@ class AiTextRepositoryImpl(
 
         var response: AiGenerateResponse? = null
         var error: String? = null
+        // 保留原始异常供 Result.failure 返回。之前这里统一包成 RuntimeException，
+        // AiHttpException(429) 等类型信息全部丢失，下游 aiFailureKind() 只能按 message
+        // 猜，限流/超时分类全部失效。
+        var failure: Throwable? = null
         var cancellation: CancellationException? = null
         try {
             response = withContext(Dispatchers.IO) {
@@ -67,11 +71,13 @@ class AiTextRepositoryImpl(
             }
         } catch (e: TimeoutCancellationException) {
             error = "请求超时"
+            failure = e
         } catch (e: CancellationException) {
             cancellation = e
             error = e.message?.takeIf { it.isNotBlank() } ?: "已取消"
         } catch (e: Throwable) {
             error = e.message ?: e.javaClass.simpleName
+            failure = e
         }
 
         withContext(NonCancellable) {
@@ -98,7 +104,7 @@ class AiTextRepositoryImpl(
 
         if (cancellation != null) throw cancellation
         return response?.let { Result.success(it) }
-            ?: Result.failure(RuntimeException(error ?: "AI 生成失败"))
+            ?: Result.failure(failure ?: RuntimeException(error ?: "AI 生成失败"))
     }
 
     override fun generateStream(
