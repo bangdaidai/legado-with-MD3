@@ -1253,10 +1253,13 @@ class TextChapterLayout(
                     inNineSlice = true
                 }
             }
+            // words 是按"渲染簇"切的（emoji 等代理对占 1 个 word、2 个字符），
+            // 样式数组按 UTF-16 字符下标建，必须用随 word 长度累加的字符偏移查样式
+            var charOffset = lineStart
             for (index in words.indices) {
                 val char = words[index]
                 val cw = textWidths[index]
-                val style = charStyles?.getOrNull(lineStart + index)
+                val style = charStyles?.getOrNull(charOffset)
                 val isNineSlice = isNineSliceStyle(style)
 
                 if (style != null && isNineSlice && !inNineSlice) {
@@ -1282,9 +1285,10 @@ class TextChapterLayout(
                 addCharToLine(
                     book, absStartX, textLine, char,
                     x, x1, index + 1 == words.size, srcList, clickList,
-                    charStyles, lineStart + index
+                    charStyles, charOffset
                 )
                 x = x1
+                charOffset += char.length
             }
         } else {
             val gapCount: Int = words.lastIndex
@@ -1306,10 +1310,12 @@ class TextChapterLayout(
                     inNineSlice = true
                 }
             }
+            // 同上：word 下标 ≠ 字符下标，样式查找必须用字符偏移
+            var charOffset = lineStart
             for (index in words.indices) {
                 val char = words[index]
                 val cw = textWidths[index]
-                val style = charStyles?.getOrNull(lineStart + index)
+                val style = charStyles?.getOrNull(charOffset)
                 val isNineSlice = isNineSliceStyle(style)
 
                 if (style != null && isNineSlice && !inNineSlice) {
@@ -1331,9 +1337,10 @@ class TextChapterLayout(
                 addCharToLine(
                     book, absStartX, textLine, char,
                     x, x1, index + 1 == words.size, srcList, clickList,
-                    charStyles, lineStart + index
+                    charStyles, charOffset
                 )
                 x = x1
+                charOffset += char.length
             }
         }
         // 行末处理：传递 margin-right 给 exceed
@@ -1453,10 +1460,12 @@ class TextChapterLayout(
             }
         }
 
+        // 同上：words 按渲染簇切分，word 下标 ≠ 字符下标，样式查找用字符偏移
+        var charOffset = lineStart
         for (index in words.indices) {
             val char = words[index]
             val cw = textWidths[index]
-            val style = charStyles?.getOrNull(lineStart + index)
+            val style = charStyles?.getOrNull(charOffset)
             val isNineSlice = isNineSliceStyle(style)
 
             if (style != null && isNineSlice && !inNineSlice) {
@@ -1479,9 +1488,10 @@ class TextChapterLayout(
             val x1 = x + cw
             addCharToLine(
                 book, absStartX, textLine, char, x, x1,
-                index + 1 == words.size, srcList, clickList, charStyles, lineStart + index,
+                index + 1 == words.size, srcList, clickList, charStyles, charOffset,
             )
             x = x1
+            charOffset += char.length
             if (hasIndent && index == indentLength - 1) {
                 textLine.indentWidth = x
             }
@@ -1758,6 +1768,8 @@ class TextChapterLayout(
             )
         }
         bodyStyles = applyUserMarkings(bodyStyles, bodyHighlightText.text, markings)
+        // 手动划线/荧光笔跨段时同样不应盖住段首空白，与正则高亮规则行为对齐
+        bodyStyles = clearLeadingWhitespaceStyles(bodyHighlightText.text, bodyStyles)
         if (titleStyles == null && bodyStyles == null) return null
         return HighlightStyleContext(titleStyles, bodyStyles, bodyHighlightText.contentOffsets)
     }
@@ -1923,6 +1935,33 @@ class TextChapterLayout(
                         )
                     }
                 }
+            }
+        }
+        return clearLeadingWhitespaceStyles(text, styles)
+    }
+
+    /**
+     * 抹掉每段行首空白字符上的高亮样式（正则规则与用户划线标记共用此清理），
+     * 与排版下划线跳过缩进的绘制行为保持一致：装饰从第一个非空白字符开始。
+     * 排版缩进前缀由 ContentProcessor 以真实字符拼入正文，因此段首
+     * 空白既可能是缩进前缀，也可能是源文本自带的缩进。
+     */
+    private fun clearLeadingWhitespaceStyles(
+        text: String,
+        styles: Array<CharStyle?>?,
+    ): Array<CharStyle?>? {
+        if (styles == null) return null
+        var atParagraphStart = true
+        for (i in text.indices) {
+            val c = text[i]
+            if (c == '\n') {
+                atParagraphStart = true
+                continue
+            }
+            if (atParagraphStart && (c == ' ' || c == '\t' || c == '　' || c.code == 0x2002 || c.code == 0x2003)) {
+                styles[i] = null
+            } else {
+                atParagraphStart = false
             }
         }
         return styles
