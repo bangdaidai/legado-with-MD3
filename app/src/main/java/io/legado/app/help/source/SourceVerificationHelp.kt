@@ -78,9 +78,9 @@ object SourceVerificationHelp {
         pendingVerification[sourceKey] = System.nanoTime()
         var verified = false
         try {
-            doVerification(source, url, title, useBrowser, refetchAfterSuccess, html).also {
-                verified = true
-            }
+            val result = doVerification(source, url, title, useBrowser, refetchAfterSuccess, html)
+            verified = true
+            return result
         } finally {
             pendingVerification.remove(sourceKey)
             // 只有验证真正成功才记录，失败（用户关闭验证页）不触发搜索侧重试
