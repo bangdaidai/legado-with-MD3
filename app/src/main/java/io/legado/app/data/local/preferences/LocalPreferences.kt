@@ -45,6 +45,7 @@ object LocalPreferencesKeys {
 
     // Change source options
     val CHANGE_SOURCE_CHECK_AUTHOR = booleanPreferencesKey("changeSourceCheckAuthor")
+    val CHANGE_SOURCE_SUPPRESS_POPUP = booleanPreferencesKey("changeSourceSuppressPopup")
     val CHANGE_SOURCE_LOAD_INFO = booleanPreferencesKey("changeSourceLoadInfo")
     val CHANGE_SOURCE_LOAD_TOC = booleanPreferencesKey("changeSourceLoadToc")
     val CHANGE_SOURCE_LOAD_WORD_COUNT = booleanPreferencesKey("changeSourceLoadWordCount")

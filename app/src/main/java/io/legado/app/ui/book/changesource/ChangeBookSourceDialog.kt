@@ -135,6 +135,8 @@ class ChangeBookSourceDialog() : BaseBottomSheetDialogFragment(R.layout.dialog_b
         binding.toolBar.setOnMenuItemClickListener(this)
         binding.toolBar.menu.findItem(R.id.menu_check_author)
             ?.isChecked = ChangeSourceConfig.checkAuthor
+        binding.toolBar.menu.findItem(R.id.menu_suppress_popup)
+            ?.isChecked = ChangeSourceConfig.suppressPopup
         binding.toolBar.menu.findItem(R.id.menu_load_info)
             ?.isChecked = ChangeSourceConfig.loadInfo
         binding.toolBar.menu.findItem(R.id.menu_load_toc)
@@ -321,6 +323,12 @@ class ChangeBookSourceDialog() : BaseBottomSheetDialogFragment(R.layout.dialog_b
                 updateSetting({ it.copy(checkAuthor = enabled) })
                 item.isChecked = enabled
                 lifecycleScope.launch { viewModel.refresh() }
+            }
+
+            R.id.menu_suppress_popup -> {
+                val enabled = !item.isChecked
+                updateSetting({ it.copy(suppressPopup = enabled) })
+                item.isChecked = enabled
             }
 
             R.id.menu_load_info -> {

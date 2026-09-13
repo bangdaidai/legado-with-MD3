@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.coroutineContext
 
@@ -195,30 +196,64 @@ class SearchBooksUseCase(
         page: Int,
         matchMode: MatchMode,
     ): SourceSearchResult {
+        val source = searchableSource.source
+        val supportsSearchPage = source.supportsSearchPage()
+        if (page > 1 && !supportsSearchPage) {
+            return SourceSearchResult.Found(emptyList())
+        }
         return try {
-            val source = searchableSource.source
-            val supportsSearchPage = source.supportsSearchPage()
-            if (page > 1 && !supportsSearchPage) {
-                return SourceSearchResult.Found(emptyList())
+            SourceSearchResult.Found(
+                searchSourceWithTimeout(source, keyword, page, matchMode),
+                supportsSearchPage,
+            )
+        } catch (exception: TimeoutCancellationException) {
+            // 超时与人机验证等待重叠：用户验证期间不计时，验证成功后自动重试一次，
+            // 避免用户花时间完成验证后该书源的结果被丢弃、搜索看起来"停了要重来"。
+            val sourceKey = source.getKey()
+            if (SourceVerificationHelp.isWaitingVerification(sourceKey)) {
+                SourceVerificationHelp.awaitVerificationIdle(sourceKey)
             }
-            val books = withTimeout(30000L) {
-                WebBook.searchBookAwait(
-                    source,
-                    keyword,
-                    page,
-                    filter = { name, author, kind ->
-                        matchMode == MatchMode.DEFAULT ||
-                            name.contains(keyword, ignoreCase = true) ||
-                            author.contains(keyword, ignoreCase = true) ||
-                            kind?.contains(keyword, ignoreCase = true) == true
-                    }
-                )
+            if (SourceVerificationHelp.wasVerifiedRecently(sourceKey)) {
+                try {
+                    SourceSearchResult.Found(
+                        searchSourceWithTimeout(source, keyword, page, matchMode),
+                        supportsSearchPage,
+                    )
+                } catch (retry: TimeoutCancellationException) {
+                    SourceSearchResult.Failed(retry)
+                }
+            } else {
+                SourceSearchResult.Failed(exception)
             }
-            SourceSearchResult.Found(books, supportsSearchPage)
         } catch (exception: Throwable) {
             coroutineContext.ensureActive()
-            if (exception is CancellationException) throw exception
+            // 单书源 30 秒超时只代表该源失败，不能当成整个搜索被取消向上抛，
+            // 否则 flatMapMerge 会终止全部书源的搜索。
+            if (exception is CancellationException && exception !is TimeoutCancellationException) {
+                throw exception
+            }
             SourceSearchResult.Failed(exception)
+        }
+    }
+
+    private suspend fun searchSourceWithTimeout(
+        source: BookSource,
+        keyword: String,
+        page: Int,
+        matchMode: MatchMode,
+    ): List<SearchBook> {
+        return withTimeout(30000L) {
+            WebBook.searchBookAwait(
+                source,
+                keyword,
+                page,
+                filter = { name, author, kind ->
+                    matchMode == MatchMode.DEFAULT ||
+                        name.contains(keyword, ignoreCase = true) ||
+                        author.contains(keyword, ignoreCase = true) ||
+                        kind?.contains(keyword, ignoreCase = true) == true
+                }
+            )
         }
     }
 

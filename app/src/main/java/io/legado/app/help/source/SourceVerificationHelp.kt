@@ -10,7 +10,9 @@ import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.isMainThread
 import io.legado.app.utils.startActivity
 import splitties.init.appCtx
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.LockSupport
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -26,6 +28,24 @@ object SourceVerificationHelp {
      */
     @Volatile
     var suppressPopup = false
+
+    /** 正在等待用户完成人机验证的书源：sourceKey -> 等待开始时间（纳秒） */
+    private val pendingVerification = ConcurrentHashMap<String, Long>()
+
+    /** sourceKey -> 最近一次人机验证成功的时间（纳秒），无条目表示从未成功 */
+    private val lastVerifiedOkAt = ConcurrentHashMap<String, Long>()
+
+    fun isWaitingVerification(sourceKey: String): Boolean =
+        pendingVerification.containsKey(sourceKey)
+
+    /** 该书源最近是否成功完成过一次人机验证（用于超时重试判定） */
+    fun wasVerifiedRecently(
+        sourceKey: String,
+        within: Duration = 10.minutes,
+    ): Boolean {
+        val at = lastVerifiedOkAt[sourceKey] ?: return false
+        return System.nanoTime() - at < within.inWholeNanoseconds
+    }
 
     private fun getVerificationResultKey(source: BaseSource) =
         getVerificationResultKey(source.getKey())
@@ -54,6 +74,30 @@ object SourceVerificationHelp {
             throw NoStackTraceException("搜索期间禁止弹窗，跳过验证")
         }
 
+        val sourceKey = source.getKey()
+        pendingVerification[sourceKey] = System.nanoTime()
+        var verified = false
+        try {
+            doVerification(source, url, title, useBrowser, refetchAfterSuccess, html).also {
+                verified = true
+            }
+        } finally {
+            pendingVerification.remove(sourceKey)
+            // 只有验证真正成功才记录，失败（用户关闭验证页）不触发搜索侧重试
+            if (verified) {
+                lastVerifiedOkAt[sourceKey] = System.nanoTime()
+            }
+        }
+    }
+
+    private fun doVerification(
+        source: BaseSource,
+        url: String,
+        title: String,
+        useBrowser: Boolean,
+        refetchAfterSuccess: Boolean,
+        html: String?,
+    ): Pair<String, String> {
         clearResult(source.getKey())
 
         if (!useBrowser) {
@@ -80,6 +124,13 @@ object SourceVerificationHelp {
         clearResult(source.getKey())
         if (result.second.isEmpty()) throw NoStackTraceException("验证结果为空")
         return result
+    }
+
+    /** 挂起等待该书源当前的人机验证流程结束（无论成功或失败） */
+    suspend fun awaitVerificationIdle(sourceKey: String) {
+        while (isWaitingVerification(sourceKey)) {
+            kotlinx.coroutines.delay(500)
+        }
     }
 
     /**

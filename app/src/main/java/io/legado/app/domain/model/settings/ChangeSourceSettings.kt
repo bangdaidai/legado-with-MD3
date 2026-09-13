@@ -5,6 +5,7 @@ import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 data class ChangeSourceSettings(
     val searchScope: String = "",
     val checkAuthor: Boolean = false,
+    val suppressPopup: Boolean = false,
     val loadInfo: Boolean = false,
     val loadToc: Boolean = false,
     val loadWordCount: Boolean = false,

@@ -10,6 +10,7 @@ object ChangeSourceConfig {
 
     val searchScope get() = settings.searchScope
     val checkAuthor get() = settings.checkAuthor
+    val suppressPopup get() = settings.suppressPopup
     val loadInfo get() = settings.loadInfo
     val loadToc get() = settings.loadToc
     val loadWordCount get() = settings.loadWordCount

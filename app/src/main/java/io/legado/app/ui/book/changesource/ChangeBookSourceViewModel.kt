@@ -22,6 +22,7 @@ import io.legado.app.help.book.primaryStr
 import io.legado.app.help.book.releaseHtmlData
 import io.legado.app.help.config.SourceConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.source.SourceVerificationHelp
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.config.otherConfig.OtherConfig
 import io.legado.app.utils.internString
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -235,39 +237,64 @@ open class ChangeBookSourceViewModel(
 
     private fun search() {
         task = viewModelScope.launch(searchPool!!) {
-            flow {
-                for (bs in bookSourceParts) {
-                    bs.getBookSource()?.let {
-                        emit(it)
+            // 搜索期间按菜单开关设置禁止验证弹窗，结束后恢复原值
+            val previousSuppress = SourceVerificationHelp.suppressPopup
+            SourceVerificationHelp.suppressPopup = ChangeSourceConfig.suppressPopup
+            try {
+                flow {
+                    for (bs in bookSourceParts) {
+                        bs.getBookSource()?.let {
+                            emit(it)
+                        }
                     }
-                }
-            }.onStart {
-                searchStateData.postValue(true)
-                _isSearching.value = true
-            }.mapParallel(threadCount) {
-                while (isPaused) {
-                    kotlinx.coroutines.delay(100)
-                }
-                try {
-                    withTimeout(60000L) {
-                        search(it)
+                }.onStart {
+                    searchStateData.postValue(true)
+                    _isSearching.value = true
+                }.mapParallel(threadCount) {
+                    while (isPaused) {
+                        kotlinx.coroutines.delay(100)
                     }
-                } catch (_: Throwable) {
-                    currentCoroutineContext().ensureActive()
-                }
-                it
-            }.onEachIndexed { index, value ->
-                _changeSourceProgress.update { _ ->
-                    index + 1 to value.bookSourceName
-                }
-            }.onCompletion {
-                ensureActive()
-                searchStateData.postValue(false)
-                _isSearching.value = false
-                searchFinishCallback?.invoke(searchBooks.isEmpty())
-            }.catch {
-                AppLog.put("换源搜索出错\n${it.localizedMessage}", it)
-            }.collect()
+                    try {
+                        searchSourceOnce(it)
+                    } catch (exception: TimeoutCancellationException) {
+                        // 超时与人机验证等待重叠：验证成功后自动补搜该源一次，
+                        // 避免用户花时间完成验证后该书源的结果被丢弃
+                        try {
+                            val sourceKey = it.getKey()
+                            if (SourceVerificationHelp.isWaitingVerification(sourceKey)) {
+                                SourceVerificationHelp.awaitVerificationIdle(sourceKey)
+                            }
+                            if (SourceVerificationHelp.wasVerifiedRecently(sourceKey)) {
+                                searchSourceOnce(it)
+                            }
+                        } catch (_: Throwable) {
+                            currentCoroutineContext().ensureActive()
+                        }
+                    } catch (_: Throwable) {
+                        currentCoroutineContext().ensureActive()
+                    }
+                    it
+                }.onEachIndexed { index, value ->
+                    _changeSourceProgress.update { _ ->
+                        index + 1 to value.bookSourceName
+                    }
+                }.onCompletion {
+                    ensureActive()
+                    searchStateData.postValue(false)
+                    _isSearching.value = false
+                    searchFinishCallback?.invoke(searchBooks.isEmpty())
+                }.catch {
+                    AppLog.put("换源搜索出错\n${it.localizedMessage}", it)
+                }.collect()
+            } finally {
+                SourceVerificationHelp.suppressPopup = previousSuppress
+            }
+        }
+    }
+
+    private suspend fun searchSourceOnce(source: BookSource) {
+        withTimeout(60000L) {
+            search(source)
         }
     }
 
