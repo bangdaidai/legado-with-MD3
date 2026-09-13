@@ -102,7 +102,7 @@ data class TextColumn(
         val hasFontSizeOffset = fontSizeOffset != 0
         val needRestoreSize = titleTextSize != null || hasFontSizeOffset
         val needRestoreColor = textPaint.color != drawColor
-        val customTypeface = getCustomTypeface()
+        val customTypeface = getCustomTypeface(textPaint.typeface)
         val needRestoreTypeface = customTypeface != null
         if (needRestoreSize) {
             val originalSize = textPaint.textSize
@@ -161,17 +161,22 @@ data class TextColumn(
         }
     }
 
-    private fun getCustomTypeface(): Typeface? {
-        return getTypeface(fontPath, fontWeight, isItalic)
+    private fun getCustomTypeface(base: Typeface?): Typeface? {
+        return getTypeface(fontPath, fontWeight, isItalic, base)
     }
 
     companion object {
         private val typefaceCache = HashMap<String, Typeface>()
         private val failedTypefaceLoads = ResourceLoadFailureCache<String>()
 
-        internal fun getTypeface(fontPath: String, fontWeight: Int = 400, isItalic: Boolean = false): Typeface? {
+        internal fun getTypeface(
+            fontPath: String,
+            fontWeight: Int = 400,
+            isItalic: Boolean = false,
+            fallback: Typeface? = null
+        ): Typeface? {
             if (fontPath.isEmpty()) {
-                return applyStyleTypeface(null, fontWeight, isItalic)
+                return applyStyleTypeface(null, fontWeight, isItalic, fallback)
             }
             typefaceCache[fontPath]?.let { return applyStyleTypeface(it, fontWeight, isItalic) }
             return failedTypefaceLoads.load(fontPath) {
@@ -181,9 +186,15 @@ data class TextColumn(
             }?.let { applyStyleTypeface(it, fontWeight, isItalic) }
         }
 
-        private fun applyStyleTypeface(typeface: Typeface?, fontWeight: Int, isItalic: Boolean): Typeface? {
+        private fun applyStyleTypeface(
+            typeface: Typeface?,
+            fontWeight: Int,
+            isItalic: Boolean,
+            fallback: Typeface? = null
+        ): Typeface? {
             if (fontWeight == 400 && !isItalic) return typeface
-            val base = typeface ?: Typeface.DEFAULT
+            // 规则未指定字体时，基于画笔当前的字体派生样式，避免回退到系统默认字体
+            val base = typeface ?: fallback ?: Typeface.DEFAULT
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 // Android P+ 使用精确字重，与正文 ChapterProvider 实现一致
                 val actualWeight = if (fontWeight == 700) 900 else fontWeight

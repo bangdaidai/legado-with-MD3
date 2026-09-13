@@ -1711,7 +1711,7 @@ class TextChapterLayout(
                 i++
             }
             val segEnd = i
-            val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic)
+            val typeface = TextColumn.getTypeface(fontPath, fontWeight, isItalic, textPaint.typeface)
             if (typeface == null && fontSizeOffset == 0) continue
             measurePaint.typeface = typeface ?: textPaint.typeface
             if (fontSizeOffset != 0) {
