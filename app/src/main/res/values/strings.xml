@@ -2580,6 +2580,7 @@
     <string name="author_bio_generate_done">Generated bios for %1$d authors, %2$d failed</string>
     <string name="author_bio_missing_none">No authors are missing a bio</string>
     <string name="author_bio_generate_cancelled">Generation cancelled</string>
+    <string name="author_bio_generate_rate_limited">Stopped after repeated rate limits (%1$d succeeded, %2$d failed). Try again later</string>
     <string name="author_management_empty">No books can be grouped by author yet</string>
     <string name="author_search_empty">No matching authors</string>
     <string name="author_detail_empty">No books for this author yet</string>

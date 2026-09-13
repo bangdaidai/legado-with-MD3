@@ -7,6 +7,8 @@ import io.legado.app.data.entities.AuthorProfile
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.AuthorProfileRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.domain.model.AiFailureKind
+import io.legado.app.domain.model.aiFailureKind
 import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
 import splitties.init.appCtx
 import io.legado.app.utils.cnCompare
@@ -16,6 +18,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,17 +105,48 @@ class AuthorManageViewModel(
             }
             var success = 0
             var failed = 0
+            var consecutiveRateLimit = 0
             targets.forEachIndexed { index, (name, titles) ->
                 _uiState.update {
                     it.copy(bioGeneration = BioGenerationUi(name, index, targets.size))
                 }
-                generateAuthorBioUseCase.execute(name, titles).fold(
+                val result = try {
+                    generateAuthorBioUseCase.execute(name, titles)
+                } catch (e: CancellationException) {
+                    // 只有批量任务自身被取消（用户点取消或页面销毁）才向上抛；
+                    // 生成链路里泄漏出来的取消按该作者失败处理，否则整个批量会静默中断，
+                    // 横幅永远停在"正在生成"且看不到结果统计。
+                    if (!currentCoroutineContext().isActive) throw e
+                    Result.failure(e)
+                }
+                result.fold(
                     onSuccess = { generated ->
                         authorProfileRepository.saveAiBio(name, generated.bio, generated.modelId)
                         success++
+                        consecutiveRateLimit = 0
                     },
-                    onFailure = { failed++ },
+                    onFailure = { error ->
+                        failed++
+                        if (error.aiFailureKind() == AiFailureKind.RATE_LIMIT) {
+                            consecutiveRateLimit++
+                        } else {
+                            consecutiveRateLimit = 0
+                        }
+                    },
                 )
+                // 连续多位作者都撞限流，说明是接口整体被限流而不是单次偶发，
+                // 继续逐个重试只会把同样的事重复几十遍，直接熔断中止。
+                if (consecutiveRateLimit >= MAX_CONSECUTIVE_RATE_LIMIT) {
+                    _uiState.update {
+                        it.copy(
+                            bioGeneration = null,
+                            bioGenerationMessage = appCtx.getString(
+                                R.string.author_bio_generate_rate_limited, success, failed,
+                            ),
+                        )
+                    }
+                    return@launch
+                }
             }
             _uiState.update {
                 it.copy(
@@ -166,5 +201,10 @@ class AuthorManageViewModel(
             AuthorSort.Name -> list.sortedWith(Comparator { a, b -> a.name.cnCompare(b.name) })
         }
         return sorted.toImmutableList()
+    }
+
+    private companion object {
+        /** 连续多少位作者因限流失败后中止整个批量。 */
+        const val MAX_CONSECUTIVE_RATE_LIMIT = 3
     }
 }
