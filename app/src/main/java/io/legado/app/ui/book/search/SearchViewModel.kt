@@ -990,10 +990,13 @@ class SearchViewModel(
                 )
                 val newBooks = result.books
                 _uiState.update {
+                    // 书源可能返回重复项或翻页结果重叠，按 bookUrl 去重，避免 LazyColumn key 冲突
+                    val seenUrls = it.expandedSourceBooks.mapTo(HashSet()) { book -> book.bookUrl }
+                    val appended = newBooks.filter { book -> seenUrls.add(book.bookUrl) }
                     it.copy(
-                        expandedSourceBooks = (it.expandedSourceBooks + newBooks).toImmutableList(),
+                        expandedSourceBooks = (it.expandedSourceBooks + appended).toImmutableList(),
                         expandedSourceLoading = false,
-                        expandedSourceEnd = newBooks.isEmpty(),
+                        expandedSourceEnd = appended.isEmpty(),
                         expandedSourcePage = page + 1,
                     )
                 }
