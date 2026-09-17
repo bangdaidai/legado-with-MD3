@@ -1043,14 +1043,8 @@ class BookInfoViewModel(
 
     fun addToBookshelf(book: Book, toc: List<BookChapter>, success: (() -> Unit)? = null) {
         execute {
-            book.removeType(BookType.notShelf)
-            if (book.order == 0) {
-                book.order = bookRepository.getMinOrder() - 1
-            }
-            bookRepository.insert(book)
+            addToBookshelfUseCase.execute(book)
             bookRepository.insertChapters(*toc.toTypedArray())
-            readingMemoryRepository.adoptOrphanMemory(book)
-            readingMemoryRepository.ensureMemory(book.bookUrl)
             book
         }.onSuccess {
             if (currentBook?.bookUrl == it.bookUrl) {

@@ -8,7 +8,6 @@ import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
-import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
@@ -42,6 +41,7 @@ import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
+import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.CleanSelectedTextUseCase
@@ -62,7 +62,6 @@ import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.isMobi
-import io.legado.app.help.book.removeType
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.source.getSourceType
@@ -155,6 +154,7 @@ class ReadBookViewModel(
     private val bookRepository: BookRepository,
     private val readingMemoryRepository: ReadingMemoryRepository,
     private val readRecordRepository: ReadRecordRepository,
+    private val addToBookshelfUseCase: AddToBookshelfUseCase,
     private val readerSession: ReaderSession,
 ) : BaseViewModel(application) {
     // --- MVI State ---
@@ -2310,11 +2310,8 @@ class ReadBookViewModel(
         val book = ReadBook.book ?: return removeCurrentNotShelfBookAndFinish()
         execute {
             val toc = bookRepository.getChapters(book.bookUrl)
-            book.removeType(BookType.notShelf)
-            if (book.order == 0) {
-                book.order = bookRepository.getMinOrder() - 1
-            }
-            bookRepository.insert(book)
+            // 与一键添加共用 AddToBookshelfUseCase：设置关闭同名书籍时替换在架那本，而不是再插一本
+            addToBookshelfUseCase.execute(book)
             if (toc.isNotEmpty()) {
                 bookRepository.insertChapters(*toc.toTypedArray())
             }
@@ -2748,11 +2745,7 @@ class ReadBookViewModel(
 
     fun addToBookshelf(book: Book, toc: List<BookChapter>, success: (() -> Unit)? = null) {
         execute {
-            book.removeType(BookType.notShelf)
-            if (book.order == 0) {
-                book.order = bookRepository.getMinOrder() - 1
-            }
-            bookRepository.insert(book)
+            addToBookshelfUseCase.execute(book)
             bookRepository.insertChapters(*toc.toTypedArray())
         }.onSuccess {
             success?.invoke()

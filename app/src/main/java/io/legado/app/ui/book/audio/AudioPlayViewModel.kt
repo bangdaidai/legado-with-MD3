@@ -19,6 +19,7 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
+import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.simulatedTotalChapterNum
@@ -48,6 +49,7 @@ class AudioPlayViewModel(
     private val otherSettingsGateway: OtherSettingsGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val readSettingsGateway: ReadSettingsGateway,
+    private val addToBookshelfUseCase: AddToBookshelfUseCase,
 ) : ViewModel() {
 
     private val activeSheet = MutableStateFlow<AudioPlaySheet?>(null)
@@ -212,11 +214,8 @@ class AudioPlayViewModel(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    book.removeType(BookType.notShelf)
-                    if (book.order == 0) {
-                        book.order = bookRepository.getMinOrder() - 1
-                    }
-                    bookRepository.insert(book)
+                    // 与一键添加共用 AddToBookshelfUseCase：设置关闭同名书籍时替换在架那本
+                    addToBookshelfUseCase.execute(book)
                     bookRepository.insertChapters(*toc.toTypedArray())
                 }
                 effect(AudioPlayEffect.ShowToast(application.getString(R.string.book_added_to_shelf)))

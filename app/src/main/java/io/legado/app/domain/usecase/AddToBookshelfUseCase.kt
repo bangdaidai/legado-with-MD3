@@ -1,6 +1,7 @@
 package io.legado.app.domain.usecase
 
 import io.legado.app.constant.BookType
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
@@ -17,16 +18,25 @@ class AddToBookshelfUseCase(
 ) {
 
     suspend fun execute(book: SearchBook) {
-        val b = book.toBook()
+        addToShelf(book.toBook())
+    }
+
+    /**
+     * 阅读器内确认加入书架：书与目录已在库，与一键添加共用同一套「同名同作者同形态替换」规则，
+     * 避免设置关闭时又插出一本同名书。
+     */
+    suspend fun execute(book: Book): Book = addToShelf(book)
+
+    private suspend fun addToShelf(b: Book): Book {
         b.removeType(BookType.notShelf)
-        // 不允许同名同作者同形态时，一键添加视为替换在架那本：不联网取目录，保持瞬时且不会失败
+        // 不允许同名同作者同形态时，加入书架视为替换在架那本：不联网取目录，保持瞬时且不会失败
         if (!bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType) {
             val conflict = bookRepository.getShelfBookConflict(b.name, b.author, b.formTypeMask)
             if (conflict != null && conflict.bookUrl != b.bookUrl) {
                 changeBookSourceUseCase.replaceShelfBookWithoutToc(conflict, b)
                 // 标签与记忆已在替换里改绑到新 bookUrl，这里只刷新汇总
                 readingMemoryRepository.ensureMemory(b.bookUrl)
-                return
+                return b
             }
         }
         if (b.order == 0) {
@@ -39,5 +49,6 @@ class AddToBookshelfUseCase(
         readingMemoryRepository.adoptOrphanMemory(b)
         // 加入书架即自动生成阅读记忆（数据汇总自 Book/ReadRecord/含笔记书签，幂等）
         readingMemoryRepository.ensureMemory(b.bookUrl)
+        return b
     }
 }

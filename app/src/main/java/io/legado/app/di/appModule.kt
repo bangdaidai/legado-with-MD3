@@ -741,6 +741,7 @@ val appModule = module {
             otherSettingsGateway = get(),
             readAloudSettingsGateway = get(),
             readSettingsGateway = get(),
+            addToBookshelfUseCase = get(),
         )
     }
     singleOf(::AudioPlayCoordinator)
@@ -864,6 +865,7 @@ val appModule = module {
             bookRepository = get(),
             readingMemoryRepository = get(),
             readRecordRepository = get(),
+            addToBookshelfUseCase = get(),
             readerSession = get(),
         )
     }
