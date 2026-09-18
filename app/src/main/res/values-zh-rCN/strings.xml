@@ -221,6 +221,12 @@
     <string name="expand">展开</string>
     <string name="collapse">折叠</string>
     <string name="select_color">选择颜色</string>
+    <string name="color_palette">色板</string>
+    <string name="color_mixer">调色</string>
+    <string name="color_hue">色相</string>
+    <string name="color_saturation">饱和度</string>
+    <string name="color_brightness">明度</string>
+    <string name="color_alpha">不透明度</string>
     <string name="color_value">色值</string>
     <string name="start">开始</string>
     <string name="stop">停止</string>

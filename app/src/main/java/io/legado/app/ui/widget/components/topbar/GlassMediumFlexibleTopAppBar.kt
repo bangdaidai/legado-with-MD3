@@ -59,15 +59,15 @@ fun GlassMediumFlexibleTopAppBar(
     val isMiuix = ThemeResolver.isMiuixEngine(composeEngine)
 
     val containerColor = if (!isMiuix) {
-        GlassDefaults.secondaryColorOr { GlassTopAppBarDefaults.containerColor() }
+        GlassTopAppBarDefaults.containerColor()
     } else {
-        GlassDefaults.secondaryColorOr { GlassTopAppBarDefaults.getMiuixAppBarColor() }
+        GlassTopAppBarDefaults.getMiuixAppBarColor()
     }
 
     val scrolledColor = if (!isMiuix) {
-        GlassDefaults.secondaryColorOr { GlassTopAppBarDefaults.scrolledContainerColor() }
+        GlassTopAppBarDefaults.scrolledContainerColor()
     } else {
-        GlassDefaults.secondaryColorOr { GlassTopAppBarDefaults.getMiuixAppBarColor() }
+        GlassTopAppBarDefaults.getMiuixAppBarColor()
     }
 
     val animatedColor = if (!isMiuix) {
@@ -189,10 +189,11 @@ object GlassTopAppBarDefaults {
     @Composable
     fun getMiuixAppBarColor(): Color {
         val baseColor = GlassDefaults.secondaryColorOr { MiuixTheme.colorScheme.surface }
-        return GlassDefaults.glassColor(
+        val glassColor = GlassDefaults.glassColor(
             noBlurColor = baseColor,
             blurAlpha = GlassDefaults.TransparentAlpha
         )
+        return applyTopBarOpacity(glassColor)
     }
 
     @OptIn(ExperimentalMaterial3Api::class)

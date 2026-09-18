@@ -126,16 +126,17 @@ fun FloatingBottomBar(
     } else {
         LegadoTheme.colorScheme.primary
     }
+    val opacity = (themeSettings.bottomBarOpacity.coerceIn(0, 100)) / 100f
     val containerColor = if (hasCustomColors && customColors.secondary != 0) {
         Color(customColors.secondary).copy(
-            alpha = if (isBlurEnabled) themeSettings.bottomBarBlurAlpha / 100f else 1f
+            alpha = ((if (isBlurEnabled) themeSettings.bottomBarBlurAlpha / 100f else 1f) * opacity).coerceIn(0f, 1f)
         )
     } else if (isBlurEnabled) {
         LegadoTheme.colorScheme.surfaceContainer.copy(
-            alpha = themeSettings.bottomBarBlurAlpha / 100f
+            alpha = (themeSettings.bottomBarBlurAlpha / 100f * opacity).coerceIn(0f, 1f)
         )
     } else {
-        LegadoTheme.colorScheme.surfaceContainer
+        LegadoTheme.colorScheme.surfaceContainer.copy(alpha = opacity)
     }
 
     val tabsBackdrop = rememberLayerBackdrop()
