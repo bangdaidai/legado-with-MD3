@@ -67,7 +67,7 @@ sealed interface ReadAloudPlayerIntent {
     data object NextChapter : ReadAloudPlayerIntent
     data object PreviousParagraph : ReadAloudPlayerIntent
     data object NextParagraph : ReadAloudPlayerIntent
-    data object OpenSettings : ReadAloudPlayerIntent
+    /** 切回阅读界面的经典朗读控制面板。 */
     data object SwitchToClassic : ReadAloudPlayerIntent
     data object CycleBgMode : ReadAloudPlayerIntent
     data class SelectChapter(val index: Int) : ReadAloudPlayerIntent
@@ -89,8 +89,8 @@ sealed interface ReadAloudPlayerIntent {
 }
 
 sealed interface ReadAloudPlayerEffect {
-    data object ReturnToReaderSettings : ReadAloudPlayerEffect
-    data object ReturnToClassic : ReadAloudPlayerEffect
+    /** 跳回阅读界面并自动打开经典朗读控制面板；bookUrl 为空表示没有可打开的书。 */
+    data class ReturnToClassic(val bookUrl: String) : ReadAloudPlayerEffect
 
     // 设置卡片「引擎与音色」页签里跳独立整页的目的；与阅读器宿主同一批入口。
     data class OpenEnginesAndVoices(val bookUrl: String?) : ReadAloudPlayerEffect

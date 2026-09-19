@@ -76,8 +76,8 @@ class ReadAloudPlayerViewModel(
             ReadAloudPlayerIntent.NextParagraph -> coordinator.nextParagraph()
             ReadAloudPlayerIntent.PreviousChapter -> coordinator.previousChapter()
             ReadAloudPlayerIntent.NextChapter -> coordinator.nextChapter()
-            ReadAloudPlayerIntent.SwitchToClassic -> effect(ReadAloudPlayerEffect.ReturnToClassic)
-            ReadAloudPlayerIntent.OpenSettings -> effect(ReadAloudPlayerEffect.ReturnToReaderSettings)
+            ReadAloudPlayerIntent.SwitchToClassic ->
+                effect(ReadAloudPlayerEffect.ReturnToClassic(uiState.value.bookUrl))
             ReadAloudPlayerIntent.CycleBgMode -> cycleBgMode()
             is ReadAloudPlayerIntent.SelectChapter -> coordinator.selectChapter(intent.index)
             is ReadAloudPlayerIntent.SetBgMode -> AppConfigStore.putInt(

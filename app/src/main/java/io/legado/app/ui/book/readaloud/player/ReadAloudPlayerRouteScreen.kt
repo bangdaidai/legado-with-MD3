@@ -35,6 +35,7 @@ fun ReadAloudPlayerRouteScreen(
     onOpenTtsCache: () -> Unit = {},
     onOpenBookVoiceCasting: (bookUrl: String) -> Unit = {},
     onOpenSpeechStoryboard: (bookUrl: String) -> Unit = {},
+    onOpenClassicReadAloud: (bookUrl: String) -> Unit = {},
 ) {
     val playerViewModel: ReadAloudPlayerViewModel = koinInject()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
@@ -67,9 +68,12 @@ fun ReadAloudPlayerRouteScreen(
 
                 ReadAloudPlayerEffect.OpenSystemTtsSettings -> IntentHelp.openTTSSetting()
 
-                // 切回阅读器/经典面板依赖阅读器宿主在栈上，跳页导航此前未接通，保持现状。
-                ReadAloudPlayerEffect.ReturnToClassic,
-                ReadAloudPlayerEffect.ReturnToReaderSettings -> Unit
+                is ReadAloudPlayerEffect.ReturnToClassic -> {
+                    if (effect.bookUrl.isNotBlank()) {
+                        onReadAloudConfigVisibleChange(false)
+                        onOpenClassicReadAloud(effect.bookUrl)
+                    }
+                }
             }
         }
     }

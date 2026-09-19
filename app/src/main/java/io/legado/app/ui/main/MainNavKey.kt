@@ -145,6 +145,8 @@ data class MainRouteReadBook(
     val chapterIndex: Int = -1,
     val chapterPos: Int = -1,
     val sharedCoverKey: String? = null,
+    /** 一次性参数：正文加载完成后自动打开经典朗读控制面板（听书页「切换到经典」） */
+    val openReadAloudMenu: Boolean = false,
 ) : MainRoute
 
 @Serializable

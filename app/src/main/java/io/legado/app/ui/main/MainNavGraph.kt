@@ -98,6 +98,7 @@ import io.legado.app.ui.book.manga.MangaReaderViewModel
 import io.legado.app.ui.book.read.ReadBookController
 import io.legado.app.ui.book.read.ReadBookInitRequest
 import io.legado.app.ui.book.read.ReadBookIntent
+import io.legado.app.ui.book.read.ReadBookMenuRoute
 import io.legado.app.ui.book.read.ReadBookRouteScreen
 import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.read.ReaderSessionViewModel
@@ -799,6 +800,8 @@ fun MainActivity.mainEntryProvider(
         val effectsReady = remember(readBookViewModel) { CompletableDeferred<Unit>() }
         val readerResumeState = remember(controller, lifecycleOwner) { booleanArrayOf(false) }
         val collectorReady = remember(readBookViewModel) { booleanArrayOf(false) }
+        // 一次性参数消费标记：contentLoadFinish 每次换章都会回调，不能反复弹经典面板
+        val readAloudMenuConsumed = remember(route) { booleanArrayOf(false) }
         // 是否跟随朗读位置：用户手动翻页/跳章后为 false，此时回阅读界面不回拉可见页。
         val readAloudSessionStore: ReadAloudSessionStore = org.koin.compose.koinInject()
         val readAloudFollow = remember(readBookViewModel) { booleanArrayOf(true) }
@@ -874,6 +877,12 @@ fun MainActivity.mainEntryProvider(
             controller.onStartContentLoadFinish = {
                 if (route.readAloud) {
                     io.legado.app.model.ReadBook.readAloud()
+                }
+                if (route.openReadAloudMenu && !readAloudMenuConsumed[0]) {
+                    readAloudMenuConsumed[0] = true
+                    readBookViewModel.onIntent(
+                        ReadBookIntent.OpenReadMenuRoute(ReadBookMenuRoute.ReadAloud)
+                    )
                 }
             }
 
@@ -1573,6 +1582,13 @@ fun MainActivity.mainEntryProvider(
             },
             onOpenSpeechStoryboard = { bookUrl ->
                 onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            },
+            // 「切换到经典」：朗读服务全程在跑，跳回阅读页后自动打开经典控制面板即可，
+            // 不需要再带 readAloud 重新起播。
+            onOpenClassicReadAloud = { bookUrl ->
+                onNavigateToRoute(
+                    MainRouteReadBook(bookUrl = bookUrl, openReadAloudMenu = true)
+                )
             },
         )
     }
