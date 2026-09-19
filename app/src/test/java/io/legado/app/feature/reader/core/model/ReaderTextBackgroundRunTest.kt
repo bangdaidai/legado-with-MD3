@@ -16,7 +16,7 @@ class ReaderTextBackgroundRunTest {
             text(10f, 0f, 25f, 20f, style),
         )
 
-        assertEquals(listOf(ReaderRect(0f, 0f, 25f, 20f)), page.textBackgroundRuns().map { it.bounds })
+        assertEquals(listOf(ReaderRect(0f, 0f, 25f, 20f)), page.textBackgroundRuns().map { it.contentBounds })
     }
 
     @Test
@@ -28,7 +28,7 @@ class ReaderTextBackgroundRunTest {
 
         assertEquals(
             listOf(ReaderRect(0f, 0f, 22f, 20f)),
-            page.textBackgroundRuns().map { it.bounds })
+            page.textBackgroundRuns().map { it.contentBounds })
     }
 
     @Test
@@ -66,46 +66,33 @@ class ReaderTextBackgroundRunTest {
     }
 
     @Test
-    fun `nine slice run includes the side pieces reserved by pagination`() {
-        val framed = image.copy(contentInsetLeftPx = 3f, contentInsetRightPx = 4f)
-        val framedStyle = style.copy(backgroundImage = framed)
+    fun `nine slice frame no longer expands the run beyond the text`() {
+        // 外扩框由绘制期 NinePatchDrawHelper 从文字矩形现算，run 只携带文字矩形。
+        val framedStyle = style.copy(
+            backgroundImage = image.copy(paddingLeftPx = 3f, paddingRightPx = 4f)
+        )
         val page = page(
             text(3f, 0f, 13f, 20f, framedStyle),
             text(13f, 0f, 23f, 20f, framedStyle),
         )
 
-        assertEquals(ReaderRect(0f, 0f, 27f, 20f), page.textBackgroundRuns().single().bounds)
+        assertEquals(ReaderRect(3f, 0f, 23f, 20f), page.textBackgroundRuns().single().contentBounds)
     }
 
     @Test
-    fun `bitmap width resolves legacy nine slice horizontal margins`() {
-        val resolved = image.copy(
-            ninePatchLeft = 0.2f,
-            ninePatchRight = 0.3f,
-            ninePatchTop = 0.1f,
-            ninePatchBottom = 0.2f,
-        ).withBitmapSize(50, 40)
+    fun `bitmap size records source content dimensions`() {
+        val resolved = image.withBitmapSize(50, 40)
 
-        assertEquals(10f, resolved.contentInsetLeftPx, 0f)
-        assertEquals(15f, resolved.contentInsetRightPx, 0.001f)
-        assertEquals(4f, resolved.contentInsetTopPx, 0f)
-        assertEquals(8f, resolved.contentInsetBottomPx, 0f)
+        assertEquals(50, resolved.sourceWidthPx)
+        assertEquals(40, resolved.sourceHeightPx)
     }
 
     @Test
-    fun `raw nine patch border is excluded when resolving fixed margins`() {
-        val resolved = image.copy(
-            source = "background.9.png",
-            ninePatchLeft = 0.2f,
-            ninePatchRight = 0.3f,
-            ninePatchTop = 0.1f,
-            ninePatchBottom = 0.2f,
-        ).withBitmapSize(52, 42)
+    fun `raw nine patch border is excluded from the content dimensions`() {
+        val resolved = image.copy(source = "background.9.png").withBitmapSize(52, 42)
 
-        assertEquals(10f, resolved.contentInsetLeftPx, 0f)
-        assertEquals(15f, resolved.contentInsetRightPx, 0.001f)
-        assertEquals(4f, resolved.contentInsetTopPx, 0f)
-        assertEquals(8f, resolved.contentInsetBottomPx, 0f)
+        assertEquals(50, resolved.sourceWidthPx)
+        assertEquals(40, resolved.sourceHeightPx)
     }
 
     private fun text(

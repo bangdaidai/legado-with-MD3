@@ -66,6 +66,8 @@ object NinePatchDrawHelper {
      * 4. 安全回退：若角块总宽超出文字宽度，统一缩小（保持宽高比）
      *
      * 绘制时把返回的角尺寸传给 [draw]，draw 内部只拉伸中段，四角保持缩放后尺寸不变。
+     * [borderPx] 为 .9.png 的 1px 引导边宽度（非 .9.png 传 0）：切分与缩放一律按
+     * 剥边后的内容尺寸计算，绘制时源矩形再加回边偏移。
      */
     fun layout(
         textLeft: Float,
@@ -82,22 +84,25 @@ object NinePatchDrawHelper {
         padEnd: Float = 0f,
         padTop: Float = 0f,
         padBottom: Float = 0f,
+        borderPx: Float = 0f,
     ): Box? {
         val textW = textRight - textLeft
         val textH = textBottom - textTop
         if (textW <= 0f || textH <= 0f) return null
-        if (bitmapWidth <= 0f || bitmapHeight <= 0f) return null
+        val contentW = bitmapWidth - borderPx * 2f
+        val contentH = bitmapHeight - borderPx * 2f
+        if (contentW <= 0f || contentH <= 0f) return null
 
         // 与切图预览一致：中带源高缩放后恰好容下"文字高 + 上下 padding"，
         // 整张图等比缩放（背景框高 = 图高 × scale），只有中段水平拉伸；
         // 两线过近时中带源高夹一个最小值，防止 scale 发散
-        val middleSrcH = (1f - npTop - npBottom).coerceIn(0.02f, 1f) * bitmapHeight
+        val middleSrcH = (1f - npTop - npBottom).coerceIn(0.02f, 1f) * contentH
         val middleDstH = (textH + padTop + padBottom).coerceAtLeast(1f)
         val scale = middleDstH / middleSrcH
-        var cornerL = npLeft * bitmapWidth * scale
-        var cornerR = npRight * bitmapWidth * scale
-        var cornerT = npTop * bitmapHeight * scale
-        var cornerB = npBottom * bitmapHeight * scale
+        var cornerL = npLeft * contentW * scale
+        var cornerR = npRight * contentW * scale
+        var cornerT = npTop * contentH * scale
+        var cornerB = npBottom * contentH * scale
 
         // 角块宽高比天然一致，不做额外处理
         // 九宫格中段负责水平拉伸，角块超出文字宽度时自然溢出由 clipRect 裁切
@@ -130,13 +135,14 @@ object NinePatchDrawHelper {
         cornerR: Float = 0f,
         cornerT: Float = 0f,
         cornerB: Float = 0f,
+        borderPx: Float = 0f,
     ) {
         val rectW = right - left
         val rectH = bottom - top
         if (rectW <= 0f || rectH <= 0f) return
 
-        val bw = bitmap.width.toFloat()
-        val bh = bitmap.height.toFloat()
+        val bw = bitmap.width - borderPx * 2f
+        val bh = bitmap.height - borderPx * 2f
         if (bw <= 0f || bh <= 0f) return
 
         // 归一化线位置，各自夹紧范围；并保证 leftX<=rightX、topY<=bottomY（允许重合）
@@ -196,16 +202,19 @@ object NinePatchDrawHelper {
         val sxBii = if (byN > tyN) sxB.roundToInt().coerceIn(0, bhI)
         else (tyN * bh + 1f).roundToInt().coerceIn(0, bhI)
 
+        // .9.png 引导边：内容坐标统一平移回含边位图
+        val bx = borderPx.roundToInt()
+        val by = borderPx.roundToInt()
         val srcRects = arrayOf(
-            Rect(0, 0, sxLi, sxTi),
-            Rect(sxLi, 0, sxRi, sxTi),
-            Rect(sxRi, 0, bwI, sxTi),
-            Rect(0, sxTi, sxLi, sxBii),
-            Rect(sxLi, sxTi, sxRi, sxBii),
-            Rect(sxRi, sxTi, bwI, sxBii),
-            Rect(0, sxBii, sxLi, bhI),
-            Rect(sxLi, sxBii, sxRi, bhI),
-            Rect(sxRi, sxBii, bwI, bhI)
+            Rect(bx, by, bx + sxLi, by + sxTi),
+            Rect(bx + sxLi, by, bx + sxRi, by + sxTi),
+            Rect(bx + sxRi, by, bx + bwI, by + sxTi),
+            Rect(bx, by + sxTi, bx + sxLi, by + sxBii),
+            Rect(bx + sxLi, by + sxTi, bx + sxRi, by + sxBii),
+            Rect(bx + sxRi, by + sxTi, bx + bwI, by + sxBii),
+            Rect(bx, by + sxBii, bx + sxLi, by + bhI),
+            Rect(bx + sxLi, by + sxBii, bx + sxRi, by + bhI),
+            Rect(bx + sxRi, by + sxBii, bx + bwI, by + bhI)
         )
 
         val dstRects = arrayOf(

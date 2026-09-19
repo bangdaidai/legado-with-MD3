@@ -6,45 +6,8 @@ import io.legado.app.feature.reader.core.model.ReaderPage
 import io.legado.app.feature.reader.core.model.ReaderPageDecoration
 import io.legado.app.feature.reader.core.model.ReaderPageId
 import io.legado.app.feature.reader.core.model.ReaderRect
-import io.legado.app.feature.reader.core.model.ReaderTextBackgroundImage
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
-import io.legado.app.feature.reader.core.model.anchoredToLineHeight
 import kotlin.math.max
-
-/**
- * 按这一行上下真正能借到的留白，把九宫格**四边等比**收紧。
- *
- * [topBudgetPx] / [bottomBudgetPx] 由调用方按邻行情况给出：邻行没有高亮框时是**整个行距**
- * （那段留白反正空着），邻行也有框时才各让**半个行距**——两个框正好相接、不重叠。
- *
- * 四边共用一个因子是这里的要点：旧 View `TextLine.drawNineSliceFrames` 只把
- * `overflowScale = halfGap / max(上厚, 下厚)` 用在上下边，左右边永远按原图厚度画，于是行距
- * 一紧就变成「左右两条宽竖边 + 上下两条发丝横线、四角被纵向抹平」的各向异性；而只做各向
- * 同性的等比例收紧时，框又会整体被钉死在半个行距上（默认行距 1.2、行高 60px 只有 6px）。
- * 放宽纵向预算 + 等比收紧，两个毛病一起解掉。
- *
- * 上下边为 0 的色带型图片纵向没有约束，左右按 图片 × scale 原样画；行距为 0 时上下边归零，
- * [ReaderNineSliceLayout] 会跳过高度为 0 的上下两行，自然回落成旧 View 的「中心 + 左右两条边」。
- */
-private fun ReaderTextBackgroundImage.fitIntoLineBudget(
-    topBudgetPx: Float,
-    bottomBudgetPx: Float,
-): ReaderTextBackgroundImage {
-    if (maxOf(contentInsetTopPx, contentInsetBottomPx) <= 0f) return this
-    val frameScale = minOf(
-        1f,
-        if (contentInsetTopPx > 0f) topBudgetPx / contentInsetTopPx else 1f,
-        if (contentInsetBottomPx > 0f) bottomBudgetPx / contentInsetBottomPx else 1f,
-    ).coerceIn(0f, 1f)
-    if (frameScale >= 1f) return this
-    if (frameScale <= 0f) return copy(contentInsetTopPx = 0f, contentInsetBottomPx = 0f)
-    return copy(
-        contentInsetLeftPx = contentInsetLeftPx * frameScale,
-        contentInsetRightPx = contentInsetRightPx * frameScale,
-        contentInsetTopPx = contentInsetTopPx * frameScale,
-        contentInsetBottomPx = contentInsetBottomPx * frameScale,
-    )
-}
 
 enum class ReaderTextAlignment { START, CENTER, END, JUSTIFY }
 enum class ReaderImageScaleMode { CONTAIN_NO_UPSCALE, FIT_WIDTH, FIT_PAGE }
@@ -271,13 +234,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
     private var columnRows = mutableListOf<ReaderLayoutRow>()
     private var centeredPageShiftPx = 0f
 
-    /**
-     * 上一个视觉行是否画了九宫格框。九宫格上下边要借用邻行的留白：邻行没有框时可以
-     * 用满整个行距，邻行也有框时只能各让半个。空行 / 图片 / 分隔线 / 分页本身就带空隙，
-     * 在这些位置复位。
-     */
-    private var previousLineHadFrame = false
-
     /** 1-block 前瞻：标题间距要读下一个 block，与旧 `blocks.getOrNull(index + 1)` 同义。 */
     private var pendingBlock: ReaderMeasuredBlock? = null
     private var pendingIndex = -1
@@ -368,10 +324,7 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
 
             is ReaderMeasuredBlock.BlankLine -> addBlankLine(block, index, hasFollowingBlock)
             is ReaderMeasuredBlock.Rule -> addRule(block)
-            ReaderMeasuredBlock.PageBreak -> {
-                previousLineHadFrame = false
-                advanceColumn()
-            }
+            ReaderMeasuredBlock.PageBreak -> advanceColumn()
         }
         if (isTitle) {
             y += if (nextIsTitle) {
@@ -475,8 +428,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
 
     private fun advanceColumn() {
         if (!columnHasContent()) return
-        // 换栏/换页后上一行已经不在同一屏，页边距本身就是空隙。
-        previousLineHadFrame = false
         if (columnIndex + 1 < config.columnCount) {
             justifyColumnBottom()
             columnIndex++
@@ -554,8 +505,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             columnRows += ReaderLayoutRow(rowElementStart, elements.size, y, y + lineHeight)
             y += lineHeight * (paragraph.lineSpacingMultiplier ?: config.lineSpacingMultiplier)
         }
-        // 这条路径（整段共用一个 style）不参与九宫格预算，但下一行仍要知道本段带框。
-        previousLineHadFrame = paragraph.style.backgroundImage?.fit == 3
         if (appendSeparator) {
             pageText.append('\n')
             y += if (paragraph.isTitle) config.titleParagraphSpacingPx ?: config.paragraphSpacingPx
@@ -564,7 +513,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
     }
 
     private fun addImage(image: ReaderMeasuredBlock.Image) {
-        previousLineHadFrame = false
         if (image.pageBreakBefore) advanceColumn()
         val sourceWidth = image.intrinsicWidthPx.coerceAtLeast(1f)
         val sourceHeight = image.intrinsicHeightPx.coerceAtLeast(1f)
@@ -636,51 +584,24 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                 is ReaderMeasuredInlineItem.Image -> "\uFFFC"
             }
         }
-        val lineGapPx =
-            (paragraph.lineSpacingMultiplier - 1f).coerceAtLeast(0f) * paragraph.lineHeightPx
-        val halfLineGapPx = lineGapPx / 2f
-
+        // 九宫格背景不再参与断行避让：绘制期用 NinePatchDrawHelper 从文字矩形现算外框，
+        // 允许自然越进页边距与行距（与规则编辑预览一致），文字位置不受背景影响。
+        // 只有 bgMargin*Start/End 保留旧 calcNineSliceMargin 语义：外边距影响排版、不随图画出。
         fun itemFrame(index: Int) =
             (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
                 ?.style?.backgroundImage?.takeIf { it.fit == 3 }
-                // 四角以本段行盒高为锚等比缩放，与编辑规则预览（NinePatchDrawHelper）同口径；
-                // 断行避让与绘制共用这一份 inset，保证"排版预留=绘制外框"不变量
-                ?.anchoredToLineHeight(paragraph.lineHeightPx)
 
-        fun lineHasFrame(from: Int, until: Int): Boolean =
-            (from until until.coerceAtMost(paragraph.items.size)).any { itemFrame(it) != null }
-
-        fun frameOf(index: Int, topBudgetPx: Float, bottomBudgetPx: Float) =
-            itemFrame(index)?.fitIntoLineBudget(topBudgetPx, bottomBudgetPx)
-
-        fun backgroundInsetBefore(
-            index: Int,
-            lineStart: Int,
-            topBudgetPx: Float,
-            bottomBudgetPx: Float,
-        ): Float {
-            val image = frameOf(index, topBudgetPx, bottomBudgetPx) ?: return 0f
-            return if (
-                index == lineStart ||
-                frameOf(index - 1, topBudgetPx, bottomBudgetPx) != image
-            ) {
-                // 段首额外让出 bgMarginStart（旧 calcNineSliceMargin：外边距只影响排版、不随图画出）
-                image.contentInsetLeftPx + image.marginStartPx.coerceAtLeast(0f)
+        fun backgroundMarginBefore(index: Int, lineStart: Int): Float {
+            val image = itemFrame(index) ?: return 0f
+            return if (index == lineStart || itemFrame(index - 1) != image) {
+                image.marginStartPx.coerceAtLeast(0f)
             } else 0f
         }
 
-        fun backgroundInsetAfter(
-            index: Int,
-            lineEnd: Int,
-            topBudgetPx: Float,
-            bottomBudgetPx: Float,
-        ): Float {
-            val image = frameOf(index, topBudgetPx, bottomBudgetPx) ?: return 0f
-            return if (
-                index + 1 == lineEnd ||
-                frameOf(index + 1, topBudgetPx, bottomBudgetPx) != image
-            ) {
-                image.contentInsetRightPx + image.marginEndPx.coerceAtLeast(0f)
+        fun backgroundMarginAfter(index: Int, lineEnd: Int): Float {
+            val image = itemFrame(index) ?: return 0f
+            return if (index + 1 == lineEnd || itemFrame(index + 1) != image) {
+                image.marginEndPx.coerceAtLeast(0f)
             } else 0f
         }
 
@@ -697,43 +618,22 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
         )
         val originalEnds = breaker.lineClusterStarts.drop(1)
         val starts = mutableListOf(0)
-        // 每行的纵向预算在断行阶段就定死，绘制阶段直接复用——排版预留与绘制的外框必须
-        // 用同一份 inset，否则框会压到相邻文字上或者留出多余的空档。
-        val lineTopBudgets = mutableListOf<Float>()
-        val lineBottomBudgets = mutableListOf<Float>()
-        // The View reader reserves the left/right pieces around every visual-line run.
-        // Refine the shaped line ends so those pieces cannot overlap adjacent text or
-        // escape the column. Keep a forbidden Chinese break intact even if its frame has
-        // to consume the remaining slack, matching the legacy punctuation priority.
+        // 段首/段尾的 bgMargin 仍可能把行挤短（保留旧引擎外边距语义），对照旧 View 逐行
+        // 收紧行尾。禁则断点不破坏，与旧标点优先级一致。
         while (starts.last() < paragraph.items.size) {
             val from = starts.last()
             val lineIndent =
                 if (starts.size == 1) indentWidth else paragraph.restLineIndentWidthPx
             val available = config.contentWidthPx - lineIndent
-            val topBudgetPx = if (previousLineHadFrame) halfLineGapPx else lineGapPx
-            // 下一行的范围在断行阶段还没最终定下来（本行可能被九宫格宽度挤短，把尾巴
-            // 让给下一行），用原始断行结果近似探测那一行有没有框。
             val breakerEnd = originalEnds.getOrElse(starts.lastIndex) { paragraph.items.size }
                 .coerceAtLeast(from + 1)
-            val nextBreakerEnd =
-                originalEnds.getOrElse(starts.lastIndex + 1) { paragraph.items.size }
-            val bottomBudgetPx =
-                if (lineHasFrame(breakerEnd, nextBreakerEnd)) halfLineGapPx else lineGapPx
-            // Advance the original visual-line cursor even when a frame forces the
-            // preceding row shorter. Reusing the first end after `from` would strand the
-            // remainder of that row as an unnecessary one-character line.
             var until = breakerEnd
 
             fun occupiedWidth(endExclusive: Int): Float =
                 (from until endExclusive).sumOf { index ->
                     (paragraph.items[index].widthPx +
-                            backgroundInsetBefore(index, from, topBudgetPx, bottomBudgetPx) +
-                            backgroundInsetAfter(
-                                index,
-                                endExclusive,
-                                topBudgetPx,
-                                bottomBudgetPx
-                            )).toDouble()
+                            backgroundMarginBefore(index, from) +
+                            backgroundMarginAfter(index, endExclusive)).toDouble()
                 }.toFloat() + letterSpacing * (endExclusive - from - 1).coerceAtLeast(0)
             while (until - from > 1 && occupiedWidth(until) > available) {
                 val candidate = until - 1
@@ -745,9 +645,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                 until = candidate
             }
             starts += until
-            lineTopBudgets += topBudgetPx
-            lineBottomBudgets += bottomBudgetPx
-            previousLineHadFrame = lineHasFrame(from, until)
         }
         for (lineIndex in 0 until starts.lastIndex) {
             val from = starts[lineIndex]
@@ -786,18 +683,16 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             if (y + actualLineHeight > config.contentBottomPx && columnHasContent()) advanceColumn()
             val indent = if (lineIndex == 0) indentWidth else paragraph.restLineIndentWidthPx
             val available = (config.contentWidthPx - indent).coerceAtLeast(0f)
-            val topBudgetPx = lineTopBudgets[lineIndex]
-            val bottomBudgetPx = lineBottomBudgets[lineIndex]
-            fun backgroundInsetBefore(index: Int) =
-                backgroundInsetBefore(from + index, from, topBudgetPx, bottomBudgetPx)
+            fun backgroundMarginBefore(index: Int) =
+                backgroundMarginBefore(from + index, from)
 
-            fun backgroundInsetAfter(index: Int) =
-                backgroundInsetAfter(from + index, until, topBudgetPx, bottomBudgetPx)
+            fun backgroundMarginAfter(index: Int) =
+                backgroundMarginAfter(from + index, until)
 
             val naturalWidth = lineItems.sumOf { it.widthPx.toDouble() }.toFloat() +
                     letterSpacing * (lineItems.size - 1).coerceAtLeast(0) +
                     lineItems.indices.sumOf {
-                        (backgroundInsetBefore(it) + backgroundInsetAfter(it)).toDouble()
+                        (backgroundMarginBefore(it) + backgroundMarginAfter(it)).toDouble()
                     }.toFloat()
             val indentItems = (paragraph.leadingIndentItems - from).coerceIn(0, lineItems.size)
             val stretchableGaps = (lineItems.size - indentItems - 1).coerceAtLeast(0)
@@ -855,8 +750,8 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             // The View reader started a non-extended underline after those glyphs.
             val underlineElementStart = elements.size + indentItems
             lineItems.forEachIndexed { itemIndex, item ->
-                x += backgroundInsetBefore(itemIndex)
-                val itemBackground = frameOf(from + itemIndex, topBudgetPx, bottomBudgetPx)
+                x += backgroundMarginBefore(itemIndex)
+                val itemBackground = itemFrame(from + itemIndex)
                 when (item) {
                     is ReaderMeasuredInlineItem.Text -> {
                         val expandedWordSpace = if (item.value == " ") wordSpaceExtra else 0f
@@ -879,15 +774,7 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                             // 富文本逐项样式：与前一项同背景图才视作同一 run 的延续
                             continuesBackgroundRun = itemBackground != null &&
                                     itemIndex > 0 &&
-                                    frameOf(
-                                        from + itemIndex - 1,
-                                        topBudgetPx,
-                                        bottomBudgetPx
-                                    ) ==
-                                    itemBackground,
-                            backgroundFrameTopPx = itemBackground?.contentInsetTopPx ?: 0f,
-                            backgroundFrameBottomPx = itemBackground?.contentInsetBottomPx
-                                ?: 0f,
+                                    itemFrame(from + itemIndex - 1) == itemBackground,
                         )
                     }
 
@@ -907,14 +794,12 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                     }
                 }
                 pageText.append(if (item is ReaderMeasuredInlineItem.Text) item.value else '\uFFFC')
-                x += item.widthPx + backgroundInsetAfter(itemIndex) + letterSpacing +
+                x += item.widthPx + backgroundMarginAfter(itemIndex) + letterSpacing +
                         if (item is ReaderMeasuredInlineItem.Text && item.value == " ") wordSpaceExtra else 0f
                 x += if (itemIndex >= indentItems) justifyGap else 0f
             }
             addPageUnderline(underlineElementStart, y + actualLineHeight)
             columnRows += ReaderLayoutRow(rowElementStart, elements.size, y, y + actualLineHeight)
-            // 按实际落笔顺序（含换页）记录，供下一段第一行判断上方有没有框。
-            previousLineHadFrame = lineHasFrame(from, until)
             // 旧 `setTypeHtml` 的行推进：行盒含 spacingAdd，且行距乘数被算两次；
             // 纯文本段落只算一次（`setTypeText`）。HTML 块由测量期标记。
             val htmlSpacingAddPx =
@@ -935,7 +820,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
     }
 
     private fun addRule(rule: ReaderMeasuredBlock.Rule) {
-        previousLineHadFrame = false
         val requiredHeight = rule.verticalPaddingPx * 2f + rule.widthPx
         if (y + requiredHeight > config.contentBottomPx && columnHasContent()) advanceColumn()
         val lineY = y + rule.verticalPaddingPx
@@ -961,7 +845,6 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
         appendSeparator: Boolean,
     ) {
         val height = blank.lineHeightPx
-        previousLineHadFrame = false
         if (y + height > config.contentBottomPx && columnHasContent()) advanceColumn()
         val rowElementStart = elements.size
         elements += ReaderElement.Spacer(

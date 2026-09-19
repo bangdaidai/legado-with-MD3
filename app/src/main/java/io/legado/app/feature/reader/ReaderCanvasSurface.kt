@@ -98,13 +98,11 @@ import io.legado.app.feature.reader.core.gesture.ReaderTapActionGrid
 import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderEmphasisUnderlineRun
 import io.legado.app.feature.reader.core.model.ReaderImageDrawLayout
-import io.legado.app.feature.reader.core.model.ReaderNineSliceLayout
 import io.legado.app.feature.reader.core.model.ReaderPage
 import io.legado.app.feature.reader.core.model.ReaderPageId
 import io.legado.app.feature.reader.core.model.ReaderPageTip
 import io.legado.app.feature.reader.core.model.ReaderPageWindow
 import io.legado.app.feature.reader.core.model.ReaderRect
-import io.legado.app.feature.reader.core.model.ReaderTextBackgroundImage
 import io.legado.app.feature.reader.core.model.ReaderTipAlignment
 import io.legado.app.feature.reader.core.model.ReaderTipRow
 import io.legado.app.feature.reader.core.model.ReaderTipRowLayout
@@ -1826,7 +1824,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrollPageConte
     data.textBackgroundRevision.value
     data.textBackgrounds.forEach { run ->
         ReaderTextBackgroundLoader.cached(run.image.source)?.let { bitmap ->
-            drawTextBackground(native, bitmap, run, data.textBackgroundPaint)
+            drawTextBackground(native, bitmap, run, data.textBackgroundPaint, 1.dp.toPx())
         }
     }
     val previewing = selectionPreviewStyle != null && activeSelection != null
@@ -2273,7 +2271,7 @@ private fun ReaderPageCanvas(
         native.clipRect(0f, 0f, page.widthPx.toFloat(), page.heightPx.toFloat())
         textBackgrounds.forEach { run ->
             textBackgroundBitmaps[run.image.source]?.let { bitmap ->
-                drawTextBackground(native, bitmap, run, textBackgroundPaint)
+                drawTextBackground(native, bitmap, run, textBackgroundPaint, 1.dp.toPx())
             }
         }
         native.restoreToCount(backgroundClipSave)
@@ -2594,6 +2592,7 @@ private fun drawTextBackground(
     bitmap: Bitmap,
     run: io.legado.app.feature.reader.core.model.ReaderTextBackgroundRun,
     paint: Paint,
+    nineSliceTextInsetPx: Float,
 ) {
     val bounds = run.contentBounds
     val image = run.image
@@ -2633,14 +2632,41 @@ private fun drawTextBackground(
             canvas.drawBitmap(bitmap, null, rect, paint)
             canvas.restore()
         }
-        3 -> drawNineSliceBackground(
-            canvas = canvas,
-            bitmap = bitmap,
-            content = destination,
-            frame = android.graphics.RectF(run.bounds.left, run.bounds.top, run.bounds.right, run.bounds.bottom),
-            image = image,
-            paint = paint,
-        )
+        3 -> {
+            // 与 main 旧引擎 TextLine.drawBgImageSegment 同口径：文字矩形取整行盒、
+            // 上下各内缩固定 1dp，再交给与预览同一套的 NinePatchDrawHelper.layout/draw
+            // 等比放大整图；外框自由越进页边距与行距，不再压扁角块。
+            val textInset = nineSliceTextInsetPx
+            io.legado.app.help.highlight.NinePatchDrawHelper.layout(
+                textLeft = bounds.left,
+                textTop = bounds.top + textInset,
+                textRight = bounds.right,
+                textBottom = bounds.bottom - textInset,
+                bitmapWidth = bitmap.width.toFloat(),
+                bitmapHeight = bitmap.height.toFloat(),
+                npLeft = image.ninePatchLeft.coerceIn(0f, 1f),
+                npRight = image.ninePatchRight.coerceIn(0f, 1f),
+                npTop = image.ninePatchTop.coerceIn(0f, 1f),
+                npBottom = image.ninePatchBottom.coerceIn(0f, 1f),
+                padStart = image.paddingLeftPx.coerceAtLeast(0f),
+                padEnd = image.paddingRightPx.coerceAtLeast(0f),
+                padTop = image.paddingTopPx.coerceAtLeast(0f),
+                padBottom = image.paddingBottomPx.coerceAtLeast(0f),
+                borderPx = if (image.hasNinePatchBorder) 1f else 0f,
+            )?.let { box ->
+                io.legado.app.help.highlight.NinePatchDrawHelper.draw(
+                    canvas,
+                    bitmap,
+                    box.left, box.top, box.right, box.bottom,
+                    paint,
+                    leftX = image.ninePatchLeft, rightX = 1f - image.ninePatchRight,
+                    topY = image.ninePatchTop, bottomY = 1f - image.ninePatchBottom,
+                    cornerL = box.cornerL, cornerR = box.cornerR,
+                    cornerT = box.cornerT, cornerB = box.cornerB,
+                    borderPx = if (image.hasNinePatchBorder) 1f else 0f,
+                )
+            }
+        }
         else -> {
             val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
             val matrix = android.graphics.Matrix().apply {
@@ -2651,37 +2677,6 @@ private fun drawTextBackground(
             paint.shader = shader
             canvas.drawRect(destination, paint)
         }
-    }
-}
-
-private fun drawNineSliceBackground(
-    canvas: android.graphics.Canvas,
-    bitmap: Bitmap,
-    content: android.graphics.RectF,
-    frame: android.graphics.RectF,
-    image: ReaderTextBackgroundImage,
-    paint: Paint,
-) {
-    ReaderNineSliceLayout.cells(
-        bitmap.width,
-        bitmap.height,
-        ReaderRect(content.left, content.top, content.right, content.bottom),
-        ReaderRect(frame.left, frame.top, frame.right, frame.bottom),
-        image,
-    ).forEach { cell ->
-        canvas.drawBitmap(
-            bitmap,
-            android.graphics.Rect(cell.source.left, cell.source.top, cell.source.right, cell.source.bottom),
-            // 与旧 NinePatchDrawHelper 相同：目标矩形四边各扩 0.5px，相邻格重叠覆盖，
-            // 消除缩放后的亚像素缝隙切割线（夜间深色底上尤其明显）。
-            android.graphics.RectF(
-                cell.destination.left - 0.5f,
-                cell.destination.top - 0.5f,
-                cell.destination.right + 0.5f,
-                cell.destination.bottom + 0.5f,
-            ),
-            paint,
-        )
     }
 }
 

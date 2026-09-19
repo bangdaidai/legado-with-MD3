@@ -2,6 +2,7 @@ package io.legado.app.feature.reader.core.layout
 
 import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderEmphasisUnderline
+import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderTextBackgroundImage
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
 import io.legado.app.feature.reader.core.model.textBackgroundRuns
@@ -438,13 +439,15 @@ class ReaderPaginatorTest {
     }
 
     @Test
-    fun nineSliceSidePiecesReserveSpaceAndReflowEachVisualLine() {
+    fun nineSliceFrameDoesNotReflowOrShiftText() {
         val frame = ReaderTextBackgroundImage(
             source = "frame.png",
             fit = 3,
             scale = 1f,
-            contentInsetLeftPx = 3f,
-            contentInsetRightPx = 4f,
+            ninePatchLeft = 0.1f,
+            ninePatchRight = 0.1f,
+            paddingLeftPx = 3f,
+            paddingRightPx = 4f,
         )
         val framedStyle = style.copy(backgroundImage = frame)
         val page = ReaderPaginator.paginateBlocks(
@@ -461,20 +464,24 @@ class ReaderPaginatorTest {
             config.copy(viewportWidthPx = 25, viewportHeightPx = 100),
         ).single()
 
+        // 九宫格外扩不再参与断行避让：文字与未高亮时排布完全一致，外框由渲染层
+        // 从文字矩形现算，允许自由越进页边距。
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        assertEquals(listOf(3f, 3f, 3f, 3f), glyphs.map { it.bounds.left })
-        assertEquals(listOf(0f, 20f, 40f, 60f), glyphs.map { it.bounds.top })
-        assertTrue(page.textBackgroundRuns().all { it.bounds.left == 0f && it.bounds.right == 17f })
+        assertEquals(listOf(0f, 10f, 0f, 10f), glyphs.map { it.bounds.left })
+        assertEquals(listOf(0f, 0f, 20f, 20f), glyphs.map { it.bounds.top })
+        assertTrue(page.textBackgroundRuns().all { it.image == frame })
     }
 
     @Test
-    fun nineSliceSidePiecesDoNotOverlapAdjacentPlainText() {
+    fun nineSliceBackgroundMayOverlapAdjacentPlainTextWithoutShiftingIt() {
         val frame = ReaderTextBackgroundImage(
             source = "frame.png",
             fit = 3,
             scale = 1f,
-            contentInsetLeftPx = 3f,
-            contentInsetRightPx = 4f,
+            ninePatchLeft = 0.1f,
+            ninePatchRight = 0.1f,
+            paddingLeftPx = 3f,
+            paddingRightPx = 4f,
         )
         val framedStyle = style.copy(backgroundImage = frame)
         val page = ReaderPaginator.paginateBlocks(
@@ -495,10 +502,11 @@ class ReaderPaginatorTest {
             config.copy(viewportWidthPx = 60, viewportHeightPx = 100),
         ).single()
 
+        // 文字一个都不挪；背景框与相邻文字的叠压交给绘制层（与预览一致）。
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        val frameBounds = page.textBackgroundRuns().single().bounds
-        assertEquals(glyphs[0].bounds.right, frameBounds.left, 0f)
-        assertEquals(frameBounds.right, glyphs[2].bounds.left, 0f)
+        assertEquals(listOf(0f, 10f, 20f), glyphs.map { it.bounds.left })
+        val run = page.textBackgroundRuns().single()
+        assertEquals(ReaderRect(10f, 0f, 20f, 20f), run.contentBounds)
     }
 
     @Test
@@ -507,8 +515,8 @@ class ReaderPaginatorTest {
             source = "frame.png",
             fit = 3,
             scale = 1f,
-            contentInsetLeftPx = 3f,
-            contentInsetRightPx = 4f,
+            marginStartPx = 3f,
+            marginEndPx = 4f,
         )
         val framedStyle = style.copy(backgroundImage = frame)
         val page = ReaderPaginator.paginateBlocks(
@@ -528,214 +536,10 @@ class ReaderPaginatorTest {
         ).single()
 
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        // bgMargin（每段 10+3+4=17px）把原始 3 字行挤成 2 字，但不把原始行拆成
+        // 一字残行：第二行同样放下剩下的两个字。
         assertEquals(listOf(0f, 0f, 20f, 20f), glyphs.map { it.bounds.top })
-    }
-
-    @Test
-    fun nineSliceDoesNotOrphanClosingPunctuation() {
-        val framedStyle = style.copy(backgroundImage = ReaderTextBackgroundImage(
-            "frame.png", 3, 1f, contentInsetLeftPx = 3f, contentInsetRightPx = 4f,
-        ))
-        val page = ReaderPaginator.paginateBlocks(
-            listOf(ReaderMeasuredBlock.InlineParagraph(
-                items = "甲，乙".mapIndexed { index, value ->
-                    ReaderMeasuredInlineItem.Text(value.toString(), 10f, framedStyle, index)
-                },
-                indentCharacters = 0,
-                alignment = ReaderTextAlignment.START,
-                lineHeightPx = 20f,
-                baselineOffsetPx = 15f,
-                baseTextSizePx = 10f,
-            )),
-            config.copy(viewportWidthPx = 25, viewportHeightPx = 100),
-        ).single()
-
-        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        assertEquals(glyphs[0].bounds.top, glyphs[1].bounds.top, 0f)
-    }
-
-    /**
-     * 孤立的一行高亮：上下邻行都没有框，整段行距都空着，框可以按原图尺寸画——不再像
-     * 旧 View 那样被钉死在一半行距上（`TextLine.drawNineSliceFrames` 的 overflowScale）。
-     */
-    @Test
-    fun lonelyNineSliceLineMayUseTheWholeLineGap() {
-        val framedStyle = style.copy(
-            backgroundImage = ReaderTextBackgroundImage(
-                "frame.png", 3, 1f,
-                contentInsetLeftPx = 3f,
-                contentInsetRightPx = 4f,
-                contentInsetTopPx = 8f,
-                contentInsetBottomPx = 8f,
-            )
-        )
-        val page = ReaderPaginator.paginateBlocks(
-            listOf(
-                ReaderMeasuredBlock.InlineParagraph(
-                    items = listOf(ReaderMeasuredInlineItem.Text("字", 10f, framedStyle, 0)),
-                    indentCharacters = 0,
-                    alignment = ReaderTextAlignment.START,
-                    lineHeightPx = 20f,
-                    baselineOffsetPx = 15f,
-                    baseTextSizePx = 10f,
-                    lineSpacingMultiplier = 1.5f,
-                )
-            ),
-            config.copy(viewportHeightPx = 100),
-        ).single()
-
-        val glyph = page.elements.single() as ReaderElement.Text
-        // 行距 1.5 ⇒ 整段留白 10px，一半只有 5px。
-        assertTrue(glyph.backgroundFrameTopPx > 5f)
-        assertEquals(8f, glyph.backgroundFrameTopPx, 0.001f)
-        assertEquals(8f, glyph.backgroundFrameBottomPx, 0.001f)
-        val fittedImage = glyph.style.backgroundImage!!
-        assertEquals(3f, fittedImage.contentInsetLeftPx, 0.001f)
-        assertEquals(4f, fittedImage.contentInsetRightPx, 0.001f)
-        val run = page.textBackgroundRuns().single()
-        assertEquals(glyph.bounds.left - 3f, run.bounds.left, 0.001f)
-        assertEquals(glyph.bounds.right + 4f, run.bounds.right, 0.001f)
-        assertEquals(glyph.bounds.top - 8f, run.bounds.top, 0.001f)
-        assertEquals(glyph.bounds.bottom + 8f, run.bounds.bottom, 0.001f)
-    }
-
-    /**
-     * 行距不够时四边**等比**收紧：旧 View 只钳上下，左右保持原图厚度，于是「左右两条宽竖边
-     * + 上下两条发丝横线、四角被纵向抹平」；这里要求四条边共用同一个因子。
-     */
-    @Test
-    fun nineSliceShrinksAllFourEdgesByTheSameFactorWhenTheGapIsTight() {
-        val framedStyle = style.copy(backgroundImage = ReaderTextBackgroundImage(
-            "frame.png", 3, 1f,
-            contentInsetLeftPx = 3f,
-            contentInsetRightPx = 4f,
-            contentInsetTopPx = 4f,
-            contentInsetBottomPx = 6f,
-        ))
-        val page = ReaderPaginator.paginateBlocks(
-            listOf(ReaderMeasuredBlock.InlineParagraph(
-                items = listOf(ReaderMeasuredInlineItem.Text("字", 10f, framedStyle, 0)),
-                indentCharacters = 0,
-                alignment = ReaderTextAlignment.START,
-                lineHeightPx = 20f,
-                baselineOffsetPx = 15f,
-                baseTextSizePx = 10f,
-                lineSpacingMultiplier = 1.2f,
-            )
-            ),
-            config.copy(viewportHeightPx = 100),
-        ).single()
-
-        val glyph = page.elements.single() as ReaderElement.Text
-        val fitted = glyph.style.backgroundImage!!
-        // 行距留白 4px：因子取 min(1, 4/4, 4/6) = 2/3。
-        val factor = 2f / 3f
-        assertEquals(3f * factor, fitted.contentInsetLeftPx, 0.001f)
-        assertEquals(4f * factor, fitted.contentInsetRightPx, 0.001f)
-        assertEquals(4f * factor, fitted.contentInsetTopPx, 0.001f)
-        assertEquals(6f * factor, fitted.contentInsetBottomPx, 0.001f)
-        assertEquals(fitted.contentInsetTopPx, glyph.backgroundFrameTopPx, 0.001f)
-        assertEquals(fitted.contentInsetBottomPx, glyph.backgroundFrameBottomPx, 0.001f)
-        // 左右边不再独立于上下边：缩放比例一致，四角不会被纵向抹平。
-        assertEquals(
-            fitted.contentInsetLeftPx / 3f,
-            fitted.contentInsetTopPx / 4f,
-            0.001f,
-        )
-    }
-
-    /**
-     * 连续多行都带框时，相邻两行各让一半行距：`上一行的下边 + 下一行的上边 ≤ 行距`，
-     * 两个框正好相接不重叠，也不会出现两条平行描边。
-     */
-    @Test
-    fun adjacentNineSliceLinesShareTheLineGapInsteadOfOverlapping() {
-        val framedStyle = style.copy(
-            backgroundImage = ReaderTextBackgroundImage(
-                "frame.png", 3, 1f,
-                contentInsetLeftPx = 3f,
-                contentInsetRightPx = 4f,
-                contentInsetTopPx = 8f,
-                contentInsetBottomPx = 8f,
-            )
-        )
-        val page = ReaderPaginator.paginateBlocks(
-            listOf(
-                ReaderMeasuredBlock.InlineParagraph(
-                    items = (0 until 4).map { index ->
-                        ReaderMeasuredInlineItem.Text("字", 10f, framedStyle, index)
-                    },
-                indentCharacters = 0,
-                alignment = ReaderTextAlignment.START,
-                lineHeightPx = 20f,
-                baselineOffsetPx = 15f,
-                baseTextSizePx = 10f,
-                lineSpacingMultiplier = 1.5f,
-            )),
-            config.copy(viewportWidthPx = 25, viewportHeightPx = 100),
-        ).single()
-
-        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        val lineGapPx = 10f
-        val lines = glyphs.groupBy { it.bounds.top }.values.toList()
-        assertEquals(2, lines.size)
-        // 同一行共用一份 inset（同一个因子），左右与上下等比。
-        lines.forEach { line ->
-            val image = line.first().style.backgroundImage!!
-            line.forEach { assertEquals(image, it.style.backgroundImage) }
-            assertEquals(3f * 5f / 8f, image.contentInsetLeftPx, 0.001f)
-            assertEquals(5f, image.contentInsetTopPx, 0.001f)
-            assertEquals(5f, image.contentInsetBottomPx, 0.001f)
-        }
-        // 相邻两边各让半个行距：正好相接，不会叠出两条平行描边。
-        val upper = lines[0].first().style.backgroundImage!!
-        val lower = lines[1].first().style.backgroundImage!!
-        assertTrue(upper.contentInsetBottomPx + lower.contentInsetTopPx <= lineGapPx + 0.001f)
-        assertEquals(lineGapPx / 2f, upper.contentInsetBottomPx, 0.001f)
-        assertEquals(lineGapPx / 2f, lower.contentInsetTopPx, 0.001f)
-        assertEquals(upper.contentInsetBottomPx, lines[0].first().backgroundFrameBottomPx, 0.001f)
-        assertEquals(lower.contentInsetTopPx, lines[1].first().backgroundFrameTopPx, 0.001f)
-    }
-
-    /**
-     * 行距 1.0 ⇒ 上下边归零。旧 View 此时画「中心 + 左右两条边」：左右边仍是原图厚度，
-     * 且落在文字框外侧；文字照常内缩，不再出现把九格塞进文字框、压住首末字的情形。
-     */
-    @Test
-    fun nineSliceWithoutALineGapKeepsTheSideEdgesOutsideTheTextRect() {
-        val framedStyle = style.copy(
-            backgroundImage = ReaderTextBackgroundImage(
-                "frame.png", 3, 1f,
-                contentInsetLeftPx = 3f,
-                contentInsetRightPx = 4f,
-                contentInsetTopPx = 4f,
-                contentInsetBottomPx = 6f,
-            )
-        )
-        val page = ReaderPaginator.paginateBlocks(
-            listOf(
-                ReaderMeasuredBlock.InlineParagraph(
-                    items = listOf(ReaderMeasuredInlineItem.Text("字", 10f, framedStyle, 0)),
-                    indentCharacters = 0,
-                    alignment = ReaderTextAlignment.START,
-                    lineHeightPx = 20f,
-                    baselineOffsetPx = 15f,
-                    baseTextSizePx = 10f,
-                    lineSpacingMultiplier = 1f,
-                )
-            ),
-            config.copy(viewportHeightPx = 100),
-        ).single()
-
-        val glyph = page.elements.single() as ReaderElement.Text
-        assertEquals(0f, glyph.backgroundFrameTopPx, 0f)
-        assertEquals(0f, glyph.backgroundFrameBottomPx, 0f)
-        assertEquals(3f, glyph.bounds.left, 0.001f)
-        val run = page.textBackgroundRuns().single()
-        assertEquals(glyph.bounds.top, run.bounds.top, 0f)
-        assertEquals(glyph.bounds.bottom, run.bounds.bottom, 0f)
-        assertEquals(glyph.bounds.left - 3f, run.bounds.left, 0.001f)
-        assertEquals(glyph.bounds.right + 4f, run.bounds.right, 0.001f)
+        assertEquals(listOf(3f, 13f, 3f, 13f), glyphs.map { it.bounds.left })
     }
 
     /**
