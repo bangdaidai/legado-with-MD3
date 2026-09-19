@@ -21,8 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlin.math.max
 import kotlin.math.min
 
@@ -39,9 +37,6 @@ class MarkingDelegate(
     private val saveMarkingUseCase: SaveMarkingUseCase,
     private val host: Host,
 ) {
-    private val inlineSaveMutex = Mutex()
-    private var inlineSaveVersion = 0L
-
     interface Host {
         fun reloadCurrentChapter()
         fun dismissMarkingSheet()
@@ -51,7 +46,7 @@ class MarkingDelegate(
     private val _uiState = MutableStateFlow(MarkingUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun open(selection: Bookmark, inlineMode: Boolean = false) {
+    fun open(selection: Bookmark) {
         val book = ReadBook.book
         _uiState.update {
             it.copy(
@@ -59,7 +54,6 @@ class MarkingDelegate(
                 editing = null,
                 highlightRules = persistentListOf(),
                 loading = true,
-                inlineMode = inlineMode,
             )
         }
         scope.launch(IO) {
@@ -89,8 +83,8 @@ class MarkingDelegate(
         }
     }
 
-    /** 从目录 Sheet 点标记项进入编辑模式：按 id 取完整标记预填。 */
-    fun openForEdit(markingId: String, inlineMode: Boolean = false) {
+    /** 点正文划线或从目录 Sheet 点标记项进入编辑模式：按 id 取完整标记预填。 */
+    fun openForEdit(markingId: String) {
         val book = ReadBook.book
         _uiState.update {
             it.copy(
@@ -98,7 +92,6 @@ class MarkingDelegate(
                 editing = null,
                 highlightRules = persistentListOf(),
                 loading = true,
-                inlineMode = inlineMode,
             )
         }
         scope.launch(IO) {
@@ -120,67 +113,17 @@ class MarkingDelegate(
         }
     }
 
-    /**
-     * 划词菜单点「笔记」的快捷路径：直接用 [DefaultMarkingStyle] 落库，不开 Sheet、不录备注。
-     *
-     * 不经过 [open]/[save] 的会话状态，因此不依赖 _uiState；同一段文字重复划线时由
-     * [SaveMarkingUseCase.save] 按锚点归并（不会堆出重复笔记，只是把样式刷成默认）。
-     * 想补备注或改样式，点正文里那条划线走 [openForEdit]。
-     */
-    fun quickSaveWithDefaultStyle(selection: Bookmark) {
-        val book = ReadBook.book ?: return
-        val style = DefaultMarkingStyle.get()
-        scope.launch(IO) {
-            runCatching {
-                val (contextBefore, contextAfter) = selectionContext(selection)
-                saveMarkingUseCase.save(
-                    bookName = book.name,
-                    bookAuthor = book.author,
-                    bookUrl = book.bookUrl,
-                    chapterIndex = selection.chapterIndex,
-                    chapterPosition = selection.chapterPos,
-                    selectedText = selection.bookText,
-                    style = style,
-                    contextBefore = contextBefore,
-                    contextAfter = contextAfter,
-                    chapterName = selection.chapterName,
-                    note = "",
-                )
-            }.onSuccess {
-                host.reloadCurrentChapter()
-            }.onFailure { error ->
-                host.showToast(error.localizedMessage ?: context.getString(R.string.error))
-            }
-        }
-    }
-
     fun save(style: TextProcessStyle, note: String) {
         val current = _uiState.value
         val book = ReadBook.book ?: return
-        val saveVersion = ++inlineSaveVersion
-        if (current.inlineMode) {
-            _uiState.update { it.copy(previewStyle = style, inlineDirty = true) }
-        }
         scope.launch(IO) {
-            inlineSaveMutex.withLock {
-                if (current.inlineMode && saveVersion != inlineSaveVersion) return@withLock
-                runCatching {
-                    persistMarking(current, book, style, note)
-                }.onSuccess { saved ->
-                    if (current.inlineMode) {
-                        _uiState.update { state ->
-                            if (state.inlineMode && saveVersion == inlineSaveVersion) {
-                                state.copy(editing = saved, loading = false)
-                            } else state
-                        }
-                    }
-                    if (!current.inlineMode) {
-                        host.reloadCurrentChapter()
-                        host.dismissMarkingSheet()
-                    }
-                }.onFailure { error ->
-                    host.showToast(error.localizedMessage ?: context.getString(R.string.error))
-                }
+            runCatching {
+                persistMarking(current, book, style, note)
+            }.onSuccess {
+                host.reloadCurrentChapter()
+                host.dismissMarkingSheet()
+            }.onFailure { error ->
+                host.showToast(error.localizedMessage ?: context.getString(R.string.error))
             }
         }
     }
@@ -244,19 +187,6 @@ class MarkingDelegate(
             chapterName = selection.chapterName,
             note = note,
         )
-    }
-
-    fun closeInlineSession() {
-        val current = _uiState.value
-        if (current.inlineMode) {
-            _uiState.value = MarkingUiState()
-            if (current.inlineDirty) {
-                scope.launch(IO) {
-                    inlineSaveMutex.withLock { Unit }
-                    host.reloadCurrentChapter()
-                }
-            }
-        }
     }
 
     private fun BookMarking.anchor(): TextProcessAnchor? =

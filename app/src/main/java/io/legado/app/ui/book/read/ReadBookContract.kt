@@ -738,15 +738,7 @@ sealed interface ReadBookIntent {
     data class TextActionBookmark(val bookmark: Bookmark) : ReadBookIntent
     data class OpenMarking(val selection: Bookmark) : ReadBookIntent
 
-    /** Prepare the inline selection-menu marking controls without opening the editor sheet. */
-    data class OpenQuickMarking(val selection: Bookmark) : ReadBookIntent
-    data class OpenQuickMarkingEdit(val id: String) : ReadBookIntent
-    data class ApplyQuickMarking(val style: TextProcessStyle, val note: String? = null) :
-        ReadBookIntent
-
-    data object DismissQuickMarking : ReadBookIntent
-
-    /** 从正文处理 Sheet 点标记项进入编辑模式。 */
+    /** 从正文点划线或正文处理 Sheet 点标记项进入编辑模式。 */
     data class EditMarking(val id: String) : ReadBookIntent
     data object DismissMarking : ReadBookIntent
     data class SaveMarking(val style: TextProcessStyle, val note: String) : ReadBookIntent

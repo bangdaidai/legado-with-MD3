@@ -86,7 +86,6 @@ import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.sheet.ReaderBookSheetTab
 import io.legado.app.ui.book.searchContent.SearchResult
 import io.legado.app.ui.book.shareCard.ShareCardScene
-import io.legado.app.utils.GSON
 import io.legado.app.utils.ImageSaveUtils
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.isAbsUrl
@@ -1534,33 +1533,11 @@ class ReadBookViewModel(
             is ReadBookIntent.TextActionBookmark -> bookmarkDelegate.openEditor(intent.bookmark)
 
             is ReadBookIntent.OpenMarking -> {
-                // 点「笔记」直接用默认样式落库、不弹样式 Sheet；想改样式/加备注点正文里那条划线。
-                markingDelegate.quickSaveWithDefaultStyle(intent.selection)
-            }
-
-            is ReadBookIntent.OpenQuickMarking -> {
+                // 点「笔记」打开标准底部弹层，样式区预选「笔记默认样式」。
                 markingReturnSheet = null
-                markingDelegate.open(intent.selection, inlineMode = true)
+                markingDelegate.open(intent.selection)
+                _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
             }
-
-            is ReadBookIntent.OpenQuickMarkingEdit -> {
-                markingReturnSheet = null
-                markingDelegate.openForEdit(intent.id, inlineMode = true)
-            }
-
-            is ReadBookIntent.ApplyQuickMarking -> {
-                viewModelScope.launch {
-                    readSettingsRepository.update {
-                        it.copy(lastMarkingStyle = GSON.toJson(intent.style))
-                    }
-                }
-                markingDelegate.save(
-                    style = intent.style,
-                    note = intent.note ?: markingDelegate.uiState.value.editing?.note.orEmpty(),
-                )
-            }
-
-            ReadBookIntent.DismissQuickMarking -> markingDelegate.closeInlineSession()
 
             is ReadBookIntent.EditMarking -> {
                 // 从目录 Sheet 进入：记住原 sheet，保存/删除/取消后返回

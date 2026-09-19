@@ -10,8 +10,8 @@ import io.legado.app.utils.fromJsonObject
 /**
  * 笔记（book_marks）专属的默认划线样式读写。
  *
- * 点「笔记」直接用这套样式落库、不弹样式选择；点已有划线才打开
- * [io.legado.app.ui.book.read.sheet.MarkingSheet] 编辑。
+ * 点「笔记」新建笔记时，[io.legado.app.ui.book.read.sheet.MarkingSheet] 的样式区
+ * 按这套样式预选（效果/颜色），不必每次重选；点已有划线同样打开该 Sheet 编辑。
  * 与「高亮规则」（正则自动高亮 HighlightRule）无关，是划线笔记独立的默认。
  * 未设置时回落内置默认：实线下划线 + [MarkingEffect.DEFAULT_COLOR]（绿色）。
  *

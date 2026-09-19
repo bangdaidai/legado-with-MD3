@@ -39,10 +39,13 @@ import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FindReplace
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.PersonSearch
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.VerticalDivider
@@ -87,7 +90,6 @@ fun TextActionSelectionMenu(
     showSelectMenuIcon: Boolean,
     onDismiss: () -> Unit,
     onItemClick: (ActionMenuItem) -> Unit,
-    onOpenQuickMarking: () -> Boolean,
     onOpenManage: () -> Unit
 ) {
 
@@ -120,12 +122,9 @@ fun TextActionSelectionMenu(
     val primaryItems = remember(draftItems) { draftItems.filter { it.showState == 0 } }
     val collapsedItems = remember(draftItems) { draftItems.filter { it.showState == 1 } }
     val activeMultiItems = remember(draftItems) { draftItems.filter { it.showState == 0 || it.showState == 1 } }
-    val handleItemClick: (ActionMenuItem) -> Unit = handleItemClick@{ item ->
-        if (item.id == R.id.menu_mark && onOpenQuickMarking()) {
-            showMoreMenu = false
-        } else if (item.id != R.id.menu_mark) {
-            onItemClick(item)
-        }
+    val handleItemClick: (ActionMenuItem) -> Unit = { item ->
+        showMoreMenu = false
+        onItemClick(item)
     }
 
     val density = localDensity.density
@@ -575,6 +574,7 @@ private fun MoreMenuItem(
 private fun ActionMenuItem.builtInIcon(): ImageVector? = when (id) {
     R.id.menu_copy -> Icons.Outlined.ContentCopy
     R.id.menu_share_str -> Icons.Outlined.Share
+    R.id.menu_share_card -> Icons.Outlined.Image
     R.id.menu_browser -> Icons.Outlined.Language
     R.id.menu_aloud -> Icons.AutoMirrored.Outlined.VolumeUp
     R.id.menu_bookmark -> Icons.Outlined.Bookmark
@@ -583,7 +583,9 @@ private fun ActionMenuItem.builtInIcon(): ImageVector? = when (id) {
     R.id.menu_replace -> Icons.Outlined.FindReplace
     R.id.menu_edit -> Icons.Outlined.Edit
     R.id.menu_ai_clean, R.id.menu_ai_rewrite -> Icons.Outlined.SmartToy
+    R.id.menu_ai_character -> Icons.Outlined.PersonSearch
     R.id.menu_search_content -> Icons.Outlined.Search
+    R.id.menu_set_protagonist -> Icons.Outlined.Star
     else -> null
 }
 

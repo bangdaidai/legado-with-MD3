@@ -38,18 +38,12 @@ fun DefaultMarkingStyleSheet(
     var markColor by remember(show) { mutableStateOf(MarkingEffect.colorOf(initialStyle)) }
     var showColorPicker by remember(show) { mutableStateOf(false) }
 
-    // 当前编辑中的样式：预览与保存共用同一份，避免两处推导不一致
-    val editingStyle = remember(effect, markColor, initialStyle) {
-        val base = effect.toStyle(markColor)
-        when {
-            effect.isUnderline -> base.copy(
-                underlineWidth = initialStyle.underlineWidth,
-                underlineOffset = initialStyle.underlineOffset,
-                underlineSvgPath = initialStyle.underlineSvgPath,
-            )
-
-            else -> base
-        }
+    // 当前编辑中的样式：预览与保存共用同一份，避免两处推导不一致。
+    // 线宽/偏移一律取 effect 的规范值：不继承存量样式的 underlineWidth，
+    // 否则旧「荧光笔粗细」时代留下的粗宽度会串到实线上，预览与正文都变粗。
+    // 新引擎荧光带按下半行几何绘制、忽略线宽，这里同样不再透传。
+    val editingStyle = remember(effect, markColor) {
+        effect.toStyle(markColor)
     }
 
     AppModalBottomSheet(

@@ -420,7 +420,6 @@ class ReadBookController(
     fun dismissTextActionMenu() {
         textMenuRequestVersion++
         _textMenuState.value = null
-        viewModel.onIntent(ReadBookIntent.DismissQuickMarking)
     }
     private val popupAction by lazy { PopupAction(activity) }
     private var screenTimeOut: Long = 0
@@ -1650,7 +1649,7 @@ class ReadBookController(
     }
 
     fun onMarkingClick(markingId: String) {
-        viewModel.onIntent(ReadBookIntent.OpenQuickMarkingEdit(markingId))
+        viewModel.onIntent(ReadBookIntent.EditMarking(markingId))
     }
 
     fun oldClickImg(src: String): Boolean {
@@ -1743,16 +1742,6 @@ class ReadBookController(
                 bookText = selectedText
             }
         }
-
-    fun openQuickMarking(): Boolean {
-        val selection = composeSelectionBookmark(bodyOnly = true)
-        if (selection == null) {
-            activity.toastOnUi(R.string.create_bookmark_error)
-            return false
-        }
-        viewModel.onIntent(ReadBookIntent.OpenQuickMarking(selection))
-        return true
-    }
 
     fun onMenuItemSelected(itemId: Int): Boolean {
         when (itemId) {

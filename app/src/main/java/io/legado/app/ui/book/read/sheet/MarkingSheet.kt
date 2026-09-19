@@ -46,6 +46,7 @@ import io.legado.app.data.entities.HighlightRule
 import io.legado.app.domain.model.MarkingEffect
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.domain.model.TextProcessStyle
+import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
@@ -67,8 +68,8 @@ import io.legado.app.utils.fromJsonObject
  * 或直接自定义本次的样式——上面一行预设颜色（尾部为自定义颜色），下面 5x1 效果格
  * （单实线/波浪线/虚线/背景色/字体色）。背景色自动加 ~20% 透明度。另带备注输入。
  * 两种进入方式：
- * - 新增：选中文本后点「划线」（[MarkingUiState.selection]）；
- * - 编辑：再次选中同一段文本，或从目录 Sheet 点标记项
+ * - 新增：选中文本后点「笔记」（[MarkingUiState.selection]），样式预选 [DefaultMarkingStyle]；
+ * - 编辑：点正文已有划线，或从目录 Sheet 点标记项
  *   （[MarkingUiState.editing] 非空），预填样式与备注，保存即更新；编辑模式可删除。
  */
 @Composable
@@ -100,17 +101,20 @@ fun MarkingSheet(
     val editingStyle = remember(editing) {
         editing?.styleJson?.let { GSON.fromJsonObject<TextProcessStyle>(it).getOrNull() }
     }
-    // 新建默认走「复用规则」，编辑已有标记时默认走自定义以展示实际存储的样式
-    var useRule by remember(show, editing) { mutableStateOf(editing == null) }
+    // 新建预选「笔记默认样式」（HighlightRuleConfigSheet 里那份独立默认），
+    // 编辑已有标记时用其实际存储的样式，两种情况都无需每次重选。
+    val baseStyle = editingStyle ?: remember(show) { DefaultMarkingStyle.get() }
+    var useRule by remember(show, editing) { mutableStateOf(false) }
     var selectedRuleId by remember(show, editing) { mutableStateOf<String?>(null) }
-    // 5x1 效果格 + 选中颜色：编辑模式从已有标记反推
+    // 5x1 效果格 + 选中颜色：从基准样式反推
     var effect by remember(show, editing) {
-        mutableStateOf(MarkingEffect.fromStyle(editingStyle))
+        mutableStateOf(MarkingEffect.fromStyle(baseStyle))
     }
     var markColor by remember(show, editing) {
-        mutableStateOf(MarkingEffect.colorOf(editingStyle))
+        mutableStateOf(MarkingEffect.colorOf(baseStyle))
     }
-    // 隐藏透传：编辑下划线类标记时保留已有宽度/偏移/SVG（自定义模式没有这些控件）
+    // 隐藏透传：仅编辑下划线类标记时保留已有宽度/偏移/SVG（自定义模式没有这些控件）；
+    // 新建走 effect 的规范值，避免存量脏宽度传染给新笔记
     var underlineWidth by remember(show, editing) {
         mutableStateOf(editingStyle?.underlineWidth ?: 1f)
     }
