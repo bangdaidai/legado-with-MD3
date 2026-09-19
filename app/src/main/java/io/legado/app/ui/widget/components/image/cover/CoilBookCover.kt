@@ -54,6 +54,13 @@ private const val SharedCoverRadiusCacheMaxSize = 256
 private const val DefaultCoverPath = "use_default_cover"
 private val sharedCoverRadiusCache = mutableStateMapOf<String, Dp>()
 
+/**
+ * 封面在源页面的圆角缓存读取入口：封面离开源页面（Visible→Visible 定格）时写入，
+ * 阅读端 sharedBounds 的起始圆角由它提供，保证转场两端圆角衔接连续。
+ */
+internal fun sharedCoverSourceRadius(sharedCoverKey: String?): Dp? =
+    sharedCoverKey?.let { sharedCoverRadiusCache[it] }
+
 @Composable
 internal fun usesDefaultBookCover(path: String?): Boolean {
     return LocalAppUiConfiguration.current.cover.useDefaultCover ||

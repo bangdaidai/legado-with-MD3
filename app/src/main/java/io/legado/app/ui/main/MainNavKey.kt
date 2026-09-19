@@ -145,10 +145,6 @@ data class MainRouteReadBook(
     val chapterIndex: Int = -1,
     val chapterPos: Int = -1,
     val sharedCoverKey: String? = null,
-    /** 封面转场层首帧渲染信息：state.book 晚于转场开始才加载，由源页面透传避免闪现默认封面 */
-    val bookName: String? = null,
-    val bookAuthor: String? = null,
-    val coverPath: String? = null,
 ) : MainRoute
 
 @Serializable
