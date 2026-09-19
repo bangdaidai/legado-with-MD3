@@ -9,13 +9,13 @@ import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.repository.HighlightRuleRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
-import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
 import io.legado.app.ui.widget.components.importComponents.ImportStatus
@@ -128,7 +128,7 @@ class ReadHighlightRuleDelegate(
         val rule = _uiState.value.deleteRule ?: return
         val configName = ReadBookConfig.durConfig.name
         highlightRuleRepository.delete(rule)
-        TextChapterLayout.invalidateRegexCache()
+        HighlightProtagonistPatterns.invalidate()
         _uiState.update {
             it.copy(
                 rules = highlightRuleRepository.load(configName).toImmutableList(),
@@ -155,7 +155,7 @@ class ReadHighlightRuleDelegate(
         val configName = ReadBookConfig.durConfig.name
         val sanitizedRules = rules.map(highlightRuleRepository::sanitizeRule)
         highlightRuleRepository.save(configName, sanitizedRules)
-        TextChapterLayout.invalidateRegexCache()
+        HighlightProtagonistPatterns.invalidate()
         _uiState.update {
             it.copy(
                 rules = highlightRuleRepository.load(configName).toImmutableList(),

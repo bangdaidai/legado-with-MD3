@@ -2,7 +2,6 @@ package io.legado.app.help.http
 
 import io.legado.app.constant.AppConst
 import io.legado.app.help.CacheManager
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.progress.ProgressManager.LISTENER
 import io.legado.app.help.glide.progress.ProgressResponseBody
 import io.legado.app.help.http.CookieManager.cookieJarHeader
@@ -29,6 +28,8 @@ import java.util.concurrent.TimeUnit
 private val proxyClientCache: ConcurrentHashMap<String, OkHttpClient> by lazy {
     ConcurrentHashMap()
 }
+
+private val cacheSettingsGateway get() = org.koin.core.context.GlobalContext.get().get<io.legado.app.domain.gateway.DownloadCacheSettingsGateway>()
 
 val cookieJar by lazy {
     object : CookieJar {
@@ -96,7 +97,7 @@ val okHttpClient: OkHttpClient by lazy {
             val request = chain.request()
             val builder = request.newBuilder()
             if (request.header(AppConst.UA_NAME) == null) {
-                builder.addHeader(AppConst.UA_NAME, AppConfig.userAgent)
+                builder.addHeader(AppConst.UA_NAME, cacheSettingsGateway.currentSettings.userAgent)
             } else if (request.header(AppConst.UA_NAME) == "null") {
                 builder.removeHeader(AppConst.UA_NAME)
             }
@@ -122,7 +123,7 @@ val okHttpClient: OkHttpClient by lazy {
             }
             networkResponse
         }
-    if (AppConfig.isCronet) {
+    if (cacheSettingsGateway.currentSettings.cronetEnabled) {
         if (Cronet.loader?.install() == true) {
             Cronet.interceptor?.let {
                 builder.addInterceptor(it)
@@ -170,17 +171,6 @@ enum class HttpCacheType(val dirName: String, val maxSize: Long) {
     MANGA("manga_cache", 100L * 1024 * 1024),
 }
 
-/**
- * 封面专用客户端：独立缓存目录 [HttpCacheType.COVER]，不和正文/书源/RSS 共用 [okHttpClient]
- * 的 http_cache，避免正文请求把封面条目挤出去导致滚动书架反复重新下载。
- * 其余配置（超时、UA、Cronet、强制缓存拦截器等）沿用 okHttpClient。
- */
-val okHttpClientCover by lazy {
-    okHttpClient.newBuilder()
-        .cache(Cache(File(appCtx.cacheDir, HttpCacheType.COVER.dirName), HttpCacheType.COVER.maxSize))
-        .build()
-}
-
 fun getHttpCacheSize(type: HttpCacheType): Long {
     val dir = File(appCtx.cacheDir, type.dirName)
     if (!dir.exists()) return 0
@@ -189,7 +179,13 @@ fun getHttpCacheSize(type: HttpCacheType): Long {
 
 fun clearHttpCache(type: HttpCacheType) {
     when (type) {
-        HttpCacheType.COVER -> okHttpClientCover.cache?.delete()
+        // 设置页“封面缓存”条目同时清掉持久化封面文件缓存（CoverFileCache，
+        // 位于 filesDir/cover_cache，不在“清除缓存”目录扫描范围内），
+        // 保证用户能彻底删除封面数据腾空间。
+        HttpCacheType.COVER -> {
+            okHttpClient.cache?.delete()
+            io.legado.app.help.coil.CoverFileCache.clear()
+        }
         HttpCacheType.MANGA -> okHttpClientManga.cache?.delete()
     }
 }

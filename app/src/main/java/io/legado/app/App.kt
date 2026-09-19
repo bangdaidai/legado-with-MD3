@@ -40,7 +40,10 @@ import io.legado.app.di.appModule
 import io.legado.app.domain.gateway.AppLocaleGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.BackupSettingsGateway
+import io.legado.app.domain.gateway.OtherSettingsGateway
+import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.domain.gateway.ReadStyleGateway
+import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.help.AppFreezeMonitor
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.CrashHandler
@@ -50,8 +53,8 @@ import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.TagManager
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppConfigStore
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfigStore
@@ -65,7 +68,6 @@ import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.BookCover
-import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.FirebaseManager
 import io.legado.app.utils.LogUtils
@@ -90,6 +92,11 @@ import java.util.logging.Level
 
 class App : Application(), SingletonImageLoader.Factory {
 
+    private val themeGateway get() = get<ThemeSettingsGateway>()
+    private val otherGateway get() = get<OtherSettingsGateway>()
+    private val backupGateway get() = get<BackupSettingsGateway>()
+    private val readGateway get() = get<ReadSettingsGateway>()
+
     override fun newImageLoader(context: Context): ImageLoader {
         return get()
     }
@@ -110,6 +117,7 @@ class App : Application(), SingletonImageLoader.Factory {
             androidContext(this@App)
             modules(appDatabaseModule, appModule)
         }
+        @Suppress("DEPRECATION")
         AppConfig.initialize(
             shellGateway = get(),
             themeGateway = get(),
@@ -132,7 +140,7 @@ class App : Application(), SingletonImageLoader.Factory {
         }
         applyDayNightInit(this)
         if (getPrefString("app_theme", "0") == "12") {
-            if (AppConfig.customMode == "accent")
+            if (themeGateway.currentSettings.customMode == "accent")
                 setTheme(R.style.ThemeOverlay_WhiteBackground)
 
             val colorImagePath = getPrefString(PreferKey.colorImage)
@@ -170,6 +178,13 @@ class App : Application(), SingletonImageLoader.Factory {
             ThreadUtils.setThreadAssertsDisabledForTesting(true)
         }
         registerActivityLifecycleCallbacks(LifecycleHelp)
+        // Rhino 的全局 ContextFactory 必须在任何线程执行 Context.enter() 之前安装：
+        // 它只在 RhinoScriptEngine 的 object init 里通过 ContextFactory.initGlobal 生效，
+        // 而 Context.enter() 取的就是这个全局工厂。原先 initRhino() 排在下面那个
+        // Coroutine.async 的末尾，冷启动早期执行的脚本（书源登录/换源/解析）可能先拿到
+        // 普通 Context，强转 RhinoContext 会直接崩溃并把该线程永久污染。
+        // 这里改为在 onCreate 中同步执行；RhinoWrapFactory 注册同理要早于任何脚本执行。
+        initRhino()
         Coroutine.async {
             get<BackupSettingsGateway>().settings
                 .map {
@@ -199,7 +214,7 @@ class App : Application(), SingletonImageLoader.Factory {
             LiveEventBus.config()
                 .lifecycleObserverAlwaysActive(true)
                 .autoClear(false)
-                .enableLogger(BuildConfig.DEBUG || AppConfig.recordLog)
+                .enableLogger(BuildConfig.DEBUG || otherGateway.currentSettings.recordLog)
                 .setLogger(EventLogger())
             DefaultData.upVersion()
             TagManager.seedPresetExcludedTags()
@@ -210,7 +225,6 @@ class App : Application(), SingletonImageLoader.Factory {
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
             launch { installGmsTlsProvider(appCtx) }
-            initRhino()
             //初始化封面
             BookCover.toString()
             //清除过期数据
@@ -225,7 +239,7 @@ class App : Application(), SingletonImageLoader.Factory {
             get<ReadStyleGateway>().clearUnusedBackgrounds()
             ThemeConfigStore.clearBg()
             //初始化简繁转换引擎
-            when (AppConfig.chineseConverterType) {
+            when (readGateway.currentSettings.chineseConverterType) {
                 1 -> {
                     ChineseUtils.fixT2sDict()
                     ChineseUtils.preLoad(true, TransType.TRADITIONAL_TO_SIMPLE)
@@ -236,16 +250,11 @@ class App : Application(), SingletonImageLoader.Factory {
             //调整排序序号
             SourceHelp.adjustSortNumber()
             //同步阅读记录
-            if (AppConfig.syncBookProgress) {
+            if (backupGateway.currentSettings.syncBookProgress) {
                 AppWebDav.upConfig()
                 AppWebDav.downloadAllBookProgress()
             }
         }
-    }
-
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        TextLine.trimCaches(level)
     }
 
     /**
@@ -341,6 +350,7 @@ class App : Application(), SingletonImageLoader.Factory {
     }
 
     private fun initRhino() {
+        @Suppress("UNUSED_EXPRESSION")
         RhinoScriptEngine
         RhinoWrapFactory.register(BookSource::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(RssSource::class.java, NativeBaseSource.factory)

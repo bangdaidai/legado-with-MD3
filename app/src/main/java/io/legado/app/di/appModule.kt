@@ -190,6 +190,7 @@ import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
 import io.legado.app.domain.usecase.CacheBookChaptersUseCase
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.ChangeSourceSearchUseCase
+import io.legado.app.domain.usecase.CheckBookContentQualityUseCase
 import io.legado.app.domain.usecase.CleanSelectedTextUseCase
 import io.legado.app.domain.usecase.ClearBookCacheUseCase
 import io.legado.app.domain.usecase.CoverAlbumUseCase
@@ -230,10 +231,10 @@ import io.legado.app.domain.usecase.UploadReadingProgressUseCase
 import io.legado.app.domain.usecase.VerifyBookmarkTargetUseCase
 import io.legado.app.domain.usecase.WebDavBackupUseCase
 import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
+import io.legado.app.feature.onboarding.OnboardingViewModel
 import io.legado.app.help.coil.CoverFetcher
 import io.legado.app.help.coil.CoverInterceptor
 import io.legado.app.help.config.ThemePackageManager
-import io.legado.app.help.http.okHttpClientCover
 import io.legado.app.help.http.okHttpClientManga
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.model.LegacyReaderSession
@@ -255,7 +256,6 @@ import io.legado.app.ui.book.shareCard.ShareCardManageViewModel
 import io.legado.app.ui.book.cache.manage.BookCacheManageViewModel
 import io.legado.app.ui.book.changecover.ChangeCoverViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceComposeViewModel
-import io.legado.app.ui.book.changesource.ChangeBookSourceViewModel
 import io.legado.app.ui.book.changesource.ChangeChapterSourceViewModel
 import io.legado.app.ui.book.explore.ExploreShowViewModel
 import io.legado.app.ui.book.group.GroupViewModel
@@ -275,6 +275,7 @@ import io.legado.app.ui.book.knowledge.BookKnowledgeListViewModel
 import io.legado.app.ui.book.manage.BookshelfManageScreenViewModel
 import io.legado.app.ui.book.manga.MangaReaderViewModel
 import io.legado.app.ui.book.read.ReadBookViewModel
+import io.legado.app.ui.book.read.ReaderSessionViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordViewModel
 import io.legado.app.ui.book.readingmemory.ReadingMemoryViewModel
@@ -324,6 +325,7 @@ import io.legado.app.ui.ai.AiModelSwitchViewModel
 import io.legado.app.ui.dict.rule.DictRuleViewModel
 import io.legado.app.ui.highlightTagRule.HighlightTagRuleViewModel
 import io.legado.app.ui.login.SourceLoginViewModel
+import io.legado.app.ui.main.MainNavRouteTracker
 import io.legado.app.ui.main.MainRouteSearchContent
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.ui.main.bookshelf.BookshelfViewModel
@@ -351,12 +353,12 @@ import io.legado.app.ui.tagGroupRule.TagGroupRuleViewModel
 import io.legado.app.utils.isNightMode
 import io.legado.app.utils.sysConfiguration
 import kotlinx.coroutines.Dispatchers
-import kotlinx.datetime.Clock
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
+import kotlin.time.Clock
 
 val appModule = module {
 
@@ -435,6 +437,7 @@ val appModule = module {
     single<ReadSettingsGateway> { get<ReadSettingsRepository>() }
     singleOf(::ReadAloudSettingsRepository)
     singleOf(::ReadAloudSessionStore)
+    singleOf(::MainNavRouteTracker)
     // R2.3：会话每个所有者一份。ReadBook.callBack 的身份是「阅读页已挂载」信号
     // （prefetchForOpen / upData 判 callBack != null），register 还会给上一个持有者
     // 发 notifyBookChanged——单例会把两个 ReadBookViewModel 的注册身份混成一个。
@@ -585,7 +588,7 @@ val appModule = module {
                 }
                 add(SvgDecoder.Factory())
                 add(CoverInterceptor())
-                add(CoverFetcher.Factory(okHttpClientCover, okHttpClientManga))
+                add(CoverFetcher.Factory(okHttpClient, okHttpClientManga))
             }
             .crossfade(true)
             .build()
@@ -689,6 +692,7 @@ val appModule = module {
     viewModelOf(::DownloadCacheConfigViewModel)
     viewModelOf(::ThemeConfigViewModel)
     viewModelOf(::ThemeManageViewModel)
+    viewModelOf(::OnboardingViewModel)
     viewModelOf(::BackupConfigViewModel)
     viewModelOf(::LabConfigViewModel)
     viewModelOf(::ProtagonistExtractionConfigViewModel)
@@ -802,7 +806,14 @@ val appModule = module {
     }
     viewModelOf(::TtsCacheViewModel)
     singleOf(::ReadAloudPlayerCoordinator)
-    viewModelOf(::ReadAloudPlayerViewModel)
+    /**
+     * 朗读播放界面状态宿主。
+     *
+     * 用单例而不是 `viewModelOf`：悬浮胶囊（Activity 叠层）与听书页目的地会同时存在，
+     * 若各自持有实例，`activeSheet` 之类的瞬态状态与设置快照就会各改各的。
+     * 播放状态本身在 `ReadAloudSessionStore`/服务里，这里只是界面投影。
+     */
+    single { ReadAloudPlayerViewModel(get(), get(), get()) }
     viewModel { (bookUrl: String, entryId: String?) ->
         BookKnowledgeDetailViewModel(
             bookUrl = bookUrl,
@@ -824,6 +835,7 @@ val appModule = module {
         )
     }
     viewModelOf(::MangaReaderViewModel)
+    viewModelOf(::ReaderSessionViewModel)
     viewModel {
         ReadBookViewModel(
             application = get(),
@@ -871,7 +883,6 @@ val appModule = module {
     }
     viewModelOf(::ChangeCoverViewModel)
     viewModelOf(::ChangeBookSourceComposeViewModel)
-    viewModelOf(::ChangeBookSourceViewModel)
     viewModelOf(::ChangeChapterSourceViewModel)
     viewModelOf(::ExploreViewModel)
     viewModelOf(::RssViewModel)
@@ -892,7 +903,8 @@ val appModule = module {
             clearBookCacheUseCase = get(),
             deleteBooksUseCase = get(),
             updateBooksGroupUseCase = get(),
-            readingMemoryRepository = get()
+            readingMemoryRepository = get(),
+            downloadCacheSettingsGateway = get()
         )
     }
 

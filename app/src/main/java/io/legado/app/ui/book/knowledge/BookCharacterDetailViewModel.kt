@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
-import io.legado.app.ui.book.read.page.provider.TextChapterLayout
+import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import kotlinx.collections.immutable.ImmutableList
@@ -203,8 +203,8 @@ class BookCharacterDetailViewModel(
                 withContext(Dispatchers.IO) {
                     bookKnowledgeGateway.upsertCharacterProfile(profile)
                 }
-                // 主角标记/角色分类可能变了，跟随主角的高亮正则缓存需失效
-                TextChapterLayout.invalidateRegexCache()
+                // 主角标记/角色分类/别名可能变了，跟随主角的高亮正则展开缓存需失效
+                HighlightProtagonistPatterns.invalidate()
                 currentProfile = profile
                 _uiState.update {
                     it.copy(

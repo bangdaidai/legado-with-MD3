@@ -38,6 +38,12 @@ data class HighlightRule(
     var npRight: Float = 0.5f,
     var npTop: Float = 0.5f,
     var npBottom: Float = 0.5f,
+    // 上游字段：true=手动切分（用 np* 值），false=引擎自动取中线。
+    // 代码默认 false（新规则自动切，在九宫格编辑器里保存过切分线才转手动）；
+    // 列默认 '1' 与上游 105 快照一致，老库升级来的既有规则维持手动、行为不变。
+    // 本 fork 不暴露开关 UI。
+    @ColumnInfo(defaultValue = "1")
+    var manualNineSlice: Boolean = false,
     @ColumnInfo(defaultValue = "0")
     var useProtagonist: Boolean = false,
     // 角色筛选：null=按主角标记取人；指定 "male_lead"/"female_lead"/"male_supporting"/"female_supporting"
@@ -98,6 +104,8 @@ data class HighlightRule(
                     3 -> "波浪下划线"
                     4 -> "双下划线"
                     5 -> "自定义SVG"
+                    6 -> "删除线"
+                    7 -> "荧光"
                     else -> "下划线"
                 } + underlineColor?.let { " ${it.toHexColor()}" }.orEmpty()
             )

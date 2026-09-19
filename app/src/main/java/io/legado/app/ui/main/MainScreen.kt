@@ -103,10 +103,8 @@ import io.legado.app.ui.about.MarkdownSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.startActivityForBook
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.NavigationRailDefaults
@@ -133,7 +131,7 @@ fun MainScreen(
     onNavigateToLocalImport: () -> Unit,
     onNavigateToCache: (Long) -> Unit,
     onNavigateToBookCacheManage: () -> Unit,
-    onOpenBookshelfBook: (BookShelfItem) -> Unit,
+    onOpenBookshelfBook: (BookShelfItem, String?) -> Unit,
     onNavigateToBackupSettings: () -> Unit,
     onNavigateToBookInfo: (name: String, author: String, bookUrl: String, origin: String?, coverPath: String?, sharedCoverKey: String?) -> Unit,
     onNavigateToExploreShow: (title: String?, sourceUrl: String, exploreUrl: String?) -> Unit,
@@ -165,7 +163,6 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val defaultHelpTitle = stringResource(R.string.help)
 
     var markdownSheetTitle by remember { mutableStateOf<String?>(null) }
     var markdownSheetContent by remember { mutableStateOf("") }
@@ -187,18 +184,6 @@ fun MainScreen(
                 }
 
                 is MainEffect.CopyUrl -> context.sendToClip(effect.url)
-                is MainEffect.ShowMarkdown -> {
-                    val title = effect.title.ifBlank { defaultHelpTitle }
-                    val mdText = withContext(Dispatchers.IO) {
-                        context.assets
-                            .open("web/help/md/${effect.path}.md")
-                            .bufferedReader()
-                            .use { it.readText() }
-                    }
-                    markdownSheetTitle = title
-                    markdownSheetContent = mdText
-                }
-
                 is MainEffect.StartActivity -> {
                     context.startActivity(Intent(context, effect.destination).apply {
                         effect.configTag?.let { putExtra("configTag", it) }
@@ -567,8 +552,8 @@ fun MainScreen(
                                         bookshelfScrollToTopRequest = 0L
                                     }
                                 },
-                                onBookClick = { book ->
-                                    onOpenBookshelfBook(book)
+                                onBookClick = { book, sharedCoverKey ->
+                                    onOpenBookshelfBook(book, sharedCoverKey)
                                 },
                                 onBookLongClick = { book, sharedCoverKey ->
                                     onNavigateToBookInfo(

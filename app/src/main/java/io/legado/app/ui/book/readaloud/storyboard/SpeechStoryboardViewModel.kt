@@ -7,12 +7,14 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
+import io.legado.app.domain.model.readaloud.ContentSplitPolicies
+import io.legado.app.domain.model.readaloud.ReadAloudContentSplitMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
 import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
-import io.legado.app.help.readaloud.segment.toCanonicalSpeechParagraphs
+import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.config.readConfig.ReadConfig
 import kotlinx.collections.immutable.persistentListOf
@@ -33,7 +35,7 @@ import splitties.init.appCtx
  * 分镜结果页：先按章列出分析过的章节，点进去看这一章的分段、说话人和音色。
  *
  * 正在读的那一章走完整分析链（可以重新分析），其它章只把库里存下来的分段读出来 ——
- * 分段依赖 `TextChapter` 的排版结果，单独去数据库捞正文再排一次版只会和朗读时对不上。
+ * 分段按朗读服务的同一划分口径从新引擎章节输入重建，单独去数据库捞正文再切一次只会和朗读时对不上。
  */
 class SpeechStoryboardViewModel(
     private val bookUrl: String,
@@ -90,7 +92,7 @@ class SpeechStoryboardViewModel(
                 val chapters = if (current != null && analyzed.none { it.chapterIndex == current }) {
                     (analyzed + StoryboardChapterUi(
                         chapterIndex = current,
-                        title = ReadBook.curTextChapter?.title?.takeUnless { it.isBlank() }
+                        title = ReadBook.readerChapterInputWindow.current?.displayTitle?.takeUnless { it.isBlank() }
                             ?: fallbackTitle(current),
                         segmentCount = 0,
                         characterCount = 0,
@@ -173,9 +175,26 @@ class SpeechStoryboardViewModel(
         chapterIndex: Int,
         reanalyze: Boolean,
     ): List<SpeechPlanItem> {
-        val chapter = ReadBook.curTextChapter ?: return emptyList()
+        val input = ReadBook.readerChapterInputWindow.current
+            ?.takeIf { it.chapter.index == chapterIndex } ?: return emptyList()
+        // 与朗读服务同口径重建段落：同一划分方式与符号策略下，段落文本和章内位置一致，
+        // 分镜展示才能和朗读时落库的分析结果对得上。
+        val splitMode = ContentSplitPolicies.resolve(
+            ReadAloudContentSplitMode.fromStorage(ReadConfig.contentSplitMode),
+            ReadConfig.useMultiSpeaker,
+        )
         val paragraphs = withContext(Dispatchers.Default) {
-            chapter.toCanonicalSpeechParagraphs()
+            ReaderReadAloudChapter.create(
+                chapterIndex = chapterIndex,
+                title = input.displayTitle,
+                semanticContent = input.source.semanticContent,
+                // 分镜只用整段视图，页边界不参与段落生成
+                pageStarts = listOf(0),
+                contentSplitMode = splitMode,
+            ).canonicalSpeechParagraphs(
+                splitByPage = false,
+                policy = ContentSplitPolicies.forMode(splitMode, ReadConfig.contentSplitSymbols),
+            )
         }
         if (reanalyze) {
             withContext(Dispatchers.IO) {
@@ -225,9 +244,9 @@ class SpeechStoryboardViewModel(
             }
         }
 
-    /** 正在读的这本书的当前章，换了书或还没排版好就返回 null */
+    /** 正在读的这本书的当前章，换了书或新引擎章节输入还没发布就返回 null */
     private fun currentChapterIndex(): Int? = ReadBook.durChapterIndex
-        .takeIf { ReadBook.book?.bookUrl == bookUrl && ReadBook.curTextChapter != null }
+        .takeIf { ReadBook.book?.bookUrl == bookUrl && ReadBook.readerChapterInputWindow.current != null }
 
     /** 目录里没有标题（本地书清过目录）时的兜底名字 */
     private fun fallbackTitle(chapterIndex: Int): String =

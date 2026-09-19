@@ -7,8 +7,8 @@ import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.help.book.TagManager
-import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -261,12 +261,13 @@ class ReadingMemoryDetailViewModel(
                         }
                         is ReadingMemoryDetailIntent.AddProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, true)
-                            TextChapterLayout.invalidateRegexCache()
+                            // 主角名单变了，跟随主角的高亮正则展开缓存必须失效
+                            HighlightProtagonistPatterns.invalidate()
                             protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.RemoveProtagonist -> {
                             repository.setProtagonist(bookUrl, intent.name, false)
-                            TextChapterLayout.invalidateRegexCache()
+                            HighlightProtagonistPatterns.invalidate()
                             protagonistRefresh.value++
                         }
                         is ReadingMemoryDetailIntent.DeleteReview -> {

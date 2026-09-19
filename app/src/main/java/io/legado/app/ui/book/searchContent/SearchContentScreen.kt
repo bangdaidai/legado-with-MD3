@@ -210,7 +210,7 @@ fun SearchContentScreen(
                             autoFocus = autoFocus,
                             scrollState = listState,
                             onQueryChange = { onIntent(SearchContentIntent.UpdateQuery(it)) },
-                            onSearch = { onIntent(SearchContentIntent.SubmitSearch) },
+                            onSearch = { onIntent(SearchContentIntent.SubmitSearch(it)) },
                             trailingIcon = {
                                 if (searchQuery.isNotEmpty()) {
                                     SmallPlainButton(

@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Bundle
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
@@ -15,7 +16,6 @@ import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.model.BookCover
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.ui.config.otherConfig.OtherConfig
 import io.legado.app.utils.mapParallelSafe
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -40,8 +40,9 @@ class ChangeCoverViewModel(
     application: Application,
     private val searchRepository: SearchRepository,
     private val bookSourceRepository: BookSourceRepository,
+    private val downloadCacheSettingsGateway: DownloadCacheSettingsGateway,
 ) : BaseViewModel(application) {
-    private val threadCount = OtherConfig.threadCount
+    private val threadCount = downloadCacheSettingsGateway.currentSettings.threadCount
     private var searchPool: ExecutorCoroutineDispatcher? = null
     private var searchSuccess: ((SearchBook) -> Unit)? = null
     private var upAdapter: (() -> Unit)? = null

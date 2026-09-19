@@ -9,8 +9,8 @@ import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.model.AiMessagePart
 import io.legado.app.domain.usecase.AiTaskStep
 import io.legado.app.domain.usecase.IdentifyBookCharactersUseCase
+import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.ui.ai.chat.AiThinkingStep
-import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import kotlinx.collections.immutable.ImmutableList
@@ -315,8 +315,8 @@ class BookCharacterListViewModel(
                         selected
                     )
                 }
-                // 男女主可能因本次识别变成主角，跟随主角的高亮正则缓存需失效
-                TextChapterLayout.invalidateRegexCache()
+                // 男女主可能因本次识别变成主角，跟随主角的高亮正则展开缓存需失效
+                HighlightProtagonistPatterns.invalidate()
                 _uiState.update { it.copy(aiSheet = null, isAiSheetVisible = false) }
                 load()
             } catch (e: CancellationException) {

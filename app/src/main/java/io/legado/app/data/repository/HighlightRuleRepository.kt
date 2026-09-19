@@ -198,7 +198,7 @@ class HighlightRuleRepository(
             textColorNight = runCatching { rule.textColorNight }.getOrNull(),
             bgColor = runCatching { rule.bgColor }.getOrNull(),
             bgColorNight = runCatching { rule.bgColorNight }.getOrNull(),
-            underlineMode = runCatching { rule.underlineMode }.getOrDefault(0).coerceIn(0, 5),
+            underlineMode = runCatching { rule.underlineMode }.getOrDefault(0).coerceIn(0, 7),
             underlineColor = runCatching { rule.underlineColor }.getOrNull(),
             underlineColorNight = runCatching { rule.underlineColorNight }.getOrNull(),
             underlineWidth = runCatching { rule.underlineWidth }.getOrDefault(1f)
@@ -206,6 +206,11 @@ class HighlightRuleRepository(
             underlineOffset = runCatching { rule.underlineOffset }.getOrDefault(2f)
                 .coerceIn(-10f, 20f),
             underlineSvgPath = runCatching { rule.underlineSvgPath }.getOrNull(),
+            // 旧版遗漏：整表保存会经 sanitize 重建对象，这 4 个字段不落进去就会被静默重置回默认值
+            underlineDashLen = runCatching { rule.underlineDashLen }.getOrDefault(8f).coerceIn(0f, 20f),
+            underlineDashGap = runCatching { rule.underlineDashGap }.getOrDefault(5f).coerceIn(0f, 20f),
+            underlineRoundCap = runCatching { rule.underlineRoundCap }.getOrDefault(false),
+            underlineFeather = runCatching { rule.underlineFeather }.getOrDefault(0f).coerceIn(0f, 5f),
             bgImage = runCatching { rule.bgImage }.getOrNull()?.takeIf { it.isNotBlank() },
             bgImageFit = runCatching { rule.bgImageFit }.getOrDefault(0).coerceIn(0, 3),
             bgImageScale = runCatching { rule.bgImageScale }.getOrDefault(1f).coerceIn(0.1f, 5f),
@@ -229,6 +234,7 @@ class HighlightRuleRepository(
             bgMarginTop = runCatching { rule.bgMarginTop }.getOrDefault(0f).coerceIn(-16f, 64f),
             bgMarginBottom = runCatching { rule.bgMarginBottom }.getOrDefault(0f).coerceIn(-16f, 64f),
             underlineBelowText = runCatching { rule.underlineBelowText }.getOrDefault(false),
+            manualNineSlice = runCatching { rule.manualNineSlice }.getOrDefault(true),
         )
     }
 

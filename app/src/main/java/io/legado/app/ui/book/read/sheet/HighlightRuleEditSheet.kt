@@ -44,13 +44,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
@@ -77,9 +77,9 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
+import io.legado.app.feature.reader.platform.AndroidReaderTextShaper
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadStyleResolver
-import io.legado.app.ui.book.read.page.entities.column.TextColumn
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FontFolderState
@@ -100,11 +100,11 @@ import io.legado.app.utils.SelectImageContract
 import io.legado.app.utils.launch
 import io.legado.app.utils.textHeight
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
-import io.legado.app.utils.toastOnUi
 import java.io.File
 
 @Composable
@@ -182,6 +182,7 @@ fun HighlightRuleEditSheet(
     var showNinePatchEditor by remember(show, rule) { mutableStateOf(false) }
     var showInsetEditor by remember { mutableStateOf(false) }
     var showMarginEditor by remember { mutableStateOf(false) }
+    var manualNineSlice by remember(show, rule) { mutableStateOf(initial.manualNineSlice) }
 
     // Config binding state — empty set = global (applies to all configs)
     var configNames by remember(show, rule) {
@@ -316,6 +317,7 @@ fun HighlightRuleEditSheet(
                             bgMarginBottom = bgMarginBottom,
                             useProtagonist = useProtagonist,
                             characterRole = characterRole.ifBlank { null },
+                            manualNineSlice = manualNineSlice,
                         )
                     )
                 },
@@ -493,8 +495,10 @@ fun HighlightRuleEditSheet(
                         stringResource(R.string.underline_wave),
                         stringResource(R.string.underline_title_bar),
                         stringResource(R.string.underline_svg),
+                        stringResource(R.string.bookmark_mark_effect_strike),
+                        stringResource(R.string.bookmark_mark_effect_highlight),
                     )
-                    val underlineValues = arrayOf("1", "2", "3", "4", "5")
+                    val underlineValues = arrayOf("1", "2", "3", "4", "5", "6", "7")
                     TinyDropdownSettingItem(
                         title = stringResource(R.string.underline_style),
                         selectedValue = underlineMode.toString(),
@@ -1056,6 +1060,8 @@ fun HighlightRuleEditSheet(
             npRight = 1f - right
             npTop = top
             npBottom = 1f - bottom
+            // 只有真的在编辑器里保存过切分线才转手动；选九宫格后直接关编辑器＝保持自动切
+            manualNineSlice = true
             showNinePatchEditor = false
         },
     )
@@ -1300,7 +1306,8 @@ internal fun HighlightRulePreview(
                 android.text.TextPaint().apply {
                     textSize = with(density) { previewBaseFontSize.sp.toPx() }
                     letterSpacing = ReadBookConfig.letterSpacing
-                    typeface = TextColumn.getTypeface(ReadBookConfig.textFont, textBoldWeight)
+                    typeface = AndroidReaderTextShaper(this)
+                        .loadTypeface(ReadBookConfig.textFont, textBoldWeight, false)
                 }.textHeight
             }
             val previewTextResult = textMeasurer.measure(
@@ -1332,6 +1339,15 @@ internal fun HighlightRulePreview(
                 if (probeBox != null) {
                     ninePatchTopOverhang = -probeBox.top
                     ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
+                }
+                6 -> {
+                    val y = textResult.size.height * 0.52f
+                    drawLine(
+                        color = resolvedUnderlineColor,
+                        start = Offset(0f, y),
+                        end = Offset(textResult.size.width.toFloat(), y),
+                        strokeWidth = strokeWidth,
+                    )
                 }
             }
             val canvasHeightDp = with(density) {
@@ -1397,27 +1413,52 @@ internal fun HighlightRulePreview(
                         matchRanges.forEach { range ->
                             val start = range.first
                             val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
-                            previewTextResult.forEachLineSegment(start, endExclusive) { left, right, _, bottom, _ ->
-                                drawUnderlineSegment(
-                                    mode = underlineMode,
-                                    color = resolvedUnderlineColor,
-                                    strokeWidth = strokeWidth,
-                                    startX = left,
-                                    endX = right,
-                                    y = bottom + underlineOffset.dp.toPx(),
-                                    roundCap = underlineRoundCap,
-                                    feather = underlineFeather,
-                                    dashLen = underlineDashLen,
-                                    dashGap = underlineDashGap,
-                                )
+                            previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
+                                when (underlineMode) {
+                                    // 7 荧光：下半行铺半透明色带，几何与新引擎 mode7 同口径
+                                    7 -> drawRect(
+                                        color = resolvedUnderlineColor.copy(alpha = 0.4f),
+                                        topLeft = Offset(left, top + (bottom - top) * 0.5f),
+                                        size = Size(right - left, (bottom - top) * 0.5f),
+                                    )
+
+                                    // 6 删除线：行高 52% 处横线，几何与新引擎 mode6 同口径
+                                    6 -> drawUnderlineSegment(
+                                        mode = 1,
+                                        color = resolvedUnderlineColor,
+                                        strokeWidth = strokeWidth,
+                                        startX = left,
+                                        endX = right,
+                                        y = top + (bottom - top) * 0.52f,
+                                        roundCap = underlineRoundCap,
+                                        feather = underlineFeather,
+                                        dashLen = underlineDashLen,
+                                        dashGap = underlineDashGap,
+                                    )
+
+                                    else -> drawUnderlineSegment(
+                                        mode = underlineMode,
+                                        color = resolvedUnderlineColor,
+                                        strokeWidth = strokeWidth,
+                                        startX = left,
+                                        endX = right,
+                                        y = bottom + underlineOffset.dp.toPx(),
+                                        roundCap = underlineRoundCap,
+                                        feather = underlineFeather,
+                                        dashLen = underlineDashLen,
+                                        dashGap = underlineDashGap,
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                if (underlineBelowText) drawUnderlinesBlock()
+                // 荧光色带必须压在文字层之下，与正文渲染一致，不受「下层」开关影响
+                val belowText = underlineBelowText || underlineMode == 7
+                if (belowText) drawUnderlinesBlock()
                 drawText(previewTextResult)
-                if (!underlineBelowText) drawUnderlinesBlock()
+                if (!belowText) drawUnderlinesBlock()
 
                 // 恢复画布，避免平移泄漏到后续绘制
                 if (ninePatchTopOverhang != 0f) {

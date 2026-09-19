@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.AiGenerateRequest
+import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiReasoningLevel
@@ -16,6 +17,7 @@ import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechEmotion
@@ -24,7 +26,6 @@ import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.help.readaloud.segment.AiSpeechAtom
 import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
-import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
@@ -69,8 +70,12 @@ class RefineSpeechWithAiUseCase(
         bookAiCooldownUntil.remove(bookUrl)
     }
 
-    suspend fun resolverVersion(bookUrl: String, mode: SpeechAnalysisMode): String {
-        if (mode == SpeechAnalysisMode.Rule) return RuleBasedSpeechSegmenter.VERSION
+    suspend fun resolverVersion(
+        bookUrl: String,
+        mode: SpeechAnalysisMode,
+        policy: ContentSplitPolicy,
+    ): String {
+        if (mode == SpeechAnalysisMode.Rule) return ruleResolverVersion(policy)
         val preset = resolvePreset()
         val profiles = knownProfiles(bookUrl)
         val characterRevision = profiles
@@ -78,7 +83,8 @@ class RefineSpeechWithAiUseCase(
             .joinToString("|") { "${it.id}:${it.updatedAt}" }
         val promptHash = MD5Utils.md5Encode(systemPrompt(preset, mode))
         return listOf(
-            RuleBasedSpeechSegmenter.VERSION,
+            // 与纯规则分段共用同一前缀，AI 结果才不会被误判成规则模式
+            ruleResolverVersion(policy),
             VERSION,
             mode.storageValue,
             preset.model.id,
@@ -91,6 +97,8 @@ class RefineSpeechWithAiUseCase(
         analysisResult: ChapterSpeechAnalysisResult,
         paragraphs: List<CanonicalSpeechParagraph>,
         mode: SpeechAnalysisMode,
+        reasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
+        policy: ContentSplitPolicy = ContentSplitPolicy.SentenceLevel,
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
@@ -114,13 +122,30 @@ class RefineSpeechWithAiUseCase(
                         analysisResult = analysisResult,
                         profiles = profiles,
                         preset = preset,
+                        reasoningLevel = reasoningLevel,
                         now = now,
                     )
                     SpeechAnalysisMode.AiUnderstanding -> {
-                        if (analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
-                            completeRuleSegments(analysisResult, profiles, preset, now)
+                        // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
+                        // 拆成多个片段，让用户显式选择的「一段 = 一个播放单元」失效。此时只让 AI
+                        // 补全说话人与情绪，边界仍由规则分段器提供的整单元保持。
+                        if (!policy.allowRoleSplits || analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
+                            completeRuleSegments(
+                                analysisResult = analysisResult,
+                                profiles = profiles,
+                                preset = preset,
+                                reasoningLevel = reasoningLevel,
+                                now = now,
+                            )
                         } else {
-                            understandAtoms(analysisResult, paragraphs, profiles, preset, now)
+                            understandAtoms(
+                                analysisResult = analysisResult,
+                                paragraphs = paragraphs,
+                                profiles = profiles,
+                                preset = preset,
+                                reasoningLevel = reasoningLevel,
+                                now = now,
+                            )
                         }
                     }
                 }
@@ -176,6 +201,7 @@ class RefineSpeechWithAiUseCase(
         analysisResult: ChapterSpeechAnalysisResult,
         profiles: List<BookCharacterProfile>,
         preset: AiTaskPresetConfig,
+        reasoningLevel: AiReasoningLevel,
         now: Long,
     ): List<ChapterSpeechSegment> {
         val candidates = analysisResult.segments.filter { segment ->
@@ -203,7 +229,9 @@ class RefineSpeechWithAiUseCase(
                     )
                 },
             )
-            parseSegmentDecisions(generate(preset, SpeechAnalysisMode.RuleWithAi, payload))
+            parseSegmentDecisions(
+                generate(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
+            )
                 .forEach { decision ->
                     require(decision.segmentId in chunk.map(ChapterSpeechSegment::id)) {
                         "AI returned an unknown segmentId: ${decision.segmentId}"
@@ -298,6 +326,7 @@ class RefineSpeechWithAiUseCase(
         paragraphs: List<CanonicalSpeechParagraph>,
         profiles: List<BookCharacterProfile>,
         preset: AiTaskPresetConfig,
+        reasoningLevel: AiReasoningLevel,
         now: Long,
     ): List<ChapterSpeechSegment> {
         val atoms = paragraphs.flatMap(AiSpeechAtomizer::atomize)
@@ -311,7 +340,8 @@ class RefineSpeechWithAiUseCase(
                     mapOf("atomId" to atom.id, "text" to atom.text)
                 },
             )
-            val groups = parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload))
+            val groups =
+                parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel))
             validateCoverage(chunk, groups)
             val knownIds = knownProfiles.mapTo(hashSetOf(), BookCharacterProfile::id)
             require(groups.all { group ->
@@ -369,6 +399,7 @@ class RefineSpeechWithAiUseCase(
         preset: AiTaskPresetConfig,
         mode: SpeechAnalysisMode,
         payload: Any,
+        reasoningLevel: AiReasoningLevel,
     ): String = aiTextGateway.generate(
         AiGenerateRequest(
             model = preset.model,
@@ -376,13 +407,7 @@ class RefineSpeechWithAiUseCase(
                 AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode)),
                 AiMessage(AiMessageRole.USER, GSON.toJson(payload)),
             ),
-            // 说话人归因是结构化抽取，思考没有收益，却会把 max_tokens 花光 ——
-            // 思考型模型于是只回 reasoning_content、正文为空，整块分析白跑。
-            params = preset.params.copy(
-                temperature = 0f,
-                reasoningLevel = AiReasoningLevel.OFF,
-                maxOutputTokens = maxOf(preset.params.maxOutputTokens ?: 0, MIN_OUTPUT_TOKENS),
-            ),
+            params = speechAnalysisParams(preset, reasoningLevel),
             taskType = AiTaskType.ANALYZE_SPEECH,
         )
     ).getOrThrow().text
@@ -561,8 +586,6 @@ class RefineSpeechWithAiUseCase(
         const val VERSION = "ai-speech-analysis-v2"
         private const val MAX_CHUNK_CHARS = 6_000
 
-        /** 一块 6000 字要按段返回 JSON，输出上限低于这个数就会被截断 */
-        private const val MIN_OUTPUT_TOKENS = 8_000
         private const val HYBRID_CONFIDENCE_THRESHOLD = 0.75f
         private const val DRAFT_SPEAKER_CONFIDENCE = 0.6f
 
@@ -598,3 +621,25 @@ class RefineSpeechWithAiUseCase(
                 "speakerGender unknown."
     }
 }
+
+/**
+ * Request params for AI speech analysis.
+ *
+ * The caller's level wins because the preset/model default (MEDIUM) would otherwise force thinking
+ * on for every analysis: models that think by default (Zhipu GLM, DeepSeek) then spend the answer on
+ * `reasoning_content` and the strict JSON contract of this task fails. AUTO keeps the presets in
+ * charge, mirroring [io.legado.app.domain.usecase.IdentifyBookCharactersUseCase.identifyStream].
+ */
+internal fun speechAnalysisParams(
+    preset: AiTaskPresetConfig,
+    reasoningLevel: AiReasoningLevel,
+): AiGenerationParams = preset.params.copy(
+    temperature = 0f,
+    reasoningLevel = reasoningLevel
+        .takeUnless { it == AiReasoningLevel.AUTO }
+        ?: preset.params.reasoningLevel,
+    // 一块 6000 字要按段返回 JSON，输出上限低于这个数就会被截断
+    maxOutputTokens = maxOf(preset.params.maxOutputTokens ?: 0, MIN_OUTPUT_TOKENS),
+)
+
+private const val MIN_OUTPUT_TOKENS = 8_000

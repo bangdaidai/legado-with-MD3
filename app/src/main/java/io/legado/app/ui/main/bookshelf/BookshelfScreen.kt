@@ -162,7 +162,7 @@ fun BookshelfRouteScreen(
     viewModel: BookshelfViewModel = koinViewModel(),
     scrollToTopRequest: Long = 0L,
     onScrollToTopRequestHandled: (Long) -> Unit = {},
-    onBookClick: (BookShelfItem) -> Unit,
+    onBookClick: (BookShelfItem, String?) -> Unit,
     onBookLongClick: (book: BookShelfItem, sharedCoverKey: String?) -> Unit,
     onNavigateToSearch: (String) -> Unit,
     onNavigateToRemoteImport: () -> Unit,
@@ -210,7 +210,7 @@ fun BookshelfScreen(
     excludedTags: List<io.legado.app.data.entities.ExcludedTag> = emptyList(),
     scrollToTopRequest: Long = 0L,
     onScrollToTopRequestHandled: (Long) -> Unit = {},
-    onBookClick: (BookShelfItem) -> Unit,
+    onBookClick: (BookShelfItem, String?) -> Unit,
     onBookLongClick: (book: BookShelfItem, sharedCoverKey: String?) -> Unit,
     onNavigateToSearch: (String) -> Unit,
     onNavigateToRemoteImport: () -> Unit,
@@ -895,7 +895,7 @@ fun BookshelfScreen(
                                     onLongClick = {
                                         onIntent(BookshelfIntent.ShowOverlay(BookshelfOverlay.GroupEditSheet(group.groupId)))
                                     },
-                                    onBookClick = onBookClick
+                                    onBookClick = { book -> onBookClick(book, null) }
                                 )
                             } else {
                                 BookGroupItemGrid(
@@ -1356,7 +1356,7 @@ fun BookshelfPage(
     onMoveBook: (fromIndex: Int, toIndex: Int, currentBooks: ImmutableList<BookUiItem>) -> Unit,
     onDragFinished: () -> Unit,
     onGlobalSearch: () -> Unit,
-    onBookClick: (BookShelfItem) -> Unit,
+    onBookClick: (BookShelfItem, String?) -> Unit,
     onBookLongClick: (BookShelfItem, String?) -> Unit,
     isCurrentPage: Boolean = true,
     sharedCoverGroupId: Long,
@@ -1533,7 +1533,7 @@ fun BookshelfPage(
                             if (uiState.isEditMode) {
                                 onToggleBookSelection(bookUi)
                             } else {
-                                onBookClick(bookUi.book)
+                                onBookClick(bookUi.book, sharedCoverKey)
                             }
                         },
                         onLongClick = if (canReorderBooks) {

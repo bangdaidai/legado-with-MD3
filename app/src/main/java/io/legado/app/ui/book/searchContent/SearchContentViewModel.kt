@@ -40,7 +40,9 @@ data class SearchContentUiState(
 
 sealed interface SearchContentIntent {
     data class UpdateQuery(val value: String) : SearchContentIntent
-    data object SubmitSearch : SearchContentIntent
+
+    /** 用户在输入法上按下「搜索」：确认这次查询并把关键词写入搜索历史。 */
+    data class SubmitSearch(val value: String) : SearchContentIntent
     data class ToggleReplace(val enabled: Boolean) : SearchContentIntent
     data class ToggleRegex(val enabled: Boolean) : SearchContentIntent
     data object ToggleHistoryScope : SearchContentIntent
@@ -75,6 +77,12 @@ class SearchContentViewModel(
         searchContentRepository.getLastSession(bookUrl)
     } else null
 
+    /**
+     * 从阅读页选中文字进入时，这次查询是用户主动发起的，允许记入历史；
+     * 其余情况（恢复上次会话、输入过程中的自动搜索）只做预览，不污染历史。
+     */
+    private val initialSearchSubmitted = initialSearchWord != null
+
     private val _uiState = MutableStateFlow(
         SearchContentUiState(
             searchQuery = initialSearchWord ?: restoredSession?.query.orEmpty(),
@@ -108,8 +116,9 @@ class SearchContentViewModel(
                 _uiState.update { it.copy(searchQuery = intent.value) }
                 executeSearch()
             }
-            SearchContentIntent.SubmitSearch -> {
-                executeSearch(saveHistory = true)
+            is SearchContentIntent.SubmitSearch -> {
+                _uiState.update { it.copy(searchQuery = intent.value) }
+                executeSearch(recordHistory = true)
             }
             is SearchContentIntent.ToggleReplace -> {
                 _uiState.update { it.copy(replaceEnabled = intent.enabled) }
@@ -156,7 +165,9 @@ class SearchContentViewModel(
                 )
             }
             observeHistory()
-            if (cachedResults.isNullOrEmpty() && state.searchQuery.isNotBlank()) executeSearch()
+            if (cachedResults.isNullOrEmpty() && state.searchQuery.isNotBlank()) {
+                executeSearch(recordHistory = initialSearchSubmitted)
+            }
         }
     }
 
@@ -171,7 +182,13 @@ class SearchContentViewModel(
         }
     }
 
-    private fun executeSearch(saveHistory: Boolean = false) {
+    /**
+     * 执行一次全文搜索。
+     *
+     * [recordHistory] 只在用户确认搜索（输入法搜索键、从阅读页选中文字发起）时为 true：
+     * 输入过程中的自动搜索只用于预览，早期实现会把拼音、半截词的中间态全部写进搜索历史。
+     */
+    private fun executeSearch(recordHistory: Boolean = false) {
         searchJob?.cancel()
         val state = _uiState.value
         if (state.searchQuery.isBlank()) {
@@ -190,7 +207,7 @@ class SearchContentViewModel(
         )
         searchJob = viewModelScope.launch {
             state.book?.let { book ->
-                if (saveHistory) {
+                if (recordHistory) {
                     searchContentRepository.saveHistory(book, state.searchQuery)
                 }
                 searchContentRepository.search(

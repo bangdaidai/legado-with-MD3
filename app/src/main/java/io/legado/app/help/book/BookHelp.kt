@@ -12,13 +12,16 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
+import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
+import io.legado.app.domain.gateway.ReadSettingsGateway
+import io.legado.app.help.book.BookHelp.saveText
+import io.legado.app.help.book.BookHelp.saveToLocalTxt
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.localBook.TextFile
-import io.legado.app.ui.config.otherConfig.OtherConfig
-import io.legado.app.ui.config.readConfig.ReadConfig
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.FileUtils
+import io.legado.app.utils.HtmlFormatter
 import io.legado.app.utils.ImageUtils
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.NetworkUtils
@@ -46,6 +49,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.apache.commons.text.similarity.JaccardSimilarity
+import org.koin.core.context.GlobalContext
 import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -61,6 +65,9 @@ import kotlin.math.min
 
 @Suppress("unused", "ConstPropertyName")
 object BookHelp {
+    private val readGateway by lazy { GlobalContext.get().get<ReadSettingsGateway>() }
+    private val cacheGateway by lazy { GlobalContext.get().get<DownloadCacheSettingsGateway>() }
+
     private const val CACHED_CONTENT_PREFIX_LENGTH = 1_024
     private val downloadDir: File = appCtx.externalFiles
     private const val cacheFolderName = "book_cache"
@@ -136,12 +143,12 @@ object BookHelp {
     private fun clearComicCache(book: Book) {
         //只处理漫画
         //为0的时候，不清除已缓存数据
-        if (!book.isImage || ReadConfig.imageRetainNum == 0) {
+        if (!book.isImage || cacheGateway.currentSettings.imageRetainNum == 0) {
             return
         }
         //向前保留设定数量，向后保留预下载数量
-        val startIndex = book.durChapterIndex - ReadConfig.imageRetainNum
-        val endIndex = book.durChapterIndex + ReadConfig.preDownloadNum
+        val startIndex = book.durChapterIndex - cacheGateway.currentSettings.imageRetainNum
+        val endIndex = book.durChapterIndex + readGateway.currentSettings.preDownloadNum
         val chapterList = appDb.bookChapterDao.getChapterList(book.bookUrl, startIndex, endIndex)
         val imgNames = hashSetOf<String>()
         //获取需要保留章节的图片信息
@@ -204,11 +211,25 @@ object BookHelp {
             book.getFolderName(),
             bookChapter.getFileName(),
         ).writeText(content)
-        if (book.isOnLineTxt && ReadConfig.tocCountWords) {
-            val wordCount = StringUtils.wordCountFormat(content.length)
+        if (book.isOnLineTxt && readGateway.currentSettings.tocCountWords) {
+            // 正文里携带的 <img src="data:base64">、内联 SVG 等富文本源码会把章节字数虚抬
+            // 几倍（3 页正文显示 3000+ 字）。这里剔除标签/Base64 后按可读纯文本计数，
+            // 取代原先的 StringUtils.wordCountFormat(content.length)。
+            val readableLength = HtmlFormatter.countReadableTextLength(content)
+            val wordCount = StringUtils.wordCountFormat(readableLength)
             bookChapter.wordCount = wordCount
             appDb.bookChapterDao.update(bookChapter)
         }
+    }
+
+    /**
+     * 保存章名。[BookChapter] 是 Room 实体，就地改名后 update，与 [saveText] 里
+     * `wordCount` 的写法一致。本地 TXT 的源文件标题由随后的 [saveText] →
+     * [saveToLocalTxt] 写入（它用 `bookChapter.title` 当段首标题）。
+     */
+    fun saveChapterTitle(bookChapter: BookChapter, title: String) {
+        bookChapter.title = title
+        appDb.bookChapterDao.update(bookChapter)
     }
 
     private fun saveToLocalTxt(book: Book, bookChapter: BookChapter, content: String) {
@@ -302,7 +323,7 @@ object BookHelp {
         book: Book,
         bookChapter: BookChapter,
         content: String,
-        concurrency: Int = OtherConfig.threadCount,
+        concurrency: Int = cacheGateway.currentSettings.threadCount,
         onProgress: (suspend (completed: Int, total: Int) -> Unit)? = null,
     ): Int = coroutineScope {
         val imageUrls = flowImages(bookChapter, content).toList()
