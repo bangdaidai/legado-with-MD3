@@ -40,6 +40,7 @@ import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
+import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
@@ -101,11 +102,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -248,6 +253,22 @@ class ReadBookViewModel(
     ) }
 
     val markingState get() = markingDelegate.uiState
+    /**
+     * 选区预览样式的窄流，交给排版层画布消费。只在此字段变化时重组，
+     * 避免标记域其它状态（规则加载、编辑预填）触发整窗口重组。
+     */
+    val markingPreviewStyle: StateFlow<TextProcessStyle?> by lazy {
+        markingDelegate.uiState
+            .map { it.previewStyle }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }
+
+    /** 排版层提交当前章重排批次后回调：撤掉保存后的粘性预览。 */
+    fun onComposeReaderPagesCommitted(chapterIndex: Int) {
+        markingDelegate.onPagesCommitted(chapterIndex)
+    }
+
     /**
      * 划线笔记编辑可能从目录 Sheet 进入：保存/删除/取消后应回到原 sheet（目录），
      * 而不是被丢回阅读页。从划词菜单新建时无原 sheet，回 null。
@@ -1554,6 +1575,8 @@ class ReadBookViewModel(
             is ReadBookIntent.SaveMarking -> {
                 markingDelegate.save(intent.style, intent.note)
             }
+
+            is ReadBookIntent.MarkingStylePreview -> markingDelegate.preview(intent.style)
 
             is ReadBookIntent.DeleteMarking -> {
                 markingDelegate.deleteCurrent()

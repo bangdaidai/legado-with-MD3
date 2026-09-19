@@ -31,14 +31,14 @@ object BookContentProcessEngine {
                 if (process.kind == BookContentProcess.KIND_USER_UNDERLINE ||
                     process.kind == BookContentProcess.KIND_USER_HIGHLIGHT
                 ) {
-                    // 用户划线/高亮标记：不改文本。锚点能在正文里解析到说明标记仍有效，
-                    // 计入 effectiveProcesses 供渲染层把样式应用到区间。
-                    val anchor = GSON.fromJsonObject<TextProcessAnchor>(process.anchorJson)
-                        .getOrNull()
-                        ?: return@forEach
-                    if (findTargetRange(output, anchor) != null) {
-                        effectiveProcesses.add(process)
-                    }
+                    // 用户划线/高亮标记：不改文本，也不在这里用原始正文预筛。原始正文里图片
+                    // 是整段 `<img>` 标签、usehtml 是带标记源码，而选区取的是排版后的字符
+                    // （图片不贡献字符），跨段评气泡/HTML 段的选择在原始文本上必然匹配不上，
+                    // 预筛会把笔记静默丢掉。是否有效统一交给渲染层在选区同一字符空间里解析
+                    // （LegacyReaderStyleRangeMapper 解析不到即跳过）。
+                    GSON.fromJsonObject<TextProcessAnchor>(process.anchorJson)
+                        .getOrNull() ?: return@forEach
+                    effectiveProcesses.add(process)
                     return@forEach
                 }
                 val anchor = GSON.fromJsonObject<TextProcessAnchor>(process.anchorJson)
@@ -134,7 +134,10 @@ object BookContentProcessEngine {
         val normalized = StringBuilder(text.length)
         val sourceIndices = ArrayList<Int>(text.length)
         text.forEachIndexed { index, char ->
-            if (!char.isProcessWhitespace()) {
+            // 图片占位符与空白一样在降级匹配中剔除：选区文本不收集行内图（段评气泡），
+            // 而正文栅格里图片占 1 个 \uFFFC，跨气泡的选择只有忽略占位符才能对上。
+            // 回填的 sourceIndices 仍指回原串，命中的区间会自动把占位符包进范围内。
+            if (!char.isProcessWhitespace() && char != '\uFFFC') {
                 normalized.append(char)
                 sourceIndices.add(index)
             }

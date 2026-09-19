@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 
 /**
@@ -22,12 +23,22 @@ object HighlightProtagonistPatterns : KoinComponent {
 
     private val cache = ConcurrentHashMap<String, String?>()
 
+    private val generationCounter = AtomicLong()
+
+    /**
+     * 人物数据的代次。跟随主角的高亮结果不写在规则里，规则列表的哈希对此毫无感知，
+     * 所以排版窗口缓存的身份键必须并入这个值——否则「正文里选词设主角」后当前章直接
+     * 复用旧页表，要翻到下一章（章节身份变了）才看得到新高亮。
+     */
+    val generation: Long get() = generationCounter.get()
+
     /** 返回展开后的 alternation 正则；该角色下没有任何人物时返回 null，调用方跳过整条规则。 */
     fun patternFor(bookUrl: String, role: String?): String? =
         cache.getOrPut("$bookUrl|${role.orEmpty()}") { build(bookUrl, role) }
 
     /** 人物资料变更后调用：清缓存，下次排版重新查库展开。 */
     fun invalidate() {
+        generationCounter.incrementAndGet()
         cache.clear()
     }
 

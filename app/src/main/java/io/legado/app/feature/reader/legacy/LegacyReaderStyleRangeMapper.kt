@@ -32,6 +32,10 @@ object LegacyReaderStyleRangeMapper {
     ): List<ReaderStyleRange> {
         val result = mutableListOf<ReaderStyleRange>()
         val bodyText = semanticBodyText(source)
+        // 笔记锚点必须在与选区完全相同的字符空间里解析：ReaderSelection.selectedText
+        // 就是按这里的 chapterPosition 从语义正文（含 usehtml 段的解析文字）拼出来的。
+        // bodyText 是正则规则空间（跳过 usehtml，与旧引擎网格一致），两者不能混用。
+        val markingText = source.semanticContent
         val titleText = source.semanticTitle
         var ruleIndex = 0
         rules.filter(HighlightRule::enabled).forEach { rule ->
@@ -74,7 +78,8 @@ object LegacyReaderStyleRangeMapper {
                     ?: return@forEachIndexed
                 val markingStyle = GSON.fromJsonObject<TextProcessStyle>(process.styleJson).getOrNull()
                     ?: return@forEachIndexed
-                val range = BookContentProcessEngine.resolveRange(bodyText, anchor) ?: return@forEachIndexed
+                val range = BookContentProcessEngine.resolveRange(markingText, anchor)
+                    ?: return@forEachIndexed
                 result += ReaderStyleRange(
                     start = range.first,
                     endExclusive = range.last + 1,

@@ -384,6 +384,9 @@ fun ReadBookScreen(
             onIntent(ReadBookIntent.SaveMarking(style, note))
         },
         onDelete = { onIntent(ReadBookIntent.DeleteMarking) },
+        onStylePreview = { style ->
+            onIntent(ReadBookIntent.MarkingStylePreview(style))
+        },
         onGenerateShareCard = if (markingState.editing != null) {
             { onIntent(ReadBookIntent.GenerateShareCardFromMarking) }
         } else {

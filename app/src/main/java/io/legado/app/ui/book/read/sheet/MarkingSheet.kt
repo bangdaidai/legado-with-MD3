@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +81,7 @@ fun MarkingSheet(
     onSave: (style: TextProcessStyle, note: String) -> Unit,
     onDelete: () -> Unit,
     showStyleConfig: Boolean = true,
+    onStylePreview: (TextProcessStyle) -> Unit = {},
     onGenerateShareCard: (() -> Unit)? = null,
 ) {
     val selection = state.selection
@@ -128,6 +130,22 @@ fun MarkingSheet(
     val noteState = key(show, editing) {
         rememberTextFieldState(initialText = editing?.note ?: "")
     }
+    // Sheet 当前拼出的样式：既是保存用的最终值，也是正文选区的实时预览值。
+    // 会话内才上报（新建走划词选区，编辑走点正文划线时画布建的标记选区）；
+    // 打开即以预选样式上报一次，「样式瞬间出现」从这里来——纯预览不落库，
+    // 不会留下半途笔记。
+    val currentStyle = buildStyle(
+        useRule = useRule,
+        selectedRule = state.highlightRules.firstOrNull { it.id == selectedRuleId },
+        effect = effect,
+        markColor = markColor,
+        underlineWidth = underlineWidth,
+        underlineOffset = underlineOffset,
+        underlineSvgPath = underlineSvgPath,
+    )
+    if (show && (selection != null || editing != null)) {
+        LaunchedEffect(currentStyle) { onStylePreview(currentStyle) }
+    }
 
     AppModalBottomSheet(
         show = show,
@@ -144,18 +162,7 @@ fun MarkingSheet(
         },
         endAction = {
             MediumTonalButton(
-                onClick = {
-                    val style = buildStyle(
-                        useRule = useRule,
-                        selectedRule = state.highlightRules.firstOrNull { it.id == selectedRuleId },
-                        effect = effect,
-                        markColor = markColor,
-                        underlineWidth = underlineWidth,
-                        underlineOffset = underlineOffset,
-                        underlineSvgPath = underlineSvgPath,
-                    )
-                    onSave(style, noteState.text.toString())
-                },
+                onClick = { onSave(currentStyle, noteState.text.toString()) },
                 icon = Icons.Default.Save,
                 contentDescription = stringResource(android.R.string.ok)
             )

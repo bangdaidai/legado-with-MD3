@@ -1202,6 +1202,9 @@ class ReadBookController(
             append('|').append(resolvedPaginationStyle.titleBottomSpacingPx)
             append('|').append(resolvedPaginationStyle.paragraphSpacing)
             append('|').append(ReadBookConfig.durConfig.highlightRules.hashCode())
+            // 跟随主角的规则按人物表现场展开，规则哈希不变但展开结果会变，
+            // 并入代次才能让「设完主角后复用旧页表」的路径重排。
+            append('|').append(HighlightProtagonistPatterns.generation)
         }
         val key = "$chapterLayoutIdentity,$paginationEnvironmentKey"
         if (directReaderLayoutKey == key && directReaderPages.isNotEmpty()) {
@@ -1469,6 +1472,11 @@ class ReadBookController(
             }
         )
         directReaderPageIndex?.let(::publishDirectReaderWindow)
+            // 当前章页面被这批新页替换 = 新样式已烘进画面，通知标记域撤掉粘性预览。
+            // 邻章批次不通知：它们的提交与当前章可见内容无关。
+        if (currentChapter.chapter.index in replacementChapterIndexes) {
+            viewModel.onComposeReaderPagesCommitted(currentChapter.chapter.index)
+        }
         }
     }
 

@@ -742,6 +742,8 @@ sealed interface ReadBookIntent {
     data class EditMarking(val id: String) : ReadBookIntent
     data object DismissMarking : ReadBookIntent
     data class SaveMarking(val style: TextProcessStyle, val note: String) : ReadBookIntent
+    /** 笔记 Sheet 内的样式选择实时预览到正文选区（不落库、不重排）。 */
+    data class MarkingStylePreview(val style: TextProcessStyle) : ReadBookIntent
     data object DeleteMarking : ReadBookIntent
     data object GenerateShareCardFromMarking : ReadBookIntent
 

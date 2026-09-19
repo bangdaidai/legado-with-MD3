@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.HighlightRule
+import io.legado.app.domain.model.TextProcessStyle
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -23,4 +24,11 @@ data class MarkingUiState(
     val highlightRules: ImmutableList<HighlightRule> = persistentListOf(),
     /** 编辑模式异步加载标记期间的占位，避免 Sheet 先空再弹内容。 */
     val loading: Boolean = false,
+    /**
+     * 选区实时预览样式：Sheet 会话期间由画布盖在选区上绘制（不改正文、不重排）。
+     * 保存后不能随弹层关闭立即撤掉——新样式要等整章重排批次提交才会烘进页面，
+     * 提前的空隙会露出旧页（先消失/先回旧样式的闪变）。由 [MarkingDelegate] 在
+     * 当前章批次提交后清除；期间选区一旦被点击取消，画布自行停绘。
+     */
+    val previewStyle: TextProcessStyle? = null,
 )

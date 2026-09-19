@@ -148,6 +148,8 @@ sealed interface TocIntent {
     data class ExportBookmarks(val uri: Uri, val isMarkdown: Boolean) : TocIntent
     data class UpdateBookmark(val bookmark: Bookmark) : TocIntent
     data class DeleteBookmark(val bookmark: Bookmark) : TocIntent
+    data class SaveMarkingNote(val id: String, val note: String) : TocIntent
+    data class DeleteMarking(val id: String) : TocIntent
     data class DownloadChapter(val id: Int) : TocIntent
     data object DownloadAll : TocIntent
     data object DownloadSelected : TocIntent
@@ -644,6 +646,8 @@ class TocViewModel(
             is TocIntent.ExportBookmarks -> exportCurrentBookBookmarks(intent.uri, intent.isMarkdown)
             is TocIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
             is TocIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
+            is TocIntent.SaveMarkingNote -> saveMarkingNote(intent.id, intent.note)
+            is TocIntent.DeleteMarking -> deleteMarking(intent.id)
             is TocIntent.DownloadChapter -> downloadChapter(intent.id)
             TocIntent.DownloadAll -> downloadAll()
             TocIntent.DownloadSelected -> downloadSelected()
@@ -837,6 +841,19 @@ class TocViewModel(
 
     fun deleteBookmark(bookmark: Bookmark) =
         viewModelScope.launch(Dispatchers.IO) { bookmarkRepository.delete(bookmark) }
+
+    /** 只改备注：样式与锚点沿用原笔记；列表是 Room Flow，保存后自动刷新。 */
+    private fun saveMarkingNote(id: String, note: String) =
+        viewModelScope.launch(Dispatchers.IO) {
+            bookMarkingGateway.getById(id)?.let { marking ->
+                bookMarkingGateway.upsert(
+                    marking.copy(note = note, updatedAt = System.currentTimeMillis())
+                )
+            }
+        }
+
+    private fun deleteMarking(id: String) =
+        viewModelScope.launch(Dispatchers.IO) { bookMarkingGateway.delete(id) }
 
     fun addBookmarksForSelected() = viewModelScope.launch(Dispatchers.IO) {
         val book = bookState.value ?: return@launch

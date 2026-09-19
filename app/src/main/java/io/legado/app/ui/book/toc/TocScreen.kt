@@ -88,9 +88,12 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
+import io.legado.app.ui.book.read.MarkingUiState
+import io.legado.app.ui.book.read.sheet.MarkingSheet
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.replace.ReplaceEditRoute
 import io.legado.app.ui.theme.LegadoTheme
@@ -240,6 +243,7 @@ fun TocScreen(
     val focusRequester = remember { FocusRequester() }
 
     var editingBookmark by remember { mutableStateOf<Bookmark?>(null) }
+    var editingMarking by remember { mutableStateOf<BookMarking?>(null) }
 
     val useReplace = state.useReplace
     val showWordCount = state.showWordCount
@@ -706,6 +710,9 @@ fun TocScreen(
                         markings = uiState.markings,
                         book = book,
                         onMarkingClick = onBookmarkClick,
+                        onMarkingLongClick = { marking ->
+                            editingMarking = marking
+                        },
                         contentPadding = adaptiveContentPaddingOnlyVertical(
                             top = padding.calculateTopPadding(),
                             bottom = 120.dp
@@ -772,6 +779,23 @@ fun TocScreen(
                 editingBookmark = null
             }
         )
+
+        editingMarking?.let { marking ->
+            MarkingSheet(
+                show = true,
+                state = MarkingUiState(editing = marking),
+                onDismissRequest = { editingMarking = null },
+                onSave = { _, note ->
+                    onIntent(TocIntent.SaveMarkingNote(marking.id, note))
+                    editingMarking = null
+                },
+                onDelete = {
+                    onIntent(TocIntent.DeleteMarking(marking.id))
+                    editingMarking = null
+                },
+                showStyleConfig = false,
+            )
+        }
     }
 }
 
@@ -1085,6 +1109,7 @@ private fun MarkingListContent(
     markings: List<TocMarkingItemUi>,
     book: Book?,
     onMarkingClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
+    onMarkingLongClick: (BookMarking) -> Unit,
     contentPadding: PaddingValues,
 ) {
     if (markings.isEmpty()) {
@@ -1115,16 +1140,18 @@ private fun MarkingListContent(
             }
             NormalCard(
                 onClick = { onMarkingClick(marking.chapterIndex, marking.chapterPos) },
+                onLongClick = { onMarkingLongClick(marking.raw) },
                 containerColor = if (marking.isDur) {
                     LegadoTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
                 } else {
                     LegadoTheme.colorScheme.surface
                 },
                 contentColor = contentColor,
-                cornerRadius = 0.dp,
+                cornerRadius = 12.dp,
                 modifier = Modifier
                     .animateItem()
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
             ) {
                 Column(
                     modifier = Modifier

@@ -162,6 +162,9 @@ fun ReadBookRouteScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val readPreferences by viewModel.readPreferences.collectAsStateWithLifecycle()
+    // 笔记选区预览样式：Sheet 会话期间盖在画布选区上，保存后保持到当前章重排批次
+    // 提交（域内自清），关闭弹层不再闪回旧页。窄流，只在该字段变化时重组。
+    val markingPreviewStyle by viewModel.markingPreviewStyle.collectAsStateWithLifecycle()
     val readerRenderState by readerSessionViewModel.uiState.collectAsStateWithLifecycle()
     val readerPageWindow = readerRenderState.pageWindow
     val readerPaginationError = readerRenderState.paginationError
@@ -734,6 +737,7 @@ fun ReadBookRouteScreen(
                 backgroundRevision = readerBackground.revision,
                 backgroundImageAlpha = readerBackgroundAlpha(state.styleConfig.bgAlpha),
                 selectionColor = LegadoTheme.colorScheme.primary.copy(alpha = 0.28f),
+                selectionPreviewStyle = markingPreviewStyle,
                 textAccentColor = Color(state.sheetConfig.textAccentColor),
                 autoPageIndicatorColor = LegadoTheme.colorScheme.primary,
                 modifier = Modifier

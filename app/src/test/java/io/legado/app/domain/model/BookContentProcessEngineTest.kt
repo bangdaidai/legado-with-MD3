@@ -68,7 +68,7 @@ class BookContentProcessEngineTest {
     }
 
     @Test
-    fun `锚点解析不到的标记不进 effectiveProcesses`() {
+    fun `标记不在 apply 预筛,原始正文匹配不到也保留`() {
         val mark = markProcess(
             selectedText = "不存在的文本",
             kind = BookContentProcess.KIND_USER_HIGHLIGHT,
@@ -79,7 +79,20 @@ class BookContentProcessEngineTest {
             processes = listOf(mark),
         )
 
-        assertTrue(result.effectiveProcesses.isEmpty())
+        // 跨段评气泡/HTML 段的选择在原始正文上必然失配，apply 不再以此为由丢笔记；
+        // 是否有效由渲染层在选区同一字符空间解析决定（解析不到即跳过）。
+        assertEquals(listOf(mark), result.effectiveProcesses)
+        // 渲染层语义：原始正文里真没有的文本，resolveRange 返回 null
+        val anchor = TextProcessAnchor(
+            chapterIndex = 0,
+            chapterPosition = 0,
+            selectedText = "不存在的文本",
+            normalizedTextHash = MD5Utils.md5Encode("不存在的文本"),
+        )
+        assertEquals(
+            null,
+            BookContentProcessEngine.resolveRange("他走进房间，看见桌上的信。", anchor),
+        )
     }
 
     @Test

@@ -46,14 +46,19 @@ class MarkingDelegate(
     private val _uiState = MutableStateFlow(MarkingUiState())
     val uiState = _uiState.asStateFlow()
 
+    /** 保存后等待重排批次提交的章节；提交前预览必须盖住旧页，否则关闭弹层会闪回旧样式。 */
+    private var previewCommitPending: Int? = null
+
     fun open(selection: Bookmark) {
         val book = ReadBook.book
+        previewCommitPending = null
         _uiState.update {
             it.copy(
                 selection = selection,
                 editing = null,
                 highlightRules = persistentListOf(),
                 loading = true,
+                previewStyle = null,
             )
         }
         scope.launch(IO) {
@@ -86,12 +91,14 @@ class MarkingDelegate(
     /** 点正文划线或从目录 Sheet 点标记项进入编辑模式：按 id 取完整标记预填。 */
     fun openForEdit(markingId: String) {
         val book = ReadBook.book
+        previewCommitPending = null
         _uiState.update {
             it.copy(
                 selection = null,
                 editing = null,
                 highlightRules = persistentListOf(),
                 loading = true,
+                previewStyle = null,
             )
         }
         scope.launch(IO) {
@@ -113,9 +120,29 @@ class MarkingDelegate(
         }
     }
 
+    /**
+     * Sheet 会话期间样式选择的实时预览。只在会话打开时接受（新建=划词选区，
+     * 编辑=点正文划线时画布已建的标记选区；从目录进入无选区，画布自然不绘制）。
+     * 保存提交等待期（[previewCommitPending] 非空）内忽略，避免撤掉粘性预览。
+     */
+    fun preview(style: TextProcessStyle) {
+        if (previewCommitPending != null) return
+        val current = _uiState.value
+        if (current.selection == null && current.editing == null) return
+        if (current.previewStyle == style) return
+        _uiState.update { it.copy(previewStyle = style) }
+    }
+
     fun save(style: TextProcessStyle, note: String) {
         val current = _uiState.value
         val book = ReadBook.book ?: return
+        // 先把最终样式钉成预览：持久化 + 重排 + 批次提交完成前一直保持，
+        // 关闭弹层时画面已被预览盖住，不会闪回旧页。
+        _uiState.update { it.copy(previewStyle = style) }
+        previewCommitPending =
+            current.selection?.chapterIndex
+                ?: current.editing?.chapterIndex
+                ?: ReadBook.durChapterIndex
         scope.launch(IO) {
             runCatching {
                 persistMarking(current, book, style, note)
@@ -123,14 +150,18 @@ class MarkingDelegate(
                 host.reloadCurrentChapter()
                 host.dismissMarkingSheet()
             }.onFailure { error ->
+                previewCommitPending = null
+                _uiState.update { it.copy(previewStyle = null) }
                 host.showToast(error.localizedMessage ?: context.getString(R.string.error))
             }
         }
     }
 
-    /** 编辑模式下删除当前标记。 */
+    /** 删除标记：预览立即撤掉，剩余「旧页还带着划线」的窗口由重排批次提交消除。 */
     fun deleteCurrent() {
         val editing = _uiState.value.editing ?: return
+        previewCommitPending = null
+        _uiState.update { it.copy(previewStyle = null) }
         scope.launch(IO) {
             runCatching {
                 saveMarkingUseCase.delete(editing.id)
@@ -143,7 +174,15 @@ class MarkingDelegate(
         }
     }
 
+    /** 当前章重排批次提交：新样式已烘进页面，撤掉粘性预览。 */
+    fun onPagesCommitted(chapterIndex: Int) {
+        if (previewCommitPending != chapterIndex) return
+        previewCommitPending = null
+        _uiState.update { it.copy(previewStyle = null) }
+    }
+
     fun onSheetDismissed() {
+        previewCommitPending = null
         _uiState.value = MarkingUiState()
     }
 
