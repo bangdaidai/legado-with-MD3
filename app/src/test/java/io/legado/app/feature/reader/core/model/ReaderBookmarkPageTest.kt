@@ -20,7 +20,7 @@ class ReaderBookmarkPageTest {
         val context = ReaderPageNavigator.pageContext(pages, index)!!
         val bookmarked = ReaderBookmarkState.hasBookmarkInRange(bookName, "作者", context.chapterIndex,
             context.startPosition, context.endPosition)
-        ReaderBookmarkBadge.create(bookmarked, false, 100, 20f, 10, 1f, 10) != null
+        ReaderBookmarkBadge.create(bookmarked, false, 100, 20f, 10f, 1f, 10) != null
     }
 
     @Test fun updatingSnapshotOnlyMarksTheOwningPageAndClearsAfterRemoval() {

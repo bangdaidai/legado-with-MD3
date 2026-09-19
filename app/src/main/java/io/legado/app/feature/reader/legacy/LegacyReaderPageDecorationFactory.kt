@@ -154,13 +154,16 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
             0 -> ReadBookConfig.textColor
             else -> configured
         }
+        // 书签角标与右页眉共用一套内缩，避免两边各自换算导致错位。
+        val headerPaddingTopPx = ReadBookConfig.headerPaddingTop.dpToPx() + contentPaddingTopPx.toFloat()
+        val headerPaddingRightPx = ReadBookConfig.headerPaddingRight.dpToPx() + contentPaddingRightPx.toFloat()
         return ReaderPageDecoration(
             bookmarkBadge = ReaderBookmarkBadge.create(
                 hasBookmark = hasBookmark,
                 isScroll = ReadBook.pageAnim() == 3,
                 pageWidthPx = page.widthPx,
-                contentTopPx = page.contentTopPx,
-                contentRightPaddingPx = ReadBookConfig.paddingRight.dpToPx(),
+                headerTopPx = headerPaddingTopPx,
+                headerRightPaddingPx = headerPaddingRightPx,
                 density = appCtx.resources.displayMetrics.density,
                 sizeDp = settings.bookmarkBadgeSize,
                 imageSource = settings.bookmarkBadgeImage,
@@ -182,8 +185,8 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
                 fontSizePx = ReadBookConfig.headerFontSize.toFloat().spToPx(),
                 fontPath = tipFontPath(ReadBookConfig.headerFont),
                 paddingLeftPx = ReadBookConfig.headerPaddingLeft.dpToPx() + contentPaddingLeftPx.toFloat(),
-                paddingTopPx = ReadBookConfig.headerPaddingTop.dpToPx() + contentPaddingTopPx.toFloat(),
-                paddingRightPx = ReadBookConfig.headerPaddingRight.dpToPx() + contentPaddingRightPx.toFloat(),
+                paddingTopPx = headerPaddingTopPx,
+                paddingRightPx = headerPaddingRightPx,
                 paddingBottomPx = ReadBookConfig.headerPaddingBottom.dpToPx().toFloat(),
                 dividerColorArgb = dividerColor.takeIf { ReadBookConfig.showHeaderLine },
                 fontFamily = tipFontFamily(),

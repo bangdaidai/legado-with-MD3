@@ -17,8 +17,8 @@ data class ReaderBookmarkBadge(
             hasBookmark: Boolean,
             isScroll: Boolean,
             pageWidthPx: Int,
-            contentTopPx: Float,
-            contentRightPaddingPx: Int,
+            headerTopPx: Float,
+            headerRightPaddingPx: Float,
             density: Float,
             sizeDp: Int,
             imageSource: String = "",
@@ -28,9 +28,9 @@ data class ReaderBookmarkBadge(
             if (!hasBookmark || isScroll || sizeDp <= 0) return null
             val width = (sizeDp * density).toInt().coerceAtLeast(1)
             return ReaderBookmarkBadge(
-                leftPx = pageWidthPx - contentRightPaddingPx - 6 * density - width,
-                // Keep the page header clear: the badge starts at the body viewport's top edge.
-                topPx = contentTopPx,
+                // 角标跟随右页眉：包围盒的右上角与页眉右槽文字对齐。
+                leftPx = pageWidthPx - headerRightPaddingPx - width,
+                topPx = headerTopPx,
                 widthPx = width,
                 heightPx = width * 2,
                 imageSource = imageSource,

@@ -7,12 +7,12 @@ import org.junit.Test
 
 class ReaderBookmarkBadgeTest {
     private fun badge(bookmarked: Boolean = true, scroll: Boolean = false, size: Int = 10) =
-        ReaderBookmarkBadge.create(bookmarked, scroll, 600, 100f, 30, 2f, size)
+        ReaderBookmarkBadge.create(bookmarked, scroll, 600, 100f, 30f, 2f, size)
 
     @Test
-    fun topEdgeAnchorsToBodyTopAndPreservesRibbonRatio() {
-        assertEquals(ReaderBookmarkBadge(538f, 100f, 20, 40), badge())
-        assertEquals(ReaderBookmarkBadge(518f, 100f, 40, 80), badge(size = 20))
+    fun topRightCornerAnchorsToHeaderAndPreservesRibbonRatio() {
+        assertEquals(ReaderBookmarkBadge(550f, 100f, 20, 40), badge())
+        assertEquals(ReaderBookmarkBadge(530f, 100f, 40, 80), badge(size = 20))
     }
 
     @Test

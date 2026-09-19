@@ -28,7 +28,7 @@ class ReaderAccessibilityPolicyTest {
 
     @Test
     fun `boundaries and bookmark state follow the visible page`() {
-        val badge = ReaderBookmarkBadge.create(true, false, 100, 10f, 10, 1f, 10)!!
+        val badge = ReaderBookmarkBadge.create(true, false, 100, 10f, 10f, 1f, 10)!!
         val current = page(0, "正文", ReaderPageDecoration(bookmarkBadge = badge))
         val snapshot = ReaderAccessibilityPolicy.snapshot(ReaderPageWindow(current = current))!!
 
