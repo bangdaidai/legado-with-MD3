@@ -77,7 +77,7 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
-import io.legado.app.feature.reader.platform.AndroidReaderTextShaper
+import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.ui.theme.LegadoTheme
@@ -1306,7 +1306,7 @@ internal fun HighlightRulePreview(
                 android.text.TextPaint().apply {
                     textSize = with(density) { previewBaseFontSize.sp.toPx() }
                     letterSpacing = ReadBookConfig.letterSpacing
-                    typeface = AndroidReaderTextShaper(this)
+                    typeface = ReaderAndroidPaintFactory
                         .loadTypeface(ReadBookConfig.textFont, textBoldWeight, false)
                 }.textHeight
             }
@@ -1339,15 +1339,6 @@ internal fun HighlightRulePreview(
                 if (probeBox != null) {
                     ninePatchTopOverhang = -probeBox.top
                     ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
-                }
-                6 -> {
-                    val y = textResult.size.height * 0.52f
-                    drawLine(
-                        color = resolvedUnderlineColor,
-                        start = Offset(0f, y),
-                        end = Offset(textResult.size.width.toFloat(), y),
-                        strokeWidth = strokeWidth,
-                    )
                 }
             }
             val canvasHeightDp = with(density) {

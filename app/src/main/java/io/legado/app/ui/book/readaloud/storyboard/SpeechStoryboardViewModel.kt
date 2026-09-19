@@ -8,10 +8,10 @@ import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ContentSplitPolicies
-import io.legado.app.domain.model.readaloud.ReadAloudContentSplitMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
 import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
@@ -183,6 +183,7 @@ class SpeechStoryboardViewModel(
             ReadAloudContentSplitMode.fromStorage(ReadConfig.contentSplitMode),
             ReadConfig.useMultiSpeaker,
         )
+        val splitPolicy = ContentSplitPolicies.forMode(splitMode, ReadConfig.contentSplitSymbols)
         val paragraphs = withContext(Dispatchers.Default) {
             ReaderReadAloudChapter.create(
                 chapterIndex = chapterIndex,
@@ -193,7 +194,7 @@ class SpeechStoryboardViewModel(
                 contentSplitMode = splitMode,
             ).canonicalSpeechParagraphs(
                 splitByPage = false,
-                policy = ContentSplitPolicies.forMode(splitMode, ReadConfig.contentSplitSymbols),
+                policy = splitPolicy,
             )
         }
         if (reanalyze) {
@@ -208,6 +209,7 @@ class SpeechStoryboardViewModel(
             paragraphs = paragraphs,
             analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
             useMultiSpeaker = ReadConfig.useMultiSpeaker,
+            policy = splitPolicy,
         )
     }
 
