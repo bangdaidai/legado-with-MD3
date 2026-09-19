@@ -375,6 +375,12 @@ class ReadBookController(
     private var directReaderPages = emptyList<io.legado.app.feature.reader.core.model.ReaderPage>()
 
     /**
+     * 页表当前所属书籍。换源原地替换书籍后新旧章节 index 对齐，暖页复用会把旧源内容
+     * 当成新书的页直接发回画面（闪回旧正文），bookUrl 一变必须整表作废。
+     */
+    private var directReaderPagesBookUrl: String? = null
+
+    /**
      * 页上下文缓存：跨页热路径（书签检查×3 + 进度上报 + 进度提交）每次跨页要取
      * 5 次 pageContext，每次 O(元素数) 遍历 + groupBy + anchorText 拼接，落在拖拽
      * 跨页帧上就是掉帧。按页 id 记忆，重排后失效（重排会重算位置与 endPosition）。
@@ -708,6 +714,36 @@ class ReadBookController(
         ) {
             updateReaderPageWindow(ReaderPageWindow())
         }
+    }
+
+    /**
+     * 书籍身份守卫：换源/替换书籍是原地进行的，页表里还留着旧源整章页时，
+     * 窗口发布路径（暖页复用、时间/电量重发）会按相同 chapterIndex 把旧正文
+     * 瞬间发回画面。bookUrl 一变就作废页表与在排任务，让画面停留在加载占位页
+     * 直到新书的批次提交。
+     */
+    private fun guardDirectReaderPagesBookIdentity() {
+        val currentBookUrl = ReadBook.readerChapterInputWindow.current?.book?.bookUrl
+            ?: ReadBook.book?.bookUrl
+        if (currentBookUrl == null || directReaderPagesBookUrl == currentBookUrl) return
+        if (directReaderPages.isNotEmpty()) {
+            directReaderLayoutJob?.cancel()
+            directReaderAdjacentLayoutJob?.cancel()
+            directReaderLayoutJob = null
+            directReaderAdjacentLayoutJob = null
+            directReaderLayoutKey = null
+            directReaderPaginationEnvironmentKey = null
+            directReaderMayReuseAdjacentPages = false
+            directReaderStreamGeneration += 1
+            clearStreamedReaderChapters()
+            directReaderPages = emptyList()
+            directReaderPageContexts.clear()
+            directReaderChapterPageCounts = emptyMap()
+            // 立刻用加载/消息页顶掉画布上的旧正文；不能发空窗，路由层
+            // lastReadablePageWindow 兜底会把换源前的内容再画回来。
+            publishLoadingReaderWindow()
+        }
+        directReaderPagesBookUrl = currentBookUrl
     }
 
     private fun rebuildDirectReaderPages() {
@@ -1092,6 +1128,7 @@ class ReadBookController(
     ): Boolean {
         val contentPadding = layoutController.viewport.value?.contentPadding ?: ReaderPadding()
         val inputWindow = ReadBook.readerChapterInputWindow
+        guardDirectReaderPagesBookIdentity()
         val chapter = inputWindow.current ?: run {
             // 内容未装载（进入书籍/目录跳转装载中）：发布"加载中"占位页窗口，让
             // 阅读画布保持组合、点击分区与菜单照常可用，装载完成后由分页批次
@@ -2123,6 +2160,7 @@ class ReadBookController(
             is ReadBookEffect.UpTime, is ReadBookEffect.UpBattery -> {
                 // 时间/电量是烘进页眉页脚 decoration 的动态信息（`directReaderWindow` 里现建），
                 // 必须重发窗口才会刷新；页表还没落地（装载期整窗占位）时也要强制重建。
+                guardDirectReaderPagesBookIdentity()
                 val index = directReaderPageIndex
                 if (index != null && directReaderPages.isNotEmpty()) {
                     publishDirectReaderWindow(index)
