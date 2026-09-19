@@ -387,6 +387,43 @@ private fun Modifier.bookshelfItemSemantics(label: String, isSelected: Boolean):
         if (isSelected) selected = true
     }
 
+/**
+ * 简介排版缓存：跨 LazyList 回收存活。
+ *
+ * LazyGrid/LazyList 滚出可视范围的条目会离开组合，其 remember 被丢弃，滚回来又重建，
+ * 于是每本含长简介的书会被反复 Jsoup 解析——400+ 本书上下滚动时足够把主线程打爆。
+ * 这里用“行数设置 + 原始简介”做 key，全局只解析一次；上限限制避免无限增长。
+ * 网格模式不展示简介、不参与解析，只有列表模式确实要显示时才解析。
+ */
+private object formattedIntroCache {
+    private const val MAX_ENTRIES = 500
+
+    // accessOrder=true 的 LinkedHashMap 天然 LRU；synchronized 内查写保证同 key 只解析一次。
+    private val cache = object : LinkedHashMap<String, String?>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, String?>): Boolean =
+            size > MAX_ENTRIES
+    }
+
+    fun getOrFormat(intro: String?, maxLines: Int): String? {
+        // 空简介直接返回 null，不进缓存，也不触发解析。
+        if (intro.isNullOrBlank()) return null
+        val key = "$maxLines|$intro"
+        return synchronized(cache) {
+            if (cache.containsKey(key)) {
+                cache[key]
+            } else {
+                val formatted = if (maxLines == 0) {
+                    HtmlFormatter.formatIntroText(intro)
+                } else {
+                    HtmlFormatter.formatSummaryText(intro)
+                }.takeIf { it.isNotBlank() }
+                cache[key] = formatted
+                formatted
+            }
+        }
+    }
+}
+
 @Composable
 fun BookGroupCover(
     settings: BookshelfSettings,
@@ -434,6 +471,8 @@ fun BookGroupCover(
                                     name = it.name,
                                     author = it.author,
                                     path = it.getDisplayCover(),
+                                    bookUrl = it.bookUrl,
+                                    preferCache = true,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -449,6 +488,8 @@ fun BookGroupCover(
                                     name = it.name,
                                     author = it.author,
                                     path = it.getDisplayCover(),
+                                    bookUrl = it.bookUrl,
+                                    preferCache = true,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -466,6 +507,8 @@ fun BookGroupCover(
                                     name = it.name,
                                     author = it.author,
                                     path = it.getDisplayCover(),
+                                    bookUrl = it.bookUrl,
+                                    preferCache = true,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -481,6 +524,8 @@ fun BookGroupCover(
                                     name = it.name,
                                     author = it.author,
                                     path = it.getDisplayCover(),
+                                    bookUrl = it.bookUrl,
+                                    preferCache = true,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -704,6 +749,8 @@ fun BookGroupItemHorizontalCovers(
                                 name = book.name,
                                 author = book.author,
                                 path = book.getDisplayCover(),
+                                bookUrl = book.bookUrl,
+                                preferCache = true,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -749,16 +796,18 @@ fun BookItem(
     onLongClick: (() -> Unit)?
 ) {
     val book = bookUi.book
-    val intro = remember(book.intro, settings.bookshelfIntroMaxLines) {
-        val formatted = if (settings.bookshelfIntroMaxLines == 0) {
-            HtmlFormatter.formatIntroText(book.intro)
-        } else {
-            HtmlFormatter.formatSummaryText(book.intro)
-        }
-        formatted.takeIf { it.isNotBlank() }
-    }
     val showListDetails = layoutMode == 0 && !isCompact && settings.showBookIntro
-    val showIntro = showListDetails && settings.bookshelfShowIntro && intro != null
+    val showIntroText = showListDetails && settings.bookshelfShowIntro
+    // 简介排版包含 Jsoup 解析 + 多轮正则，是主线程重活；LazyList 回收后 remember 会丢失，
+    // 来回滚动就会反复重解析。这里只在列表模式真要显示时才算，并用跨回收的 LRU 缓存兜住。
+    val intro = remember(showIntroText, book.intro, settings.bookshelfIntroMaxLines) {
+        if (showIntroText) {
+            formattedIntroCache.getOrFormat(book.intro, settings.bookshelfIntroMaxLines)
+        } else {
+            null
+        }
+    }
+    val showIntro = showIntroText && intro != null
     val showIntroBelowContent = showIntro && settings.bookshelfListIntroBelowContent
     val ticketStyle = showIntroBelowContent && settings.bookshelfTicketStyle
     val unreadCount = book.getUnreadChapterNum()
@@ -804,6 +853,9 @@ fun BookItem(
                 .fillMaxWidth()
                 .aspectRatio(5f / 7f),
             sourceOrigin = book.origin,
+            // 传本书 bookUrl：封面命中本地（含别名）缓存时
+            // 不解析书源规则、不弹登录提示、不重新下载
+            bookUrl = book.bookUrl,
             badgeText = if (layoutMode != 0) unreadText else null,
             // 网格封面底部进度条；gridStyle==1 书名覆盖封面底部，不叠加
             progress = if (layoutMode != 0 && gridStyle != 1 && showReadingProgress) readingProgress else null,

@@ -198,7 +198,7 @@ class HighlightRuleRepository(
             textColorNight = runCatching { rule.textColorNight }.getOrNull(),
             bgColor = runCatching { rule.bgColor }.getOrNull(),
             bgColorNight = runCatching { rule.bgColorNight }.getOrNull(),
-            underlineMode = runCatching { rule.underlineMode }.getOrDefault(0).coerceIn(0, 5),
+            underlineMode = runCatching { rule.underlineMode }.getOrDefault(0).coerceIn(0, 7),
             underlineColor = runCatching { rule.underlineColor }.getOrNull(),
             underlineColorNight = runCatching { rule.underlineColorNight }.getOrNull(),
             underlineWidth = runCatching { rule.underlineWidth }.getOrDefault(1f)
@@ -229,6 +229,7 @@ class HighlightRuleRepository(
             bgMarginTop = runCatching { rule.bgMarginTop }.getOrDefault(0f).coerceIn(-16f, 64f),
             bgMarginBottom = runCatching { rule.bgMarginBottom }.getOrDefault(0f).coerceIn(-16f, 64f),
             underlineBelowText = runCatching { rule.underlineBelowText }.getOrDefault(false),
+            manualNineSlice = runCatching { rule.manualNineSlice }.getOrDefault(true),
         )
     }
 

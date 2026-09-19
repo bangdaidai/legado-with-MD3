@@ -1,9 +1,11 @@
 package io.legado.app.domain.usecase
 
 import io.legado.app.constant.AppLog
+import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
+import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechRoleType
@@ -38,21 +40,24 @@ class PrepareChapterSpeechPlanUseCase(
         paragraphs: List<CanonicalSpeechParagraph>,
         preferredDefaultVoiceId: String? = null,
         analysisMode: SpeechAnalysisMode = SpeechAnalysisMode.Rule,
+        analysisReasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
         useMultiSpeaker: Boolean = true,
+        policy: ContentSplitPolicy,
     ): List<SpeechPlanItem> {
         if (paragraphs.isEmpty()) return emptyList()
         val requestedMode = analysisMode
+        val ruleVersion = ruleResolverVersion(policy)
         val resolverVersion = if (requestedMode == SpeechAnalysisMode.Rule) {
-            RuleBasedSpeechSegmenter.VERSION
+            ruleVersion
         } else {
-            runCatching { refineSpeechWithAi.resolverVersion(bookUrl, requestedMode) }
+            runCatching { refineSpeechWithAi.resolverVersion(bookUrl, requestedMode, policy) }
                 .onFailure {
                     // 没配 AI 模型时这里就抛了，静默回落会让用户以为 AI 模式生效了
                     notifyFallback("AI 分析未启用，已按规则模式朗读", it)
                 }
-                .getOrDefault(RuleBasedSpeechSegmenter.VERSION)
+                .getOrDefault(ruleVersion)
         }
-        val effectiveMode = if (resolverVersion == RuleBasedSpeechSegmenter.VERSION) {
+        val effectiveMode = if (isRuleResolverVersion(resolverVersion, policy)) {
             SpeechAnalysisMode.Rule
         } else {
             requestedMode
@@ -62,6 +67,7 @@ class PrepareChapterSpeechPlanUseCase(
             chapterIndex = chapterIndex,
             paragraphs = paragraphs,
             resolverVersion = resolverVersion,
+            policy = policy,
         )
         val locallyResolved = resolveLocalSpeakers(
             analysisResult = analysis,
@@ -75,6 +81,8 @@ class PrepareChapterSpeechPlanUseCase(
                     analysisResult = locallyResolved,
                     paragraphs = paragraphs,
                     mode = effectiveMode,
+                    reasoningLevel = analysisReasoningLevel,
+                    policy = policy,
                 )
             }.onSuccess {
                 lastNotifiedFallback = null
@@ -149,3 +157,15 @@ class PrepareChapterSpeechPlanUseCase(
         )
     }
 }
+
+/**
+ * 纯规则分段的分析标识。
+ *
+ * 内容划分方式会改变切分结果，必须参与版本号，否则切换划分方式后会命中旧划分的分析缓存。
+ */
+fun ruleResolverVersion(policy: ContentSplitPolicy): String =
+    "${RuleBasedSpeechSegmenter.VERSION}:${policy.identifier}"
+
+/** 判断某个解析器版本是否就是该划分方式下的纯规则分段。 */
+fun isRuleResolverVersion(resolverVersion: String, policy: ContentSplitPolicy): Boolean =
+    resolverVersion == ruleResolverVersion(policy)

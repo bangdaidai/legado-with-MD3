@@ -34,10 +34,12 @@ data class HighlightRule(
     var isItalic: Boolean = false,
     @ColumnInfo(defaultValue = "0")
     var fontSizeOffset: Int = 0,
-    var npLeft: Float = 0.5f,
-    var npRight: Float = 0.5f,
-    var npTop: Float = 0.5f,
-    var npBottom: Float = 0.5f,
+    var npLeft: Float = 0.1f,
+    var npRight: Float = 0.1f,
+    var npTop: Float = 0.1f,
+    var npBottom: Float = 0.1f,
+    @ColumnInfo(defaultValue = "1")
+    var manualNineSlice: Boolean = true,
     @ColumnInfo(defaultValue = "0")
     var useProtagonist: Boolean = false,
     // 角色筛选：null=按主角标记取人；指定 "male_lead"/"female_lead"/"male_supporting"/"female_supporting"
@@ -98,6 +100,8 @@ data class HighlightRule(
                     3 -> "波浪下划线"
                     4 -> "双下划线"
                     5 -> "自定义SVG"
+                    6 -> "删除线"
+                    7 -> "荧光"
                     else -> "下划线"
                 } + underlineColor?.let { " ${it.toHexColor()}" }.orEmpty()
             )

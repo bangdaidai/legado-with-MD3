@@ -161,19 +161,54 @@ fun SearchContentScreen(
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            GlassMediumFlexibleTopAppBar(
-                title = if (searchQuery.isNotBlank() && searchResults.isNotEmpty()) {
-                    "共 ${searchResults.size} 条结果"
-                } else "搜索内容",
-                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
-                actions = {
-                    TopBarAnimatedActionButton(
-                        checked = replaceEnabled,
-                        onCheckedChange = { onIntent(SearchContentIntent.ToggleReplace(it)) },
-                        iconChecked = Icons.Default.FindReplace,
-                        iconUnchecked = Icons.Default.FindReplace,
-                        activeText = "替换开启",
-                        inactiveText = "替换关闭"
+            Column {
+                GlassMediumFlexibleTopAppBar(
+                    title = if (searchQuery.isNotBlank() && searchResults.isNotEmpty()) {
+                        "共 ${searchResults.size} 条结果"
+                    } else "搜索内容",
+                    navigationIcon = { TopBarNavigationButton(onClick = onBack) },
+                    actions = {
+                        TopBarAnimatedActionButton(
+                            checked = replaceEnabled,
+                            onCheckedChange = { onIntent(SearchContentIntent.ToggleReplace(it)) },
+                            iconChecked = Icons.Default.FindReplace,
+                            iconUnchecked = Icons.Default.FindReplace,
+                            activeText = "替换开启",
+                            inactiveText = "替换关闭"
+                        )
+
+                        TopBarAnimatedActionButton(
+                            checked = regexReplace,
+                            onCheckedChange = { onIntent(SearchContentIntent.ToggleRegex(it)) },
+                            iconChecked = Icons.Default.Code,
+                            iconUnchecked = Icons.Default.Code,
+                            activeText = "正则开启",
+                            inactiveText = "正则关闭"
+                        )
+                    },
+                    scrollBehavior = scrollBehavior
+                )
+                Box(
+                    modifier = Modifier.adaptiveHorizontalPadding()
+                ) {
+                    SearchBar(
+                        query = searchQuery,
+                        autoFocus = autoFocus,
+                        scrollState = listState,
+                        onQueryChange = { onIntent(SearchContentIntent.UpdateQuery(it)) },
+                        onSearch = { onIntent(SearchContentIntent.SubmitSearch(it)) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                SmallPlainButton(
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    onClick = {
+                                        onIntent(SearchContentIntent.UpdateQuery(""))
+                                    },
+                                    icon = AppIcons.Close,
+                                    contentDescription = stringResource(R.string.clear)
+                                )
+                            }
+                        }
                     )
 
                     TopBarAnimatedActionButton(
@@ -359,18 +394,31 @@ fun SearchHistoryList(
                 contentPadding = adaptiveContentPadding(top = 8.dp, bottom = 8.dp)
             ) {
                 items(history, key = { it.id }) { item ->
-                    SelectionItemCard(
-                        modifier = Modifier.animateItem(),
-                        title = item.query,
-                        onToggleSelection = { onHistoryClick(item) },
-                        trailingAction = {
+                    ListItem(
+                        modifier = Modifier
+                            .clickable { onHistoryClick(item) }
+                            .animateItem(),
+                        leadingContent = {
+                            Icon(Icons.Default.History, contentDescription = null)
+                        },
+                        trailingContent = {
                             SmallPlainButton(
                                 onClick = { onDeleteHistory(item) },
                                 icon = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.delete)
                             )
-                        }
-                    )
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = LegadoTheme.colorScheme.surface,
+                            contentColor = LegadoTheme.colorScheme.onSurface
+                        )
+                    ) {
+                        AppText(
+                            text = item.query,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

@@ -7,6 +7,8 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
+import io.legado.app.domain.model.readaloud.ContentSplitPolicies
+import io.legado.app.domain.model.readaloud.ReadAloudContentSplitMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
@@ -189,6 +191,13 @@ class SpeechStoryboardViewModel(
             paragraphs = paragraphs,
             analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
             useMultiSpeaker = ReadConfig.useMultiSpeaker,
+            policy = ContentSplitPolicies.forMode(
+                mode = ContentSplitPolicies.resolve(
+                    ReadAloudContentSplitMode.fromStorage(ReadConfig.contentSplitMode),
+                    ReadConfig.useMultiSpeaker,
+                ),
+                storedSymbols = ReadConfig.contentSplitSymbols,
+            ),
         )
     }
 

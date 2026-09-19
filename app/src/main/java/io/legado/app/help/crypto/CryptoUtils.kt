@@ -33,40 +33,11 @@ internal fun String.hexToByteArray(): ByteArray {
 
 internal fun ByteArray.toBase64(): String = Base64.Default.encode(this)
 
-private val BASE64_DECODE_TABLE = IntArray(128) { -1 }.also { table ->
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".forEachIndexed { index, c ->
-        table[c.code] = index
-    }
-    table['+'.code] = 62
-    table['/'.code] = 63
-    // URL-safe 字符集与标准字符集共用一张表，允许两者混用
-    table['-'.code] = 62
-    table['_'.code] = 63
-}
-
-/**
- * 对齐 Hutool `Base64Decoder.decode`：直接跳过非 base64 字符，允许缺失 padding、
- * 允许标准与 URL-safe 字符集混用，任何输入都不抛异常。
- *
- * 书源（尤其是先解密再 base64 解码做校验的那类）依赖这种宽松行为，严格解码会让
- * 书源走进自身的异常兜底分支。
- */
 internal fun String.base64ToByteArray(): ByteArray {
-    val out = ByteArrayOutputStream(length * 3 / 4 + 3)
-    var buffer = 0
-    var bits = 0
-    for (c in this) {
-        if (c == '=') break
-        val value = if (c.code < 128) BASE64_DECODE_TABLE[c.code] else -1
-        if (value < 0) continue
-        buffer = (buffer shl 6) or value
-        bits += 6
-        if (bits >= 8) {
-            bits -= 8
-            out.write((buffer ushr bits) and 0xFF)
-        }
-    }
-    return out.toByteArray()
+    // Hutool Base64.decode 对缺失 "=" 填充、url-safe(-/_)、空白等输入宽容，与 beta.17 之前
+    // 应用内统一走 Hutool 解码的行为逐字节一致。Kotlin kotlin.io.encoding.Base64 为严格填充，
+    // 会对未对齐 4 倍数的输入抛 "The padding option is set to PRESENT..."(见书源取章名回归)。
+    return cn.hutool.core.codec.Base64.decode(replace("\\s".toRegex(), ""))
 }
 
 internal fun digest(algorithm: String, data: ByteArray): ByteArray =

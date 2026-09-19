@@ -386,7 +386,9 @@ class ReadAiDelegate(
             return
         }
         val chapterTitle = host.chapterName
-        val visibleContent = ReadBook.curTextChapter?.getContent().orEmpty()
+        val visibleContent = ReadBook.readerChapterInputWindow.current
+            ?.takeIf { it.chapter.index == chapterIndex }
+            ?.source?.semanticContent.orEmpty()
         val (contextBefore, contextAfter) = buildSelectionContext(
             content = visibleContent,
             selectedText = text,
@@ -593,7 +595,7 @@ class ReadAiDelegate(
 
     fun openAiCurrentChapterRewrite() {
         val book = ReadBook.book ?: return
-        val chapter = ReadBook.curTextChapter?.chapter ?: return
+        val chapter = ReadBook.readerChapterInputWindow.current?.chapter ?: return
         scope.launch {
             val text = withContext(IO) {
                 getEffectiveChapterContent(book, chapter).trim()
@@ -622,7 +624,9 @@ class ReadAiDelegate(
         val book = ReadBook.book ?: return
         val chapterTitle = host.findChapter(book.bookUrl, chapterIndex)?.title
             ?: host.chapterName
-        val visibleContent = ReadBook.curTextChapter?.getContent().orEmpty()
+        val visibleContent = ReadBook.readerChapterInputWindow.current
+            ?.takeIf { it.chapter.index == chapterIndex }
+            ?.source?.semanticContent.orEmpty()
         val (contextBefore, contextAfter) = buildSelectionContext(
             content = visibleContent,
             selectedText = text,

@@ -56,7 +56,16 @@ fun AppScaffold(
     contentColor: Color = contentColorFor(MiuixTheme.colorScheme.surface),
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
     alwaysDrawBehindBars: Boolean = false,
-    disableHazeSource: Boolean = false,
+    /**
+     * 内容不作为模糊 / 液态玻璃的采样源。
+     *
+     * haze 的 `hazeSource` 与液态玻璃的 `layerBackdrop` 都会把整棵内容录进 GraphicsLayer；
+     * 内容里若有 AndroidView（WebView 等 interop view），Compose 会把它一并画进那张离屏
+     * RenderNode（`AndroidViewHolder.draw` → `AndroidComposeView.drawAndroidView`）。
+     * Chromium 在「把网页画进别人的图层」这条路径上不稳定，部分设备会表现为网页闪烁，
+     * 因此 WebView 类页面必须把两个采样源一起关掉。
+     */
+    disableContentSampling: Boolean = false,
     content: @Composable (PaddingValues) -> Unit
 ) {
     val isDark = LegadoTheme.isDark
@@ -146,14 +155,16 @@ fun AppScaffold(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(
-                                    if (liquidGlassEnabled) {
+                                    if (liquidGlassEnabled && !disableContentSampling) {
                                         Modifier.layerBackdrop(topBarContentBackdrop)
                                     } else {
                                         Modifier
                                     }
                                 )
                                 .then(
-                                    if (!disableHazeSource) Modifier.responsiveHazeSource(hazeState)
+                                    if (!disableContentSampling) Modifier.responsiveHazeSource(
+                                        hazeState
+                                    )
                                     else Modifier
                                 )
                                 .then(
@@ -213,14 +224,16 @@ fun AppScaffold(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(
-                                    if (liquidGlassEnabled) {
+                                    if (liquidGlassEnabled && !disableContentSampling) {
                                         Modifier.layerBackdrop(topBarContentBackdrop)
                                     } else {
                                         Modifier
                                     }
                                 )
                                 .then(
-                                    if (!disableHazeSource) Modifier.responsiveHazeSource(hazeState)
+                                    if (!disableContentSampling) Modifier.responsiveHazeSource(
+                                        hazeState
+                                    )
                                     else Modifier
                                 )
                                 .then(

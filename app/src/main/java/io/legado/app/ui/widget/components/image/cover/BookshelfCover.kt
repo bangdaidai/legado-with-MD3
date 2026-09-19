@@ -64,6 +64,9 @@ fun BookshelfCover(
     showBadgeDot: Boolean = false,
     leftBottomText: String? = null,
     sourceOrigin: String? = null,
+    // 本书 bookUrl，供封面别名缓存键；书架组件默认本地优先
+    // （preferCache=true）：有缓存（含别名命中）直接显示，不跑书源规则脚本、不联网。
+    bookUrl: String? = null,
     onLoadFinish: (() -> Unit)? = null,
     showLoadingPlaceholder: Boolean = true,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -77,6 +80,8 @@ fun BookshelfCover(
             path = path,
             modifier = coverModifier,
             sourceOrigin = sourceOrigin,
+            bookUrl = bookUrl,
+            preferCache = true,
             onLoadFinish = onLoadFinish,
             showLoadingPlaceholder = showLoadingPlaceholder,
             sharedTransitionScope = sharedTransitionScope,

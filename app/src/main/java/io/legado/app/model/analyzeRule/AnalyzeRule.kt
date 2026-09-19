@@ -14,10 +14,10 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssArticle
+import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.getShareScope
@@ -42,6 +42,7 @@ import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.nodes.Node
 import org.mozilla.javascript.NativeObject
 import org.mozilla.javascript.Scriptable
+import org.koin.core.context.GlobalContext
 import java.lang.ref.WeakReference
 import java.net.URL
 import java.util.Locale
@@ -78,6 +79,7 @@ class AnalyzeRule(
 
     private val stringRuleCache = hashMapOf<String, List<SourceRule>>()
     private val regexCache = hashMapOf<String, Regex?>()
+    private val cacheSettingsGateway get() = GlobalContext.get().get<DownloadCacheSettingsGateway>()
     private val scriptCache = hashMapOf<String, CompiledScript>()
     private var topScopeRef: WeakReference<Scriptable>? = null
     private var evalJSCallCount = 0
@@ -175,7 +177,7 @@ class AnalyzeRule(
                 url = baseUrl,
                 html = content.toString(),
                 javaScript = jsStr,
-                headerMap = getSource()?.getHeaderMap(AppConfig.userAgent, true),
+                headerMap = getSource()?.getHeaderMap(cacheSettingsGateway.currentSettings.userAgent, true),
                 tag = getSource()?.getKey(),
                 cacheFirst = true,
                 timeout = 10000,
@@ -209,12 +211,17 @@ class AnalyzeRule(
                 val sourceRule = ruleList.first()
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
-                result = if (sourceRule.getParamSize() > 1) {
+                result = when {
+                    // 快捷路径同样要按 mode 分发（与下方通用路径一致）：`@js:` 书源列表
+                    // 规则产出的 JS 对象条目上，`$.x` / `@js:xxx` 若被当字面量键名处理会
+                    // 返回空，BookList 丢掉空书名条目 → 书源校验把搜索/发现误判为失效。
+                    sourceRule.mode == Mode.Js -> evalJS(sourceRule.rule, result)
+                    sourceRule.mode == Mode.Json ->
+                        getAnalyzeByJSonPath(result).getStringList(sourceRule.rule)
                     // get {{}}
-                    sourceRule.rule
-                } else {
+                    sourceRule.getParamSize() > 1 -> sourceRule.rule
                     // 键值直接访问
-                    result[sourceRule.rule]
+                    else -> result[sourceRule.rule]
                 }
                 result?.let {
                     if (sourceRule.replaceRegex.isNotEmpty() && it is List<*>) {
@@ -308,14 +315,18 @@ class AnalyzeRule(
                 val sourceRule = ruleList.first()
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
-                result = if (sourceRule.getParamSize() > 1) {
+                result = when {
+                    // 与 getStringList 同理：JS 对象条目必须按 mode 分发，否则 `$.name`
+                    // 与 `@js:xxx` 都会被当字面量键名而返回空串。
+                    sourceRule.mode == Mode.Js -> evalJS(sourceRule.rule, result)
+                    sourceRule.mode == Mode.Json ->
+                        getAnalyzeByJSonPath(result).getString(sourceRule.rule)
                     // get {{}}
-                    sourceRule.rule
-                } else {
+                    sourceRule.getParamSize() > 1 -> sourceRule.rule
                     // 键值直接访问
-                    result[sourceRule.rule]?.toString()
+                    else -> result[sourceRule.rule]?.toString()
                 }?.let {
-                    replaceRegex(it, sourceRule)
+                    replaceRegex(it.toString(), sourceRule)
                 }
             } else if (result is LinkedTreeMap<*, *>) {
                 result = result[ruleList.first().rule]?.toString()

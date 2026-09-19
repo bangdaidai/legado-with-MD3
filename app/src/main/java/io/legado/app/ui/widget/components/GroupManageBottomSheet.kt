@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.SettingItem
@@ -50,6 +51,21 @@ fun GroupManageBottomSheet(
     groupScenes: (group: String) -> List<String> = { emptyList() },
     onToggleGroupScene: (group: String, sceneKey: String) -> Unit = { _, _ -> },
 ) {
+    var groupToDelete by remember { mutableStateOf<String?>(null) }
+    AppAlertDialog(
+        show = groupToDelete != null,
+        onDismissRequest = { groupToDelete = null },
+        title = stringResource(R.string.delete),
+        text = stringResource(R.string.sure_del),
+        confirmText = stringResource(R.string.ok),
+        onConfirm = {
+            groupToDelete?.let(onDeleteGroup)
+            groupToDelete = null
+            onDismissRequest()
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { groupToDelete = null },
+    )
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
@@ -63,7 +79,7 @@ fun GroupManageBottomSheet(
                     currentScenes = groupScenes(group),
                     onToggleGroupScene = onToggleGroupScene,
                     onUpdateGroup = onUpdateGroup,
-                    onDeleteGroup = onDeleteGroup,
+                    onDeleteGroup = { groupToDelete = it }
                 )
             }
         }

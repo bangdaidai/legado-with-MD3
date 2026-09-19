@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.AiGenerateRequest
+import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiReasoningLevel
@@ -16,6 +17,7 @@ import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechEmotion
@@ -24,7 +26,6 @@ import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.help.readaloud.segment.AiSpeechAtom
 import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
-import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
@@ -40,37 +41,12 @@ class RefineSpeechWithAiUseCase(
     private val chapterSpeechGateway: ChapterSpeechGateway,
 ) {
 
-    /**
-     * 本书级 AI 失败冷却：同一本书任意一章 AI 识别失败后，后续章节（含听书预加载的下一章）
-     * 直接跳过 AI、回落规则，避免每章都各自等一次超时。
-     *
-     * 之前是按章冷却（[ChapterSpeechAnalysisResult.isAiCoolingDown]），但分析记录按
-     * (bookUrl, chapterIndex, resolverVersion) 分章独立，第一章失败不会让第二章跳过 AI，
-     * 于是预加载 10 章会各发一次慢 AI 请求。改成本书级后，第一章失败即整本书进入冷却。
-     *
-     * 注意：换模型/改 prompt 会因 resolverVersion 变化落到新分析记录，但本书冷却仍按 bookUrl 计；
-     * 分镜页「重新分析」会调用 [clearAiCooldown] 主动解除，避免被冷却挡住。
-     */
-    private val bookAiCooldownUntil = ConcurrentHashMap<String, Long>()
-
-    /**
-     * 同一本书的 AI 分析串行锁。
-     *
-     * 朗读服务起播和分镜页点开当前章会并发调用本 use case，而「冷却判断 → AI 调用 → 冷却写入」
-     * 之间不是原子的。多个并发请求都会先通过冷却检查、各自发一次完整 AI 请求（每个还带 3 次
-     * 内部重试），于是出现「同一章 AI 失败回落规则弹好几次、一直转圈」。
-     *
-     * 用按 bookUrl 的锁把整段包住：第一个请求跑 AI，其余在锁上等待，进入后发现冷却已置位就直接
-     * 回落规则，不再重发 AI。
-     */
-    private val bookLocks = ConcurrentHashMap<String, Mutex>()
-
-    fun clearAiCooldown(bookUrl: String) {
-        bookAiCooldownUntil.remove(bookUrl)
-    }
-
-    suspend fun resolverVersion(bookUrl: String, mode: SpeechAnalysisMode): String {
-        if (mode == SpeechAnalysisMode.Rule) return RuleBasedSpeechSegmenter.VERSION
+    suspend fun resolverVersion(
+        bookUrl: String,
+        mode: SpeechAnalysisMode,
+        policy: ContentSplitPolicy,
+    ): String {
+        if (mode == SpeechAnalysisMode.Rule) return ruleResolverVersion(policy)
         val preset = resolvePreset()
         val profiles = knownProfiles(bookUrl)
         val characterRevision = profiles
@@ -78,7 +54,8 @@ class RefineSpeechWithAiUseCase(
             .joinToString("|") { "${it.id}:${it.updatedAt}" }
         val promptHash = MD5Utils.md5Encode(systemPrompt(preset, mode))
         return listOf(
-            RuleBasedSpeechSegmenter.VERSION,
+            // 与纯规则分段共用同一前缀，AI 结果才不会被误判成规则模式
+            ruleResolverVersion(policy),
             VERSION,
             mode.storageValue,
             preset.model.id,
@@ -91,38 +68,35 @@ class RefineSpeechWithAiUseCase(
         analysisResult: ChapterSpeechAnalysisResult,
         paragraphs: List<CanonicalSpeechParagraph>,
         mode: SpeechAnalysisMode,
+        reasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
+        policy: ContentSplitPolicy = ContentSplitPolicy.SentenceLevel,
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
-        val bookUrl = analysisResult.analysis.bookUrl
-        // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
-        // 避免朗读与分镜页并发各自发一次 AI（竞态下冷却还没写入就都通过了检查）。
-        val guard = bookLocks.getOrPut(bookUrl) { Mutex() }
-        return guard.withLock {
-            if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return@withLock analysisResult
-            if (
-                mode == SpeechAnalysisMode.AiUnderstanding &&
-                analysisResult.fromCache &&
-                analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
-            ) return@withLock analysisResult
-            val profiles = knownProfiles(analysisResult.analysis.bookUrl)
-            val preset = resolvePreset()
-            val refined = try {
-                when (mode) {
-                    SpeechAnalysisMode.Rule -> analysisResult.segments
-                    SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
-                        analysisResult = analysisResult,
-                        profiles = profiles,
-                        preset = preset,
-                        now = now,
-                    )
-                    SpeechAnalysisMode.AiUnderstanding -> {
-                        if (analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
-                            completeRuleSegments(analysisResult, profiles, preset, now)
-                        } else {
-                            understandAtoms(analysisResult, paragraphs, profiles, preset, now)
-                        }
-                    }
+        if (
+            mode == SpeechAnalysisMode.AiUnderstanding &&
+            analysisResult.fromCache &&
+            analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
+        ) return analysisResult
+        val profiles = activeProfiles(analysisResult.analysis.bookUrl)
+        val preset = resolvePreset()
+        val refined = when (mode) {
+            SpeechAnalysisMode.Rule -> analysisResult.segments
+            SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
+                analysisResult = analysisResult,
+                profiles = profiles,
+                preset = preset,
+                reasoningLevel = reasoningLevel,
+                now = now,
+            )
+            SpeechAnalysisMode.AiUnderstanding -> {
+                // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
+                // 拆成多个片段，让用户显式选择的「一段 = 一个播放单元」失效。此时只让 AI
+                // 补全说话人与情绪，边界仍由规则分段器提供的整单元保持。
+                if (!policy.allowRoleSplits || analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
+                    completeRuleSegments(analysisResult, profiles, preset, reasoningLevel, now)
+                } else {
+                    understandAtoms(analysisResult, paragraphs, profiles, preset, reasoningLevel, now)
                 }
             } catch (e: CancellationException) {
                 // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却
@@ -154,6 +128,11 @@ class RefineSpeechWithAiUseCase(
         }
     }
 
+    /** 分镜页「重新分析」入口：主动解除本书冷却，避免被上一次 AI 失败挡住。 */
+    fun clearAiCooldown(bookUrl: String) {
+        bookAiCooldownUntil.remove(bookUrl)
+    }
+
     /**
      * 把 AI 失败写进分析记录：分段保持规则结果不动，只标状态和原因。
      *
@@ -176,6 +155,7 @@ class RefineSpeechWithAiUseCase(
         analysisResult: ChapterSpeechAnalysisResult,
         profiles: List<BookCharacterProfile>,
         preset: AiTaskPresetConfig,
+        reasoningLevel: AiReasoningLevel,
         now: Long,
     ): List<ChapterSpeechSegment> {
         val candidates = analysisResult.segments.filter { segment ->
@@ -203,7 +183,9 @@ class RefineSpeechWithAiUseCase(
                     )
                 },
             )
-            parseSegmentDecisions(generate(preset, SpeechAnalysisMode.RuleWithAi, payload))
+            parseSegmentDecisions(
+                generate(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
+            )
                 .forEach { decision ->
                     require(decision.segmentId in chunk.map(ChapterSpeechSegment::id)) {
                         "AI returned an unknown segmentId: ${decision.segmentId}"
@@ -298,6 +280,7 @@ class RefineSpeechWithAiUseCase(
         paragraphs: List<CanonicalSpeechParagraph>,
         profiles: List<BookCharacterProfile>,
         preset: AiTaskPresetConfig,
+        reasoningLevel: AiReasoningLevel,
         now: Long,
     ): List<ChapterSpeechSegment> {
         val atoms = paragraphs.flatMap(AiSpeechAtomizer::atomize)
@@ -311,7 +294,8 @@ class RefineSpeechWithAiUseCase(
                     mapOf("atomId" to atom.id, "text" to atom.text)
                 },
             )
-            val groups = parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload))
+            val groups =
+                parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel))
             validateCoverage(chunk, groups)
             val knownIds = knownProfiles.mapTo(hashSetOf(), BookCharacterProfile::id)
             require(groups.all { group ->
@@ -369,6 +353,7 @@ class RefineSpeechWithAiUseCase(
         preset: AiTaskPresetConfig,
         mode: SpeechAnalysisMode,
         payload: Any,
+        reasoningLevel: AiReasoningLevel,
     ): String = aiTextGateway.generate(
         AiGenerateRequest(
             model = preset.model,
@@ -376,14 +361,7 @@ class RefineSpeechWithAiUseCase(
                 AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode)),
                 AiMessage(AiMessageRole.USER, GSON.toJson(payload)),
             ),
-            // 说话人归因是结构化抽取，思考没有收益，却会把 max_tokens 花光 ——
-            // 思考型模型于是只回 reasoning_content、正文为空，整块分析白跑。
-            params = preset.params.copy(
-                temperature = 0f,
-                reasoningLevel = AiReasoningLevel.OFF,
-                maxOutputTokens = maxOf(preset.params.maxOutputTokens ?: 0, MIN_OUTPUT_TOKENS),
-            ),
-            taskType = AiTaskType.ANALYZE_SPEECH,
+            params = speechAnalysisParams(preset, reasoningLevel),
         )
     ).getOrThrow().text
 
@@ -598,3 +576,21 @@ class RefineSpeechWithAiUseCase(
                 "speakerGender unknown."
     }
 }
+
+/**
+ * Request params for AI speech analysis.
+ *
+ * The caller's level wins because the preset/model default (MEDIUM) would otherwise force thinking
+ * on for every analysis: models that think by default (Zhipu GLM, DeepSeek) then spend the answer on
+ * `reasoning_content` and the strict JSON contract of this task fails. AUTO keeps the presets in
+ * charge, mirroring [io.legado.app.domain.usecase.IdentifyBookCharactersUseCase.identifyStream].
+ */
+internal fun speechAnalysisParams(
+    preset: AiTaskPresetConfig,
+    reasoningLevel: AiReasoningLevel,
+): AiGenerationParams = preset.params.copy(
+    temperature = 0f,
+    reasoningLevel = reasoningLevel
+        .takeUnless { it == AiReasoningLevel.AUTO }
+        ?: preset.params.reasoningLevel,
+)

@@ -14,11 +14,11 @@ import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.domain.model.readaloud.HttpTtsVoice
+import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.ConcurrentRateLimiter
 import io.legado.app.help.JsExtensions
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.crypto.toHexString
 import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.help.glide.GlideHeaders
@@ -58,6 +58,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.koin.core.context.GlobalContext
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.URLEncoder
@@ -121,6 +122,7 @@ class AnalyzeUrl(
     private val domain: String
     private var webViewDelayTime: Long = 0
     private val concurrentRateLimiter = ConcurrentRateLimiter(source)
+    private val cacheSettingsGateway get() = GlobalContext.get().get<DownloadCacheSettingsGateway>()
 
     // 服务器ID
     var serverID: Long? = null
@@ -131,7 +133,7 @@ class AnalyzeUrl(
         val urlMatch = paramPattern.find(baseUrl)
         if (urlMatch != null) baseUrl = baseUrl.substring(0, urlMatch.range.first)
         (headerMapF ?: runScriptWithContext(coroutineContext) {
-            source?.getHeaderMap(AppConfig.userAgent, hasLoginHeader)
+            source?.getHeaderMap(cacheSettingsGateway.currentSettings.userAgent, hasLoginHeader)
         })?.let {
             headerMap.putAll(it)
             if (it.containsKey("proxy")) {
@@ -604,7 +606,7 @@ class AnalyzeUrl(
         if (readTimeout == null && callTimeout == null && dnsIp == null) {
             return client
         }
-        if (AppConfig.isCronet && dnsIp != null) {
+        if (cacheSettingsGateway.currentSettings.cronetEnabled && dnsIp != null) {
             customIp[urlNoQuery] = dnsIp!!
         }
         return client.newBuilder().run {
@@ -760,7 +762,7 @@ class AnalyzeUrl(
     }
 
     fun getUserAgent(): String {
-        return headerMap.get(UA_NAME, true) ?: AppConfig.userAgent
+        return headerMap.get(UA_NAME, true) ?: cacheSettingsGateway.currentSettings.userAgent
     }
 
     fun isPost(): Boolean {

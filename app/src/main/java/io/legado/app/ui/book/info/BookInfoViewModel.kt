@@ -914,7 +914,7 @@ class BookInfoViewModel(
                 context = context,
                 data = path,
                 sourceOrigin = sourceOrigin,
-                loadOnlyWifi = CoverConfig.loadCoverOnlyWifi,
+                loadOnlyWifi = coverSettingsGateway.currentSettings.loadOnlyOnWifi,
                 crossfade = false
             )
             val result = imageLoader.execute(request)

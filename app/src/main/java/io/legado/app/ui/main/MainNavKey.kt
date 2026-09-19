@@ -144,6 +144,7 @@ data class MainRouteReadBook(
     /** 一次性定位参数（书签/笔记跳转）：>=0 时开书后直接跳到该章节位置 */
     val chapterIndex: Int = -1,
     val chapterPos: Int = -1,
+    val sharedCoverKey: String? = null,
 ) : MainRoute
 
 @Serializable
@@ -151,6 +152,8 @@ data class MainRouteReadManga(
     val bookUrl: String? = null,
     val inBookshelf: Boolean = true,
     val chapterChanged: Boolean = false,
+    /** Distinguishes repeated open requests for the same book after an external TOC selection. */
+    val openRequestId: Long = 0L,
 ) : MainRoute
 
 @Serializable
@@ -158,6 +161,13 @@ data class MainRouteAudioPlay(
     val bookUrl: String? = null,
     val inBookshelf: Boolean = true,
 ) : MainRoute
+
+/**
+ * 听书播放界面。单例语义：可从阅读界面、悬浮胶囊或媒体按键在任意界面之上打开，
+ * 重复进入只替换不叠加。
+ */
+@Serializable
+data object MainRouteReadAloudPlayer : MainRoute
 
 @Serializable
 data class MainRouteSearch(

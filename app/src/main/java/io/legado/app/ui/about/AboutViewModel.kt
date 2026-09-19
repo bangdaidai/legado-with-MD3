@@ -8,8 +8,9 @@ import io.legado.app.R
 import io.legado.app.BuildConfig
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
+import io.legado.app.domain.gateway.BackupSettingsGateway
+import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.help.CrashHandler
-
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.utils.FileDoc
@@ -36,6 +37,8 @@ import java.io.FileFilter
 
 class AboutViewModel(
     application: Application,
+    private val otherSettingsGateway: OtherSettingsGateway,
+    private val backupSettingsGateway: BackupSettingsGateway,
 ) : BaseViewModel(application) {
 
     private val _uiState = MutableStateFlow(AboutUiState())
@@ -142,7 +145,7 @@ class AboutViewModel(
             context.externalCacheDir
                 ?.getFile("crash")
                 ?.let { FileUtils.delete(it, false) }
-            val backupPath = AppConfig.backupPath
+            val backupPath = backupSettingsGateway.currentSettings.backupPath
             if (!backupPath.isNullOrEmpty()) {
                 val uri = Uri.parse(backupPath)
                 FileDoc.fromUri(uri, true)
@@ -166,7 +169,7 @@ class AboutViewModel(
             ?.getFile("crash")
             ?.listFiles(FileFilter { it.isFile })
             ?.forEach { list.add(FileDoc.fromFile(it)) }
-        val backupPath = AppConfig.backupPath
+        val backupPath = backupSettingsGateway.currentSettings.backupPath
         if (!backupPath.isNullOrEmpty()) {
             val uri = Uri.parse(backupPath)
             FileDoc.fromUri(uri, true)
@@ -179,11 +182,11 @@ class AboutViewModel(
 
     private fun saveLog() {
         execute {
-            val backupPath = AppConfig.backupPath ?: run {
+            val backupPath = backupSettingsGateway.currentSettings.backupPath ?: run {
                 _effects.tryEmit(AboutEffect.ShowToast(context.getString(R.string.about_backup_dir_not_set)))
                 return@execute
             }
-            if (!AppConfig.recordLog) {
+            if (!otherSettingsGateway.currentSettings.recordLog) {
                 _effects.tryEmit(AboutEffect.ShowToast(context.getString(R.string.about_log_recording_disabled)))
                 delay(3000)
             }
@@ -198,11 +201,11 @@ class AboutViewModel(
 
     private fun createHeapDump() {
         execute {
-            val backupPath = AppConfig.backupPath ?: run {
+            val backupPath = backupSettingsGateway.currentSettings.backupPath ?: run {
                 _effects.tryEmit(AboutEffect.ShowToast(context.getString(R.string.about_backup_dir_not_set)))
                 return@execute
             }
-            if (!AppConfig.recordHeapDump) {
+            if (!otherSettingsGateway.currentSettings.recordHeapDump) {
                 _effects.tryEmit(AboutEffect.ShowToast(context.getString(R.string.about_heap_dump_recording_disabled)))
                 delay(3000)
             }
