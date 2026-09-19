@@ -227,13 +227,12 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         val chapterIdx = durChapterIndex
         // 如果切换到了新章节，把旧章节的全部文本长度计入
         if (chapterIdx != sessionLastChapter && sessionLastChapter >= 0) {
-            // 旧章的字数：取 curTextChapter（可能已切走变成 prev），或用 prevTextChapter
-            val finishedChapter = if (prevTextChapter != null && prevTextChapter!!.position == sessionLastChapter) {
-                prevTextChapter
-            } else if (curTextChapter != null && curTextChapter!!.position == sessionLastChapter) {
-                curTextChapter
-            } else null
-            val chapterLen = finishedChapter?.getContent()?.length?.toLong() ?: 0L
+            // 旧章的字数：新引擎不再在内存持有 TextChapter，改按已落盘章节缓存统计（不触发网络）
+            val chapterLen = book?.let { b ->
+                appDb.bookChapterDao.getChapter(b.bookUrl, sessionLastChapter)?.let {
+                    BookHelp.getCachedContentLength(b, it)
+                }
+            }?.toLong() ?: 0L
             // 计入从进入该章到章末的增量
             sessionWordAccum += (chapterLen - sessionChapterStartPos).coerceAtLeast(0)
             sessionLastChapter = chapterIdx

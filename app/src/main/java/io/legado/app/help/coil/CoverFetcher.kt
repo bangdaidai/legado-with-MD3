@@ -173,14 +173,21 @@ class CoverFetcher(
                     val body = networkResponse.body
                     if (!networkResponse.isSuccessful) {
                         body.close()
-                        throw IOException("HTTP ${networkResponse.code}")
+                        throw CoverHttpException(networkResponse.code)
                     }
                     body.use { it.bytes() }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                markFailed(url)
+                markFailed(
+                    url,
+                    if (e is CoverHttpException && e.code in 400..499) {
+                        FAIL_TTL_CLIENT_MS
+                    } else {
+                        FAIL_TTL_TRANSIENT_MS
+                    }
+                )
                 // 网络彻底失败（断网/源挂）时回退到本书别名缓存：
                 // 只要这本书曾经成功加载过封面，弱网/断网下仍显示上次缓存的封面，而不是灰图。
                 if (!isManga && bookUrl != null) {

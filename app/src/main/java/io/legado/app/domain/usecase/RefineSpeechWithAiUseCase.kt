@@ -41,6 +41,18 @@ class RefineSpeechWithAiUseCase(
     private val chapterSpeechGateway: ChapterSpeechGateway,
 ) {
 
+    /** 本书 AI 失败后的冷却截止时间（毫秒时间戳）。 */
+    private val bookAiCooldownUntil = ConcurrentHashMap<String, Long>()
+
+    /**
+     * 同一本书的 AI 分析串行锁。
+     *
+     * 朗读服务起播和分镜页点开当前章会并发调用本 use case，而「冷却判断 → AI 调用 → 冷却写入」
+     * 之间不是原子的。用按 bookUrl 的锁把整段包住：第一个请求跑 AI，其余在锁上等待，
+     * 进入后发现冷却已置位就直接回落规则，不再重发 AI。
+     */
+    private val bookLocks = ConcurrentHashMap<String, Mutex>()
+
     suspend fun resolverVersion(
         bookUrl: String,
         mode: SpeechAnalysisMode,
@@ -73,30 +85,52 @@ class RefineSpeechWithAiUseCase(
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
-        if (
-            mode == SpeechAnalysisMode.AiUnderstanding &&
-            analysisResult.fromCache &&
-            analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
-        ) return analysisResult
-        val profiles = activeProfiles(analysisResult.analysis.bookUrl)
-        val preset = resolvePreset()
-        val refined = when (mode) {
-            SpeechAnalysisMode.Rule -> analysisResult.segments
-            SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
-                analysisResult = analysisResult,
-                profiles = profiles,
-                preset = preset,
-                reasoningLevel = reasoningLevel,
-                now = now,
-            )
-            SpeechAnalysisMode.AiUnderstanding -> {
-                // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
-                // 拆成多个片段，让用户显式选择的「一段 = 一个播放单元」失效。此时只让 AI
-                // 补全说话人与情绪，边界仍由规则分段器提供的整单元保持。
-                if (!policy.allowRoleSplits || analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
-                    completeRuleSegments(analysisResult, profiles, preset, reasoningLevel, now)
-                } else {
-                    understandAtoms(analysisResult, paragraphs, profiles, preset, reasoningLevel, now)
+        val bookUrl = analysisResult.analysis.bookUrl
+        // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
+        // 避免朗读与分镜页并发各自发一次 AI（竞态下冷却还没写入就都通过了检查）。
+        val guard = bookLocks.getOrPut(bookUrl) { Mutex() }
+        return guard.withLock {
+            if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return@withLock analysisResult
+            if (
+                mode == SpeechAnalysisMode.AiUnderstanding &&
+                analysisResult.fromCache &&
+                analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
+            ) return@withLock analysisResult
+            val profiles = knownProfiles(analysisResult.analysis.bookUrl)
+            val preset = resolvePreset()
+            val refined = try {
+                when (mode) {
+                    SpeechAnalysisMode.Rule -> analysisResult.segments
+                    SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
+                        analysisResult = analysisResult,
+                        profiles = profiles,
+                        preset = preset,
+                        reasoningLevel = reasoningLevel,
+                        now = now,
+                    )
+                    SpeechAnalysisMode.AiUnderstanding -> {
+                        // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
+                        // 拆成多个片段，让用户显式选择的「一段 = 一个播放单元」失效。此时只让 AI
+                        // 补全说话人与情绪，边界仍由规则分段器提供的整单元保持。
+                        if (!policy.allowRoleSplits || analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
+                            completeRuleSegments(
+                                analysisResult,
+                                profiles,
+                                preset,
+                                reasoningLevel,
+                                now,
+                            )
+                        } else {
+                            understandAtoms(
+                                analysisResult,
+                                paragraphs,
+                                profiles,
+                                preset,
+                                reasoningLevel,
+                                now,
+                            )
+                        }
+                    }
                 }
             } catch (e: CancellationException) {
                 // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却

@@ -206,7 +206,6 @@ import io.legado.app.domain.usecase.GenerateChapterRecapUseCase
 import io.legado.app.domain.usecase.ExplainBookCharacterUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.domain.usecase.GetReadingMemoryDetailUseCase
-import io.legado.app.domain.usecase.CheckBookContentQualityUseCase
 import io.legado.app.domain.usecase.GetReadingProgressUseCase
 import io.legado.app.domain.usecase.HomeDashboardUseCase
 import io.legado.app.domain.usecase.IdentifyBookCharactersUseCase
@@ -904,8 +903,8 @@ val appModule = module {
             clearBookCacheUseCase = get(),
             deleteBooksUseCase = get(),
             updateBooksGroupUseCase = get(),
-            readingMemoryRepository = get()
-            downloadCacheSettingsGateway = get()
+            readingMemoryRepository = get(),
+            downloadCacheSettingsGateway = get(),
         )
     }
 

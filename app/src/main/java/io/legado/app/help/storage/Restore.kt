@@ -36,7 +36,6 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookVoiceBindingEntity
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.CloudTtsEngineEntity
-import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.DictRule
 import io.legado.app.data.entities.ReadAloudVoiceEntity
 import io.legado.app.data.entities.RemovedAutoTag

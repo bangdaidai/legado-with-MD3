@@ -337,6 +337,7 @@ internal fun MutableMap<String, Any?>.appendServerTool(tool: Map<String, Any?>) 
     this["tools"] = existing + tool
 }
 
+/**
  * GLM-5.3 / GLM-5.3-Flash 强制思考，无法通过 thinking.type 关闭（z.ai 文档），
  * 对这些模型发 disabled 只会换回一个错误响应。
  */
