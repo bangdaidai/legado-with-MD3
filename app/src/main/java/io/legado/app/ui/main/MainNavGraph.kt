@@ -1563,6 +1563,17 @@ fun MainActivity.mainEntryProvider(
             showReadAloudConfig = readAloudConfigOpen,
             onReadAloudConfigVisibleChange = { readAloudConfigOpen = it },
             onBack = { onNavigateBack() },
+            // 设置卡片「引擎与音色」页签的跳页入口，与阅读器宿主接同一批目的地。
+            onOpenTtsEnginesAndVoices = { bookUrl ->
+                onNavigateToRoute(MainRouteCloudTtsEngines(bookUrl))
+            },
+            onOpenTtsCache = { onNavigateToRoute(MainRouteTtsCache) },
+            onOpenBookVoiceCasting = { bookUrl ->
+                onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
+            },
+            onOpenSpeechStoryboard = { bookUrl ->
+                onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            },
         )
     }
 

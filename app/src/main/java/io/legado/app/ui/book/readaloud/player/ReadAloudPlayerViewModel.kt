@@ -251,7 +251,8 @@ class ReadAloudPlayerViewModel(
         )
     }
 
-    private fun effect(value: ReadAloudPlayerEffect) {
+    // internal：配置卡片意图映射（ReadAloudConfigIntentMapper）在类外发跳页 Effect。
+    internal fun effect(value: ReadAloudPlayerEffect) {
         _effects.tryEmit(value)
     }
 

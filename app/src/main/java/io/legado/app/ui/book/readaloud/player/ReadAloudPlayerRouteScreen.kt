@@ -1,14 +1,17 @@
 package io.legado.app.ui.book.readaloud.player
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.help.IntentHelp
 import io.legado.app.ui.book.read.sheet.ReadAloudConfigContent
 import io.legado.app.ui.book.read.sheet.asReadBookUiState
 import io.legado.app.ui.theme.ProvideThemeOverride
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import kotlinx.coroutines.flow.collectLatest
 import org.koin.compose.koinInject
 
 /**
@@ -28,11 +31,48 @@ fun ReadAloudPlayerRouteScreen(
     showReadAloudConfig: Boolean,
     onReadAloudConfigVisibleChange: (Boolean) -> Unit,
     onBack: () -> Unit,
+    onOpenTtsEnginesAndVoices: (bookUrl: String?) -> Unit = {},
+    onOpenTtsCache: () -> Unit = {},
+    onOpenBookVoiceCasting: (bookUrl: String) -> Unit = {},
+    onOpenSpeechStoryboard: (bookUrl: String) -> Unit = {},
 ) {
     val playerViewModel: ReadAloudPlayerViewModel = koinInject()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val settingsState by playerViewModel.readAloudSettings.collectAsStateWithLifecycle()
     val playerTheme = rememberPlayerThemeOverride(playerState)
+
+    LaunchedEffect(playerViewModel) {
+        playerViewModel.effects.collectLatest { effect ->
+            when (effect) {
+                // 设置卡片是 dialog 窗口，不收起会浮在跳过去的整页上面。
+                is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
+                    onReadAloudConfigVisibleChange(false)
+                    onOpenTtsEnginesAndVoices(effect.bookUrl)
+                }
+
+                ReadAloudPlayerEffect.OpenTtsCache -> {
+                    onReadAloudConfigVisibleChange(false)
+                    onOpenTtsCache()
+                }
+
+                is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
+                    onReadAloudConfigVisibleChange(false)
+                    onOpenBookVoiceCasting(effect.bookUrl)
+                }
+
+                is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
+                    onReadAloudConfigVisibleChange(false)
+                    onOpenSpeechStoryboard(effect.bookUrl)
+                }
+
+                ReadAloudPlayerEffect.OpenSystemTtsSettings -> IntentHelp.openTTSSetting()
+
+                // 切回阅读器/经典面板依赖阅读器宿主在栈上，跳页导航此前未接通，保持现状。
+                ReadAloudPlayerEffect.ReturnToClassic,
+                ReadAloudPlayerEffect.ReturnToReaderSettings -> Unit
+            }
+        }
+    }
 
     ProvideThemeOverride(playerTheme) {
         ReadAloudPlayerScreenContent(

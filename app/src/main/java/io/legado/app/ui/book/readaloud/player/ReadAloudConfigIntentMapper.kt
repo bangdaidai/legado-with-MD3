@@ -68,6 +68,27 @@ internal fun ReadAloudPlayerViewModel.applyReadBookConfigIntent(intent: ReadBook
         is ReadBookIntent.ApplyAudioCacheCleanTime ->
             onConfigIntent(ReadAloudConfigOption.AudioCacheCleanTime, intValue = intent.value)
 
+        // 跳独立整页：发 Effect，由路由层收集后交给 MainNavGraph 导航；
+        // 语义与阅读器宿主的 ReadAloudDelegate 一致。
+        ReadBookIntent.OpenTtsEnginesAndVoices ->
+            effect(ReadAloudPlayerEffect.OpenEnginesAndVoices(uiState.value.bookUrl.ifBlank { null }))
+
+        ReadBookIntent.OpenTtsCache ->
+            effect(ReadAloudPlayerEffect.OpenTtsCache)
+
+        ReadBookIntent.OpenBookVoiceCasting -> {
+            val bookUrl = uiState.value.bookUrl
+            if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenBookVoiceCasting(bookUrl))
+        }
+
+        ReadBookIntent.OpenSpeechStoryboard -> {
+            val bookUrl = uiState.value.bookUrl
+            if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenSpeechStoryboard(bookUrl))
+        }
+
+        ReadBookIntent.OpenSystemTtsSettings ->
+            effect(ReadAloudPlayerEffect.OpenSystemTtsSettings)
+
         // 其余意图在播放界面没有等价动作（缓存清理、数值选择器弹层等），静默忽略
         else -> Unit
     }
