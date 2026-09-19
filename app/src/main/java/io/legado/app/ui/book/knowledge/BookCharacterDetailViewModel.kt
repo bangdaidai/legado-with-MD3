@@ -238,6 +238,9 @@ class BookCharacterDetailViewModel(
                         deleteEvents = intent.deleteEvents,
                     )
                 }
+                // 删掉主角后，跟随主角高亮的展开缓存必须失效：否则正文仍命中已删人物
+                // （查询本身过滤 status!=DELETED，但缓存里的旧 pattern 还带着这个名字）。
+                HighlightProtagonistPatterns.invalidate()
                 _effects.tryEmit(CharacterDetailEffect.NavigateBack)
             } catch (e: CancellationException) {
                 throw e

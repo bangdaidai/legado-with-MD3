@@ -15,6 +15,7 @@ import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderUnderline
 import io.legado.app.feature.reader.core.model.underlineRuns
 import io.legado.app.utils.dpToPx
+import kotlin.math.roundToInt
 
 /** Immutable Android draw data prepared once for a page snapshot revision. */
 internal data class ReaderPageDecorationDrawCache(
@@ -191,39 +192,63 @@ internal class ReaderUnderlineDrawCommand(
     }
 
     private fun drawDashed(canvas: Canvas, start: Float, end: Float, y: Float) {
-        val dashOn = underline.dashOnPx.coerceAtLeast(MIN_SEGMENT_PX)
-        val dashOff = underline.dashOffPx.coerceAtLeast(MIN_SEGMENT_PX)
-        var x = start
-        while (x < end) {
-            canvas.drawLine(x, y, (x + dashOn).coerceAtMost(end), y, paint)
-            x += dashOn + dashOff
+        val (periods, on, off) = scaledDashSegments(
+            end - start,
+            underline.dashOnPx,
+            underline.dashOffPx,
+        )
+        for (i in 0 until periods) {
+            val segStart = start + i * (on + off)
+            if (segStart >= end) break
+            canvas.drawLine(segStart, y, (segStart + on).coerceAtMost(end), y, paint)
         }
     }
 
     private companion object {
-        const val MIN_SEGMENT_PX = 0.1f
         const val SVG_BASE_WIDTH = 100f
         const val SVG_BASELINE_Y = 50f
 
         fun createWavePath(bounds: ReaderRect, underline: ReaderUnderline): Path {
             val y = bounds.bottom + underline.offsetPx
-            val waveLength = underline.waveLengthPx.coerceAtLeast(MIN_SEGMENT_PX)
+            val width = bounds.right - bounds.left
+            // 把余数均摊进所有半波：段尾不再被 coerceAtMost 截出挤扁的短波，
+            // 同一行内波长一致，行间疏密也不随余量跳动
+            val halfWaves = waveHalfWaveCount(width, underline.waveLengthPx)
+            val step = width / halfWaves
             return Path().apply {
                 moveTo(bounds.left, y)
                 var x = bounds.left
-                while (x < bounds.right) {
-                    val next = (x + waveLength).coerceAtMost(bounds.right)
-                    quadTo((x + next) / 2f, y - underline.waveAmplitudePx, next, y)
+                for (i in 0 until halfWaves) {
+                    // 最后一个半波强制收口到区间末端，避免取整误差留下小缝隙
+                    val next = if (i == halfWaves - 1) bounds.right else x + step
+                    val amplitude =
+                        if (i % 2 == 0) -underline.waveAmplitudePx else underline.waveAmplitudePx
+                    quadTo((x + next) / 2f, y + amplitude, next, y)
                     x = next
-                    if (x < bounds.right) {
-                        val nextDown = (x + waveLength).coerceAtMost(bounds.right)
-                        quadTo((x + nextDown) / 2f, y + underline.waveAmplitudePx, nextDown, y)
-                        x = nextDown
-                    }
                 }
             }
         }
     }
+}
+
+/** 周期笔画（波浪/虚线）的最小段长，防止除零和退化配置。 */
+internal const val READER_MIN_STROKE_SEGMENT_PX = 0.1f
+
+/** 把 [widthPx] 均摊成整数个半波后的半波数。 */
+internal fun waveHalfWaveCount(widthPx: Float, waveLengthPx: Float): Int =
+    (widthPx / waveLengthPx.coerceAtLeast(READER_MIN_STROKE_SEGMENT_PX))
+        .roundToInt().coerceAtLeast(1)
+
+/**
+ * 虚线周期数就近取整后把余量按同比分给段与间隙（段尾不再被硬切成碎段）。
+ * 返回 Triple(周期数, 缩放后的段长, 缩放后的间隙)。
+ */
+internal fun scaledDashSegments(widthPx: Float, dashOnPx: Float, dashOffPx: Float): Triple<Int, Float, Float> {
+    val dashOn = dashOnPx.coerceAtLeast(READER_MIN_STROKE_SEGMENT_PX)
+    val dashOff = dashOffPx.coerceAtLeast(READER_MIN_STROKE_SEGMENT_PX)
+    val periods = ((widthPx + dashOff) / (dashOn + dashOff)).roundToInt().coerceAtLeast(1)
+    val scale = widthPx / (periods * dashOn + (periods - 1) * dashOff)
+    return Triple(periods, dashOn * scale, dashOff * scale)
 }
 
 internal object ReaderSvgPathCache {

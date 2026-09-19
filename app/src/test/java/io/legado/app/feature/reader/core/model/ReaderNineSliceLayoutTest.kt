@@ -116,4 +116,27 @@ class ReaderNineSliceLayoutTest {
         assertEquals(ReaderIntRect(1, 1, 8, 6), cells.first().source)
         assertEquals(ReaderIntRect(23, 22, 32, 30), cells.last().source)
     }
+
+    @Test
+    fun anchoredToLineHeightScalesCornersFromMiddleBandLikePreview() {
+        val image = ReaderTextBackgroundImage(
+            "frame.png", 3, 1f,
+            ninePatchLeft = 0.2f,
+            ninePatchRight = 0.2f,
+            ninePatchTop = 0.2f,
+            ninePatchBottom = 0.1f,
+            paddingLeftPx = 2f,
+        ).withBitmapSize(100, 50)
+
+        // 中带源高 (1-0.2-0.1)*50=35，锚定行盒高 40 → 全图等比 scale=40/35，
+        // 四角尺寸随行高变化（与 NinePatchDrawHelper.layout 同一口径），padding 不变
+        val anchored = image.anchoredToLineHeight(40f)
+        assertEquals(50f * 0.2f * 40f / 35f, anchored.contentInsetTopPx, 0.1f)
+        assertEquals(50f * 0.1f * 40f / 35f, anchored.contentInsetBottomPx, 0.1f)
+        assertEquals(100f * 0.2f * 40f / 35f + 2f, anchored.contentInsetLeftPx, 0.1f)
+
+        // 无源图尺寸（测试直接构造 inset）时锚定不生效，保持既有行为
+        val noSource = ReaderTextBackgroundImage("frame.png", 3, 1f, contentInsetTopPx = 9f)
+        assertEquals(9f, noSource.anchoredToLineHeight(40f).contentInsetTopPx, 0f)
+    }
 }

@@ -162,6 +162,9 @@ class ReaderChapterBlockMeasurer(
             var emittedContent = false
             var hasStandaloneImage = false
             var droppedActionImage = false
+            // 段首空白不吃高亮装饰（移植旧 clearLeadingWhitespaceStyles）：缩进前缀
+            // 由 ContentProcessor 以真实字符拼入正文，正则规则与笔记跨段时都不应盖住它
+            var atLeadingWhitespace = true
             val inline = mutableListOf<ReaderMeasuredInlineItem>()
             fun flushInline(skipBlank: Boolean = false) {
                 if (inline.isEmpty()) return
@@ -205,7 +208,10 @@ class ReaderChapterBlockMeasurer(
                         var offset = 0
                         initiallyShaped.text.forEachIndexed { clusterIndex, cluster ->
                             val position = item.chapterPosition + offset
-                            val rangeStyle = style.styleRanges
+                            val leadingBlank = atLeadingWhitespace &&
+                                cluster.firstOrNull()?.isLeadingWhitespace() == true
+                            if (!leadingBlank) atLeadingWhitespace = false
+                            val rangeStyle = if (leadingBlank) null else style.styleRanges
                                 .takeIf(List<ReaderStyleRange>::isNotEmpty)
                                 ?.let {
                                     ReaderCharacterStyleResolver.resolve(
@@ -262,6 +268,7 @@ class ReaderChapterBlockMeasurer(
                             droppedActionImage = true
                             return@forEach
                         }
+                        atLeadingWhitespace = false
                         // A broken image must not make the entire chapter disappear. The bitmap
                         // loader already supplies an error image; reserve stable line geometry
                         // until real dimensions are available.
@@ -468,3 +475,7 @@ private fun ReaderTextStyle.merge(override: ReaderCharacterStyle?): ReaderTextSt
         backgroundImage = override.backgroundImage ?: backgroundImage,
     )
 }
+
+/** 段首空白字符集，与旧引擎 clearLeadingWhitespaceStyles 一致（半角/全角/排版空格）。 */
+private fun Char.isLeadingWhitespace(): Boolean =
+    this == ' ' || this == '\t' || this == '\u3000' || code == 0x2002 || code == 0x2003

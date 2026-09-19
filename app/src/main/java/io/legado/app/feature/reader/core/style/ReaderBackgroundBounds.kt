@@ -21,8 +21,9 @@ fun List<ReaderElement.Text>.mergeBackgroundBounds(
 ): List<ReaderBackgroundBand> {
     if (isEmpty()) return emptyList()
     val bands = ArrayList<ReaderBackgroundBand>(size)
+    var previousText: ReaderElement.Text? = null
     forEach { element ->
-        val colorArgb = element.style.backgroundArgb ?: return@forEach
+        val colorArgb = element.style.backgroundArgb
         val rect = element.bounds
         val previous = bands.lastOrNull()
         val verticalOverlap = previous?.let {
@@ -34,7 +35,11 @@ fun List<ReaderElement.Text>.mergeBackgroundBounds(
         val horizontalGap = previous?.let {
             maxOf(rect.left - it.bounds.right, it.bounds.left - rect.right, 0f)
         } ?: Float.POSITIVE_INFINITY
-        if (sameLine && previous.colorArgb == colorArgb && horizontalGap <= joinGapPx) {
+        // 对照旧 `drawBgColors`（bfa3c1c92）：紧邻的上一元素没有该背景色就打断连续性，
+        // 背景色带不得跨过未匹配字符延伸；字距/两端对齐的小间隙仍按容差连接。
+        val continues = colorArgb != null && sameLine && previous.colorArgb == colorArgb &&
+            previousText?.style?.backgroundArgb == colorArgb && horizontalGap <= joinGapPx
+        if (continues) {
             bands[bands.lastIndex] = previous.copy(
                 bounds = ReaderRect(
                     left = minOf(previous.bounds.left, rect.left),
@@ -43,9 +48,10 @@ fun List<ReaderElement.Text>.mergeBackgroundBounds(
                     bottom = maxOf(previous.bounds.bottom, rect.bottom),
                 ),
             )
-        } else {
+        } else if (colorArgb != null) {
             bands += ReaderBackgroundBand(colorArgb, rect)
         }
+        previousText = element
     }
     return bands
 }

@@ -257,6 +257,34 @@ class ReaderChapterBlockMeasurerTest {
         assertEquals("mark-1", text.markingId)
     }
 
+    @Test fun leadingParagraphWhitespaceNeverCarriesHighlightStyle() = runBlocking {
+        val source = ReaderChapterSource(
+            1, "",
+            listOf(ReaderChapterSourceBlock.Paragraph(listOf(
+                ReaderChapterInlineSource.Text("　　甲乙", 0),
+            ))),
+            4,
+        )
+        val result = ReaderChapterBlockMeasurer(
+            bodyShaper = shaper,
+            titleShaper = shaper,
+            imageDimensionsResolver = { null },
+        ).measure(
+            source,
+            style.copy(styleRanges = listOf(
+                ReaderStyleRange(
+                    0, 4, ReaderStyleTarget.BODY,
+                    ReaderCharacterStyle(markingId = "m", backgroundArgb = 55), 10_000,
+                ),
+            )),
+        ) as ReaderChapterMeasureResult.Success
+        val glyphs = (result.blocks.single() as ReaderMeasuredBlock.InlineParagraph)
+            .items.filterIsInstance<ReaderMeasuredInlineItem.Text>()
+        // 段首缩进空格不吞笔记/规则装饰（移植旧 clearLeadingWhitespaceStyles）
+        assertEquals(listOf(null, null, "m", "m"), glyphs.map { it.markingId })
+        assertEquals(listOf(null, null, 55, 55), glyphs.map { it.style.backgroundArgb })
+    }
+
     @Test fun convertsHtmlNewlineOnlyParagraphIntoAVisualBlankLineWithoutSyntheticText() = runBlocking {
         val source = ReaderChapterSource(1, "", listOf(ReaderChapterSourceBlock.Html("x", 5)), 4)
         val result = ReaderChapterBlockMeasurer(

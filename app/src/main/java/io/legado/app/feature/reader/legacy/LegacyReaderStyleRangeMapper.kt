@@ -16,6 +16,8 @@ import io.legado.app.feature.reader.core.style.ReaderStyleRange
 import io.legado.app.feature.reader.core.style.ReaderStyleTarget
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.ReadStyleResolver
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fromJsonObject
@@ -31,29 +33,37 @@ object LegacyReaderStyleRangeMapper {
         val result = mutableListOf<ReaderStyleRange>()
         val bodyText = semanticBodyText(source)
         val titleText = source.semanticTitle
-        rules.filter(HighlightRule::enabled).forEachIndexed { index, rule ->
-            // 跟随主角：把人物名/别名展开成正则；展开失败（该书无人）时整条规则跳过，与旧引擎一致
-            val pattern = if (rule.useProtagonist) {
-                HighlightProtagonistPatterns.patternFor(bookUrl, rule.characterRole)
-                    ?: return@forEachIndexed
-            } else {
-                rule.pattern
-            }
-            val regex = runCatching { Regex(pattern) }.getOrNull() ?: return@forEachIndexed
-            val targets = when (rule.targetScope) {
-                HighlightRule.TARGET_TITLE -> listOf(titleText to ReaderStyleTarget.TITLE)
-                HighlightRule.TARGET_BODY -> listOf(bodyText to ReaderStyleTarget.BODY)
-                else -> listOf(titleText to ReaderStyleTarget.TITLE, bodyText to ReaderStyleTarget.BODY)
-            }
-            targets.forEach { (text, target) ->
-                regex.findAll(text).forEach { match ->
-                    result += ReaderStyleRange(
-                        start = match.range.first,
-                        endExclusive = match.range.last + 1,
-                        target = target,
-                        style = rule.toReaderStyle(),
-                        priority = index,
-                    )
+        var ruleIndex = 0
+        rules.filter(HighlightRule::enabled).forEach { rule ->
+            // 单条规则的任何异常都只跳过自己，绝不冒泡拖垮整章排版：
+            // 与旧引擎"该条展开/解析失败就整条跳过"一致。旧引擎不崩正是因为逐条容错，
+            // 新引擎此前缺这层保护——一本配了坏规则的书会点"重试"仍反复失败。
+            val priority = ruleIndex++
+            runCatching {
+                // 跟随主角：把人物名/别名展开成正则；展开失败（该书无人）时整条规则跳过
+                val pattern = if (rule.useProtagonist) {
+                    HighlightProtagonistPatterns.patternFor(bookUrl, rule.characterRole)
+                        ?: return@runCatching
+                } else {
+                    rule.pattern
+                }
+                val regex = runCatching { Regex(pattern) }.getOrNull() ?: return@runCatching
+                val targets = when (rule.targetScope) {
+                    HighlightRule.TARGET_TITLE -> listOf(titleText to ReaderStyleTarget.TITLE)
+                    HighlightRule.TARGET_BODY -> listOf(bodyText to ReaderStyleTarget.BODY)
+                    else -> listOf(titleText to ReaderStyleTarget.TITLE, bodyText to ReaderStyleTarget.BODY)
+                }
+                val style = runCatching { rule.toReaderStyle() }.getOrNull() ?: return@runCatching
+                targets.forEach { (text, target) ->
+                    regex.findAll(text).forEach { match ->
+                        result += ReaderStyleRange(
+                            start = match.range.first,
+                            endExclusive = match.range.last + 1,
+                            target = target,
+                            style = style,
+                            priority = priority,
+                        )
+                    }
                 }
             }
         }
@@ -108,15 +118,19 @@ object LegacyReaderStyleRangeMapper {
     }
 
     private fun HighlightRule.toReaderStyle() = ReaderCharacterStyle(
-        colorArgb = textColor,
-        backgroundArgb = bgColor,
+        colorArgb = resolveModeColor(textColor, textColorNight, hasBgImage = false),
+        backgroundArgb = resolveModeColor(bgColor, bgColorNight, bgImage?.isNotBlank() == true),
         underline = underlineMode.takeIf { it != 0 }?.let {
             ReaderUnderline(
                 mode = it,
                 // 兜底跟随正文色：旧 `TextLine.drawStyledUnderlines` 的
                 // `underlineColor ?: textColor ?: ChapterProvider.renderStyle.textColor`
                 // （即 ReadBookConfig.textColor），不是写死的主题绿。
-                colorArgb = underlineColor ?: textColor ?: ReadBookConfig.textColor,
+                colorArgb = resolveModeColor(
+                    underlineColor ?: textColor,
+                    underlineColorNight ?: textColorNight,
+                    bgImage?.isNotBlank() == true,
+                ) ?: ReadBookConfig.textColor,
                 widthPx = underlineWidth.dpToPx(),
                 offsetPx = underlineOffset.dpToPx(),
                 svgPath = underlineSvgPath.orEmpty(),
@@ -164,15 +178,21 @@ object LegacyReaderStyleRangeMapper {
     )
 
     private fun TextProcessStyle.toReaderStyle(markingId: String) = ReaderCharacterStyle(
-        colorArgb = textColor,
-        backgroundArgb = bgColor,
+        // 笔记样式没有夜间字段，旧引擎在夜间按明度反相派生（TextColumn/TextLine 的
+        // resolveModeColor 传入 null 夜间色即走派生分支），这里保持同一语义。
+        colorArgb = resolveModeColor(textColor, nightColor = null, hasBgImage = false),
+        backgroundArgb = resolveModeColor(bgColor, nightColor = null, hasBgImage = false),
         underline = underlineMode.takeIf { it != 0 }?.let {
             ReaderUnderline(
                 mode = it,
                 // 兜底跟随正文色：旧 `TextLine.drawStyledUnderlines` 的
                 // `underlineColor ?: textColor ?: ChapterProvider.renderStyle.textColor`
                 // （即 ReadBookConfig.textColor），不是写死的主题绿。
-                colorArgb = underlineColor ?: textColor ?: ReadBookConfig.textColor,
+                colorArgb = resolveModeColor(
+                    underlineColor ?: textColor,
+                    nightColor = null,
+                    hasBgImage = false,
+                ) ?: ReadBookConfig.textColor,
                 widthPx = underlineWidth.dpToPx(),
                 offsetPx = underlineOffset.dpToPx(),
                 svgPath = underlineSvgPath.orEmpty(),
@@ -188,6 +208,23 @@ object LegacyReaderStyleRangeMapper {
 
     private fun BookContentProcess.isUserMarking(): Boolean =
         kind == BookContentProcess.KIND_USER_UNDERLINE || kind == BookContentProcess.KIND_USER_HIGHLIGHT
+
+    /**
+     * 对照旧 `TextLine`/`TextColumn.resolveModeColor` 的双向派生：
+     * 日间优先日间色、缺失时反相夜间色；夜间优先夜间色、缺失时反相日间色
+     * （文字色不受 [hasBgImage] 限制；背景/下划线色在配了背景图时不反相，
+     * 因为图案底上反相色会突兀）。排版期解析一次，日夜间切换由整章重排消化。
+     */
+    private fun resolveModeColor(dayColor: Int?, nightColor: Int?, hasBgImage: Boolean): Int? {
+        if (!ReadStyleResolver.isNightTheme()) {
+            dayColor?.let { return it }
+            nightColor?.let { return ColorUtils.flipLightness(it) }
+            return null
+        }
+        nightColor?.let { return it }
+        if (hasBgImage) return dayColor
+        return dayColor?.let { ColorUtils.flipLightness(it) }
+    }
 
     private fun backgroundImageSize(path: String): Pair<Int, Int> =
         ReaderTextBackgroundLoader.dimensions(path)

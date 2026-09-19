@@ -463,6 +463,9 @@ fun MainActivity.mainEntryProvider(
                         MainRouteReadBook(
                             bookUrl = book.bookUrl,
                             sharedCoverKey = sharedCoverKey,
+                            bookName = book.name,
+                            bookAuthor = book.author,
+                            coverPath = book.getDisplayCover(),
                         )
                     )
                 }
@@ -836,6 +839,9 @@ fun MainActivity.mainEntryProvider(
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = LocalNavAnimatedContentScope.current,
             sharedCoverKey = route.sharedCoverKey,
+            bookName = route.bookName,
+            bookAuthor = route.bookAuthor,
+            coverPath = route.coverPath,
             onEffectsReady = { effectsReady.complete(Unit) },
             onOpenSearch = { word, bookUrl, autoFocus ->
                 onNavigateToRoute(
@@ -1301,6 +1307,9 @@ fun MainActivity.mainEntryProvider(
                         chapterIndex = chapterIndex,
                         chapterPos = chapterPos,
                         sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(route.bookUrl),
+                        bookName = route.name,
+                        bookAuthor = route.author,
+                        coverPath = route.coverPath,
                     )
                 )
             },

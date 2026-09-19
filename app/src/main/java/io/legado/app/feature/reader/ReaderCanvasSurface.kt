@@ -149,6 +149,8 @@ import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.feature.reader.platform.ReaderBookmarkBadgeRenderer
 import io.legado.app.feature.reader.platform.ReaderPageDecorationDrawCache
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
+import io.legado.app.feature.reader.platform.scaledDashSegments
+import io.legado.app.feature.reader.platform.waveHalfWaveCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1418,12 +1420,14 @@ fun ReaderCanvasSurface(
             Box(Modifier
                 .fillMaxSize()
                 .drawWithContent {
-                    // 外扩阴影/斜体溢出，对照旧 View 的 ChapterProvider.visibleRect：
-                    // 矩形裁剪，四边都按阴影/斜体外扩，右侧到 `viewWidth - paddingRight`。
+                    // 对照旧 View：绘制期只裁到整个 ContentTextView 边界
+                    // （`ContentTextView.draw` 的 clipRect(0,0,width,height)），没有内容区
+                    // 裁剪，九宫格外扩边框可以画进页边距。这里保持旧版的上下内容带
+                    // （防止相邻滚动页渗入页眉/页脚区），仅把左右放宽到整幅。
                     clipRect(
-                        left = current.contentLeftPx - contentClipPad,
+                        left = 0f,
                         top = current.contentTopPx - contentClipPad,
-                        right = current.contentRightPx + contentClipPad,
+                        right = size.width,
                         bottom = current.contentBottomPx + contentClipPad,
                     ) {
                         this@drawWithContent.drawContent()
@@ -2262,9 +2266,20 @@ private fun ReaderPageCanvas(
             drawable.alpha = (backgroundImageAlpha.coerceIn(0f, 1f) * 255).roundToInt()
             drawable.draw(native)
         }
-        // 内容按旧 `ChapterProvider.visibleRect` 裁：背景色/背景图不裁（旧 View 里它们在
-        // ContentTextView 之外），九宫格左右外扩与斜体/阴影字缘因此不会画进页边距。
-        // 与 Image/Selection 的绘制共用同一个 native canvas，故用原生 save/clipRect 即可。
+        // 文字背景图不受内容边界裁剪：旧引擎 `TextLine.drawBgImageSegment` 的九宫格
+        // （fit==3）走 NinePatchDrawHelper，全程没有 canvas.clipRect，外扩的边框可以
+        // 自由画进页边距。这里只夹到整页范围，避免溢出到相邻页。
+        val backgroundClipSave = native.save()
+        native.clipRect(0f, 0f, page.widthPx.toFloat(), page.heightPx.toFloat())
+        textBackgrounds.forEach { run ->
+            textBackgroundBitmaps[run.image.source]?.let { bitmap ->
+                drawTextBackground(native, bitmap, run, textBackgroundPaint)
+            }
+        }
+        native.restoreToCount(backgroundClipSave)
+        // 其余内容按旧 `ChapterProvider.visibleRect` 裁：斜体/阴影字缘靠 padding 外扩，
+        // 背景色块和下划线不会画进页边距。与 Image/Selection 的绘制共用同一个 native
+        // canvas，故用原生 save/clipRect 即可。
         val contentClipPad = page.contentClipPadPx
         val contentClipSave = native.save()
         native.clipRect(
@@ -2273,11 +2288,6 @@ private fun ReaderPageCanvas(
             page.contentRightPx + contentClipPad,
             page.contentBottomPx + contentClipPad,
         )
-        textBackgrounds.forEach { run ->
-            textBackgroundBitmaps[run.image.source]?.let { bitmap ->
-                drawTextBackground(native, bitmap, run, textBackgroundPaint)
-            }
-        }
         textBackgroundBands.forEach { band ->
             drawRect(
                 Color(band.colorArgb),
@@ -2408,31 +2418,36 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSelectionStyleP
         when (style.underlineMode) {
             1, 6 -> drawLine(Color(color), Offset(rect.left, y), Offset(rect.right, y), stroke)
             2 -> {
-                val on = 8.dp.toPx()
-                val off = 5.dp.toPx()
-                var x = rect.left
-                while (x < rect.right) {
+                // 与正式渲染同一套周期均摊算法，段尾不再被截出碎段
+                val (periods, on, off) = scaledDashSegments(
+                    rect.right - rect.left,
+                    8.dp.toPx(),
+                    5.dp.toPx(),
+                )
+                for (i in 0 until periods) {
+                    val segStart = rect.left + i * (on + off)
+                    if (segStart >= rect.right) break
                     drawLine(
                         Color(color),
-                        Offset(x, y),
-                        Offset((x + on).coerceAtMost(rect.right), y),
+                        Offset(segStart, y),
+                        Offset((segStart + on).coerceAtMost(rect.right), y),
                         stroke
                     )
-                    x += on + off
                 }
             }
 
             3 -> {
                 val amplitude = 3.dp.toPx()
-                val length = 12.dp.toPx()
+                val width = rect.right - rect.left
+                // 与正式渲染同一套半波均摊算法，预览拖拽时的波浪疏密与落定后一致
+                val halfWaves = waveHalfWaveCount(width, 12.dp.toPx())
+                val step = width / halfWaves
                 val path = Path().apply {
                     moveTo(rect.left, y)
                     var x = rect.left
-                    var up = true
-                    while (x < rect.right) {
-                        val next = (x + length).coerceAtMost(rect.right)
-                        quadraticTo((x + next) / 2f, y + if (up) -amplitude else amplitude, next, y)
-                        up = !up
+                    for (i in 0 until halfWaves) {
+                        val next = if (i == halfWaves - 1) rect.right else x + step
+                        quadraticTo((x + next) / 2f, y + if (i % 2 == 0) -amplitude else amplitude, next, y)
                         x = next
                     }
                 }
@@ -2657,11 +2672,13 @@ private fun drawNineSliceBackground(
         canvas.drawBitmap(
             bitmap,
             android.graphics.Rect(cell.source.left, cell.source.top, cell.source.right, cell.source.bottom),
+            // 与旧 NinePatchDrawHelper 相同：目标矩形四边各扩 0.5px，相邻格重叠覆盖，
+            // 消除缩放后的亚像素缝隙切割线（夜间深色底上尤其明显）。
             android.graphics.RectF(
-                cell.destination.left,
-                cell.destination.top,
-                cell.destination.right,
-                cell.destination.bottom,
+                cell.destination.left - 0.5f,
+                cell.destination.top - 0.5f,
+                cell.destination.right + 0.5f,
+                cell.destination.bottom + 0.5f,
             ),
             paint,
         )

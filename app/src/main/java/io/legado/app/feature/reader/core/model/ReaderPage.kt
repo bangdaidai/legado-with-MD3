@@ -46,6 +46,9 @@ data class ReaderTextBackgroundImage(
     /** 背景段与相邻文字的水平间距（px），只在排版避让时额外让出，不随图片画出。旧引擎 bgMargin*Start/End。 */
     val marginStartPx: Float = 0f,
     val marginEndPx: Float = 0f,
+    /** 剥离 .9.png 引导边后的源图尺寸（px），0=未知。九宫格按行高锚定四角时需要。 */
+    val sourceWidthPx: Int = 0,
+    val sourceHeightPx: Int = 0,
 ) {
     val hasNinePatchBorder: Boolean
         get() = source.substringBefore('?').substringBefore('#')
@@ -70,6 +73,31 @@ fun ReaderTextBackgroundImage.withBitmapSize(widthPx: Int, heightPx: Int): Reade
         contentInsetTopPx = contentHeightPx * ninePatchTop.coerceIn(0f, 1f) * fixedScale +
             paddingTopPx.coerceAtLeast(0f),
         contentInsetBottomPx = contentHeightPx * ninePatchBottom.coerceIn(0f, 1f) * fixedScale +
+            paddingBottomPx.coerceAtLeast(0f),
+        sourceWidthPx = contentWidthPx,
+        sourceHeightPx = contentHeightPx,
+    )
+}
+
+/**
+ * 九宫格四角按行高等比锚定：中带源高缩放后恰好铺满 [lineHeightPx]，四角随同一 scale
+ * 同步放大缩小——与 [io.legado.app.help.highlight.NinePatchDrawHelper.layout]（编辑规则
+ * 预览所用）同一口径，正文小图案不再与预览不一致。bgImageScale 作为角块相对中带占
+ * 比的整体微调（旧引擎无此维度，默认 1 即与预览完全一致）。
+ */
+fun ReaderTextBackgroundImage.anchoredToLineHeight(lineHeightPx: Float): ReaderTextBackgroundImage {
+    if (fit != 3 || sourceHeightPx <= 0 || lineHeightPx <= 0f) return this
+    val middleSrcH = (1f - ninePatchTop.coerceIn(0f, 1f) - ninePatchBottom.coerceIn(0f, 1f))
+        .coerceIn(0.02f, 1f) * sourceHeightPx
+    val scale = (lineHeightPx / middleSrcH) * this.scale.coerceIn(0.1f, 5f)
+    return copy(
+        contentInsetLeftPx = sourceWidthPx * ninePatchLeft.coerceIn(0f, 1f) * scale +
+            paddingLeftPx.coerceAtLeast(0f),
+        contentInsetRightPx = sourceWidthPx * ninePatchRight.coerceIn(0f, 1f) * scale +
+            paddingRightPx.coerceAtLeast(0f),
+        contentInsetTopPx = sourceHeightPx * ninePatchTop.coerceIn(0f, 1f) * scale +
+            paddingTopPx.coerceAtLeast(0f),
+        contentInsetBottomPx = sourceHeightPx * ninePatchBottom.coerceIn(0f, 1f) * scale +
             paddingBottomPx.coerceAtLeast(0f),
     )
 }

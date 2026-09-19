@@ -8,6 +8,7 @@ import io.legado.app.feature.reader.core.model.ReaderPageId
 import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderTextBackgroundImage
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
+import io.legado.app.feature.reader.core.model.anchoredToLineHeight
 import kotlin.math.max
 
 /**
@@ -642,6 +643,9 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
         fun itemFrame(index: Int) =
             (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
                 ?.style?.backgroundImage?.takeIf { it.fit == 3 }
+                // 四角以本段行盒高为锚等比缩放，与编辑规则预览（NinePatchDrawHelper）同口径；
+                // 断行避让与绘制共用这一份 inset，保证"排版预留=绘制外框"不变量
+                ?.anchoredToLineHeight(paragraph.lineHeightPx)
 
         fun lineHasFrame(from: Int, until: Int): Boolean =
             (from until until.coerceAtMost(paragraph.items.size)).any { itemFrame(it) != null }

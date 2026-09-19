@@ -23,7 +23,11 @@ object ReaderAndroidPaintFactory {
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = style.colorArgb
             textSize = style.fontSizePx
-            typeface = loadTypeface(style.fontPath, style.fontWeight, false, style.fontFamily)
+            // 对照旧 `TextColumn.applyStyleTypeface`（cde625008）：规则里的"粗体"存 700，
+            // 但中文静态字体只有 400/900 两档，请求 700 会落回常规导致粗体不明显，
+            // 统一抬到 900（与正文 textBold 加粗→900 同口径）。
+            val weight = style.fontWeight.let { if (it == 700) 900 else it }
+            typeface = loadTypeface(style.fontPath, weight, false, style.fontFamily)
             // Match the reader's synthetic italic; don't substitute another font's italic face.
             textSkewX = if (style.italic) -0.25f else 0f
             isLinearText = style.linearText
@@ -34,7 +38,7 @@ object ReaderAndroidPaintFactory {
                 // bold/light 档位）才写 `wght`；`400` 在本仓库语义是"未设置/常规"
                 // （见 LegacyReaderStyleRangeMapper 的 400 约定），旧版此时完全不动
                 // Paint，强写 `wght 400` 会把字体自带的默认实例（如 500）改细。
-                style.fontWeight.takeIf { it != 400 }
+                weight.takeIf { it != 400 }
                     ?.let { setFontVariationSettings("'wght' $it") }
             }
             style.shadow?.let { setShadowLayer(it.radiusPx, it.dxPx, it.dyPx, it.colorArgb) }
