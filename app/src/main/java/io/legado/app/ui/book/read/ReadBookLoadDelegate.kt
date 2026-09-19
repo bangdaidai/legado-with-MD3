@@ -377,6 +377,9 @@ class ReadBookLoadDelegate(
             newBook = book,
             chapters = toc,
             options = changeSourceSettingsGateway.currentSettings.migrationOptions(),
+            // 紧接着的 resetData+loadContent 会按换源后对齐好的章节下标加载；
+            // 用例内再走一次 onChapterListUpdated 就是按旧下标多排一轮
+            reloadReader = false,
         )
         ReadBook.resetData(book)
         ReadBook.upMsg(null)

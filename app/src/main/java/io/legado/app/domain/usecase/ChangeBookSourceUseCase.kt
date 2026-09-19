@@ -110,11 +110,17 @@ class ChangeBookSourceUseCase(
         return newBook
     }
 
+    /**
+     * @param reloadReader 阅读页没跟着做 resetData 时才传 true：[ReadBook.onChapterListUpdated]
+     * 会用当前内存里的 durChapterIndex 抢先发起一轮加载，随后又 resetData+loadContent 的话
+     * 就是同一章按旧下标、新下标各排一遍。
+     */
     suspend fun changeTo(
         oldBook: Book,
         newBook: Book,
         chapters: List<BookChapter>,
         options: ChangeSourceMigrationOptions,
+        reloadReader: Boolean = true,
     ): ChangeBookSourceResult {
         val oldBookUrl = oldBook.bookUrl
         // 换源到本地文件：目录只存在于文件本身，不落库就没有章节；旧源的章节缓存会被
@@ -153,7 +159,7 @@ class ChangeBookSourceUseCase(
             database.bookTagRelationDao.deleteByBookUrl(oldBookUrl)
         }
         TagManager.updateTagsOnSourceChange(newBook)
-        if (effectiveOptions.migrateChapters) {
+        if (reloadReader && effectiveOptions.migrateChapters) {
             ReadBook.onChapterListUpdated(newBook)
         }
         // bookUrl 变了就是一次书籍替换：旧行已被删除，任何仍持有旧 bookUrl 的页面必须改绑到新书
