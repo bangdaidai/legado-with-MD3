@@ -1385,15 +1385,7 @@ fun ReaderCanvasSurface(
                             !it.value.firstOrNull().isMarkingLeadingWhitespace()
                         } ?: markingElements.lastOrNull()
                         if (first != null && last != null && onElementClick(hitElement)) {
-                            val markingSelection = ReaderSelection(
-                                chapterIndex = hitPage.id.chapterIndex,
-                                anchor = first.chapterPosition,
-                                focus = last.chapterPosition,
-                                anchorIsTitle = first.emphasized,
-                                focusIsTitle = last.emphasized,
-                            )
-                            textSelection = markingSelection
-                            showSelectionMenu(markingSelection, downWindow)
+                            // 笔记对话框已由 onElementClick 打开，不再建立选区和弹出菜单
                             true
                         } else false
                     } else {
