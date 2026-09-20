@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -925,7 +926,10 @@ fun BookshelfScreen(
                         BookshelfPage(
                             gridState = standaloneSearchGridState,
                             paddingValues = paddingValues,
-                            books = uiState.items,
+                            books = rememberBooksHeldDuringEnter(
+                                uiState.items,
+                                animatedVisibilityScope,
+                            ),
                             uiState = uiState,
                             selectedBookUrls = selectedBookUrls,
                             canReorderBooks = false,
@@ -961,8 +965,11 @@ fun BookshelfScreen(
                             val group = uiState.groups.getOrNull(pageIndex)
                             if (group != null) {
                                 val isSelectedGroup = group.groupId == uiState.selectedGroupId
-                                val books = uiState.visibleGroupBooks[group.groupId]
-                                    ?: persistentListOf()
+                                val books = rememberBooksHeldDuringEnter(
+                                    uiState.visibleGroupBooks[group.groupId]
+                                        ?: persistentListOf(),
+                                    animatedVisibilityScope,
+                                )
                                 val canReorderBooks = isEditMode &&
                                         !uiState.isSearch &&
                                         (group.bookSort.takeIf { it >= 0 }
@@ -1340,6 +1347,32 @@ private data class BookshelfEditStickySummary(
     val groupName: String?,
     val showGroupName: Boolean,
 )
+
+/**
+ * 进入转场期间冻结书架列表。
+ *
+ * 从阅读页返回时阅读时间落库触发重排（默认按最近阅读倒序），重排列表往往在 pop
+ * 转场开始后的几帧才重新发射；被点那本书的封面槽位随之从第 N 格跳到第 1 格，
+ * sharedBounds 目标矩形中途失锚，封面会闪现到屏幕角落再拉回。首屏完整可见时
+ * 跳变发生在可见区最明显；列表上滑后新槽位被标题栏裁掉，观感上反而是正常的。
+ * 转场未落定前保持进入首帧的列表，落定后一次性应用新顺序：封面先平滑飞回
+ * 原槽位，随后列表重排。
+ */
+@Composable
+private fun rememberBooksHeldDuringEnter(
+    books: ImmutableList<BookUiItem>,
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+): ImmutableList<BookUiItem> {
+    if (animatedVisibilityScope == null) return books
+    val transition = animatedVisibilityScope.transition
+    val entering = transition.currentState != EnterExitState.Visible ||
+        transition.targetState != EnterExitState.Visible
+    var held by remember { mutableStateOf(books) }
+    LaunchedEffect(entering, books) {
+        if (!entering) held = books
+    }
+    return if (entering) held else books
+}
 
 @Composable
 fun BookshelfPage(
