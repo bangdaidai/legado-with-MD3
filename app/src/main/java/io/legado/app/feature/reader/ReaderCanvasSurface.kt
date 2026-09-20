@@ -2658,10 +2658,12 @@ private fun drawTextBackground(
                 npRight = image.ninePatchRight.coerceIn(0f, 1f),
                 npTop = image.ninePatchTop.coerceIn(0f, 1f),
                 npBottom = image.ninePatchBottom.coerceIn(0f, 1f),
-                padStart = image.paddingLeftPx.coerceAtLeast(0f),
-                padEnd = image.paddingRightPx.coerceAtLeast(0f),
-                padTop = image.paddingTopPx.coerceAtLeast(0f),
-                padBottom = image.paddingBottomPx.coerceAtLeast(0f),
+                // 内边距不做 coerceAtLeast(0f)：负内边距要把背景框向文字内侧收，
+                // 与规则编辑预览同一套几何（NinePatchDrawHelper.layout 已处理负 padding）。
+                padStart = image.paddingLeftPx,
+                padEnd = image.paddingRightPx,
+                padTop = image.paddingTopPx,
+                padBottom = image.paddingBottomPx,
                 borderPx = if (image.hasNinePatchBorder) 1f else 0f,
             )?.let { box ->
                 io.legado.app.help.highlight.NinePatchDrawHelper.draw(

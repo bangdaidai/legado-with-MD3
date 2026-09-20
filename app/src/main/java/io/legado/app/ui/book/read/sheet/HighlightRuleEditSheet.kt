@@ -1218,12 +1218,37 @@ internal fun HighlightRulePreview(
         }
     }
 
-    val annotated = remember(
-        sampleText, matchRanges, resolvedTextColor, bgColor, fontWeight, isItalic, fontSizeOffset
+    // 外边距镜像正文语义：ReaderPaginator 用 backgroundMarginBefore/After 在命中段前后各预留
+    // marginStart/marginEnd 的横向空白，把相邻非高亮文字推开，九宫格四角才不会压住它们。
+    // 正文只对外边距做 >=0 夹紧（负值当 0），这里同理：<=0 不插空白。
+    // 空白用零宽空格 \u200B + SpanStyle.letterSpacing 撑出精确宽度：零宽字符不可见、不占字身，
+    // letterSpacing(sp) 是绝对宽度，避免内联占位符在裸 drawText 路径下被画成方框。
+    // 插入空白后命中段下标整体右移，背景/下划线两处绘制改用 shift 后的 styledRanges。
+    val previewDensity = LocalDensity.current
+    val (annotated, styledRanges) = remember(
+        sampleText, matchRanges, resolvedTextColor, bgColor, fontWeight, isItalic,
+        fontSizeOffset, bgMarginStart, bgMarginEnd
     ) {
-        buildAnnotatedString {
-            append(sampleText)
+        val startLs =
+            if (bgMarginStart > 0f) with(previewDensity) { bgMarginStart.dp.toSp() } else null
+        val endLs =
+            if (bgMarginEnd > 0f) with(previewDensity) { bgMarginEnd.dp.toSp() } else null
+        val ranges = mutableListOf<IntRange>()
+        val text = buildAnnotatedString {
+            var srcCursor = 0
             matchRanges.forEach { range ->
+                val start = range.first
+                val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                if (start >= endExclusive) return@forEach
+                if (start > srcCursor) append(sampleText, srcCursor, start)
+                if (startLs != null) {
+                    val gapIndex = length
+                    append(Char(0x200B)) // 零宽空格：不可见，宽度由下面的 letterSpacing 撑出
+                    addStyle(SpanStyle(letterSpacing = startLs), gapIndex, gapIndex + 1)
+                }
+                val styledStart = length
+                append(sampleText, start, endExclusive)
+                val styledEnd = length
                 addStyle(
                     SpanStyle(
                         color = resolvedTextColor,
@@ -1241,11 +1266,20 @@ internal fun HighlightRulePreview(
                             androidx.compose.ui.unit.TextUnit.Unspecified
                         },
                     ),
-                    range.first,
-                    (range.last + 1).coerceAtMost(sampleText.length),
+                    styledStart,
+                    styledEnd,
                 )
+                ranges += styledStart until styledEnd
+                if (endLs != null) {
+                    val gapIndex = length
+                    append(Char(0x200B)) // 零宽空格：不可见，宽度由下面的 letterSpacing 撑出
+                    addStyle(SpanStyle(letterSpacing = endLs), gapIndex, gapIndex + 1)
+                }
+                srcCursor = endExclusive
             }
+            if (srcCursor < sampleText.length) append(sampleText, srcCursor, sampleText.length)
         }
+        text to ranges
     }
 
     val labelColor = if (ColorUtils.isColorLight(pageBgColor)) {
@@ -1377,12 +1411,12 @@ internal fun HighlightRulePreview(
                     drawContext.canvas.translate(0f, ninePatchTopOverhang)
                 }
 
-                // 在匹配区域画背景图
-                if (bgBitmap != null && matchRanges.isNotEmpty()) {
+                // 在匹配区域画背景图（用 shift 后的 styledRanges：annotated 里已插入零宽空白占位）
+                if (bgBitmap != null && styledRanges.isNotEmpty()) {
                     val density = this.density
-                    matchRanges.forEach { range ->
+                    styledRanges.forEach { range ->
                         val start = range.first
-                        val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                        val endExclusive = range.last + 1
                         previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
                             if (bgImageFit == 3 && bgRawBitmap != null) {
                                 // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
@@ -1424,9 +1458,9 @@ internal fun HighlightRulePreview(
                 val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
                     if (underlineMode > 0) {
                         val strokeWidth = underlineWidth.dp.toPx()
-                        matchRanges.forEach { range ->
+                        styledRanges.forEach { range ->
                             val start = range.first
-                            val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                            val endExclusive = range.last + 1
                             previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
                                 when (underlineMode) {
                                     // 7 荧光：下半行铺半透明色带，几何与新引擎 mode7 同口径
