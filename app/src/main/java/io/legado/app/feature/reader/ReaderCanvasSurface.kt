@@ -1707,7 +1707,7 @@ private class ReaderScrollBoundaryReached : CancellationException()
 
 /** 段首空白字符集，与 `ReaderChapterBlockMeasurer.isLeadingWhitespace` 保持一致。 */
 private fun Char?.isMarkingLeadingWhitespace(): Boolean =
-    this == ' ' || this == '\t' || this == '\u3000' || code == 0x2002 || code == 0x2003
+    this == ' ' || this == '\t' || this == '\u3000' || this?.code == 0x2002 || this?.code == 0x2003
 
 /** 旧 `ReadView.longPressTimeout`：长按判定的固定阈值（不是平台 `longPressTimeout`）。 */
 private const val LONG_PRESS_TIMEOUT_MILLIS = 600L
