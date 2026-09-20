@@ -9,6 +9,7 @@ import io.legado.app.data.repository.HighlightRuleRepository
 import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.domain.usecase.SaveMarkingUseCase
+import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
@@ -66,6 +67,7 @@ class MarkingDelegate(
                 highlightRules = persistentListOf(),
                 loading = true,
                 previewStyle = null,
+                floatingAnchor = null,
             )
         }
         scope.launch(IO) {
@@ -119,6 +121,7 @@ class MarkingDelegate(
                 highlightRules = persistentListOf(),
                 loading = true,
                 previewStyle = null,
+                floatingAnchor = null,
             )
         }
         scope.launch(IO) {
@@ -192,6 +195,15 @@ class MarkingDelegate(
                 host.showToast(error.localizedMessage ?: context.getString(R.string.error))
             }
         }
+    }
+
+    /**
+     * 悬浮锚点由宿主在打开弹层的 intent（[openForEdit]/[saveQuick]）之后上报：
+     * 两者都会先清空锚点，先到会把本次位置抹掉。目录等无正文位置的入口不上报，
+     * 保持标准底部弹层。
+     */
+    fun setSheetAnchor(anchor: ReaderSelectionMenuAnchor) {
+        _uiState.update { it.copy(floatingAnchor = anchor) }
     }
 
     /** 当前章重排批次提交：新样式已烘进页面，撤掉粘性预览。 */

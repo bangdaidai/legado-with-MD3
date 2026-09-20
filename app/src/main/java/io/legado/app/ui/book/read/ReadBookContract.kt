@@ -22,6 +22,7 @@ import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.model.settings.ReadStyleItem
 import io.legado.app.domain.usecase.BookmarkTargetVerdict
+import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.model.translation.TranslationChapterStatus
 import io.legado.app.ui.book.read.sheet.ReaderBookSheetTab
 import io.legado.app.ui.book.searchContent.SearchResult
@@ -744,6 +745,13 @@ sealed interface ReadBookIntent {
     data class SaveMarking(val style: TextProcessStyle, val note: String) : ReadBookIntent
     /** 笔记 Sheet 内的样式选择实时预览到正文选区（不落库、不重排）。 */
     data class MarkingStylePreview(val style: TextProcessStyle) : ReadBookIntent
+
+    /**
+     * 笔记弹层的悬浮锚点（画布坐标系）。阅读页两个来源：点正文划线时画布直接
+     * 上报；划词菜单点「笔记」时由 Controller 从当前菜单状态派生。为空时弹层
+     * 走标准底部样式（目录等入口没有正文位置）。
+     */
+    data class SetMarkingSheetAnchor(val anchor: ReaderSelectionMenuAnchor?) : ReadBookIntent
     data object DeleteMarking : ReadBookIntent
     data object GenerateShareCardFromMarking : ReadBookIntent
 

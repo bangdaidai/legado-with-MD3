@@ -770,6 +770,7 @@ fun ReadBookRouteScreen(
                 onAutoPageStop = controller::stopAutoPage,
                 onShowSelectionMenu = controller::showComposeTextActionMenu,
                 onDismissSelectionMenu = controller::dismissTextActionMenu,
+                onMarkingSheetAnchor = controller::onComposeReaderMarkingSheetAnchor,
                 onElementClick = controller::onComposeReaderElementClick,
                 onElementLongPress = controller::onComposeReaderElementLongPress,
                 selectionEnabled = readPreferences.selectText,

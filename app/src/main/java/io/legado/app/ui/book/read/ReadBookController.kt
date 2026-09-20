@@ -421,6 +421,14 @@ class ReadBookController(
         textMenuRequestVersion++
         _textMenuState.value = null
     }
+
+    /**
+     * 画布点击正文已有划线后上报标记选区锚点：EditMarking 已在 onElementClick
+     * 中先行分发并清掉旧锚点，这里补上本次位置，笔记弹层据此悬浮。
+     */
+    fun onComposeReaderMarkingSheetAnchor(anchor: ReaderSelectionMenuAnchor) {
+        viewModel.onIntent(ReadBookIntent.SetMarkingSheetAnchor(anchor))
+    }
     private val popupAction by lazy { PopupAction(activity) }
     private var screenTimeOut: Long = 0
     private var appliedDarkTheme: Boolean? = null
@@ -1773,6 +1781,21 @@ class ReadBookController(
             R.id.menu_mark -> {
                 composeSelectionBookmark(bodyOnly = true)?.let {
                     viewModel.onIntent(ReadBookIntent.OpenMarking(it))
+                    // 菜单位置即选区位置：在菜单被 finally 清掉前派生锚点，
+                    // 让笔记弹层悬浮在选中的文段旁而不是挡住正文。
+                    _textMenuState.value?.let { menu ->
+                        viewModel.onIntent(
+                            ReadBookIntent.SetMarkingSheetAnchor(
+                                ReaderSelectionMenuAnchor(
+                                    startX = menu.startX.toFloat(),
+                                    startTopY = menu.startTopY.toFloat(),
+                                    startBottomY = menu.startBottomY.toFloat(),
+                                    endX = menu.endX.toFloat(),
+                                    endBottomY = menu.endBottomY.toFloat(),
+                                )
+                            )
+                        )
+                    }
                 } ?: activity.toastOnUi(R.string.create_bookmark_error)
                 return true
             }

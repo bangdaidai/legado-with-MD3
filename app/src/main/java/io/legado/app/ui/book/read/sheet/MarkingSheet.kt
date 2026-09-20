@@ -7,10 +7,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,24 +38,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import io.legado.app.R
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.domain.model.MarkingEffect
-import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.domain.model.TextProcessStyle
+import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.MarkingUiState
+import io.legado.app.ui.book.read.TextMenuPositionProvider
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.ProvideAppDensity
 import io.legado.app.ui.widget.components.AppTextField
-import io.legado.app.ui.widget.components.AppTextFieldSurface
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
@@ -72,6 +80,13 @@ import io.legado.app.utils.fromJsonObject
  * - 新增：选中文本后点「笔记」（[MarkingUiState.selection]），样式预选 [DefaultMarkingStyle]；
  * - 编辑：点正文已有划线，或从目录 Sheet 点标记项
  *   （[MarkingUiState.editing] 非空），预填样式与备注，保存即更新；编辑模式可删除。
+ *
+ * 呈现形态由 [MarkingUiState.floatingAnchor] 决定：阅读页入口（划词菜单/点正文划线）
+ * 知道笔记在正文中的位置，弹层悬浮在该位置旁——改样式时正文里的实时预览不被挡住；
+ * 目录等无位置入口仍是标准底部弹层。两种形态共用同一套标题行与内容组件，
+ * 悬浮形态为压低高度默认收起「样式来源」区（下拉 + 规则列表，由标题行调色按钮展开/收起），
+ * 颜色行与效果格仍内联展示；调色与分享卡片放标题行右侧，删除单独放左侧。
+ * 没有保存按钮：关闭弹层即保存本次改动（样式或备注与会话初始值不同时才落库）。
  */
 @Composable
 fun MarkingSheet(
@@ -87,16 +102,9 @@ fun MarkingSheet(
     val selection = state.selection
     val editing = state.editing
 
-    // 编辑模式无选中文本时，预览取标记锚点里的原文。
-    val editingAnchorText = remember(editing) {
-        editing?.anchorJson
-            ?.let { GSON.fromJsonObject<TextProcessAnchor>(it).getOrNull() }
-            ?.selectedText
-            ?: ""
-    }
-    // 标题用位置（章节名），与书签对话框一致；原文单独作为只读框展示。
+    // 标题用位置（章节名），与书签对话框一致；原文由正文实时预览直接呈现，
+    // 弹层不再重复展示。
     val position = selection?.chapterName?.takeIf { it.isNotBlank() } ?: editing?.chapterName ?: ""
-    val originalText = selection?.bookText?.takeIf { it.isNotBlank() } ?: editingAnchorText
 
     // 状态提升到 Sheet 顶层：底部 ColorPickerSheet 与内容共用；以 show + editing 为键，
     // 每次打开/切到编辑模式时重置（编辑模式的样式/颜色/备注来自已有标记）。
@@ -127,6 +135,11 @@ fun MarkingSheet(
         mutableStateOf(editingStyle?.underlineSvgPath)
     }
     var showColorPicker by remember(show, editing) { mutableStateOf(false) }
+    // 悬浮形态默认收起「样式来源」区（下拉 + 规则列表）：这套规则选择器较长，
+    // 收进标题行的调色按钮后，面板只剩颜色行、效果格与备注，紧贴笔记位置不挡正文。
+    // 颜色行与效果格仍按原样内联展示。底部弹层没有高度顾虑，来源区始终展示。
+    val floating = show && state.floatingAnchor != null
+    var styleExpanded by remember(show, editing) { mutableStateOf(false) }
     val noteState = key(show, editing) {
         rememberTextFieldState(initialText = editing?.note ?: "")
     }
@@ -147,27 +160,55 @@ fun MarkingSheet(
         LaunchedEffect(currentStyle) { onStylePreview(currentStyle) }
     }
 
-    AppModalBottomSheet(
-        show = show,
-        onDismissRequest = onDismissRequest,
-        title = position,
-        startAction = {
-            if (editing != null) {
+    // 会话初始快照：样式状态与备注在同一 (show, editing) 键下重置，键变化后的首次
+    // 组合就是「用户什么都没动」时的值。关闭时与之比较，没动过就不落库。
+    val baseline = remember(show, editing) { currentStyle to noteState.text.toString() }
+    val dirty = currentStyle != baseline.first ||
+            noteState.text.toString() != baseline.second
+    // 关闭即保存：改过样式/备注则关闭动作直接等价于保存（onSave 成功后由
+    // delegate 负责收起弹层），没改过则纯关闭。标题行因此不再需要保存按钮。
+    val requestClose: () -> Unit = {
+        if (dirty) onSave(currentStyle, noteState.text.toString()) else onDismissRequest()
+    }
+
+    // 左侧动作：仅删除（编辑模式）。删除是破坏性操作，单独放左侧，
+    // 与右侧的调色/分享按钮隔开标题，降低误触。
+    val startAction: @Composable (() -> Unit)? =
+        if (editing != null) {
+            {
                 MediumTonalButton(
                     onClick = onDelete,
                     icon = Icons.Default.Delete,
                     contentDescription = stringResource(R.string.delete)
                 )
             }
-        },
-        endAction = {
-            MediumTonalButton(
-                onClick = { onSave(currentStyle, noteState.text.toString()) },
-                icon = Icons.Default.Save,
-                contentDescription = stringResource(android.R.string.ok)
-            )
-        }
-    ) {
+        } else null
+    // 右侧动作：样式来源区展开开关（仅悬浮形态）+ 分享卡片。
+    // 保存按钮已按「关闭即保存」语义移除。
+    val showStyleToggle = floating && showStyleConfig
+    val endAction: (@Composable () -> Unit)? =
+        if (showStyleToggle || onGenerateShareCard != null) {
+            {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (showStyleToggle) {
+                        MediumTonalButton(
+                            onClick = { styleExpanded = !styleExpanded },
+                            icon = Icons.Default.Palette,
+                            contentDescription = stringResource(R.string.bookmark_mark_style_source)
+                        )
+                    }
+                    onGenerateShareCard?.let { share ->
+                        MediumTonalButton(
+                            onClick = share,
+                            icon = Icons.Outlined.Image,
+                            contentDescription = stringResource(R.string.generate_share_card)
+                        )
+                    }
+                }
+            }
+        } else null
+    // 底部弹层与悬浮两种形态共用的主体内容。
+    val body: @Composable ColumnScope.() -> Unit = {
         if (selection == null && editing == null) {
             // 编辑模式异步加载标记期间的占位，避免先空再弹内容
             if (state.loading) {
@@ -181,123 +222,127 @@ fun MarkingSheet(
                     AppCircularProgressIndicator()
                 }
             }
-            return@AppModalBottomSheet
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (showStyleConfig) {
-                TinyDropdownSettingItem(
-                    title = stringResource(R.string.bookmark_mark_style_source),
-                    selectedValue = if (useRule) STYLE_SOURCE_RULE else STYLE_SOURCE_CUSTOM,
-                    displayEntries = arrayOf(
-                        stringResource(R.string.bookmark_mark_reuse_rule),
-                        stringResource(R.string.bookmark_mark_custom),
-                    ),
-                    entryValues = arrayOf(STYLE_SOURCE_RULE, STYLE_SOURCE_CUSTOM),
-                    onValueChange = { useRule = it == STYLE_SOURCE_RULE },
-                )
-
-                if (useRule) {
-                    val rules = state.highlightRules
-                    if (rules.isEmpty()) {
-                        EmptyMessage(
-                            message = stringResource(R.string.bookmark_mark_no_rules),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // 悬浮形态下只收起「样式来源」（下拉 + 规则列表），由标题行的调色按钮展开；
+                // 颜色行与效果格始终按原样内联展示。
+                if (showStyleConfig) {
+                    if (!floating || styleExpanded) {
+                        TinyDropdownSettingItem(
+                            title = stringResource(R.string.bookmark_mark_style_source),
+                            selectedValue = if (useRule) STYLE_SOURCE_RULE else STYLE_SOURCE_CUSTOM,
+                            displayEntries = arrayOf(
+                                stringResource(R.string.bookmark_mark_reuse_rule),
+                                stringResource(R.string.bookmark_mark_custom),
+                            ),
+                            entryValues = arrayOf(STYLE_SOURCE_RULE, STYLE_SOURCE_CUSTOM),
+                            onValueChange = { useRule = it == STYLE_SOURCE_RULE },
                         )
-                    } else {
-                        rules.forEach { rule ->
-                            val selected = selectedRuleId == rule.id
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedRuleId = if (selected) null else rule.id
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = if (selected) {
-                                        LegadoTheme.colorScheme.primary
-                                    } else {
-                                        LegadoTheme.colorScheme.outlineVariant
-                                    },
-                                    modifier = Modifier.size(20.dp),
+
+                        if (useRule) {
+                            val rules = state.highlightRules
+                            if (rules.isEmpty()) {
+                                EmptyMessage(
+                                    message = stringResource(R.string.bookmark_mark_no_rules),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    AppText(
-                                        text = rule.name.ifBlank { rule.displayPattern() },
-                                        style = LegadoTheme.typography.bodyMedium,
-                                    )
-                                    AppText(
-                                        text = rule.styleSummary(),
-                                        style = LegadoTheme.typography.labelSmall,
-                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                    )
+                            } else {
+                                rules.forEach { rule ->
+                                    val selected = selectedRuleId == rule.id
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectedRuleId = if (selected) null else rule.id
+                                            }
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = if (selected) {
+                                                LegadoTheme.colorScheme.primary
+                                            } else {
+                                                LegadoTheme.colorScheme.outlineVariant
+                                            },
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            AppText(
+                                                text = rule.name.ifBlank { rule.displayPattern() },
+                                                style = LegadoTheme.typography.bodyMedium,
+                                            )
+                                            AppText(
+                                                text = rule.styleSummary(),
+                                                style = LegadoTheme.typography.labelSmall,
+                                                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                } else {
-                    // 自定义：预设颜色行（尾部自定义色）+ 5x1 效果格
-                    MarkingColorRow(
-                        selectedColor = markColor,
-                        onColorSelected = { markColor = it },
-                        onCustomColorClick = { showColorPicker = true },
-                    )
-                    MarkingEffectGrid(
-                        selectedEffect = effect,
-                        onEffectSelected = { effect = it },
-                    )
+
+                    if (!useRule) {
+                        // 自定义：预设颜色行（尾部自定义色）+ 5x1 效果格
+                        MarkingColorRow(
+                            selectedColor = markColor,
+                            onColorSelected = { markColor = it },
+                            onCustomColorClick = { showColorPicker = true },
+                        )
+                        MarkingEffectGrid(
+                            selectedEffect = effect,
+                            onEffectSelected = { effect = it },
+                        )
+                    }
+
+                    Spacer(Modifier.height(4.dp))
                 }
 
-                Spacer(Modifier.height(4.dp))
-            }
-
-            // 笔记原文（只读展示，与书签对话框一致）
-            AppTextFieldSurface(
-                value = originalText,
-                onValueChange = {},
-                readOnly = true,
-                label = stringResource(R.string.bookmark_original_text),
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 10,
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // 备注（笔记）
-            AppTextField(
-                state = noteState,
-                modifier = Modifier
-                    .fillMaxWidth(),
-                label = stringResource(R.string.bookmark_mark_note),
-                placeholder = {
-                    AppText(stringResource(R.string.bookmark_mark_note_hint))
-                },
-            )
-
-            if (onGenerateShareCard != null) {
-                // 外层 Column 的 spacedBy(4dp) 在 Spacer 上下各加一次，
-                // 所以补 4dp 凑成 12dp；收尾补 8dp 同样凑成 12dp。
-                Spacer(modifier = Modifier.height(4.dp))
-                MediumTonalButton(
-                    onClick = onGenerateShareCard,
-                    modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(R.string.generate_share_card),
+                // 备注（笔记）
+                AppTextField(
+                    state = noteState,
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    label = stringResource(R.string.bookmark_mark_note),
+                    placeholder = {
+                        AppText(stringResource(R.string.bookmark_mark_note_hint))
+                    },
                 )
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
+
+    val floatingAnchor = if (show) state.floatingAnchor else null
+    if (floatingAnchor != null) {
+        // 阅读页入口：面板悬浮在笔记/选区旁，改样式时正文预览不被挡住
+        MarkingFloatingPanel(
+            anchor = floatingAnchor,
+            title = position,
+            startAction = startAction,
+            endAction = endAction,
+            onDismissRequest = requestClose,
+            content = body,
+        )
+    } else {
+        AppModalBottomSheet(
+            show = show,
+            onDismissRequest = requestClose,
+            title = position,
+            startAction = startAction,
+            endAction = endAction,
+            content = body,
+        )
     }
 
     if (showStyleConfig) {
@@ -310,6 +355,97 @@ fun MarkingSheet(
                 showColorPicker = false
             },
         )
+    }
+}
+
+/**
+ * 笔记面板的阅读页悬浮形态：与底部弹层同一套标题行（位置 + 删除/调色按钮）和内容
+ * 组件，只是挂在笔记/选区旁边且不压暗正文，改样式时能直接看到正文里的效果。
+ * 定位复用划词菜单的 [TextMenuPositionProvider]，与选区菜单保持同一套挂位规则。
+ */
+@Composable
+private fun MarkingFloatingPanel(
+    anchor: ReaderSelectionMenuAnchor,
+    title: String,
+    startAction: (@Composable () -> Unit)?,
+    endAction: (@Composable () -> Unit)?,
+    onDismissRequest: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val density = LocalDensity.current
+    val shadowPadding = 12.dp
+    val windowSize = LocalWindowInfo.current.containerSize
+    val panelWidth = with(density) { windowSize.width.toDp() } - 32.dp
+    val panelMaxHeight = with(density) { (windowSize.height * 0.6f).toDp() }
+    val positionProvider = remember(anchor, density.density) {
+        TextMenuPositionProvider(
+            density = density.density,
+            startX = anchor.startX.toInt(),
+            startTopY = anchor.startTopY.toInt(),
+            startBottomY = anchor.startBottomY.toInt(),
+            endX = anchor.endX.toInt(),
+            endBottomY = anchor.endBottomY.toInt(),
+            shadowPadding = with(density) { shadowPadding.roundToPx() },
+            placeOppositeHalf = true,
+        )
+    }
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(
+            // 备注输入需要键盘；返回键与点击面板外都按「关闭笔记」处理，
+            // 与底部弹层的取消语义一致。
+            focusable = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        ProvideAppDensity {
+            Box(modifier = Modifier.padding(shadowPadding)) {
+                NormalCard(
+                    modifier = Modifier.width(panelWidth),
+                    containerColor = LegadoTheme.colorScheme.surfaceBright,
+                    elevation = 12.dp,
+                    cornerRadius = 12.dp,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = panelMaxHeight)
+                            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    ) {
+                        // 与 AppModalBottomSheet 标题行同款布局：标题居中，两侧动作。
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp, bottom = 16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (startAction != null) {
+                                Box(modifier = Modifier.align(Alignment.CenterStart)) {
+                                    startAction()
+                                }
+                            }
+                            if (title.isNotBlank()) {
+                                AppText(
+                                    text = title,
+                                    style = LegadoTheme.typography.titleMediumEmphasized,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 56.dp),
+                                )
+                            }
+                            if (endAction != null) {
+                                Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                                    endAction()
+                                }
+                            }
+                        }
+                        content()
+                    }
+                }
+            }
+        }
     }
 }
 

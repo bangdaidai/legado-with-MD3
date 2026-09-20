@@ -6,6 +6,7 @@ import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.domain.model.TextProcessStyle
+import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -31,4 +32,10 @@ data class MarkingUiState(
      * 当前章批次提交后清除；期间选区一旦被点击取消，画布自行停绘。
      */
     val previewStyle: TextProcessStyle? = null,
+    /**
+     * 阅读页悬浮面板锚点（画布坐标系）：非空时笔记弹层挂在笔记/选区旁边
+     * 而不是底部弹层，改样式时能直接看到正文里的效果。从目录等无位置入口
+     * 进入时为空，保持底部弹层。
+     */
+    val floatingAnchor: ReaderSelectionMenuAnchor? = null,
 )

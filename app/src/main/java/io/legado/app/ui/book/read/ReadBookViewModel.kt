@@ -1582,6 +1582,9 @@ class ReadBookViewModel(
 
             is ReadBookIntent.MarkingStylePreview -> markingDelegate.preview(intent.style)
 
+            is ReadBookIntent.SetMarkingSheetAnchor ->
+                markingDelegate.setSheetAnchor(intent.anchor)
+
             is ReadBookIntent.DeleteMarking -> {
                 markingDelegate.deleteCurrent()
             }

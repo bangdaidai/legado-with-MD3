@@ -210,6 +210,8 @@ fun ReaderCanvasSurface(
     onAutoPageStop: () -> Unit,
     onShowSelectionMenu: (ReaderSelection, String, ReaderSelectionMenuAnchor) -> Unit,
     onDismissSelectionMenu: () -> Unit,
+    /** 点击正文已有划线时上报选区锚点：笔记弹层据此悬浮在笔记旁，不弹划词菜单。 */
+    onMarkingSheetAnchor: (ReaderSelectionMenuAnchor) -> Unit,
     onElementClick: (ReaderElement) -> Boolean,
     onElementLongPress: (ReaderElement, Float, Float) -> Boolean,
     selectionEnabled: Boolean,
@@ -283,6 +285,7 @@ fun ReaderCanvasSurface(
     val latestAutoPageActive by rememberUpdatedState(autoPageActive)
     val latestShowSelectionMenu by rememberUpdatedState(onShowSelectionMenu)
     val latestDismissSelectionMenu by rememberUpdatedState(onDismissSelectionMenu)
+    val latestMarkingSheetAnchor by rememberUpdatedState(onMarkingSheetAnchor)
     val latestSelectionHapticsEnabled by rememberUpdatedState(selectionHapticsEnabled)
     val latestSelectionEnabled by rememberUpdatedState(selectionEnabled)
     val latestTapActionGrid by rememberUpdatedState(tapActionGrid)
@@ -1385,7 +1388,22 @@ fun ReaderCanvasSurface(
                             !it.value.firstOrNull().isMarkingLeadingWhitespace()
                         } ?: markingElements.lastOrNull()
                         if (first != null && last != null && onElementClick(hitElement)) {
-                            // 笔记对话框已由 onElementClick 打开，不再建立选区和弹出菜单
+                            // 划词菜单不弹：笔记弹层已由 onElementClick 打开。
+                            // 选区仍要建立——样式实时预览要盖在它上绘制，
+                            // 悬浮笔记面板也按它的 bounds 定位。
+                            val markingSelection = ReaderSelection(
+                                chapterIndex = hitPage.id.chapterIndex,
+                                anchor = first.chapterPosition,
+                                focus = last.chapterPosition,
+                                anchorIsTitle = first.emphasized,
+                                focusIsTitle = last.emphasized,
+                            )
+                            textSelection = markingSelection
+                            ReaderSelectionMenuAnchor.from(
+                                downSelectionLayout
+                                    .selectionBounds(markingSelection)
+                                    .map { it.bounds }
+                            )?.let(latestMarkingSheetAnchor)
                             true
                         } else false
                     } else {
