@@ -47,7 +47,9 @@ object ReaderAndroidPaintFactory {
 
     /**
      * 规则加粗字重：以正文实际字重（`ReadBookConfig.textBold` 归一后的值）的 2 倍为准，
-     * 封顶 900、保底 700（保证仍是可辨的粗体）。正文越粗，规则加粗越接近最黑档。
+     * 再量化到系统字体保证存在的档：2 倍 <900 → 700（Bold），≥900 → 900（Black）。
+     * 直接请求 800 会被就近匹配吸到 900（中文字体普遍只有 400/500/700/900 档），
+     * 视觉上仍是拉满的 Black，必须避免。
      */
     private fun ruleBoldWeight(): Int {
         val bodyWeight = when (val bold = ReadBookConfig.textBold) {
@@ -56,7 +58,7 @@ object ReaderAndroidPaintFactory {
             in 100..900 -> bold
             else -> 400
         }
-        return (bodyWeight * 2).coerceIn(700, 900)
+        return if (bodyWeight * 2 >= 900) 900 else 700
     }
 
     fun createTextPaint(style: ReaderTextStyle): TextPaint = TextPaint(create(style))
