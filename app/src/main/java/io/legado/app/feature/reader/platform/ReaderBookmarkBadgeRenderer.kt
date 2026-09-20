@@ -83,7 +83,9 @@ object ReaderBookmarkBadgeRenderer {
                 val width = bitmap.width * scale
                 val height = bitmap.height * scale
                 val left = (badge.widthPx - width) / 2
-                val top = (badge.heightPx - height) / 2
+                // 自定义图贴盒顶：垂直居中会让矮图（常见方形 PNG 落在 1:2 的盒子里）整块
+                // 下坠，看起来就是没跟页眉对齐。丝带自身在 12 x 24 视口里还有 2 单位留白。
+                val top = 0f
                 canvas.drawBitmap(bitmap, null, RectF(left, top, left + width, top + height), paint)
             } else {
                 canvas.scale(badge.widthPx / 12f, badge.heightPx / 24f)

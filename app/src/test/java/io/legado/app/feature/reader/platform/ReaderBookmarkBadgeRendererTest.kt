@@ -45,14 +45,15 @@ class ReaderBookmarkBadgeRendererTest {
         assertArrayEquals(expectedPixels, actualPixels)
     }
 
-    @Test fun customBitmapUsesFitCenterAndFollowsPageTranslation() {
+    @Test fun customBitmapAnchorsToBadgeTopAndFollowsPageTranslation() {
         val source = Bitmap.createBitmap(20, 10, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }
         val bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.translate(20f, 5f)
         ReaderBookmarkBadgeRenderer.draw(canvas, badge, source)
-        assertEquals(Color.RED, bitmap.getPixel(42, 39))
-        assertEquals(Color.TRANSPARENT, bitmap.getPixel(42, 20))
+        // 盒子顶边在 15，矮图等比缩放后贴顶绘制，盒底仍留空。
+        assertEquals(Color.RED, bitmap.getPixel(42, 20))
+        assertEquals(Color.TRANSPARENT, bitmap.getPixel(42, 39))
         assertEquals(Color.TRANSPARENT, bitmap.getPixel(22, 34))
     }
 
