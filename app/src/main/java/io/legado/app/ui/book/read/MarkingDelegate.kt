@@ -200,9 +200,9 @@ class MarkingDelegate(
     /**
      * 悬浮锚点由宿主在打开弹层的 intent（[openForEdit]/[saveQuick]）之后上报：
      * 两者都会先清空锚点，先到会把本次位置抹掉。目录等无正文位置的入口不上报，
-     * 保持标准底部弹层。
+     * 保持标准底部弹层。传 null 表示清除位置，弹层回到标准底部样式。
      */
-    fun setSheetAnchor(anchor: ReaderSelectionMenuAnchor) {
+    fun setSheetAnchor(anchor: ReaderSelectionMenuAnchor?) {
         _uiState.update { it.copy(floatingAnchor = anchor) }
     }
 
