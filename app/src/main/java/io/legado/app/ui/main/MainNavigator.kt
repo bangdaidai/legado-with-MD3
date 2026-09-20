@@ -253,7 +253,8 @@ object MainNavigator {
                     currentRoute is MainRouteBookEventList ||
                     currentRoute is MainRouteBookEventDetail ||
                     currentRoute is MainRouteReadBook ||
-                    currentRoute is MainRouteReadManga
+                    currentRoute is MainRouteReadManga ||
+                    currentRoute is MainRouteReadAloudPlayer
                 ) {
                     backStack.add(route)
                 } else {

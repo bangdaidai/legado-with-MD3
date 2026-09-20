@@ -18,6 +18,7 @@ import io.legado.app.feature.reader.core.model.ReaderTipValueFormatter
 import io.legado.app.feature.reader.core.model.ReaderTipValueType
 import io.legado.app.feature.reader.core.model.ReaderTipVisual
 import io.legado.app.feature.reader.core.model.resolveReaderTipColor
+import io.legado.app.feature.reader.measureTipWidthPx
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
@@ -157,6 +158,27 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
         // 书签角标与右页眉共用一套内缩，避免两边各自换算导致错位。
         val headerPaddingTopPx = ReadBookConfig.headerPaddingTop.dpToPx() + contentPaddingTopPx.toFloat()
         val headerPaddingRightPx = ReadBookConfig.headerPaddingRight.dpToPx() + contentPaddingRightPx.toFloat()
+        val headerTips = tips(
+            context,
+            ReadBookConfig.tipHeaderLeft to ReadBookConfig.customTipHeaderLeft,
+            ReadBookConfig.tipHeaderMiddle to ReadBookConfig.customTipHeaderMiddle,
+            ReadBookConfig.tipHeaderRight to ReadBookConfig.customTipHeaderRight,
+        )
+        val density = appCtx.resources.displayMetrics.density
+        // 右页眉有内容时角标左移避让；量宽与 `drawTipRow` 共用同一口径。
+        val headerEndTipWidthPx = if (headerVisible()) {
+            headerTips.firstOrNull { it.alignment == ReaderTipAlignment.END }?.let { endTip ->
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+                    textSize = ReadBookConfig.headerFontSize.toFloat().spToPx()
+                    typeface = ReaderAndroidPaintFactory.loadTypeface(
+                        tipFontPath(ReadBookConfig.headerFont), 400, false, tipFontFamily()
+                    )
+                }
+                measureTipWidthPx(endTip, paint, density)
+            }
+        } else {
+            null
+        } ?: 0f
         return ReaderPageDecoration(
             bookmarkBadge = ReaderBookmarkBadge.create(
                 hasBookmark = hasBookmark,
@@ -164,20 +186,17 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
                 pageWidthPx = page.widthPx,
                 headerTopPx = headerPaddingTopPx,
                 headerRightPaddingPx = headerPaddingRightPx,
-                density = appCtx.resources.displayMetrics.density,
+                density = density,
                 sizeDp = settings.bookmarkBadgeSize,
+                rightTipWidthPx = headerEndTipWidthPx,
+                rightTipGapPx = 4f.dpToPx().toFloat(),
                 imageSource = settings.bookmarkBadgeImage,
                 imageVersion = settings.bookmarkBadgeImage.takeIf { hasBookmark && it.isNotBlank() }
                     ?.let { File(it).let { file -> "${file.lastModified()}:${file.length()}" } }.orEmpty(),
             ),
             header = ReaderTipRow(
                 visible = headerVisible(),
-                tips = tips(
-                    context,
-                    ReadBookConfig.tipHeaderLeft to ReadBookConfig.customTipHeaderLeft,
-                    ReadBookConfig.tipHeaderMiddle to ReadBookConfig.customTipHeaderMiddle,
-                    ReadBookConfig.tipHeaderRight to ReadBookConfig.customTipHeaderRight,
-                ),
+                tips = headerTips,
                 colorArgb = resolveReaderTipColor(
                     ReadBookConfig.resolvedTipHeaderColor,
                     ReadBookConfig.textColor,

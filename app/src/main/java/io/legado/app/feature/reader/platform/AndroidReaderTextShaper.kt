@@ -11,6 +11,7 @@ import io.legado.app.feature.reader.core.layout.ReaderFontLineMetrics
 import io.legado.app.feature.reader.core.layout.ReaderTextShaper
 import io.legado.app.feature.reader.core.layout.clusterGlyphs
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.utils.validFontLeading
 import splitties.init.appCtx
 import java.io.File
@@ -23,10 +24,10 @@ object ReaderAndroidPaintFactory {
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = style.colorArgb
             textSize = style.fontSizePx
-            // 对照旧 `TextColumn.applyStyleTypeface`（cde625008）：规则里的"粗体"存 700，
-            // 但中文静态字体只有 400/900 两档，请求 700 会落回常规导致粗体不明显，
-            // 统一抬到 900（与正文 textBold 加粗→900 同口径）。
-            val weight = style.fontWeight.let { if (it == 700) 900 else it }
+            // 规则里的"粗体"存 700：旧口径直接抬到 900（中文静态字体的最黑档），
+            // 相对正文过重。改为按**实际正文字重的 2 倍**取粗，封顶 900、保底 700，
+            // 让加粗强度随正文粗细联动，而不是无脑拉满。
+            val weight = style.fontWeight.let { if (it == 700) ruleBoldWeight() else it }
             typeface = loadTypeface(style.fontPath, weight, false, style.fontFamily)
             // Match the reader's synthetic italic; don't substitute another font's italic face.
             textSkewX = if (style.italic) -0.25f else 0f
@@ -43,6 +44,20 @@ object ReaderAndroidPaintFactory {
             }
             style.shadow?.let { setShadowLayer(it.radiusPx, it.dxPx, it.dyPx, it.colorArgb) }
         }
+
+    /**
+     * 规则加粗字重：以正文实际字重（`ReadBookConfig.textBold` 归一后的值）的 2 倍为准，
+     * 封顶 900、保底 700（保证仍是可辨的粗体）。正文越粗，规则加粗越接近最黑档。
+     */
+    private fun ruleBoldWeight(): Int {
+        val bodyWeight = when (val bold = ReadBookConfig.textBold) {
+            1 -> 900
+            2 -> 300
+            in 100..900 -> bold
+            else -> 400
+        }
+        return (bodyWeight * 2).coerceIn(700, 900)
+    }
 
     fun createTextPaint(style: ReaderTextStyle): TextPaint = TextPaint(create(style))
 

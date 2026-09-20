@@ -172,6 +172,11 @@ enum class HttpCacheType(val dirName: String, val maxSize: Long) {
 }
 
 fun getHttpCacheSize(type: HttpCacheType): Long {
+    // 封面持久缓存实际落在 filesDir/cover_cache（CoverFileCache），而非 cacheDir 同名目录，
+    // 这里必须按真实写入位置统计，否则设置页永远显示 0。
+    if (type == HttpCacheType.COVER) {
+        return io.legado.app.help.coil.CoverFileCache.size()
+    }
     val dir = File(appCtx.cacheDir, type.dirName)
     if (!dir.exists()) return 0
     return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }

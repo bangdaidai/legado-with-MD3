@@ -49,4 +49,23 @@ class MainNavigatorBackStackTest {
 
         assertEquals(listOf(MainRouteHome, bookInfo, reader), backStack)
     }
+
+    @Test
+    fun `cloud tts engines from read aloud player keeps player in back stack`() {
+        val engines = MainRouteCloudTtsEngines("book-url")
+        val backStack = mutableListOf<NavKey>(MainRouteHome, MainRouteReadAloudPlayer)
+
+        MainNavigator.navigateToRoute(backStack, engines)
+
+        assertEquals(listOf(MainRouteHome, MainRouteReadAloudPlayer, engines), backStack)
+    }
+
+    @Test
+    fun `tts cache from read aloud player keeps player in back stack`() {
+        val backStack = mutableListOf<NavKey>(MainRouteHome, MainRouteReadAloudPlayer)
+
+        MainNavigator.navigateToRoute(backStack, MainRouteTtsCache)
+
+        assertEquals(listOf(MainRouteHome, MainRouteReadAloudPlayer, MainRouteTtsCache), backStack)
+    }
 }

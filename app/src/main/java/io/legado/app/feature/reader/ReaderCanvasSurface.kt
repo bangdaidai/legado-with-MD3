@@ -1376,8 +1376,14 @@ fun ReaderCanvasSurface(
                             .filterIsInstance<ReaderElement.Text>()
                             .filter { it.markingId == hitElement.markingId }
                             .sortedBy { it.chapterPosition }
-                        val first = markingElements.firstOrNull()
-                        val last = markingElements.lastOrNull()
+                        // 段首空白在排版期就不参与高亮着色，点击重建选区时同样跳过，
+                        // 否则全角缩进空格会被框进背景。
+                        val first = markingElements.firstOrNull {
+                            !it.value.firstOrNull().isMarkingLeadingWhitespace()
+                        } ?: markingElements.firstOrNull()
+                        val last = markingElements.lastOrNull {
+                            !it.value.firstOrNull().isMarkingLeadingWhitespace()
+                        } ?: markingElements.lastOrNull()
                         if (first != null && last != null && onElementClick(hitElement)) {
                             val markingSelection = ReaderSelection(
                                 chapterIndex = hitPage.id.chapterIndex,
@@ -1698,6 +1704,10 @@ private fun pullBookmark(offset: Offset, height: Float, density: Float, mode: Re
     )
 
 private class ReaderScrollBoundaryReached : CancellationException()
+
+/** 段首空白字符集，与 `ReaderChapterBlockMeasurer.isLeadingWhitespace` 保持一致。 */
+private fun Char?.isMarkingLeadingWhitespace(): Boolean =
+    this == ' ' || this == '\t' || this == '\u3000' || code == 0x2002 || code == 0x2003
 
 /** 旧 `ReadView.longPressTimeout`：长按判定的固定阈值（不是平台 `longPressTimeout`）。 */
 private const val LONG_PRESS_TIMEOUT_MILLIS = 600L
@@ -2762,9 +2772,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTipRow(
     val startTip = row.tips.firstOrNull { it.alignment == ReaderTipAlignment.START }
     val centerTip = row.tips.firstOrNull { it.alignment == ReaderTipAlignment.CENTER }
     val endTip = row.tips.firstOrNull { it.alignment == ReaderTipAlignment.END }
-    fun tipWidth(tip: ReaderPageTip): Float =
-        if (tip.visual == ReaderTipVisual.TEXT) paint.measureText(tip.text)
-        else visualTipWidthPx(tip, paint)
+    fun tipWidth(tip: ReaderPageTip): Float = measureTipWidthPx(tip, paint, density)
     // 对照旧 `view_book_page.xml` 的三槽约束：
     // - 左槽 `layout_width=0dp` + `constraintHorizontal_weight=1`，右边界是 `barrier`
     //   （`barrierDirection=start`、`barrierAllowsGoneWidgets=false`）= 可见的中/右槽起始边的最小值，
@@ -2803,7 +2811,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTipRow(
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.visualTipWidthPx(
     tip: ReaderPageTip,
     paint: Paint,
-): Float {
+): Float = visualTipWidthPx(tip, paint, density)
+
+internal fun visualTipWidthPx(tip: ReaderPageTip, paint: Paint, density: Float): Float {
     val unit = density
     val gap = 4f * unit
     val batteryWidth = 28f * unit
@@ -2818,6 +2828,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.visualTipWidthPx(
         ReaderTipVisual.TEXT -> textWidth
     }
 }
+
+/** tip 的绘制宽度：文字按排版后的文本量，电池/箭头按视觉几何。与 `drawTipRow` 同一口径。 */
+internal fun measureTipWidthPx(tip: ReaderPageTip, paint: Paint, density: Float): Float =
+    if (tip.visual == ReaderTipVisual.TEXT) paint.measureText(tip.text)
+    else visualTipWidthPx(tip, paint, density)
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawVisualTip(
     canvas: android.graphics.Canvas,

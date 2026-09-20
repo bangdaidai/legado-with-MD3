@@ -40,6 +40,8 @@ class MarkingDelegate(
     interface Host {
         fun reloadCurrentChapter()
         fun dismissMarkingSheet()
+        /** 一键保存遇到已有标记时转编辑：请求宿主打开笔记 Sheet（此时选区已就绪）。 */
+        fun openMarkingSheet()
         fun showToast(message: String)
     }
 
@@ -49,8 +51,13 @@ class MarkingDelegate(
     /** 保存后等待重排批次提交的章节；提交前预览必须盖住旧页，否则关闭弹层会闪回旧样式。 */
     private var previewCommitPending: Int? = null
 
-    fun open(selection: Bookmark) {
-        val book = ReadBook.book
+    /**
+     * 点「笔记」一键保存：新段落直接套用 [DefaultMarkingStyle] 落库、不弹样式选择，
+     * 也不必每次单独挑样式。若该选区同锚点已有标记，则不静默覆盖（会清空备注），
+     * 而是预填样式与备注后请求宿主打开编辑 Sheet，交回用户修改。
+     */
+    fun saveQuick(selection: Bookmark) {
+        val book = ReadBook.book ?: return
         previewCommitPending = null
         _uiState.update {
             it.copy(
@@ -62,28 +69,41 @@ class MarkingDelegate(
             )
         }
         scope.launch(IO) {
-            val rules = runCatching {
-                highlightRuleRepository.load(ReadBookConfig.durConfig.name)
-            }.getOrDefault(emptyList())
-            val existing = if (book != null) {
-                runCatching {
-                    saveMarkingUseCase.find(
-                        bookName = book.name,
-                        bookAuthor = book.author,
-                        chapterIndex = selection.chapterIndex,
-                        chapterPosition = selection.chapterPos,
-                        selectedText = selection.bookText,
-                    )
-                }.getOrNull()
-            } else {
-                null
-            }
-            _uiState.update {
-                it.copy(
-                    highlightRules = rules.toImmutableList(),
-                    editing = existing,
-                    loading = false,
+            val existing = runCatching {
+                saveMarkingUseCase.find(
+                    bookName = book.name,
+                    bookAuthor = book.author,
+                    chapterIndex = selection.chapterIndex,
+                    chapterPosition = selection.chapterPos,
+                    selectedText = selection.bookText,
                 )
+            }.getOrNull()
+            if (existing != null) {
+                val rules = runCatching {
+                    highlightRuleRepository.load(ReadBookConfig.durConfig.name)
+                }.getOrDefault(emptyList())
+                _uiState.update {
+                    it.copy(
+                        highlightRules = rules.toImmutableList(),
+                        editing = existing,
+                        loading = false,
+                    )
+                }
+                host.openMarkingSheet()
+                return@launch
+            }
+            val style = DefaultMarkingStyle.get()
+            // 先把默认样式钉成预览，持久化 + 重排 + 批次提交完成前保持，避免闪回无划线旧页。
+            _uiState.update { it.copy(previewStyle = style) }
+            previewCommitPending = selection.chapterIndex
+            runCatching {
+                persistMarking(MarkingUiState(selection = selection), book, style, "")
+            }.onSuccess {
+                host.reloadCurrentChapter()
+            }.onFailure { error ->
+                previewCommitPending = null
+                _uiState.update { it.copy(previewStyle = null) }
+                host.showToast(error.localizedMessage ?: context.getString(R.string.error))
             }
         }
     }

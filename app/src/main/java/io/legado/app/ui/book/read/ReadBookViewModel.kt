@@ -246,6 +246,12 @@ class ReadBookViewModel(
                 restoreMarkingReturnSheet()
             }
 
+            override fun openMarkingSheet() {
+                // 一键保存检测到已有标记转编辑：此时无原返回 sheet（新建入口来自划词菜单）。
+                markingReturnSheet = null
+                _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
+            }
+
             override fun showToast(message: String) {
                 _effects.tryEmit(ReadBookEffect.ShowToast(message))
             }
@@ -1554,10 +1560,8 @@ class ReadBookViewModel(
             is ReadBookIntent.TextActionBookmark -> bookmarkDelegate.openEditor(intent.bookmark)
 
             is ReadBookIntent.OpenMarking -> {
-                // 点「笔记」打开标准底部弹层，样式区预选「笔记默认样式」。
-                markingReturnSheet = null
-                markingDelegate.open(intent.selection)
-                _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
+                // 点「笔记」一键保存：新段落直接套默认样式落库；同锚点已有标记则转编辑打开 Sheet。
+                markingDelegate.saveQuick(intent.selection)
             }
 
             is ReadBookIntent.EditMarking -> {

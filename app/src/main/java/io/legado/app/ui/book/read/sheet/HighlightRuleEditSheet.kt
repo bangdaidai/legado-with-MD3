@@ -78,6 +78,7 @@ import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
+import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.ui.theme.LegadoTheme
@@ -183,6 +184,20 @@ fun HighlightRuleEditSheet(
     var showInsetEditor by remember { mutableStateOf(false) }
     var showMarginEditor by remember { mutableStateOf(false) }
     var manualNineSlice by remember(show, rule) { mutableStateOf(initial.manualNineSlice) }
+
+    // 预览必须与正文渲染取同一份切分线来源：非手动且图片带 .9.png 引导线时正文吃自动值，
+    // 这里同步换算，避免"预览调好了、正文没生效"。
+    val effectiveNineSlice = remember(bgImage, manualNineSlice, npLeft, npRight, npTop, npBottom) {
+        val automatic = if (bgImage.isNotBlank() && !manualNineSlice) {
+            ReaderTextBackgroundLoader.nineSliceFractions(bgImage)
+        } else null
+        NineSliceValues(
+            left = automatic?.left ?: npLeft,
+            right = automatic?.right ?: npRight,
+            top = automatic?.top ?: npTop,
+            bottom = automatic?.bottom ?: npBottom,
+        )
+    }
 
     // Config binding state — empty set = global (applies to all configs)
     var configNames by remember(show, rule) {
@@ -878,10 +893,10 @@ fun HighlightRuleEditSheet(
                 pageBgColor = previewDayBgColor,
                 pageTextColor = previewConfig.getTextColor().toPreviewColor(0xFF3E3D3B.toInt()),
                 pageBgImagePath = previewDayBgImage,
-                npLeft = npLeft,
-                npRight = npRight,
-                npTop = npTop,
-                npBottom = npBottom,
+                npLeft = effectiveNineSlice.left,
+                npRight = effectiveNineSlice.right,
+                npTop = effectiveNineSlice.top,
+                npBottom = effectiveNineSlice.bottom,
                 bgPadStart = bgPaddingStart,
                 bgPadEnd = bgPaddingEnd,
                 bgPadTop = bgPaddingTop,
@@ -1050,10 +1065,10 @@ fun HighlightRuleEditSheet(
         show = showNinePatchEditor,
         imagePath = bgImage,
         // np* 存的是「角块占比」，编辑器内部用「绝对线位置(0~1)」，此处做转换
-        initialLeft = npLeft,
-        initialRight = 1f - npRight,
-        initialTop = npTop,
-        initialBottom = 1f - npBottom,
+        initialLeft = effectiveNineSlice.left,
+        initialRight = 1f - effectiveNineSlice.right,
+        initialTop = effectiveNineSlice.top,
+        initialBottom = 1f - effectiveNineSlice.bottom,
         onDismissRequest = { showNinePatchEditor = false },
         onSave = { left, right, top, bottom ->
             npLeft = left
@@ -1118,6 +1133,14 @@ private fun pageBgImagePathOf(bgType: Int, bgStr: String): String? = when (bgTyp
 /** 颜色字符串解析不出来（比如 bgStr 存的是图片文件名）时退回 fallback */
 private fun String?.toPreviewColor(fallback: Int): Int =
     this?.let { runCatching { android.graphics.Color.parseColor(it) }.getOrNull() } ?: fallback
+
+/** 预览实际生效的九宫格切分线（自动探测优先时与正文渲染同一口径） */
+private data class NineSliceValues(
+    val left: Float,
+    val right: Float,
+    val top: Float,
+    val bottom: Float,
+)
 
 @Composable
 internal fun HighlightRulePreview(

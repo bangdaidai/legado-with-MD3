@@ -97,6 +97,7 @@ import io.legado.app.ui.book.read.sheet.MarkingSheet
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.replace.ReplaceEditRoute
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveContentPaddingOnlyVertical
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.ActionItem
@@ -713,7 +714,9 @@ fun TocScreen(
                         onMarkingLongClick = { marking ->
                             editingMarking = marking
                         },
-                        contentPadding = adaptiveContentPaddingOnlyVertical(
+                        // 笔记是卡片（NormalCard），需要标准横向内容边距让卡片浮起、不贴屏幕边；
+                        // 章节/书签是整行无边框列表，保持 onlyVertical 全出血。
+                        contentPadding = adaptiveContentPadding(
                             top = padding.calculateTopPadding(),
                             bottom = 120.dp
                         )

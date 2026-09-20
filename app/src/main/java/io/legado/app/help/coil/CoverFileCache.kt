@@ -113,6 +113,12 @@ object CoverFileCache {
         }
     }
 
+    /** 设置页"封面缓存"条目读取的真实占用：本目录（filesDir/cover_cache）下所有文件字节之和。 */
+    fun size(): Long {
+        if (!cacheDir.exists()) return 0L
+        return cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
     /** 按 lastModified 做 LRU 清理，防止常年累积占满存储 */
     private fun maybeTrim() {
         val now = System.currentTimeMillis()
