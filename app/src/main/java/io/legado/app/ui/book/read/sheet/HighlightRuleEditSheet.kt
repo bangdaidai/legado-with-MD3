@@ -137,11 +137,11 @@ fun HighlightRuleEditSheet(
     var textColorNight by remember(show, rule) { mutableStateOf(initial.textColorNight) }
     var bgColor by remember(show, rule) { mutableStateOf(initial.bgColor) }
     var bgColorNight by remember(show, rule) { mutableStateOf(initial.bgColorNight) }
-    var hasUnderline by remember(show, rule) { mutableStateOf(initial.underlineMode > 0) }
+    // 0 = 无下划线（原「下划线开关」的关），>0 = 具体线型；开关与样式合并为单一来源
     var underlineMode by remember(
         show,
         rule
-    ) { mutableIntStateOf(if (initial.underlineMode > 0) initial.underlineMode else 1) }
+    ) { mutableIntStateOf(initial.underlineMode) }
     var underlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor) }
     var underlineColorNight by remember(show, rule) { mutableStateOf(initial.underlineColorNight) }
     var underlineWidth by remember(show, rule) { mutableFloatStateOf(initial.underlineWidth) }
@@ -299,9 +299,9 @@ fun HighlightRuleEditSheet(
                             textColorNight = textColorNight,
                             bgColor = bgColor,
                             bgColorNight = bgColorNight,
-                            underlineMode = if (hasUnderline) underlineMode else 0,
-                            underlineColor = if (hasUnderline) underlineColor else null,
-                            underlineColorNight = if (hasUnderline) underlineColorNight else null,
+                            underlineMode = underlineMode,
+                            underlineColor = if (underlineMode > 0) underlineColor else null,
+                            underlineColorNight = if (underlineMode > 0) underlineColorNight else null,
                             underlineWidth = underlineWidth,
                             underlineOffset = underlineOffset,
                             underlineSvgPath = underlineSvgPath.ifBlank { null },
@@ -496,32 +496,27 @@ fun HighlightRuleEditSheet(
                 onValueChange = { fontSizeOffset = it.toInt() },
             )
 
-            // Underline
-            TinySwitchSettingItem(
-                title = stringResource(R.string.underline_style),
-                checked = hasUnderline,
-                onCheckedChange = { hasUnderline = it },
+            // Underline — 「无」即原来的关闭，选中具体线型即原来的开启；下拉常驻，细节项按选中态展开
+            val underlineEntries = arrayOf(
+                stringResource(R.string.underline_none),
+                stringResource(R.string.underline_solid),
+                stringResource(R.string.underline_dashed),
+                stringResource(R.string.underline_wave),
+                stringResource(R.string.underline_title_bar),
+                stringResource(R.string.underline_svg),
+                stringResource(R.string.bookmark_mark_effect_strike),
+                stringResource(R.string.bookmark_mark_effect_highlight),
             )
-            AnimatedVisibility(visible = hasUnderline) {
+            val underlineValues = arrayOf("0", "1", "2", "3", "4", "5", "6", "7")
+            TinyDropdownSettingItem(
+                title = stringResource(R.string.underline_style),
+                selectedValue = underlineMode.toString(),
+                displayEntries = underlineEntries,
+                entryValues = underlineValues,
+                onValueChange = { underlineMode = it.toIntOrNull() ?: 0 },
+            )
+            AnimatedVisibility(visible = underlineMode > 0) {
                 Column {
-                    val underlineEntries = arrayOf(
-                        stringResource(R.string.underline_solid),
-                        stringResource(R.string.underline_dashed),
-                        stringResource(R.string.underline_wave),
-                        stringResource(R.string.underline_title_bar),
-                        stringResource(R.string.underline_svg),
-                        stringResource(R.string.bookmark_mark_effect_strike),
-                        stringResource(R.string.bookmark_mark_effect_highlight),
-                    )
-                    val underlineValues = arrayOf("1", "2", "3", "4", "5", "6", "7")
-                    TinyDropdownSettingItem(
-                        title = stringResource(R.string.underline_style),
-                        selectedValue = underlineMode.toString(),
-                        displayEntries = underlineEntries,
-                        entryValues = underlineValues,
-                        onValueChange = { underlineMode = it.toIntOrNull() ?: 1 },
-                    )
-
                     AnimatedVisibility(visible = underlineMode == 5) {
                         AppTextField(
                             value = underlineSvgPath,
@@ -886,8 +881,8 @@ fun HighlightRuleEditSheet(
                 bgImage = if (hasBgImage) bgImage else "",
                 bgImageFit = bgImageFit,
                 bgImageScale = bgImageScale,
-                underlineMode = if (hasUnderline) underlineMode else 0,
-                underlineColor = if (hasUnderline) underlineColor else null,
+                underlineMode = underlineMode,
+                underlineColor = if (underlineMode > 0) underlineColor else null,
                 underlineWidth = underlineWidth,
                 underlineOffset = underlineOffset,
                 pageBgColor = previewDayBgColor,
@@ -923,7 +918,7 @@ fun HighlightRuleEditSheet(
                 // 夜间预览：夜间色优先，否则从日间色派生
                 val nightTextColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) }
                 val nightBgColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) }
-                val nightUnderlineColor = if (hasUnderline) {
+                val nightUnderlineColor = if (underlineMode > 0) {
                     underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) }
                 } else null
                 val previewNightBgImage = pageBgImagePathOf(
@@ -943,7 +938,7 @@ fun HighlightRuleEditSheet(
                     bgImage = "",
                     bgImageFit = bgImageFit,
                     bgImageScale = bgImageScale,
-                    underlineMode = if (hasUnderline) underlineMode else 0,
+                    underlineMode = underlineMode,
                     underlineColor = nightUnderlineColor,
                     underlineWidth = underlineWidth,
                     underlineOffset = underlineOffset,
