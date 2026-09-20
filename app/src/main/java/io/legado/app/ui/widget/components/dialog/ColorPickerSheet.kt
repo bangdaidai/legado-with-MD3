@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -36,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -45,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -75,6 +74,8 @@ fun ColorPickerSheet(
     var isHexInputError by remember { mutableStateOf(false) }
     // true = 原始色板网格，false = 色块面板（饱和度/明度大色块 + 色相 + 透明度滑块）
     var isPaletteMode by remember { mutableStateOf(true) }
+    // 色板模式实测高度(px)，用于色块面板对齐总高
+    var paletteHeightPx by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(show, initialColor) {
         if (show) {
@@ -139,14 +140,22 @@ fun ColorPickerSheet(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 记录色板模式实测高度，供色块面板模式对齐，切换时弹层不再跳高跳低
             when (isPaletteMode) {
-                true -> PaletteMode(
-                    currentColor = currentColor,
-                    onColorChanged = ::applyColor,
-                )
+                true -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { paletteHeightPx = it.height.toFloat() }
+                ) {
+                    PaletteMode(
+                        currentColor = currentColor,
+                        onColorChanged = ::applyColor,
+                    )
+                }
                 false -> FieldMode(
                     currentColor = currentColor,
                     onColorChanged = ::applyColor,
+                    targetHeightPx = paletteHeightPx,
                 )
             }
 
@@ -222,6 +231,7 @@ private fun PaletteMode(
 private fun FieldMode(
     currentColor: Color,
     onColorChanged: (Color) -> Unit,
+    targetHeightPx: Float,
 ) {
     val initialHsv = remember { colorToHsv(currentColor) }
     var hue by remember { mutableFloatStateOf(initialHsv[0]) }
@@ -250,7 +260,21 @@ private fun FieldMode(
         onColorChanged(newColor)
     }
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    // 总高对齐色板模式实测高度；未测得时给一个接近色板高度的兜底
+    val density = LocalDensity.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (targetHeightPx > 0f) {
+                    Modifier.height(with(density) { targetHeightPx.toDp() })
+                } else {
+                    Modifier.height(280.dp)
+                }
+            )
+    ) {
+        // 与色板网格同宽同边距：不额外加水平 padding
         SaturationValuePanel(
             hueColor = Color.hsv(hue, 1f, 1f),
             saturation = saturation,
@@ -258,17 +282,15 @@ private fun FieldMode(
             onSaturationBrightnessChanged = { s, v -> emit(hue, s, v, alpha) },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
-                .padding(horizontal = 16.dp),
+                .weight(1f),
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         GradientSlider(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(36.dp),
+                .height(32.dp),
             gradientBrush = Brush.horizontalGradient(
                 colors = (0..360 step 30).map { Color.hsv(it.toFloat(), 1f, 1f) }
             ),
@@ -282,8 +304,7 @@ private fun FieldMode(
         GradientSlider(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(36.dp),
+                .height(32.dp),
             gradientBrush = Brush.horizontalGradient(
                 colors = listOf(
                     opaqueColor.copy(alpha = 0f),
@@ -349,20 +370,31 @@ private fun SaturationValuePanel(
                 thumbSizePx / 2,
                 panelHeightPx - thumbSizePx / 2
             )
-            Box(
+            SelectionRing(
                 modifier = Modifier
                     .size(thumbSizeDp)
                     .offset(
                         x = with(density) { (thumbX - thumbSizePx / 2).toDp() },
                         y = with(density) { (thumbY - thumbSizePx / 2).toDp() },
                     )
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(LegadoTheme.colorScheme.onSurface)
-                    .border(2.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape),
             )
         }
     }
+}
+
+/** 选中指示「空心圆环」：与色板网格上的取色圆点同款——白色粗描边圆环，中心透出所选颜色 */
+@Composable
+private fun SelectionRing(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.drawBehind {
+            val stroke = size.minDimension * 0.34f
+            drawCircle(
+                color = Color.White,
+                radius = (size.minDimension - stroke) / 2f,
+                style = Stroke(width = stroke),
+            )
+        }
+    )
 }
 
 @Composable
@@ -373,8 +405,6 @@ private fun GradientSlider(
     onPositionChanged: (Float) -> Unit,
     checkerboard: Boolean = false,
 ) {
-    val thumbColor = LegadoTheme.colorScheme.onSurface
-    val outlineColor = LegadoTheme.colorScheme.outlineVariant
     val density = LocalDensity.current
     val thumbSizeDp = 28.dp
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
@@ -384,15 +414,16 @@ private fun GradientSlider(
             .onGloballyPositioned { coords ->
                 trackWidthPx = coords.size.width.toFloat()
             }
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(percent = 50))
             .drawBehind {
                 if (checkerboard) {
-                    // 透明度滑块底色：两行明暗交替棋盘格，透出「此处是透明」
-                    val cell = size.height / 2f
+                    // 透明度滑块底色：明暗交替棋盘格，透出「此处是透明」
+                    val cell = size.height / 4f
                     val lightColor = Color(0xFFE0E0E0)
                     val darkColor = Color(0xFFBDBDBD)
                     val columns = (size.width / cell).toInt() + 1
-                    for (row in 0 until 2) {
+                    val rows = 4
+                    for (row in 0 until rows) {
                         for (col in 0 until columns) {
                             drawRect(
                                 color = if ((row + col) % 2 == 0) lightColor else darkColor,
@@ -402,14 +433,10 @@ private fun GradientSlider(
                         }
                     }
                 }
+                // 与色板内置滑块一致：胶囊轨道，无描边
                 drawRoundRect(
                     brush = gradientBrush,
-                    cornerRadius = CornerRadius(18.dp.toPx()),
-                )
-                drawRoundRect(
-                    color = outlineColor,
-                    cornerRadius = CornerRadius(18.dp.toPx()),
-                    style = Stroke(width = 1.dp.toPx()),
+                    cornerRadius = CornerRadius(size.height / 2f),
                 )
             }
             .pointerInput(Unit) {
@@ -433,17 +460,13 @@ private fun GradientSlider(
                 thumbSizePx / 2,
                 trackWidthPx - thumbSizePx / 2
             )
-            Box(
+            SelectionRing(
                 modifier = Modifier
                     .size(thumbSizeDp)
                     .offset(
                         x = with(density) { (thumbOffsetPx - thumbSizePx / 2).toDp() },
                         y = 0.dp,
                     )
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(thumbColor)
-                    .border(2.dp, outlineColor, CircleShape),
             )
         }
     }
