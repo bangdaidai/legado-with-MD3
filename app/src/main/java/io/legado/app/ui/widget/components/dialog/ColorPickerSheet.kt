@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,13 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,21 +45,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.platform.LocalDensity
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
-import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.isHex
 import top.yukonga.miuix.kmp.basic.ColorPalette
 import kotlin.math.max
@@ -78,6 +73,7 @@ fun ColorPickerSheet(
     var currentColor by remember { mutableStateOf(Color(initialColor)) }
     var hexInput by remember { mutableStateOf(initialColor.asHexColorString()) }
     var isHexInputError by remember { mutableStateOf(false) }
+    // true = 原始色板网格，false = 色块面板（饱和度/明度大色块 + 色相 + 透明度滑块）
     var isPaletteMode by remember { mutableStateOf(true) }
 
     LaunchedEffect(show, initialColor) {
@@ -90,6 +86,12 @@ fun ColorPickerSheet(
     }
 
     val parsedHexColor = parseHexColor(hexInput)
+
+    fun applyColor(color: Color) {
+        currentColor = color
+        hexInput = color.toArgb().asHexColorString()
+        isHexInputError = false
+    }
 
     AppModalBottomSheet(
         show = show,
@@ -107,15 +109,27 @@ fun ColorPickerSheet(
             )
         },
         endAction = {
-            MediumTonalButton(
-                onClick = {
-                    onColorSelected(currentColor.toArgb())
-                    onDismissRequest()
-                },
-                enabled = parsedHexColor != null && !isHexInputError,
-                icon = Icons.Default.Save,
-                contentDescription = stringResource(R.string.action_save),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 取色方式切换：与保存按钮同形式、紧邻保存按钮（对齐分享卡片「切换模板」按钮）
+                MediumTonalButton(
+                    onClick = { isPaletteMode = !isPaletteMode },
+                    icon = Icons.Default.SwapHoriz,
+                    contentDescription = if (isPaletteMode) {
+                        stringResource(R.string.color_mixer)
+                    } else {
+                        stringResource(R.string.color_palette)
+                    },
+                )
+                MediumTonalButton(
+                    onClick = {
+                        onColorSelected(currentColor.toArgb())
+                        onDismissRequest()
+                    },
+                    enabled = parsedHexColor != null && !isHexInputError,
+                    icon = Icons.Default.Save,
+                    contentDescription = stringResource(R.string.action_save),
+                )
+            }
         },
     ) {
         Column(
@@ -125,40 +139,14 @@ fun ColorPickerSheet(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = { isPaletteMode = !isPaletteMode }) {
-                    Icon(
-                        imageVector = if (isPaletteMode) Icons.Outlined.Tune else Icons.Outlined.GridView,
-                        contentDescription = if (isPaletteMode) {
-                            stringResource(R.string.color_mixer)
-                        } else {
-                            stringResource(R.string.color_palette)
-                        },
-                        tint = LegadoTheme.colorScheme.primary,
-                    )
-                }
-            }
-
             when (isPaletteMode) {
                 true -> PaletteMode(
                     currentColor = currentColor,
-                    onColorChanged = { color ->
-                        currentColor = color
-                        hexInput = color.toArgb().asHexColorString()
-                        isHexInputError = false
-                    },
+                    onColorChanged = ::applyColor,
                 )
-                false -> MixerMode(
+                false -> FieldMode(
                     currentColor = currentColor,
-                    onColorChanged = { color ->
-                        currentColor = color
-                        hexInput = color.toArgb().asHexColorString()
-                        isHexInputError = false
-                    },
+                    onColorChanged = ::applyColor,
                 )
             }
 
@@ -208,60 +196,74 @@ fun ColorPickerSheet(
     }
 }
 
+/** 原始色板模式：Miuix 色板网格，透明度由色板自身提供 */
 @Composable
 private fun PaletteMode(
     currentColor: Color,
     onColorChanged: (Color) -> Unit,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ColorPalette(
-            color = currentColor,
-            onColorChanged = onColorChanged,
-            rows = 8,
-            hueColumns = 12,
-            modifier = Modifier.fillMaxWidth(),
-            showPreview = false
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        val hsv = remember(currentColor) { colorToHsv(currentColor) }
-        var alpha by remember(currentColor) { mutableFloatStateOf(currentColor.alpha) }
-
-        SliderLabel(text = stringResource(R.string.color_alpha))
-        GradientSlider(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(36.dp),
-            gradientBrush = Brush.horizontalGradient(
-                colors = listOf(
-                    currentColor.copy(alpha = 0f),
-                    currentColor.copy(alpha = 1f),
-                )
-            ),
-            position = alpha,
-            onPositionChanged = { newAlpha ->
-                alpha = newAlpha
-                onColorChanged(Color.hsv(hsv[0], hsv[1], hsv[2], newAlpha))
-            },
-        )
-    }
+    ColorPalette(
+        color = currentColor,
+        onColorChanged = onColorChanged,
+        rows = 8,
+        hueColumns = 12,
+        modifier = Modifier.fillMaxWidth(),
+        showPreview = false
+    )
 }
 
+/**
+ * 色块面板模式：一整块「饱和度 × 明度」取色区 + 色相滑块 + 透明度滑块。
+ *
+ * HSV 以本地状态为准，只在外部改色（十六进制输入/重置/重新打开）时才回同步；
+ * 外部颜色是灰阶时保留当前色相，避免拖色相到灰色后滑块弹回红端。
+ */
 @Composable
-private fun MixerMode(
+private fun FieldMode(
     currentColor: Color,
     onColorChanged: (Color) -> Unit,
 ) {
-    val hsv = remember(currentColor) { colorToHsv(currentColor) }
-    var hue by remember(currentColor) { mutableFloatStateOf(hsv[0]) }
-    var saturation by remember(currentColor) { mutableFloatStateOf(hsv[1]) }
-    var brightness by remember(currentColor) { mutableFloatStateOf(hsv[2]) }
-    var alpha by remember(currentColor) { mutableFloatStateOf(currentColor.alpha) }
+    val initialHsv = remember { colorToHsv(currentColor) }
+    var hue by remember { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember { mutableFloatStateOf(initialHsv[1]) }
+    var brightness by remember { mutableFloatStateOf(initialHsv[2]) }
+    var alpha by remember { mutableFloatStateOf(currentColor.alpha) }
+    var lastEmitted by remember { mutableStateOf(currentColor) }
+
+    LaunchedEffect(currentColor) {
+        if (currentColor == lastEmitted) return@LaunchedEffect
+        val hsv = colorToHsv(currentColor)
+        if (hsv[1] != 0f) hue = hsv[0]
+        saturation = hsv[1]
+        brightness = hsv[2]
+        alpha = currentColor.alpha
+        lastEmitted = currentColor
+    }
+
+    fun emit(h: Float, s: Float, v: Float, a: Float) {
+        hue = h
+        saturation = s
+        brightness = v
+        alpha = a
+        val newColor = Color.hsv(h, s, v, a)
+        lastEmitted = newColor
+        onColorChanged(newColor)
+    }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        SliderLabel(text = stringResource(R.string.color_hue))
+        SaturationValuePanel(
+            hueColor = Color.hsv(hue, 1f, 1f),
+            saturation = saturation,
+            brightness = brightness,
+            onSaturationBrightnessChanged = { s, v -> emit(hue, s, v, alpha) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .padding(horizontal = 16.dp),
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         GradientSlider(
             modifier = Modifier
                 .fillMaxWidth()
@@ -271,15 +273,12 @@ private fun MixerMode(
                 colors = (0..360 step 30).map { Color.hsv(it.toFloat(), 1f, 1f) }
             ),
             position = hue / 360f,
-            onPositionChanged = { pos ->
-                hue = pos * 360f
-                onColorChanged(Color.hsv(hue, saturation, brightness, alpha))
-            },
+            onPositionChanged = { pos -> emit(pos * 360f, saturation, brightness, alpha) },
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        SliderLabel(text = stringResource(R.string.color_saturation))
+        val opaqueColor = Color.hsv(hue, saturation, brightness, 1f)
         GradientSlider(
             modifier = Modifier
                 .fillMaxWidth()
@@ -287,59 +286,82 @@ private fun MixerMode(
                 .height(36.dp),
             gradientBrush = Brush.horizontalGradient(
                 colors = listOf(
-                    Color.hsv(hue, 0f, brightness),
-                    Color.hsv(hue, 1f, brightness),
+                    opaqueColor.copy(alpha = 0f),
+                    opaqueColor,
                 )
             ),
-            position = saturation,
-            onPositionChanged = { pos ->
-                saturation = pos
-                onColorChanged(Color.hsv(hue, saturation, brightness, alpha))
-            },
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        SliderLabel(text = stringResource(R.string.color_brightness))
-        GradientSlider(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(36.dp),
-            gradientBrush = Brush.horizontalGradient(
-                colors = listOf(
-                    Color.hsv(hue, saturation, 0f),
-                    Color.hsv(hue, saturation, 1f),
-                )
-            ),
-            position = brightness,
-            onPositionChanged = { pos ->
-                brightness = pos
-                onColorChanged(Color.hsv(hue, saturation, brightness, alpha))
-            },
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        val previewColor = Color.hsv(hue, saturation, brightness, 1f)
-        SliderLabel(text = stringResource(R.string.color_alpha))
-        GradientSlider(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(36.dp),
-            gradientBrush = Brush.horizontalGradient(
-                colors = listOf(
-                    previewColor.copy(alpha = 0f),
-                    previewColor.copy(alpha = 1f),
-                )
-            ),
+            checkerboard = true,
             position = alpha,
-            onPositionChanged = { pos ->
-                alpha = pos
-                onColorChanged(Color.hsv(hue, saturation, brightness, alpha))
-            },
+            onPositionChanged = { pos -> emit(hue, saturation, brightness, pos) },
         )
+    }
+}
+
+/** 饱和度(横轴) × 明度(纵轴)取色面板：左上白、右上纯色相、底部黑 */
+@Composable
+private fun SaturationValuePanel(
+    hueColor: Color,
+    saturation: Float,
+    brightness: Float,
+    onSaturationBrightnessChanged: (Float, Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val thumbSizeDp = 28.dp
+    var panelWidthPx by remember { mutableFloatStateOf(0f) }
+    var panelHeightPx by remember { mutableFloatStateOf(0f) }
+    val shape = RoundedCornerShape(16.dp)
+
+    Box(
+        modifier = modifier
+            .onGloballyPositioned { coords ->
+                panelWidthPx = coords.size.width.toFloat()
+                panelHeightPx = coords.size.height.toFloat()
+            }
+            .clip(shape)
+            .background(Brush.horizontalGradient(colors = listOf(Color.White, hueColor)))
+            .background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black)))
+            .pointerInput(hueColor) {
+                detectTapGestures { tapOffset ->
+                    onSaturationBrightnessChanged(
+                        (tapOffset.x / size.width).coerceIn(0f, 1f),
+                        1f - (tapOffset.y / size.height).coerceIn(0f, 1f),
+                    )
+                }
+            }
+            .pointerInput(hueColor) {
+                detectDragGestures { change, _ ->
+                    change.consume()
+                    onSaturationBrightnessChanged(
+                        (change.position.x / size.width).coerceIn(0f, 1f),
+                        1f - (change.position.y / size.height).coerceIn(0f, 1f),
+                    )
+                }
+            }
+    ) {
+        if (panelWidthPx > 0f && panelHeightPx > 0f) {
+            val thumbSizePx = with(density) { thumbSizeDp.toPx() }
+            val thumbX = (saturation * panelWidthPx).coerceIn(
+                thumbSizePx / 2,
+                panelWidthPx - thumbSizePx / 2
+            )
+            val thumbY = ((1f - brightness) * panelHeightPx).coerceIn(
+                thumbSizePx / 2,
+                panelHeightPx - thumbSizePx / 2
+            )
+            Box(
+                modifier = Modifier
+                    .size(thumbSizeDp)
+                    .offset(
+                        x = with(density) { (thumbX - thumbSizePx / 2).toDp() },
+                        y = with(density) { (thumbY - thumbSizePx / 2).toDp() },
+                    )
+                    .shadow(4.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(LegadoTheme.colorScheme.onSurface)
+                    .border(2.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape),
+            )
+        }
     }
 }
 
@@ -349,6 +371,7 @@ private fun GradientSlider(
     gradientBrush: Brush,
     position: Float,
     onPositionChanged: (Float) -> Unit,
+    checkerboard: Boolean = false,
 ) {
     val thumbColor = LegadoTheme.colorScheme.onSurface
     val outlineColor = LegadoTheme.colorScheme.outlineVariant
@@ -358,11 +381,27 @@ private fun GradientSlider(
 
     Box(
         modifier = modifier
-            .onGloballyPositioned { coords: LayoutCoordinates ->
+            .onGloballyPositioned { coords ->
                 trackWidthPx = coords.size.width.toFloat()
             }
             .clip(RoundedCornerShape(18.dp))
             .drawBehind {
+                if (checkerboard) {
+                    // 透明度滑块底色：两行明暗交替棋盘格，透出「此处是透明」
+                    val cell = size.height / 2f
+                    val lightColor = Color(0xFFE0E0E0)
+                    val darkColor = Color(0xFFBDBDBD)
+                    val columns = (size.width / cell).toInt() + 1
+                    for (row in 0 until 2) {
+                        for (col in 0 until columns) {
+                            drawRect(
+                                color = if ((row + col) % 2 == 0) lightColor else darkColor,
+                                topLeft = Offset(col * cell, row * cell),
+                                size = Size(cell, cell),
+                            )
+                        }
+                    }
+                }
                 drawRoundRect(
                     brush = gradientBrush,
                     cornerRadius = CornerRadius(18.dp.toPx()),
@@ -408,16 +447,6 @@ private fun GradientSlider(
             )
         }
     }
-}
-
-@Composable
-private fun SliderLabel(text: String) {
-    AppText(
-        text = text,
-        style = LegadoTheme.typography.labelMedium,
-        color = LegadoTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
-    )
 }
 
 private fun colorToHsv(color: Color): FloatArray {

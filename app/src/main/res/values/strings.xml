@@ -253,10 +253,6 @@
     <string name="select_color">Select Color</string>
     <string name="color_palette">Palette</string>
     <string name="color_mixer">Mixer</string>
-    <string name="color_hue">Hue</string>
-    <string name="color_saturation">Saturation</string>
-    <string name="color_brightness">Brightness</string>
-    <string name="color_alpha">Opacity</string>
     <string name="color_value">Color Value</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
