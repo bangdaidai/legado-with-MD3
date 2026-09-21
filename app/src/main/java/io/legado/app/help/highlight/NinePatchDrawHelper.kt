@@ -181,13 +181,15 @@ object NinePatchDrawHelper {
         val wM = (rectW - wL - wR).coerceAtLeast(0f)
         val hM = (rectH - hT - hB).coerceAtLeast(0f)
 
+        // 内部分界取整到整数像素：相邻块共享同一条边，消除子像素缝隙；
+        // 且各格严格平铺、互不重叠（见下方绘制循环）。
         val x0 = left
-        val x1 = left + wL
-        val x2 = right - wR
+        val x1 = (left + wL).roundToInt().toFloat().coerceIn(x0, right)
+        val x2 = (right - wR).roundToInt().toFloat().coerceIn(x1, right)
         val x3 = right
         val y0 = top
-        val y1 = top + hT
-        val y2 = bottom - hB
+        val y1 = (top + hT).roundToInt().toFloat().coerceIn(y0, bottom)
+        val y2 = (bottom - hB).roundToInt().toFloat().coerceIn(y1, bottom)
         val y3 = bottom
 
         val bwI = bw.toInt()
@@ -205,16 +207,30 @@ object NinePatchDrawHelper {
         // .9.png 引导边：内容坐标统一平移回含边位图
         val bx = borderPx.roundToInt()
         val by = borderPx.roundToInt()
+        // 源图四条分界线 X0|X1|X2|X3（Y 同理），X1/X2 即两条内部切割线。
+        val sxLines = intArrayOf(bx, bx + sxLi, bx + sxRi, bx + bwI)
+        val syLines = intArrayOf(by, by + sxTi, by + sxBii, by + bhI)
+        // 每格在内部切割线一侧向邻区多取 1px 源像素（夹在本格两条外分界之间）：
+        // FILTER_BITMAP 双线性在 srcRect 边缘会采样到切割线外侧，透明边缘图
+        // 每格靠缝约 1px 的 alpha 被拉低，深色底上呈"缝隙线"。越沿采样让边界
+        // 像素取到邻区真实内容，接缝连续；目标矩形仍严格平铺、互不重叠，
+        // 半透明图不会再出现 0.5px 外扩造成的双重 alpha 叠加四线。
+        fun cellSrc(col: Int, row: Int): Rect {
+            val l = sxLines[col]
+            val r = sxLines[col + 1]
+            val t = syLines[row]
+            val b = syLines[row + 1]
+            return Rect(
+                if (col > 0) (l - 1).coerceAtLeast(sxLines[0]) else l,
+                if (row > 0) (t - 1).coerceAtLeast(syLines[0]) else t,
+                if (col < 2) (r + 1).coerceAtMost(sxLines[3]) else r,
+                if (row < 2) (b + 1).coerceAtMost(syLines[3]) else b,
+            )
+        }
         val srcRects = arrayOf(
-            Rect(bx, by, bx + sxLi, by + sxTi),
-            Rect(bx + sxLi, by, bx + sxRi, by + sxTi),
-            Rect(bx + sxRi, by, bx + bwI, by + sxTi),
-            Rect(bx, by + sxTi, bx + sxLi, by + sxBii),
-            Rect(bx + sxLi, by + sxTi, bx + sxRi, by + sxBii),
-            Rect(bx + sxRi, by + sxTi, bx + bwI, by + sxBii),
-            Rect(bx, by + sxBii, bx + sxLi, by + bhI),
-            Rect(bx + sxLi, by + sxBii, bx + sxRi, by + bhI),
-            Rect(bx + sxRi, by + sxBii, bx + bwI, by + bhI)
+            cellSrc(0, 0), cellSrc(1, 0), cellSrc(2, 0),
+            cellSrc(0, 1), cellSrc(1, 1), cellSrc(2, 1),
+            cellSrc(0, 2), cellSrc(1, 2), cellSrc(2, 2),
         )
 
         val dstRects = arrayOf(
@@ -235,16 +251,12 @@ object NinePatchDrawHelper {
         for (i in 0 until 9) {
             val src = srcRects[i]
             if (src.width() <= 0 || src.height() <= 0) continue
-            val dst = dstRects[i]
-            // 扩展目标矩形边界 0.5px，消除亚像素缝隙导致的切割线
-            canvas.drawBitmap(
-                bitmap, src,
-                android.graphics.RectF(
-                    dst.left - 0.5f, dst.top - 0.5f,
-                    dst.right + 0.5f, dst.bottom + 0.5f,
-                ),
-                paint,
-            )
+            // 相邻格在整数分界上严格平铺，不做边界外扩：
+            // 曾经按每边 0.5px 扩展靠重叠盖缝（a60fddd49），但半透明高亮图在
+            // 两条横线、两条竖线的重叠带上会被叠加两次 alpha，夜间深色底上
+            // 呈现为四条分割线（2026-09-22 真机确认）。历史分支上验证过的
+            // 做法是整数分界共享边（e63c0eebc），缝隙与叠加两者都不出现。
+            canvas.drawBitmap(bitmap, src, dstRects[i], paint)
         }
         canvas.restore()
     }
