@@ -674,6 +674,9 @@ internal class TextMenuPositionProvider(
         val isSpaceEnoughBelowSelection = windowSize.height - endBottomY >
                 cardHeight + textMargin + cursorHandleClearance + marginVertical
         val isSpaceEnoughAtTop = startTopY > cardHeight + textMargin + marginVertical
+        // 仅阅读区域最顶部 10% 的选区优先在下方展开；其余位置遵循原本“有上方空间
+        // 就放上方”的策略，避免菜单在普通位置不必要地遮挡后文。
+        val preferBelowForTopSelection = startTopY < windowSize.height / 10
 
         if (preferBelow) {
             // 标记卡落位（上游同规则）：默认在选区下方展开，只有下方放不下卡片

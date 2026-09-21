@@ -752,13 +752,12 @@ class ReadBookController(
             ?: ReadBook.book?.bookUrl
         if (currentBookUrl == null || directReaderPagesBookUrl == currentBookUrl) return
         if (directReaderPages.isNotEmpty()) {
-            directReaderLayoutJob?.cancel()
-            directReaderAdjacentLayoutJob?.cancel()
-            directReaderLayoutJob = null
-            directReaderAdjacentLayoutJob = null
+            // 新引擎按「章」登记在飞的分页任务，换书要作废的就是这一批：
+            // 它们排出的是旧源正文，提交回来会把旧页画到新书上。
+            readerChapterPaginationJobs.values.forEach { it.job.cancel() }
+            readerChapterPaginationJobs.clear()
             directReaderLayoutKey = null
             directReaderPaginationEnvironmentKey = null
-            directReaderMayReuseAdjacentPages = false
             directReaderStreamGeneration += 1
             clearStreamedReaderChapters()
             directReaderPages = emptyList()

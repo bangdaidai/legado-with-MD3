@@ -9,7 +9,6 @@ import io.legado.app.R
 import io.legado.app.data.repository.ExploreRepository
 import io.legado.app.domain.model.BookShelfState
 import io.legado.app.data.local.preferences.LocalPreferencesKeys
-import io.legado.app.data.repository.ExploreRepository
 import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.domain.gateway.CoverSettingsGateway
 import io.legado.app.domain.usecase.AddToBookshelfUseCase

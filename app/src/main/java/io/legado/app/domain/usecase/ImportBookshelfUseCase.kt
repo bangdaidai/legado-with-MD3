@@ -77,6 +77,7 @@ class ImportBookshelfUseCase(
             books.forEach { bookInfo ->
                 val name = bookInfo["name"] ?: ""
                 val author = bookInfo["author"] ?: ""
+                // 书架备份里只有书名/作者，形态要等精确搜索才知道，这里按「同名同作者即冲突」判重
                 if (name.isEmpty() || bookRepository.getShelfBookConflict(name, author) != null) {
                     return@forEach
                 }

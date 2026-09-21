@@ -332,6 +332,7 @@ private fun runSourceCallback(
 private val BookInfoCallbackAction.resultText: String?
     get() = when (this) {
         is BookInfoCallbackAction.Search -> keyword
+        is BookInfoCallbackAction.OpenAuthorDetail -> author
         is BookInfoCallbackAction.ShareText -> text
         is BookInfoCallbackAction.CopyText -> text
         BookInfoCallbackAction.ClearCache -> null

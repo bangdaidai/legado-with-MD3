@@ -31,6 +31,8 @@ fun HeatmapCalendarSection(
     val (startDate, endDate) = rememberDateRange(dailyReadCounts, dailyReadTimes)
     val days = rememberDaysInRange(startDate, endDate)
     val weeks = rememberWeeks(days, startDate)
+    // 刻度只算一次，整张网格共用：避免每个格子各自遍历全表求最大值
+    val scale = rememberHeatmapScale(dailyReadCounts, dailyReadTimes)
 
     val listState = rememberLazyListState()
 
@@ -70,6 +72,7 @@ fun HeatmapCalendarSection(
                 HeatmapWeekColumn(
                     week = week,
                     mode = currentMode,
+                    scale = scale,
                     dailyReadCounts = dailyReadCounts,
                     dailyReadTimes = dailyReadTimes,
                     selectedDate = selectedDate,

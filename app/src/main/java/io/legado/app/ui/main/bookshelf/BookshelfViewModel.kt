@@ -26,11 +26,7 @@ import io.legado.app.domain.usecase.ExportBookshelfUseCase
 import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
 import io.legado.app.domain.usecase.UpdateBooksGroupUseCase
-import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.BookshelfTagGateway
-import io.legado.app.domain.gateway.AppShellSettingsGateway
-import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
-import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.TagManager
 import io.legado.app.help.coroutine.Coroutine

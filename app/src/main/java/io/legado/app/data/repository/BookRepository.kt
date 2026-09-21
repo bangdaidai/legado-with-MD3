@@ -78,6 +78,18 @@ class BookRepository(
         }
     }
 
+    /**
+     * 同名同作者的在架书籍，不区分形态。
+     *
+     * 供书架导入这类「备份里只有书名/作者、形态要等精确搜索才知道」的入口使用；
+     * 新书形态已知时（加入书架、换源）用下面的三参重载，让文本/音频/图片/视频各算各的。
+     */
+    suspend fun getShelfBookConflict(name: String, author: String): Book? {
+        return withContext(Dispatchers.IO) {
+            bookDao.getShelfBookConflict(name, author)
+        }
+    }
+
     /** 同名同作者且形态相同的在架书籍；formMask 见 [io.legado.app.help.book.formTypeMask] */
     suspend fun getShelfBookConflict(name: String, author: String, formMask: Int): Book? {
         return withContext(Dispatchers.IO) {

@@ -51,7 +51,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.util.ceil
 import androidx.compose.ui.platform.LocalDensity
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
@@ -60,6 +59,7 @@ import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.utils.isHex
 import top.yukonga.miuix.kmp.basic.ColorPalette
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 

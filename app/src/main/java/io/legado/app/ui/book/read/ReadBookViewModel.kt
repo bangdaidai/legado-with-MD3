@@ -236,15 +236,12 @@ class ReadBookViewModel(
         highlightRuleRepository = highlightRuleRepository,
         saveMarkingUseCase = saveMarkingUseCase,
         host = object : MarkingDelegate.Host {
-            override val activeSheet: ReadBookSheet?
-                get() = _uiState.value.activeSheet
-
-            override fun setActiveSheet(sheet: ReadBookSheet?) {
-                _uiState.update { it.copy(activeSheet = sheet) }
-            }
-
             override fun reloadCurrentChapter() {
                 contentProcessDelegate.reloadCurrentChapterPreservingSnapshot()
+            }
+
+            override fun dismissMarkingSheet() {
+                restoreMarkingReturnSheet()
             }
 
             override fun openMarkingSheet() {
