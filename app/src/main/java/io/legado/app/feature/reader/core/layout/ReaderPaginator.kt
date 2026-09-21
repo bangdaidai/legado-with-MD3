@@ -6,6 +6,7 @@ import io.legado.app.feature.reader.core.model.ReaderPage
 import io.legado.app.feature.reader.core.model.ReaderPageDecoration
 import io.legado.app.feature.reader.core.model.ReaderPageId
 import io.legado.app.feature.reader.core.model.ReaderRect
+import io.legado.app.feature.reader.core.model.ReaderTextBackgroundRun
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
 import kotlin.math.max
 
@@ -591,6 +592,19 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
                 ?.style?.backgroundImage?.takeIf { it.fit == 3 }
 
+        /**
+         * 元素绘制时真正使用的背景图。九宫格的外扩框由绘制期现算（见
+         * [ReaderTextBackgroundRun]），这里与 [itemFrame] 一样返回原样实例。
+         *
+         * 行内连续放行标记必须用「绘制用实例」比较，不能只看 [itemFrame]（它只认 `fit == 3`）。
+         * 旧 View `TextLine.drawStyledBackgrounds` 对行内连续的同图段无条件合并，新实现多了
+         * 「几何相邻 < 1px」这条，靠分页期放行标记兜住字间距（默认 0.1em，远大于 1px）。
+         * 放行标记若只发给九宫格，fit≠3 的背景图就会逐字绘制成一条条断开的气泡。
+         */
+        fun drawnBackgroundOf(index: Int) =
+            (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
+                ?.style?.backgroundImage
+
         fun backgroundMarginBefore(index: Int, lineStart: Int): Float {
             val image = itemFrame(index) ?: return 0f
             return if (index == lineStart || itemFrame(index - 1) != image) {
@@ -752,6 +766,10 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             lineItems.forEachIndexed { itemIndex, item ->
                 x += backgroundMarginBefore(itemIndex)
                 val itemBackground = itemFrame(from + itemIndex)
+                // run 连续性比较用的「绘制用实例」：fit≠3 时 itemBackground 为 null，
+                // 但背景图仍在绘制，必须照样放行。
+                val currentBackground = itemBackground
+                    ?: (item as? ReaderMeasuredInlineItem.Text)?.style?.backgroundImage
                 when (item) {
                     is ReaderMeasuredInlineItem.Text -> {
                         val expandedWordSpace = if (item.value == " ") wordSpaceExtra else 0f
@@ -774,9 +792,9 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                             // 富文本逐项样式：与前一项同背景图才视作同一 run 的延续。
                             // 比较「绘制用实例」，非九宫格背景图同样要拿到放行标记，
                             // 否则字间距会把它切成逐字绘制。
-                            continuesBackgroundRun = itemBackground != null &&
+                            continuesBackgroundRun = currentBackground != null &&
                                     itemIndex > 0 &&
-                                    itemFrame(from + itemIndex - 1) == itemBackground,
+                                    drawnBackgroundOf(from + itemIndex - 1) == currentBackground,
                         )
                     }
 
