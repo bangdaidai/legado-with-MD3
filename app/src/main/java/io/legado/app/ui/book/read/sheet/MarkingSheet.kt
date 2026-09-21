@@ -1,8 +1,10 @@
 package io.legado.app.ui.book.read.sheet
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,11 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,7 +78,7 @@ import io.legado.app.utils.fromJsonObject
  * 划线/高亮笔记配置 Sheet。
  *
  * 样式来源两种：复用用户已有的一条高亮规则（[MarkingUiState.highlightRules]），
- * 或直接自定义本次的样式——上面一行预设颜色（尾部为自定义颜色），下面 5x1 效果格
+ * 或直接自定义本次的样式——上面一行颜色（头部为色板入口 + 预设颜色），下面 5x1 效果格
  * （单实线/波浪线/虚线/背景色/字体色）。背景色自动加 ~20% 透明度。另带备注输入。
  * 两种进入方式：
  * - 新增：选中文本后点「笔记」（[MarkingUiState.selection]），样式预选 [DefaultMarkingStyle]；
@@ -135,6 +139,8 @@ fun MarkingSheet(
         mutableStateOf(editingStyle?.underlineSvgPath)
     }
     var showColorPicker by remember(show, editing) { mutableStateOf(false) }
+    // 打开取色器的种子色：点色板入口用当前选中色，长按预设色则以被长按的色为基准微调。
+    var colorPickerSeed by remember(show, editing) { mutableStateOf(markColor) }
     // 悬浮形态默认收起「样式来源」区（下拉 + 规则列表）：这套规则选择器较长，
     // 收进标题行的调色按钮后，面板只剩颜色行、效果格与备注，紧贴笔记位置不挡正文。
     // 颜色行与效果格仍按原样内联展示。底部弹层没有高度顾虑，来源区始终展示。
@@ -294,11 +300,18 @@ fun MarkingSheet(
                     }
 
                     if (!useRule) {
-                        // 自定义：预设颜色行（尾部自定义色）+ 5x1 效果格
+                        // 自定义：颜色行（色板入口 + 预设色）+ 5x1 效果格
                         MarkingColorRow(
                             selectedColor = markColor,
                             onColorSelected = { markColor = it },
-                            onCustomColorClick = { showColorPicker = true },
+                            onColorLongPress = { color ->
+                                colorPickerSeed = color
+                                showColorPicker = true
+                            },
+                            onCustomColorClick = {
+                                colorPickerSeed = markColor
+                                showColorPicker = true
+                            },
                         )
                         MarkingEffectGrid(
                             selectedEffect = effect,
@@ -348,7 +361,7 @@ fun MarkingSheet(
     if (showStyleConfig) {
         ColorPickerSheet(
             show = showColorPicker,
-            initialColor = markColor,
+            initialColor = colorPickerSeed,
             onDismissRequest = { showColorPicker = false },
             onColorSelected = { color ->
                 markColor = color
@@ -361,7 +374,9 @@ fun MarkingSheet(
 /**
  * 笔记面板的阅读页悬浮形态：与底部弹层同一套标题行（位置 + 删除/调色按钮）和内容
  * 组件，只是挂在笔记/选区旁边且不压暗正文，改样式时能直接看到正文里的效果。
- * 定位复用划词菜单的 [TextMenuPositionProvider]，与选区菜单保持同一套挂位规则。
+ * 定位复用划词菜单的 [TextMenuPositionProvider]，但落位方向与上游标记卡一致：
+ * 默认在选区下方展开，只有贴近窗口底部、下方放不下面板时才上翻
+ * （改样式要盯的是选区本身，盖后文比盖前文更可接受）。
  */
 @Composable
 private fun MarkingFloatingPanel(
@@ -386,7 +401,7 @@ private fun MarkingFloatingPanel(
             endX = anchor.endX.toInt(),
             endBottomY = anchor.endBottomY.toInt(),
             shadowPadding = with(density) { shadowPadding.roundToPx() },
-            placeOppositeHalf = true,
+            preferBelow = true,
         )
     }
     Popup(
@@ -449,12 +464,16 @@ private fun MarkingFloatingPanel(
     }
 }
 
-/** 自定义样式区：预设颜色行（尾部为自定义颜色，打开取色器）。 */
+/**
+ * 自定义样式区的颜色行：头部色板入口（打开取色器），其后预设颜色。
+ * 预设色点按直接选中，长按以该色为基准打开取色器微调。
+ */
 @Composable
 internal fun MarkingColorRow(
     selectedColor: Int,
     onColorSelected: (Int) -> Unit,
     onCustomColorClick: () -> Unit,
+    onColorLongPress: (Int) -> Unit = onCustomColorClick,
 ) {
     Row(
         modifier = Modifier
@@ -464,53 +483,73 @@ internal fun MarkingColorRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MarkingPresetColors.forEach { color ->
-            MarkingColorSwatch(
-                color = color,
-                selected = color == selectedColor,
-                onClick = { onColorSelected(color) },
-            )
-        }
-        // 尾部自定义颜色：未选自定义色时显示取色图标，选中后显示该色并高亮
+        // 色板入口：未选自定义色时是彩虹渐变圆（与纯色预设明显区分），
+        // 选中自定义色后显示该色并高亮，回显当前用的就是这个颜色。
         val isCustom = selectedColor !in MarkingPresetColors
         MarkingColorSwatch(
             color = if (isCustom) selectedColor else null,
             selected = isCustom,
             onClick = onCustomColorClick,
-            custom = true,
+            palette = true,
         )
+        MarkingPresetColors.forEach { color ->
+            MarkingColorSwatch(
+                color = color,
+                selected = color == selectedColor,
+                onClick = { onColorSelected(color) },
+                onLongClick = { onColorLongPress(color) },
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MarkingColorSwatch(
     color: Int?,
     selected: Boolean,
     onClick: () -> Unit,
-    custom: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    palette: Boolean = false,
 ) {
     val borderColor = if (selected) {
         LegadoTheme.colorScheme.primary
     } else {
         LegadoTheme.colorScheme.outlineVariant
     }
+    val paletteDesc = stringResource(R.string.bookmark_mark_custom_color)
     Box(
         modifier = Modifier
             .size(32.dp)
             .clip(CircleShape)
             .background(
-                if (color != null) Color(color) else LegadoTheme.colorScheme.surfaceContainerHigh
+                when {
+                    color != null -> Color(color)
+                    palette -> Brush.sweepGradient(MarkingPaletteWheel)
+                    else -> LegadoTheme.colorScheme.surfaceContainerHigh
+                }
             )
             .border(2.dp, borderColor, CircleShape)
-            .clickable(onClick = onClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .semantics {
+                if (color == null) {
+                    contentDescription = paletteDesc
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
-        if (custom && color == null) {
+        if (palette && color == null) {
             Icon(
                 imageVector = Icons.Default.Palette,
-                contentDescription = stringResource(R.string.bookmark_mark_custom_color),
-                tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier
+                    .size(16.dp)
+                    .background(
+                        LegadoTheme.colorScheme.scrim.copy(alpha = 0.35f),
+                        CircleShape,
+                    )
+                    .padding(2.dp),
             )
         }
     }
@@ -635,7 +674,7 @@ private fun HighlightRule.toProcessStyle(): TextProcessStyle = TextProcessStyle(
     underlineSvgPath = underlineSvgPath,
 )
 
-/** 自定义模式的预设颜色（尾部之外的自定义色用取色器）。 */
+/** 自定义模式的预设颜色（色板入口之外的自定义色用取色器）。 */
 private val MarkingPresetColors = listOf(
     0xFFFF5252.toInt(),
     0xFFFF9800.toInt(),
@@ -648,6 +687,12 @@ private val MarkingPresetColors = listOf(
     0xFF795548.toInt(),
     0xFF607D8B.toInt(),
 )
+
+/** 色板入口按钮的彩虹环：取预设色相环一圈，首尾同色闭合渐变接缝。 */
+private val MarkingPaletteWheel = listOf(
+    0xFFFF5252, 0xFFFF9800, 0xFFFFEB3B, 0xFF4CAF50,
+    0xFF26A6D6, 0xFF2196F3, 0xFF9C27B0, 0xFFEC407A, 0xFFFF5252,
+).map { Color(it.toInt()) }
 
 private const val STYLE_SOURCE_RULE = "rule"
 private const val STYLE_SOURCE_CUSTOM = "custom"

@@ -643,7 +643,7 @@ internal class TextMenuPositionProvider(
     private val endX: Int,
     private val endBottomY: Int,
     private val shadowPadding: Int,
-    private val placeOppositeHalf: Boolean = false,
+    private val preferBelow: Boolean = false,
 ) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
@@ -668,10 +668,11 @@ internal class TextMenuPositionProvider(
         val isSpaceEnoughBelowSelection = windowSize.height - endBottomY >
                 cardHeight + textMargin + cursorHandleClearance + marginVertical
 
-        if (placeOppositeHalf) {
+        if (preferBelow) {
+            // 标记卡落位（上游同规则）：默认在选区下方展开，只有下方放不下卡片
+            // 且上方放得下时才上翻，避免普通位置的笔记面板不必要地盖住前文。
             x = startX - shadowPadding
-            val selectionCenterY = (startTopY + endBottomY) / 2
-            y = if (selectionCenterY < windowSize.height / 2) {
+            y = if (isSpaceEnoughBelowSelection || !isSpaceEnoughAtTop) {
                 endBottomY + cursorHandleClearance + textMargin - shadowPadding
             } else {
                 startTopY - popupContentSize.height + shadowPadding - textMargin

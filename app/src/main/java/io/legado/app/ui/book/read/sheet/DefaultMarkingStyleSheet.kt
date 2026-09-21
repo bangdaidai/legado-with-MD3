@@ -37,6 +37,8 @@ fun DefaultMarkingStyleSheet(
     var effect by remember(show) { mutableStateOf(MarkingEffect.fromStyle(initialStyle)) }
     var markColor by remember(show) { mutableStateOf(MarkingEffect.colorOf(initialStyle)) }
     var showColorPicker by remember(show) { mutableStateOf(false) }
+    // 打开取色器的种子色：点色板入口用当前选中色，长按预设色则以被长按的色为基准微调。
+    var colorPickerSeed by remember(show) { mutableStateOf(MarkingEffect.colorOf(initialStyle)) }
 
     // 当前编辑中的样式：预览与保存共用同一份，避免两处推导不一致。
     // 线宽/偏移一律取 effect 的规范值：不继承存量样式的 underlineWidth，
@@ -65,7 +67,14 @@ fun DefaultMarkingStyleSheet(
             MarkingColorRow(
                 selectedColor = markColor,
                 onColorSelected = { markColor = it },
-                onCustomColorClick = { showColorPicker = true },
+                onColorLongPress = { color ->
+                    colorPickerSeed = color
+                    showColorPicker = true
+                },
+                onCustomColorClick = {
+                    colorPickerSeed = markColor
+                    showColorPicker = true
+                },
             )
             Spacer(Modifier.height(4.dp)) // 颜色行自带 8dp
             MarkingEffectGrid(
@@ -102,7 +111,7 @@ fun DefaultMarkingStyleSheet(
 
     ColorPickerSheet(
         show = showColorPicker,
-        initialColor = markColor,
+        initialColor = colorPickerSeed,
         onDismissRequest = { showColorPicker = false },
         onColorSelected = { color ->
             markColor = color
