@@ -60,6 +60,7 @@ import io.legado.app.feature.reader.platform.ReaderPerfTrace
 import io.legado.app.help.TTS
 import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.model.CacheBook
@@ -369,6 +370,17 @@ class ReadBookController(
     private var directReaderPaginationEnvironmentKey: String? = null
 
     /**
+     * 上一次「整窗作废页表」时生效的日夜模式（[ReadStyleResolver.isNightTheme]，含墨水屏下的
+     * 日夜分支，因为排版期解析规则色用的就是它）。
+     *
+     * 日夜切换有两条互不知情的通道：阅读页的日夜按钮走 `ReadConfigUpdateBus`（带
+     * `InvalidateTextPage`，最终到 [rebuildDirectReaderPages]），系统深色跟随和主题设置页
+     * 只到 [onAppThemeChanged]。两条都得让"排版期才按模式解析"的产物重排（高亮规则的
+     * `*Night` 色），但同一次切换只能作废一次——靠这里记录的模式去重。
+     */
+    private var directReaderPagesNightTheme: Boolean? = null
+
+    /**
      * 章 → 正在跑的分页任务（连同它依据的章节身份）。
      *
      * 旧 View 的 `TextChapterLayout` 与章节一一对应，且排版任务跨章存活：`ReadBook.loadContent`
@@ -390,7 +402,27 @@ class ReadBookController(
         val identity: LegacyReaderChapterLayoutIdentity,
         val job: Job,
     )
+
+    /** 一章已成型页的出处，与 [ReaderChapterPaginationTask] 同一判据，但用于任务结束后的暖页。 */
+    private class ReaderChapterPagesSource(
+        val identity: LegacyReaderChapterLayoutIdentity,
+        val environmentKey: String?,
+    )
+
     private var directReaderPages = emptyList<io.legado.app.feature.reader.core.model.ReaderPage>()
+
+    /**
+     * 页表里各章暖页的出处：这一章自己的内容身份 + 排版它时所在的排版环境。
+     *
+     * 旧引擎用一个整窗 key 表达同一件事：key 一变就无条件重排当前章。新引擎按「章」调度任务，
+     * 任务排完就把自己从 [readerChapterPaginationJobs] 里摘掉，留在页表里的那些页因此不带任何
+     * 依据信息。若复用判断只看「这一章有没有页」，两类不动正文的改动就会被旧页一直挡住：
+     * 划线笔记只改章节身份里的 `contentProcessesHash`、高亮规则只改排版环境里的规则代次，
+     * 表现就是「改了要退出书籍重进才生效，连刷新都不行」。记下出处后：出处对得上才复用
+     * （换章接力照旧省掉重排），对不上就重排。
+     */
+    private val directReaderChapterPagesSource =
+        mutableMapOf<Int, ReaderChapterPagesSource>()
 
     /**
      * 页表当前所属书籍。换源原地替换书籍后新旧章节 index 对齐，暖页复用会把旧源内容
@@ -761,6 +793,7 @@ class ReadBookController(
             directReaderStreamGeneration += 1
             clearStreamedReaderChapters()
             directReaderPages = emptyList()
+            directReaderChapterPagesSource.clear()
             directReaderPageContexts.clear()
             directReaderChapterPageCounts = emptyMap()
             // 立刻用加载/消息页顶掉画布上的旧正文；不能发空窗，路由层
@@ -775,8 +808,13 @@ class ReadBookController(
         readerChapterPaginationJobs.clear()
         directReaderLayoutKey = null
         directReaderPaginationEnvironmentKey = null
+        // 记下重排依据的日夜模式：主题通道（onAppThemeChanged）靠它判断这一次切换是不是已经作废过。
+        directReaderPagesNightTheme = ReadStyleResolver.isNightTheme()
         directReaderStreamGeneration += 1
         clearStreamedReaderChapters()
+        // 页先留在表里当画面（重排期间靠它们避免闪"加载中"），但出处一律作废：
+        // "重建"就是"当前页不可信"，包括排版失败后的手动重试入口。
+        directReaderChapterPagesSource.clear()
         ReadBook.clearReaderPagination()
         updateReaderPaginationError(null)
         publishReaderPageWindow()
@@ -1268,6 +1306,7 @@ class ReadBookController(
                 // 而不再重排，页面会一直停在旧字号/旧主题的几何上。清空后窗口由加载占位页承接，
                 // 各章的新页随各自的批次填回（旧 View 重建 TextChapter 后同样是整章重排）。
                 directReaderPages = emptyList()
+                directReaderChapterPagesSource.clear()
                 directReaderPageContexts.clear()
             }
             // 换章接力：新当前章若在旧 key 下已经排出过部分页（上一轮邻章预排的产物），保留它们。
@@ -1321,13 +1360,13 @@ class ReadBookController(
         // 该章已经有任务在跑（很可能正是上一轮作为邻章启动的那个）：不打断，等它收尾。
         // 内容换了一份时身份不同，会落到下面按新内容重排。
         if (isReaderChapterPaginationRunning(current)) return
-        val hasShapedPages = directReaderPages.any {
-            it.id.chapterIndex == currentIndex && !it.isPlaceholder
-        }
+        // 暖页只有在出处（本章内容身份 + 排版环境）没变时才算数：光看"有没有页"会把
+        // 划线笔记、高亮规则这类不改正文的改动一直挡在旧页后面。
+        val hasReusablePages = hasReusableReaderPages(current)
         // 页表里还挂着"排了一半"的残留（任务已被取消、部分页却没清干净）时同样要重排，
         // 否则这一章会停在半成品上、尾部一直挂着"加载中"。
         val stalledPartialPages = currentIndex in directReaderStreamingChapters
-        if (!hasShapedPages || stalledPartialPages) {
+        if (!hasReusablePages || stalledPartialPages) {
             startReaderChapterPagination(
                 paginationGeneration, current, width, height, padding, style,
             )
@@ -1384,10 +1423,28 @@ class ReadBookController(
     )
 
     /**
+     * 该章是否已经有一份"出处对得上"的整章页。
+     *
+     * 出处 = 本章内容身份 + 排版它时所在的排版环境。二者任一变化（重新加载正文、增删划线
+     * 笔记、字号/主题/高亮规则变化）都视为没有可用页，需要重排；都没变时暖页照旧直接接上，
+     * 换章接力不必重排。
+     */
+    private fun hasReusableReaderPages(candidate: ReaderChapterInput): Boolean {
+        val chapterIndex = candidate.chapter.index
+        val source = directReaderChapterPagesSource[chapterIndex] ?: return false
+        if (source.identity != candidate.layoutIdentity()) return false
+        if (source.environmentKey != directReaderPaginationEnvironmentKey) return false
+        return directReaderPages.any {
+            it.id.chapterIndex == chapterIndex && !it.isPlaceholder
+        }
+    }
+
+    /**
      * 预热窗口里还没有页的邻章。
      *
      * 只负责把缺失的章补上：已经有页、已经有任务在跑、或已经不在窗口里的章都跳过，
      * 所以它既可以在当前章落地后被调用，也可以在给出暖页后立刻调用，不会重复排版。
+     * "已经有页"同样按出处判断，理由见 [hasReusableReaderPages]。
      */
     private fun scheduleAdjacentReaderChapterPagination(
         chapters: List<ReaderChapterInput>,
@@ -1402,7 +1459,7 @@ class ReadBookController(
             val index = candidate.chapter.index
             index != current.chapter.index &&
                     index in visible &&
-                    directReaderPages.none { it.id.chapterIndex == index && !it.isPlaceholder } &&
+                    !hasReusableReaderPages(candidate) &&
                     !isReaderChapterPaginationRunning(candidate)
         }
         if (missing.isEmpty()) return
@@ -1431,6 +1488,8 @@ class ReadBookController(
         val streamGeneration = directReaderStreamGeneration
         val identity = candidate.layoutIdentity()
         readerChapterPaginationJobs.remove(chapterIndex)?.job?.cancel()
+        // 这一章正在按新依据重排：旧页还挂在表上撑画面，但不再算"可用暖页"。
+        directReaderChapterPagesSource.remove(chapterIndex)
         // 旧任务作废：它流出一半的页可能是按旧正文/旧几何排的，必须先撤掉，否则新任务排出的
         // 同 id 页会被"已经存在"挡掉，页表里反而留下旧内容的那几页。
         clearStreamedReaderChapter(chapterIndex)
@@ -1472,6 +1531,7 @@ class ReadBookController(
                 applyDirectReaderPaginationBatch(
                     environmentKey = environmentKey,
                     chapter = candidate,
+                    layoutIdentity = identity,
                     batch = collectLegacyReaderPaginationBatch(
                         chapterIndex,
                         listOf(chapterIndex to result),
@@ -1491,6 +1551,7 @@ class ReadBookController(
     private fun applyDirectReaderPaginationBatch(
         environmentKey: String?,
         chapter: ReaderChapterInput,
+        layoutIdentity: LegacyReaderChapterLayoutIdentity,
         batch: LegacyReaderPaginationBatch,
         paginationGeneration: Long,
     ) {
@@ -1520,6 +1581,14 @@ class ReadBookController(
             }
             directReaderPages = (retainedPages + replacementPages)
                 .sortedWith(compareBy({ it.id.chapterIndex }, { it.id.pageIndex }))
+            // 记下这一批页的出处（本章内容身份 + 排版环境），暖页复用靠它判断依据有没有变。
+            // 身份用任务启动时那一份：这些页就是按它排出来的，此刻重算可能已经拿到重新加载后的
+            // 新正文，记成新的会把旧内容的页判成"出处对得上"直接复用。
+            // 排不出页（Unsupported / 排版异常）也记下：否则"没有出处"会让这一章在每次发布时
+            // 重排→失败→再发布，转成死循环；失败提示与手动重试仍由 updateReaderPaginationError
+            // 和 retryComposeReaderPagination 负责（重建会连出处一起作废）。
+            directReaderChapterPagesSource[chapterIndex] =
+                ReaderChapterPagesSource(layoutIdentity, environmentKey)
             // 批次提交即"这一章排完了"（旧 `TextChapter.isCompleted = true`）：撤掉流出态与尾部承接页。
             directReaderStreamingChapters.removeAll(replacementChapterIndexes)
             directReaderStreamedPages.keys.removeAll(replacementChapterIndexes)
@@ -1620,7 +1689,18 @@ class ReadBookController(
         // java.getThemeConfig() 产出与主题相关的图片），而不是因为清了解码缓存。
         // Compose 不重建 Activity，这里走与样式方案切换相同的路径：
         // 重下当前窗口图片 → 替换位图 → loadContent(false) 重新处理正文并重排。
-        if (modeChanged) refreshInlineImagesThenReload()
+        if (modeChanged) {
+            // 正文/标题/文字阴影/页底下划线四类色已经在上面原地改过，页面背景和九宫格底图是绘制期
+            // 取的，都不必重排。剩下的是**排版期才按日夜解析一次、烧进页里**的那些：高亮规则的
+            // `*Night` 字色/底色/下划线（`LegacyReaderStyleRangeMapper.resolveModeColor`）和替换
+            // 规则定色的文本区间。排版环境 key 不含颜色，所以只重发窗口会原样复用暖页 ——
+            // 表现就是「切了日夜，规则色要退出书籍重进才变」。系统深色跟随与主题设置页只走到这里
+            // （不经 ReadConfigUpdateBus），所以这里按日夜按钮相同的语义作废一次：暖页出处清空后
+            // 当前章与邻章都会按新模式重排，旧页仍留在表上撑画面，不会闪加载页。
+            val nightTheme = ReadStyleResolver.isNightTheme()
+            if (directReaderPagesNightTheme != nightTheme) rebuildDirectReaderPages()
+            refreshInlineImagesThenReload()
+        }
         upSystemUiVisibility()
         LogUtils.d(
             "ReadBookTheme",
