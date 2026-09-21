@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.util.ceil
 import androidx.compose.ui.platform.LocalDensity
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
@@ -290,7 +292,7 @@ private fun FieldMode(
         GradientSlider(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(32.dp),
+                .height(26.dp),
             gradientBrush = Brush.horizontalGradient(
                 colors = (0..360 step 30).map { Color.hsv(it.toFloat(), 1f, 1f) }
             ),
@@ -304,7 +306,7 @@ private fun FieldMode(
         GradientSlider(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(32.dp),
+                .height(26.dp),
             gradientBrush = Brush.horizontalGradient(
                 colors = listOf(
                     opaqueColor.copy(alpha = 0f),
@@ -328,7 +330,8 @@ private fun SaturationValuePanel(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val thumbSizeDp = 28.dp
+    // 与 Miuix ColorPalette 内置滑块同款：20dp 空心圆环取色点
+    val thumbSizeDp = 20.dp
     var panelWidthPx by remember { mutableFloatStateOf(0f) }
     var panelHeightPx by remember { mutableFloatStateOf(0f) }
     val shape = RoundedCornerShape(16.dp)
@@ -382,17 +385,38 @@ private fun SaturationValuePanel(
     }
 }
 
-/** 选中指示「空心圆环」：与色板网格上的取色圆点同款——白色粗描边圆环，中心透出所选颜色 */
+/** 选中指示「空心圆环」：与色板网格取色点同款——6dp 白色描边圆环 + 外围柔光，中心透出所选颜色 */
 @Composable
 private fun SelectionRing(modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
     Box(
-        modifier = modifier.drawBehind {
-            val stroke = size.minDimension * 0.34f
-            drawCircle(
-                color = Color.White,
-                radius = (size.minDimension - stroke) / 2f,
-                style = Stroke(width = stroke),
+        modifier = modifier.drawWithCache {
+            val strokeWidth = with(density) { 6.dp.toPx() }
+            val halfStroke = strokeWidth / 2f
+            val glowSpread = with(density) { 2.dp.toPx() }
+            val glowColor = Color.Black.copy(alpha = 0.25f)
+
+            val ringCenterRadius = (size.minDimension / 2f) - halfStroke
+            val gradientRadius = ringCenterRadius + halfStroke + glowSpread
+
+            val glowBrush = Brush.radialGradient(
+                colorStops = listOf(
+                    ((ringCenterRadius - halfStroke - glowSpread).coerceAtLeast(0f) / gradientRadius) to Color.Transparent,
+                    ((ringCenterRadius - halfStroke) / gradientRadius) to glowColor,
+                    ((ringCenterRadius + halfStroke) / gradientRadius) to glowColor,
+                    ((ringCenterRadius + halfStroke + glowSpread) / gradientRadius) to Color.Transparent,
+                ).toTypedArray(),
+                radius = gradientRadius,
             )
+
+            onDrawBehind {
+                drawCircle(brush = glowBrush, radius = gradientRadius)
+                drawCircle(
+                    color = Color.White,
+                    radius = ringCenterRadius,
+                    style = Stroke(width = strokeWidth),
+                )
+            }
         }
     )
 }
@@ -406,7 +430,8 @@ private fun GradientSlider(
     checkerboard: Boolean = false,
 ) {
     val density = LocalDensity.current
-    val thumbSizeDp = 28.dp
+    // 与 Miuix ColorPalette 内置滑块同款：20dp 空心圆环滑块头
+    val thumbSizeDp = 20.dp
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
 
     Box(
@@ -417,19 +442,23 @@ private fun GradientSlider(
             .clip(RoundedCornerShape(percent = 50))
             .drawBehind {
                 if (checkerboard) {
-                    // 透明度滑块底色：明暗交替棋盘格，透出「此处是透明」
-                    val cell = size.height / 4f
-                    val lightColor = Color(0xFFE0E0E0)
-                    val darkColor = Color(0xFFBDBDBD)
-                    val columns = (size.width / cell).toInt() + 1
-                    val rows = 4
+                    // 与 Miuix drawCheckerboard 同款：3dp 小格棋盘，透出「此处是透明」
+                    val cell = with(density) { 3.dp.toPx() }.coerceAtLeast(1f)
+                    val rows = ceil(size.height / cell).toInt().coerceAtLeast(1)
+                    drawRect(color = Color(0xFFCCCCCC))
+                    val darkColor = Color(0xFFAAAAAA)
                     for (row in 0 until rows) {
-                        for (col in 0 until columns) {
+                        var x = if (row % 2 == 0) cell else 0f
+                        while (x < size.width) {
                             drawRect(
-                                color = if ((row + col) % 2 == 0) lightColor else darkColor,
-                                topLeft = Offset(col * cell, row * cell),
-                                size = Size(cell, cell),
+                                color = darkColor,
+                                topLeft = Offset(x, row * cell),
+                                size = Size(
+                                    min(x + cell, size.width) - x,
+                                    min((row + 1) * cell, size.height) - row * cell,
+                                ),
                             )
+                            x += cell * 2f
                         }
                     }
                 }
