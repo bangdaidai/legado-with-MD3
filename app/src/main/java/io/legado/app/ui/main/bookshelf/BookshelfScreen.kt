@@ -13,7 +13,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -1415,7 +1414,10 @@ private fun moveBookToFront(
 ): ImmutableList<BookUiItem> {
     val index = books.indexOfFirst { it.book.bookUrl == bookUrl }
     if (index <= 0) return books
-    return books.removeAt(index).add(0, books[index]).toImmutableList()
+    // ImmutableList 没有 removeAt；先在可变副本里"取出再插到头部"，再冻结返回
+    val reordered = books.toMutableList()
+    reordered.add(0, reordered.removeAt(index))
+    return reordered.toImmutableList()
 }
 
 /**
@@ -1595,11 +1597,13 @@ fun BookshelfPage(
             itemsIndexed(displayBooks, key = { _, item -> item.book.bookUrl }) { index, bookUi ->
                 // 转场冻结释放后的重排（如刚读的书从原格移到第 1 格）没有位移动画就会瞬移；
                 // 编辑拖拽时禁用，避免与 reorderable 库自己的拖拽动画互相干扰。
+                // animateItem() 在当前 foundation 版本只做位移动画，已无 fadeSpec 形参
+                //（淡入淡出由独立的可见性修饰符控制），与项目内其他列表用法一致。
                 Box(
                     modifier = if (canReorderBooks) {
                         Modifier
                     } else {
-                        Modifier.animateItem(fadeSpec = EnterTransition.None)
+                        Modifier.animateItem()
                     }
                 ) {
                     val isSelected = selectedBookUrls.contains(bookUi.book.bookUrl)
