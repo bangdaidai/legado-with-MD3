@@ -288,6 +288,8 @@ class BookInfoViewModel(
     private var observingReadRecordKey: String? = null
     private var chapterChanged = false
 
+    /** 命中重复、等待用户在冲突 Sheet 上选择共存还是迁移的那本书。 */
+
     var inBookshelf = false
         private set
     var bookSource: BookSource? = null
@@ -542,6 +544,12 @@ class BookInfoViewModel(
 
             BookInfoIntent.GroupClick -> setSheet(BookInfoSheet.GroupPicker)
             BookInfoIntent.ChangeSourceClick -> currentBook?.uiCopy()
+                ?.apply {
+                    // 详情页的 currentBook 多来自书源解析结果，并不带 notShelf 标记，而它才是
+                    // 「未上架」的唯一事实来源。这里按 inBookshelf 如实补位，换源 Sheet 才能
+                    // 知道不需要询问「新增还是替换」。
+                    if (!inBookshelf) addType(BookType.notShelf)
+                }
                 ?.let { setSheet(BookInfoSheet.SourcePicker(it)) }
             BookInfoIntent.ReadRecordClick -> setSheet(BookInfoSheet.ReadRecord)
             BookInfoIntent.RemarkClick -> showDialog(BookInfoDialog.EditRemark(currentBook?.remark))
@@ -1040,6 +1048,12 @@ class BookInfoViewModel(
         }
     }
 
+    /**
+     * 「另存新书」入架。
+     *
+     * 这里**有意不做查重**：该入口只由换源 Sheet 的「新增书籍」选项触发，查重由 Sheet 侧的
+     * 同名同作者同形态判断完成（不允许同名时走静默替换），避免同一动作被问两次。
+     */
     fun addToBookshelf(book: Book, toc: List<BookChapter>, success: (() -> Unit)? = null) {
         execute {
             addToBookshelfUseCase.execute(book)
@@ -1720,14 +1734,15 @@ class BookInfoViewModel(
             clearReadRecordObserve()
             return
         }
-        val key = "${book.name}|||${book.author}"
+        // 阅读统计按书籍副本统计：书架允许同名作者作品共存，不能让一个副本继承另一个副本的时长。
+        val key = "${book.name}|||${book.author}|||${book.bookUrl}"
         if (observingReadRecordKey == key && readRecordObserveJob?.isActive == true) return
         observingReadRecordKey = key
         readRecordObserveJob?.cancel()
         readRecordObserveJob = viewModelScope.launch {
             combine(
-                readRecordRepository.getBookReadTime(book.name, book.author),
-                readRecordRepository.getBookTimelineDays(book.name, book.author)
+                readRecordRepository.getBookCopyReadTime(book.bookUrl, book.name, book.author),
+                readRecordRepository.getBookCopyTimelineDays(book.bookUrl, book.name, book.author)
             ) { totalTime, timelineDays ->
                 totalTime to timelineDays
             }.collectLatest { (totalTime, timelineDays) ->

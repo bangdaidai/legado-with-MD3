@@ -51,8 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import io.legado.app.data.entities.SearchBook
 import io.legado.app.R
+import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.BookShelfState
 import io.legado.app.ui.main.bookCoverSharedElementKey
 import io.legado.app.ui.theme.LegadoTheme
@@ -74,10 +74,12 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import io.legado.app.utils.toastOnUi
 import org.koin.androidx.compose.koinViewModel
 import io.legado.app.ui.theme.fadingEdge
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.explore.exploreKindKey
+import splitties.init.appCtx
 
 private enum class BookFilterState(val id: Int) {
     SHOW_ALL(0),
@@ -120,7 +122,7 @@ fun ExploreShowRouteScreen(
                     effect.sharedCoverKey,
                 )
 
-                is ExploreShowEffect.ShowMessage -> {}
+                is ExploreShowEffect.ShowMessage -> appCtx.toastOnUi(effect.message)
             }
         }
     }

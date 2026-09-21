@@ -17,7 +17,6 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.TagManager
 import io.legado.app.help.book.isLocal
-import io.legado.app.help.book.removeType
 import io.legado.app.model.ReadBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.mapAsync
@@ -106,7 +105,6 @@ class ChangeBookSourceUseCase(
             readSettingsGateway.currentSettings.chineseConverterType,
             keepOfficialMeta = options.keepOfficialMeta,
         )
-        newBook.removeType(BookType.updateError)
         return newBook
     }
 

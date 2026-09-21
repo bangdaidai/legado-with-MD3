@@ -472,8 +472,8 @@ private fun MarkingFloatingPanel(
 internal fun MarkingColorRow(
     selectedColor: Int,
     onColorSelected: (Int) -> Unit,
+    onColorLongPress: (Int) -> Unit,
     onCustomColorClick: () -> Unit,
-    onColorLongPress: (Int) -> Unit = onCustomColorClick,
 ) {
     Row(
         modifier = Modifier
@@ -522,11 +522,13 @@ private fun MarkingColorSwatch(
         modifier = Modifier
             .size(32.dp)
             .clip(CircleShape)
-            .background(
+            // background 的 Color/Brush 两个重载不能靠 when 的公共父类型选择，
+            // 分支里 Color 和 Brush 混用时推断成 Any 会编译失败，改为整体给 Modifier。
+            .then(
                 when {
-                    color != null -> Color(color)
-                    palette -> Brush.sweepGradient(MarkingPaletteWheel)
-                    else -> LegadoTheme.colorScheme.surfaceContainerHigh
+                    color != null -> Modifier.background(Color(color))
+                    palette -> Modifier.background(Brush.sweepGradient(MarkingPaletteWheel))
+                    else -> Modifier.background(LegadoTheme.colorScheme.surfaceContainerHigh)
                 }
             )
             .border(2.dp, borderColor, CircleShape)

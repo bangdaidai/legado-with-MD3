@@ -80,9 +80,7 @@ import io.legado.app.model.activeReadAloudProgress
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
-import io.legado.app.model.translation.TranslationChapterKey
 import io.legado.app.model.translation.TranslationChapterStatus
-import io.legado.app.model.translation.TranslationManager
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.sheet.ReaderBookSheetTab
 import io.legado.app.ui.book.searchContent.SearchResult
@@ -238,12 +236,15 @@ class ReadBookViewModel(
         highlightRuleRepository = highlightRuleRepository,
         saveMarkingUseCase = saveMarkingUseCase,
         host = object : MarkingDelegate.Host {
-            override fun reloadCurrentChapter() {
-                contentProcessDelegate.reloadCurrentChapterPreservingSnapshot()
+            override val activeSheet: ReadBookSheet?
+                get() = _uiState.value.activeSheet
+
+            override fun setActiveSheet(sheet: ReadBookSheet?) {
+                _uiState.update { it.copy(activeSheet = sheet) }
             }
 
-            override fun dismissMarkingSheet() {
-                restoreMarkingReturnSheet()
+            override fun reloadCurrentChapter() {
+                contentProcessDelegate.reloadCurrentChapterPreservingSnapshot()
             }
 
             override fun openMarkingSheet() {
@@ -403,6 +404,13 @@ class ReadBookViewModel(
 
         override suspend fun listChapters(bookUrl: String): List<BookChapter> =
             bookRepository.getChapters(bookUrl)
+
+        override val translationStatus: TranslationChapterStatus
+            get() = _uiState.value.translationStatus
+
+        override fun updateTranslationStatus(status: TranslationChapterStatus) {
+            _uiState.update { it.copy(translationStatus = status) }
+        }
     }
 
     private val aiDelegate by lazy { ReadAiDelegate(
@@ -696,8 +704,6 @@ class ReadBookViewModel(
     val readPreferences = _readPreferences.asStateFlow()
 
     private var pendingBooksDirReloadChapterList: Boolean = false
-    private var translationStatusJob: Job? = null
-    private var observedTranslationKey: TranslationChapterKey? = null
     private var deferredReaderFeaturesStarted = false
 
     val isInitFinish: Boolean get() = _uiState.value.isInitFinish
@@ -1355,6 +1361,7 @@ class ReadBookViewModel(
             is ReadBookIntent.UpdateHighlightRuleImportItem ->
                 highlightRuleDelegate.updateImportItem(intent.index, intent.rule)
             is ReadBookIntent.SaveImportedHighlightRules -> highlightRuleDelegate.saveImported()
+            is ReadBookIntent.ShowHighlightRulePresets -> highlightRuleDelegate.showPresets()
             is ReadBookIntent.ExportHighlightRules -> {
                 _effects.tryEmit(ReadBookEffect.OpenHighlightRuleExportPicker)
             }
@@ -2045,6 +2052,7 @@ class ReadBookViewModel(
             titleFont = config.titleFont,
             pageAnim = actualConfig.getPageAnim(),
             pageAnimEInk = actualConfig.getPageAnimEInk(),
+            pageAnimSpeed = actualConfig.getPageAnimSpeed(),
             shareLayout = config.shareLayout,
             menuBgColorDay = dur.menuBgColor(isNight = false),
             menuBgColorNight = dur.menuBgColor(isNight = true),
@@ -2144,7 +2152,7 @@ class ReadBookViewModel(
         val chapterInput = ReadBook.readerChapterInputWindow.current
         val canvasPage = composePagePosition
             ?.takeIf { it.chapterIndex == ReadBook.durChapterIndex }
-        val translationStatus = observeCurrentTranslation(book, ReadBook.durChapterIndex)
+        val translationStatus = aiDelegate.observeChapterTranslation(book, ReadBook.durChapterIndex)
         return current.copy(
             book = book,
             bookSource = ReadBook.bookSource,
@@ -2226,42 +2234,6 @@ class ReadBookViewModel(
                 titleBarCompact = ReadBookConfig.titleBarCompact,
             ),
         )
-    }
-
-    private fun observeCurrentTranslation(
-        book: Book?,
-        chapterIndex: Int,
-    ): TranslationChapterStatus {
-        val key = book
-            ?.takeIf { it.getTranslationMode() }
-            ?.let { TranslationChapterKey(it.bookUrl, chapterIndex) }
-        if (key == observedTranslationKey && translationStatusJob?.isActive == true) {
-            return _uiState.value.translationStatus
-        }
-
-        translationStatusJob?.cancel()
-        val taskFlow = key?.let {
-            TranslationManager.getChapterTaskStateFlow(it.bookUrl, it.chapterIndex)
-        }
-        if (taskFlow == null) {
-            observedTranslationKey = null
-            return TranslationChapterStatus.Idle
-        }
-
-        observedTranslationKey = key
-        translationStatusJob = viewModelScope.launch {
-            taskFlow.takeWhile { taskState ->
-                if (observedTranslationKey == taskState.key) {
-                    _uiState.update { state ->
-                        state.copy(translationStatus = taskState.status)
-                    }
-                }
-                taskState.status == TranslationChapterStatus.Translating ||
-                    taskState.status == TranslationChapterStatus.Thinking
-            }.collect {}
-            if (observedTranslationKey == key) observedTranslationKey = null
-        }
-        return taskFlow.value.status
     }
 
     private fun calculateSeekProgress(): Int {
@@ -2813,7 +2785,6 @@ class ReadBookViewModel(
     }
 
     override fun onCleared() {
-        translationStatusJob?.cancel()
         super.onCleared()
         if (BaseReadAloudService.isRun && BaseReadAloudService.pause) {
             ReadAloud.stop(context)

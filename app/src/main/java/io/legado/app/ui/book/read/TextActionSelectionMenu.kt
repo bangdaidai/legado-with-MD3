@@ -635,6 +635,16 @@ private class MoreMenuPositionProvider(
     }
 }
 
+/**
+ * 选区浮层的落位规则，并把整个选区与末端选择柄留在浮层之外。
+ * 默认有上方空间就贴着选区上沿向上展开；[preferBelow] 为 true 时反过来，
+ * 默认贴着选区下沿展开，只有下方放不下且上方放得下时才上翻。
+ *
+ * [TextActionSelectionMenu] 与笔记悬浮面板（MarkingSheet 的 MarkingFloatingPanel）共用该定位器：
+ * 两者在同一次选区里互相切换，落位口径必须一致，否则切换时浮层会跳。
+ * 划词菜单保持默认「上方优先」；笔记面板传 [TextMenuPositionProvider.preferBelow]
+ * 走「下方优先」——改样式要盯的是选区本身，盖后文比盖前文更可接受。
+ */
 internal class TextMenuPositionProvider(
     private val density: Float,
     private val startX: Int,
@@ -661,12 +671,9 @@ internal class TextMenuPositionProvider(
         val cursorHandleClearance = (14 * density).toInt()
 
         val cardHeight = popupContentSize.height - shadowPadding * 2
-        val isSpaceEnoughAtTop = startTopY > cardHeight + textMargin + marginVertical
-        // 仅阅读区域最顶部 10% 的选区优先在下方展开；其余位置遵循原本“有上方空间
-        // 就放上方”的策略，避免菜单在普通位置不必要地遮挡后文。
-        val preferBelowForTopSelection = startTopY < windowSize.height / 10
         val isSpaceEnoughBelowSelection = windowSize.height - endBottomY >
                 cardHeight + textMargin + cursorHandleClearance + marginVertical
+        val isSpaceEnoughAtTop = startTopY > cardHeight + textMargin + marginVertical
 
         if (preferBelow) {
             // 标记卡落位（上游同规则）：默认在选区下方展开，只有下方放不下卡片

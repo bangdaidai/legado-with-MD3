@@ -11,14 +11,14 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
-import io.legado.app.data.repository.SearchRepository
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.model.settings.ChangeSourceSettings
+import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.domain.usecase.ChangeSourceSearchEvent
 import io.legado.app.domain.usecase.ChangeSourceSearchUseCase
-import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.help.book.formTypeMask
 import io.legado.app.help.book.isWebFile
@@ -31,8 +31,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
@@ -127,6 +127,14 @@ class ChangeBookSourceComposeViewModel(
                 book.formTypeMask,
             )
             onMain { onResult(conflict) }
+        }
+    }
+
+    /** 用户选中某本书架作品后取回完整实体，用于按换源语义执行迁移。 */
+    fun loadShelfBook(bookUrl: String, onResult: (Book?) -> Unit) {
+        viewModelScope.launch(IO) {
+            val book = bookRepository.getBook(bookUrl)
+            onMain { onResult(book) }
         }
     }
 

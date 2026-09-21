@@ -771,7 +771,9 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                             markingId = item.markingId,
                             chapterPosition = item.chapterPosition,
                             paragraphIndex = paragraphIndex,
-                            // 富文本逐项样式：与前一项同背景图才视作同一 run 的延续
+                            // 富文本逐项样式：与前一项同背景图才视作同一 run 的延续。
+                            // 比较「绘制用实例」，非九宫格背景图同样要拿到放行标记，
+                            // 否则字间距会把它切成逐字绘制。
                             continuesBackgroundRun = itemBackground != null &&
                                     itemIndex > 0 &&
                                     itemFrame(from + itemIndex - 1) == itemBackground,

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.explore
 
+import android.content.res.Configuration
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.SearchBook
@@ -7,17 +8,18 @@ import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.R
 import io.legado.app.data.repository.ExploreRepository
 import io.legado.app.domain.model.BookShelfState
+import io.legado.app.data.local.preferences.LocalPreferencesKeys
+import io.legado.app.data.repository.ExploreRepository
+import io.legado.app.data.repository.SettingsRepository
+import io.legado.app.domain.gateway.CoverSettingsGateway
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.BookShelfKey
 import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ResolveBookShelfStateUseCase
 import io.legado.app.domain.usecase.SaveSearchBooksUseCase
-import io.legado.app.domain.gateway.CoverSettingsGateway
-import android.content.res.Configuration
-import io.legado.app.data.local.preferences.LocalPreferencesKeys
-import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.utils.stackTraceStr
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -25,7 +27,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import splitties.init.appCtx
 

@@ -8,6 +8,7 @@ import androidx.annotation.Keep
 import androidx.room.withTransaction
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import androidx.room.withTransaction
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -62,13 +63,11 @@ import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
-import io.legado.app.data.entities.readRecord.ReadRecordSession
 import io.legado.app.data.entities.readRecord.ReadRecordIdentity
+import io.legado.app.data.entities.readRecord.ReadRecordSession
 import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.domain.gateway.AppLocaleGateway
 import io.legado.app.domain.gateway.ReadStyleGateway
-import io.legado.app.ui.book.read.ConfigUpdateAction
-import io.legado.app.ui.book.read.ReadConfigUpdateBus
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.book.isLocal
@@ -80,6 +79,8 @@ import io.legado.app.help.config.SettingsWriter
 import io.legado.app.help.config.ThemeConfigStore
 import io.legado.app.model.BookCover
 import io.legado.app.model.localBook.LocalBook
+import io.legado.app.ui.book.read.ConfigUpdateAction
+import io.legado.app.ui.book.read.ReadConfigUpdateBus
 import io.legado.app.utils.ACache
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -710,6 +711,7 @@ object Restore : KoinComponent {
             localSession.deviceId,
             localSession.bookName,
             localSession.bookAuthor,
+            localSession.bookUrl,
             localSession.startTime,
             localSession.endTime,
             localSession.words
