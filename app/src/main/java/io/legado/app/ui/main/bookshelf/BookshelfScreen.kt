@@ -13,6 +13,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -147,6 +148,7 @@ import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -929,8 +931,11 @@ fun BookshelfScreen(
                             gridState = standaloneSearchGridState,
                             paddingValues = paddingValues,
                             books = rememberBooksHeldDuringEnter(
-                                uiState.items,
-                                animatedVisibilityScope,
+                                snapshotKey = "search:$currentGroupId",
+                                books = uiState.items,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                // 搜索结果列表的顺序不由阅读时间决定，只冻结不预排
+                                predictMoveToFrontOnReturn = false,
                             ),
                             uiState = uiState,
                             selectedBookUrls = selectedBookUrls,
@@ -967,15 +972,23 @@ fun BookshelfScreen(
                             val group = uiState.groups.getOrNull(pageIndex)
                             if (group != null) {
                                 val isSelectedGroup = group.groupId == uiState.selectedGroupId
+                                // "按最近阅读"（else 分支）和"按最近阅读/更新"（4）都以阅读时间倒序为准，
+                                // 刚读过的书返回后必然落第 1 格，返程转场可以按最终顺序预排位
+                                val groupEffectiveSort = group.bookSort.takeIf { it >= 0 }
+                                    ?: uiState.bookshelfSort
                                 val books = rememberBooksHeldDuringEnter(
-                                    uiState.visibleGroupBooks[group.groupId]
+                                    snapshotKey = "group:${group.groupId}",
+                                    books = uiState.visibleGroupBooks[group.groupId]
                                         ?: persistentListOf(),
-                                    animatedVisibilityScope,
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    predictMoveToFrontOnReturn =
+                                        (groupEffectiveSort == 4 ||
+                                                groupEffectiveSort !in 1..5) &&
+                                                uiState.bookshelfSortOrder == 1,
                                 )
                                 val canReorderBooks = isEditMode &&
                                         !uiState.isSearch &&
-                                        (group.bookSort.takeIf { it >= 0 }
-                                            ?: uiState.bookshelfSort) == 3 &&
+                                        groupEffectiveSort == 3 &&
                                         isSelectedGroup
                                 BookshelfPage(
                                     gridState = groupGridStates.getValue(group.groupId),
@@ -1007,7 +1020,15 @@ fun BookshelfScreen(
                                         if (isSelectedGroup) onIntent(BookshelfIntent.FinishDragging)
                                     },
                                     onGlobalSearch = { onNavigateToSearch(uiState.searchKey.trim()) },
-                                    onBookClick = onBookClick,
+                                    onBookClick = { book, coverKey ->
+                                        // 记录本次开书，供返回转场按最终顺序预排位
+                                        recordBookshelfOpenHint(
+                                            snapshotKey = "group:${group.groupId}",
+                                            gridState = groupGridStates.getValue(group.groupId),
+                                            bookUrl = book.bookUrl,
+                                        )
+                                        onBookClick(book, coverKey)
+                                    },
                                     onBookLongClick = onBookLongClick,
                                     isCurrentPage = isSelectedGroup,
                                     sharedCoverGroupId = group.groupId,
@@ -1362,31 +1383,89 @@ private data class BookshelfEditStickySummary(
 )
 
 /**
- * 进入转场期间冻结书架列表。
+ * 书架列表快照：进入/返回转场期间冻结顺序用。
+ *
+ * NavDisplay 在去程转场结束后会销毁书架组合，`remember` 无法跨组合存活，
+ * 快照必须放在组合外；稳定帧持续刷新，转场中只认快照。
+ */
+private val bookshelfOrderSnapshots = mutableMapOf<String, ImmutableList<BookUiItem>>()
+
+/** 从书架某列表页最后点开过的书（与 [bookshelfOrderSnapshots] 同 key），返回转场预排位用。 */
+private val bookshelfOpenHints = mutableMapOf<String, BookshelfOpenHint>()
+
+private data class BookshelfOpenHint(val bookUrl: String, val atTop: Boolean)
+
+/** 点击开书时记录：书名 + 当时列表是否停在顶部（第一行未被标题栏裁切）。 */
+private fun recordBookshelfOpenHint(
+    snapshotKey: String,
+    gridState: LazyGridState,
+    bookUrl: String,
+) {
+    // 只有第一行完整可见时才允许预排位：预排后该书的新槽位（第 1 格）必然处于组合中，
+    // sharedBounds 目标不会失锚；被裁切时闪左上角的旧问题会复发，退回"冻结旧顺序"兜底。
+    val atTop = gridState.firstVisibleItemIndex == 0 &&
+            gridState.firstVisibleItemScrollOffset == 0
+    bookshelfOpenHints[snapshotKey] = BookshelfOpenHint(bookUrl, atTop)
+}
+
+/** 按"最近阅读倒序"的最终结果预排：刚读过的书时间戳最新，必然落到第 1 格。 */
+private fun moveBookToFront(
+    books: ImmutableList<BookUiItem>,
+    bookUrl: String,
+): ImmutableList<BookUiItem> {
+    val index = books.indexOfFirst { it.book.bookUrl == bookUrl }
+    if (index <= 0) return books
+    return books.removeAt(index).add(0, books[index]).toImmutableList()
+}
+
+/**
+ * 转场期间冻结书架列表，并在返回方向按最终顺序预排位。
  *
  * 从阅读页返回时阅读时间落库触发重排（默认按最近阅读倒序），重排列表往往在 pop
  * 转场开始后的几帧才重新发射；被点那本书的封面槽位随之从第 N 格跳到第 1 格，
- * sharedBounds 目标矩形中途失锚，封面会闪现到屏幕角落再拉回。首屏完整可见时
- * 跳变发生在可见区最明显；列表上滑后新槽位被标题栏裁掉，观感上反而是正常的。
- * 转场未落定前保持进入首帧的列表，落定后一次性应用新顺序：封面先平滑飞回
- * 原槽位，随后列表重排。
+ * sharedBounds 目标矩形中途失锚，封面会闪现到屏幕角落再拉回。
+ *
+ * 因此转场未落定前一律使用组合外快照（[bookshelfOrderSnapshots]）里的顺序：
+ * - 去程（书架 Visible → 隐藏）：冻结在离开前的顺序，列表不在点击瞬间跳动；
+ * - 返程且列表原本停在顶部、且排序是"按阅读时间倒序"系（默认/含更新时间）：
+ *   直接展示"点开的那本书移到第 1 格"的最终顺序，封面一段动画直接飞向第 1 格，
+ *   落定后真实数据与预排一致，不再出现"飞回原位→瞬移到第一"的两段跳脱；
+ * - 其余情况（滚动中/其它排序/升序）：退回冻结旧顺序，封面先飞回原槽位，
+ *   落定后由格子项的 animateItem 位移动画平滑滑到新位置。
  */
 @Composable
 private fun rememberBooksHeldDuringEnter(
+    snapshotKey: String,
     books: ImmutableList<BookUiItem>,
     animatedVisibilityScope: AnimatedVisibilityScope?,
+    predictMoveToFrontOnReturn: Boolean,
 ): ImmutableList<BookUiItem> {
     if (animatedVisibilityScope == null) return books
     val transition = animatedVisibilityScope.transition
     val entering = transition.currentState != EnterExitState.Visible ||
         transition.targetState != EnterExitState.Visible
-    var held by remember { mutableStateOf(books) }
-    LaunchedEffect(entering, books) {
-        if (!entering) held = books
+    // currentState 已不是 Visible：处于（或刚从）隐藏态回来，才允许预排位；
+    // 去程 current 仍是 Visible，只冻结不预排，避免点击瞬间列表跳动。
+    val returning = transition.currentState != EnterExitState.Visible
+    val heldFallback = remember(snapshotKey) { mutableStateOf(books) }
+    LaunchedEffect(entering, books, snapshotKey) {
+        if (!entering) {
+            heldFallback.value = books
+            bookshelfOrderSnapshots[snapshotKey] = books
+            bookshelfOpenHints.remove(snapshotKey)
+        }
     }
-    return if (entering) held else books
+    if (!entering) return books
+    val frozen = bookshelfOrderSnapshots[snapshotKey] ?: heldFallback.value
+    val hint = if (returning && predictMoveToFrontOnReturn) {
+        bookshelfOpenHints[snapshotKey]?.takeIf { it.atTop }
+    } else {
+        null
+    }
+    return hint?.let { moveBookToFront(frozen, it.bookUrl) } ?: frozen
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookshelfPage(
     gridState: LazyGridState,
@@ -1514,86 +1593,96 @@ fun BookshelfPage(
             showFastScroll = showFastScroll
         ) {
             itemsIndexed(displayBooks, key = { _, item -> item.book.bookUrl }) { index, bookUi ->
-                val isSelected = selectedBookUrls.contains(bookUi.book.bookUrl)
-                val sharedCoverKey = bookCoverSharedElementKey(
-                    bookUi.book.bookUrl,
-                    "bookshelf:$sharedCoverGroupId"
-                )
-                ReorderableItem(
-                    state = reorderableState,
-                    key = bookUi.book.bookUrl,
-                    enabled = canReorderBooks
-                ) { isDragging ->
-                    BookItem(
-                        settings = uiState.settings,
-                        tagColorMap = if (uiState.enableCustomTagColors) tagColorMap else emptyMap(),
-                        excludedTags = excludedTags,
-                        bookUi = bookUi,
-                        modifier = Modifier
-                            .reorderAccessibility(
-                                index = index,
-                                itemCount = displayBooks.size,
-                                enabled = canReorderBooks,
-                            ) { from, to ->
-                                onDragStarted(displayBooks)
-                                onMoveBook(from, to, displayBooks)
-                                onDragFinished()
-                            }
-                            .then(
-                                if (canReorderBooks) {
-                                    Modifier.longPressDraggableHandle(
-                                        onDragStarted = {
-                                            onDragStarted(displayBooks)
-                                            hapticFeedback.performHapticFeedback(
-                                                HapticFeedbackType.GestureThresholdActivate
-                                            )
-                                        },
-                                        onDragStopped = {
-                                            hapticFeedback.performHapticFeedback(
-                                                HapticFeedbackType.GestureEnd
-                                            )
-                                        }
-                                    )
-                                } else {
-                                    Modifier
+                // 转场冻结释放后的重排（如刚读的书从原格移到第 1 格）没有位移动画就会瞬移；
+                // 编辑拖拽时禁用，避免与 reorderable 库自己的拖拽动画互相干扰。
+                Box(
+                    modifier = if (canReorderBooks) {
+                        Modifier
+                    } else {
+                        Modifier.animateItem(fadeSpec = EnterTransition.None)
+                    }
+                ) {
+                    val isSelected = selectedBookUrls.contains(bookUi.book.bookUrl)
+                    val sharedCoverKey = bookCoverSharedElementKey(
+                        bookUi.book.bookUrl,
+                        "bookshelf:$sharedCoverGroupId"
+                    )
+                    ReorderableItem(
+                        state = reorderableState,
+                        key = bookUi.book.bookUrl,
+                        enabled = canReorderBooks
+                    ) { isDragging ->
+                        BookItem(
+                            settings = uiState.settings,
+                            tagColorMap = if (uiState.enableCustomTagColors) tagColorMap else emptyMap(),
+                            excludedTags = excludedTags,
+                            bookUi = bookUi,
+                            modifier = Modifier
+                                .reorderAccessibility(
+                                    index = index,
+                                    itemCount = displayBooks.size,
+                                    enabled = canReorderBooks,
+                                ) { from, to ->
+                                    onDragStarted(displayBooks)
+                                    onMoveBook(from, to, displayBooks)
+                                    onDragFinished()
                                 }
-                            )
-                            .graphicsLayer {
-                                alpha = if (isDragging) 0.5f else 1f
-                            },
-                        layoutMode = bookshelfLayoutMode,
-                        isSelected = isSelected,
-                        gridStyle = bookItemGridStyle,
-                        isCompact = bookItemIsCompact,
-                        isUpdating = uiState.updatingBooks.contains(bookUi.book.bookUrl),
-                        titleSmallFont = bookItemTitleSmallFont,
-                        titleCenter = bookItemTitleCenter,
-                        titleMaxLines = bookItemTitleMaxLines,
-                        coverShadow = bookItemCoverShadow,
-                        isSearchMode = uiState.isSearch,
-                        searchKey = uiState.searchKey,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        sharedCoverKey = sharedCoverKey,
-                        onClick = {
-                            if (uiState.isEditMode) {
-                                onToggleBookSelection(bookUi)
-                            } else {
-                                onBookClick(bookUi.book, sharedCoverKey)
-                            }
-                        },
-                        onLongClick = if (canReorderBooks) {
-                            null
-                        } else {
-                            {
+                                .then(
+                                    if (canReorderBooks) {
+                                        Modifier.longPressDraggableHandle(
+                                            onDragStarted = {
+                                                onDragStarted(displayBooks)
+                                                hapticFeedback.performHapticFeedback(
+                                                    HapticFeedbackType.GestureThresholdActivate
+                                                )
+                                            },
+                                            onDragStopped = {
+                                                hapticFeedback.performHapticFeedback(
+                                                    HapticFeedbackType.GestureEnd
+                                                )
+                                            }
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .graphicsLayer {
+                                    alpha = if (isDragging) 0.5f else 1f
+                                },
+                            layoutMode = bookshelfLayoutMode,
+                            isSelected = isSelected,
+                            gridStyle = bookItemGridStyle,
+                            isCompact = bookItemIsCompact,
+                            isUpdating = uiState.updatingBooks.contains(bookUi.book.bookUrl),
+                            titleSmallFont = bookItemTitleSmallFont,
+                            titleCenter = bookItemTitleCenter,
+                            titleMaxLines = bookItemTitleMaxLines,
+                            coverShadow = bookItemCoverShadow,
+                            isSearchMode = uiState.isSearch,
+                            searchKey = uiState.searchKey,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            sharedCoverKey = sharedCoverKey,
+                            onClick = {
                                 if (uiState.isEditMode) {
                                     onToggleBookSelection(bookUi)
                                 } else {
-                                    onBookLongClick(bookUi.book, sharedCoverKey)
+                                    onBookClick(bookUi.book, sharedCoverKey)
+                                }
+                            },
+                            onLongClick = if (canReorderBooks) {
+                                null
+                            } else {
+                                {
+                                    if (uiState.isEditMode) {
+                                        onToggleBookSelection(bookUi)
+                                    } else {
+                                        onBookLongClick(bookUi.book, sharedCoverKey)
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
