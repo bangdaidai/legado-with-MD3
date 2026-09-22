@@ -253,9 +253,11 @@ class ReaderChapterBlockMeasurer(
                                 chapterPosition = position,
                                 link = item.style.link,
                                 markingId = rangeStyle?.markingId,
+                                colorFromStyleRange = rangeStyle?.colorArgb != null,
                                 lineHeightPx = lineMetrics?.heightPx,
                                 baselineOffsetPx = lineMetrics?.baselineOffsetPx,
                                 baselineShiftPx = baselineShift,
+                                decorationExempt = leadingBlank,
                             )
                             offset += cluster.length
                         }

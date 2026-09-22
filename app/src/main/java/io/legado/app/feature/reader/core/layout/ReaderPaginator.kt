@@ -177,6 +177,10 @@ sealed interface ReaderMeasuredInlineItem {
         val baselineOffsetPx: Float? = null,
         /** Positive values move this glyph below the line baseline; negative values move it above. */
         val baselineShiftPx: Float = 0f,
+        /** 见 [ReaderElement.Text.colorFromStyleRange]。 */
+        val colorFromStyleRange: Boolean = false,
+        /** 排版期判定为段首空白，样式已置空；仍要带给绘制层，实时预览按同一口径跳过。 */
+        val decorationExempt: Boolean = false,
     ) : ReaderMeasuredInlineItem
 
     data class Image(
@@ -795,6 +799,8 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                             continuesBackgroundRun = currentBackground != null &&
                                     itemIndex > 0 &&
                                     drawnBackgroundOf(from + itemIndex - 1) == currentBackground,
+                            decorationExempt = item.decorationExempt,
+                            colorFromStyleRange = item.colorFromStyleRange,
                         )
                     }
 

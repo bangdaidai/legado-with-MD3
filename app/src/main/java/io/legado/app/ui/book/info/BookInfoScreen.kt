@@ -356,27 +356,9 @@ private fun BookInfoScreenContent(
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        with(sharedTransitionScope) {
-                            if (this != null &&
-                                sharedCoverKey != null &&
-                                animatedVisibilityScope?.transition?.isRunning == true
-                            ) {
-                                // 转场期把顶栏抬进共享覆盖层、置于封面元素之上：
-                                // 否则被提升的封面全程画在标题栏上方，落位瞬间才突然"沉底"。
-                                // 注意：当前编译版本没有 visible 形参，勿加。
-                                Modifier.renderInSharedTransitionScopeOverlay(
-                                    zIndexInOverlay = 1f,
-                                )
-                            } else {
-                                Modifier
-                            }
-                        }
-                    )
-            ) {
+            // 转场期把顶栏抬进共享覆盖层（renderInSharedTransitionScopeOverlay）会让顶栏脱离
+            // 页面转场、与滑出动画不同步，2026-09-22 真机否决；封面在标题栏处的沉底闪为已知旧瑕疵。
+            Box(modifier = Modifier.fillMaxWidth()) {
                 val statusBarHeight =
                     WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 BookInfoTopScrim(

@@ -122,6 +122,7 @@ import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.feature.reader.core.selection.ReaderSelectionPolicy
 import io.legado.app.feature.reader.core.selection.mergeSelectionBounds
 import io.legado.app.feature.reader.core.selection.selectionPages
+import io.legado.app.feature.reader.core.selection.stylePreviewBounds
 import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
 import io.legado.app.feature.reader.core.transition.CurlPoint
 import io.legado.app.feature.reader.core.transition.PageCurlFrame
@@ -1411,14 +1412,10 @@ fun ReaderCanvasSurface(
                             .filterIsInstance<ReaderElement.Text>()
                             .filter { it.markingId == hitElement.markingId }
                             .sortedBy { it.chapterPosition }
-                        // 段首空白在排版期就不参与高亮着色，点击重建选区时同样跳过，
-                        // 否则全角缩进空格会被框进背景。
-                        val first = markingElements.firstOrNull {
-                            !it.value.firstOrNull().isMarkingLeadingWhitespace()
-                        } ?: markingElements.firstOrNull()
-                        val last = markingElements.lastOrNull {
-                            !it.value.firstOrNull().isMarkingLeadingWhitespace()
-                        } ?: markingElements.lastOrNull()
+                        // 段首空白在排版期就不吃装饰，因此也不带 markingId：首末个被装饰
+                        // 的字就是重建选区的两端，全角缩进空格不会被框进背景。
+                        val first = markingElements.firstOrNull()
+                        val last = markingElements.lastOrNull()
                         if (first != null && last != null && onElementClick(hitElement)) {
                             // 划词菜单不弹：笔记弹层已由 onElementClick 打开。
                             // 选区仍要建立——样式实时预览要盖在它上绘制，
@@ -1747,10 +1744,6 @@ private fun pullBookmark(offset: Offset, height: Float, density: Float, mode: Re
 
 private class ReaderScrollBoundaryReached : CancellationException()
 
-/** 段首空白字符集，与 `ReaderChapterBlockMeasurer.isLeadingWhitespace` 保持一致。 */
-private fun Char?.isMarkingLeadingWhitespace(): Boolean =
-    this == ' ' || this == '\t' || this == '\u3000' || this?.code == 0x2002 || this?.code == 0x2003
-
 /** 旧 `ReadView.longPressTimeout`：长按判定的固定阈值（不是平台 `longPressTimeout`）。 */
 private const val LONG_PRESS_TIMEOUT_MILLIS = 600L
 
@@ -1881,9 +1874,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrollPageConte
     }
     val previewing = selectionPreviewStyle != null && activeSelection != null
     val previewBounds = if (previewing) {
-        data.textElements.filter { activeSelection.contains(it, page.id.chapterIndex) }
-            .map(ReaderElement.Text::bounds)
-            .mergeSelectionBounds()
+        activeSelection.stylePreviewBounds(data.textElements, page.id.chapterIndex)
     } else emptyList()
     val visibleTextBackgroundBands = if (previewing) {
         data.textElements.filterNot { activeSelection.contains(it, page.id.chapterIndex) }
@@ -2278,9 +2269,7 @@ private fun ReaderPageCanvas(
     }
     val previewBounds = remember(textElements, activeSelection, previewing) {
         if (previewing) {
-            textElements.filter { activeSelection.contains(it, page.id.chapterIndex) }
-                .map(ReaderElement.Text::bounds)
-                .mergeSelectionBounds()
+            activeSelection.stylePreviewBounds(textElements, page.id.chapterIndex)
         } else emptyList()
     }
     val textBackgroundSources = remember(textBackgrounds) {
@@ -2429,7 +2418,13 @@ private fun ReaderPage.withoutSelectionDecorations(selection: ReaderSelection): 
 private fun ReaderPage.previewBaseTextColor(selected: ReaderElement.Text): Int =
     elements.asSequence()
         .filterIsInstance<ReaderElement.Text>()
-        .filter { it.markingId == null && it.emphasized == selected.emphasized }
+        // 规则命中的字同样 markingId == null，但它吃的是规则文字色（背景图规则常配
+        // 对比色）。拿它当基准会把紧邻规则的笔记文字染成规则色，只有没被任何区间
+        // 改过色的正文才能作预览基准。
+        .filter {
+            it.markingId == null && !it.colorFromStyleRange &&
+                    it.emphasized == selected.emphasized
+        }
         .minByOrNull { kotlin.math.abs(it.chapterPosition - selected.chapterPosition) }
         ?.style?.colorArgb
         ?: selected.style.colorArgb

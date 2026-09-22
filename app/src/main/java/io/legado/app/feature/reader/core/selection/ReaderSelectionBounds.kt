@@ -1,5 +1,6 @@
 package io.legado.app.feature.reader.core.selection
 
+import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderRect
 /** Joins sequential glyph boxes on the same visual line into one continuous selection band. */
 fun List<ReaderRect>.mergeSelectionBounds(minimumLineOverlap: Float = 0.5f): List<ReaderRect> {
@@ -29,3 +30,16 @@ fun List<ReaderRect>.mergeSelectionBounds(minimumLineOverlap: Float = 0.5f): Lis
     }
     return result
 }
+
+/**
+ * 实时样式预览的落位矩形。段首空白在排版期就不吃装饰（旧 `clearLeadingWhitespaceStyles`
+ * 的口径，跨段笔记同样跳过），预览必须按同一规则筛字，否则选区是连续区间、
+ * 而正文是逐字样式——段首那截缩进会在预览里凭空多出一条线。
+ */
+fun ReaderSelection.stylePreviewBounds(
+    elements: List<ReaderElement.Text>,
+    pageChapterIndex: Int,
+): List<ReaderRect> = elements
+    .filter { contains(it, pageChapterIndex) && !it.decorationExempt }
+    .map(ReaderElement.Text::bounds)
+    .mergeSelectionBounds()

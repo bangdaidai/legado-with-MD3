@@ -106,6 +106,10 @@ sealed interface ReaderElement {
         val paragraphIndex: Int = -1,
         /** 同一行内紧随同背景图元素之后（对照旧 View TextLine 的行内连续绘制）。 */
         val continuesBackgroundRun: Boolean = false,
+        /** 文字色由规则或笔记区间覆盖而来，不能当作笔记预览的正文基准色。 */
+        val colorFromStyleRange: Boolean = false,
+        /** 段首空白：排版期就不吃高亮/笔记装饰（旧 `clearLeadingWhitespaceStyles`）。 */
+        val decorationExempt: Boolean = false,
     ) : ReaderElement {
         /** HTML links keep the legacy reader's accent priority, including during read-aloud. */
         fun resolvedColorArgb(accentColorArgb: Int): Int =

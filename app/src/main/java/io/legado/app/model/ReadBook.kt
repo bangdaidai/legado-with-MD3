@@ -146,6 +146,14 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     @Volatile
     var durChapterPos = 0
         private set
+
+    /**
+     * 最近一次"阅读位置确实推进"的保存发生在哪本书上。
+     * 书架返程转场的预排位据此判断封面能否直接飞第 1 格：只有真翻过页才预排，
+     * 点开看书架页/阅读页没翻页就返回的书保持原位。点击书架开书时清零。
+     */
+    @Volatile
+    var lastReadAdvancedUrl: String? = null
     var isLocalBook = true
     var chapterChanged = false
     @Volatile
@@ -1883,8 +1891,16 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         executor.execute {
             kotlin.runCatching {
                 book.lastCheckCount = 0
-                book.durChapterTime = System.currentTimeMillis()
                 val chapterChanged = book.durChapterIndex != durChapterIndex
+                // 只有阅读位置真的推进（换章或同章翻页）才算"读了"、才刷新最后阅读时间；
+                // 点开没翻页就返回不再触发书架"按最近阅读"重排。
+                // 时间戳同时充当窄保存的节流时钟（下方与 lastProgressSaveAt 比较），
+                // 未推进时比较双方同为旧值，节流语义不变。
+                val positionChanged = chapterChanged || book.durChapterPos != durChapterPos
+                if (positionChanged) {
+                    book.durChapterTime = System.currentTimeMillis()
+                    lastReadAdvancedUrl = book.bookUrl
+                }
                 book.durChapterIndex = durChapterIndex
                 book.durChapterPos = durChapterPos
                 if (!pageChanged || chapterChanged) {

@@ -283,6 +283,74 @@ class ReaderChapterBlockMeasurerTest {
         // 段首缩进空格不吞笔记/规则装饰（移植旧 clearLeadingWhitespaceStyles）
         assertEquals(listOf(null, null, "m", "m"), glyphs.map { it.markingId })
         assertEquals(listOf(null, null, 55, 55), glyphs.map { it.style.backgroundArgb })
+        // 豁免结论要随元素带到绘制层：实时预览按同一口径筛字，不能自己再判一遍空白
+        assertEquals(listOf(true, true, false, false), glyphs.map { it.decorationExempt })
+    }
+
+    @Test fun onlyBodyColoredGlyphsAreMarkingPreviewBaseColor() = runBlocking {
+        // 笔记紧邻一条带文字色的高亮规则：预览没配文字色的样式时，基准色只能取
+        // 未被任何区间改过色的正文，否则笔记文字会被染成规则色（背景图规则常配对比色）。
+        val ruleColor = 0xFFE0C0FF.toInt()
+        val source = ReaderChapterSource(1, "", listOf(
+            ReaderChapterSourceBlock.Paragraph(listOf(
+                ReaderChapterInlineSource.Text("甲乙丙", 0),
+            )),
+        ), 3)
+        val result = ReaderChapterBlockMeasurer(
+            bodyShaper = shaper,
+            titleShaper = shaper,
+            imageDimensionsResolver = { null },
+        ).measure(
+            source,
+            style.copy(styleRanges = listOf(
+                ReaderStyleRange(
+                    0, 1, ReaderStyleTarget.BODY,
+                    ReaderCharacterStyle(markingId = "m", backgroundArgb = 55), 10_000,
+                ),
+                ReaderStyleRange(
+                    1, 2, ReaderStyleTarget.BODY,
+                    ReaderCharacterStyle(colorArgb = ruleColor), 1,
+                ),
+            )),
+        ) as ReaderChapterMeasureResult.Success
+        val glyphs = (result.blocks.single() as ReaderMeasuredBlock.InlineParagraph)
+            .items.filterIsInstance<ReaderMeasuredInlineItem.Text>()
+        assertEquals(listOf(1, ruleColor, 1), glyphs.map { it.style.colorArgb })
+        assertEquals(listOf(false, true, false), glyphs.map { it.colorFromStyleRange })
+    }
+
+    @Test fun crossParagraphMarkingExemptsEveryParagraphLeadingWhitespace() = runBlocking {
+        // 跨段笔记：每一段自己的段首空白同样豁免（旧引擎在 applyUserMarkings 之后
+        // 统一 clearLeadingWhitespaceStyles），否则下一段的缩进会被划进装饰里。
+        val source = ReaderChapterSource(
+            1, "",
+            listOf(
+                ReaderChapterSourceBlock.Paragraph(listOf(
+                    ReaderChapterInlineSource.Text("甲乙", 0),
+                )),
+                ReaderChapterSourceBlock.Paragraph(listOf(
+                    ReaderChapterInlineSource.Text("　　丙", 3),
+                )),
+            ),
+            6,
+        )
+        val result = ReaderChapterBlockMeasurer(
+            bodyShaper = shaper,
+            titleShaper = shaper,
+            imageDimensionsResolver = { null },
+        ).measure(
+            source,
+            style.copy(styleRanges = listOf(
+                ReaderStyleRange(
+                    0, 6, ReaderStyleTarget.BODY,
+                    ReaderCharacterStyle(markingId = "m", backgroundArgb = 55), 10_000,
+                ),
+            )),
+        ) as ReaderChapterMeasureResult.Success
+        val glyphs = result.blocks.filterIsInstance<ReaderMeasuredBlock.InlineParagraph>()
+            .flatMap { it.items }.filterIsInstance<ReaderMeasuredInlineItem.Text>()
+        assertEquals(listOf("m", "m", null, null, "m"), glyphs.map { it.markingId })
+        assertEquals(listOf(false, false, true, true, false), glyphs.map { it.decorationExempt })
     }
 
     @Test fun convertsHtmlNewlineOnlyParagraphIntoAVisualBlankLineWithoutSyntheticText() = runBlocking {
