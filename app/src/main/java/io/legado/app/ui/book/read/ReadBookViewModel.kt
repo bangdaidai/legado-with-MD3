@@ -1125,8 +1125,13 @@ class ReadBookViewModel(
                 it.copy(activeSheet = intent.sheet)
             }
             is ReadBookIntent.RestorePendingSheet -> _uiState.update {
-                if (it.pendingSheet == null) it
-                else it.copy(activeSheet = it.pendingSheet, pendingSheet = null)
+                if (it.pendingSheet == null && it.pendingMenu == null) it
+                else it.copy(
+                    activeSheet = it.pendingSheet,
+                    menuState = it.pendingMenu ?: ReadBookMenuState(),
+                    pendingSheet = null,
+                    pendingMenu = null,
+                )
             }
             is ReadBookIntent.ShowDialog -> _uiState.update { it.copy(activeDialog = intent.dialog) }
             is ReadBookIntent.ResolveReadRecordAlias ->

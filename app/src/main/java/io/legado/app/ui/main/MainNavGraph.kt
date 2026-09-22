@@ -876,6 +876,15 @@ fun MainActivity.mainEntryProvider(
             },
         )
 
+        // sheet 跳整页时被记成 pendingSheet/pendingMenu 先收起；同 Activity 内 push/pop
+        // 不会触发底层 entry 的 lifecycle resume，只有栈顶判定能可靠地把它放回来。
+        val isTopOfBackStack = backStack.lastOrNull() == route
+        LaunchedEffect(isTopOfBackStack) {
+            if (isTopOfBackStack) {
+                readBookViewModel.onIntent(ReadBookIntent.RestorePendingSheet)
+            }
+        }
+
         DisposableEffect(controller, lifecycleOwner, route.readAloud) {
             activeReadBookInputHandler = controller
             activeReadBookRoute = route
@@ -1576,19 +1585,36 @@ fun MainActivity.mainEntryProvider(
         // 听书播放界面独立于阅读器：从胶囊或媒体按键打开时，阅读器可能根本不在栈上，
         // 因此这里不复用阅读器的状态宿主，只依赖全局朗读会话状态。
         var readAloudConfigOpen by rememberSaveable { mutableStateOf(false) }
+        // 设置卡片跳独立整页时先收起（dialog 窗口会浮在新页面上），记下来等回到栈顶再弹回；
+        // 同 Activity 内 push/pop 不触发 lifecycle resume，只能按栈顶判定。
+        var readAloudConfigPendingRestore by rememberSaveable { mutableStateOf(false) }
+        val configRestorableAtTop = backStack.lastOrNull() is MainRouteReadAloudPlayer
+        LaunchedEffect(configRestorableAtTop) {
+            if (configRestorableAtTop && readAloudConfigPendingRestore) {
+                readAloudConfigPendingRestore = false
+                readAloudConfigOpen = true
+            }
+        }
         ReadAloudPlayerRouteScreen(
             showReadAloudConfig = readAloudConfigOpen,
             onReadAloudConfigVisibleChange = { readAloudConfigOpen = it },
             onBack = { onNavigateBack() },
             // 设置卡片「引擎与音色」页签的跳页入口，与阅读器宿主接同一批目的地。
+            // 这四个回调只可能由卡片内的跳页意图触发，收起前一律记为待恢复。
             onOpenTtsEnginesAndVoices = { bookUrl ->
+                readAloudConfigPendingRestore = true
                 onNavigateToRoute(MainRouteCloudTtsEngines(bookUrl))
             },
-            onOpenTtsCache = { onNavigateToRoute(MainRouteTtsCache) },
+            onOpenTtsCache = {
+                readAloudConfigPendingRestore = true
+                onNavigateToRoute(MainRouteTtsCache)
+            },
             onOpenBookVoiceCasting = { bookUrl ->
+                readAloudConfigPendingRestore = true
                 onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
             },
             onOpenSpeechStoryboard = { bookUrl ->
+                readAloudConfigPendingRestore = true
                 onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
             },
             // 「切换到经典」：朗读服务全程在跑，跳回阅读页后自动打开经典控制面板即可，

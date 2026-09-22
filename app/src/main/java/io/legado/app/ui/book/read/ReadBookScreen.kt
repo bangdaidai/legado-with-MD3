@@ -13,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.repository.ReadPreferences
@@ -139,11 +138,9 @@ fun ReadBookScreen(
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
 ) {
-    // 从朗读引擎/角色配音/分镜这些独立目的地返回时，把跳转前收起的那一级 sheet 放回来
-    LifecycleResumeEffect(Unit) {
-        onIntent(ReadBookIntent.RestorePendingSheet)
-        onPauseOrDispose { }
-    }
+    // 从朗读引擎/角色配音/分镜这些独立目的地返回时的 sheet/菜单恢复
+    // 由导航宿主在路由回到栈顶时触发 RestorePendingSheet；
+    // 同 Activity 内 push/pop 不会走 onPause→onResume，挂 lifecycle 事件上不可靠。
     // Dialogs driven by activeDialog state
     val restoreDialog = state.activeDialog as? ReadBookDialog.ConfirmRestoreProgress
     val syncDialog = state.activeDialog as? ReadBookDialog.SureSyncProgress

@@ -273,6 +273,13 @@ data class ReadBookUiState(
      * 但从它们返回时要回到原来那一级设置，所以先记在这里，回到阅读页时再放回 [activeSheet]。
      */
     val pendingSheet: ReadBookSheet? = null,
+    /**
+     * 与 [pendingSheet] 同进同出的菜单叠层（如经典朗读控制面板）。
+     *
+     * sheet 收起后菜单还开着会露出上一级，跳转过程看起来"先塌一层再进新页"；
+     * 所以跳整页时连菜单一起收，回到阅读页栈顶时和 sheet 一起放回来。
+     */
+    val pendingMenu: ReadBookMenuState? = null,
     val activeDialog: ReadBookDialog? = null,
     /** 书签/笔记跳转前校验不通过时的待确认目标（弹确认框）。 */
     val pendingBookmarkTarget: PendingBookmarkTarget? = null,
@@ -584,7 +591,7 @@ sealed interface ReadBookIntent {
     data object DismissSheet : ReadBookIntent
     data class SetActiveSheet(val sheet: ReadBookSheet?) : ReadBookIntent
 
-    /** 从 Navigation 3 整页返回阅读页时，把跳转前收起的那一级 sheet 放回来 */
+    /** 从 Navigation 3 整页返回阅读页栈顶时，把跳转前收起的菜单叠层和 sheet 一起放回来 */
     data object RestorePendingSheet : ReadBookIntent
     data class ShowDialog(val dialog: ReadBookDialog) : ReadBookIntent
     data class ResolveReadRecordAlias(val merge: Boolean, val rememberChoice: Boolean = false) : ReadBookIntent
