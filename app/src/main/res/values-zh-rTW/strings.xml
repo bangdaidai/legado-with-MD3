@@ -318,7 +318,6 @@
     <string name="bookmark_mark_selection">選中文字</string>
     <string name="bookmark_mark_style">標記樣式</string>
     <string name="bookmark_mark_style_source">樣式來源</string>
-    <string name="bookmark_mark_reuse_rule">複用高亮規則</string>
     <string name="bookmark_mark_custom">自訂</string>
     <string name="bookmark_mark_no_rules">目前閱讀樣式沒有高亮規則</string>
     <string name="bookmark_mark_text_color">文字顏色</string>

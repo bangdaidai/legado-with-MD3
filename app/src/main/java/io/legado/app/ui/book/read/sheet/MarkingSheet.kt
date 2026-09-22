@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.outlined.Image
@@ -63,13 +62,13 @@ import io.legado.app.ui.book.read.TextMenuPositionProvider
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ProvideAppDensity
 import io.legado.app.ui.widget.components.AppTextField
-import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
-import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -87,9 +86,10 @@ import io.legado.app.utils.fromJsonObject
  *
  * 呈现形态由 [MarkingUiState.floatingAnchor] 决定：阅读页入口（划词菜单/点正文划线）
  * 知道笔记在正文中的位置，弹层悬浮在该位置旁——改样式时正文里的实时预览不被挡住；
- * 目录等无位置入口仍是标准底部弹层。两种形态共用同一套标题行与内容组件，
- * 悬浮形态为压低高度默认收起「样式来源」区（下拉 + 规则列表，由标题行调色按钮展开/收起），
- * 颜色行与效果格仍内联展示；调色与分享卡片放标题行右侧，删除单独放左侧。
+ * 目录等无位置入口仍是标准底部弹层。两种形态共用同一套标题行与内容组件：
+ * 标题行右侧的调色按钮直接弹出「样式来源」下拉（自定义 + 各条高亮规则，见
+ * [MarkingRuleDropdown]），点中某条规则即复用它的样式；颜色行与效果格内联展示，
+ * 仅在自定义（未复用规则）时出现。调色与分享卡片放标题行右侧，删除单独放左侧。
  * 没有保存按钮：关闭弹层即保存本次改动（样式或备注与会话初始值不同时才落库）。
  */
 @Composable
@@ -141,11 +141,8 @@ fun MarkingSheet(
     var showColorPicker by remember(show, editing) { mutableStateOf(false) }
     // 打开取色器的种子色：点色板入口用当前选中色，长按预设色则以被长按的色为基准微调。
     var colorPickerSeed by remember(show, editing) { mutableStateOf(markColor) }
-    // 悬浮形态默认收起「样式来源」区（下拉 + 规则列表）：这套规则选择器较长，
-    // 收进标题行的调色按钮后，面板只剩颜色行、效果格与备注，紧贴笔记位置不挡正文。
-    // 颜色行与效果格仍按原样内联展示。底部弹层没有高度顾虑，来源区始终展示。
-    val floating = show && state.floatingAnchor != null
-    var styleExpanded by remember(show, editing) { mutableStateOf(false) }
+    // 「样式来源」下拉（自定义 + 高亮规则）的展开状态，锚在标题行的调色按钮上。
+    var showRuleMenu by remember(show, editing) { mutableStateOf(false) }
     val noteState = key(show, editing) {
         rememberTextFieldState(initialText = editing?.note ?: "")
     }
@@ -189,19 +186,32 @@ fun MarkingSheet(
                 )
             }
         } else null
-    // 右侧动作：样式来源区展开开关（仅悬浮形态）+ 分享卡片。
+    // 右侧动作：样式来源下拉入口（调色按钮）+ 分享卡片。
     // 保存按钮已按「关闭即保存」语义移除。
-    val showStyleToggle = floating && showStyleConfig
     val endAction: (@Composable () -> Unit)? =
-        if (showStyleToggle || onGenerateShareCard != null) {
+        if (showStyleConfig || onGenerateShareCard != null) {
             {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (showStyleToggle) {
-                        MediumTonalButton(
-                            onClick = { styleExpanded = !styleExpanded },
-                            icon = Icons.Default.Palette,
-                            contentDescription = stringResource(R.string.bookmark_mark_style_source)
-                        )
+                    if (showStyleConfig) {
+                        Box {
+                            MediumTonalButton(
+                                onClick = { showRuleMenu = true },
+                                icon = Icons.Default.Palette,
+                                contentDescription = stringResource(R.string.bookmark_mark_style_source)
+                            )
+                            MarkingRuleDropdown(
+                                expanded = showRuleMenu,
+                                rules = state.highlightRules,
+                                useRule = useRule,
+                                selectedRuleId = selectedRuleId,
+                                onDismissRequest = { showRuleMenu = false },
+                                onSelectCustom = { useRule = false },
+                                onSelectRule = { id ->
+                                    useRule = true
+                                    selectedRuleId = id
+                                },
+                            )
+                        }
                     }
                     onGenerateShareCard?.let { share ->
                         MediumTonalButton(
@@ -235,89 +245,25 @@ fun MarkingSheet(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 悬浮形态下只收起「样式来源」（下拉 + 规则列表），由标题行的调色按钮展开；
-                // 颜色行与效果格始终按原样内联展示。
-                if (showStyleConfig) {
-                    if (!floating || styleExpanded) {
-                        TinyDropdownSettingItem(
-                            title = stringResource(R.string.bookmark_mark_style_source),
-                            selectedValue = if (useRule) STYLE_SOURCE_RULE else STYLE_SOURCE_CUSTOM,
-                            displayEntries = arrayOf(
-                                stringResource(R.string.bookmark_mark_reuse_rule),
-                                stringResource(R.string.bookmark_mark_custom),
-                            ),
-                            entryValues = arrayOf(STYLE_SOURCE_RULE, STYLE_SOURCE_CUSTOM),
-                            onValueChange = { useRule = it == STYLE_SOURCE_RULE },
-                        )
-
-                        if (useRule) {
-                            val rules = state.highlightRules
-                            if (rules.isEmpty()) {
-                                EmptyMessage(
-                                    message = stringResource(R.string.bookmark_mark_no_rules),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp),
-                                )
-                            } else {
-                                rules.forEach { rule ->
-                                    val selected = selectedRuleId == rule.id
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                selectedRuleId = if (selected) null else rule.id
-                                            }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = if (selected) {
-                                                LegadoTheme.colorScheme.primary
-                                            } else {
-                                                LegadoTheme.colorScheme.outlineVariant
-                                            },
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            AppText(
-                                                text = rule.name.ifBlank { rule.displayPattern() },
-                                                style = LegadoTheme.typography.bodyMedium,
-                                            )
-                                            AppText(
-                                                text = rule.styleSummary(),
-                                                style = LegadoTheme.typography.labelSmall,
-                                                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (!useRule) {
-                        // 自定义：颜色行（色板入口 + 预设色）+ 5x1 效果格
-                        MarkingColorRow(
-                            selectedColor = markColor,
-                            onColorSelected = { markColor = it },
-                            onColorLongPress = { color ->
-                                colorPickerSeed = color
-                                showColorPicker = true
-                            },
-                            onCustomColorClick = {
-                                colorPickerSeed = markColor
-                                showColorPicker = true
-                            },
-                        )
-                        MarkingEffectGrid(
-                            selectedEffect = effect,
-                            onEffectSelected = { effect = it },
-                        )
-                    }
+                // 样式来源已经收进标题行的调色按钮：复用规则时这里只剩备注输入，
+                // 自定义时才内联展示颜色行与效果格。
+                if (showStyleConfig && !useRule) {
+                    MarkingColorRow(
+                        selectedColor = markColor,
+                        onColorSelected = { markColor = it },
+                        onColorLongPress = { color ->
+                            colorPickerSeed = color
+                            showColorPicker = true
+                        },
+                        onCustomColorClick = {
+                            colorPickerSeed = markColor
+                            showColorPicker = true
+                        },
+                    )
+                    MarkingEffectGrid(
+                        selectedEffect = effect,
+                        onEffectSelected = { effect = it },
+                    )
 
                     Spacer(Modifier.height(4.dp))
                 }
@@ -368,6 +314,60 @@ fun MarkingSheet(
                 showColorPicker = false
             },
         )
+    }
+}
+
+/**
+ * 笔记的「样式来源」下拉：自定义 + 当前阅读样式下的各条高亮规则。
+ * 点中某条规则即复用它的样式（见 [buildStyle]），正文预览立刻跟着变。
+ * 规则条数可能较多，限高后内部滚动，避免菜单顶出屏幕。
+ */
+@Composable
+private fun MarkingRuleDropdown(
+    expanded: Boolean,
+    rules: List<HighlightRule>,
+    useRule: Boolean,
+    selectedRuleId: String?,
+    onDismissRequest: () -> Unit,
+    onSelectCustom: () -> Unit,
+    onSelectRule: (String) -> Unit,
+) {
+    RoundDropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+    ) { dismiss ->
+        Column(
+            modifier = Modifier
+                .heightIn(max = 320.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            RoundDropdownMenuItem(
+                text = stringResource(R.string.bookmark_mark_custom),
+                isSelected = !useRule,
+                onClick = {
+                    onSelectCustom()
+                    dismiss()
+                },
+            )
+            if (rules.isEmpty()) {
+                RoundDropdownMenuItem(
+                    text = stringResource(R.string.bookmark_mark_no_rules),
+                    enabled = false,
+                    onClick = {},
+                )
+            } else {
+                rules.forEach { rule ->
+                    RoundDropdownMenuItem(
+                        text = rule.name.ifBlank { rule.displayPattern() },
+                        isSelected = useRule && selectedRuleId == rule.id,
+                        onClick = {
+                            onSelectRule(rule.id)
+                            dismiss()
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -695,6 +695,3 @@ private val MarkingPaletteWheel = listOf(
     0xFFFF5252, 0xFFFF9800, 0xFFFFEB3B, 0xFF4CAF50,
     0xFF26A6D6, 0xFF2196F3, 0xFF9C27B0, 0xFFEC407A, 0xFFFF5252,
 ).map { Color(it.toInt()) }
-
-private const val STYLE_SOURCE_RULE = "rule"
-private const val STYLE_SOURCE_CUSTOM = "custom"

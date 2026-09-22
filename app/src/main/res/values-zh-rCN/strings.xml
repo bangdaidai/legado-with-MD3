@@ -378,7 +378,6 @@
     <string name="bookmark_mark_selection">选中文本</string>
     <string name="bookmark_mark_style">标记样式</string>
     <string name="bookmark_mark_style_source">样式来源</string>
-    <string name="bookmark_mark_reuse_rule">复用高亮规则</string>
     <string name="bookmark_mark_custom">自定义</string>
     <string name="bookmark_mark_no_rules">当前阅读样式没有高亮规则</string>
     <string name="bookmark_mark_text_color">文字颜色</string>
