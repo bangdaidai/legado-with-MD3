@@ -794,8 +794,7 @@ fun ReadBookRouteScreen(
                 noAnimationScrollPage = readPreferences.noAnimScrollPage,
                 externalPageTurns = controller.composePageTurns,
                 externalSelectionCancels = controller.composeSelectionCancels,
-                    externalSelections = controller.composeSelections,
-                    onVisibleBodyTextPositionProvider = controller::setComposeVisibleBodyTextPositionProvider,
+                onVisibleBodyTextPositionProvider = controller::setComposeVisibleBodyTextPositionProvider,
                 )
             }
             AnimatedVisibility(

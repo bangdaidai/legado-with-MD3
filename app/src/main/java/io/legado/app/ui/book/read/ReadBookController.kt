@@ -344,10 +344,6 @@ class ReadBookController(
     private val _composeSelectionCancels = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     val composeSelectionCancels = _composeSelectionCancels.asSharedFlow()
 
-    /** 宿主要求画布建立选区（全文搜索命中），对照旧 View 的"搜索结果即真选区"。 */
-    private val _composeSelections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 4)
-    val composeSelections = _composeSelections.asSharedFlow()
-
     /** 触边界提示文案（由阅读页 SnackbarHost 呈现）。 */
     private val _composeBoundaryMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val composeBoundaryMessages = _composeBoundaryMessages.asSharedFlow()
@@ -1173,10 +1169,12 @@ class ReadBookController(
                 ReaderPageNavigator.locate(pages, result.chapterIndex, bodyPosition)
             )
         }
-        // 旧 View 的全文搜索命中是一次**真选区**（`isSelectingSearchResult` + selectStart/End +
-        // `isTextSelected = true`）：有手柄、可拖动、弹出选区菜单。窗口发布之后再推给画布，
-        // 让它能按新窗口算锚点。
-        _composeSelections.tryEmit(selection)
+        // 搜索命中只作为页面级高亮（`searchSelection` 已进页面对象的 searchStart/
+        // searchEndInclusive），不建画布选区：跳结果的人是想看这个词出现在哪，没有对选区做
+        // 下一步操作的意图，而真选区会画出两端手柄、吞掉跳转后的第一次点击
+        // （`ReaderCanvasSurface` 的 suppressTap）并禁掉拉书签。这里只清掉用户自己长按留下的
+        // 旧选区——它属于上一页，留着会按新窗口重锚出一个错位的菜单。
+        cancelComposeSelection()
     }
 
     private fun publishDirectReaderPageWindow(
@@ -2061,6 +2059,11 @@ class ReadBookController(
     }
 
     fun onMenuActionFinally() {
+        cancelComposeSelection()
+    }
+
+    /** 清掉画布上的用户选区及其菜单。 */
+    private fun cancelComposeSelection() {
         dismissTextActionMenu()
         composeSelection = null
         composeSelectedText = null
@@ -2353,12 +2356,7 @@ class ReadBookController(
                 ReadBook.loadContent(false)
             }
 
-            is ReadBookEffect.CancelSelect -> {
-                dismissTextActionMenu()
-                composeSelection = null
-                composeSelectedText = null
-                _composeSelectionCancels.tryEmit(Unit)
-            }
+            is ReadBookEffect.CancelSelect -> cancelComposeSelection()
             is ReadBookEffect.MenuImageStyleChanged -> rebuildDirectReaderPages()
             is ReadBookEffect.InvalidateReaderImage -> {
                 activity.lifecycleScope.launch { replaceReaderImages(setOf(effect.source)) }

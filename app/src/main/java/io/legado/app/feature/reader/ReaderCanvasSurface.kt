@@ -228,8 +228,6 @@ fun ReaderCanvasSurface(
     noAnimationScrollPage: Boolean,
     externalPageTurns: Flow<ReaderTurnDirection>,
     externalSelectionCancels: Flow<Unit>,
-    /** 宿主要求建立选区（全文搜索命中）：旧 View 的命中就是一次真选区，带手柄与菜单。 */
-    externalSelections: Flow<ReaderSelection>,
     onVisibleBodyTextPositionProvider: ((() -> ReaderVisibleTextPosition?)?) -> Unit,
 ) {
     // 滚动跨页同步换窗：跨页帧内宿主回调直接返回新窗口，先写入 pending 供绘制与
@@ -733,17 +731,6 @@ fun ReaderCanvasSurface(
             selectionDragHandleCenter = null
             selectionDragEndpoint = null
             selectionMenuVisible = false
-        }
-    }
-    LaunchedEffect(externalSelections) {
-        externalSelections.collect { selection ->
-            // 旧 View 的搜索结果即真选区：建选区、带手柄，并按当前窗口弹一次选区菜单。
-            clearSelectionForPageChange(ReaderPageChangeOrigin.PROGRAMMATIC)
-            textSelection = selection
-            selectionMagnifierSource = null
-            selectionDragHandleCenter = null
-            selectionDragEndpoint = null
-            showSelectionMenu(selection, latestPages)
         }
     }
     LaunchedEffect(hostPages) {
