@@ -174,9 +174,15 @@ class MangaReaderDataRepository(
 
     override suspend fun persistProgress(bookUrl: String, chapterIndex: Int, pageIndex: Int) {
         val book = database.bookDao.getBook(bookUrl) ?: return
+        // 与文本阅读页同一判据：位置真的推进（翻页/换章）才刷新最后阅读时间，
+        // 点开没翻就退出不该让书架"按最近阅读"重排。
+        val positionChanged =
+            book.durChapterIndex != chapterIndex || book.durChapterPos != pageIndex
         book.durChapterIndex = chapterIndex
         book.durChapterPos = pageIndex
-        book.durChapterTime = System.currentTimeMillis()
+        if (positionChanged) {
+            book.durChapterTime = System.currentTimeMillis()
+        }
         database.bookChapterDao.getChapter(bookUrl, chapterIndex)?.let {
             book.durChapterTitle = it.title
         }
