@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,6 +79,18 @@ fun AiLogScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val expandedKeys = remember { mutableStateMapOf<String, Boolean>() }
     val listState = rememberLazyListState()
+    // 折叠回顶必须挂在列表层而不是条目内：超长条目折叠后会瞬间被回收出可见区，
+    // 条目内的协程会跟着取消导致滚动不执行（表现为折叠后视口停在下方不动）。
+    var pendingCollapseId by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(pendingCollapseId) {
+        val id = pendingCollapseId ?: return@LaunchedEffect
+        val index = state.logs.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            listState.animateScrollToItem(index)
+        }
+        pendingCollapseId = null
+    }
 
     LaunchedEffect(Unit) {
         effects.collectLatest { effect ->
@@ -126,21 +139,18 @@ fun AiLogScreen(
             ) {
                 items(state.logs, key = { it.id }) { item ->
                     val key = item.id.toString()
-                    val wasExpanded = remember { mutableStateOf(expandedKeys[key] == true) }
                     val isExpanded = expandedKeys[key] == true
-                    LaunchedEffect(isExpanded) {
-                        if (wasExpanded.value && !isExpanded) {
-                            val index = state.logs.indexOfFirst { it.id == item.id }
-                            if (index >= 0) {
-                                listState.animateScrollToItem(index)
-                            }
-                        }
-                        wasExpanded.value = isExpanded
-                    }
                     LogCard(
                         item = item,
                         expanded = isExpanded,
-                        onToggleExpand = { expandedKeys[key] = expandedKeys[key] != true },
+                        onToggleExpand = {
+                            if (isExpanded) {
+                                expandedKeys[key] = false
+                                pendingCollapseId = item.id
+                            } else {
+                                expandedKeys[key] = true
+                            }
+                        },
                         onCopy = { onIntent(AiLogIntent.CopyItem(item)) },
                     )
                 }
