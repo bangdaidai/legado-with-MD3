@@ -122,6 +122,7 @@ import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
 import io.legado.app.ui.book.readaloud.config.ReadAloudConfigScreen
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerRouteScreen
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
+import io.legado.app.ui.book.readaloud.player.applyReadAloudConfigIntent
 import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardScreen
 import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardViewModel
 import io.legado.app.ui.book.search.SearchIntent
