@@ -48,7 +48,6 @@ import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.PrivateAccessSettings
 import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.domain.model.MatchMode
-import io.legado.app.domain.model.BookshelfConflict
 import io.legado.app.domain.model.PrivateAccessState
 import io.legado.app.domain.model.PrivateUnlockTarget
 import io.legado.app.domain.model.settings.ThemeSettings

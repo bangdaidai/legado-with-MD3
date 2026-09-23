@@ -7,8 +7,6 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
-import io.legado.app.domain.model.BookshelfConflict
-import io.legado.app.domain.model.ConflictBookSummary
 import io.legado.app.domain.model.PrivateAccessState
 
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
@@ -67,9 +65,6 @@ data class BookInfoUiState(
     val showMangaUi: Boolean = true,
     val enableCustomTagColors: Boolean = false,
     val bookshelfTagBorder: Boolean = false,
-    /** 加入书架时发现的疑似重复；非空时由冲突 Sheet 决定共存还是迁移。 */
-    val shelfConflict: BookshelfConflict? = null,
-    val isResolvingShelfConflict: Boolean = false,
     /** 本书是否私密（单本标记 ∪ 所属私密分组）；菜单里"标记/取消私密"读它 */
     val bookPrivate: Boolean = false,
     /** 进入本页时这本书是否需要验证（页面内刚标记私密不会立刻脱敏） */
