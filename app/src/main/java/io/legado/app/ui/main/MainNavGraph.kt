@@ -177,6 +177,7 @@ import io.legado.app.ui.theme.ProvideThemeOverride
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
 import io.legado.app.ui.widget.components.changeSource.ChangeSourceSheet
+import io.legado.app.ui.widget.components.privacy.PrivateReadGate
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.sendToClip
@@ -840,6 +841,14 @@ fun MainActivity.mainEntryProvider(
             readBookViewModel.onIntent(ReadBookIntent.OnPause)
         }
 
+        // 私密闸门：未授权时整段阅读器（首帧即请求分页的 canvas、initData 正文加载、
+        // controller 生命周期注册）都不组合，杜绝"先打开再遮住"的正文泄漏；这一处收口即
+        // 覆盖进程恢复、继续阅读、深链、媒体键等所有直推 ReadBook 路由、不经书架/详情页的入口。
+        PrivateReadGate(
+            bookUrl = route.bookUrl,
+            onExit = { onNavigateBack() },
+            onOpenLocalPasswordSettings = { onNavigateToRoute(MainRouteSettingsPrivate) },
+        ) {
         ReadBookRouteScreen(
             viewModel = readBookViewModel,
             readerSessionViewModel = readerSessionViewModel,
@@ -926,6 +935,8 @@ fun MainActivity.mainEntryProvider(
                 }
             }
         }
+        }
+        )
     }
 
     entry<MainRouteReadManga> { route ->
