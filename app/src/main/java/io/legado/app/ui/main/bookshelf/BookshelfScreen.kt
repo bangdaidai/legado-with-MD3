@@ -1048,40 +1048,49 @@ fun BookshelfScreen(
                     // 注意：锁定态只替换"某个分组自己的内容区"，不能替换整个分页容器，
                     // 否则用户会被卡在锁定页里、连相邻分组都切不过去。
                     if (isUsingStandaloneSearchGroup) {
-                        BookshelfPage(
-                            gridState = standaloneSearchGridState,
-                            paddingValues = paddingValues,
-                            books = rememberBooksHeldDuringEnter(
-                                snapshotKey = "search:$currentGroupId",
-                                books = uiState.items,
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                // 搜索结果列表的顺序不由阅读时间决定，只冻结不预排
-                                predictMoveToFrontOnReturn = false,
+                        if (uiState.selectedGroupLocked) {
+                            PrivateGroupLockedPage(
+                                groupId = uiState.selectedGroupId,
+                                uiState = uiState,
+                                onIntent = onIntent,
+                            )
+                        } else {
+                            BookshelfPage(
                                 gridState = standaloneSearchGridState,
-                            ),
-                            uiState = uiState,
-                            selectedBookUrls = selectedBookUrls,
-                            canReorderBooks = false,
-                            onToggleBookSelection = { toggleBookSelection(it.book.bookUrl) },
-                            draggingBooks = null,
-                            pendingSavedBooks = null,
-                            onDragStarted = {},
-                            onMoveBook = { _, _, _ -> },
-                            onDragFinished = {},
-                            onGlobalSearch = { onNavigateToSearch(uiState.searchKey.trim()) },
-                            onBookClick = { book, coverKey ->
-                                // 与分组页同一口径：列表滑下去时不挂封面转场
-                                val atTop = isBookshelfGridAtTop(standaloneSearchGridState)
-                                onBookClick(book, coverKey.takeIf { atTop })
-                            },
-                            onBookLongClick = onBookLongClick,
-                            isCurrentPage = true,
-                            sharedCoverGroupId = currentGroupId,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            tagColorMap = tagColorMap,
-                            excludedTags = excludedTags,
-                        )
+                                paddingValues = paddingValues,
+                                books = rememberBooksHeldDuringEnter(
+                                    snapshotKey = "search:$currentGroupId",
+                                    books = uiState.items,
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    // 搜索结果列表的顺序不由阅读时间决定，只冻结不预排
+                                    predictMoveToFrontOnReturn = false,
+                                    gridState = standaloneSearchGridState,
+                                ),
+                                uiState = uiState,
+                                selectedBookUrls = selectedBookUrls,
+                                canReorderBooks = false,
+                                onToggleBookSelection = { toggleBookSelection(it.book.bookUrl) },
+                                draggingBooks = null,
+                                pendingSavedBooks = null,
+                                onDragStarted = {},
+                                onMoveBook = { _, _, _ -> },
+                                onDragFinished = {},
+                                onGlobalSearch = { onNavigateToSearch(uiState.searchKey.trim()) },
+                                onBookClick = { book, coverKey ->
+                                    // 与分组页同一口径：列表滑下去时不挂封面转场
+                                    val atTop = isBookshelfGridAtTop(standaloneSearchGridState)
+                                    onBookClick(book, coverKey.takeIf { atTop })
+                                },
+                                onLockedBookClick = requestBookUnlock,
+                                onBookLongClick = onBookLongClick,
+                                isCurrentPage = true,
+                                sharedCoverGroupId = currentGroupId,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                tagColorMap = tagColorMap,
+                                excludedTags = excludedTags,
+                            )
+                        }
                     } else {
                         HorizontalPager(
                             state = pagerState,
@@ -1117,56 +1126,79 @@ fun BookshelfScreen(
                                         !uiState.isSearch &&
                                         groupEffectiveSort == 3 &&
                                         isSelectedGroup
-                                BookshelfPage(
-                                    gridState = groupGridStates.getValue(group.groupId),
-                                    paddingValues = paddingValues,
-                                    books = books,
-                                    uiState = uiState,
-                                    selectedBookUrls = selectedBookUrls,
-                                    canReorderBooks = canReorderBooks,
-                                    onToggleBookSelection = { toggleBookSelection(it.book.bookUrl) },
-                                    draggingBooks = if (isSelectedGroup) {
-                                        uiState.draggingBooks
-                                    } else {
-                                        null
-                                    },
-                                    pendingSavedBooks = if (isSelectedGroup) {
-                                        uiState.pendingSavedBooks
-                                    } else {
-                                        null
-                                    },
-                                    onDragStarted = {
-                                        if (isSelectedGroup) onIntent(BookshelfIntent.StartDragging(it))
-                                    },
-                                    onMoveBook = { from, to, currentBooks ->
-                                        if (isSelectedGroup) {
-                                            onIntent(BookshelfIntent.MoveDragging(from, to, currentBooks))
-                                        }
-                                    },
-                                    onDragFinished = {
-                                        if (isSelectedGroup) onIntent(BookshelfIntent.FinishDragging)
-                                    },
-                                    onGlobalSearch = { onNavigateToSearch(uiState.searchKey.trim()) },
-                                    onBookClick = { book, coverKey ->
-                                        // 记录本次开书，供返回转场按最终顺序预排位；
-                                        // 列表滑下去（第一行不完整可见）时不传封面 key：
-                                        // 返回首帧滚动位置未恢复、动画目标格子不在组合中，
-                                        // 与其失锚不飞，不如直接走普通页面转场。
-                                        val atTop = recordBookshelfOpenHint(
-                                            snapshotKey = "group:${group.groupId}",
-                                            gridState = groupGridStates.getValue(group.groupId),
-                                            bookUrl = book.bookUrl,
-                                        )
-                                        onBookClick(book, coverKey.takeIf { atTop })
-                                    },
-                                    onBookLongClick = onBookLongClick,
-                                    isCurrentPage = isSelectedGroup,
-                                    sharedCoverGroupId = group.groupId,
-                                    sharedTransitionScope = sharedTransitionScope,
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    tagColorMap = tagColorMap,
-                                    excludedTags = excludedTags,
-                                )
+                                if (uiState.isGroupLocked(group)) {
+                                    PrivateGroupLockedPage(
+                                        groupId = group.groupId,
+                                        uiState = uiState,
+                                        onIntent = onIntent,
+                                    )
+                                } else {
+                                    BookshelfPage(
+                                        gridState = groupGridStates.getValue(group.groupId),
+                                        paddingValues = paddingValues,
+                                        books = books,
+                                        uiState = uiState,
+                                        selectedBookUrls = selectedBookUrls,
+                                        canReorderBooks = canReorderBooks,
+                                        onToggleBookSelection = {
+                                            toggleBookSelection(it.book.bookUrl)
+                                        },
+                                        draggingBooks = if (isSelectedGroup) {
+                                            uiState.draggingBooks
+                                        } else {
+                                            null
+                                        },
+                                        pendingSavedBooks = if (isSelectedGroup) {
+                                            uiState.pendingSavedBooks
+                                        } else {
+                                            null
+                                        },
+                                        onDragStarted = {
+                                            if (isSelectedGroup) {
+                                                onIntent(BookshelfIntent.StartDragging(it))
+                                            }
+                                        },
+                                        onMoveBook = { from, to, currentBooks ->
+                                            if (isSelectedGroup) {
+                                                onIntent(
+                                                    BookshelfIntent.MoveDragging(
+                                                        from,
+                                                        to,
+                                                        currentBooks
+                                                    )
+                                                )
+                                            }
+                                        },
+                                        onDragFinished = {
+                                            if (isSelectedGroup) {
+                                                onIntent(BookshelfIntent.FinishDragging)
+                                            }
+                                        },
+                                        onGlobalSearch = {
+                                            onNavigateToSearch(uiState.searchKey.trim())
+                                        },
+                                        onBookClick = { book, coverKey ->
+                                            // 记录本次开书，供返回转场按最终顺序预排位；
+                                            // 列表滑下去（第一行不完整可见）时不传封面 key：
+                                            // 返回首帧滚动位置未恢复、动画目标格子不在组合中，
+                                            // 与其失锚不飞，不如直接走普通页面转场。
+                                            val atTop = recordBookshelfOpenHint(
+                                                snapshotKey = "group:${group.groupId}",
+                                                gridState = groupGridStates.getValue(group.groupId),
+                                                bookUrl = book.bookUrl,
+                                            )
+                                            onBookClick(book, coverKey.takeIf { atTop })
+                                        },
+                                        onLockedBookClick = requestBookUnlock,
+                                        onBookLongClick = onBookLongClick,
+                                        isCurrentPage = isSelectedGroup,
+                                        sharedCoverGroupId = group.groupId,
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        tagColorMap = tagColorMap,
+                                        excludedTags = excludedTags,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1694,6 +1726,40 @@ private data class BookshelfDeferredRelease(
     val firstIndex: Int,
     val firstOffset: Int,
 )
+
+/**
+ * 私密分组的锁定态内容区。
+ *
+ * 只替换"这个分组自己的内容"，不动分页容器——否则用户会被卡在锁定页里，
+ * 连相邻分组都切不过去。提示块复用 [PrivateLockedPage]，与详情页脱敏态是同一套呈现。
+ */
+@Composable
+private fun PrivateGroupLockedPage(
+    groupId: Long,
+    uiState: BookshelfUiState,
+    onIntent: (BookshelfIntent) -> Unit,
+) {
+    PrivateLockedPage(
+        title = stringResource(R.string.private_locked_group_title),
+        description = stringResource(
+            if (uiState.privateAccess.hasPassword) {
+                R.string.private_locked_group_desc
+            } else {
+                R.string.private_content_no_password
+            }
+        ),
+        actionText = stringResource(
+            if (uiState.privateAccess.hasPassword) {
+                R.string.private_verify_and_view
+            } else {
+                R.string.set_local_password
+            }
+        ),
+        onAction = {
+            onIntent(BookshelfIntent.RequestPrivateUnlock(PrivateUnlockTarget.Group(groupId)))
+        }
+    )
+}
 
 @Composable
 fun BookshelfPage(

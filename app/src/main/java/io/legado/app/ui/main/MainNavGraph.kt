@@ -148,6 +148,7 @@ import io.legado.app.ui.config.customTheme.CustomThemeRouteScreen
 import io.legado.app.ui.config.downloadCacheConfig.DownloadCacheConfigRouteScreen
 import io.legado.app.ui.config.labConfig.LabConfigRouteScreen
 import io.legado.app.ui.config.otherConfig.OtherConfigRouteScreen
+import io.legado.app.ui.config.privateConfig.PrivateConfigRouteScreen
 import io.legado.app.ui.config.readConfig.ReadConfigRouteScreen
 import io.legado.app.ui.config.protagonistExtractionConfig.ProtagonistExtractionConfigRouteScreen
 import io.legado.app.ui.config.themeConfig.ThemeConfigRouteScreen
@@ -580,8 +581,13 @@ fun MainActivity.mainEntryProvider(
             onNavigateToAi = { backStack.add(MainRouteSettingsAi) },
             onNavigateToDownloadCache = { backStack.add(MainRouteSettingsDownloadCache) },
             onNavigateToTranslation = { backStack.add(MainRouteSettingsTranslation) },
-            onNavigateToLab = { backStack.add(MainRouteSettingsLabConfig) }
+            onNavigateToLab = { backStack.add(MainRouteSettingsLabConfig) },
+            onNavigateToPrivate = { backStack.add(MainRouteSettingsPrivate) }
         )
+    }
+
+    entry<MainRouteSettingsPrivate> {
+        PrivateConfigRouteScreen(onBackClick = { onNavigateBack() })
     }
 
     entry<MainRouteSettingsOther> {

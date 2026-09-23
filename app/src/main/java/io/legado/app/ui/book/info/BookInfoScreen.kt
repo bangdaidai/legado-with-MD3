@@ -157,6 +157,7 @@ import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
+import io.legado.app.ui.widget.components.privacy.PrivateLockedPage
 import io.legado.app.ui.widget.components.alert.BookDeleteConfirmDialog
 import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
@@ -292,6 +293,29 @@ fun BookInfoScreen(
             },
         )
     }
+
+    // 应用内密码解锁弹层：生物不可用、或用户点了"使用密码"时由 VM 置位。
+    // 与书架的 PrivatePassword 覆盖层同一组件、同一文案，保持弹层风格一致。
+    if (state.showPrivatePasswordDialog) {
+        var password by remember { mutableStateOf("") }
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { onIntent(BookInfoIntent.DismissPrivatePassword) },
+            title = stringResource(R.string.private_unlock_password_title),
+            content = {
+                AppTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = stringResource(R.string.private_unlock_password_title),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmText = stringResource(R.string.ok),
+            onConfirm = { onIntent(BookInfoIntent.SubmitPrivatePassword(password)) },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { onIntent(BookInfoIntent.DismissPrivatePassword) },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class,
@@ -375,18 +399,43 @@ private fun BookInfoScreenContent(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { onIntent(BookInfoIntent.ReadClick) },
-                containerColor = LegadoTheme.colorScheme.primaryContainer,
-                contentColor = LegadoTheme.colorScheme.onPrimaryContainer,
-                icon = { Icon(Icons.Default.Book, null) },
-                text = { Text(stringResource(R.string.reading)) },
-            )
+            if (!state.privateLocked) {
+                ExtendedFloatingActionButton(
+                    onClick = { onIntent(BookInfoIntent.ReadClick) },
+                    containerColor = LegadoTheme.colorScheme.primaryContainer,
+                    contentColor = LegadoTheme.colorScheme.onPrimaryContainer,
+                    icon = { Icon(Icons.Default.Book, null) },
+                    text = { Text(stringResource(R.string.reading)) },
+                )
+            }
         },
         alwaysDrawBehindBars = true,
     ) { paddingValues ->
         val book = state.book
-        if (book == null) {
+        if (state.privateLocked) {
+            // 锁定态：整块内容（背景大图、书名/作者/简介、目录入口）一律不渲染，
+            // 只给"验证打开"提示。刻意不走"同布局+糊封面+占位条"，因为那仍会把封面
+            // 以模糊形式留在页面上；这里连模糊封面都不出现，脱敏更彻底。
+            PrivateLockedPage(
+                title = stringResource(R.string.private_locked_book_title),
+                description = stringResource(
+                    if (state.privateAccess.hasPassword) {
+                        R.string.private_locked_book_desc
+                    } else {
+                        R.string.private_content_no_password
+                    }
+                ),
+                actionText = stringResource(
+                    if (state.privateAccess.hasPassword) {
+                        R.string.private_verify_and_open
+                    } else {
+                        R.string.set_local_password
+                    }
+                ),
+                onAction = { onIntent(BookInfoIntent.RequestPrivateUnlock) },
+                modifier = Modifier.padding(paddingValues),
+            )
+        } else if (book == null) {
             Box(modifier = Modifier.fillMaxSize())
         } else {
             val resolvedBackdropStyle = requireNotNull(backdropStyle)
