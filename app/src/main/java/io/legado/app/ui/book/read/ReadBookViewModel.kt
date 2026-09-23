@@ -29,7 +29,6 @@ import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.domain.gateway.AiArtifactGateway
-import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiPromptPresetGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.AppUiConfigurationGateway
@@ -145,7 +144,6 @@ class ReadBookViewModel(
     private val bookContentProcessGateway: BookContentProcessGateway,
     private val aiArtifactGateway: AiArtifactGateway,
     private val aiPromptPresetGateway: AiPromptPresetGateway,
-    private val aiProfileGateway: AiProfileGateway,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
     private val readAloudSessionStore: ReadAloudSessionStore,
     private val replaceRuleRepository: ReplaceRuleRepository,
@@ -651,11 +649,9 @@ class ReadBookViewModel(
                 _readAloudProgress.value = chapterStart
             }
         },
-        readSettingsRepository = readSettingsRepository,
         readAloudSettingsRepository = readAloudSettingsRepository,
         readAloudSessionStore = readAloudSessionStore,
         httpTtsRepository = httpTtsRepository,
-        aiProfileGateway = aiProfileGateway,
         syncReadAloudVoicesUseCase = syncReadAloudVoicesUseCase,
     ) }
 
@@ -1122,20 +1118,10 @@ class ReadBookViewModel(
                     is ReadBookSheet.TextProcessing -> contentProcessDelegate.onSheetDismissed()
                     else -> Unit
                 }
-                // 二级 sheet 关闭时回上一级，没有上一级才真正收起
-                _uiState.update { it.copy(activeSheet = it.activeSheet?.parentSheet) }
+                _uiState.update { it.copy(activeSheet = null) }
             }
             is ReadBookIntent.SetActiveSheet -> _uiState.update {
                 it.copy(activeSheet = intent.sheet)
-            }
-            is ReadBookIntent.RestorePendingSheet -> _uiState.update {
-                if (it.pendingSheet == null && it.pendingMenu == null) it
-                else it.copy(
-                    activeSheet = it.pendingSheet,
-                    menuState = it.pendingMenu ?: ReadBookMenuState(),
-                    pendingSheet = null,
-                    pendingMenu = null,
-                )
             }
             is ReadBookIntent.ShowDialog -> _uiState.update { it.copy(activeDialog = intent.dialog) }
             is ReadBookIntent.ResolveReadRecordAlias ->
@@ -1425,48 +1411,9 @@ class ReadBookViewModel(
             is ReadBookIntent.ConfirmAddCurrentBookToBookshelf -> addCurrentBookToBookshelfAndFinish()
             is ReadBookIntent.ExitWithoutAddingCurrentBookToBookshelf -> removeCurrentNotShelfBookAndFinish()
 
-            is ReadBookIntent.ShowReadAloudConfig -> readAloudDelegate.openConfigSheet()
-            is ReadBookIntent.OpenPreDownloadNumPicker ->
-                readAloudDelegate.openPreDownloadNumPicker()
-            is ReadBookIntent.OpenPreSynthesisConcurrencyPicker ->
-                readAloudDelegate.openPreSynthesisConcurrencyPicker()
-            is ReadBookIntent.OpenParagraphIntervalPicker ->
-                readAloudDelegate.openParagraphIntervalPicker()
-            is ReadBookIntent.OpenCacheCleanTimePicker ->
-                readAloudDelegate.openCacheCleanTimePicker()
-            is ReadBookIntent.ApplyPreDownloadNum ->
-                readAloudDelegate.applyPreDownloadNum(intent.value)
-            is ReadBookIntent.ApplyPreSynthesisConcurrency ->
-                readAloudDelegate.applyPreSynthesisConcurrency(intent.value)
-            is ReadBookIntent.ApplyAudioCacheCleanTime ->
-                readAloudDelegate.applyAudioCacheCleanTime(intent.value)
-            is ReadBookIntent.ApplyParagraphInterval ->
-                readAloudDelegate.applyParagraphInterval(intent.value)
-            is ReadBookIntent.SetReadAloudIgnoreAudioFocus ->
-                readAloudDelegate.setIgnoreAudioFocus(intent.value)
-            is ReadBookIntent.SetReadAloudPauseOnPhoneCall ->
-                readAloudDelegate.setPauseOnPhoneCall(intent.value)
-            is ReadBookIntent.SetReadAloudWakeLock -> readAloudDelegate.setWakeLock(intent.value)
-            is ReadBookIntent.SetReadAloudKeepOnExit ->
-                readAloudDelegate.setKeepOnExit(intent.value)
-            is ReadBookIntent.SetShowReadAloudCapsule ->
-                readAloudDelegate.setShowCapsule(intent.value)
-            is ReadBookIntent.SetCapsuleAutoCollapse ->
-                readAloudDelegate.setCapsuleAutoCollapse(intent.value)
-            ReadBookIntent.ResetReadAloudCapsulePosition ->
-                readAloudDelegate.resetCapsulePosition()
+            is ReadBookIntent.ShowReadAloudConfig -> readAloudDelegate.openConfigPage()
             is ReadBookIntent.SetReadAloudCapsulePosition ->
                 readAloudDelegate.setCapsulePosition(intent.x, intent.y)
-            is ReadBookIntent.SetReadAloudMediaButtonPerNext ->
-                readAloudDelegate.setMediaButtonPerNext(intent.value)
-            is ReadBookIntent.SetReadAloudContentSplitMode ->
-                readAloudDelegate.setContentSplitMode(intent.value)
-            is ReadBookIntent.SetReadAloudSystemMediaCompat ->
-                readAloudDelegate.setSystemMediaCompat(intent.value)
-            is ReadBookIntent.SetReadAloudAndroidMediaControl ->
-                readAloudDelegate.setAndroidMediaControl(intent.value)
-            is ReadBookIntent.SetReadAloudStreamAudio ->
-                readAloudDelegate.setStreamAudio(intent.value)
             is ReadBookIntent.ReadAloudPrevParagraph -> readAloudDelegate.prevParagraph()
             is ReadBookIntent.ReadAloudTogglePause -> _effects.tryEmit(ReadBookEffect.ToggleReadAloud)
             is ReadBookIntent.ReadAloudStop -> readAloudDelegate.stop()
@@ -1487,18 +1434,6 @@ class ReadBookViewModel(
                 readAloudDelegate.setTtsFollowSys(intent.value)
             is ReadBookIntent.SetReadAloudTtsSpeechRate ->
                 readAloudDelegate.setTtsSpeechRate(intent.value)
-            is ReadBookIntent.SetSpeechAnalysisMode -> readAloudDelegate.setSpeechAnalysisMode(intent.value)
-            is ReadBookIntent.SetSpeechAnalysisReasoningLevel -> readAloudDelegate.setSpeechAnalysisReasoningLevel(intent.value)
-            is ReadBookIntent.SetUseMultiSpeaker ->
-                readAloudDelegate.setUseMultiSpeaker(intent.value)
-            is ReadBookIntent.SetDefaultReadAloudInterface ->
-                readAloudDelegate.setDefaultInterface(intent.value)
-            is ReadBookIntent.OpenSystemTtsSettings -> readAloudDelegate.openSystemTtsSettings()
-            is ReadBookIntent.ClearTtsCache -> readAloudDelegate.clearTtsCache()
-            ReadBookIntent.OpenTtsEnginesAndVoices -> readAloudDelegate.openTtsEnginesAndVoices()
-            ReadBookIntent.OpenTtsCache -> readAloudDelegate.openTtsCache()
-            ReadBookIntent.OpenBookVoiceCasting -> readAloudDelegate.openBookVoiceCasting()
-            ReadBookIntent.OpenSpeechStoryboard -> readAloudDelegate.openSpeechStoryboard()
             ReadBookIntent.OpenReadAloudPlayer -> readAloudDelegate.openPlayer()
             ReadBookIntent.OpenClassicReadAloudControls -> readAloudDelegate.openClassicControls()
 

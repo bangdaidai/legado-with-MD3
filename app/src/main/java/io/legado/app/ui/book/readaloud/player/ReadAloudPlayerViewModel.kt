@@ -1,33 +1,50 @@
 package io.legado.app.ui.book.readaloud.player
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.ReadAloudBgMode
+import io.legado.app.data.repository.ReadAloudSettingsRepository
+import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
+import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
+import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.model.settings.ReadSettings
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.config.compatDsInt
+import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadAloudSessionStore
+import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.widget.components.player.PlayerChapterUi
+import io.legado.app.utils.TTSCacheUtils
+import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class ReadAloudPlayerViewModel(
     private val coordinator: ReadAloudPlayerCoordinator,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val readSettingsGateway: ReadSettingsGateway,
+    private val application: Application,
+    private val readAloudSessionStore: ReadAloudSessionStore,
+    private val aiProfileGateway: AiProfileGateway,
 ) : ViewModel() {
 
     private val activeSheet = MutableStateFlow<ReadAloudPlayerSheet?>(null)
@@ -119,8 +136,13 @@ class ReadAloudPlayerViewModel(
     ) {
         viewModelScope.launch {
             when (option) {
-                ReadAloudConfigOption.DefaultInterface ->
-                    readAloudSettingsGateway.update { it.copy(defaultInterface = value) }
+                ReadAloudConfigOption.DefaultInterface -> readAloudSettingsGateway.update {
+                    it.copy(
+                        defaultInterface = value.takeIf { candidate ->
+                            candidate in ReadAloudSettingsRepository.AVAILABLE_INTERFACES
+                        } ?: ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC
+                    )
+                }
 
                 ReadAloudConfigOption.ShowCapsule ->
                     readAloudSettingsGateway.update { it.copy(showReadAloudCapsule = selected) }
@@ -152,19 +174,58 @@ class ReadAloudPlayerViewModel(
                     it.copy(systemMediaControlCompatibilityChange = selected)
                 }
 
-                ReadAloudConfigOption.StreamAudio ->
+                ReadAloudConfigOption.StreamAudio -> {
                     readAloudSettingsGateway.update { it.copy(streamReadAloudAudio = selected) }
+                    // 流式输出与耳机媒体键播报互斥，打开流式即关掉媒体键转发
+                    if (selected) postEvent(EventBus.MEDIA_BUTTON, false)
+                }
 
-                ReadAloudConfigOption.SpeechAnalysisMode ->
-                    readAloudSettingsGateway.update { it.copy(speechAnalysisMode = value) }
-
-                ReadAloudConfigOption.SpeechAnalysisReasoningLevel ->
-                    readAloudSettingsGateway.update {
-                        it.copy(speechAnalysisReasoningLevel = value)
+                ReadAloudConfigOption.SpeechAnalysisMode -> {
+                    // 非规则模式要求已配置 AI 模型，否则拒绝切换并提示
+                    if (value != "rule") {
+                        val configured = aiProfileGateway.getTaskPreset(AiTaskType.ANALYZE_SPEECH)
+                            ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
+                        if (configured == null) {
+                            effect(ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired)
+                            return@launch
+                        }
                     }
+                    readAloudSettingsGateway.update { it.copy(speechAnalysisMode = value) }
+                }
 
-                ReadAloudConfigOption.UseMultiSpeaker ->
+                ReadAloudConfigOption.SpeechAnalysisReasoningLevel -> {
+                    // 关闭思考模式是 AI 朗读分析的默认值：默认思考的模型（智谱 GLM 等）
+                    // 只把内容放在 reasoning_content 里，分析会直接失败。
+                    val level = AiReasoningLevel.fromStorage(value, AiReasoningLevel.OFF)
+                    readAloudSettingsGateway.update {
+                        it.copy(speechAnalysisReasoningLevel = level.storageValue)
+                    }
+                }
+
+                ReadAloudConfigOption.UseMultiSpeaker -> {
+                    // 正在朗读时必须重启朗读服务才能换掉合成管线；重启前记住页内位置，
+                    // 等服务真的回到 Idle 再重放，避免新旧管线叠音。
+                    val shouldRestart = BaseReadAloudService.isRun
+                    val resumePlaying = shouldRestart && !BaseReadAloudService.pause
+                    val chapterPosition =
+                        readAloudSessionStore.state.value.playback.chapterPosition
                     readAloudSettingsGateway.update { it.copy(useMultiSpeaker = selected) }
+                    if (shouldRestart && ReadBook.readerChapterInputWindow.current != null) {
+                        ReadAloud.stop(application)
+                        val stopped = withTimeoutOrNull(2_000) {
+                            readAloudSessionStore.state.first {
+                                it.status == ReadAloudSessionStatus.Idle
+                            }
+                        }
+                        if (stopped == null) return@launch
+                        ReadAloud.refreshReadAloudClass()
+                        ReadAloud.play(
+                            context = application,
+                            play = resumePlaying,
+                            chapterPosition = chapterPosition.coerceAtLeast(0),
+                        )
+                    }
+                }
 
                 ReadAloudConfigOption.ContentSplit -> {
                     val (mode, symbols) = ReadAloudContentSplitSetting.decode(value)
@@ -190,8 +251,18 @@ class ReadAloudPlayerViewModel(
                 ReadAloudConfigOption.AudioCacheCleanTime -> readAloudSettingsGateway.update {
                     it.copy(audioCacheCleanTime = intValue)
                 }
+
+                ReadAloudConfigOption.ResetCapsulePosition -> readAloudSettingsGateway.update {
+                    it.copy(capsuleOffsetX = 0f, capsuleOffsetY = 0f)
+                }
             }
         }
+    }
+
+    /** 清除朗读音频缓存；语义与阅读器宿主 ReadAloudDelegate.clearTtsCache 一致。 */
+    fun clearTtsCache() {
+        TTSCacheUtils.clearTtsCache()
+        effect(ReadAloudPlayerEffect.TtsCacheCleared)
     }
 
     private fun cycleBgMode() {

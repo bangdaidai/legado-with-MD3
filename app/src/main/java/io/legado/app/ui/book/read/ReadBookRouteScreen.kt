@@ -75,7 +75,6 @@ import io.legado.app.feature.reader.core.transition.ReaderPageTurnSpeed
 import io.legado.app.feature.reader.core.transition.ReaderTransitionMode
 import io.legado.app.feature.reader.core.transition.ReaderViewportLayerPolicy
 import io.legado.app.feature.reader.platform.ReaderPerfTrace
-import io.legado.app.help.IntentHelp
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.model.translation.TranslationChapterStatus
@@ -152,10 +151,7 @@ fun ReadBookRouteScreen(
     sharedCoverKey: String? = null,
     onEffectsReady: () -> Unit = {},
     onOpenSearch: (word: String?, bookUrl: String, autoFocus: Boolean) -> Unit = { _, _, _ -> },
-    onOpenVoiceCasting: (bookUrl: String) -> Unit = {},
-    onOpenSpeechStoryboard: (bookUrl: String) -> Unit = {},
-    onOpenTtsEnginesAndVoices: () -> Unit = {},
-    onOpenTtsCache: () -> Unit = {},
+    onOpenReadAloudConfig: (bookUrl: String?) -> Unit = {},
     onOpenReadAloudPlayer: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -419,14 +415,9 @@ fun ReadBookRouteScreen(
                             is ReadBookEffect.OpenSearch -> {
                                 onOpenSearch(effect.word, effect.bookUrl, effect.autoFocus)
                             }
-                            is ReadBookEffect.OpenBookVoiceCasting -> {
-                                onOpenVoiceCasting(effect.bookUrl)
+                            is ReadBookEffect.OpenReadAloudConfig -> {
+                                onOpenReadAloudConfig(effect.bookUrl)
                             }
-                            is ReadBookEffect.OpenSpeechStoryboard -> {
-                                onOpenSpeechStoryboard(effect.bookUrl)
-                            }
-                            ReadBookEffect.OpenTtsEnginesAndVoices -> onOpenTtsEnginesAndVoices()
-                            ReadBookEffect.OpenTtsCache -> onOpenTtsCache()
                             ReadBookEffect.OpenReadAloudPlayer -> onOpenReadAloudPlayer()
                             is ReadBookEffect.MenuSettingReplace -> {
                                 replaceLauncher.launch(
@@ -489,12 +480,6 @@ fun ReadBookRouteScreen(
                             is ReadBookEffect.OpenTitleBarCustomIconPicker -> {
                                 pendingTitleBarCustomIconId = effect.id
                                 titleBarCustomIconPicker.launch("image/*")
-                            }
-                            is ReadBookEffect.OpenSystemTtsSettings -> {
-                                IntentHelp.openTTSSetting()
-                            }
-                            is ReadBookEffect.TtsCacheCleared -> {
-                                context.toastOnUi(effect.message)
                             }
                             is ReadBookEffect.OpenHighlightRuleImportPicker -> {
                                 importHighlightRulePicker.launch(

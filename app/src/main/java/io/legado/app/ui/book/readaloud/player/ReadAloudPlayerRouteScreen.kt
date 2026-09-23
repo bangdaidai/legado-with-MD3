@@ -3,14 +3,8 @@ package io.legado.app.ui.book.readaloud.player
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.legado.app.R
-import io.legado.app.help.IntentHelp
-import io.legado.app.ui.book.read.sheet.ReadAloudConfigContent
-import io.legado.app.ui.book.read.sheet.asReadBookUiState
 import io.legado.app.ui.theme.ProvideThemeOverride
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.compose.koinInject
 
@@ -23,57 +17,32 @@ import org.koin.compose.koinInject
  * 这类窗口级 sheet 容器，也不自己驱动位移，没有「弹层里再开弹层」的
  * shape / 宽度 / 返回键特判；代价是没有下拉关闭手势。
  *
- * 设置卡片用的是全局 [ReadAloudPlayerViewModel] 的设置快照，不依赖阅读器 ViewModel，
+ * 朗读设置是独立的 Navigation 3 整页（`ReadAloudConfigScreen`），这里只发跳页回调；
+ * 设置内容用的是全局 [ReadAloudPlayerViewModel] 的设置快照，不依赖阅读器 ViewModel，
  * 所以从胶囊直接进听书页时同样能改朗读设置。
  */
 @Composable
 fun ReadAloudPlayerRouteScreen(
-    showReadAloudConfig: Boolean,
-    onReadAloudConfigVisibleChange: (Boolean) -> Unit,
     onBack: () -> Unit,
-    onOpenTtsEnginesAndVoices: (bookUrl: String?) -> Unit = {},
-    onOpenTtsCache: () -> Unit = {},
-    onOpenBookVoiceCasting: (bookUrl: String) -> Unit = {},
-    onOpenSpeechStoryboard: (bookUrl: String) -> Unit = {},
+    onOpenSettingsPage: () -> Unit,
     onOpenClassicReadAloud: (bookUrl: String) -> Unit = {},
 ) {
     val playerViewModel: ReadAloudPlayerViewModel = koinInject()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
-    val settingsState by playerViewModel.readAloudSettings.collectAsStateWithLifecycle()
     val playerTheme = rememberPlayerThemeOverride(playerState)
 
     LaunchedEffect(playerViewModel) {
         playerViewModel.effects.collectLatest { effect ->
             when (effect) {
-                // 设置卡片是 dialog 窗口，不收起会浮在跳过去的整页上面。
-                is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
-                    onReadAloudConfigVisibleChange(false)
-                    onOpenTtsEnginesAndVoices(effect.bookUrl)
-                }
-
-                ReadAloudPlayerEffect.OpenTtsCache -> {
-                    onReadAloudConfigVisibleChange(false)
-                    onOpenTtsCache()
-                }
-
-                is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
-                    onReadAloudConfigVisibleChange(false)
-                    onOpenBookVoiceCasting(effect.bookUrl)
-                }
-
-                is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
-                    onReadAloudConfigVisibleChange(false)
-                    onOpenSpeechStoryboard(effect.bookUrl)
-                }
-
-                ReadAloudPlayerEffect.OpenSystemTtsSettings -> IntentHelp.openTTSSetting()
-
                 is ReadAloudPlayerEffect.ReturnToClassic -> {
                     if (effect.bookUrl.isNotBlank()) {
-                        onReadAloudConfigVisibleChange(false)
                         onOpenClassicReadAloud(effect.bookUrl)
                     }
                 }
+
+                // 跳页/提示类 effect 属于朗读设置整页宿主（两处收集同一份 flow），
+                // 这里必须静默，否则会和设置页各导航一次。
+                else -> Unit
             }
         }
     }
@@ -83,20 +52,7 @@ fun ReadAloudPlayerRouteScreen(
             state = playerState,
             onIntent = playerViewModel::onIntent,
             onBack = onBack,
-            onOpenConfig = { onReadAloudConfigVisibleChange(true) },
-        )
-    }
-    // 播放页自己是一层全屏目的地，这里只叠一层设置卡片，全屏只有这一层 scrim。
-    AppModalBottomSheet(
-        show = showReadAloudConfig,
-        onDismissRequest = { onReadAloudConfigVisibleChange(false) },
-        title = stringResource(R.string.aloud_config),
-    ) {
-        ReadAloudConfigContent(
-            state = settingsState.asReadBookUiState(),
-            playerState = playerState,
-            onIntent = playerViewModel::applyReadBookConfigIntent,
-            onPlayerIntent = playerViewModel::onIntent,
+            onOpenConfig = onOpenSettingsPage,
         )
     }
 }

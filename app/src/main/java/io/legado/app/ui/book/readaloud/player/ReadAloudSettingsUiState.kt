@@ -29,6 +29,8 @@ enum class ReadAloudConfigOption {
     PreSynthesisConcurrency,
     ParagraphInterval,
     AudioCacheCleanTime,
+    /** 把朗读胶囊位置复位（偏移清零）。 */
+    ResetCapsulePosition,
 }
 
 /** 朗读设置界面需要的只读快照。 */

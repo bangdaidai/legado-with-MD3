@@ -465,8 +465,10 @@ class ReadBookDomainSplitBoundaryTest {
                     "saveBackgroundImage",
                 ),
             ),
-            // 朗读域无自持状态：20 来个朗读字段被四个 composable 直读，搬出去要改四处入参；
-            // 靠 stateTypes 守「设置写入与合成管线重启逻辑不回流 VM」
+            // 朗读域无自持状态：播放/定时/语速字段仍被菜单等渲染直读；朗读设置改整页后，
+            // 设置写入与合成管线重启落在 readaloud/player 包的 ReadAloudPlayerViewModel，
+            // delegate 只剩播放控制、声音目录同步与语速写入。
+            // 靠 stateTypes 守「这些逻辑不回流阅读页 VM」
             DomainSplit(
                 name = "朗读",
                 delegateFile = "io/legado/app/ui/book/read/ReadAloudDelegate.kt",

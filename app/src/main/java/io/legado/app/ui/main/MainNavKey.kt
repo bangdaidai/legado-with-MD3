@@ -226,6 +226,9 @@ data class MainRouteCloudTtsEngines(val bookUrl: String? = null) : MainRoute
 data object MainRouteTtsCache : MainRoute
 
 @Serializable
+data class MainRouteReadAloudConfig(val bookUrl: String? = null) : MainRoute
+
+@Serializable
 data class MainRouteBookKnowledgeList(
     val bookUrl: String,
 ) : MainRoute

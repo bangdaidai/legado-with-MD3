@@ -834,7 +834,7 @@ val appModule = module {
      * 若各自持有实例，`activeSheet` 之类的瞬态状态与设置快照就会各改各的。
      * 播放状态本身在 `ReadAloudSessionStore`/服务里，这里只是界面投影。
      */
-    single { ReadAloudPlayerViewModel(get(), get(), get()) }
+    single { ReadAloudPlayerViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { (bookUrl: String, entryId: String?) ->
         BookKnowledgeDetailViewModel(
             bookUrl = bookUrl,
@@ -881,7 +881,6 @@ val appModule = module {
             bookContentProcessGateway = get(),
             aiArtifactGateway = get(),
             aiPromptPresetGateway = get(),
-            aiProfileGateway = get(),
             syncReadAloudVoicesUseCase = get(),
             readAloudSessionStore = get(),
             replaceRuleRepository = get(),

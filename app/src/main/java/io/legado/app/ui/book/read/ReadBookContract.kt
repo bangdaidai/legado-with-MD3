@@ -266,20 +266,6 @@ data class ReadBookUiState(
     val menuState: ReadBookMenuState = ReadBookMenuState(),
     // Active sheet / dialog
     val activeSheet: ReadBookSheet? = null,
-    /**
-     * 跳去 Navigation 3 整页（朗读引擎、TTS 缓存、角色配音、分镜）之前关掉的 sheet。
-     *
-     * 那些页面是独立目的地，跳转时必须先收起 sheet，否则它是 dialog window、会浮在新页面上；
-     * 但从它们返回时要回到原来那一级设置，所以先记在这里，回到阅读页时再放回 [activeSheet]。
-     */
-    val pendingSheet: ReadBookSheet? = null,
-    /**
-     * 与 [pendingSheet] 同进同出的菜单叠层（如经典朗读控制面板）。
-     *
-     * sheet 收起后菜单还开着会露出上一级，跳转过程看起来"先塌一层再进新页"；
-     * 所以跳整页时连菜单一起收，回到阅读页栈顶时和 sheet 一起放回来。
-     */
-    val pendingMenu: ReadBookMenuState? = null,
     val activeDialog: ReadBookDialog? = null,
     /** 书签/笔记跳转前校验不通过时的待确认目标（弹确认框）。 */
     val pendingBookmarkTarget: PendingBookmarkTarget? = null,
@@ -344,10 +330,6 @@ val shareCardScene: ShareCardScene? = null,
 ) {
     val menuVisible: Boolean
         get() = menuState.visible
-
-    /** 朗读设置卡片是否打开；经典控制面板与听书播放界面共用同一份设置内容。 */
-    val isReadAloudConfigOpen: Boolean
-        get() = activeSheet is ReadBookSheet.ReadAloudConfig
 }
 
 /** 护眼模式设置，来源是 ThemeSettings，与外观设置共用同一份值。 */
@@ -590,9 +572,6 @@ sealed interface ReadBookIntent {
     data class ShowSheet(val sheet: ReadBookSheet) : ReadBookIntent
     data object DismissSheet : ReadBookIntent
     data class SetActiveSheet(val sheet: ReadBookSheet?) : ReadBookIntent
-
-    /** 从 Navigation 3 整页返回阅读页栈顶时，把跳转前收起的菜单叠层和 sheet 一起放回来 */
-    data object RestorePendingSheet : ReadBookIntent
     data class ShowDialog(val dialog: ReadBookDialog) : ReadBookIntent
     data class ResolveReadRecordAlias(val merge: Boolean, val rememberChoice: Boolean = false) : ReadBookIntent
     /** 清除所有持久化的未知作者决定，使冲突可以再次由用户确认。 */
@@ -832,34 +811,9 @@ sealed interface ReadBookIntent {
     data object ConfirmAddCurrentBookToBookshelf : ReadBookIntent
     data object ExitWithoutAddingCurrentBookToBookshelf : ReadBookIntent
 
-    // Read aloud config (needs Activity for DialogFragment)
+    // Read aloud: 齿轮入口跳朗读设置整页；胶囊拖动仍由阅读器处理
     data object ShowReadAloudConfig : ReadBookIntent
-    data object OpenPreDownloadNumPicker : ReadBookIntent
-    data object OpenPreSynthesisConcurrencyPicker : ReadBookIntent
-    data object OpenParagraphIntervalPicker : ReadBookIntent
-    data object OpenCacheCleanTimePicker : ReadBookIntent
-    data class ApplyPreDownloadNum(val value: Int) : ReadBookIntent
-    data class ApplyPreSynthesisConcurrency(val value: Int) : ReadBookIntent
-    data class ApplyAudioCacheCleanTime(val value: Int) : ReadBookIntent
-    data class ApplyParagraphInterval(val value: Int) : ReadBookIntent
-    data class SetReadAloudIgnoreAudioFocus(val value: Boolean) : ReadBookIntent
-    data class SetReadAloudPauseOnPhoneCall(val value: Boolean) : ReadBookIntent
-    data class SetReadAloudWakeLock(val value: Boolean) : ReadBookIntent
-    data class SetReadAloudKeepOnExit(val value: Boolean) : ReadBookIntent
-    data class SetShowReadAloudCapsule(val value: Boolean) : ReadBookIntent
-    data class SetCapsuleAutoCollapse(val value: Boolean) : ReadBookIntent
-    data object ResetReadAloudCapsulePosition : ReadBookIntent
     data class SetReadAloudCapsulePosition(val x: Float, val y: Float) : ReadBookIntent
-    data class SetReadAloudMediaButtonPerNext(val value: Boolean) : ReadBookIntent
-
-    /**
-     * 内容划分方式与配套标点集合，取值是
-     * [io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting.encode] 的编码。
-     */
-    data class SetReadAloudContentSplitMode(val value: String) : ReadBookIntent
-    data class SetReadAloudSystemMediaCompat(val value: Boolean) : ReadBookIntent
-    data class SetReadAloudAndroidMediaControl(val value: Boolean) : ReadBookIntent
-    data class SetReadAloudStreamAudio(val value: Boolean) : ReadBookIntent
     data object ReadAloudPrevParagraph : ReadBookIntent
     data object ReadAloudTogglePause : ReadBookIntent
     data object ReadAloudStop : ReadBookIntent
@@ -880,16 +834,6 @@ sealed interface ReadBookIntent {
     data class SetFinishCurrentChapterAfterTimer(val value: Boolean) : ReadBookIntent
     data class SetReadAloudTtsFollowSys(val value: Boolean) : ReadBookIntent
     data class SetReadAloudTtsSpeechRate(val value: Int) : ReadBookIntent
-    data class SetSpeechAnalysisMode(val value: String) : ReadBookIntent
-    data class SetSpeechAnalysisReasoningLevel(val value: String) : ReadBookIntent
-    data class SetUseMultiSpeaker(val value: Boolean) : ReadBookIntent
-    data class SetDefaultReadAloudInterface(val value: String) : ReadBookIntent
-    data object OpenSystemTtsSettings : ReadBookIntent
-    data object ClearTtsCache : ReadBookIntent
-    data object OpenTtsEnginesAndVoices : ReadBookIntent
-    data object OpenTtsCache : ReadBookIntent
-    data object OpenBookVoiceCasting : ReadBookIntent
-    data object OpenSpeechStoryboard : ReadBookIntent
     data object OpenReadAloudPlayer : ReadBookIntent
     data object OpenClassicReadAloudControls : ReadBookIntent
     data class SelectFont(val path: String) : ReadBookIntent
@@ -923,7 +867,6 @@ sealed interface ReadBookEffect {
     // Toast
     data class ShowToast(val message: String) : ReadBookEffect
     data class LongToast(val message: String) : ReadBookEffect
-    data class TtsCacheCleared(val message: String) : ReadBookEffect
 
     // Navigation / lifecycle
     data object Finish : ReadBookEffect
@@ -1025,7 +968,6 @@ sealed interface ReadBookEffect {
     data class OpenReadStyleExport(val fileName: String) : ReadBookEffect
     data class OpenMenuCustomIconPicker(val id: String) : ReadBookEffect
     data class OpenTitleBarCustomIconPicker(val id: String) : ReadBookEffect
-    data object OpenSystemTtsSettings : ReadBookEffect
 
     /**
      * 打开听书播放界面。
@@ -1034,10 +976,12 @@ sealed interface ReadBookEffect {
      * 不再是阅读器内的弹层，因此这里只发导航意图，不写 `activeSheet`。
      */
     data object OpenReadAloudPlayer : ReadBookEffect
-    data object OpenTtsEnginesAndVoices : ReadBookEffect
-    data object OpenTtsCache : ReadBookEffect
-    data class OpenBookVoiceCasting(val bookUrl: String) : ReadBookEffect
-    data class OpenSpeechStoryboard(val bookUrl: String) : ReadBookEffect
+
+    /**
+     * 打开朗读设置整页（Navigation 3 目的地）。原来是阅读器内的底部弹层；
+     * [bookUrl] 供设置页里「角色配音/分镜」等入口定位当前书籍，可为空。
+     */
+    data class OpenReadAloudConfig(val bookUrl: String?) : ReadBookEffect
     data object OpenHighlightRuleImportPicker : ReadBookEffect
     data object OpenHighlightRuleExportPicker : ReadBookEffect
 
@@ -1091,11 +1035,6 @@ sealed interface ReadBookSheet {
     data object Marking : ReadBookSheet
     data object MoreConfig : ReadBookSheet
     data object BgTextConfig : ReadBookSheet
-    data object ReadAloudConfig : ReadBookSheet
-    data object PreDownloadConfig : ReadBookSheet
-    data object PreSynthesisConcurrencyConfig : ReadBookSheet
-    data object AudioCacheCleanConfig : ReadBookSheet
-    data object ParagraphIntervalConfig : ReadBookSheet
     data object ClickActionConfig : ReadBookSheet
     data object PageKeyConfig : ReadBookSheet
     data object InfoConfig : ReadBookSheet
@@ -1111,24 +1050,6 @@ sealed interface ReadBookSheet {
         val sourceOrigin: String? = null,
     ) : ReadBookSheet
 }
-
-/**
- * 二级 sheet 的上一级。关闭时该回到这里，而不是退回阅读页。
- *
- * `activeSheet` 是单值而不是栈，所以「回上一级」必须由类型自己说明。这几个数值 sheet 在
- * `ReadBookScreen` 里已经把 `onDismissRequest` 指向听书设置了，但阅读页的 `BackHandler`
- * 在 sheet 打开时统一发 [ReadBookIntent.DismissSheet]；两条路必须给出同一个结果，否则
- * 返回键从哪个窗口被消费就决定了会回上一级还是直接退到阅读页。
- */
-val ReadBookSheet.parentSheet: ReadBookSheet?
-    get() = when (this) {
-        ReadBookSheet.PreDownloadConfig,
-        ReadBookSheet.PreSynthesisConcurrencyConfig,
-        ReadBookSheet.AudioCacheCleanConfig,
-        ReadBookSheet.ParagraphIntervalConfig -> ReadBookSheet.ReadAloudConfig
-
-        else -> null
-    }
 
 @Immutable
 sealed interface ReadBookDialog {

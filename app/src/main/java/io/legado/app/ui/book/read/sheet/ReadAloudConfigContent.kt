@@ -25,11 +25,10 @@ import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
-import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.ui.book.read.ReadBookUiState
+import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerUiState
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.pager.pagerHeight
 import io.legado.app.ui.widget.components.pager.rememberPagerAnimatedHeight
 import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
@@ -42,18 +41,19 @@ import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.launch
 
+/**
+ * 朗读设置页的内容（两个页签）。
+ *
+ * 宿主是 Navigation 3 整页 `ReadAloudConfigScreen`；数值项就地铺成滑块，
+ * 不再叠一层选择器弹层——弹层套弹层正是当初层级跳乱的根源。
+ */
 @Composable
 fun ReadAloudConfigContent(
     state: ReadBookUiState,
     playerState: ReadAloudPlayerUiState,
-    onIntent: (ReadBookIntent) -> Unit,
+    onIntent: (ReadAloudConfigIntent) -> Unit,
     onPlayerIntent: (ReadAloudPlayerIntent) -> Unit,
     modifier: Modifier = Modifier,
-    /**
-     * true 表示内容被整页宿主承载，数值项就地铺开成滑块；
-     * false（默认）表示宿主是卡片弹层，数值项继续打开选择器弹层。
-     */
-    asPage: Boolean = false,
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
@@ -98,7 +98,7 @@ fun ReadAloudConfigContent(
                         ),
                         entryValues = arrayOf("classic", "player"),
                         description = stringResource(R.string.default_read_aloud_interface_summary),
-                        onValueChange = { onIntent(ReadBookIntent.SetDefaultReadAloudInterface(it)) },
+                        onValueChange = { onIntent(ReadAloudConfigIntent.SetDefaultInterface(it)) },
                     )
                     TinyDropdownSettingItem(
                         title = stringResource(R.string.read_aloud_player_background),
@@ -122,7 +122,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.show_read_aloud_capsule_summary),
                         checked = state.showReadAloudCapsule,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetShowReadAloudCapsule(it))
+                            onIntent(ReadAloudConfigIntent.ShowCapsule(it))
                         },
                     )
                     if (state.showReadAloudCapsule) {
@@ -131,7 +131,7 @@ fun ReadAloudConfigContent(
                             description = stringResource(R.string.capsule_auto_collapse_summary),
                             checked = state.capsuleAutoCollapse,
                             onCheckedChange = {
-                                onIntent(ReadBookIntent.SetCapsuleAutoCollapse(it))
+                                onIntent(ReadAloudConfigIntent.CapsuleAutoCollapse(it))
                             },
                         )
                     }
@@ -140,7 +140,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.ignore_audio_focus_summary),
                         checked = state.readAloudIgnoreAudioFocus,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudIgnoreAudioFocus(it))
+                            onIntent(ReadAloudConfigIntent.IgnoreAudioFocus(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -149,7 +149,7 @@ fun ReadAloudConfigContent(
                         checked = state.readAloudPauseOnPhoneCall,
                         enabled = state.readAloudIgnoreAudioFocus,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudPauseOnPhoneCall(it))
+                            onIntent(ReadAloudConfigIntent.PauseOnPhoneCall(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -157,7 +157,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.read_aloud_wake_lock_summary),
                         checked = state.readAloudWakeLock,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudWakeLock(it))
+                            onIntent(ReadAloudConfigIntent.WakeLock(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -165,7 +165,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.read_aloud_keep_on_exit_summary),
                         checked = state.readAloudKeepOnExit,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudKeepOnExit(it))
+                            onIntent(ReadAloudConfigIntent.KeepOnExit(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -173,7 +173,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.pref_media_button_per_next_summary),
                         checked = state.readAloudMediaButtonPerNext,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudMediaButtonPerNext(it))
+                            onIntent(ReadAloudConfigIntent.MediaButtonPerNext(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -181,7 +181,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.read_aloud_android_media_control_summary),
                         checked = state.readAloudAndroidMediaControl,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudAndroidMediaControl(it))
+                            onIntent(ReadAloudConfigIntent.AndroidMediaControl(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -189,7 +189,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.system_media_control_compatibility_change_summary),
                         checked = state.readAloudSystemMediaCompat,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudSystemMediaCompat(it))
+                            onIntent(ReadAloudConfigIntent.SystemMediaCompat(it))
                         },
                     )
                     TinySwitchSettingItem(
@@ -197,29 +197,29 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.stream_read_aloud_audio_summary),
                         checked = state.readAloudStreamAudio,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadAloudStreamAudio(it))
+                            onIntent(ReadAloudConfigIntent.StreamAudio(it))
                         },
                     )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.reset_read_aloud_capsule_position),
                         description = stringResource(R.string.reset_read_aloud_capsule_position_summary),
-                        onClick = { onIntent(ReadBookIntent.ResetReadAloudCapsulePosition) },
+                        onClick = { onIntent(ReadAloudConfigIntent.ResetCapsulePosition) },
                     )
                 } else {
                     TinyClickableSettingItem(
                         title = stringResource(R.string.read_aloud_engines_and_voices),
                         description = stringResource(R.string.read_aloud_engines_and_voices_summary),
-                        onClick = { onIntent(ReadBookIntent.OpenTtsEnginesAndVoices) },
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenEnginesAndVoices) },
                     )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.tts_cache_manage),
                         description = stringResource(R.string.tts_cache_manage_summary),
-                        onClick = { onIntent(ReadBookIntent.OpenTtsCache) },
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenTtsCache) },
                     )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.read_aloud_character_casting),
                         description = stringResource(R.string.book_voice_casting_entry_summary),
-                        onClick = { onIntent(ReadBookIntent.OpenBookVoiceCasting) },
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenBookVoiceCasting) },
                     )
                     TinyDropdownSettingItem(
                         title = stringResource(R.string.speech_analysis_mode),
@@ -235,12 +235,12 @@ fun ReadAloudConfigContent(
                             "ai_understanding" -> stringResource(R.string.speech_analysis_ai_summary)
                             else -> stringResource(R.string.speech_analysis_rule_summary)
                         },
-                        onValueChange = { onIntent(ReadBookIntent.SetSpeechAnalysisMode(it)) },
+                        onValueChange = { onIntent(ReadAloudConfigIntent.SetSpeechAnalysisMode(it)) },
                     )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.speech_storyboard),
                         description = stringResource(R.string.speech_storyboard_desc),
-                        onClick = { onIntent(ReadBookIntent.OpenSpeechStoryboard) },
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenSpeechStoryboard) },
                     )
                     TinyDropdownSettingItem(
                         title = stringResource(R.string.speech_analysis_reasoning_level),
@@ -261,7 +261,7 @@ fun ReadAloudConfigContent(
                             R.string.speech_analysis_reasoning_level_summary
                         ),
                         onValueChange = {
-                            onIntent(ReadBookIntent.SetSpeechAnalysisReasoningLevel(it))
+                            onIntent(ReadAloudConfigIntent.SetSpeechAnalysisReasoningLevel(it))
                         },
                     )
                     TinyDropdownSettingItem(
@@ -291,7 +291,7 @@ fun ReadAloudConfigContent(
                         },
                         onValueChange = { value ->
                             onIntent(
-                                ReadBookIntent.SetReadAloudContentSplitMode(
+                                ReadAloudConfigIntent.SetContentSplitMode(
                                     ReadAloudContentSplitSetting.encode(
                                         mode = ReadAloudContentSplitMode.fromStorage(value),
                                         symbols = state.readAloudContentSplitSymbols
@@ -318,7 +318,7 @@ fun ReadAloudConfigContent(
                                 val next = if (checked) selected + symbol else selected - symbol
                                 if (next.isNotEmpty()) {
                                     onIntent(
-                                        ReadBookIntent.SetReadAloudContentSplitMode(
+                                        ReadAloudConfigIntent.SetContentSplitMode(
                                             ReadAloudContentSplitSetting.encode(
                                                 mode = ReadAloudContentSplitMode.Symbols,
                                                 symbols = next,
@@ -334,84 +334,65 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.use_multi_speaker_summary),
                         checked = state.useMultiSpeaker,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetUseMultiSpeaker(it))
+                            onIntent(ReadAloudConfigIntent.SetUseMultiSpeaker(it))
                         },
                     )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.sys_tts_config),
-                        onClick = { onIntent(ReadBookIntent.OpenSystemTtsSettings) },
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenSystemTtsSettings) },
                     )
-                    if (asPage) {
-                        // 整页宿主自己就是一层，数值项直接铺开成滑块：
-                        // 再叠一层选择器 sheet 会重新引入「sheet 套 sheet」的层级问题。
-                        ReadAloudNumberSliderItem(
-                            title = stringResource(R.string.read_aloud_preload),
-                            description = stringResource(
-                                R.string.read_aloud_preload_summary, state.preDownloadNum,
-                            ),
-                            value = state.preDownloadNum,
-                            defaultValue = 10,
-                            valueRange = 0f..100f,
-                            onValueChange = { onIntent(ReadBookIntent.ApplyPreDownloadNum(it)) },
-                        )
-                        ReadAloudNumberSliderItem(
-                            title = stringResource(R.string.tts_pre_synthesis_concurrency),
-                            description = stringResource(
-                                R.string.tts_pre_synthesis_concurrency_summary,
-                                state.preSynthesisConcurrency,
-                            ),
-                            value = state.preSynthesisConcurrency,
-                            defaultValue = 3,
-                            valueRange = 1f..8f,
-                            onValueChange = {
-                                onIntent(ReadBookIntent.ApplyPreSynthesisConcurrency(it))
-                            },
-                        )
-                        ReadAloudNumberSliderItem(
-                            title = stringResource(R.string.tts_paragraph_interval),
-                            description = stringResource(
-                                R.string.tts_paragraph_interval_summary,
-                                state.readAloudParagraphInterval,
-                            ),
-                            value = state.readAloudParagraphInterval,
-                            defaultValue = 0,
-                            valueRange = 0f..5000f,
-                            onValueChange = { onIntent(ReadBookIntent.ApplyParagraphInterval(it)) },
-                        )
-                        ReadAloudNumberSliderItem(
-                            title = stringResource(R.string.audio_cache_clean_time),
-                            description = stringResource(
-                                R.string.audio_cache_clean_time_summary,
-                                state.audioCacheCleanTime,
-                            ),
-                            value = state.audioCacheCleanTime,
-                            defaultValue = 10,
-                            valueRange = 0f..10080f,
-                            onValueChange = { onIntent(ReadBookIntent.ApplyAudioCacheCleanTime(it)) },
-                        )
-                    } else {
-                        TinyClickableSettingItem(
-                            title = stringResource(R.string.read_aloud_preload),
-                            onClick = { onIntent(ReadBookIntent.OpenPreDownloadNumPicker) },
-                        )
-                        TinyClickableSettingItem(
-                            title = stringResource(R.string.tts_pre_synthesis_concurrency),
-                            onClick = {
-                                onIntent(ReadBookIntent.OpenPreSynthesisConcurrencyPicker)
-                            },
-                        )
-                        TinyClickableSettingItem(
-                            title = stringResource(R.string.tts_paragraph_interval),
-                            onClick = { onIntent(ReadBookIntent.OpenParagraphIntervalPicker) },
-                        )
-                        TinyClickableSettingItem(
-                            title = stringResource(R.string.audio_cache_clean_time),
-                            onClick = { onIntent(ReadBookIntent.OpenCacheCleanTimePicker) },
-                        )
-                    }
+                    ReadAloudNumberSliderItem(
+                        title = stringResource(R.string.read_aloud_preload),
+                        description = stringResource(
+                            R.string.read_aloud_preload_summary, state.preDownloadNum,
+                        ),
+                        value = state.preDownloadNum,
+                        defaultValue = 10,
+                        valueRange = 0f..100f,
+                        onValueChange = { onIntent(ReadAloudConfigIntent.SetPreDownloadNum(it)) },
+                    )
+                    ReadAloudNumberSliderItem(
+                        title = stringResource(R.string.tts_pre_synthesis_concurrency),
+                        description = stringResource(
+                            R.string.tts_pre_synthesis_concurrency_summary,
+                            state.preSynthesisConcurrency,
+                        ),
+                        value = state.preSynthesisConcurrency,
+                        defaultValue = 3,
+                        valueRange = 1f..8f,
+                        onValueChange = {
+                            onIntent(ReadAloudConfigIntent.SetPreSynthesisConcurrency(it))
+                        },
+                    )
+                    ReadAloudNumberSliderItem(
+                        title = stringResource(R.string.tts_paragraph_interval),
+                        description = stringResource(
+                            R.string.tts_paragraph_interval_summary,
+                            state.readAloudParagraphInterval,
+                        ),
+                        value = state.readAloudParagraphInterval,
+                        defaultValue = 0,
+                        valueRange = 0f..5000f,
+                        onValueChange = {
+                            onIntent(ReadAloudConfigIntent.SetParagraphInterval(it))
+                        },
+                    )
+                    ReadAloudNumberSliderItem(
+                        title = stringResource(R.string.audio_cache_clean_time),
+                        description = stringResource(
+                            R.string.audio_cache_clean_time_summary,
+                            state.audioCacheCleanTime,
+                        ),
+                        value = state.audioCacheCleanTime,
+                        defaultValue = 10,
+                        valueRange = 0f..10080f,
+                        onValueChange = {
+                            onIntent(ReadAloudConfigIntent.SetAudioCacheCleanTime(it))
+                        },
+                    )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.clear_cache),
-                        onClick = { onIntent(ReadBookIntent.ClearTtsCache) },
+                        onClick = { onIntent(ReadAloudConfigIntent.ClearTtsCache) },
                     )
                 }
             }
@@ -420,7 +401,7 @@ fun ReadAloudConfigContent(
 }
 
 /**
- * 整页宿主用的数值项：直接铺开滑块，不再叠一层选择器弹层。
+ * 数值项：直接铺开滑块，不再叠一层选择器弹层。
  */
 @Composable
 private fun ReadAloudNumberSliderItem(
@@ -485,37 +466,4 @@ private fun symbolLabelRes(option: ReadAloudSplitSymbol): Int = when (option) {
     ReadAloudSplitSymbol.HalfSemicolon -> R.string.symbol_halfwidth_semicolon
     ReadAloudSplitSymbol.HalfComma -> R.string.symbol_halfwidth_comma
     ReadAloudSplitSymbol.HalfColon -> R.string.symbol_halfwidth_colon
-}
-
-@Composable
-fun ReadAloudNumberConfigSheet(
-    show: Boolean,
-    title: String,
-    description: String,
-    value: Int,
-    defaultValue: Int,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Int) -> Unit,
-    onDismissRequest: () -> Unit,
-) {
-    AppModalBottomSheet(
-        show = show,
-        onDismissRequest = onDismissRequest,
-        title = title,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            SliderSettingItem(
-                title = title,
-                description = description,
-                value = value.toFloat(),
-                defaultValue = defaultValue.toFloat(),
-                valueRange = valueRange,
-                onValueChange = { onValueChange(it.toInt()) },
-            )
-        }
-    }
 }

@@ -102,6 +102,7 @@ import io.legado.app.ui.book.read.ReadBookMenuRoute
 import io.legado.app.ui.book.read.ReadBookRouteScreen
 import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.read.ReaderSessionViewModel
+import io.legado.app.ui.book.read.sheet.asReadBookUiState
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewRouteScreen
 import io.legado.app.ui.book.readRecord.ReadRecordRouteScreen
 import io.legado.app.ui.book.readingmemory.ReadingMemoryScreen
@@ -118,7 +119,9 @@ import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsEffect
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsIntent
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsScreen
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
+import io.legado.app.ui.book.readaloud.config.ReadAloudConfigScreen
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerRouteScreen
+import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardScreen
 import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardViewModel
 import io.legado.app.ui.book.search.SearchIntent
@@ -863,17 +866,8 @@ fun MainActivity.mainEntryProvider(
                     )
                 )
             },
-            onOpenVoiceCasting = { bookUrl ->
-                onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
-            },
-            onOpenSpeechStoryboard = { bookUrl ->
-                onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
-            },
-            onOpenTtsEnginesAndVoices = {
-                onNavigateToRoute(MainRouteCloudTtsEngines(route.bookUrl))
-            },
-            onOpenTtsCache = {
-                onNavigateToRoute(MainRouteTtsCache)
+            onOpenReadAloudConfig = { bookUrl ->
+                onNavigateToRoute(MainRouteReadAloudConfig(bookUrl ?: route.bookUrl))
             },
             // 经典控制面板的「切换到听书播放器」：目的地是 nav3 路由，
             // 必须在这里接上，否则意图只发到效果层、没人导航。
@@ -881,15 +875,6 @@ fun MainActivity.mainEntryProvider(
                 onNavigateToRoute(MainRouteReadAloudPlayer)
             },
         )
-
-        // sheet 跳整页时被记成 pendingSheet/pendingMenu 先收起；同 Activity 内 push/pop
-        // 不会触发底层 entry 的 lifecycle resume，只有栈顶判定能可靠地把它放回来。
-        val isTopOfBackStack = backStack.lastOrNull() == route
-        LaunchedEffect(isTopOfBackStack) {
-            if (isTopOfBackStack) {
-                readBookViewModel.onIntent(ReadBookIntent.RestorePendingSheet)
-            }
-        }
 
         DisposableEffect(controller, lifecycleOwner, route.readAloud) {
             activeReadBookInputHandler = controller
@@ -1585,43 +1570,41 @@ fun MainActivity.mainEntryProvider(
         )
     }
 
+    entry<MainRouteReadAloudConfig> { route ->
+        // 朗读设置整页：读写都走全局朗读设置宿主，阅读器/听书页两个入口进的是同一页。
+        val playerViewModel: ReadAloudPlayerViewModel = koinInject()
+        val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
+        val settingsState by playerViewModel.readAloudSettings.collectAsStateWithLifecycle()
+        ReadAloudConfigScreen(
+            state = settingsState.asReadBookUiState(),
+            playerState = playerState,
+            onIntent = playerViewModel::applyReadAloudConfigIntent,
+            onPlayerIntent = playerViewModel::onIntent,
+            effects = playerViewModel.effects,
+            onBack = { onNavigateBack() },
+            onOpenEnginesAndVoices = { bookUrl ->
+                onNavigateToRoute(MainRouteCloudTtsEngines(bookUrl ?: route.bookUrl))
+            },
+            onOpenTtsCache = { onNavigateToRoute(MainRouteTtsCache) },
+            onOpenBookVoiceCasting = { bookUrl ->
+                onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
+            },
+            onOpenSpeechStoryboard = { bookUrl ->
+                onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            },
+        )
+    }
+
     entry<MainRouteReadAloudPlayer>(
         metadata = readAloudPlayerEntryMetadata(configuration.appShell.predictiveBackEnabled)
     ) {
         // 听书播放界面独立于阅读器：从胶囊或媒体按键打开时，阅读器可能根本不在栈上，
         // 因此这里不复用阅读器的状态宿主，只依赖全局朗读会话状态。
-        var readAloudConfigOpen by rememberSaveable { mutableStateOf(false) }
-        // 设置卡片跳独立整页时先收起（dialog 窗口会浮在新页面上），记下来等回到栈顶再弹回；
-        // 同 Activity 内 push/pop 不触发 lifecycle resume，只能按栈顶判定。
-        var readAloudConfigPendingRestore by rememberSaveable { mutableStateOf(false) }
-        val configRestorableAtTop = backStack.lastOrNull() is MainRouteReadAloudPlayer
-        LaunchedEffect(configRestorableAtTop) {
-            if (configRestorableAtTop && readAloudConfigPendingRestore) {
-                readAloudConfigPendingRestore = false
-                readAloudConfigOpen = true
-            }
-        }
         ReadAloudPlayerRouteScreen(
-            showReadAloudConfig = readAloudConfigOpen,
-            onReadAloudConfigVisibleChange = { readAloudConfigOpen = it },
             onBack = { onNavigateBack() },
-            // 设置卡片「引擎与音色」页签的跳页入口，与阅读器宿主接同一批目的地。
-            // 这四个回调只可能由卡片内的跳页意图触发，收起前一律记为待恢复。
-            onOpenTtsEnginesAndVoices = { bookUrl ->
-                readAloudConfigPendingRestore = true
-                onNavigateToRoute(MainRouteCloudTtsEngines(bookUrl))
-            },
-            onOpenTtsCache = {
-                readAloudConfigPendingRestore = true
-                onNavigateToRoute(MainRouteTtsCache)
-            },
-            onOpenBookVoiceCasting = { bookUrl ->
-                readAloudConfigPendingRestore = true
-                onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
-            },
-            onOpenSpeechStoryboard = { bookUrl ->
-                readAloudConfigPendingRestore = true
-                onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            // 朗读设置是独立整页，与阅读器宿主的齿轮进的是同一个目的地。
+            onOpenSettingsPage = {
+                onNavigateToRoute(MainRouteReadAloudConfig())
             },
             // 「切换到经典」：朗读服务全程在跑，跳回阅读页后自动打开经典控制面板即可，
             // 不需要再带 readAloud 重新起播。

@@ -1,95 +1,96 @@
 package io.legado.app.ui.book.readaloud.player
 
-import io.legado.app.ui.book.read.ReadBookIntent
+import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 
 /**
- * 把配置卡片的 [ReadBookIntent] 翻译成全局设置写入。
+ * 把朗读设置页的 [ReadAloudConfigIntent] 翻译成全局设置写入或跳页 Effect。
  *
- * 配置内容（`ReadAloudConfigContent`）的契约是 `ReadBookIntent`，因为它的主宿主是阅读器。
- * 听书播放界面是独立目的地、没有阅读器 ViewModel，所以这里把同一批意图落到
- * [ReadAloudPlayerViewModel.onConfigIntent]，两个宿主的设置语义完全一致。
+ * 设置页是 Navigation 3 整页，阅读页与听书页都跳进同一个目的地，
+ * 所以写入统一落到 [ReadAloudPlayerViewModel.onConfigIntent]，
+ * 跳页经 Effect 交给路由层，由 MainNavGraph 执行导航。
  */
-internal fun ReadAloudPlayerViewModel.applyReadBookConfigIntent(intent: ReadBookIntent) {
+internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAloudConfigIntent) {
     when (intent) {
-        is ReadBookIntent.SetDefaultReadAloudInterface ->
+        is ReadAloudConfigIntent.SetDefaultInterface ->
             onConfigIntent(ReadAloudConfigOption.DefaultInterface, value = intent.value)
 
-        is ReadBookIntent.SetShowReadAloudCapsule ->
+        is ReadAloudConfigIntent.ShowCapsule ->
             onConfigIntent(ReadAloudConfigOption.ShowCapsule, selected = intent.value)
 
-        is ReadBookIntent.SetCapsuleAutoCollapse ->
+        is ReadAloudConfigIntent.CapsuleAutoCollapse ->
             onConfigIntent(ReadAloudConfigOption.CapsuleAutoCollapse, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudIgnoreAudioFocus ->
+        is ReadAloudConfigIntent.IgnoreAudioFocus ->
             onConfigIntent(ReadAloudConfigOption.IgnoreAudioFocus, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudPauseOnPhoneCall ->
+        is ReadAloudConfigIntent.PauseOnPhoneCall ->
             onConfigIntent(ReadAloudConfigOption.PauseOnPhoneCall, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudWakeLock ->
+        is ReadAloudConfigIntent.WakeLock ->
             onConfigIntent(ReadAloudConfigOption.WakeLock, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudKeepOnExit ->
+        is ReadAloudConfigIntent.KeepOnExit ->
             onConfigIntent(ReadAloudConfigOption.KeepOnExit, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudMediaButtonPerNext ->
+        is ReadAloudConfigIntent.MediaButtonPerNext ->
             onConfigIntent(ReadAloudConfigOption.MediaButtonPerNext, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudAndroidMediaControl ->
+        is ReadAloudConfigIntent.AndroidMediaControl ->
             onConfigIntent(ReadAloudConfigOption.AndroidMediaControl, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudSystemMediaCompat ->
+        is ReadAloudConfigIntent.SystemMediaCompat ->
             onConfigIntent(ReadAloudConfigOption.SystemMediaCompat, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudStreamAudio ->
+        is ReadAloudConfigIntent.StreamAudio ->
             onConfigIntent(ReadAloudConfigOption.StreamAudio, selected = intent.value)
 
-        is ReadBookIntent.SetSpeechAnalysisMode ->
+        is ReadAloudConfigIntent.SetSpeechAnalysisMode ->
             onConfigIntent(ReadAloudConfigOption.SpeechAnalysisMode, value = intent.value)
 
-        is ReadBookIntent.SetSpeechAnalysisReasoningLevel ->
+        is ReadAloudConfigIntent.SetSpeechAnalysisReasoningLevel ->
             onConfigIntent(ReadAloudConfigOption.SpeechAnalysisReasoningLevel, value = intent.value)
 
-        is ReadBookIntent.SetUseMultiSpeaker ->
+        is ReadAloudConfigIntent.SetUseMultiSpeaker ->
             onConfigIntent(ReadAloudConfigOption.UseMultiSpeaker, selected = intent.value)
 
-        is ReadBookIntent.SetReadAloudContentSplitMode ->
+        is ReadAloudConfigIntent.SetContentSplitMode ->
             onConfigIntent(ReadAloudConfigOption.ContentSplit, value = intent.value)
 
-        is ReadBookIntent.ApplyPreDownloadNum ->
+        is ReadAloudConfigIntent.SetPreDownloadNum ->
             onConfigIntent(ReadAloudConfigOption.PreDownloadNum, intValue = intent.value)
 
-        is ReadBookIntent.ApplyPreSynthesisConcurrency ->
+        is ReadAloudConfigIntent.SetPreSynthesisConcurrency ->
             onConfigIntent(ReadAloudConfigOption.PreSynthesisConcurrency, intValue = intent.value)
 
-        is ReadBookIntent.ApplyParagraphInterval ->
+        is ReadAloudConfigIntent.SetParagraphInterval ->
             onConfigIntent(ReadAloudConfigOption.ParagraphInterval, intValue = intent.value)
 
-        is ReadBookIntent.ApplyAudioCacheCleanTime ->
+        is ReadAloudConfigIntent.SetAudioCacheCleanTime ->
             onConfigIntent(ReadAloudConfigOption.AudioCacheCleanTime, intValue = intent.value)
 
-        // 跳独立整页：发 Effect，由路由层收集后交给 MainNavGraph 导航；
-        // 语义与阅读器宿主的 ReadAloudDelegate 一致。
-        ReadBookIntent.OpenTtsEnginesAndVoices ->
+        ReadAloudConfigIntent.ResetCapsulePosition ->
+            onConfigIntent(ReadAloudConfigOption.ResetCapsulePosition)
+
+        // 跳独立整页：发 Effect，由路由层收集后交给 MainNavGraph 导航。
+        ReadAloudConfigIntent.OpenEnginesAndVoices ->
             effect(ReadAloudPlayerEffect.OpenEnginesAndVoices(uiState.value.bookUrl.ifBlank { null }))
 
-        ReadBookIntent.OpenTtsCache ->
+        ReadAloudConfigIntent.OpenTtsCache ->
             effect(ReadAloudPlayerEffect.OpenTtsCache)
 
-        ReadBookIntent.OpenBookVoiceCasting -> {
+        ReadAloudConfigIntent.OpenBookVoiceCasting -> {
             val bookUrl = uiState.value.bookUrl
             if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenBookVoiceCasting(bookUrl))
         }
 
-        ReadBookIntent.OpenSpeechStoryboard -> {
+        ReadAloudConfigIntent.OpenSpeechStoryboard -> {
             val bookUrl = uiState.value.bookUrl
             if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenSpeechStoryboard(bookUrl))
         }
 
-        ReadBookIntent.OpenSystemTtsSettings ->
+        ReadAloudConfigIntent.OpenSystemTtsSettings ->
             effect(ReadAloudPlayerEffect.OpenSystemTtsSettings)
 
-        // 其余意图在播放界面没有等价动作（缓存清理、数值选择器弹层等），静默忽略
-        else -> Unit
+        ReadAloudConfigIntent.ClearTtsCache -> clearTtsCache()
     }
 }

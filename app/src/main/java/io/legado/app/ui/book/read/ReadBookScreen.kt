@@ -35,15 +35,12 @@ import io.legado.app.ui.book.read.sheet.MoreConfigSheet
 import io.legado.app.ui.book.read.sheet.PageAnimConfigSheet
 import io.legado.app.ui.book.read.sheet.PageKeyConfigSheet
 import io.legado.app.ui.book.read.sheet.PhotoSheet
-import io.legado.app.ui.book.read.sheet.ReadAloudConfigContent
-import io.legado.app.ui.book.read.sheet.ReadAloudNumberConfigSheet
 import io.legado.app.ui.book.read.sheet.ReaderMoreActionsSheet
 import io.legado.app.ui.book.read.sheet.ShadowSetSheet
 import io.legado.app.ui.book.read.sheet.SimulatedReadingSheet
 import io.legado.app.ui.book.read.sheet.TextProcessingSheet
 import io.legado.app.ui.book.read.sheet.ToolButtonConfigSheet
 import io.legado.app.ui.book.read.sheet.UnderlineConfigSheet
-import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.dict.DictSheet
 import io.legado.app.ui.book.knowledge.CharacterQuerySheet
 import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
@@ -53,7 +50,6 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.bookmark.BookmarkEditSheet
 import io.legado.app.ui.widget.components.changeSource.ChangeSourceSheet
 import io.legado.app.ui.widget.components.log.AppLogSheet
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.collectLatest
@@ -138,9 +134,6 @@ fun ReadBookScreen(
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
 ) {
-    // 从朗读引擎/角色配音/分镜这些独立目的地返回时的 sheet/菜单恢复
-    // 由导航宿主在路由回到栈顶时触发 RestorePendingSheet；
-    // 同 Activity 内 push/pop 不会走 onPause→onResume，挂 lifecycle 事件上不可靠。
     // Dialogs driven by activeDialog state
     val restoreDialog = state.activeDialog as? ReadBookDialog.ConfirmRestoreProgress
     val syncDialog = state.activeDialog as? ReadBookDialog.SureSyncProgress
@@ -436,62 +429,6 @@ fun ReadBookScreen(
         onPickBookmarkBadgeImage = onPickBookmarkBadgeImage,
         onResetBookmarkBadge = onResetBookmarkBadge,
     )
-    ReadAloudNumberConfigSheet(
-        show = state.activeSheet is ReadBookSheet.PreDownloadConfig,
-        title = stringResource(R.string.read_aloud_preload),
-        description = stringResource(R.string.read_aloud_preload_summary, state.preDownloadNum),
-        value = state.preDownloadNum,
-        defaultValue = 10,
-        valueRange = 0f..100f,
-        onValueChange = { onIntent(ReadBookIntent.ApplyPreDownloadNum(it)) },
-        onDismissRequest = {
-            onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.ReadAloudConfig))
-        },
-    )
-    ReadAloudNumberConfigSheet(
-        show = state.activeSheet is ReadBookSheet.PreSynthesisConcurrencyConfig,
-        title = stringResource(R.string.tts_pre_synthesis_concurrency),
-        description = stringResource(
-            R.string.tts_pre_synthesis_concurrency_summary, state.preSynthesisConcurrency,
-        ),
-        value = state.preSynthesisConcurrency,
-        defaultValue = 3,
-        valueRange = 1f..8f,
-        onValueChange = { onIntent(ReadBookIntent.ApplyPreSynthesisConcurrency(it)) },
-        onDismissRequest = {
-            onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.ReadAloudConfig))
-        },
-    )
-    ReadAloudNumberConfigSheet(
-        show = state.activeSheet is ReadBookSheet.AudioCacheCleanConfig,
-        title = stringResource(R.string.audio_cache_clean_time),
-        description = stringResource(
-            R.string.audio_cache_clean_time_summary,
-            state.audioCacheCleanTime
-        ),
-        value = state.audioCacheCleanTime,
-        defaultValue = 10,
-        valueRange = 0f..10080f,
-        onValueChange = { onIntent(ReadBookIntent.ApplyAudioCacheCleanTime(it)) },
-        onDismissRequest = {
-            onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.ReadAloudConfig))
-        },
-    )
-    ReadAloudNumberConfigSheet(
-        show = state.activeSheet is ReadBookSheet.ParagraphIntervalConfig,
-        title = stringResource(R.string.tts_paragraph_interval),
-        description = stringResource(
-            R.string.tts_paragraph_interval_summary,
-            state.readAloudParagraphInterval
-        ),
-        value = state.readAloudParagraphInterval,
-        defaultValue = 0,
-        valueRange = 0f..5000f,
-        onValueChange = { onIntent(ReadBookIntent.ApplyParagraphInterval(it)) },
-        onDismissRequest = {
-            onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.ReadAloudConfig))
-        },
-    )
     AppLogSheet(
         show = state.activeSheet is ReadBookSheet.AppLog,
         onDismissRequest = dismissSheet,
@@ -516,23 +453,7 @@ fun ReadBookScreen(
         scene = state.shareCardScene,
     )
 
-    val aloudPlayerViewModel: ReadAloudPlayerViewModel =
-        org.koin.compose.koinInject()
-    val aloudPlayerShellState by aloudPlayerViewModel.uiState.collectAsStateWithLifecycle()
-    // 听书播放界面已是 Navigation 3 目的地（见 ReadAloudPlayerRouteScreen），
-    // 这里只保留朗读配置卡片；经典控制面板与听书播放界面共用同一份配置内容。
-    AppModalBottomSheet(
-        show = state.activeSheet is ReadBookSheet.ReadAloudConfig,
-        onDismissRequest = dismissSheet,
-        title = stringResource(R.string.aloud_config),
-    ) {
-        ReadAloudConfigContent(
-            state = state,
-            playerState = aloudPlayerShellState,
-            onIntent = onIntent,
-            onPlayerIntent = aloudPlayerViewModel::onIntent,
-        )
-    }
+    // 朗读设置已改为 Navigation 3 整页（ReadAloudConfigScreen），阅读页不再挂弹层宿主。
 
     val dictSheet = state.activeSheet as? ReadBookSheet.Dict
     DictSheet(

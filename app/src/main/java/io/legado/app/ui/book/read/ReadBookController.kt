@@ -2536,16 +2536,11 @@ class ReadBookController(
             is ReadBookEffect.OpenReadStyleExport,
             is ReadBookEffect.OpenMenuCustomIconPicker,
             is ReadBookEffect.OpenTitleBarCustomIconPicker,
-            is ReadBookEffect.OpenSystemTtsSettings,
-            ReadBookEffect.OpenTtsEnginesAndVoices,
-            ReadBookEffect.OpenTtsCache,
-                // 朗读播放界面是 Navigation 3 目的地，由路由层导航，这里不处理
+                // 朗读设置/播放界面是 Navigation 3 目的地，由路由层导航，这里不处理
+            is ReadBookEffect.OpenReadAloudConfig,
             ReadBookEffect.OpenReadAloudPlayer,
-            is ReadBookEffect.OpenBookVoiceCasting,
-            is ReadBookEffect.OpenSpeechStoryboard,
             is ReadBookEffect.OpenHighlightRuleImportPicker,
             is ReadBookEffect.OpenHighlightRuleExportPicker,
-            is ReadBookEffect.TtsCacheCleared,
             is ReadBookEffect.ExportJson,
             // DB query + bookmark effects — handled by ViewModel, ignored here
             is ReadBookEffect.MenuChangeSource,
