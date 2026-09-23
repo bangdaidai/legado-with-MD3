@@ -273,6 +273,7 @@ dependencies {
     implementation(libs.firebase.perf)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.palette)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.startup.runtime)
     implementation(platform(libs.androidx.compose.bom))

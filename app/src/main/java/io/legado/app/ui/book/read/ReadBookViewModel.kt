@@ -250,6 +250,10 @@ class ReadBookViewModel(
                 _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
             }
 
+            override fun cancelReaderSelection() {
+                _effects.tryEmit(ReadBookEffect.CancelSelect)
+            }
+
             override fun showToast(message: String) {
                 _effects.tryEmit(ReadBookEffect.ShowToast(message))
             }
@@ -1741,21 +1745,13 @@ class ReadBookViewModel(
             ReadBook.webBookProgress = null
         }
 
-        // View-layer operations via effects
-        _effects.tryEmit(ReadBookEffect.UpSystemUiVisibility)
-        _effects.tryEmit(ReadBookEffect.UpTime)
-        _effects.tryEmit(ReadBookEffect.UpScreenTimeOut)
-
-        // Activity-level operations
-        _effects.tryEmit(ReadBookEffect.RegisterTimeBatteryReceiver)
-        _effects.tryEmit(ReadBookEffect.RegisterNetworkListener)
+        // Reader window and listener lifecycle is handled synchronously by the route controller.
     }
 
     private var justInitData = false
 
     private fun handleOnPause() {
         backupJob?.cancel()
-        _effects.tryEmit(ReadBookEffect.StopAutoPage)
 
         // Read time tracking
         ReadBook.isUiActive = false
@@ -1766,20 +1762,12 @@ class ReadBookViewModel(
         }
         ReadBook.cancelPreDownloadTask()
 
-        // View-layer
-        _effects.tryEmit(ReadBookEffect.UpSystemUiVisibility)
-
-        // Activity-level operations
-        _effects.tryEmit(ReadBookEffect.UnregisterTimeBatteryReceiver)
-        _effects.tryEmit(ReadBookEffect.UnregisterNetworkListener)
-
         if (!BuildConfig.DEBUG) {
             if (backupSettingsGateway.currentSettings.syncBookProgressPlus) {
                 ReadBook.syncProgress()
             } else {
                 ReadBook.uploadProgress()
             }
-            _effects.tryEmit(ReadBookEffect.BackupNow)
         }
         justInitData = false
     }

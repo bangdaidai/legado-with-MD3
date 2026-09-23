@@ -222,7 +222,17 @@ object ReaderPaginator {
  * 因为只有章末才知道它的堆叠高度要加 [ReaderPaginationConfig.chapterEndPaddingPx]
  * （旧版同样在章末才 `textPage.height = durY + 20dp`）。
  */
-internal class ReaderPaginationSession(private val config: ReaderPaginationConfig) {
+internal class ReaderPaginationMetrics {
+    var lineBreakNs = 0L
+    var lineRefineNs = 0L
+    var linePlacementNs = 0L
+    var inlineParagraphs = 0L
+}
+
+internal class ReaderPaginationSession(
+    private val config: ReaderPaginationConfig,
+    private val metrics: ReaderPaginationMetrics? = null,
+) {
 
     /** 每页成型即回调；章末页在 [finish] 内回调。 */
     var onPage: ((ReaderPage) -> Unit)? = null
@@ -578,6 +588,7 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
         appendSeparator: Boolean,
     ) {
         if (paragraph.items.isEmpty()) return
+        val setupStartNs = if (metrics != null) System.nanoTime() else 0L
         val letterSpacing = paragraph.letterSpacingPx ?: config.letterSpacingPx
         val indentWidth = paragraph.indentWidthPx
             ?: (paragraph.baseTextSizePx + letterSpacing) * paragraph.indentCharacters
@@ -635,6 +646,7 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
                 .coerceAtLeast(0f).toInt(),
         )
         val originalEnds = breaker.lineClusterStarts.drop(1)
+        val refineStartNs = if (metrics != null) System.nanoTime() else 0L
         val starts = mutableListOf(0)
         // 段首/段尾的 bgMargin 仍可能把行挤短（保留旧引擎外边距语义），对照旧 View 逐行
         // 收紧行尾。禁则断点不破坏，与旧标点优先级一致。
@@ -664,6 +676,7 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             }
             starts += until
         }
+        val placementStartNs = if (metrics != null) System.nanoTime() else 0L
         for (lineIndex in 0 until starts.lastIndex) {
             val from = starts[lineIndex]
             val until = starts[lineIndex + 1]
@@ -842,6 +855,13 @@ internal class ReaderPaginationSession(private val config: ReaderPaginationConfi
             y += if (paragraph.emphasized) (config.titleParagraphSpacingPx
                 ?: config.paragraphSpacingPx) * paragraph.titleSpacingScale
             else config.paragraphSpacingPx
+        }
+        if (metrics != null) {
+            val endNs = System.nanoTime()
+            metrics.lineBreakNs += refineStartNs - setupStartNs
+            metrics.lineRefineNs += placementStartNs - refineStartNs
+            metrics.linePlacementNs += endNs - placementStartNs
+            metrics.inlineParagraphs++
         }
     }
 

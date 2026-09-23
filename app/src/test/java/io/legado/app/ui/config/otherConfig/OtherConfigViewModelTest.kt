@@ -8,20 +8,19 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.DirectLinkRule
 import io.legado.app.domain.gateway.DirectLinkSettingsGateway
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
-import io.legado.app.domain.gateway.LocalPasswordGateway
 import io.legado.app.domain.gateway.OtherConfigSystemGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
+import io.legado.app.domain.model.settings.BookshelfSettings
+import io.legado.app.domain.model.settings.DownloadCacheSettings
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ReadAloudSettings
-import io.legado.app.domain.model.settings.DownloadCacheSettings
-import io.legado.app.domain.model.settings.BookshelfSettings
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.async
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -29,8 +28,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import splitties.init.injectAsAppCtx
 
@@ -49,13 +48,11 @@ class OtherConfigViewModelTest {
         val appLocaleGateway = FakeAppLocaleGateway()
         val viewModel = OtherConfigViewModel(
             appLocaleGateway = appLocaleGateway,
-        readAloudSettingsGateway = FakeReadAloudSettingsGateway(),
-        otherSettingsGateway = otherSettingsGateway,
-        bookshelfSettingsGateway = FakeBookshelfSettingsGateway(),
+            readAloudSettingsGateway = FakeReadAloudSettingsGateway(),
+            otherSettingsGateway = otherSettingsGateway,
             bookshelfSettingsGateway = FakeBookshelfSettingsGateway(),
             downloadCacheSettingsGateway = FakeDownloadCacheSettingsGateway(),
             directLinkSettingsGateway = FakeDirectLinkSettingsGateway(),
-            localPasswordGateway = FakeLocalPasswordGateway(),
             systemGateway = FakeOtherConfigSystemGateway(),
             initialState = OtherConfigUiState(),
         )
@@ -106,21 +103,15 @@ class OtherConfigViewModelTest {
     }
 
     @Test
-    fun directRuleAndPassword_writeThroughGateways() = runBlocking {
+    fun directRule_writeThroughGateway() = runBlocking {
         val directLinkGateway = FakeDirectLinkSettingsGateway()
-        val localPasswordGateway = FakeLocalPasswordGateway()
-        val viewModel = createViewModel(
-            directLinkSettingsGateway = directLinkGateway,
-            localPasswordGateway = localPasswordGateway,
-        )
+        val viewModel = createViewModel(directLinkSettingsGateway = directLinkGateway)
         Shadows.shadowOf(Looper.getMainLooper()).idle()
 
         viewModel.onIntent(OtherConfigIntent.ConfirmDirectLinkRule)
-        viewModel.onIntent(OtherConfigIntent.SaveLocalPassword("secret"))
         Shadows.shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals("Example", directLinkGateway.savedRule?.summary)
-        assertEquals("secret", localPasswordGateway.savedPassword)
     }
 
     @Test
@@ -144,15 +135,14 @@ class OtherConfigViewModelTest {
         otherSettingsGateway: FakeOtherSettingsGateway = FakeOtherSettingsGateway(),
         directLinkSettingsGateway: FakeDirectLinkSettingsGateway =
             FakeDirectLinkSettingsGateway(),
-        localPasswordGateway: FakeLocalPasswordGateway = FakeLocalPasswordGateway(),
         systemGateway: FakeOtherConfigSystemGateway = FakeOtherConfigSystemGateway(),
     ) = OtherConfigViewModel(
         appLocaleGateway = FakeAppLocaleGateway(),
         readAloudSettingsGateway = FakeReadAloudSettingsGateway(),
         otherSettingsGateway = otherSettingsGateway,
+        bookshelfSettingsGateway = FakeBookshelfSettingsGateway(),
         downloadCacheSettingsGateway = FakeDownloadCacheSettingsGateway(),
         directLinkSettingsGateway = directLinkSettingsGateway,
-        localPasswordGateway = localPasswordGateway,
         systemGateway = systemGateway,
         initialState = OtherConfigUiState(),
     )
@@ -242,14 +232,6 @@ class OtherConfigViewModelTest {
             savedRule = rule
         }
         override suspend fun testRule(rule: DirectLinkRule): String = "ok"
-    }
-
-    private class FakeLocalPasswordGateway : LocalPasswordGateway {
-        var savedPassword: String? = null
-
-        override suspend fun setPassword(password: String?) {
-            savedPassword = password
-        }
     }
 
     private class FakeOtherConfigSystemGateway : OtherConfigSystemGateway {

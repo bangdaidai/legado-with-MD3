@@ -3,6 +3,7 @@ package io.legado.app.ui.main.bookshelf
 import androidx.compose.runtime.Stable
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
+import io.legado.app.domain.model.PrivateAccessState
 import io.legado.app.utils.splitNotBlank
 import io.legado.app.help.book.TagManager
 import kotlinx.collections.immutable.ImmutableList
@@ -53,16 +54,29 @@ data class BookShelfItem(
 
     /**
      * 将 DTO 转换为专为 Compose 设计的 UI 状态
+     *
+     * [isPrivate] 由书架在内存侧算出并集（单本标记 ∪ 所属私密分组），
+     * 这里只负责带上结果，不做判定。
      */
-    suspend fun toUiItem(): BookUiItem {
+    suspend fun toUiItem(isPrivate: Boolean = false): BookUiItem {
         // 统一数据源：与书籍信息页、阅读记忆页一致（排除 + 映射异名归一）
         val tagList = TagManager.bookDisplayTags(kind, customTag)
         return BookUiItem(
             book = this,
-            displayTags = tagList.toImmutableList()
+            displayTags = tagList.toImmutableList(),
+            isPrivate = isPrivate
         )
     }
 }
+
+/**
+ * 这本书此刻是否处于锁定态（需要脱敏）。
+ *
+ * 唯一实现：凡是判断"某本书要不要遮"的地方都走这里，
+ * 避免 UiState 与 ViewModel 各自复制一份谓词后漂移。
+ */
+fun BookUiItem.isLocked(access: PrivateAccessState, verifyOnOpenBook: Boolean): Boolean =
+    isPrivate && verifyOnOpenBook && !access.isTargetGranted(book.bookUrl, book.group)
 
 /**
  * 理想实现：专为 UI 设计的状态类
@@ -70,7 +84,8 @@ data class BookShelfItem(
 @Stable
 data class BookUiItem(
     val book: BookShelfItem,
-    val displayTags: ImmutableList<String>
+    val displayTags: ImmutableList<String>,
+    val isPrivate: Boolean = false
 ) {
     fun matches(key: String): Boolean {
         return book.name.contains(key, true) ||

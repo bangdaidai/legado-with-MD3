@@ -43,6 +43,11 @@ class MarkingDelegate(
         fun dismissMarkingSheet()
         /** 一键保存遇到已有标记时转编辑：请求宿主打开笔记 Sheet（此时选区已就绪）。 */
         fun openMarkingSheet()
+        /**
+         * 取消排版层选区。笔记会话期间选区是样式实时预览的绘制载体，
+         * 所以只在预览不再需要它的时候调用：纯关闭时立刻，保存后等重排批次提交。
+         */
+        fun cancelReaderSelection()
         fun showToast(message: String)
     }
 
@@ -191,6 +196,9 @@ class MarkingDelegate(
             }.onSuccess {
                 host.reloadCurrentChapter()
                 host.dismissMarkingSheet()
+                // 预览在删除发起前就已撤掉，没有等重排批次的理由：选区当场取消，
+                // 否则关闭弹层后框着的只是普通文字。
+                host.cancelReaderSelection()
             }.onFailure { error ->
                 host.showToast(error.localizedMessage ?: context.getString(R.string.error))
             }
@@ -206,16 +214,18 @@ class MarkingDelegate(
         _uiState.update { it.copy(floatingAnchor = anchor) }
     }
 
-    /** 当前章重排批次提交：新样式已烘进页面，撤掉粘性预览。 */
+    /** 当前章重排批次提交：新样式已烘进页面，撤掉粘性预览，选区也不再需要留着。 */
     fun onPagesCommitted(chapterIndex: Int) {
         if (previewCommitPending != chapterIndex) return
         previewCommitPending = null
         _uiState.update { it.copy(previewStyle = null) }
+        host.cancelReaderSelection()
     }
 
     fun onSheetDismissed() {
         previewCommitPending = null
         _uiState.value = MarkingUiState()
+        host.cancelReaderSelection()
     }
 
     private suspend fun persistMarking(
