@@ -1142,6 +1142,19 @@ private fun BookInfoOverflowMenu(
             text = stringResource(R.string.to_top),
             onClick = { onMenuAction(BookInfoMenuAction.Top) }
         )
+        // 与书架多选"标记私密"同一显示口径：没设本地密码时标了也不生效，入口就不出现
+        if (state.privateAccess.hasPassword) {
+            RoundDropdownMenuItem(
+                text = stringResource(
+                    if (state.bookPrivate) {
+                        R.string.private_unmark_book
+                    } else {
+                        R.string.private_mark_book
+                    }
+                ),
+                onClick = { onMenuAction(BookInfoMenuAction.TogglePrivate) }
+            )
+        }
         if (book?.isLocal == false ){
             RoundDropdownMenuItem(
                 text = stringResource(R.string.allow_update),
