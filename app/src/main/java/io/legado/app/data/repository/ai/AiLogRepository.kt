@@ -33,6 +33,14 @@ data class AiLogEntry(
     val modelDisplayName: String? = null,
     val summary: String = "",
     val success: Boolean = true,
+    /**
+     * 这次调用是被上层取消的（翻页、停止朗读、预合成重启），不是模型或网络出错。
+     *
+     * 取消与失败必须分开：朗读起播与预合成共用书级锁时，用户一次不耐烦的重复点击就能留下
+     * 成排「失败」记录，看日志的人据此判断不出到底是模型不行还是自己打断了自己。
+     * 历史数据没有这个字段，Gson 反序列化后为 false，等于按失败展示，可接受。
+     */
+    val cancelled: Boolean = false,
     val durationMillis: Long = 0,
     val error: String? = null,
     /** 业务场景中文名（如「作者简介生成」），由仓库层按 taskType 映射，区分于底层调用类型 [kind]。 */

@@ -1,5 +1,6 @@
 package io.legado.app.domain.model
 
+import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
@@ -87,7 +88,8 @@ private val CONTEXT_OVERFLOW_MARKERS = listOf(
  * 把任意异常归一化成 [AiFailureKind]。
  *
  * 注意：[kotlinx.coroutines.CancellationException] 不在这里处理 —— 协程取消必须由调用方
- * 直接重抛，不能当作可重试的失败。
+ * 直接重抛，不能当作可重试的失败。唯一的例外是 [TimeoutCancellationException]：它虽然是
+ * CancellationException 的子类，但含义是「这次请求没在预算内完成」，属于真失败。
  */
 fun Throwable.aiFailureKind(): AiFailureKind {
     if (this is AiHttpException) {
@@ -105,6 +107,9 @@ fun Throwable.aiFailureKind(): AiFailureKind {
     if (this is SocketTimeoutException || this is InterruptedIOException) {
         return AiFailureKind.TIMEOUT
     }
+    // 仓库层的 withTimeout 是 AI 调用唯一的整体超时（AiHttpClient 把 okhttp 的
+    // readTimeout / callTimeout 都关成 0），不归这一条的话超时永远落 UNKNOWN。
+    if (this is TimeoutCancellationException) return AiFailureKind.TIMEOUT
     if (this is IOException) return AiFailureKind.NETWORK
     return detectContextOverflow(message) ?: AiFailureKind.UNKNOWN
 }

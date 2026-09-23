@@ -62,6 +62,7 @@ class AiLogViewModel(
                     model = entry.modelDisplayName ?: entry.modelId ?: "-",
                     summary = entry.summary,
                     success = entry.success,
+                    cancelled = entry.cancelled,
                     durationText = formatDuration(entry.durationMillis),
                     error = entry.error,
                     steps = entry.steps.map { AiLogStepUi(relativeMs = it.relativeMs, label = it.label) },
@@ -99,7 +100,7 @@ class AiLogViewModel(
     }
 
     private fun buildItemText(item: AiLogItemUi): String = buildString {
-        append("[${item.timeText}] ${item.scenario} · ${item.kind} ${if (item.success) "成功" else "失败"}")
+        append("[${item.timeText}] ${item.scenario} · ${item.kind} ${statusText(item)}")
         append(" | ${item.provider} / ${item.model}")
         append(" | ${item.durationText}")
         if (item.summary.isNotBlank()) append("\n${item.summary}")
@@ -112,7 +113,16 @@ class AiLogViewModel(
                 append("\n  +${formatDuration(step.relativeMs)} ${step.label}")
             }
         }
-        if (!item.success && !item.error.isNullOrBlank()) append("\n错误: ${item.error}")
+        if (!item.success && !item.error.isNullOrBlank()) {
+            append("\n${if (item.cancelled) "取消原因" else "错误"}: ${item.error}")
+        }
+    }
+
+    /** 取消单列一档：朗读起播与预合成共用书级锁时，用户重复点击会成批留下取消记录。 */
+    private fun statusText(item: AiLogItemUi): String = when {
+        item.success -> "成功"
+        item.cancelled -> "已取消"
+        else -> "失败"
     }
 
     private fun kindLabel(kind: String): String = when (kind) {

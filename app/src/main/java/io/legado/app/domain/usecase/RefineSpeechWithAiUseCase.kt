@@ -29,6 +29,7 @@ import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.Uuid
@@ -149,12 +150,16 @@ class RefineSpeechWithAiUseCase(
                         }
                     }
                 }
-            } catch (e: CancellationException) {
-                // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却
-                throw e
             } catch (e: Throwable) {
-                markAiFailed(analysisResult, e, now)
-                bookAiCooldownUntil[bookUrl] = now + AI_FAILURE_COOLDOWN_MS
+                // 用户翻页/停止朗读导致的取消不是失败，不能因此把整章锁进冷却。
+                // 但超时必须算失败：`withTimeout` 抛的 TimeoutCancellationException 也是
+                // CancellationException 的子类，不单独排除的话超时永远进不了冷却，
+                // 每次起播和每一章预合成都会重撞一遍几十秒的超时。
+                val cancelledByUser = e is CancellationException && e !is TimeoutCancellationException
+                if (!cancelledByUser) {
+                    markAiFailed(analysisResult, e, now)
+                    bookAiCooldownUntil[bookUrl] = now + AI_FAILURE_COOLDOWN_MS
+                }
                 throw e
             }
             val status = if (refined.any { segment ->

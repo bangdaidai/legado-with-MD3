@@ -1,5 +1,10 @@
 package io.legado.app.domain.model
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -86,6 +91,34 @@ class AiFailureKindTest {
     @Test
     fun unclassifiedFailuresAreNotRetried() {
         val kind = IllegalStateException("Empty AI response").aiFailureKind()
+
+        assertEquals(AiFailureKind.UNKNOWN, kind)
+        assertFalse(kind.isRetryable)
+    }
+
+    /**
+     * 仓库层 withTimeout 造的超时不是 IOException，AI 调用又是唯一一处整体超时
+     * （okhttp 的 readTimeout / callTimeout 都是 0），漏掉它等于超时永远不重试。
+     */
+    @Test
+    fun coroutineTimeoutIsRetryableAsTimeout() = runBlocking {
+        val error = try {
+            withTimeout(1) { delay(1_000) }
+            throw IllegalStateException("expected withTimeout to fire")
+        } catch (e: TimeoutCancellationException) {
+            e
+        }
+
+        val kind = error.aiFailureKind()
+
+        assertEquals(AiFailureKind.TIMEOUT, kind)
+        assertTrue(kind.isRetryable)
+    }
+
+    /** 真取消仍然不是超时：它必须留在不重试那一类，由调用方直接重抛。 */
+    @Test
+    fun plainCancellationIsStillNotATimeout() {
+        val kind = CancellationException("Job was cancelled").aiFailureKind()
 
         assertEquals(AiFailureKind.UNKNOWN, kind)
         assertFalse(kind.isRetryable)

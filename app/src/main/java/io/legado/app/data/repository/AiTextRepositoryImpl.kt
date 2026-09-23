@@ -91,6 +91,8 @@ class AiTextRepositoryImpl(
                     modelDisplayName = model.displayName,
                     summary = summary,
                     success = cancellation == null && error == null,
+                    // 取消单独一档：超时在上面已经按「请求超时」归到失败，不会走到这里
+                    cancelled = cancellation != null,
                     durationMillis = System.currentTimeMillis() - start,
                     error = error,
                     scenario = aiTaskSceneLabel(request.taskType),
@@ -134,7 +136,10 @@ class AiTextRepositoryImpl(
             .onCompletion { cause ->
                 if (suppressLog) return@onCompletion
                 val success = cause == null
-                val cancelled = cause is CancellationException
+                // 与 generate 一致：withTimeout 造的超时是 CancellationException 的子类，
+                // 不排除就会把「模型没在预算内回话」记成「用户自己打断」。
+                val cancelled = cause is CancellationException &&
+                    cause !is TimeoutCancellationException
                 val logError = if (success) {
                     null
                 } else if (cancelled) {
@@ -152,6 +157,7 @@ class AiTextRepositoryImpl(
                         modelDisplayName = model.displayName,
                         summary = summary,
                         success = success,
+                        cancelled = cancelled,
                         durationMillis = System.currentTimeMillis() - start,
                         error = logError,
                         scenario = aiTaskSceneLabel(request.taskType),

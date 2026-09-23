@@ -171,10 +171,16 @@ private fun LogCard(
     onToggleExpand: () -> Unit,
     onCopy: () -> Unit,
 ) {
-    val statusColor = if (item.success) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.error
+    val statusColor = when {
+        item.success -> MaterialTheme.colorScheme.primary
+        // 取消是用户自己打断的（翻页、停止朗读），不该标成红色报错
+        item.cancelled -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.error
+    }
+    val statusLabel = when {
+        item.success -> stringResource(R.string.success)
+        item.cancelled -> stringResource(R.string.ai_log_cancelled)
+        else -> stringResource(R.string.fail)
     }
     val hasLongContent = item.summary.isNotBlank() ||
         item.prompt.isNotBlank() ||
@@ -202,7 +208,7 @@ private fun LogCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "${item.kind} · ${if (item.success) stringResource(R.string.success) else stringResource(R.string.fail)}",
+                    text = "${item.kind} · $statusLabel",
                     style = MaterialTheme.typography.labelMedium,
                     color = statusColor,
                 )
@@ -258,7 +264,7 @@ private fun LogCard(
                 Text(
                     text = stringResource(R.string.ai_log_error_format, item.error),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = statusColor,
                     modifier = Modifier.padding(top = 4.dp),
                     maxLines = if (expanded) Int.MAX_VALUE else 4,
                 )

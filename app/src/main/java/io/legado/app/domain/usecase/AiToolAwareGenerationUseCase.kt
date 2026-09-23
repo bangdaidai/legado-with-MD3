@@ -38,6 +38,7 @@ class AiToolAwareGenerationUseCase(
         val model = request.model
         var currentRequest = request.let { if (it.readOnlyTools) it.withReadOnlyTools() else it }
         var lastError: String? = null
+        var cancelled = false
         var success = false
         // 整个工具循环的思考与输出聚合，供 finally 里写入 AI 日志
         val reasoningBuilder = StringBuilder()
@@ -95,6 +96,8 @@ class AiToolAwareGenerationUseCase(
                 )
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
+            // 超时也是 CancellationException 的子类，但它算一次真失败，不能记成「已取消」
+            cancelled = e !is kotlinx.coroutines.TimeoutCancellationException
             lastError = e.message?.takeIf { it.isNotBlank() } ?: "已取消"
             throw e
         } catch (e: Throwable) {
@@ -113,6 +116,7 @@ class AiToolAwareGenerationUseCase(
                     modelDisplayName = model.displayName,
                     summary = summarizeRequest(request),
                     success = success,
+                    cancelled = cancelled,
                     durationMillis = System.currentTimeMillis() - start,
                     error = lastError,
                     scenario = aiTaskSceneLabel(request.taskType),

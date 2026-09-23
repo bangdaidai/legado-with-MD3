@@ -27,6 +27,8 @@ data class AiLogItemUi(
     val model: String,
     val summary: String,
     val success: Boolean,
+    /** 这次调用是被上层取消的，既不是成功也不是失败，单独一档避免看日志时误判成模型出错。 */
+    val cancelled: Boolean = false,
     val durationText: String,
     val error: String?,
     val steps: List<AiLogStepUi> = emptyList(),
