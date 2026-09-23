@@ -1435,7 +1435,6 @@ class ReadBookViewModel(
             is ReadBookIntent.SetReadAloudTtsSpeechRate ->
                 readAloudDelegate.setTtsSpeechRate(intent.value)
             ReadBookIntent.OpenReadAloudPlayer -> readAloudDelegate.openPlayer()
-            ReadBookIntent.OpenClassicReadAloudControls -> readAloudDelegate.openClassicControls()
 
             is ReadBookIntent.SelectFont -> styleDelegate.selectFont(intent.path)
             is ReadBookIntent.SelectTitleFont -> styleDelegate.selectTitleFont(intent.path)

@@ -278,13 +278,6 @@ private fun readAloudPlayerEntryMetadata(predictiveBackEnabled: Boolean) = metad
     }
 }
 
-/**
- * 听书播放页「经典控制」的目标判定：上一站是阅读界面时回到已有阅读界面并打开经典朗读控制，
- * 否则打开阅读界面。抽成纯函数以便单测覆盖这条分支。
- */
-internal fun hasReadBookParent(backStack: List<NavKey>): Boolean =
-    backStack.dropLast(1).lastOrNull() is MainRouteReadBook
-
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun MainActivity.mainEntryProvider(
     backStack: MutableList<NavKey>,

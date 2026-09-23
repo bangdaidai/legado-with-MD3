@@ -224,12 +224,6 @@ class ReadAloudDelegate(
         host.emitEffect(ReadBookEffect.OpenReadAloudPlayer)
     }
 
-    /** 经典朗读控制面板：阅读菜单里的一页，不遮挡正文区域之外的交互。 */
-    fun openClassicControls() {
-        host.updateState { it.copy(activeSheet = null) }
-        host.openReadMenuRoute(ReadBookMenuRoute.ReadAloud)
-    }
-
     /**
      * 打开朗读设置整页（Navigation 3 目的地）。
      *

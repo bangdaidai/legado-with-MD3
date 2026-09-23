@@ -835,7 +835,6 @@ sealed interface ReadBookIntent {
     data class SetReadAloudTtsFollowSys(val value: Boolean) : ReadBookIntent
     data class SetReadAloudTtsSpeechRate(val value: Int) : ReadBookIntent
     data object OpenReadAloudPlayer : ReadBookIntent
-    data object OpenClassicReadAloudControls : ReadBookIntent
     data class SelectFont(val path: String) : ReadBookIntent
     data class SelectTitleFont(val path: String) : ReadBookIntent
     data class SelectTitleSystemTypeface(val index: Int) : ReadBookIntent
