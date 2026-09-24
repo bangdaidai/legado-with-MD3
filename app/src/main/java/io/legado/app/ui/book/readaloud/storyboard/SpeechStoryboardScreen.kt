@@ -54,6 +54,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarScrollBehavior
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
@@ -129,6 +130,7 @@ fun SpeechStoryboardScreen(
         topBar = {
             StoryboardTopBar(
                 state = state,
+                scrollBehavior = scrollBehavior,
                 inChapterDetail = inChapterDetail,
                 onIntent = onIntent,
                 onBack = onBack,
@@ -168,6 +170,7 @@ fun SpeechStoryboardScreen(
 @Composable
 private fun StoryboardTopBar(
     state: SpeechStoryboardUiState,
+    scrollBehavior: GlassTopAppBarScrollBehavior,
     inChapterDetail: Boolean,
     onIntent: (SpeechStoryboardIntent) -> Unit,
     onBack: () -> Unit,
@@ -240,7 +243,7 @@ private fun StoryboardTopBar(
                 )
             }
         },
-        scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior(),
+        scrollBehavior = scrollBehavior,
     )
 }
 
