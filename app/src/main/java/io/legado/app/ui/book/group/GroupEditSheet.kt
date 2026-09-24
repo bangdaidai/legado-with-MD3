@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -27,7 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.TagGroupRule
@@ -41,6 +45,7 @@ import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.CompactSwitchSettingItem
+import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.SelectImageContract
@@ -111,6 +116,7 @@ fun GroupEditContent(
     var pattern by remember(tagGroupRule) { mutableStateOf(tagGroupRule?.pattern ?: "") }
     var showPattern by remember(tagGroupRule) { mutableStateOf(tagGroupRule != null || pattern.isNotBlank()) }
     var isSaving by remember(group) { mutableStateOf(false) }
+    val hasLocalPassword by viewModel.hasLocalPassword.collectAsStateWithLifecycle()
 
     val sortOptions = stringArrayResource(R.array.book_sort)
     val sortEntryValues = remember(sortOptions) {
@@ -297,18 +303,88 @@ fun GroupEditContent(
         )
     }
 
-    AppAlertDialog(
+    PrivateConfirmDialog(
         show = showDisablePrivateDialog,
-        onDismissRequest = { showDisablePrivateDialog = false },
         title = stringResource(R.string.disable_private_group),
-        text = stringResource(R.string.sure_disable_private_group),
-        confirmText = stringResource(android.R.string.ok),
-        onConfirm = {
+        message = stringResource(R.string.sure_disable_private_group),
+        requiresPassword = hasLocalPassword,
+        viewModel = viewModel,
+        onDismissRequest = { showDisablePrivateDialog = false },
+        onConfirmed = {
             isPrivate = false
             showDisablePrivateDialog = false
+        }
+    )
+}
+
+@Composable
+private fun PrivateConfirmDialog(
+    show: Boolean,
+    title: String,
+    message: String,
+    requiresPassword: Boolean,
+    viewModel: GroupViewModel,
+    onDismissRequest: () -> Unit,
+    onConfirmed: () -> Unit,
+) {
+    // show 变化即重置：每次重新弹框都是干净的输入，不带上一轮的密码或错误态
+    var password by remember(show) { mutableStateOf("") }
+    var passwordError by remember(show) { mutableStateOf(false) }
+
+    AppAlertDialog(
+        show = show,
+        onDismissRequest = {
+            passwordError = false
+            onDismissRequest()
+        },
+        title = title,
+        text = message,
+        content = {
+            if (requiresPassword) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    AppTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            passwordError = false
+                        },
+                        label = stringResource(R.string.private_unlock_password_title),
+                        backgroundColor = LegadoTheme.colorScheme.surface,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (passwordError) {
+                        AppText(
+                            text = stringResource(R.string.private_unlock_password_error),
+                            color = LegadoTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        },
+        confirmText = stringResource(android.R.string.ok),
+        onConfirm = {
+            if (requiresPassword) {
+                viewModel.verifyPrivatePassword(password) { ok ->
+                    if (ok) {
+                        password = ""
+                        passwordError = false
+                        onConfirmed()
+                    } else {
+                        passwordError = true
+                    }
+                }
+            } else {
+                // 未设本地密码时无从校验，退回普通确认
+                onConfirmed()
+            }
         },
         dismissText = stringResource(android.R.string.cancel),
-        onDismiss = { showDisablePrivateDialog = false }
+        onDismiss = {
+            passwordError = false
+            onDismissRequest()
+        }
     )
 }
 
@@ -335,6 +411,7 @@ fun GroupDeleteAction(
     viewModel: GroupViewModel = koinViewModel()
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val hasLocalPassword by viewModel.hasLocalPassword.collectAsStateWithLifecycle()
 
     MediumTonalButton(
         onClick = {
@@ -344,22 +421,22 @@ fun GroupDeleteAction(
         contentDescription = stringResource(R.string.delete),
     )
 
-    AppAlertDialog(
+    PrivateConfirmDialog(
         show = showDeleteDialog,
-        onDismissRequest = { showDeleteDialog = false },
         title = stringResource(R.string.delete),
-        text = stringResource(
+        message = stringResource(
             if (group.isPrivate) R.string.sure_del_private_group else R.string.sure_del
         ),
-        confirmText = stringResource(android.R.string.ok),
-        onConfirm = {
+        // 只有私密分组才拦；非私密分组维持原普通确认
+        requiresPassword = group.isPrivate && hasLocalPassword,
+        viewModel = viewModel,
+        onDismissRequest = { showDeleteDialog = false },
+        onConfirmed = {
             showDeleteDialog = false
             viewModel.delGroup(group) {
                 onDismissRequest()
             }
-        },
-        dismissText = stringResource(android.R.string.cancel),
-        onDismiss = { showDeleteDialog = false }
+        }
     )
 }
 

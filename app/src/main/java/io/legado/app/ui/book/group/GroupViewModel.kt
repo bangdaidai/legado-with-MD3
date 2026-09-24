@@ -8,20 +8,43 @@ import io.legado.app.data.entities.TagGroupRule
 import io.legado.app.data.repository.BookGroupRepository
 import io.legado.app.data.repository.TagGroupRuleRepository
 import io.legado.app.domain.gateway.BookGroupMutationGateway
+import io.legado.app.domain.gateway.PrivateAccessGateway
 import io.legado.app.domain.model.BookGroupUpdate
 import io.legado.app.domain.model.NewBookGroup
 import io.legado.app.domain.model.TagGroupRuleUpdate
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class GroupViewModel(
     application: Application,
     private val bookGroupRepository: BookGroupRepository,
     private val bookGroupMutationGateway: BookGroupMutationGateway,
+    private val privateAccessGateway: PrivateAccessGateway,
 ) : BaseViewModel(application) {
 
     private val tagGroupRuleRepository = TagGroupRuleRepository()
+
+    /** 是否设了本地密码：没设就无法校验，私密分组的关闭/删除退回普通确认框。Eagerly 保证开框即读到真值。 */
+    val hasLocalPassword: StateFlow<Boolean> = privateAccessGateway.state
+        .map { it.hasPassword }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * 关闭/删除私密分组前的身份校验。走 verifyPasswordOnly：只证明是本人，
+     * 不顺手把私密内容解锁（与"进隐私设置页"同一套语义）。
+     */
+    fun verifyPrivatePassword(input: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = runCatching { privateAccessGateway.verifyPasswordOnly(input) }
+                .getOrDefault(false)
+            onResult(ok)
+        }
+    }
 
     fun upGroup(vararg bookGroup: BookGroup, finally: (() -> Unit)? = null) {
         execute {

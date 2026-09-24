@@ -179,6 +179,7 @@ import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
 import io.legado.app.ui.widget.components.changeSource.ChangeSourceSheet
 import io.legado.app.ui.widget.components.privacy.PrivateReadGate
+import io.legado.app.ui.widget.components.privacy.PrivateVerifyGate
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.sendToClip
@@ -585,7 +586,11 @@ fun MainActivity.mainEntryProvider(
     }
 
     entry<MainRouteSettingsPrivate> {
-        PrivateConfigRouteScreen(onBackClick = { onNavigateBack() })
+        // 隐私设置页可以关掉三种验证时机，所以进入前要求确认身份（生物或密码）。
+        // 只校验、不授予：进来一次不该顺带解锁私密内容。
+        PrivateVerifyGate(onCancel = { onNavigateBack() }) {
+            PrivateConfigRouteScreen(onBackClick = { onNavigateBack() })
+        }
     }
 
     entry<MainRouteSettingsOther> {
