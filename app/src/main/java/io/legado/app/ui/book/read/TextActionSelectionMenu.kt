@@ -636,14 +636,13 @@ private class MoreMenuPositionProvider(
 }
 
 /**
- * 选区浮层的落位规则，并把整个选区与末端选择柄留在浮层之外。
- * 默认有上方空间就贴着选区上沿向上展开；[preferBelow] 为 true 时反过来，
- * 默认贴着选区下沿展开，只有下方放不下且上方放得下时才上翻。
+ * 选区浮层的落位规则：**有上方空间就贴着选区上沿向上展开**，并把整个选区与末端选择柄留在
+ * 浮层之外。上方放不下时才贴选区下沿展开，上下都放不下时仍贴下沿，由末尾的 clamp 兜底。
+ * 阅读区最顶部 10% 以内的选区强制向下展开，避免浮层顶出阅读区。
  *
- * [TextActionSelectionMenu] 与笔记悬浮面板（MarkingSheet 的 MarkingFloatingPanel）共用该定位器：
- * 两者在同一次选区里互相切换，落位口径必须一致，否则切换时浮层会跳。
- * 划词菜单保持默认「上方优先」；笔记面板传 [TextMenuPositionProvider.preferBelow]
- * 走「下方优先」——改样式要盯的是选区本身，盖后文比盖前文更可接受。
+ * [TextActionSelectionMenu] 与笔记悬浮面板（MarkingSheet 的 MarkingFloatingPanel）共用该
+ * 定位器且口径一致：两者在同一次选区里互相切换，落位不同会让浮层在切换瞬间跳一下；
+ * 面板贴选区上沿向上展开时底边是钉住的，键盘弹起压缩下方空间也不会把它翻到另一边。
  */
 internal class TextMenuPositionProvider(
     private val density: Float,
@@ -653,7 +652,6 @@ internal class TextMenuPositionProvider(
     private val endX: Int,
     private val endBottomY: Int,
     private val shadowPadding: Int,
-    private val preferBelow: Boolean = false,
 ) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
@@ -674,20 +672,11 @@ internal class TextMenuPositionProvider(
         val isSpaceEnoughBelowSelection = windowSize.height - endBottomY >
                 cardHeight + textMargin + cursorHandleClearance + marginVertical
         val isSpaceEnoughAtTop = startTopY > cardHeight + textMargin + marginVertical
-        // 仅阅读区域最顶部 10% 的选区优先在下方展开；其余位置遵循原本“有上方空间
-        // 就放上方”的策略，避免菜单在普通位置不必要地遮挡后文。
+        // 仅阅读区域最顶部 10% 的选区例外，强制在下方展开：向上放不下会被 clamp 推回，
+        // 观感上是浮层从屏幕顶被挤下来，不如一开始就贴选区下沿。
         val preferBelowForTopSelection = startTopY < windowSize.height / 10
 
-        if (preferBelow) {
-            // 标记卡落位（上游同规则）：默认在选区下方展开，只有下方放不下卡片
-            // 且上方放得下时才上翻，避免普通位置的笔记面板不必要地盖住前文。
-            x = startX - shadowPadding
-            y = if (isSpaceEnoughBelowSelection || !isSpaceEnoughAtTop) {
-                endBottomY + cursorHandleClearance + textMargin - shadowPadding
-            } else {
-                startTopY - popupContentSize.height + shadowPadding - textMargin
-            }
-        } else if (!preferBelowForTopSelection && isSpaceEnoughAtTop) {
+        if (!preferBelowForTopSelection && isSpaceEnoughAtTop) {
             x = startX - shadowPadding
             y = startTopY - popupContentSize.height + shadowPadding - textMargin
         } else if (isSpaceEnoughBelowSelection) {

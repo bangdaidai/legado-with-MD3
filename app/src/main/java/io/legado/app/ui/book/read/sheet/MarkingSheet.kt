@@ -374,9 +374,9 @@ private fun MarkingRuleDropdown(
 /**
  * 笔记面板的阅读页悬浮形态：与底部弹层同一套标题行（位置 + 删除/调色按钮）和内容
  * 组件，只是挂在笔记/选区旁边且不压暗正文，改样式时能直接看到正文里的效果。
- * 定位复用划词菜单的 [TextMenuPositionProvider]，但落位方向与上游标记卡一致：
- * 默认在选区下方展开，只有贴近窗口底部、下方放不下面板时才上翻
- * （改样式要盯的是选区本身，盖后文比盖前文更可接受）。
+ * 定位复用划词菜单的 [TextMenuPositionProvider]，因此与划词菜单同一条落位规则：
+ * 有上方空间就贴选区上沿向上展开。面板底边钉在选区上沿，键盘弹起压缩下方空间时
+ * 它既不会翻到选区另一边，也不会被推离原位；代价是面板盖住笔记的前文。
  */
 @Composable
 private fun MarkingFloatingPanel(
@@ -401,7 +401,6 @@ private fun MarkingFloatingPanel(
             endX = anchor.endX.toInt(),
             endBottomY = anchor.endBottomY.toInt(),
             shadowPadding = with(density) { shadowPadding.roundToPx() },
-            preferBelow = true,
         )
     }
     Popup(
