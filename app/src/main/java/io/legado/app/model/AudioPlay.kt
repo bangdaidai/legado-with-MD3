@@ -403,8 +403,18 @@ object AudioPlay : CoroutineScope by MainScope() {
         val book = book ?: return
         Coroutine.async {
             book.lastCheckCount = 0
-            book.durChapterTime = System.currentTimeMillis()
             val chapterChanged = book.durChapterIndex != durChapterIndex
+            // 与 ReadBook.saveRead 同一判据：播放位置真的推进（换章或进度前进）才刷
+            // 最后阅读时间并上报推进标记。此前听书无条件写 durChapterTime 却不记标记，
+            // 书架返程判定为"没读过"→ 冻结旧顺序让封面飞回原槽位，落定后真实列表
+            // 已把它重排到第 1 格，整格弹回 = 返回书架时的跳动/闪角。
+            // 没推进（刚进听书没开播就返回）则时间和标记都不动，保持原位。
+            val positionChanged = chapterChanged || book.durChapterPos != durChapterPos
+            if (positionChanged) {
+                val now = System.currentTimeMillis()
+                book.durChapterTime = now
+                ReadBook.markReadProgressAdvanced(book.bookUrl, now)
+            }
             book.durChapterIndex = durChapterIndex
             book.durChapterPos = durChapterPos
             if (chapterChanged) {

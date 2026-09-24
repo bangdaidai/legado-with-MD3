@@ -152,10 +152,20 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
      * 最近一次"阅读位置真的推进"的 (bookUrl, 时间戳)。
      * 书架返程转场的预排位用它判断封面能否直接飞第 1 格：只有本次开书期间真翻过页
      * （标记比点击时新）才预排；点开看一眼没翻页就返回的书保持原位。
+     * 听书播放器按同一判据上报，见 [markReadProgressAdvanced]。
      */
     @Volatile
     var lastReadProgressAdvanced: Pair<String, Long>? = null
         private set
+
+    /**
+     * 听书侧（AudioPlay.saveRead）报告"播放位置真的推进"。
+     * 标记只按 bookUrl 记账，与阅读器当前打开的是不是同一本书无关；
+     * 书架侧判据是"标记的书 == 被点开的书 且时间戳比点击时新"。
+     */
+    fun markReadProgressAdvanced(bookUrl: String, timestamp: Long) {
+        lastReadProgressAdvanced = bookUrl to timestamp
+    }
     var isLocalBook = true
     var chapterChanged = false
     @Volatile
