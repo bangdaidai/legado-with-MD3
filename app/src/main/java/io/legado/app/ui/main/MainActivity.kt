@@ -45,6 +45,7 @@ import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.BaseComposeActivity
 import io.legado.app.constant.AppConst.appInfo
+import io.legado.app.constant.AppLog
 import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.gateway.MangaSettingsGateway
@@ -511,6 +512,38 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
             PrivateAppStartGate {
                 Box(modifier = Modifier.fillMaxSize()) {
+                    val diagEntryProvider = mainEntryProvider(
+                        backStack = backStack,
+                        configuration = configuration,
+                        showMangaUi = mangaSettings.showMangaUi,
+                        useRail = useRail,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        onNavigateToRoute = { route ->
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                route,
+                                navRouteTracker,
+                            )
+                        },
+                        onNavigateBack = {
+                            MainNavigator.navigateBack(
+                                this@MainActivity,
+                                backStack,
+                                navRouteTracker
+                            )
+                        },
+                    )
+                    // 临时诊断：本作用域每成功重组一次，mainEntryProvider 就换一"代"，
+                    // 摘栈重组时条目会用新代 content lambda 重建；若新代与手势开始时捕获的
+                    // 场景条目不相等，NavDisplay 松手时会把手势判为"取消"——先退回当前页、
+                    // 再单独弹一次 pop，即"闪一下"。松手前后若出现本行且 provider 数值变了，
+                    // 即为实锤。定位后连同 MainNavigator 的【返回诊断】一并回退。
+                    SideEffect {
+                        AppLog.put(
+                            "【返回诊断】NavHost重组 provider=" +
+                                System.identityHashCode(diagEntryProvider)
+                        )
+                    }
                     NavDisplay(
                         backStack = backStack,
                         entryDecorators = listOf(
@@ -580,27 +613,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                             ) + fadeOut(animationSpec = tween()))
                         },
                         onBack = { MainNavigator.navigateBack(this@MainActivity, backStack) },
-                        entryProvider = mainEntryProvider(
-                            backStack = backStack,
-                            configuration = configuration,
-                            showMangaUi = mangaSettings.showMangaUi,
-                            useRail = useRail,
-                            sharedTransitionScope = this@SharedTransitionLayout,
-                            onNavigateToRoute = { route ->
-                                MainNavigator.navigateToRoute(
-                                    backStack,
-                                    route,
-                                    navRouteTracker,
-                                )
-                            },
-                            onNavigateBack = {
-                                MainNavigator.navigateBack(
-                                    this@MainActivity,
-                                    backStack,
-                                    navRouteTracker
-                                )
-                            },
-                        )
+                        entryProvider = diagEntryProvider
                     )
                     // 朗读悬浮胶囊叠在整个导航之上：阅读器只是其中一个目的地，
                     // 挂在阅读器里会导致离开阅读界面后胶囊消失。
