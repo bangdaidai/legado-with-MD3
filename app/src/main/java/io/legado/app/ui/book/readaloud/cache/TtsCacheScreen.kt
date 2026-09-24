@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readaloud.cache
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -156,7 +157,9 @@ fun TtsCacheScreen(
                         )
                     }
                 }
-                items(state.logs, key = { "${it.timestamp}:${it.message.hashCode()}" }) { entry ->
+                // AppLog 允许同一毫秒写入相同内容的日志，timestamp+message 哈希不保证唯一，
+                // 撞 key 会让 LazyColumn 直接崩溃；日志行无内部状态，用位置索引作 key。
+                itemsIndexed(state.logs, key = { index, _ -> index }) { _, entry ->
                     val timeText = dateFormat.format(Date(entry.timestamp))
                     TinyClickableSettingItem(
                         title = timeText,
