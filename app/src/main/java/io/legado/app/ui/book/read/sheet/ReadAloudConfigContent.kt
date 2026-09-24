@@ -1,14 +1,23 @@
 package io.legado.app.ui.book.read.sheet
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.constant.ReadAloudBgMode
@@ -29,14 +39,17 @@ import io.legado.app.ui.book.read.ReadBookUiState
 import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerUiState
+import io.legado.app.ui.widget.components.AppSlider
+import io.legado.app.ui.widget.components.button.ConfirmDismissButtonsRow
 import io.legado.app.ui.widget.components.pager.pagerHeight
 import io.legado.app.ui.widget.components.pager.rememberPagerAnimatedHeight
-import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
 import io.legado.app.ui.widget.components.tabRow.CardTabRow
+import io.legado.app.ui.widget.components.text.AppText
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.launch
@@ -383,6 +396,7 @@ fun ReadAloudConfigContent(
                             R.string.audio_cache_clean_time_summary,
                             state.audioCacheCleanTime,
                         ),
+                        descriptionMaxLines = 2,
                         value = state.audioCacheCleanTime,
                         defaultValue = 10,
                         valueRange = 0f..10080f,
@@ -401,7 +415,8 @@ fun ReadAloudConfigContent(
 }
 
 /**
- * 数值项：直接铺开滑块，不再叠一层选择器弹层。
+ * 数值项：点击展开后铺开滑块，保留精确输入与恢复默认，卡片外观与同页其它 Tiny 项一致。
+ * 不再走共享的 SliderSettingItem——它是遗留的「拼块 + 分隔线」样式，夹在 Tiny 卡片里会突兀。
  */
 @Composable
 private fun ReadAloudNumberSliderItem(
@@ -410,15 +425,100 @@ private fun ReadAloudNumberSliderItem(
     value: Int,
     defaultValue: Int,
     valueRange: ClosedFloatingPointRange<Float>,
+    descriptionMaxLines: Int = 1,
     onValueChange: (Int) -> Unit,
 ) {
-    SliderSettingItem(
+    var expanded by remember { mutableStateOf(false) }
+    var isInputMode by remember { mutableStateOf(false) }
+    var sliderValue by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    val textFieldState = rememberTextFieldState()
+
+    // 朗读数值均为整数, 拖动时吸附到整数
+    fun snap(v: Float): Float = v.roundToInt().toFloat()
+    fun format(v: Float): String =
+        if (v % 1f == 0f) v.toInt().toString() else v.toString()
+
+    LaunchedEffect(value) { sliderValue = value.toFloat() }
+    LaunchedEffect(isInputMode) {
+        if (isInputMode) textFieldState.edit { replace(0, length, format(value)) }
+    }
+
+    // 拖动中让标题下的数值实时跟随滑块, 松手或收起才真正写回
+    val displayDescription =
+        if (sliderValue != value.toFloat()) format(sliderValue) else description
+
+    fun commitValue() {
+        if (isInputMode) {
+            textFieldState.text.toString().toFloatOrNull()?.let {
+                onValueChange(snap(it).coerceIn(valueRange).toInt())
+            }
+        } else if (sliderValue != value.toFloat()) {
+            onValueChange(sliderValue.toInt())
+        }
+    }
+
+    TinySettingItem(
         title = title,
-        description = description,
-        value = value.toFloat(),
-        defaultValue = defaultValue.toFloat(),
-        valueRange = valueRange,
-        onValueChange = { onValueChange(it.toInt()) },
+        description = displayDescription,
+        descriptionMaxLines = descriptionMaxLines,
+        expanded = expanded,
+        onExpandChange = {
+            if (expanded) commitValue()
+            expanded = it
+        },
+        expandContent = {
+            AnimatedContent(targetState = isInputMode, label = "readAloudNumberInput") { inputMode ->
+                if (inputMode) {
+                    TextField(
+                        state = textFieldState,
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        label = {
+                            AppText(
+                                stringResource(
+                                    R.string.input_value_range,
+                                    valueRange.start.toInt(),
+                                    valueRange.endInclusive.toInt(),
+                                )
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(
+                            top = 4.dp,
+                            bottom = 4.dp,
+                            start = 12.dp,
+                            end = 12.dp,
+                        ),
+                    )
+                } else {
+                    AppSlider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = snap(it) },
+                        onValueChangeFinished = {
+                            onValueChange(sliderValue.coerceIn(valueRange).toInt())
+                        },
+                        valueRange = valueRange,
+                        modifier = Modifier.fillMaxWidth(),
+                        accessibilityLabel = title,
+                        accessibilityValue = displayDescription,
+                    )
+                }
+            }
+            ConfirmDismissButtonsRow(
+                modifier = Modifier.padding(top = 16.dp),
+                onDismiss = { isInputMode = !isInputMode },
+                onConfirm = {
+                    onValueChange(defaultValue)
+                    textFieldState.edit { replace(0, length, format(defaultValue.toFloat())) }
+                },
+                dismissText = stringResource(
+                    if (isInputMode) R.string.slider else R.string.edit
+                ),
+                confirmText = stringResource(R.string.text_default),
+            )
+        },
     )
 }
 
