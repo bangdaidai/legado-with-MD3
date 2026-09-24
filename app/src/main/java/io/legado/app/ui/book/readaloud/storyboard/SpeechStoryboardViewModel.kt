@@ -63,6 +63,7 @@ class SpeechStoryboardViewModel(
     val effects = _effects.asSharedFlow()
 
     private var loadJob: Job? = null
+    private var sceneJob: Job? = null
     private var previewJob: Job? = null
     private var deleteJob: Job? = null
 
@@ -136,6 +137,7 @@ class SpeechStoryboardViewModel(
 
     private fun loadChapters() {
         loadJob?.cancel()
+        sceneJob?.cancel()
         loadJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -195,6 +197,7 @@ class SpeechStoryboardViewModel(
 
     private fun loadChapter(chapterIndex: Int, reanalyze: Boolean) {
         loadJob?.cancel()
+        sceneJob?.cancel()
         stopPreview()
         val title = _uiState.value.chapters
             .firstOrNull { it.chapterIndex == chapterIndex }
@@ -206,7 +209,7 @@ class SpeechStoryboardViewModel(
             }
             try {
                 val isCurrent = chapterIndex == currentChapterIndex()
-                var plan = when {
+                val plan = when {
                     reanalyze && isCurrent -> currentChapterPlan(chapterIndex, true)
                     isCurrent -> {
                         // 朗读期间这章的分析已经落在库里，直接读缓存即可，
@@ -224,7 +227,6 @@ class SpeechStoryboardViewModel(
 
                     else -> cachedChapterPlan(chapterIndex)
                 }
-                plan = withScenes(chapterIndex, plan)
                 currentPlan = plan
                 val items = plan.map(::toItemUi)
                 _uiState.update {
@@ -238,11 +240,34 @@ class SpeechStoryboardViewModel(
                         summary = buildSummary(items),
                     )
                 }
+                attachScenes(chapterIndex, plan)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 _uiState.update { it.copy(isLoading = false) }
                 toast(e.localizedMessage ?: appCtx.getString(R.string.load_failed))
+            }
+        }
+    }
+
+    /**
+     * 场景拆分是按需补跑的锦上添花层，绝不挡详情页渲染：
+     * 扁平列表先发布、试听先可用，AI 再慢也在后台跑，成功才重新归组。
+     */
+    private fun attachScenes(chapterIndex: Int, plan: List<SpeechPlanItem>) {
+        sceneJob?.cancel()
+        sceneJob = viewModelScope.launch {
+            val enriched = withScenes(chapterIndex, plan)
+            // 跳过/失败时 withScenes 原样返回同一个实例，不必重发状态
+            if (enriched === plan) return@launch
+            if (_uiState.value.selectedChapterIndex != chapterIndex) return@launch
+            currentPlan = enriched
+            val items = enriched.map(::toItemUi)
+            _uiState.update {
+                it.copy(
+                    scenes = groupIntoScenes(items).toImmutableList(),
+                    summary = buildSummary(items),
+                )
             }
         }
     }
