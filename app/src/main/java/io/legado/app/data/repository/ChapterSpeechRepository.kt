@@ -130,6 +130,8 @@ private fun ChapterSpeechSegmentEntity.toDomain() = ChapterSpeechSegment(
     confidence = confidence,
     source = SpeechResolutionSource.fromStorage(source),
     userLocked = userLocked,
+    sceneIndex = sceneIndex,
+    sceneTitle = sceneTitle,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
@@ -151,6 +153,8 @@ private fun ChapterSpeechSegment.toEntity() = ChapterSpeechSegmentEntity(
     confidence = confidence,
     source = source.storageValue,
     userLocked = userLocked,
+    sceneIndex = sceneIndex,
+    sceneTitle = sceneTitle,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )

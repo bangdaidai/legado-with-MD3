@@ -71,6 +71,56 @@ class RefineSpeechWithAiUseCase(
         bookAiCooldownUntil.remove(bookUrl)
     }
 
+    /**
+     * 给缺少场景分组的分段补上场景：按章分段（含文本顺序）交给 AI 切分成连续的场景组。
+     *
+     * 场景只服务分镜页浏览，朗读链路不依赖它，所以刻意与 [invoke] 分开：
+     * - 不在本书 AI 锁内、不进失败冷却 —— 场景拆坏了也不能拖慢起播或毁掉说话人分析；
+     * - 整段调用失败或单个分块校验不过时原样返回 / 跳过该分块，调用方按「无场景」降级展示。
+     */
+    suspend fun assignScenes(
+        segments: List<ChapterSpeechSegment>,
+        reasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
+    ): List<ChapterSpeechSegment> {
+        if (segments.size < 2 || segments.none { it.sceneIndex == 0 }) return segments
+        val preset = runCatching { resolvePreset() }.getOrNull() ?: return segments
+        val result = segments.toMutableList()
+        // 全局场景序号按分块连续递增；某个分块失败只影响它自己
+        var nextSceneIndex = 1
+        // chunkByTextLength 保序，块内下标 + 块起始偏移 = 全量列表位置
+        var chunkOffset = 0
+        segments.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
+            val ids = chunk.map(ChapterSpeechSegment::id)
+            val scenes = runCatching {
+                parseScenes(
+                    text = generateScenes(preset, chunk, reasoningLevel),
+                    expectedIds = ids,
+                )
+            }.getOrNull()
+            if (scenes == null) {
+                chunkOffset += chunk.size
+                return@forEach
+            }
+            val idPositions = chunk.withIndex().associate { (pos, seg) -> seg.id to chunkOffset + pos }
+            scenes.forEach { scene ->
+                val current = nextSceneIndex
+                val title = scene.title
+                scene.segmentIds.forEach { id ->
+                    val pos = idPositions[id] ?: return@forEach
+                    val segment = result[pos]
+                    result[pos] = segment.copy(
+                        sceneIndex = current,
+                        sceneTitle = title,
+                        updatedAt = segment.updatedAt,
+                    )
+                }
+                nextSceneIndex++
+            }
+            chunkOffset += chunk.size
+        }
+        return result
+    }
+
     suspend fun resolverVersion(
         bookUrl: String,
         mode: SpeechAnalysisMode,
@@ -417,6 +467,56 @@ class RefineSpeechWithAiUseCase(
         )
     ).getOrThrow().text
 
+    private suspend fun generateScenes(
+        preset: AiTaskPresetConfig,
+        chunk: List<ChapterSpeechSegment>,
+        reasoningLevel: AiReasoningLevel,
+    ): String = aiTextGateway.generate(
+        AiGenerateRequest(
+            model = preset.model,
+            messages = listOf(
+                AiMessage(AiMessageRole.SYSTEM, SCENE_PROMPT),
+                AiMessage(
+                    AiMessageRole.USER,
+                    GSON.toJson(
+                        mapOf(
+                            "segments" to chunk.map { segment ->
+                                mapOf(
+                                    "segmentId" to segment.id,
+                                    "text" to segment.text,
+                                    "roleType" to segment.roleType.storageValue,
+                                    "speakerName" to segment.characterName.takeIf { it.isNotBlank() },
+                                )
+                            },
+                        )
+                    ),
+                ),
+            ),
+            params = speechAnalysisParams(preset, reasoningLevel),
+            taskType = AiTaskType.ANALYZE_SPEECH,
+        )
+    ).getOrThrow().text
+
+    /** 场景拆分结果：扁平后的 segmentIds 必须与输入完全一致（同序、不重不漏），否则视为失败 */
+    private fun parseScenes(text: String, expectedIds: List<String>): List<ParsedScene> {
+        val array = parseRoot(text).getAsJsonArray("scenes")
+        val scenes = array.map { element ->
+            val item = element.asJsonObject
+            ParsedScene(
+                title = item.optionalString("title").orEmpty()
+                    .replace(Regex("\\s+"), " ").trim().take(MAX_SCENE_TITLE_CHARS),
+                segmentIds = item.getAsJsonArray("segmentIds").map { it.asString },
+            )
+        }
+        require(scenes.isNotEmpty()) { "AI returned no scenes" }
+        require(scenes.flatMap(ParsedScene::segmentIds) == expectedIds) {
+            "AI scene coverage is incomplete, duplicated, or out of order"
+        }
+        return scenes
+    }
+
+    private data class ParsedScene(val title: String, val segmentIds: List<String>)
+
     private suspend fun resolvePreset(): AiTaskPresetConfig =
         aiProfileGateway.getTaskPreset(AiTaskType.ANALYZE_SPEECH)
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
@@ -599,6 +699,22 @@ class RefineSpeechWithAiUseCase(
 
         /** 失败原因只用于排障提示，截断避免把整段响应写进库 */
         private const val MAX_ERROR_LENGTH = 200
+
+        /** 场景短标题的展示上限，和说话人名一致由 UI 单行截断兜底 */
+        private const val MAX_SCENE_TITLE_CHARS = 24
+
+        /**
+         * 场景拆分提示词。刻意不并入 [systemPrompt]：promptHash 是分析缓存身份的一部分，
+         * 场景词改动不该让全书说话人分析重来。
+         */
+        private const val SCENE_PROMPT =
+            "Split the consecutive speech segments of one fiction chapter into a few storyboard " +
+                "scenes for TTS review. Cut only at real scene changes (place, time, cast or " +
+                "topic). Scenes must be contiguous, cover every segment exactly once in input " +
+                "order, and never be empty. Give each scene a short title in the language of the " +
+                "text. Return only one JSON object: " +
+                "{\"scenes\":[{\"title\":string,\"segmentIds\":[string]}]}. " +
+                "Never rewrite text and never invent IDs."
         private const val DEFAULT_PROMPT =
             "Analyze fiction speech for text-to-speech. Distinguish narration, spoken dialogue, " +
                 "internal thought and unknown speech. Resolve speakers only from the supplied " +

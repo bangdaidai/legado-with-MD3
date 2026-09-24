@@ -824,6 +824,8 @@ val appModule = module {
             buildSpeechPlan = get(),
             chapterSpeechGateway = get(),
             bookKnowledgeGateway = get(),
+            refineSpeechWithAi = get(),
+            previewSynthesizer = get(),
         )
     }
     viewModelOf(::TtsCacheViewModel)

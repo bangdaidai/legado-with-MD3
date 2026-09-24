@@ -110,6 +110,10 @@ data class ChapterSpeechSegment(
     val confidence: Float = 0f,
     val source: SpeechResolutionSource,
     val userLocked: Boolean = false,
+    /** 场景序号，从 1 开始；0 表示还没有场景分组 */
+    val sceneIndex: Int = 0,
+    /** AI 给场景起的短标题，可能为空 */
+    val sceneTitle: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )

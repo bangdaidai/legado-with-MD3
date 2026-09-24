@@ -904,6 +904,15 @@ object DatabaseMigrations {
 
             // 书架标签筛选：bookTags.showOnBookshelf
             db.execSQL("ALTER TABLE bookTags ADD COLUMN showOnBookshelf INTEGER NOT NULL DEFAULT 1")
+
+            // 本地额外: 分镜场景分组。场景是朗读分析之后按整章补跑的轻量拆分，
+            // 只有 AI 模式会写入；0 / 空串表示该章还没有场景信息，分镜页退化为扁平列表。
+            db.execSQL(
+                "ALTER TABLE chapter_speech_segments ADD COLUMN sceneIndex INTEGER NOT NULL DEFAULT 0"
+            )
+            db.execSQL(
+                "ALTER TABLE chapter_speech_segments ADD COLUMN sceneTitle TEXT NOT NULL DEFAULT ''"
+            )
         }
     }
 }

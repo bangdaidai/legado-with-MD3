@@ -126,6 +126,65 @@ class RefineSpeechWithAiUseCaseTest {
         assertEquals(2, ai.calls)
     }
 
+    @Test
+    fun `scenes are assigned when the AI covers every segment`() = runBlocking {
+        val ai = StubAiTextGateway(
+            """{"scenes":[{"title":"桥头对峙","segmentIds":["segment-1","segment-2"]}""" +
+                """,{"title":"雨夜离场","segmentIds":["segment-3"]}]}"""
+        )
+        val useCase = refineUseCase(ai, MemoryChapterSpeechGateway())
+
+        val enriched = useCase.assignScenes(threeSegments())
+
+        assertEquals(listOf(1, 1, 2), enriched.map { it.sceneIndex })
+        assertEquals(
+            listOf("桥头对峙", "桥头对峙", "雨夜离场"),
+            enriched.map { it.sceneTitle },
+        )
+    }
+
+    @Test
+    fun `an incomplete scene split leaves the segments untouched`() = runBlocking {
+        // 少返回 segment-3：整块校验不过，不能把半截分组写进去
+        val ai = StubAiTextGateway(
+            """{"scenes":[{"title":"桥头对峙","segmentIds":["segment-1","segment-2"]}]}"""
+        )
+        val useCase = refineUseCase(ai, MemoryChapterSpeechGateway())
+
+        val enriched = useCase.assignScenes(threeSegments())
+
+        assertEquals(List(3) { 0 }, enriched.map { it.sceneIndex })
+    }
+
+    @Test
+    fun `a failing scene call never breaks the analysis`() = runBlocking {
+        val ai = FailingAiTextGateway(RuntimeException("boom"))
+        val useCase = refineUseCase(ai, MemoryChapterSpeechGateway())
+
+        val enriched = useCase.assignScenes(threeSegments())
+
+        assertEquals(List(3) { 0 }, enriched.map { it.sceneIndex })
+    }
+
+    private fun threeSegments() = List(3) { index ->
+        ChapterSpeechSegment(
+            id = "segment-${index + 1}",
+            analysisId = "analysis-1",
+            bookUrl = BOOK_URL,
+            chapterIndex = 3,
+            paragraphIndex = index,
+            start = 0,
+            end = 4,
+            chapterPosition = index * 5,
+            text = "第${index + 1}段正文",
+            roleType = if (index == 1) SpeechRoleType.Character else SpeechRoleType.Narrator,
+            confidence = 0.9f,
+            source = SpeechResolutionSource.Ai,
+            createdAt = 100,
+            updatedAt = 100,
+        )
+    }
+
     private companion object {
         /** RefineSpeechWithAiUseCase 里 AI_FAILURE_COOLDOWN_MS 的当前取值。 */
         const val AI_FAILURE_WINDOW_MS = 10 * 60 * 1000L
@@ -217,6 +276,18 @@ private class FailingAiTextGateway(
         // 与仓库层一致：超时不是抛出而是塞进 Result，由 use case 的 getOrThrow 还原
         return Result.failure(failure)
     }
+
+    override fun generateStream(request: AiGenerateRequest): Flow<AiStreamEvent> = emptyFlow()
+
+    override suspend fun fetchModels(provider: AiProviderConfig) =
+        Result.success(emptyList<AiAvailableModel>())
+}
+
+private class StubAiTextGateway(
+    private val response: String,
+) : AiTextGateway {
+    override suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse> =
+        Result.success(AiGenerateResponse(text = response))
 
     override fun generateStream(request: AiGenerateRequest): Flow<AiStreamEvent> = emptyFlow()
 

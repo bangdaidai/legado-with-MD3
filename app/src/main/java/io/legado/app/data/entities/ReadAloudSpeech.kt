@@ -116,6 +116,12 @@ data class ChapterSpeechSegmentEntity(
     val source: String,
     @ColumnInfo(defaultValue = "0")
     val userLocked: Boolean = false,
+    /** 场景序号，从 1 开始；0 表示还没有场景分组（规则分析或 AI 场景拆分失败） */
+    @ColumnInfo(defaultValue = "0")
+    val sceneIndex: Int = 0,
+    /** AI 给场景起的短标题，可能为空 */
+    @ColumnInfo(defaultValue = "")
+    val sceneTitle: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )
