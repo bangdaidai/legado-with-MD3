@@ -440,7 +440,7 @@ private fun ReadAloudNumberSliderItem(
 
     LaunchedEffect(value) { sliderValue = value.toFloat() }
     LaunchedEffect(isInputMode) {
-        if (isInputMode) textFieldState.edit { replace(0, length, format(value)) }
+        if (isInputMode) textFieldState.edit { replace(0, length, format(value.toFloat())) }
     }
 
     // 拖动中让标题下的数值实时跟随滑块, 松手或收起才真正写回
