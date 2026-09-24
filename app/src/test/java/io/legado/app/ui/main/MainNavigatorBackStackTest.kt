@@ -68,4 +68,21 @@ class MainNavigatorBackStackTest {
 
         assertEquals(listOf(MainRouteHome, MainRouteReadAloudPlayer, MainRouteTtsCache), backStack)
     }
+
+    @Test
+    fun `read aloud sub pages from read aloud config keep config in back stack`() {
+        val config = MainRouteReadAloudConfig("book-url")
+
+        for (subPage in listOf<NavKey>(
+            MainRouteCloudTtsEngines("book-url"),
+            MainRouteTtsCache,
+            MainRouteBookVoiceCasting("book-url"),
+        )) {
+            val backStack = mutableListOf<NavKey>(MainRouteHome, MainRouteReadBook(), config)
+
+            MainNavigator.navigateToRoute(backStack, subPage)
+
+            assertEquals(listOf(MainRouteHome, MainRouteReadBook(), config, subPage), backStack)
+        }
+    }
 }

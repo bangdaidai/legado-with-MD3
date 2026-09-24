@@ -257,7 +257,10 @@ object MainNavigator {
                     currentRoute is MainRouteBookEventDetail ||
                     currentRoute is MainRouteReadBook ||
                     currentRoute is MainRouteReadManga ||
-                    currentRoute is MainRouteReadAloudPlayer
+                    currentRoute is MainRouteReadAloudPlayer ||
+                    // 朗读设置整页上就挂着这四个入口，漏了它会把整栈清到书架，
+                    // 返回时设置页和阅读器一起没了。
+                    currentRoute is MainRouteReadAloudConfig
                 ) {
                     backStack.add(route)
                 } else {
