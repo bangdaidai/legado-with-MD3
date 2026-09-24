@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -49,8 +50,18 @@ class ReadAloudPlayerCoordinator(
         }
     }
     private val configChanges = ReadConfigUpdateBus.events.map { }
+
+    /**
+     * 会话状态一变就重拍书目快照。点「听书」切到另一本书时，
+     * 换源/开播/进度这些事件一个都不发，只有 Preparing 是立刻翻转的：
+     * 不接上它，播放页会一直挂着上一本书的封面和正文到真正出声为止。
+     */
+    private val sessionStatusChanges =
+        sessionStore.state.map { it.status }.distinctUntilChanged().map { }
+
     private val bookState =
-        merge(bookChanges, refreshRequests, configChanges).map { snapshotBook() }
+        merge(bookChanges, refreshRequests, configChanges, sessionStatusChanges)
+            .map { snapshotBook() }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val bookWithChapters = bookState.flatMapLatest { book ->
