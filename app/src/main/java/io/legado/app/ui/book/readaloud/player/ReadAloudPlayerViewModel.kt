@@ -13,16 +13,13 @@ import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
-import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.model.settings.ReadSettings
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.config.compatDsInt
-import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadAloudSessionStore
-import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.widget.components.player.PlayerChapterUi
 import io.legado.app.utils.TTSCacheUtils
@@ -33,10 +30,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 class ReadAloudPlayerViewModel(
     private val coordinator: ReadAloudPlayerCoordinator,
@@ -203,28 +198,10 @@ class ReadAloudPlayerViewModel(
                 }
 
                 ReadAloudConfigOption.UseMultiSpeaker -> {
-                    // 正在朗读时必须重启朗读服务才能换掉合成管线；重启前记住页内位置，
-                    // 等服务真的回到 Idle 再重放，避免新旧管线叠音。
-                    val shouldRestart = BaseReadAloudService.isRun
-                    val resumePlaying = shouldRestart && !BaseReadAloudService.pause
-                    val chapterPosition =
-                        readAloudSessionStore.state.value.playback.chapterPosition
+                    // 正在朗读时必须重启朗读服务才能换掉合成管线；
+                    // 重启前记住页内位置，等服务真的回到 Idle 再重放，避免新旧管线叠音。
                     readAloudSettingsGateway.update { it.copy(useMultiSpeaker = selected) }
-                    if (shouldRestart && ReadBook.readerChapterInputWindow.current != null) {
-                        ReadAloud.stop(application)
-                        val stopped = withTimeoutOrNull(2_000) {
-                            readAloudSessionStore.state.first {
-                                it.status == ReadAloudSessionStatus.Idle
-                            }
-                        }
-                        if (stopped == null) return@launch
-                        ReadAloud.refreshReadAloudClass()
-                        ReadAloud.play(
-                            context = application,
-                            play = resumePlaying,
-                            chapterPosition = chapterPosition.coerceAtLeast(0),
-                        )
-                    }
+                    restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
                 ReadAloudConfigOption.ContentSplit -> {

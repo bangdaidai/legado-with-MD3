@@ -813,6 +813,7 @@ val appModule = module {
             bookKnowledgeGateway = get(),
             voiceGateway = get(),
             previewSynthesizer = get(),
+            readAloudSessionStore = get(),
         )
     }
     viewModelOf(::CloudTtsViewModel)

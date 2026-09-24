@@ -10,10 +10,14 @@ import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
+import io.legado.app.model.ReadAloudSessionStore
+import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.readaloud.player.restartReadAloudPipeline
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -30,6 +34,7 @@ class BookVoiceCastingViewModel(
     private val bookKnowledgeGateway: BookKnowledgeGateway,
     private val voiceGateway: ReadAloudVoiceGateway,
     private val previewSynthesizer: VoicePreviewSynthesizer,
+    private val readAloudSessionStore: ReadAloudSessionStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BookVoiceCastingUiState(bookUrl = bookUrl))
@@ -221,6 +226,7 @@ class BookVoiceCastingViewModel(
                     )
                 )
                 _uiState.update { it.copy(picker = null) }
+                restartPipelineIfListening()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -316,10 +322,27 @@ class BookVoiceCastingViewModel(
             try {
                 voiceGateway.deleteBinding(binding)
                 _uiState.update { it.copy(picker = null) }
+                restartPipelineIfListening()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 showSaveError(e)
+            }
+        }
+    }
+
+    /**
+     * 正在朗读这本书时，绑定变化必须重启合成管线才能换掉当前章的声音。
+     *
+     * 朗读计划是章准备时一次性建好放进播放队列的，只写数据库的话界面显示会更新、
+     * 声音要等下次重建计划才变，观感就是「显示变了声音没变」。换书朗读时不重启别人的管线。
+     */
+    private fun restartPipelineIfListening() {
+        if (ReadBook.book?.bookUrl != bookUrl) return
+        viewModelScope.launch {
+            // 返回上一页会销毁本 ViewModel；重启必须跑完，否则只 stop 不 play，声音直接丢。
+            withContext(NonCancellable) {
+                restartReadAloudPipeline(readAloudSessionStore, appCtx)
             }
         }
     }

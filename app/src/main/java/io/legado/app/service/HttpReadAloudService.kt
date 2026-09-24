@@ -233,6 +233,17 @@ class HttpReadAloudService : BaseReadAloudService(),
         preDownloadJob?.cancel()
     }
 
+    /**
+     * 新朗读会话整体替换播放状态时立刻作废旧会话的预合成。
+     * 预合成跑在服务 lifecycleScope 上，不受起播 generation 管辖；
+     * 换书后若不主动掐掉，旧书的预合成会继续和新书的实时合成抢服务器
+     * 并发/限流配额，实时合成因此整批失败并退化成无声。
+     */
+    override fun onPlaybackStateReplaced() {
+        preDownloadJob?.cancel()
+        preDownloadJob = null
+    }
+
     private fun updateNextPos(naturalCompletion: Boolean = false) {
         if (!playbackQueue.isEmpty) {
             val current = playbackCursor ?: ReadAloudPlaybackCursor(nowSpeak, paragraphStartPos)
@@ -325,7 +336,12 @@ class HttpReadAloudService : BaseReadAloudService(),
                                 }
 
                                 else -> {
-                                    val inputStream = getSpeakStream(itemHttpTts, speakText)
+                                    val inputStream = getSpeakStream(
+                                        itemHttpTts,
+                                        speakText,
+                                        HttpTtsVoiceCatalog.fromVoice(routedVoice),
+                                        cueEmotion,
+                                    )
                                     if (inputStream != null) {
                                         createSpeakFile(fileName, inputStream)
                                     } else {
@@ -453,6 +469,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         try {
             for (i in 1..limit) {
                 currentCoroutineContext().ensureActive()
+                // 预合成开始时抓的是旧书：书一换，后面的章节内容全不属于当前会话，立即收手
+                if (book.bookUrl != ReadBook.book?.bookUrl) break
                 if (consecutiveFailures >= 3) {
                     AppLog.put("TTS预合成连续失败${consecutiveFailures}章，已停止预合成")
                     break
@@ -499,8 +517,11 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val success = synthesizeSingleCueWithRetry(
                         routedVoice, cue, content, prepared.chapterTitle, httpTts,
                     )
+                    // 预合成失败不写无声文件"占位"：文件名按真实音色哈希生成，
+                    // 实时朗读走到该 cue 时会被 hasSpeakFile 命中而跳过实时合成，
+                    // 整章"看起来正常"（进度推进、字幕滚动）却全程无声。
+                    // 留空，交给实时路径自己合成重试。
                     if (!success) {
-                        createSilentSound(fileName)
                         failedCount++
                     }
                 } finally {
@@ -561,7 +582,12 @@ class HttpReadAloudService : BaseReadAloudService(),
                 ReadAloudVoice.ENGINE_HTTP -> {
                     val itemHttpTts = routedVoice.engineId.toLongOrNull()
                         ?.let(appDb.httpTTSDao::get) ?: httpTts
-                    val inputStream = getSpeakStream(itemHttpTts, speakText)
+                    val inputStream = getSpeakStream(
+                        itemHttpTts,
+                        speakText,
+                        HttpTtsVoiceCatalog.fromVoice(routedVoice),
+                        cue?.emotion.orEmpty(),
+                    )
                     if (inputStream != null) {
                         createSpeakFile(fileName, inputStream)
                         true
@@ -734,6 +760,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         try {
             for (i in 1..limit) {
                 currentCoroutineContext().ensureActive()
+                // 同文件模式预合成：书一换立即收手，不和新会话抢服务器配额
+                if (book.bookUrl != ReadBook.book?.bookUrl) break
                 if (consecutiveFailures >= 3) {
                     AppLog.put("TTS流式预合成连续失败${consecutiveFailures}章，已停止")
                     break
@@ -782,8 +810,8 @@ class HttpReadAloudService : BaseReadAloudService(),
                         val success = synthesizeSingleCueWithRetry(
                             routedVoice, cue, content, prepared.chapterTitle, httpTts,
                         )
+                        // 与文件模式预合成同口径：失败不写无声占位，避免永久命中坏缓存
                         if (!success) {
-                            createSilentSound(fileName)
                             failedCount++
                         }
                     } else {
@@ -869,6 +897,8 @@ class HttpReadAloudService : BaseReadAloudService(),
                     httpTts.url,
                     speakText = speakText,
                     speakSpeed = (httpTts.speed ?: DEFAULT_TTS_SPEED) + 5,
+                    speakVoice = voice,
+                    speakEmotion = emotion,
                     source = httpTts,
                     readTimeout = 300 * 1000L,
                     coroutineContext = currentCoroutineContext()
@@ -1074,8 +1104,14 @@ class HttpReadAloudService : BaseReadAloudService(),
         file.writeBytes(resources.openRawResource(R.raw.silent_sound).readBytes())
     }
 
+    /**
+     * 与无声占位文件同尺寸的缓存按"未命中"处理、触发重合成——
+     * 历史失败曾把无声文件写进真实音色的文件名里，命中它等于整章"看起来正常"地无声。
+     * 判据与 removeCacheFile 的清理口径一致（无声资源字节数固定）。
+     */
     private fun hasSpeakFile(name: String): Boolean {
-        return FileUtils.exist("${ttsFolderPath}$name.mp3")
+        val file = File("${ttsFolderPath}$name.mp3")
+        return file.exists() && file.length() != SILENT_SOUND_FILE_BYTES
     }
 
     private fun getSpeakFileAsMd5(name: String): File {
@@ -1105,7 +1141,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         val titleMd5 = if (protectCurrentChapter) MD5Utils.md5Encode16(readerReadAloudChapter?.title.orEmpty()) else ""
 
         FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach {
-            val isSilentSound = it.length() == 2160L
+            val isSilentSound = it.length() == SILENT_SOUND_FILE_BYTES
 
             // 判断逻辑：
             // 1. 如果是无声文件 -> 删
@@ -1298,3 +1334,6 @@ class HttpReadAloudService : BaseReadAloudService(),
 
 /** 源级语速默认值, 对应 1 倍速, 与全局语速共用 0..80 的刻度 */
 private const val DEFAULT_TTS_SPEED = 5
+
+/** raw/silent_sound 的字节数; 无声占位文件按此长度识别(与 removeCacheFile 同一口径) */
+private const val SILENT_SOUND_FILE_BYTES = 2160L
