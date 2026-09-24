@@ -512,32 +512,48 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
             PrivateAppStartGate {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    val diagEntryProvider = mainEntryProvider(
-                        backStack = backStack,
-                        configuration = configuration,
-                        showMangaUi = mangaSettings.showMangaUi,
-                        useRail = useRail,
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        onNavigateToRoute = { route ->
-                            MainNavigator.navigateToRoute(
-                                backStack,
-                                route,
-                                navRouteTracker,
-                            )
-                        },
-                        onNavigateBack = {
-                            MainNavigator.navigateBack(
-                                this@MainActivity,
-                                backStack,
-                                navRouteTracker
-                            )
-                        },
-                    )
-                    // 临时诊断：本作用域每成功重组一次，mainEntryProvider 就换一"代"，
-                    // 摘栈重组时条目会用新代 content lambda 重建；若新代与手势开始时捕获的
-                    // 场景条目不相等，NavDisplay 松手时会把手势判为"取消"——先退回当前页、
-                    // 再单独弹一次 pop，即"闪一下"。松手前后若出现本行且 provider 数值变了，
-                    // 即为实锤。定位后连同 MainNavigator 的【返回诊断】一并回退。
+                    val diagSharedTransitionScope = this@SharedTransitionLayout
+                    // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
+                    // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
+                    // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
+                    // provider 重建条目，与被摘栈手势开始时捕获的场景必然不相等，
+                    // NavDisplay 松手校验 targetState == scene 失败就把预测手势判为
+                    // "取消"——先退回当前页再重放一次摘栈（两拍闪），已组合的露出页
+                    // 也随销毁重建冷启动。用 remember 锁住 provider 代次，跨重组不换代。
+                    val diagEntryProvider = remember(
+                        backStack,
+                        configuration,
+                        mangaSettings.showMangaUi,
+                        useRail,
+                        navRouteTracker,
+                        diagSharedTransitionScope,
+                    ) {
+                        mainEntryProvider(
+                            backStack = backStack,
+                            configuration = configuration,
+                            showMangaUi = mangaSettings.showMangaUi,
+                            useRail = useRail,
+                            sharedTransitionScope = diagSharedTransitionScope,
+                            onNavigateToRoute = { route ->
+                                MainNavigator.navigateToRoute(
+                                    backStack,
+                                    route,
+                                    navRouteTracker,
+                                )
+                            },
+                            onNavigateBack = {
+                                MainNavigator.navigateBack(
+                                    this@MainActivity,
+                                    backStack,
+                                    navRouteTracker
+                                )
+                            },
+                        )
+                    }
+                    // 临时诊断：本作用域每成功重组一次打一行 provider 身份码。
+                    // provider 已锁代次后，各次导航后的重组行应显示同一数值——
+                    // 这既是"不换代"生效的凭证，也便于回看闪动是否还与换代有关。
+                    // 定位后连同 MainNavigator 的【返回诊断】一并回退。
                     SideEffect {
                         AppLog.put(
                             "【返回诊断】NavHost重组 provider=" +
