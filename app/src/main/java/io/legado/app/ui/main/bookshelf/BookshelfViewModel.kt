@@ -426,11 +426,14 @@ class BookshelfViewModel(
         combine(
             groupsFlow,
             sortConfigFlow,
-            privateMarkersFlow,
             tagConfigVersionFlow
-        ) { groups, sortConfig, markers, _ ->
-            Triple(groups, sortConfig, markers)
-        }.flatMapLatest { (groups, sortConfig, markers) ->
+        ) { groups, sortConfig, _ ->
+            groups to sortConfig
+        }.flatMapLatest { (groups, sortConfig) ->
+            // 私密标记刻意不进这个 key：否则翻一本的私密就会取消并重启「全分组」的
+            // flowBookShelfByGroup fan-out，combine(flows) 要等所有分组查询回来才刷新徽章，
+            // 表现为返回书架后过几秒才变。私密改为在末端 combine(privateMarkersFlow) 里
+            // 只做一次纯内存 copy，见下。
             if (groups.isEmpty()) {
                 flowOf(persistentMapOf())
             } else {
@@ -441,7 +444,7 @@ class BookshelfViewModel(
                             group,
                             sortConfig.sort,
                             sortConfig.sortOrder
-                        ).map { it.toUiItem(markers.isPrivate(it)) }.toImmutableList()
+                        ).map { it.toUiItem() }.toImmutableList()
                     }
                 }
                 combine(flows) { results ->
@@ -450,6 +453,10 @@ class BookshelfViewModel(
                     }
                 }
             }
+        }.combine(privateMarkersFlow) { bookMap, markers ->
+            bookMap.mapValues { (_, books) ->
+                books.map { it.copy(isPrivate = markers.isPrivate(it.book)) }.toImmutableList()
+            }.toImmutableMap()
         }.distinctUntilChanged()
             .flowOn(Dispatchers.Default)
 
