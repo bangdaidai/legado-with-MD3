@@ -937,7 +937,6 @@ fun MainActivity.mainEntryProvider(
             }
         }
         }
-        )
     }
 
     entry<MainRouteReadManga> { route ->
