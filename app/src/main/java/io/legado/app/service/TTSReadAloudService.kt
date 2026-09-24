@@ -59,6 +59,7 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
     private var defaultVoiceName = ""
     private var initGeneration = 0
     private var reportedUnplayableVoice = false
+    private var reportedVoiceName: String? = null
 
     /** 播放会话号: 每次真正发声、停止、暂停、清理或整体换章时递增, 用于拒收旧会话的回调 */
     @Volatile
@@ -107,6 +108,7 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         ttsInitFinish = false
         activeVoiceName = ""
         defaultVoiceName = ""
+        reportedVoiceName = null
         initGeneration++
         speakSession++
     }
@@ -260,11 +262,30 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         )
         val cue = playbackQueue.cues.getOrNull(nowSpeak) ?: return fallback
         reportUnplayableVoice(cue.voice)
-        return SpeechVoiceRouter.route(
+        val routed = SpeechVoiceRouter.route(
             cue = cue,
             supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_SYSTEM),
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_SYSTEM, configured),
         ).voice ?: fallback
+        cue.voice?.takeIf { it.speakerId.isBlank() }?.let { reportBoundVoiceHasNoSpeaker(it) }
+        return routed
+    }
+
+    /**
+     * 绑到的音色记录本身没有 speakerId 时，[applyVoice] 会在 `ifBlank { defaultVoiceName }`
+     * 处直接早退，连「音色不可用」都不会报——表现和音色名匹配失败完全一样，
+     * 必须单独说清楚，否则这两种成因分不开。
+     */
+    private fun reportBoundVoiceHasNoSpeaker(voice: ReadAloudVoice) {
+        val key = "noSpeaker:${voice.id}"
+        if (key == reportedVoiceName) return
+        reportedVoiceName = key
+        AppLog.put(
+            "绑定的音色「${voice.displayName}」没有记录具体音色（speakerId 为空），" +
+                "只能用引擎出厂默认声发声\n" +
+                "引擎字段：${voice.engineId.ifBlank { "（空，会落到系统全局默认引擎）" }}",
+            toast = true,
+        )
     }
 
     /**
@@ -289,15 +310,39 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         val tts = textToSpeech ?: return
         val voice = tts.voices.orEmpty().firstOrNull { it.name == requestedName }
         if (voice == null) {
-            AppLog.putDebug("系统 TTS 音色不可用: $requestedName")
+            reportVoiceUnavailable(requestedName, tts)
             return
         }
         if (tts.setVoice(voice) == TextToSpeech.SUCCESS) {
             activeVoiceName = requestedName
         } else {
-            AppLog.putDebug("系统 TTS 音色切换失败: $requestedName")
+            AppLog.put(
+                "系统 TTS 切换音色失败：$requestedName（引擎 ${engineLabel()}）",
+                toast = true,
+            )
         }
     }
+
+    /**
+     * 音色没生效只会表现成「用引擎出厂默认声」，播放本身不报错。原来只写 putDebug，
+     * 而 putDebug 在未开「记录日志」时整条丢弃，所以线上完全无线索可查。
+     * 同名只报一次，避免每条 cue 重复弹。
+     */
+    private fun reportVoiceUnavailable(requestedName: String, tts: TextToSpeech) {
+        if (requestedName == reportedVoiceName) return
+        reportedVoiceName = requestedName
+        val available = tts.voices.orEmpty().map { it.name }
+        AppLog.put(
+            "系统 TTS 音色不可用：「$requestedName」\n" +
+                "引擎：${engineLabel()}｜出厂默认音色：${defaultVoiceName.ifBlank { "未知" }}\n" +
+                "该引擎报告了 ${available.size} 个音色：" +
+                available.take(30).joinToString().ifBlank { "（空）" },
+            toast = true,
+        )
+    }
+
+    /** 空包名意味着 TextToSpeech 绑的是系统全局默认引擎，不是 App 里选的那个。 */
+    private fun engineLabel(): String = activeEngine.ifBlank { "系统默认引擎(未指定包名)" }
 
     private fun applyPreset(voice: ReadAloudVoice) {
         val config = runCatching {
