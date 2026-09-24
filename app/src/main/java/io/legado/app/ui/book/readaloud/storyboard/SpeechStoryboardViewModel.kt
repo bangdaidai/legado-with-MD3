@@ -12,6 +12,7 @@ import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
 import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
 import io.legado.app.domain.usecase.RefineSpeechWithAiUseCase
@@ -348,7 +349,7 @@ class SpeechStoryboardViewModel(
         var lastScene = Int.MIN_VALUE
         items.forEach { item ->
             if (groups.isEmpty() || item.sceneIndex != lastScene) {
-                groups += mutableListOf()
+                groups.add(mutableListOf())
             }
             groups.last() += item
             lastScene = item.sceneIndex
