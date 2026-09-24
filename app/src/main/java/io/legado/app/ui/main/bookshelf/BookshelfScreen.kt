@@ -1062,9 +1062,8 @@ fun BookshelfScreen(
                                     snapshotKey = "search:$currentGroupId",
                                     books = uiState.items,
                                     animatedVisibilityScope = animatedVisibilityScope,
-                                    // 搜索结果列表的顺序不由阅读时间决定，只冻结不预排
+                                    // 搜索结果列表不记录开书提示、也永不预排：等同上游
                                     predictMoveToFrontOnReturn = false,
-                                    gridState = standaloneSearchGridState,
                                 ),
                                 uiState = uiState,
                                 selectedBookUrls = selectedBookUrls,
@@ -1076,11 +1075,7 @@ fun BookshelfScreen(
                                 onMoveBook = { _, _, _ -> },
                                 onDragFinished = {},
                                 onGlobalSearch = { onNavigateToSearch(uiState.searchKey.trim()) },
-                                onBookClick = { book, coverKey ->
-                                    // 与分组页同一口径：列表滑下去时不挂封面转场
-                                    val atTop = isBookshelfGridAtTop(standaloneSearchGridState)
-                                    onBookClick(book, coverKey.takeIf { atTop })
-                                },
+                                onBookClick = onBookClick,
                                 onLockedBookClick = requestBookUnlock,
                                 onBookLongClick = onBookLongClick,
                                 isCurrentPage = true,
@@ -1111,6 +1106,7 @@ fun BookshelfScreen(
                                 // 刚读过的书返回后必然落第 1 格，返程转场可以按最终顺序预排位
                                 val groupEffectiveSort = group.bookSort.takeIf { it >= 0 }
                                     ?: uiState.bookshelfSort
+                                val groupGridState = groupGridStates.getValue(group.groupId)
                                 val books = rememberBooksHeldDuringEnter(
                                     snapshotKey = "group:${group.groupId}",
                                     books = uiState.visibleGroupBooks[group.groupId]
@@ -1120,7 +1116,6 @@ fun BookshelfScreen(
                                         (groupEffectiveSort == 4 ||
                                                 groupEffectiveSort !in 1..5) &&
                                                 uiState.bookshelfSortOrder == 1,
-                                    gridState = groupGridStates.getValue(group.groupId),
                                 )
                                 val canReorderBooks = isEditMode &&
                                         !uiState.isSearch &&
@@ -1134,7 +1129,7 @@ fun BookshelfScreen(
                                     )
                                 } else {
                                     BookshelfPage(
-                                        gridState = groupGridStates.getValue(group.groupId),
+                                        gridState = groupGridState,
                                         paddingValues = paddingValues,
                                         books = books,
                                         uiState = uiState,
@@ -1178,16 +1173,15 @@ fun BookshelfScreen(
                                             onNavigateToSearch(uiState.searchKey.trim())
                                         },
                                         onBookClick = { book, coverKey ->
-                                            // 记录本次开书，供返回转场按最终顺序预排位；
-                                            // 列表滑下去（第一行不完整可见）时不传封面 key：
-                                            // 返回首帧滚动位置未恢复、动画目标格子不在组合中，
-                                            // 与其失锚不飞，不如直接走普通页面转场。
-                                            val atTop = recordBookshelfOpenHint(
+                                            // 记录本次开书（书名/是否停顶/推进戳/当时顺序），
+                                            // 供返回转场冻结并预排位；不接管时表现与上游一致。
+                                            recordBookshelfOpenHint(
                                                 snapshotKey = "group:${group.groupId}",
-                                                gridState = groupGridStates.getValue(group.groupId),
+                                                gridState = groupGridState,
                                                 bookUrl = book.bookUrl,
+                                                books = books,
                                             )
-                                            onBookClick(book, coverKey.takeIf { atTop })
+                                            onBookClick(book, coverKey)
                                         },
                                         onLockedBookClick = requestBookUnlock,
                                         onBookLongClick = onBookLongClick,
@@ -1571,21 +1565,21 @@ private data class BookshelfEditStickySummary(
 )
 
 /**
- * 书架列表快照：进入/返回转场期间冻结顺序用。
+ * 从书架某列表页最后点开过的书（key = "group:分组ID"），返回转场冻结/预排位用。
  *
  * NavDisplay 在去程转场结束后会销毁书架组合，`remember` 无法跨组合存活，
- * 快照必须放在组合外；稳定帧持续刷新，转场中只认快照。
+ * 所以记录必须放在组合外；列表稳定可见时清除。
  */
-private val bookshelfOrderSnapshots = mutableMapOf<String, ImmutableList<BookUiItem>>()
-
-/** 从书架某列表页最后点开过的书（与 [bookshelfOrderSnapshots] 同 key），返回转场预排位用。 */
 private val bookshelfOpenHints = mutableMapOf<String, BookshelfOpenHint>()
 
 private data class BookshelfOpenHint(
     val bookUrl: String,
+    /** 点击时列表是否停在顶部（第一行完整可见）。只有顶部的开书才接管转场顺序。 */
     val atTop: Boolean,
     /** 点击开书时 [ReadBook.lastReadProgressAdvanced] 里该书的推进时间戳（没推进过=0）。 */
     val advanceStamp: Long,
+    /** 点击时刻列表展示的顺序：转场期间按它冻结呈现，避免终点格子中途跳位。 */
+    val orderAtOpen: ImmutableList<BookUiItem>,
 )
 
 /** 列表是否停在顶部（第一行完整可见、未被标题栏裁切）。 */
@@ -1593,25 +1587,23 @@ private fun isBookshelfGridAtTop(gridState: LazyGridState): Boolean =
     gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
 
 /**
- * 点击开书时记录：书名 + 当时列表是否停在顶部（第一行未被标题栏裁切），返回 atTop。
+ * 点击开书时记录：书名、当时列表是否停在顶部、点击时刻的阅读推进戳和列表顺序。
  *
- * atTop 同时决定这次开书挂不挂封面 sharedBounds：滑下去后返回首帧网格滚动位置
- * 尚未恢复，被点书的格子不在组合中，动画目标失锚、"飞很远"根本不会出现；
- * 不如不挂，走普通页面转场。只有列表停在顶部时封面才飞。
+ * 只有"停在顶部"的开书会被 [rememberBooksHeldDuringEnter] 接管转场顺序
+ * （上游的闪角问题只发生在这种情况下）；其余情况完全不接管。
  */
 private fun recordBookshelfOpenHint(
     snapshotKey: String,
     gridState: LazyGridState,
     bookUrl: String,
-): Boolean {
-    // 预排位同样只在第一行完整可见时允许：预排后该书的新槽位（第 1 格）必然处于组合中。
+    books: ImmutableList<BookUiItem>,
+) {
     val atTop = isBookshelfGridAtTop(gridState)
-    // 记下点击时刻的推进戳：返程只有出现"比这更新"的推进才允许预排位，
+    // 记下点击时刻的推进戳：返程只有出现"比这更新"的推进才预排位，
     // 避免上一轮阅读留下的标记让"点开看一眼就返回"也误飞第 1 格。
     val advanceStamp = ReadBook.lastReadProgressAdvanced
         ?.takeIf { it.first == bookUrl }?.second ?: 0L
-    bookshelfOpenHints[snapshotKey] = BookshelfOpenHint(bookUrl, atTop, advanceStamp)
-    return atTop
+    bookshelfOpenHints[snapshotKey] = BookshelfOpenHint(bookUrl, atTop, advanceStamp, books)
 }
 
 /** 按"最近阅读倒序"的最终结果预排：刚读过的书时间戳最新，必然落到第 1 格。 */
@@ -1628,23 +1620,29 @@ private fun moveBookToFront(
 }
 
 /**
- * 转场期间冻结书架列表，并在返回方向按最终顺序预排位。
+ * 被点书返回后是否真的会重排到第 1 格：本次开书期间阅读位置推进过才行。
+ * 只点开没翻页的书不会重排，预排反而会在落定后被真实顺序弹回。
+ */
+private fun readProgressAdvancedDuring(hint: BookshelfOpenHint): Boolean {
+    val advanced = ReadBook.lastReadProgressAdvanced ?: return false
+    return advanced.first == hint.bookUrl && advanced.second > hint.advanceStamp
+}
+
+/**
+ * 顶部开书时冻结/预排转场期间的列表顺序，修上游"返回书架封面闪现左上角"。
  *
- * 从阅读页返回时阅读时间落库触发重排（默认按最近阅读倒序），重排列表往往在 pop
- * 转场开始后的几帧才重新发射；被点那本书的封面槽位随之从第 N 格跳到第 1 格，
- * sharedBounds 目标矩形中途失锚，封面会闪现到屏幕角落再拉回。
+ * 上游问题：首屏点开 2/3/4 号书返回时，阅读时间落库触发的重排在 pop 转场开始后
+ * 几帧才重新发射，sharedBounds 终点从第 N 格跳到第 1 格，封面闪到屏幕角落再拉回。
  *
- * 因此转场未落定前一律使用组合外快照（[bookshelfOrderSnapshots]，内容=最后一次
- * **展示**的顺序）里的顺序：
- * - 去程（书架 Visible → 隐藏）：冻结在离开前的顺序，列表不在点击瞬间跳动；
- * - 返程且列表原本停在顶部、排序是"按阅读时间倒序"系（默认/含更新时间）、
- *   且本次开书期间阅读位置真的推进过（[ReadBook.lastReadProgressAdvanced] 比
- *   点击时更新，见 [BookshelfOpenHint.advanceStamp]）：
- *   直接展示"点开的那本书移到第 1 格"的最终顺序，封面一段动画直接飞向第 1 格，
- *   落定后真实数据与预排一致，无第二段动作；没翻页的书不会重排，也就不会被预排；
- * - 其余情况（滚动中/其它排序/升序）：封面只飞回原槽位，落定后**保持**冻结顺序，
- *   等用户下次滚动该列表时才静默应用新顺序（观感上无"滑过去/瞬移"的第二段；
- *   列表内容集变化——如阅读页删书、移组——则立即生效，不展示幽灵条目）。
+ * 只接管一种情况——点击时列表停在顶部（[recordBookshelfOpenHint] 记录了提示）：
+ * - 去程：按点击时刻的顺序冻结，重排发射不会让格子在封面飞出时跳位；
+ * - 返程：排序为"按阅读时间倒序"系且本次真的推进了阅读位置时，直接展示预排到
+ *   第 1 格的最终顺序，封面一段动画飞向第 1 格，落定后与真实顺序一致；
+ *   没推进或别的排序则保持冻结顺序飞回原槽位，落定后应用真实顺序。
+ *
+ * 其余一切情况（滑动态点书、搜索页、无提示）原样透传真实列表，与上游行为一致。
+ * 列表内容集在阅读器里变化（删书、移组、加书）时快照不可信，立即回到真实列表，
+ * 不展示幽灵条目。
  */
 @Composable
 private fun rememberBooksHeldDuringEnter(
@@ -1652,7 +1650,6 @@ private fun rememberBooksHeldDuringEnter(
     books: ImmutableList<BookUiItem>,
     animatedVisibilityScope: AnimatedVisibilityScope?,
     predictMoveToFrontOnReturn: Boolean,
-    gridState: LazyGridState,
 ): ImmutableList<BookUiItem> {
     if (animatedVisibilityScope == null) return books
     val transition = animatedVisibilityScope.transition
@@ -1660,72 +1657,22 @@ private fun rememberBooksHeldDuringEnter(
         transition.targetState != EnterExitState.Visible
     // currentState 已不是 Visible：处于（或刚从）隐藏态回来，才允许预排位；
     // 去程 current 仍是 Visible，只冻结不预排，避免点击瞬间列表跳动。
-    val returning = transition.currentState != EnterExitState.Visible
-    val heldFallback = remember(snapshotKey) { mutableStateOf(books) }
-    // 兜底路径的"延迟生效"记录：冻结时展示的列表 + 当时的滚动位置
-    val deferredRelease = remember(snapshotKey) {
-        mutableStateOf<BookshelfDeferredRelease?>(null)
+    val returning = entering && transition.currentState != EnterExitState.Visible
+    val hint = bookshelfOpenHints[snapshotKey]?.takeIf { it.atTop }
+    val displayed = when {
+        hint == null || hint.orderAtOpen.size != books.size -> books
+        returning && predictMoveToFrontOnReturn &&
+            readProgressAdvancedDuring(hint) ->
+            moveBookToFront(hint.orderAtOpen, hint.bookUrl)
+        entering -> hint.orderAtOpen
+        else -> books
     }
 
-    val displayed: ImmutableList<BookUiItem> = if (entering) {
-        val frozen = bookshelfOrderSnapshots[snapshotKey] ?: heldFallback.value
-        val hint = if (returning && predictMoveToFrontOnReturn) {
-            bookshelfOpenHints[snapshotKey]?.takeIf { it.atTop }
-        } else {
-            null
-        }
-        // 本次开书期间阅读位置真的推进过才预排；只点开没翻页的书不会重排，
-        // 预排反而会在落定后被真实顺序弹回。
-        val predicted = hint?.takeIf {
-            val advanced = ReadBook.lastReadProgressAdvanced
-            advanced != null && advanced.first == it.bookUrl && advanced.second > it.advanceStamp
-        }?.let { moveBookToFront(frozen, it.bookUrl) }
-        if (predicted != null) {
-            deferredRelease.value = null
-            predicted
-        } else {
-            deferredRelease.value = BookshelfDeferredRelease(
-                books = frozen,
-                firstIndex = gridState.firstVisibleItemIndex,
-                firstOffset = gridState.firstVisibleItemScrollOffset,
-            )
-            frozen
-        }
-    } else {
-        val pending = deferredRelease.value
-        if (
-            pending != null &&
-            pending.books !== books &&
-            pending.books.size == books.size &&
-            gridState.firstVisibleItemIndex == pending.firstIndex &&
-            gridState.firstVisibleItemScrollOffset == pending.firstOffset
-        ) {
-            // 转场已落定但用户还没滚动：继续展示封面降落时的顺序
-            pending.books
-        } else {
-            deferredRelease.value = null
-            books
-        }
-    }
-
-    LaunchedEffect(entering, displayed, snapshotKey) {
-        if (!entering) {
-            // 快照永远等于用户最后看到的顺序：延迟生效期间不把新顺序写进去，
-            // 否则下一次点击瞬间列表会从"用户看到的旧顺序"跳到"新顺序"。
-            heldFallback.value = displayed
-            bookshelfOrderSnapshots[snapshotKey] = displayed
-            bookshelfOpenHints.remove(snapshotKey)
-        }
+    LaunchedEffect(entering, snapshotKey) {
+        if (!entering) bookshelfOpenHints.remove(snapshotKey)
     }
     return displayed
 }
-
-/** [rememberBooksHeldDuringEnter] 兜底路径的延迟生效记录。 */
-private data class BookshelfDeferredRelease(
-    val books: ImmutableList<BookUiItem>,
-    val firstIndex: Int,
-    val firstOffset: Int,
-)
 
 /**
  * 私密分组的锁定态内容区。
