@@ -139,6 +139,18 @@ abstract class BaseReadAloudService : BaseService(),
         var currentChapterIndex: Int = -1
             private set
 
+        /**
+         * 当前有一轮「准备」正在为哪一章干活，-1 表示没有轮次在飞。
+         *
+         * [currentChapterIndex] 只有一轮准备完整跑完才更新，排版批次若只比对它，
+         * 会把在飞的轮次一轮轮掐死（自动补发起播 → cancel 旧轮 → 再补发）。
+         * 起播一开始就记上章号，让 [io.legado.app.model.ReadBook] 的重启判据看到「已有人在弄本章」。
+         */
+        @JvmStatic
+        @Volatile
+        var preparingChapterIndex: Int = -1
+            private set
+
         @JvmStatic
         @Volatile
         var currentProgress: Int = 0
@@ -352,6 +364,7 @@ abstract class BaseReadAloudService : BaseService(),
         statusBeforePreparing = null
         sessionStore.stop()
         currentChapterIndex = -1
+        preparingChapterIndex = -1
         currentProgress = 0
         abandonFocus()
         unregisterReceiver(broadcastReceiver)
@@ -415,6 +428,8 @@ abstract class BaseReadAloudService : BaseService(),
         clearFinishChapterTimerIfChapterChanged(ReadBook.durChapterIndex)
         val generation = ++prepareReadAloudGeneration
         prepareReadAloudJob?.cancel()
+        // 先把「本章有人在准备」记上；若等轮次跑完才更新，排版批次会一路补发起播掐死在飞轮次
+        preparingChapterIndex = ReadBook.durChapterIndex
         if (play) upPreparingState(true)
         prepareReadAloudJob = execute(executeContext = IO) {
             val input = ReadBook.readerChapterInputWindow.current ?: return@execute
@@ -551,7 +566,12 @@ abstract class BaseReadAloudService : BaseService(),
             AppLog.put("启动朗读出错\n${it.localizedMessage}", it, true)
         }.onFinally {
             // 提前返回 / 出错时 play() 不会执行, 这里兜底把「准备中」摘掉, 否则界面一直转圈
-            if (generation == prepareReadAloudGeneration) upPreparingState(false)
+            if (generation == prepareReadAloudGeneration) {
+                // 本轮已交账（成功或被更早放弃）：清掉记账，让「分页未完成」等早退路径
+                // 仍能被下一个排版批次重试，恢复换章兜底的原职责
+                preparingChapterIndex = -1
+                upPreparingState(false)
+            }
         }
     }
 

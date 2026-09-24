@@ -10,6 +10,8 @@ import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 
 /**
  * Builds the persisted speech plan used by a read-aloud session.
@@ -52,8 +54,16 @@ class PrepareChapterSpeechPlanUseCase(
         } else {
             runCatching { refineSpeechWithAi.resolverVersion(bookUrl, requestedMode, policy) }
                 .onFailure {
-                    // 没配 AI 模型时这里就抛了，静默回落会让用户以为 AI 模式生效了
-                    notifyFallback("AI 分析未启用，已按规则模式朗读", it)
+                    if (it.isCancelledByNextRound()) {
+                        // 本轮被新一轮起播裸 cancel() 掐掉，不是「没启用 AI」，不许弹回落 toast
+                        AppLog.put(
+                            "AI 分析版本号未取到（本轮已被新起播取消，非失败）\n${it.describeError()}",
+                            it,
+                        )
+                    } else {
+                        // 没配 AI 模型时这里就抛了，静默回落会让用户以为 AI 模式生效了
+                        notifyFallback("AI 分析未启用，已按规则模式朗读", it)
+                    }
                 }
                 .getOrDefault(ruleVersion)
         }
@@ -87,7 +97,15 @@ class PrepareChapterSpeechPlanUseCase(
             }.onSuccess {
                 lastNotifiedFallback = null
             }.onFailure {
-                notifyFallback("AI 分析说话人失败，已回落规则结果", it)
+                if (it.isCancelledByNextRound()) {
+                    // 取消≠失败：不弹「分析失败」，也不该让用户以为回落了规则结果
+                    AppLog.put(
+                        "AI 说话人分析被新一轮起播取消，非失败\n${it.describeError()}",
+                        it,
+                    )
+                } else {
+                    notifyFallback("AI 分析说话人失败，已回落规则结果", it)
+                }
             }.getOrDefault(locallyResolved)
         }
         if (useMultiSpeaker) {
@@ -121,11 +139,24 @@ class PrepareChapterSpeechPlanUseCase(
      * 回落提示按「原因」去重：只有换了新原因才弹 toast，重复的只进日志。
      */
     private fun notifyFallback(reason: String, error: Throwable) {
-        val message = "$reason\n${error.localizedMessage}"
+        val message = "$reason\n${error.describeError()}"
         val repeated = message == lastNotifiedFallback
         lastNotifiedFallback = message
         AppLog.put(message, error, !repeated)
     }
+
+    /**
+     * 本轮是被新一轮起播掐掉的，不是 AI 真出了问题。
+     *
+     * `newReadAloud` 用无因 `cancel()` 砍旧轮，抛出来的 CancellationException 连消息都是 null，
+     * 之前一律按失败弹 toast，才有「明明配了模型却提示未启用/失败」。超时是真失败，必须排除。
+     */
+    private fun Throwable.isCancelledByNextRound(): Boolean =
+        this is CancellationException && this !is TimeoutCancellationException
+
+    /** 裸 cancel() 等无消息异常 localizedMessage 为 null，toast 会显示一个天书「null」，退回类名 */
+    private fun Throwable.describeError(): String =
+        localizedMessage ?: javaClass.simpleName
 
     /** 只给本章真正开口的角色自动选音，别把整本人物表的音色都占掉 */
     private fun ChapterSpeechAnalysisResult.speakingPerformances(): List<CharacterPerformanceProfile> {

@@ -687,6 +687,9 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         if (!readAloudSessionStore.state.value.followReadAloudPosition) return
         if (snapshots.none { it.chapterIndex == durChapterIndex }) return
         if (BaseReadAloudService.currentChapterIndex == durChapterIndex) return
+        // 本轮准备已在为当前章干活：不再补发起播。补发会 cancel 在飞轮次（无因 cancel 的异常
+        // 消息为 null），曾被误报成「AI 分析失败/未启用」并让每次进页面空转多个批次周期。
+        if (BaseReadAloudService.preparingChapterIndex == durChapterIndex) return
         readAloud(play = !BaseReadAloudService.pause)
     }
 
