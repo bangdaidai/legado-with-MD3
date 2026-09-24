@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ContentSplitPolicies
+import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
@@ -18,6 +19,7 @@ import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
 import io.legado.app.domain.usecase.RefineSpeechWithAiUseCase
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.config.readConfig.ReadConfig
 import kotlinx.collections.immutable.persistentListOf
@@ -452,7 +454,8 @@ class SpeechStoryboardViewModel(
                 SpeechResolutionSource.Fallback -> StoryboardSource.Fallback
             },
             locked = segment.userLocked,
-            previewable = item.voice != null && segment.text.isNotBlank(),
+            // 没绑定音色也能试听（回退引擎默认），按钮只在没有文本时才灰
+            previewable = segment.text.isNotBlank(),
             sceneIndex = segment.sceneIndex,
             sceneTitle = segment.sceneTitle,
         )
@@ -489,10 +492,9 @@ class SpeechStoryboardViewModel(
             return
         }
         val planItem = currentPlan.firstOrNull { it.segment.id == itemId }
-        val voice = planItem?.voice
         val text = planItem?.segment?.text?.trim()
         previewJob?.cancel()
-        if (voice == null || text.isNullOrEmpty()) {
+        if (text.isNullOrEmpty()) {
             toast(appCtx.getString(R.string.speech_storyboard_preview_unavailable))
             return
         }
@@ -500,18 +502,29 @@ class SpeechStoryboardViewModel(
             _uiState.update { it.copy(previewingItemId = itemId) }
             val outcome = runCatching {
                 withContext(Dispatchers.IO) {
+                    // 没绑定音色不拦试听：与真实朗读同款，回退到协调器默认引擎路线
+                    val voice = planItem?.voice ?: runtimeDefaultVoice() ?: return@withContext null
                     val file = File(appCtx.cacheDir, "storyboard_preview/$itemId.audio")
                     file.parentFile?.mkdirs()
                     previewSynthesizer.synthesize(voice, text, file) to file
                 }
             }
             outcome.fold(
-                onSuccess = { (ok, file) ->
-                    if (ok) {
-                        _effects.tryEmit(SpeechStoryboardEffect.PlayPreview(file.absolutePath))
-                    } else {
-                        clearPreview()
-                        toast(appCtx.getString(R.string.voice_preview_failed))
+                onSuccess = { result ->
+                    when {
+                        result == null -> {
+                            clearPreview()
+                            toast(appCtx.getString(R.string.speech_storyboard_preview_unavailable))
+                        }
+
+                        result.first -> _effects.tryEmit(
+                            SpeechStoryboardEffect.PlayPreview(result.second.absolutePath),
+                        )
+
+                        else -> {
+                            clearPreview()
+                            toast(appCtx.getString(R.string.voice_preview_failed))
+                        }
                     }
                 },
                 onFailure = { e ->
@@ -521,6 +534,24 @@ class SpeechStoryboardViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * 朗读服务在没绑定音色时用的同款兜底：按协调器默认引擎路线现造一条运行时音色，
+     * 不落库、不参与分析，只保证「每段都能听」听到的是真实朗读的发声。
+     */
+    private fun runtimeDefaultVoice(): ReadAloudVoice? {
+        val engineType = ReadAloud.coordinatorDefaultEngineType
+        val engineId = ReadAloud.coordinatorDefaultEngineId
+        // http 路线的 engineId 必须是可查的 HttpTTS 主键，否则与 VoicePreviewSynthesizer 的解析口径对不上
+        if (engineType == ReadAloudVoice.ENGINE_HTTP && engineId.toLongOrNull() == null) return null
+        return ReadAloudVoice(
+            id = "storyboard-preview:$engineType:$engineId:$engineId",
+            engineType = engineType,
+            engineId = engineId,
+            speakerId = ReadAloud.coordinatorDefaultSpeakerId,
+            displayName = "",
+        )
     }
 
     private fun stopPreview() {
