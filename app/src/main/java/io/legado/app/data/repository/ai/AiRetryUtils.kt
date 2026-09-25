@@ -145,7 +145,9 @@ internal suspend fun <T> tryModelsEndpoints(
             if (!response.isSuccessful()) {
                 throw AiHttpException(response.code(), response.message(), response.body)
             }
-            return parse(response.body)
+            val body = response.body
+                ?: throw IllegalStateException("models endpoint returned empty body: $url")
+            return parse(body)
         } catch (e: CancellationException) {
             throw e
         } catch (e: AiHttpException) {
