@@ -661,9 +661,13 @@ abstract class BaseReadAloudService : BaseService(),
             nowSpeak = preparedNowSpeak
             readAloudNumber = preparedReadAloudNumber
             paragraphStartPos = preparedParagraphStartPos
+            // 临时诊断：≤3字的碎段计数——"每段只读两三个字"若是计划把段落切碎成短 cue，
+            // 这里当场见数；正常整段/句级划分下短段只会有零星引号尾段。定位后随诊断删掉。
+            val shortCueCount = preparedContentList.count { it.length <= 3 }
             diagVoice(
                 "换声成功 c${preparedChapter.chapterIndex} 段$preparedNowSpeak/" +
                     "${preparedContentList.size} 偏$preparedParagraphStartPos 位$preparedReadAloudNumber " +
+                    "短段$shortCueCount/${preparedContentList.size} " +
                     // 两个引擎都恒定 useSpeechPlaybackQueue=true（HttpReadAloudService:107 /
                     // TTSReadAloudService:41），这里"有"只表示走了分镜 cue 队列，不代表开了多角色
                     "队列=${if (hasSpeechPlaybackQueue) "有" else "无"}"
@@ -787,6 +791,13 @@ abstract class BaseReadAloudService : BaseService(),
         upReadAloudNotification()
         sessionStore.setStatus(ReadAloudSessionStatus.Playing)
         postEvent(EventBus.ALOUD_STATE, Status.PLAY)
+        // 临时诊断：每次真正进入播放动作留痕。正常一个 cue 起播只出现一次；若同一 cueIndex
+        // 反复出现且"偏"越来越大，就是 play() 被重入、上段 onRangeStart 残留的偏移把段首截掉，
+        // 现场即"每段只读两三个字然后跳下一段"。定位后随诊断删掉。
+        diagVoiceTrace(
+            "play 段$nowSpeak 偏$paragraphStartPos/" +
+                "${contentList.getOrNull(nowSpeak)?.length ?: -1}"
+        )
         if (!ReadBook.isAutoSaveSessionRunning) {
             ReadBook.startReadSession()
         }
