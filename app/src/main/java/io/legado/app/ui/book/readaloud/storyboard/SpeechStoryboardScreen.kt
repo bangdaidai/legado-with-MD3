@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
@@ -78,8 +79,18 @@ fun SpeechStoryboardScreen(
 
     // 试听只服务单段回放，不抢朗读服务的播放器：合成好的文件用轻量 MediaPlayer 播
     val player = remember { MediaPlayer() }
+    var lastPreviewPath by remember { mutableStateOf<String?>(null) }
     DisposableEffect(player) {
         player.setOnCompletionListener { latestOnIntent(SpeechStoryboardIntent.PreviewFinished) }
+        // 异步解码失败只会哑掉，不留痕就又是「点了没声也看不到日志」
+        player.setOnErrorListener { _, what, extra ->
+            AppLog.put(
+                "分镜试听播放失败：MediaPlayer what=$what extra=$extra " +
+                    "path=${lastPreviewPath ?: "（未知）"}"
+            )
+            latestOnIntent(SpeechStoryboardIntent.PreviewFinished)
+            true
+        }
         onDispose { runCatching { player.release() } }
     }
 
@@ -94,11 +105,15 @@ fun SpeechStoryboardScreen(
             when (effect) {
                 is SpeechStoryboardEffect.ShowToast -> context.toastOnUi(effect.message)
                 is SpeechStoryboardEffect.PlayPreview -> runCatching {
+                    lastPreviewPath = effect.path
                     player.reset()
                     player.setDataSource(effect.path)
                     player.prepare()
                     player.start()
-                }.onFailure { context.toastOnUi(previewFailed) }
+                }.onFailure { e ->
+                    AppLog.put("分镜试听播放失败：${e.javaClass.name}: ${e.message} path=${effect.path}")
+                    context.toastOnUi(previewFailed)
+                }
 
                 SpeechStoryboardEffect.StopPreviewPlayback -> runCatching {
                     if (player.isPlaying) player.stop()

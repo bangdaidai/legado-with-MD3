@@ -515,6 +515,11 @@ class SpeechStoryboardViewModel(
                     when {
                         result == null -> {
                             clearPreview()
+                            // 走到这里说明连兜底音色都造不出来，必须把当时引擎配置记下来
+                            AppLog.put(
+                                "分镜试听没有可用的兜底音色：engineType=${ReadAloud.coordinatorDefaultEngineType} " +
+                                    "engineId=${ReadAloud.coordinatorDefaultEngineId.ifBlank { "（空）" }}"
+                            )
                             toast(appCtx.getString(R.string.speech_storyboard_preview_unavailable))
                         }
 
