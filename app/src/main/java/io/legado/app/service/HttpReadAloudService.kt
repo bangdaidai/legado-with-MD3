@@ -215,7 +215,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         exoPlayer.stop()
         if (!requestFocus()) return
         if (contentList.isEmpty()) {
-            AppLog.putDebug("朗读列表为空")
+            diagVoice("朗读列表为空(引擎侧)", verbose = true)
             ReadBook.readAloud()
         } else {
             super.play()
@@ -293,7 +293,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                         md5SpeakFileName(text, httpTts = itemHttpTts, sourceKey = sourceKey)
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isEmpty()) {
-                        AppLog.put("阅读段落内容为空，使用无声音频代替。\n朗读文本：$text")
+                        diagVoice("空内容段→无声音频[${text.take(20)}]")
                         createSilentSound(fileName)
                     } else if (!hasSpeakFile(fileName)) {
                         runCatching {
@@ -602,7 +602,11 @@ class HttpReadAloudService : BaseReadAloudService(),
             when (it) {
                 is CancellationException -> throw it
                 else -> {
-                    AppLog.put("TTS预合成cue失败: ${it.localizedMessage}")
+                    // 原先只打 localizedMessage，很多异常它本来就是 null，看不出是什么错。
+                    // 逐 cue 一条会刷屏，收进【朗读声音诊断】那一条。
+                    diagVoiceTrace(
+                        "预合成失败 ${it.javaClass.simpleName}:${it.localizedMessage}"
+                    )
                     false
                 }
             }
@@ -683,7 +687,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isEmpty()) {
-                        AppLog.put("阅读段落内容为空，使用无声音频代替。\n朗读文本：$speakText")
+                        diagVoice("段$index空内容→无声音频[${text.take(20)}]")
                     }
                     val itemHttpTts = httpTtsForCue(index, httpTts)
                     val itemVoice = httpVoiceForCue(index, httpTts)
@@ -953,15 +957,21 @@ class HttpReadAloudService : BaseReadAloudService(),
 
                     else -> {
                         downloadErrorNo++
-                        val msg = "tts下载错误\n${e.localizedMessage}"
-                        AppLog.put(msg, e)
+                        val giveUp = downloadErrorNo > 5
+                        // 逐段失败原来两条一起刷（tts下载错误 + 用无声音频代替），
+                        // 收进【朗读声音诊断】；带堆栈的那份仍走 logcat（printOnDebug）。
+                        diagVoiceTrace(
+                            "下载异常 ${e.javaClass.simpleName}:${e.localizedMessage} " +
+                                "计$downloadErrorNo→${if (giveUp) "暂停朗读" else "无声音频"}" +
+                                "[${speakText.take(20)}]"
+                        )
                         e.printOnDebug()
-                        if (downloadErrorNo > 5) {
-                            val msg1 = "TTS服务器连续5次错误，已暂停阅读。"
-                            AppLog.put(msg1, e, true)
+                        if (giveUp) {
+                            AppLog.put(
+                                "TTS服务器连续5次错误，已暂停阅读。\n${e.localizedMessage}", e, true
+                            )
                             throw e
                         } else {
-                            AppLog.put("TTS下载音频出错，使用无声音频代替。\n朗读文本：$speakText")
                             break
                         }
                     }
@@ -1247,14 +1257,14 @@ class HttpReadAloudService : BaseReadAloudService(),
                     exoPlayer.stop()
                     exoPlayer.clearMediaItems()
                     if (!pause && !isLastParagraph) {
-                        AppLog.putDebug("HttpTTS段落开始停顿: $interval 毫秒")
+                        diagVoice("段$nowSpeak停顿${interval}ms", verbose = true)
                         execute {
                             delay(interval)
                             if (!pause) {
                                 launch(Main) {
                                     if (!pause) {
                                         play()
-                                        AppLog.putDebug("HttpTTS段落停顿结束，恢复播放")
+                                        diagVoice("停顿结束恢复", verbose = true)
                                     }
                                 }
                             }

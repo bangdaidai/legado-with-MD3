@@ -118,22 +118,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 /**
- * 临时诊断：MainNavigator/MainActivity 的【返回诊断】片段不再逐条落日志页，
- * 全部先攒到这里；阅读面入场窗口期满时由 flushDiagEntranceTrace 与"提交序列"
- * 合并成**一条**"一次返回＝一条日志"。定位后整块随【入场诊断】一并回退。
+ * 临时诊断的读侧门面：MainNavigator/MainActivity 的返回/导航轨迹，和阅读面入场后的
+ * 窗口提交序列，都进同一个桶（[BaseReadAloudService.diagPageTrace]），由入场期满一次
+ * 性收口，做到"一次返回＝一条【页面跳转诊断】"，不再逐条刷屏。定位后整块随诊断回退。
  */
 object ReaderEntranceDiag {
-    private val lines = mutableListOf<String>()
-
-    fun add(line: String) {
-        if (lines.size < 80) lines += line
-    }
-
-    fun drain(): List<String> {
-        val copy = lines.toList()
-        lines.clear()
-        return copy
-    }
+    fun add(line: String) = BaseReadAloudService.diagPageTrace(line)
 }
 
 /**
@@ -549,9 +539,6 @@ class ReadBookController(
 
     /** 临时诊断：阅读面 attach 后的窗口提交记录截止时间戳，0 表示不在记录期。 */
     private var diagEntranceTraceUntil = 0L
-    /** 临时诊断：记录期内的紧凑提交片段，期满合并成一条日志，不再逐条刷屏。 */
-    private val diagEntranceTrace = mutableListOf<String>()
-    private var diagEntranceTraceStart = 0L
     /**
      * 入场时后到的「加载中」占位窗暂存，不直接上屏：冷重入场必然经过"正文输入未就绪"
      * 的几十到几百毫秒，此时 ReaderSessionViewModel 里还挂着上一次离场的成型窗口，
@@ -562,54 +549,22 @@ class ReadBookController(
 
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
-        // 临时诊断：从听书页等整页返回、阅读面重新入场后的 2.5 秒里，
-        // 把每一次窗口提交记成"+毫秒 c章p页·来源"片段，连同返回段攒下的
-        // 【返回诊断】在期满时合并成**一条**【返回入场诊断】。定位后整体回退。
-        // 注意：入场时不清攒、不结算——那几条返回段正是本次返回的开头，
-        // 要一起进期满那条，才做得到"一次返回只有一条日志"。
-        diagEntranceTraceStart = System.currentTimeMillis()
-        diagEntranceTraceUntil = diagEntranceTraceStart + 2500
+        // 临时诊断：从听书页等整页返回、阅读面重新入场后的 2.5 秒里，把每一次窗口提交
+        // 记成 c章p页·来源 片段，连同导航那头攒下的返回/重组轨迹，期满一起收进**唯一一条**
+        // 【页面跳转诊断】。定位后整体回退。
+        // 注意：入场时不清桶、不提前结算——那些返回片段正是本次返回的开头，
+        // 要一起进期满那一条，才做得到"一次返回只有一条日志"。
+        diagEntranceTraceUntil = System.currentTimeMillis() + 2500
         diagEntranceHoldPlaceholder = null
         activity.lifecycleScope.launch {
             delay(2600)
             // 入场仍未等到任何真实页：放行暂存的加载占位，"加载中"语义保持不变。
             diagEntranceHoldPlaceholder?.invoke()
             diagEntranceHoldPlaceholder = null
-            flushDiagEntranceTrace()
+            BaseReadAloudService.flushDiagPage()
         }
         ReadBook.registerRender(this)
         publishReaderPageWindow(from = "入场")
-    }
-
-    /** 临时诊断：把攒下的片段连续去重并成 ×N，用 " | " 串成一段。 */
-    private fun compressDiagEntries(entries: List<String>): String {
-        val merged = StringBuilder()
-        var index = 0
-        while (index < entries.size) {
-            val entry = entries[index]
-            var repeat = 1
-            while (index + repeat < entries.size && entries[index + repeat] == entry) {
-                repeat += 1
-            }
-            if (merged.isNotEmpty()) merged.append(" | ")
-            merged.append(entry)
-            if (repeat > 1) merged.append('×').append(repeat)
-            index += repeat
-        }
-        return merged.toString()
-    }
-
-    /** 临时诊断：返回段+入场段合并成唯一一条日志；两段都空则静默。 */
-    private fun flushDiagEntranceTrace() {
-        diagEntranceTraceUntil = 0L
-        val backStage = ReaderEntranceDiag.drain()
-        if (diagEntranceTrace.isEmpty() && backStage.isEmpty()) return
-        AppLog.put(
-            "【返回入场诊断】返回段: ${compressDiagEntries(backStage)} " +
-                "|| 入场2.5秒共 ${diagEntranceTrace.size} 次提交: " +
-                compressDiagEntries(diagEntranceTrace)
-        )
-        diagEntranceTrace.clear()
     }
 
     /**
@@ -646,9 +601,9 @@ class ReadBookController(
             System.currentTimeMillis() < diagEntranceTraceUntil
         ) {
             val placeholderMark = if (next?.isPlaceholder == true) "占位" else ""
-            diagEntranceTrace +=
-                "+${System.currentTimeMillis() - diagEntranceTraceStart}ms " +
-                    "c${next?.id?.chapterIndex}p${next?.id?.pageIndex}$placeholderMark·$from"
+            ReaderEntranceDiag.add(
+                "提交c${next?.id?.chapterIndex}p${next?.id?.pageIndex}$placeholderMark·$from"
+            )
         }
         readerSessionViewModel.submitPageWindow(value)
         return value

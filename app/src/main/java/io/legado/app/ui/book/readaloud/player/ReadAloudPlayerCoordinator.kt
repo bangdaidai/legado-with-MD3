@@ -198,11 +198,54 @@ class ReadAloudPlayerCoordinator(
     /** 悬浮胶囊与播放界面的停止入口共用。 */
     fun stop() = ReadAloud.stop(application)
 
-    fun previousParagraph() = ReadAloud.prevParagraph(application)
-    fun nextParagraph() = ReadAloud.nextParagraph(application)
-    fun previousChapter() = ReadBook.moveToPrevChapter(true, false)
-    fun nextChapter() = ReadBook.moveToNextChapter(true)
-    fun selectChapter(index: Int) = ReadBook.openChapter(index, durChapterPos = 0)
+    fun previousParagraph() {
+        diagVoiceJump("点上一句")
+        ReadAloud.prevParagraph(application)
+    }
+
+    fun nextParagraph() {
+        diagVoiceJump("点下一句")
+        ReadAloud.nextParagraph(application)
+    }
+
+    /**
+     * 播放页跳章：声音不会由这里直接控制，全靠 ReadBook 换章后的补发判据把朗读拽到新章，
+     * 所以片段记进【页面跳转诊断】那一桶，由它把「点下去 → 页面改章 → 补发/不补发 → 落点」
+     * 连同导航返回/入场轨迹收成一条日志；服务端那一轮准备怎么走另在【朗读声音诊断】里一条出完。定位后一并回退。
+     */
+    fun previousChapter(): Boolean {
+        BaseReadAloudService.diagPage(diagJumpNote("点上一章"))
+        val moved = ReadBook.moveToPrevChapter(true, false)
+        BaseReadAloudService.diagPage("落点c${ReadBook.durChapterIndex} ${if (moved) "已改页" else "无此章"}")
+        return moved
+    }
+
+    fun nextChapter(): Boolean {
+        BaseReadAloudService.diagPage(diagJumpNote("点下一章"))
+        val moved = ReadBook.moveToNextChapter(true)
+        BaseReadAloudService.diagPage("落点c${ReadBook.durChapterIndex} ${if (moved) "已改页" else "无此章"}")
+        return moved
+    }
+
+    fun selectChapter(index: Int) {
+        BaseReadAloudService.diagPage(diagJumpNote("目录选章c$index"))
+        ReadBook.openChapter(index, durChapterPos = 0)
+        BaseReadAloudService.diagPage("落点c${ReadBook.durChapterIndex}")
+    }
+
+    /** 点跳句只动声音位置，片段归【朗读声音诊断】那条。 */
+    private fun diagVoiceJump(action: String) {
+        if (!BaseReadAloudService.isRun) return
+        BaseReadAloudService.diagVoice(
+            "$action 声音c${BaseReadAloudService.currentChapterIndex} " +
+                "位${sessionStore.state.value.playback.chapterPosition}"
+        )
+    }
+
+    /** 点跳章瞬间的页面/声音两侧章号与跟随状态——脱离状态是"声音不跟"最常见的一种解释。 */
+    private fun diagJumpNote(action: String): String =
+        "$action 页面c${ReadBook.durChapterIndex} 声音c${BaseReadAloudService.currentChapterIndex} " +
+            "跟随=${sessionStore.state.value.followReadAloudPosition}"
 
     suspend fun setSpeed(value: Int) {
         readAloudSettingsGateway.update { it.copy(ttsSpeechRate = coerceReadAloudSpeed(value)) }

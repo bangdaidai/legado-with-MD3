@@ -14,6 +14,8 @@ import android.graphics.Color
 import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.support.v4.media.MediaMetadataCompat
@@ -180,6 +182,72 @@ abstract class BaseReadAloudService : BaseService(),
         fun isPlay(): Boolean {
             return isRun && !pause
         }
+
+        private const val DIAG_PAGE_QUIET_MS = 1_200L
+        private const val DIAG_VOICE_QUIET_MS = 6_000L
+
+        /**
+         * 临时诊断：听书一次操作只落**两条**日志——
+         * [diagPage] 记页面侧（点了哪个按钮、正文改到哪一章、补发判据怎么走），
+         * [diagVoice] 记声音侧（起轮、备料、早退/作废、换声、引擎逐段出声、预合成失败）。
+         *
+         * 定位的是「听书页正文已经是下一章、声音还在念上一章」。这条链是页面侧改章 →
+         * [io.legado.app.model.ReadBook] 补发判据 → 服务端一整轮准备，三段各有权属，
+         * 而准备轮里有若干处静默 return：任一命中，服务就继续持有上一章的朗读内容，
+         * 界面看到的却已是新章。原先一次换章十几条日志没法读，故按归属分桶合并。
+         * 定位后整体回退。
+         */
+        private val diagPageBucket = ReadAloudDiagBucket(
+            label = "页面跳转",
+            quietMs = DIAG_PAGE_QUIET_MS,
+        ) {
+            "文字c${ReadBook.durChapterIndex} 声音c$currentChapterIndex"
+        }
+        private val diagVoiceBucket = ReadAloudDiagBucket(
+            label = "朗读声音",
+            quietMs = DIAG_VOICE_QUIET_MS,
+        ) {
+            // 声音实际停在第几章：currentChapterIndex 只随朗读进度从 readerReadAloudChapter 取值，
+            // 一轮准备没替换成功时它就停在上一章——正是要看的量。
+            val voiceChapterIndex = currentChapterIndex
+            val pageChapterIndex = ReadBook.durChapterIndex
+            "文字c$pageChapterIndex 声音c$voiceChapterIndex " +
+                if (voiceChapterIndex == pageChapterIndex) "一致" else "脱节(声音仍停在c$voiceChapterIndex)"
+        }
+
+        /** 记一条页面侧片段：跳转动作、页面落点、补发判据的走向；静默期后自己收口成一条。 */
+        @JvmStatic
+        fun diagPage(note: String) = diagPageBucket.add(note)
+
+        /**
+         * 记一条页面侧背景轨迹（导航返回/重组、入场后的窗口提交）：不自己收口，
+         * 由阅读面入场期满调 [flushDiagPage] 一并出条，所以"一次返回＝一条"。
+         */
+        @JvmStatic
+        fun diagPageTrace(note: String) = diagPageBucket.add(note, selfFlush = false)
+
+        /** 收口页面侧那一条：一次返回/入场走完时调用。 */
+        @JvmStatic
+        fun flushDiagPage() = diagPageBucket.flush()
+
+        /** 记一条声音侧片段；[verbose] 是引擎逐段出声那种噪声，只随本轮诊断出条。 */
+        @JvmStatic
+        fun diagVoice(note: String, verbose: Boolean = false) {
+            if (verbose && !AppLog.isRecording) return
+            diagVoiceBucket.add(note, selfFlush = !verbose)
+        }
+
+        /**
+         * 记一条声音侧背景片段（预合成逐 cue 失败、下载回退无声）：一直记，但不自己收口，
+         * 由本轮 [flushDiagVoice] 或片段上限一次性带出——这类片段一处命中就是几十上百条，
+         * 挨个出条等于没诊断。
+         */
+        @JvmStatic
+        fun diagVoiceTrace(note: String) = diagVoiceBucket.add(note, selfFlush = false)
+
+        /** 本轮准备走到终点（换声成功或任一早退/作废）：声音侧片段就此合成一条。 */
+        @JvmStatic
+        fun flushDiagVoice() = diagVoiceBucket.flush()
 
         private const val TAG = "BaseReadAloudService"
         private const val ACTION_ADD_TIMER = "io.legado.app.action.ADD_READ_ALOUD_TIMER"
@@ -431,10 +499,21 @@ abstract class BaseReadAloudService : BaseService(),
         // 先把「本章有人在准备」记上；若等轮次跑完才更新，排版批次会一路补发起播掐死在飞轮次
         preparingChapterIndex = ReadBook.durChapterIndex
         if (play) upPreparingState(true)
+        // 临时诊断：本轮起播是为哪一章、从哪儿起（定位后回退）
+        diagVoice(
+            "起轮c${ReadBook.durChapterIndex} 页$requestPageIndex 偏$requestStartPos " +
+                "位${requestedChapterPosition ?: "-"} 播=$play"
+        )
         prepareReadAloudJob = execute(executeContext = IO) {
-            val input = ReadBook.readerChapterInputWindow.current ?: return@execute
+            val input = ReadBook.readerChapterInputWindow.current
+            if (input == null) {
+                diagVoice("早退:正文窗口空c${ReadBook.durChapterIndex}")
+                flushDiagVoice()
+                return@execute
+            }
             val pagination = ReadBook.readerPagination(input.chapter.index) ?: run {
-                AppLog.put("启动朗读失败：章节分页未完成 chapterIndex=${input.chapter.index}")
+                diagVoice("早退:未分页c${input.chapter.index}")
+                flushDiagVoice()
                 return@execute
             }
             val contentSplitMode = resolveContentSplitMode()
@@ -476,7 +555,16 @@ abstract class BaseReadAloudService : BaseService(),
                 ),
                 splitPolicy = splitPolicy,
             )
-            if (generation != prepareReadAloudGeneration) return@execute
+            if (generation != prepareReadAloudGeneration) {
+                // 被更新轮次取代：不在此收口，否则重启循环又会一条接一条。
+                // 新轮次走到终点时自然把这片 作废×N 一起带出来。
+                diagVoice("作废:被更新轮次取代 正文c${input.chapter.index}")
+                return@execute
+            }
+            diagVoice(
+                "备料c${input.chapter.index} 段${preparedParagraphs.size} 起位$preparedReadAloudNumber " +
+                    "计划章${ReadBook.durChapterIndex}"
+            )
             var preparedPlaybackQueue = runCatching {
                 ReadAloudPlaybackQueue.from(preparedSpeechPlan)
             }.onFailure {
@@ -491,10 +579,11 @@ abstract class BaseReadAloudService : BaseService(),
                 policy = splitPolicy,
             )
             if (!usePreparedPlaybackQueue && preparedNowSpeak !in preparedContentList.indices) {
-                AppLog.put(
-                    "启动朗读失败：无法定位朗读段落 position=$preparedReadAloudNumber " +
-                        "pageIndex=$pageIndex startPos=$startPos"
+                diagVoice(
+                    "早退:段落越界 段$preparedNowSpeak/共${preparedContentList.size} " +
+                        "位$preparedReadAloudNumber 页$pageIndex 偏$startPos"
                 )
+                flushDiagVoice()
                 return@execute
             }
             val moveToLast = toLast
@@ -519,6 +608,12 @@ abstract class BaseReadAloudService : BaseService(),
                     preparedNowSpeak = cursor.cueIndex
                     preparedParagraphStartPos = cursor.offset
                     preparedReadAloudNumber = preparedPlaybackQueue.cues[cursor.cueIndex].chapterStart
+                    // 偏移>0 会让引擎把这一句只剩尾巴几个字（"每句只读两个字"的判据）
+                    diagVoice(
+                        "队列落点 cue${cursor.cueIndex}/${preparedPlaybackQueue.cues.size} " +
+                            "偏${cursor.offset}/${preparedContentList.getOrNull(cursor.cueIndex)?.length ?: -1} " +
+                            "位$preparedReadAloudNumber"
+                    )
                 }
             }
             val shouldReadChapterTitle = !moveToLast && startsAtChapterBeginning &&
@@ -542,7 +637,10 @@ abstract class BaseReadAloudService : BaseService(),
             } else if (usePreparedPlaybackQueue) {
                 preparedContentChapterPositions = preparedPlaybackQueue.cues.map { it.chapterStart }
             }
-            if (generation != prepareReadAloudGeneration) return@execute
+            if (generation != prepareReadAloudGeneration) {
+                diagVoice("作废:替换前被取代 正文c${input.chapter.index}")
+                return@execute
+            }
             this@BaseReadAloudService.pageIndex = pageIndex
             readerReadAloudChapter = preparedChapter
             contentList = preparedContentList
@@ -553,6 +651,13 @@ abstract class BaseReadAloudService : BaseService(),
             nowSpeak = preparedNowSpeak
             readAloudNumber = preparedReadAloudNumber
             paragraphStartPos = preparedParagraphStartPos
+            diagVoice(
+                "换声成功 c${preparedChapter.chapterIndex} 段$preparedNowSpeak/" +
+                    "${preparedContentList.size} 偏$preparedParagraphStartPos 位$preparedReadAloudNumber " +
+                    "队列=${if (hasSpeechPlaybackQueue) "多角色" else "无"}"
+            )
+            // 本轮声音侧片段到此为止：立即收口成一条，之后的引擎逐段出声攒进下一条
+            flushDiagVoice()
             updateReadAloudProgressSnapshot(preparedReadAloudNumber + 1)
             onPlaybackStateReplaced()
             if (moveToLast) toLast = false
@@ -602,7 +707,10 @@ abstract class BaseReadAloudService : BaseService(),
         splitPolicy: ContentSplitPolicy,
     ): List<SpeechPlanItem> {
         if (bookUrl.isEmpty() || !ReadConfig.useMultiSpeaker) {
-            AppLog.putDebug("跳过多角色朗读计划 有书=${bookUrl.isNotEmpty()} 多角色开关=${ReadConfig.useMultiSpeaker}")
+            diagVoice(
+                "跳过多角色计划 有书=${bookUrl.isNotEmpty()} " +
+                    "开关=${ReadConfig.useMultiSpeaker}", verbose = true
+            )
             return emptyList()
         }
         val prepareSpeechPlan: PrepareChapterSpeechPlanUseCase =
@@ -1494,6 +1602,8 @@ abstract class BaseReadAloudService : BaseService(),
     abstract fun aloudServicePendingIntent(actionStr: String): PendingIntent?
 
     open fun prevChapter() {
+        // 临时诊断：通知栏/章末由声音侧牵页面，同样记进听书页面那条
+        diagPage("服务上一章 声音c${readerReadAloudChapter?.chapterIndex}")
         // 只清分钟模式装的章末臂标；章节配额的计数跨章保留，否则「读 N 章」永远数不满
         clearFinishChapterFlag()
         ReadBook.upReadTime()
@@ -1503,9 +1613,10 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     open fun nextChapter() {
+        diagPage("服务下一章 声音c${readerReadAloudChapter?.chapterIndex}")
         clearFinishChapterFlag()
         ReadBook.upReadTime()
-        AppLog.putDebug("${readerReadAloudChapter?.title} 朗读结束跳转下一章并朗读")
+        diagPage("章末自动换章「${readerReadAloudChapter?.title}」")
         resumeReadAloudInternal()
         if (!withSpeechNavigation { ReadBook.moveToNextChapter(true) }) {
             stopReadAloudService()
@@ -1783,4 +1894,71 @@ internal inline fun findReadAloudPageIndex(
         targetPageIndex++
     }
     return targetPageIndex
+}
+
+/**
+ * 临时诊断的一桶日志片段：不逐条落日志页，攒成紧凑片段后合并成**一条**。
+ *
+ * 听书一次操作原先要往日志页灌十几条（页面侧几条、准备轮几条、引擎逐段再几条），
+ * 没法读。这里按归属分两桶：跳转/轮次片段到期合并一条并附结论；[selfFlush]=false 的
+ * 背景轨迹片段（导航重组、引擎逐段出声）只搭本次收口的车，不自己出条。
+ * 定位「听书页正文与声音不同步」后整块随诊断一并回退。
+ */
+private class ReadAloudDiagBucket(
+    private val label: String,
+    private val quietMs: Long,
+    private val conclusion: () -> String,
+) {
+    private val handler = Handler(Looper.getMainLooper())
+    private val notes = mutableListOf<Pair<Long, String>>()
+    private var startedAt = 0L
+
+    /**
+     * @param selfFlush false = 背景轨迹片段（导航重组、引擎逐段出声、预合成与下载的逐段失败）：
+     *   自己不触发收口，只跟着本轮/本次入场的收口出条，否则连续流会把合并日志冲回一句一行。
+     */
+    @Synchronized
+    fun add(note: String, selfFlush: Boolean = true) {
+        val now = System.currentTimeMillis()
+        if (startedAt == 0L) startedAt = now
+        notes += (now - startedAt) to note
+        // 没有轮次来收口时（例如只有逐段噪声）靠条数上限兜底，片段不会压在桶里丢
+        if (notes.size >= DIAG_MAX_NOTES) flush() else if (selfFlush) arm()
+    }
+
+    /** 轮次走到终点（换声成功 / 任一早退作废）时立刻收口，本轮片段就是一条日志。 */
+    @Synchronized
+    fun flush() {
+        handler.removeCallbacksAndMessages(null)
+        if (notes.isEmpty()) {
+            startedAt = 0L
+            return
+        }
+        val total = notes.size
+        // 重启循环会让同一片段连着出现几十次，连续相同的并成 ×N，一条日志才有得读
+        val merged = StringBuilder()
+        var index = 0
+        while (index < total) {
+            val note = notes[index].second
+            var repeat = 1
+            while (index + repeat < total && notes[index + repeat].second == note) repeat++
+            if (merged.isNotEmpty()) merged.append(" | ")
+            merged.append('+').append(notes[index].first).append("ms ").append(note)
+            if (repeat > 1) merged.append('×').append(repeat)
+            index += repeat
+        }
+        notes.clear()
+        startedAt = 0L
+        AppLog.put("【${label}诊断】共${total}片段 $merged || 结论: ${conclusion()}")
+    }
+
+    private fun arm() {
+        // 跳转/准备链是分几步落地的（点按钮→改页→补发判据），最后一步之后再等一个静默期收口
+        handler.removeCallbacksAndMessages(null)
+        handler.postDelayed({ flush() }, quietMs)
+    }
+
+    companion object {
+        private const val DIAG_MAX_NOTES = 60
+    }
 }

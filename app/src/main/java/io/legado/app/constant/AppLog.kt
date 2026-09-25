@@ -12,6 +12,9 @@ object AppLog {
 
     private val otherGateway by lazy { GlobalContext.get().get<OtherSettingsGateway>() }
 
+    /** 「记录日志」开关：合并型诊断用它决定逐段噪声记不记，语义与 [putDebug] 保持一致。 */
+    val isRecording get() = otherGateway.currentSettings.recordLog
+
     private val mLogs = arrayListOf<Triple<Long, String, Throwable?>>()
 
     val logs get() = mLogs.toList()

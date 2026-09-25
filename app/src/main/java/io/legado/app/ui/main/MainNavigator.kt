@@ -43,7 +43,7 @@ object MainNavigator {
         resetToHome: Boolean = false,
     ) {
         ReaderEntranceDiag.add(
-            "navigateTo ${route::class.simpleName} size=${backStack.size}"
+            "导航→${route::class.simpleName} 栈深=${backStack.size}"
         )
         navigateToRouteInternal(backStack, route, tracker, resetToHome)
     }
@@ -441,12 +441,12 @@ object MainNavigator {
         tracker: MainNavRouteTracker?,
     ) {
         ReaderEntranceDiag.add(
-            "navigateBack inProgress=$backNavigationInProgress size=${backStack.size} " +
-                "top=${backStack.lastOrNull()?.let { it::class.simpleName }} " +
-                "from=${if (tracker != null) "pageButton" else "navDisplay"}"
+            "返回 防抖中=$backNavigationInProgress 栈深=${backStack.size} " +
+                "顶=${backStack.lastOrNull()?.let { it::class.simpleName }} " +
+                "发起=${if (tracker != null) "页面按钮" else "系统返回"}"
         )
         if (backNavigationInProgress) {
-            ReaderEntranceDiag.add("navigateBack SWALLOWED by debounce")
+            ReaderEntranceDiag.add("返回被防抖吞掉(未出栈)")
             return
         }
         if (backStack.size > 1) {
@@ -454,21 +454,21 @@ object MainNavigator {
             backStack.removeLastOrNull()
             tracker?.onBackStackChanged(backStack)
             ReaderEntranceDiag.add(
-                "navigateBack POPPED, newTop=${backStack.lastOrNull()?.let { it::class.simpleName }}"
+                "返回已出栈 新顶=${backStack.lastOrNull()?.let { it::class.simpleName }}"
             )
         } else {
-            ReaderEntranceDiag.add("navigateBack finish()")
+            ReaderEntranceDiag.add("返回:栈到底, finish()")
             activity.finish()
         }
     }
 
     fun onBackStackChanged() {
-        ReaderEntranceDiag.add("snapshot arrived, scheduling flag clear (+500ms)")
+        ReaderEntranceDiag.add("导航快照到达, 500ms后清防抖标志")
         backNavigationResetJob?.cancel()
         backNavigationResetJob = navigationScope.launch {
             delay(500)
             backNavigationInProgress = false
-            ReaderEntranceDiag.add("debounce flag cleared")
+            ReaderEntranceDiag.add("防抖标志已清")
         }
     }
 

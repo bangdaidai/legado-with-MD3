@@ -551,8 +551,8 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                         )
                     }
                     // 临时诊断：本作用域每成功重组一次记一个 provider 身份码，
-                    // 不再逐条落日志页——由阅读面入场期满时并进唯一的
-                    // 【返回入场诊断】一条里。定位后随诊断一并回退。
+                    // 不逐条落日志页——由阅读面入场期满时并进唯一的
+                    // 【页面跳转诊断】一条里。定位后随诊断一并回退。
                     SideEffect {
                         ReaderEntranceDiag.add(
                             "NavHost重组 provider=" +

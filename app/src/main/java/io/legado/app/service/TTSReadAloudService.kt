@@ -144,7 +144,7 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         if (!ttsInitFinish) return
         if (!requestFocus()) return
         if (contentList.isEmpty()) {
-            AppLog.putDebug("朗读列表为空")
+            diagVoice("朗读列表为空(引擎侧)", verbose = true)
             ReadBook.readAloud()
             return
         }
@@ -158,14 +158,12 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         speakJob?.cancel()
         speakJob = execute {
             val interval = ReadConfig.ttsParagraphInterval.toLong()
-            AppLog.putDebug("TTS_PLAY: nowSpeak=$nowSpeak, isDelay=$isDelay, interval=$interval")
+            diagVoice("TTS起声 段$nowSpeak 延=$isDelay 隔${interval}ms", verbose = true)
             
             if (hasSpeechPlaybackQueue || interval > 0) {
                 // 段落间隔模式：单段播放
                 if (isDelay) {
-                    AppLog.putDebug("TTS开始延迟: $interval 毫秒")
                     delay(interval)
-                    AppLog.putDebug("TTS延迟结束，准备播放")
                 }
                 ensureActive()
 
@@ -177,11 +175,12 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
                     text = text.substring(paragraphStartPos)
                 }
                 if (text.matches(AppPattern.notReadAloudRegex)) {
-                    AppLog.putDebug("TTS段落全标点跳过: nowSpeak=$nowSpeak")
+                    diagVoice("段$nowSpeak全标点跳过", verbose = true)
                     ttsUtteranceListener.onDone(ttsUtteranceId(AppConst.APP_TAG, session, nowSpeak))
                     return@execute
                 }
-                AppLog.putDebug("TTS开始Speak: $text")
+                // 出声文本原样带上（截断即可）：偏>0 时这里就是"每句只读两个字"的现场证据
+                diagVoice("段$nowSpeak出声[${text.length}字]$text", verbose = true)
                 val result = tts.runCatching {
                     speak(text, TextToSpeech.QUEUE_FLUSH, null, ttsUtteranceId(AppConst.APP_TAG, session, nowSpeak))
                 }.getOrElse {
