@@ -216,6 +216,7 @@ class ReadAloudPlayerCoordinator(
     fun previousChapter(): Boolean {
         BaseReadAloudService.diagPage(diagJumpNote("点上一章"))
         val moved = ReadBook.moveToPrevChapter(true, false)
+        if (moved) refresh()
         BaseReadAloudService.diagPage("落点c${ReadBook.durChapterIndex} ${if (moved) "已改页" else "无此章"}")
         return moved
     }
@@ -223,6 +224,7 @@ class ReadAloudPlayerCoordinator(
     fun nextChapter(): Boolean {
         BaseReadAloudService.diagPage(diagJumpNote("点下一章"))
         val moved = ReadBook.moveToNextChapter(true)
+        if (moved) refresh()
         BaseReadAloudService.diagPage("落点c${ReadBook.durChapterIndex} ${if (moved) "已改页" else "无此章"}")
         return moved
     }
@@ -230,6 +232,7 @@ class ReadAloudPlayerCoordinator(
     fun selectChapter(index: Int) {
         BaseReadAloudService.diagPage(diagJumpNote("目录选章c$index"))
         ReadBook.openChapter(index, durChapterPos = 0)
+        refresh()
         BaseReadAloudService.diagPage("落点c${ReadBook.durChapterIndex}")
     }
 
