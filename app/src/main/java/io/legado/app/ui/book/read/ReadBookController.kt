@@ -864,6 +864,25 @@ class ReadBookController(
     }
 
     /**
+     * 按位置重锚的钳位闸：该章分页任务还在飞（页表尾部仍在逐页流出）时，
+     * locate 只能落在已流出的最后一页——把这种临时落点发上屏，就是快进若干页
+     * 后返回阅读页"先闪一页、再跳到朗读页"的那一下（c4p1→c4p4 抓取实锤）。
+     * 真实落点不用等：批次落地前任务已自摘（见 ensureReaderChapterPagination
+     * 的 remove-再-发布顺序），"批次换页/批次落地"仍会把正确页锚出来。
+     */
+    private fun readerAnchorIsProvisional(
+        pages: List<ReaderPage>,
+        locatedIndex: Int,
+        chapterIndex: Int,
+    ): Boolean {
+        if (locatedIndex != pages.indexOfLast { it.id.chapterIndex == chapterIndex }) return false
+        if (!readerChapterPaginationJobs.containsKey(chapterIndex)) return false
+        val end = ReaderPageNavigator.pageContext(pages, locatedIndex)?.endPosition
+            ?: return false
+        return ReadBook.durChapterPos >= end
+    }
+
+    /**
      * 书籍身份守卫：换源/替换书籍是原地进行的，页表里还留着旧源整章页时，
      * 窗口发布路径（暖页复用、时间/电量重发）会按相同 chapterIndex 把旧正文
      * 瞬间发回画面。bookUrl 一变就作废页表与在排任务，让画面停留在加载占位页
@@ -1381,8 +1400,15 @@ class ReadBookController(
             ReaderPageNavigator
                 .locateOrNull(directReaderPages, chapter.chapter.index, ReadBook.durChapterPos)
                 ?.let { index ->
-                    directReaderPageIndex = index
-                    publishDirectReaderWindow(index, "按位置重锚·$from")
+                    if (!readerAnchorIsProvisional(
+                            directReaderPages,
+                            index,
+                            chapter.chapter.index,
+                        )
+                    ) {
+                        directReaderPageIndex = index
+                        publishDirectReaderWindow(index, "按位置重锚·$from")
+                    }
                 }
             scheduleAdjacentReaderChapterPagination(
                 chapters, chapter, width, height, contentPadding, resolvedPaginationStyle
