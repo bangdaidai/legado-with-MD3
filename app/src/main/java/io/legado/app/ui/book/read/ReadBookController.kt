@@ -569,8 +569,7 @@ class ReadBookController(
             if (repeat > 1) merged.append('×').append(repeat)
             index += repeat
         }
-        // 头部 v2＝构建包含 884db9aa4 邻章批次锚定修复；无 v2 的旧包看不到该修复的效果。
-        AppLog.put("【入场诊断v2】重入场 2.5 秒共 ${diagEntranceTrace.size} 次提交: $merged")
+        AppLog.put("【入场诊断】重入场 2.5 秒共 ${diagEntranceTrace.size} 次提交: $merged")
         diagEntranceTrace.clear()
     }
 
