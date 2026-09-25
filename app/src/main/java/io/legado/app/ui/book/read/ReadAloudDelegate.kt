@@ -203,6 +203,7 @@ class ReadAloudDelegate(
 
     /** 媒体键/胶囊触发的默认朗读界面：按设置决定开播放器还是经典控制面板。 */
     fun openDefaultInterface() {
+        syncVoiceToVisiblePage()
         if (
             host.uiState.defaultReadAloudInterface ==
             ReadAloudSettingsRepository.DEFAULT_INTERFACE_PLAYER
@@ -211,6 +212,19 @@ class ReadAloudDelegate(
         } else {
             host.openReadMenuRoute(ReadBookMenuRoute.ReadAloud)
         }
+    }
+
+    /**
+     * 「从哪个阅读页进的听书，就从哪一页读」：朗读服务已活着、但阅读页已被手动翻离
+     * 声音位置（脱离跟随）时，点听书先把声音按当前可见页重新起读，再开界面——
+     * 否则听书页显示的还是声音那本旧章，返回时阅读页又会被回拉，两处都"对不上"。
+     * 跟随状态下声音就在这一页里，不动声音，保持"仅打开界面"的现有语义。
+     */
+    private fun syncVoiceToVisiblePage() {
+        val state = host.uiState
+        if (!state.isReadAloudRunning || state.readAloudFollow) return
+        // 默认参数即"从当前页页首起读"，且新轮起轮会恢复跟随
+        ReadBook.readAloud()
     }
 
     /**

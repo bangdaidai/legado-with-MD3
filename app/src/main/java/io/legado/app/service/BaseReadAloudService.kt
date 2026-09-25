@@ -536,7 +536,17 @@ abstract class BaseReadAloudService : BaseService(),
         prepareReadAloudJob?.cancel()
         // 先把「本章有人在准备」记上；若等轮次跑完才更新，排版批次会一路补发起播掐死在飞轮次
         preparingChapterIndex = ReadBook.durChapterIndex
-        if (play) upPreparingState(true)
+        if (play) {
+            upPreparingState(true)
+            // 准备期旧章声音原样在播：AI 分析一卡就是几十秒（超时 30s 才回落规则），
+            // 这期间"文字已换章、声音还在上一章"是跳章脱节的最后一道缝——早退哑声
+            // 够不到"没早退、只是慢"的轮次。超阈值声音侧仍没换到本章就先哑声等交接；
+            // 规则划分的快路径在阈值内就完成换声，音画连续性不受影响。
+            lifecycleScope.launch {
+                delay(3000)
+                if (generation == prepareReadAloudGeneration) muteStaleAudioForHandoff()
+            }
+        }
         // 临时诊断：本轮起播是为哪一章、从哪儿起（定位后回退）
         diagVoice(
             "起轮c${ReadBook.durChapterIndex} 页$requestedPageIndex 偏$requestedStartPos " +
@@ -737,12 +747,12 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     /**
-     * 跨章交接的补发轮早退（正文窗口空/未分页）时，这一轮不会替换播放状态。
+     * 声音侧还停在旧章、页面已翻篇时把旧声音哑掉（两个触发口：补发轮早退、准备期超阈值）。
      *
      * 旧章声音若原样继续，听感就是"文字已是下一章、声音还在念上一章"，而且旧章的
      * 引擎回调还会拖着新章的阅读页逐段前进（读一段跳一段，字音完全对不上）。
-     * 先把旧声音暂停哑掉，新章排版批次落地会再次补发，成功轮以 play=true 起播自动解除；
-     * 补发始终不来时保持暂停，交由用户决定。
+     * 先把旧声音暂停哑掉，新章轮次换声成功以 play=true 起播自动解除；
+     * 成功轮始终不来时保持暂停，交由用户决定。
      */
     private fun muteStaleAudioForHandoff() {
         lifecycleScope.launch(Main) {

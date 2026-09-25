@@ -68,12 +68,14 @@ import io.legado.app.utils.dpToPx
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -1582,10 +1584,16 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
             }
         }.onError {
             removeLoading(index)
-            if (index == durChapterIndex) {
-                upMsg("加载正文出错\n${it.localizedMessage}")
+            // 取消不是错误：换书/新轮掐掉正文预取时它以"r1 was cancelled"这类消息收场
+            // （超时除外——那是真拿不到正文），只静默清账，别弹"加载正文出错"。
+            val cancelledByDesign = generateSequence(it) { e -> e.cause }
+                .any { e -> e is CancellationException && e !is TimeoutCancellationException }
+            if (!cancelledByDesign) {
+                if (index == durChapterIndex) {
+                    upMsg("加载正文出错\n${it.localizedMessage}")
+                }
+                AppLog.put("加载正文出错\n${it.localizedMessage}", it)
             }
-            AppLog.put("加载正文出错\n${it.localizedMessage}", it)
         }
     }
 
@@ -1620,6 +1628,9 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                 }
                 success?.invoke()
             } catch (e: Exception) {
+                // 取消（含 withContext 被上层掐掉的"r1 was cancelled"）沿协程语义原样上抛，
+                // 不得伪装成"加载正文出错"记进日志
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 AppLog.put("加载正文出错\n${e.localizedMessage}")
             } finally {
                 removeLoading(index)
