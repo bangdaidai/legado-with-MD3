@@ -75,6 +75,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         }
         body.applyThinkingSwitch(provider, params.reasoningLevel)
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
+        body.applyGenericReasoningOff(provider, request.model.modelId, params.reasoningLevel)
         body.applySenseNovaThinking(provider, request.model.modelId, params.reasoningLevel)
         body.applyProviderWebSearch(provider, params)
 
@@ -118,6 +119,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         // 先清掉正常路径可能留下的强度值，再按 OFF 下发各供应商的关闭写法
         // （SenseNova 的 reasoning_effort="none" 本身就是关闭思考，必须留在请求里）
         body.remove("reasoning_effort")
+        body.applyGenericReasoningOff(provider, request.model.modelId, AiReasoningLevel.OFF)
         body.applySenseNovaThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
         body["max_tokens"] = maxOf(params.maxOutputTokens ?: 0, REASONING_FALLBACK_MAX_TOKENS)
         return send()
@@ -151,6 +153,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         }
         body.applyThinkingSwitch(provider, params.reasoningLevel)
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
+        body.applyGenericReasoningOff(provider, request.model.modelId, params.reasoningLevel)
         body.applySenseNovaThinking(provider, request.model.modelId, params.reasoningLevel)
         body.applyProviderWebSearch(provider, params)
 
@@ -319,6 +322,32 @@ internal fun MutableMap<String, Any?>.applySenseNovaThinking(
         AiReasoningLevel.XHIGH -> "high"
         else -> reasoningLevel.effort
     }
+}
+
+/**
+ * 未识别网关的通用关思考路径：`reasoning_effort` 是 OpenAI 标准参数名，兼容生态
+ * 覆盖面最广（vLLM、SiliconFlow 及多数中转认 "none"），与 [applyThinkingSwitch] 的
+ * `enable_thinking=false` 互补——认哪个都关得掉。
+ * 排除两类：OpenAI/DeepSeek 官方（不支持关思考，未知取值直接 400）与强制思考的
+ * GLM-5.3（发了也没用）；智谱/商汤等已按家适配的供应商不重复发，避免同字段两种
+ * 写法打架。强度档位不在这里下发，仍走能力标记 + effortFor 白名单。
+ */
+internal fun MutableMap<String, Any?>.applyGenericReasoningOff(
+    provider: AiProviderConfig,
+    modelId: String,
+    reasoningLevel: AiReasoningLevel
+) {
+    if (reasoningLevel != AiReasoningLevel.OFF) return
+    val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
+    if ("api.openai.com" in identity || "api.deepseek.com" in identity) return
+    if (isAlwaysThinkingGlm(modelId)) return
+    val normalizedModelId = modelId.lowercase()
+    val hasDedicatedBranch = "zhipu" in identity || "bigmodel" in identity ||
+        "sensenova" in identity || "sensecore" in identity ||
+        "glm-" in normalizedModelId || normalizedModelId.startsWith("glm") ||
+        "sensechat" in normalizedModelId || "sensenova" in normalizedModelId
+    if (hasDedicatedBranch) return
+    this["reasoning_effort"] = "none"
 }
 
 /**
