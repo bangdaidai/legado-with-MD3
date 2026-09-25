@@ -293,9 +293,9 @@ jobs:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           APK_DIR=app/build/outputs/apk/app/release
+          # 只构建 arm64 单一 ABI，不再往文件名追加 -arm64-v8a 后缀
           for f in "$APK_DIR"/*.apk; do
-            abi=$(basename "$f" | sed -n 's/.*\(armeabi-v7a\|arm64-v8a\|universal\).*/-\1/p')
-            mv -- "$f" "$APK_DIR/legado-${APP_VERSION_NAME}${abi}.apk"
+            mv -- "$f" "$APK_DIR/legado-${APP_VERSION_NAME}.apk"
           done
           ls -la "$APK_DIR"
 
@@ -394,9 +394,9 @@ jobs:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           APK_DIR=app/build/outputs/apk/app/debug
+          # 同上：debug 包也去掉 ABI 后缀
           for f in "$APK_DIR"/*.apk; do
-            abi=$(basename "$f" | sed -n 's/.*\(armeabi-v7a\|arm64-v8a\|universal\).*/-\1/p')
-            mv -- "$f" "$APK_DIR/legado-debug-${APP_VERSION_NAME}${abi}.apk"
+            mv -- "$f" "$APK_DIR/legado-debug-${APP_VERSION_NAME}.apk"
           done
           ls -la "$APK_DIR"
 
