@@ -1,5 +1,7 @@
 package io.legado.app.domain.model.readaloud
 
+import io.legado.app.constant.AppPattern
+
 data class ReadAloudPlaybackCue(
     val text: String,
     val chapterStart: Int,
@@ -120,7 +122,79 @@ class ReadAloudPlaybackQueue private constructor(
             require(cues.zipWithNext().none { (left, right) -> left.chapterEnd > right.chapterStart }) {
                 "Playback cues must not overlap"
             }
-            return ReadAloudPlaybackQueue(cues)
+            return ReadAloudPlaybackQueue(mergeSilentCues(cues))
+        }
+
+        /**
+         * 纯标点/空白碎段归并。划分策略偶尔会把一行标点单独切成 cue，若按普通片段播出就是
+         * "无声磕巴"的源头：无声片段照常合成（得到无声音频）、照常推进章节位置，听感上
+         * 是"字在走、声不出"。这里在队列层面收口：连续碎段优先向后并入上一实义片段，
+         * 接不上再向前并入下一实义片段，两头都接不上的孤立碎段直接丢弃——
+         * cursorAt 本就会把位置缝隙对齐到下一 cue，丢弃不会产生落点空洞。
+         */
+        private fun mergeSilentCues(
+            cues: List<ReadAloudPlaybackCue>,
+        ): List<ReadAloudPlaybackCue> {
+            val result = ArrayList<ReadAloudPlaybackCue>(cues.size)
+            // 待定的一段连续静音碎稿：文本与其章节区间 [pendingStart, pendingEnd)
+            var pendingText = ""
+            var pendingStart = -1
+            var pendingEnd = -1
+
+            fun clearPending() {
+                pendingText = ""
+                pendingStart = -1
+                pendingEnd = -1
+            }
+
+            // 尝试把待定碎段接到最近一个实义片段尾部；接不上返回 false（由调用方决定向前并或丢弃）
+            fun appendBackward(): Boolean {
+                if (pendingStart < 0) return true
+                val last = result.lastOrNull() ?: return false
+                if (last.isChapterTitle || last.chapterEnd != pendingStart) return false
+                result[result.lastIndex] = last.copy(
+                    text = last.text + pendingText,
+                    chapterEnd = last.chapterEnd + pendingText.length,
+                )
+                clearPending()
+                return true
+            }
+
+            for (cue in cues) {
+                if (!cue.isChapterTitle && cue.text.matches(AppPattern.notReadAloudRegex)) {
+                    if (pendingStart >= 0 && cue.chapterStart == pendingEnd) {
+                        // 与待定碎段首尾相接，攒成同一段再一次性归并
+                        pendingText += cue.text
+                        pendingEnd = cue.chapterEnd
+                    } else {
+                        // 新碎段与旧待定之间有缝隙：旧待定已不可能向前接（后续 cue 起点更大），先向后归并再丢弃
+                        appendBackward()
+                        clearPending()
+                        pendingText = cue.text
+                        pendingStart = cue.chapterStart
+                        pendingEnd = cue.chapterEnd
+                    }
+                    continue
+                }
+                if (pendingStart >= 0) {
+                    if (!appendBackward() && pendingEnd == cue.chapterStart) {
+                        // 向后接不上、但与前段起点严丝合缝：整段碎稿前置并入本 cue
+                        result.add(
+                            cue.copy(
+                                text = pendingText + cue.text,
+                                chapterStart = pendingStart,
+                            )
+                        )
+                        clearPending()
+                        continue
+                    }
+                    // 两头都接不上：孤立碎段直接丢弃
+                    clearPending()
+                }
+                result.add(cue)
+            }
+            appendBackward()
+            return result
         }
     }
 }

@@ -54,6 +54,77 @@ class ReadAloudPlaybackQueueTest {
         assertEquals(true, ReadAloudPlaybackQueue.Empty.withChapterTitle("标题").isEmpty)
     }
 
+    @Test
+    fun `merges punctuation-only cue into previous cue`() {
+        val merged = ReadAloudPlaybackQueue.from(
+            listOf(
+                item("你好", 0),
+                item("。", 2),
+                item("再见", 3),
+            )
+        )
+
+        assertEquals(2, merged.cues.size)
+        assertEquals("你好。", merged.cues.first().text)
+        assertEquals(3, merged.cues.first().chapterEnd)
+        assertEquals(ReadAloudPlaybackCursor(1, 0), merged.cursorAt(3))
+    }
+
+    @Test
+    fun `folds consecutive silent cues into one backward merge`() {
+        val merged = ReadAloudPlaybackQueue.from(
+            listOf(
+                item("你好", 0),
+                item("”", 2),
+                item("。", 3),
+                item("再见", 4),
+            )
+        )
+
+        assertEquals(2, merged.cues.size)
+        assertEquals("你好”。", merged.cues.first().text)
+    }
+
+    @Test
+    fun `prepends silent cue to next cue when previous is not adjacent`() {
+        val merged = ReadAloudPlaybackQueue.from(
+            listOf(
+                item("你好", 0),
+                item("……", 4),
+                item("再见", 6),
+            )
+        )
+
+        assertEquals(2, merged.cues.size)
+        assertEquals("……再见", merged.cues.last().text)
+        assertEquals(4, merged.cues.last().chapterStart)
+        assertEquals(ReadAloudPlaybackCursor(1, 2), merged.cursorAt(6))
+    }
+
+    @Test
+    fun `drops isolated silent cue with gaps on both sides`() {
+        val merged = ReadAloudPlaybackQueue.from(
+            listOf(
+                item("你好", 0),
+                item("……", 5),
+                item("再见", 10),
+            )
+        )
+
+        assertEquals(2, merged.cues.size)
+        // 缝隙由 cursorAt 对齐到下一 cue，丢弃碎段不会产生落点空洞
+        assertEquals(ReadAloudPlaybackCursor(1, 0), merged.cursorAt(5))
+    }
+
+    @Test
+    fun `all-silent plan collapses to empty queue`() {
+        val merged = ReadAloudPlaybackQueue.from(
+            listOf(item("。", 0), item("……", 1))
+        )
+
+        assertEquals(true, merged.isEmpty)
+    }
+
     private fun item(
         text: String,
         start: Int,
