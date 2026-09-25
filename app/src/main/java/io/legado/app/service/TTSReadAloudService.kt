@@ -175,12 +175,12 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
                     text = text.substring(paragraphStartPos)
                 }
                 if (text.matches(AppPattern.notReadAloudRegex)) {
-                    diagVoice("段$nowSpeak全标点跳过", verbose = true)
+                    diagVoice("段${nowSpeak}全标点跳过", verbose = true)
                     ttsUtteranceListener.onDone(ttsUtteranceId(AppConst.APP_TAG, session, nowSpeak))
                     return@execute
                 }
                 // 出声文本原样带上（截断即可）：偏>0 时这里就是"每句只读两个字"的现场证据
-                diagVoice("段$nowSpeak出声[${text.length}字]$text", verbose = true)
+                diagVoice("段${nowSpeak}出声[${text.length}字]$text", verbose = true)
                 val result = tts.runCatching {
                     speak(text, TextToSpeech.QUEUE_FLUSH, null, ttsUtteranceId(AppConst.APP_TAG, session, nowSpeak))
                 }.getOrElse {

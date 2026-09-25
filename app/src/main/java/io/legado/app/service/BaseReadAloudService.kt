@@ -501,7 +501,7 @@ abstract class BaseReadAloudService : BaseService(),
         if (play) upPreparingState(true)
         // 临时诊断：本轮起播是为哪一章、从哪儿起（定位后回退）
         diagVoice(
-            "起轮c${ReadBook.durChapterIndex} 页$requestPageIndex 偏$requestStartPos " +
+            "起轮c${ReadBook.durChapterIndex} 页$requestedPageIndex 偏$requestedStartPos " +
                 "位${requestedChapterPosition ?: "-"} 播=$play"
         )
         prepareReadAloudJob = execute(executeContext = IO) {

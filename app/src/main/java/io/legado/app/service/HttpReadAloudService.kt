@@ -687,7 +687,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isEmpty()) {
-                        diagVoice("段$index空内容→无声音频[${text.take(20)}]")
+                        diagVoice("段${index}空内容→无声音频[${text.take(20)}]")
                     }
                     val itemHttpTts = httpTtsForCue(index, httpTts)
                     val itemVoice = httpVoiceForCue(index, httpTts)
@@ -1257,7 +1257,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     exoPlayer.stop()
                     exoPlayer.clearMediaItems()
                     if (!pause && !isLastParagraph) {
-                        diagVoice("段$nowSpeak停顿${interval}ms", verbose = true)
+                        diagVoice("段${nowSpeak}停顿${interval}ms", verbose = true)
                         execute {
                             delay(interval)
                             if (!pause) {

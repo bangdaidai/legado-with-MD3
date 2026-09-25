@@ -689,7 +689,7 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
             return
         }
         if (snapshots.none { it.chapterIndex == durChapterIndex }) {
-            diagPageMove("分页批次:不补发(无本章c$durChapterIndex分页)")
+            diagPageMove("分页批次:不补发(无本章c${durChapterIndex}分页)")
             return
         }
         if (BaseReadAloudService.currentChapterIndex == durChapterIndex) return
