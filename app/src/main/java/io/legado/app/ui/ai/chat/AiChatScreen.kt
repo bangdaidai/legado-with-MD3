@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
@@ -87,6 +88,7 @@ import io.legado.app.ui.ai.AiReasoningModeButton
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
@@ -651,46 +653,106 @@ private fun AiChatModelPickerContent(
         )
         return
     }
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 360.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(models, key = { it.modelProfileId }) { model ->
-            Row(
+    // 参照 legado_NG 的 AiModelSelectionFilters：搜索 + 厂商筛选，厂商多于一个才显示筛选行
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedProviders by remember { mutableStateOf(emptySet<String>()) }
+    val providerNames = remember(models) {
+        models.map { it.providerName }.filter { it.isNotBlank() }.distinct()
+    }
+    val filteredModels = remember(models, searchQuery, selectedProviders) {
+        models.filter { model ->
+            val matchesQuery = searchQuery.isBlank() ||
+                model.modelName.contains(searchQuery, ignoreCase = true) ||
+                model.providerName.contains(searchQuery, ignoreCase = true)
+            val matchesProvider = selectedProviders.isEmpty() || model.providerName in selectedProviders
+            matchesQuery && matchesProvider
+        }
+    }
+    Column {
+        AppTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { AppText(text = stringResource(R.string.ai_search_models)) },
+            leadingIcon = {
+                AppIcon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null
+                )
+            }
+        )
+        if (providerNames.size > 1) {
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onSelect(model.modelProfileId) }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    AppText(
-                        text = model.modelName,
-                        style = LegadoTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                providerNames.forEach { providerName ->
+                    ToggleChip(
+                        label = providerName,
+                        selected = providerName in selectedProviders,
+                        onToggle = {
+                            selectedProviders = if (providerName in selectedProviders) {
+                                selectedProviders - providerName
+                            } else {
+                                selectedProviders + providerName
+                            }
+                        }
                     )
-                    if (model.providerName.isNotBlank()) {
-                        AppText(
-                            text = model.providerName,
-                            style = LegadoTheme.typography.bodySmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
-                if (model.isSelected) {
-                    AppIcon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = LegadoTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+            }
+        }
+        if (filteredModels.isEmpty()) {
+            AppText(
+                text = stringResource(R.string.ai_no_model_match),
+                style = LegadoTheme.typography.bodyMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(filteredModels, key = { it.modelProfileId }) { model ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { onSelect(model.modelProfileId) }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            AppText(
+                                text = model.modelName,
+                                style = LegadoTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (model.providerName.isNotBlank()) {
+                                AppText(
+                                    text = model.providerName,
+                                    style = LegadoTheme.typography.bodySmall,
+                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (model.isSelected) {
+                            AppIcon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = LegadoTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

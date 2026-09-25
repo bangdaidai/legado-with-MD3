@@ -1681,6 +1681,8 @@
     <string name="ai_save_provider">儲存供應商</string>
     <string name="ai_scroll_to_bottom">滾動到底部</string>
     <string name="ai_select_model">選擇模型</string>
+    <string name="ai_search_models">搜尋模型</string>
+    <string name="ai_no_model_match">沒有符合的模型</string>
     <string name="ai_send">發送</string>
     <string name="ai_skills">技能</string>
     <string name="ai_tasks">任務</string>

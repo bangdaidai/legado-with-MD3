@@ -2488,6 +2488,8 @@
     <string name="ai_no_provider_configured">请先新建供应商</string>
     <string name="ai_no_models_imported">未导入模型</string>
     <string name="ai_select_model">选择模型</string>
+    <string name="ai_search_models">搜索模型</string>
+    <string name="ai_no_model_match">没有匹配的模型</string>
     <string name="ai_add_model_manually">手动添加模型</string>
     <string name="ai_not_set">未设置</string>
     <string name="ai_current_value">当前：%1$s</string>
