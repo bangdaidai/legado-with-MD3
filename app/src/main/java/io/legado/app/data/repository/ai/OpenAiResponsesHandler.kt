@@ -256,25 +256,15 @@ class OpenAiResponsesHandler : AiProtocolHandler {
             "AI provider configuration incomplete: baseUrl and apiKey are required"
         }
         val keyRotator = KeyRotator(provider.apiKey)
-        val modelsUrl = provider.modelsPath?.let { provider.baseUrl + it }
-            ?: provider.modelsUrl
-            ?: (provider.baseUrl + "/models")
-        return retryWithBackoff(maxAttempts = 2, keyRotator = keyRotator) {
-            trace.mark("已发送请求")
-            val response = okHttpClient.newCallStrResponse {
-                url(modelsUrl)
-                addHeaders(
-                    provider.headers + provider.customHeaders + mapOf(
-                        "Authorization" to "Bearer ${keyRotator.currentKey}",
-                        "Content-Type" to "application/json"
-                    )
-                )
-            }
-            trace.mark("已收到响应")
-            if (!response.isSuccessful()) {
-                throw AiHttpException(response.code(), response.message(), response.body)
-            }
-            val json = GSON.fromJson(response.body, OpenAiModelsResponse::class.java)
+        return tryModelsEndpoints(
+            provider = provider,
+            trace = trace,
+            authHeaders = mapOf(
+                "Authorization" to "Bearer ${keyRotator.currentKey}",
+                "Content-Type" to "application/json"
+            )
+        ) { body ->
+            val json = GSON.fromJson(body, OpenAiModelsResponse::class.java)
             json?.data.toAvailableModels()
         }
     }
