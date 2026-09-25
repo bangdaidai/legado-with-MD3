@@ -134,6 +134,8 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
             val route = systemVoiceForCurrentCue()
             val requiredEngine = route.engineId
             if (requiredEngine != activeEngine || textToSpeech == null) {
+                // "转圈没声音"嫌疑路径：换引擎的 init 回调如果不回来，起播就停在这
+                diagVoice("起播改道:换TTS引擎${requiredEngine}后等init回调 段$nowSpeak")
                 clearTTS()
                 initTts(requiredEngine)
                 return
@@ -141,8 +143,14 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
             applyVoice(route.speakerId)
             applyPreset(route)
         }
-        if (!ttsInitFinish) return
-        if (!requestFocus()) return
+        if (!ttsInitFinish) {
+            diagVoice("起播止步:TTS引擎未就绪")
+            return
+        }
+        if (!requestFocus()) {
+            diagVoice("起播止步:音频焦点未获取")
+            return
+        }
         if (contentList.isEmpty()) {
             diagVoice("朗读列表为空(引擎侧)", verbose = true)
             ReadBook.readAloud()

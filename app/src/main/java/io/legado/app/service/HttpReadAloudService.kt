@@ -214,7 +214,11 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun play() {
         pageChanged = false
         exoPlayer.stop()
-        if (!requestFocus()) return
+        if (!requestFocus()) {
+            // 焦点没到手就静默 return 是"转圈没声音"的形状（toast 容易被忽略）
+            diagVoice("起播止步:音频焦点未获取")
+            return
+        }
         if (contentList.isEmpty()) {
             diagVoice("朗读列表为空(引擎侧)", verbose = true)
             ReadBook.readAloud()
