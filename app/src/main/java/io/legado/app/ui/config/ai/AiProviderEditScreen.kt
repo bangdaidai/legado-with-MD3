@@ -325,13 +325,14 @@ fun AiProviderEditScreen(
                     title = stringResource(R.string.ai_thinking_strength),
                     selectedValue = model.reasoningLevel.effort,
                     displayEntries = arrayOf(
+                        stringResource(R.string.ai_thinking_off),
                         stringResource(R.string.ai_reasoning_level_low),
                         stringResource(R.string.ai_reasoning_level_medium),
                         stringResource(R.string.ai_reasoning_level_high),
                         stringResource(R.string.ai_reasoning_level_xhigh),
                         stringResource(R.string.ai_reasoning_level_max)
                     ),
-                    entryValues = AiReasoningLevel.modelConfigEntries
+                    entryValues = (listOf(AiReasoningLevel.OFF) + AiReasoningLevel.modelConfigEntries)
                         .map { it.effort }
                         .toTypedArray(),
                     onValueChange = {

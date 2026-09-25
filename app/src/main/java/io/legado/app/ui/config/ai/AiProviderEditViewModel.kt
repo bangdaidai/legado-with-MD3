@@ -377,6 +377,7 @@ class AiProviderEditViewModel(
     }
 
     private fun AiReasoningLevel.toModelConfigLevel(): AiReasoningLevel {
-        return takeIf { it in AiReasoningLevel.modelConfigEntries } ?: AiReasoningLevel.MEDIUM
+        // 模型级可保存关闭(OFF)或强度五档;AUTO 是脏值/旧数据占位,归回默认强度
+        return takeIf { it != AiReasoningLevel.AUTO } ?: AiReasoningLevel.MEDIUM
     }
 }
