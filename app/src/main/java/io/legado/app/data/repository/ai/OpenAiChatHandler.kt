@@ -298,6 +298,7 @@ internal fun MutableMap<String, Any?>.applyZhipuThinking(
  * `enable_thinking`，未知字段被静默忽略——思考关不掉时正文被推理挤空，
  * 调用方只能拿到 "AI response contains only reasoning content"。
  * 与 [applyZhipuThinking] 同理按供应商/模型身份下发，不依赖模型能力标记。
+ * 官方模型 id 形如 sensenova-6.7-flash-lite / SenseChat-5，两者都识别。
  * 它没有 effort 类参数，思考深度档位对它只有开/关语义。
  */
 internal fun MutableMap<String, Any?>.applySenseNovaThinking(
@@ -307,8 +308,9 @@ internal fun MutableMap<String, Any?>.applySenseNovaThinking(
 ) {
     val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
     val isSenseNovaProvider = "sensenova" in identity || "sensecore" in identity
-    val isSenseChatModel = modelId.lowercase().contains("sensechat")
-    if (!isSenseNovaProvider && !isSenseChatModel) return
+    val normalizedModelId = modelId.lowercase()
+    val isSenseNovaModel = "sensechat" in normalizedModelId || "sensenova" in normalizedModelId
+    if (!isSenseNovaProvider && !isSenseNovaModel) return
     this["thinking"] = mapOf("enabled" to (reasoningLevel != AiReasoningLevel.OFF))
 }
 
