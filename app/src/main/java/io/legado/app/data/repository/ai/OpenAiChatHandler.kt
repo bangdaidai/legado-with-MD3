@@ -75,6 +75,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         }
         body.applyThinkingSwitch(provider, params.reasoningLevel)
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
+        body.applySenseNovaThinking(provider, request.model.modelId, params.reasoningLevel)
         body.applyProviderWebSearch(provider, params)
 
         // 返回 null 代表「只有思考内容」，交给外层降级重试；其余失败照旧抛出
@@ -114,6 +115,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         // 思考把 max_tokens 花光了：显式关掉思考、抬高输出上限再试一次，比直接失败划算
         body.applyThinkingSwitch(provider, AiReasoningLevel.OFF)
         body.applyZhipuThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
+        body.applySenseNovaThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
         body.remove("reasoning_effort")
         body["max_tokens"] = maxOf(params.maxOutputTokens ?: 0, REASONING_FALLBACK_MAX_TOKENS)
         return send()
@@ -147,6 +149,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         }
         body.applyThinkingSwitch(provider, params.reasoningLevel)
         body.applyZhipuThinking(provider, request.model.modelId, params.reasoningLevel)
+        body.applySenseNovaThinking(provider, request.model.modelId, params.reasoningLevel)
         body.applyProviderWebSearch(provider, params)
 
         // For streaming, we retry before establishing the SSE connection.
@@ -287,6 +290,26 @@ internal fun MutableMap<String, Any?>.applyZhipuThinking(
     this["thinking"] = mapOf(
         "type" to if (reasoningLevel == AiReasoningLevel.OFF) "disabled" else "enabled"
     )
+}
+
+/**
+ * SenseNova（商汤日日新，OpenAI 兼容网关 token.sensenova.cn）的思考开关是
+ * `thinking.enabled`（布尔，默认开启，见 sensecore ChatCompletions 文档），不认
+ * `enable_thinking`，未知字段被静默忽略——思考关不掉时正文被推理挤空，
+ * 调用方只能拿到 "AI response contains only reasoning content"。
+ * 与 [applyZhipuThinking] 同理按供应商/模型身份下发，不依赖模型能力标记。
+ * 它没有 effort 类参数，思考深度档位对它只有开/关语义。
+ */
+internal fun MutableMap<String, Any?>.applySenseNovaThinking(
+    provider: AiProviderConfig,
+    modelId: String,
+    reasoningLevel: AiReasoningLevel
+) {
+    val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
+    val isSenseNovaProvider = "sensenova" in identity || "sensecore" in identity
+    val isSenseChatModel = modelId.lowercase().contains("sensechat")
+    if (!isSenseNovaProvider && !isSenseChatModel) return
+    this["thinking"] = mapOf("enabled" to (reasoningLevel != AiReasoningLevel.OFF))
 }
 
 /**
