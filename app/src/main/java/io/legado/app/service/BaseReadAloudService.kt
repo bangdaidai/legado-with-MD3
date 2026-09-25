@@ -718,7 +718,9 @@ abstract class BaseReadAloudService : BaseService(),
                     // TTSReadAloudService:41），这里"有"只表示走了分镜 cue 队列，不代表开了多角色；
                     // 引擎名一起打出——换声成功后的"转圈没声音"要先知道断在哪个引擎
                     "队列=${if (hasSpeechPlaybackQueue) "有" else "无"} " +
-                    "引擎=${javaClass.simpleName}"
+                    // 这里必须点名服务实例：裸 javaClass 在 execute 协程 lambda 里解到的是
+                    // 协程载体（release 下打成 "g2" 这类名），不是引擎服务本体
+                    "引擎=${this@BaseReadAloudService.javaClass.simpleName}"
             )
             // 本轮声音侧片段到此为止：立即收口成一条，之后的引擎逐段出声攒进下一条
             flushDiagVoice()
