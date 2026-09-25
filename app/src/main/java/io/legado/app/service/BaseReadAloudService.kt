@@ -818,7 +818,7 @@ abstract class BaseReadAloudService : BaseService(),
      * 后面排版时这一等就是好几秒（实测 ~4.7s 的哑声窗口）。早退后替这一轮盯着：
      * 本章分页一就绪立刻重起；起了新轮(generation 变化)就静默退出。
      */
-    private fun scheduleEarlyExitRetry(generation: Int) {
+    private fun scheduleEarlyExitRetry(generation: Long) {
         lifecycleScope.launch {
             repeat(40) {
                 delay(500)
