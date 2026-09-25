@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readaloud.storyboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
@@ -530,6 +531,8 @@ class SpeechStoryboardViewModel(
                 onFailure = { e ->
                     if (e is CancellationException) throw e
                     clearPreview()
+                    // 异常原来只弹一句「试听失败」就被吞了，日志里什么都不留
+                    AppLog.put("分镜试听异常：${e.javaClass.name}: ${e.message}")
                     toast(appCtx.getString(R.string.voice_preview_failed))
                 },
             )
