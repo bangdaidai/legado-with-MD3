@@ -1655,6 +1655,11 @@ class ReadBookController(
             }
             updateReaderPaginationError(batch.failureReasonFor(chapterIndex))
             val previousPages = directReaderPages.associateBy { it.id }
+            // 页表替换前抓牢当前可见页：它所属的章不参与本批时（邻章提前排版落地），
+            // 提交后必须按对象身份原地锚定。曾经的事故：邻章批次用 locate(邻章, durChapterPos)
+            // 重锚当前下标，把已经稳定的画面整页拽进邻章（返程日志 "+189ms c3p5·批次换页"）。
+            val visiblePageBefore =
+                directReaderPageIndex?.let { index -> directReaderPages.getOrNull(index) }
             // 每个任务只负责自己那一章：其它章的页原样保留。旧 View 各章的 `TextChapter.textPages`
             // 也是各自独立累积的，一章重排不会牵动别章的页，因此这里不再需要"整窗重建"分支。
             val replacementChapterIndexes = batch.pages.mapTo(mutableSetOf()) { it.id.chapterIndex }
@@ -1688,15 +1693,25 @@ class ReadBookController(
             directReaderChapterPageCounts =
                 directReaderPages.groupingBy { it.id.chapterIndex }.eachCount()
             directReaderPageIndex = directReaderPages.takeIf { it.isNotEmpty() }?.let { pages ->
-                // 当前章在批次结果中缺失时 locate 会折叠成 0（全书首页）：保留原下标，
-                // 由下面的 publishDirectReaderWindow 重新收敛到合法范围，避免跳回书首。
-                ReaderPageNavigator.locateOrNull(
-                    pages,
-                    chapterIndex,
-                    ReadBook.durChapterPos
-                )
-                    ?: directReaderPageIndex?.coerceIn(pages.indices)
-                    ?: 0
+                if (visiblePageBefore != null &&
+                    visiblePageBefore.id.chapterIndex != chapterIndex
+                ) {
+                    // 邻章批次：当前页原样保留在新页表里，按身份锚回原位，画面不许动。
+                    pages.indexOfFirst { it === visiblePageBefore }
+                        .takeIf { it >= 0 }
+                        ?: directReaderPageIndex?.coerceIn(pages.indices)
+                        ?: 0
+                } else {
+                    // 当前章在批次结果中缺失时 locate 会折叠成 0（全书首页）：保留原下标，
+                    // 由下面的 publishDirectReaderWindow 重新收敛到合法范围，避免跳回书首。
+                    ReaderPageNavigator.locateOrNull(
+                        pages,
+                        chapterIndex,
+                        ReadBook.durChapterPos
+                    )
+                        ?: directReaderPageIndex?.coerceIn(pages.indices)
+                        ?: 0
+                }
             }
             val snapshotRange = ReadBook.durChapterIndex.let { it - 1..it + 1 }
             ReadBook.publishReaderPagination(
