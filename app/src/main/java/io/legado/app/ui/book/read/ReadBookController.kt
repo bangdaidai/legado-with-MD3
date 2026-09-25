@@ -533,6 +533,13 @@ class ReadBookController(
     /** 临时诊断：记录期内的紧凑提交片段，期满合并成一条日志，不再逐条刷屏。 */
     private val diagEntranceTrace = mutableListOf<String>()
     private var diagEntranceTraceStart = 0L
+    /**
+     * 入场时后到的「加载中」占位窗暂存，不直接上屏：冷重入场必然经过"正文输入未就绪"
+     * 的几十到几百毫秒，此时 ReaderSessionViewModel 里还挂着上一次离场的成型窗口，
+     * 直接发占位页会把它冲掉——这正是返回时先闪空白加载页再跳回正文的原因。
+     * 真实页提交或入场收尾时补发，保证语义不丢：新书真的没内容时仍会显示加载页。
+     */
+    private var diagEntranceHoldPlaceholder: (() -> Unit)? = null
 
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
@@ -542,8 +549,12 @@ class ReadBookController(
         flushDiagEntranceTrace()
         diagEntranceTraceStart = System.currentTimeMillis()
         diagEntranceTraceUntil = diagEntranceTraceStart + 2500
+        diagEntranceHoldPlaceholder = null
         activity.lifecycleScope.launch {
             delay(2600)
+            // 入场仍未等到任何真实页：放行暂存的加载占位，"加载中"语义保持不变。
+            diagEntranceHoldPlaceholder?.invoke()
+            diagEntranceHoldPlaceholder = null
             flushDiagEntranceTrace()
         }
         ReadBook.registerRender(this)
@@ -597,6 +608,10 @@ class ReadBookController(
         val next = value.current
         if (previous?.id != next?.id || previous?.layoutRevision != next?.layoutRevision) {
             cancelReaderImageLoadsExcept(activeReaderImageKeys(value))
+        }
+        if (next != null && !next.isPlaceholder) {
+            // 真实页到达，入场暂存的加载占位不再需要。
+            diagEntranceHoldPlaceholder = null
         }
         _readerPageWindow.value = value
         if (diagEntranceTraceUntil != 0L &&
@@ -824,7 +839,16 @@ class ReadBookController(
         if (!currentInputIsReady &&
             _readerPageWindow.value.current?.id?.chapterIndex != ReadBook.durChapterIndex
         ) {
-            publishLoadingReaderWindow(from = "输入未就绪")
+            // 入场门控未过时画面还挂着上一次离场的成型窗口（ReaderSessionViewModel 跨重组存活）：
+            // 此刻发加载占位会把成型正文冲成空白页——即"从听书页返回先闪加载页"的元凶。
+            // 暂存不发布，真实页到达（updateReaderPageWindow）或门控收尾时补发。
+            if (readerSessionViewModel.uiState.value.pageWindow.current != null) {
+                diagEntranceHoldPlaceholder = {
+                    publishLoadingReaderWindow(from = "$from·补发")
+                }
+            } else {
+                publishLoadingReaderWindow(from = from)
+            }
         }
     }
 
