@@ -505,7 +505,9 @@ class SpeechStoryboardViewModel(
                 withContext(Dispatchers.IO) {
                     // 没绑定音色不拦试听：与真实朗读同款，回退到协调器默认引擎路线
                     val voice = planItem?.voice ?: runtimeDefaultVoice() ?: return@withContext null
-                    val file = File(appCtx.cacheDir, "storyboard_preview/$itemId.audio")
+                    // 文件名不能用原始 segmentId：里面的「:」会被 MediaPlayer 当成协议前缀，
+                    // prepare 直接 status=0x1。与 casting/cloudtts 页同款，用 hashCode 命名。
+                    val file = File(appCtx.cacheDir, "storyboard_preview/${itemId.hashCode()}.audio")
                     file.parentFile?.mkdirs()
                     previewSynthesizer.synthesize(voice, text, file) to file
                 }
