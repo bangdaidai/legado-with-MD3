@@ -530,15 +530,47 @@ class ReadBookController(
 
     /** 临时诊断：阅读面 attach 后的窗口提交记录截止时间戳，0 表示不在记录期。 */
     private var diagEntranceTraceUntil = 0L
+    /** 临时诊断：记录期内的紧凑提交片段，期满合并成一条日志，不再逐条刷屏。 */
+    private val diagEntranceTrace = mutableListOf<String>()
+    private var diagEntranceTraceStart = 0L
 
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
         // 临时诊断：从听书页等整页返回、阅读面重新入场后的 2.5 秒里，
-        // 记录每一次窗口提交（章/页/是否占位），把"连跳几次"对上发布者。
-        // 定位后连同【返回诊断】一并回退。
-        diagEntranceTraceUntil = System.currentTimeMillis() + 2500
+        // 把每一次窗口提交记成"+毫秒 c章p页·来源"片段，连续相同的并成 ×N，
+        // 期满合并成一条【入场诊断】写入日志页。定位后连同【返回诊断】一并回退。
+        flushDiagEntranceTrace()
+        diagEntranceTraceStart = System.currentTimeMillis()
+        diagEntranceTraceUntil = diagEntranceTraceStart + 2500
+        activity.lifecycleScope.launch {
+            delay(2600)
+            flushDiagEntranceTrace()
+        }
         ReadBook.registerRender(this)
         publishReaderPageWindow(from = "入场")
+    }
+
+    /** 临时诊断：把记录期攒下的提交合并压缩成一条日志；不在记录期或无提交则静默。 */
+    private fun flushDiagEntranceTrace() {
+        diagEntranceTraceUntil = 0L
+        if (diagEntranceTrace.isEmpty()) return
+        val merged = StringBuilder()
+        var index = 0
+        while (index < diagEntranceTrace.size) {
+            val entry = diagEntranceTrace[index]
+            var repeat = 1
+            while (index + repeat < diagEntranceTrace.size &&
+                diagEntranceTrace[index + repeat] == entry
+            ) {
+                repeat += 1
+            }
+            if (merged.isNotEmpty()) merged.append(" | ")
+            merged.append(entry)
+            if (repeat > 1) merged.append('×').append(repeat)
+            index += repeat
+        }
+        AppLog.put("【入场诊断】重入场 2.5 秒共 ${diagEntranceTrace.size} 次提交: $merged")
+        diagEntranceTrace.clear()
     }
 
     /**
@@ -570,11 +602,10 @@ class ReadBookController(
         if (diagEntranceTraceUntil != 0L &&
             System.currentTimeMillis() < diagEntranceTraceUntil
         ) {
-            AppLog.put(
-                "【入场诊断】窗口提交 chapter=${next?.id?.chapterIndex} " +
-                    "page=${next?.id?.pageIndex} placeholder=${next?.isPlaceholder} " +
-                    "来源=$from"
-            )
+            val placeholderMark = if (next?.isPlaceholder == true) "占位" else ""
+            diagEntranceTrace +=
+                "+${System.currentTimeMillis() - diagEntranceTraceStart}ms " +
+                    "c${next?.id?.chapterIndex}p${next?.id?.pageIndex}$placeholderMark·$from"
         }
         readerSessionViewModel.submitPageWindow(value)
         return value
