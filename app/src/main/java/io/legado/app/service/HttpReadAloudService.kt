@@ -212,6 +212,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     override fun play() {
+        // 声音章落后阅读页（哑声等交接窗口）时起旧队列就是"点播放读上一章"，交给补发轮
+        if (stalePlayGuard()) return
         pageChanged = false
         exoPlayer.stop()
         if (!requestFocus()) {
@@ -1198,6 +1200,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     override fun resumeReadAloud() {
+        // 走 exoPlayer.play() 的快恢复不重建队列，哑声窗口里等于原地复活旧章
+        if (stalePlayGuard()) return
         super.resumeReadAloud()
         kotlin.runCatching {
             if (pageChanged) {

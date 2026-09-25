@@ -558,12 +558,14 @@ abstract class BaseReadAloudService : BaseService(),
                 diagVoice("早退:正文窗口空c${ReadBook.durChapterIndex}")
                 flushDiagVoice()
                 muteStaleAudioForHandoff()
+                scheduleEarlyExitRetry(generation)
                 return@execute
             }
             val pagination = ReadBook.readerPagination(input.chapter.index) ?: run {
                 diagVoice("早退:未分页c${input.chapter.index}")
                 flushDiagVoice()
                 muteStaleAudioForHandoff()
+                scheduleEarlyExitRetry(generation)
                 return@execute
             }
             val contentSplitMode = resolveContentSplitMode()
@@ -697,6 +699,9 @@ abstract class BaseReadAloudService : BaseService(),
             // 每个排版批次/按位置重锚都会判"页面cX 声音cY 脱节"再补发一轮,
             // 新轮掐旧轮(y1 was cancelled)、反复从新章段0重放——补发风暴。
             currentChapterIndex = preparedChapter.chapterIndex
+            // 声音侧已追平本章：等交接结束，转圈交还给起播（play=true 时随后的
+            // play() 呈现播放态；play=false 时由本轮 onFinally 摘回暂停态）
+            handoffAwaitSwap = false
             // 临时诊断：声音侧从这一刻起真的换到本章。定位后随诊断删掉。
             diagVoiceChapter = preparedChapter.chapterIndex
             contentList = preparedContentList
@@ -745,7 +750,9 @@ abstract class BaseReadAloudService : BaseService(),
                 // 本轮已交账（成功或被更早放弃）：清掉记账，让「分页未完成」等早退路径
                 // 仍能被下一个排版批次重试，恢复换章兜底的原职责
                 preparingChapterIndex = -1
-                upPreparingState(false)
+                // 哑声等交接窗口例外：转圈就是这一阶段的正确呈现，静态暂停只会诱导用户
+                // 点播放复活旧章；解铃还须系铃人——成功起播(play)或重试盯梢放弃时摘
+                if (!handoffAwaitSwap) upPreparingState(false)
             }
         }
     }
@@ -757,17 +764,73 @@ abstract class BaseReadAloudService : BaseService(),
      * 引擎回调还会拖着新章的阅读页逐段前进（读一段跳一段，字音完全对不上）。
      * 先把旧声音暂停哑掉，新章轮次换声成功以 play=true 起播自动解除；
      * 成功轮始终不来时保持暂停，交由用户决定。
+     *
+     * 哑声窗口标成 [handoffAwaitSwap]：界面停在"暂停"是静态的，用户会以为按播放就能继续，
+     * 一按就把旧章复活；这段时间语义上是"还在等新章"，必须保持"准备中"转圈。
      */
     private fun muteStaleAudioForHandoff() {
+        val voiceChapter = readerReadAloudChapter ?: return
+        if (voiceChapter.chapterIndex == ReadBook.durChapterIndex) return
+        // 同步置位：onFinally 与下面的 Main 块不分先后，靠这个标志保证转圈不被摘
+        handoffAwaitSwap = true
         lifecycleScope.launch(Main) {
-            val voiceChapter = readerReadAloudChapter ?: return@launch
-            if (voiceChapter.chapterIndex == ReadBook.durChapterIndex || pause) return@launch
-            playStop()
-            pauseReadAloud(abandonFocus = false)
+            if (!pause) {
+                playStop()
+                pauseReadAloud(abandonFocus = false)
+            }
+            upPreparingState(true)
             diagVoice(
                 "哑声等交接:声音c${voiceChapter.chapterIndex} " +
                     "页面c${ReadBook.durChapterIndex}"
             )
+        }
+    }
+
+    /**
+     * 哑声等交接窗口是否仍在等（新章成功起播或重试盯梢放弃时清除）。
+     * 置位期间 onFinally 不得把「准备中」摘回静态暂停态。
+     */
+    @Volatile
+    private var handoffAwaitSwap = false
+
+    /**
+     * "播放/继续"落到引擎前的落后闸门（听书页按钮、通知、媒体键都走这里）：
+     * 哑声等交接的窗口里引擎状态还指着旧章，原样起播就是"点播放却读上一章"的案发现场。
+     * 跟随开着且声音章落后阅读页章时不起旧章，按"从你看的页读"重起一轮交接；
+     * 本章已有在飞轮次就只止步，不再叠第二轮。返回 true 表示本轮起播已被接管。
+     */
+    protected fun stalePlayGuard(): Boolean {
+        val voiceChapter = readerReadAloudChapter ?: return false
+        if (voiceChapter.chapterIndex == ReadBook.durChapterIndex) return false
+        if (!sessionStore.state.value.followReadAloudPosition) return false
+        if (preparingChapterIndex != ReadBook.durChapterIndex) {
+            diagVoice(
+                "起播止步:声音c${voiceChapter.chapterIndex}落后页面" +
+                    "c${ReadBook.durChapterIndex},按当前页重起轮"
+            )
+            ReadBook.readAloud()
+        }
+        return true
+    }
+
+    /**
+     * 早退轮（正文窗口空/未分页）不是放弃：补发要等下一个排版批次，阅读页压在听书页
+     * 后面排版时这一等就是好几秒（实测 ~4.7s 的哑声窗口）。早退后替这一轮盯着：
+     * 本章分页一就绪立刻重起；起了新轮(generation 变化)就静默退出。
+     */
+    private fun scheduleEarlyExitRetry(generation: Int) {
+        lifecycleScope.launch {
+            repeat(40) {
+                delay(500)
+                if (generation != prepareReadAloudGeneration) return@launch
+                if (ReadBook.readerPagination(ReadBook.durChapterIndex) != null) {
+                    ReadBook.readAloud()
+                    return@launch
+                }
+            }
+            // 盯满仍没等到分页：转圈承诺到此为止，摘回暂停态交由用户决定
+            handoffAwaitSwap = false
+            upPreparingState(false)
         }
     }
 
@@ -855,6 +918,8 @@ abstract class BaseReadAloudService : BaseService(),
     @SuppressLint("WakelockTimeout")
     open fun play() {
         if (stopRequested) return
+        // 声音真的起播了：哑声等交接的"准备中"承诺交回给播放态
+        handoffAwaitSwap = false
         if (useWakeLock) {
             wakeLock.acquire()
             wifiLock?.acquire()

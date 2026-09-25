@@ -130,6 +130,8 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
 
     @Synchronized
     override fun play() {
+        // 声音章落后阅读页（哑声等交接窗口）时从 nowSpeak 起读就是"点播放读上一章"，交给补发轮
+        if (stalePlayGuard()) return
         if (hasSpeechPlaybackQueue) {
             val route = systemVoiceForCurrentCue()
             val requiredEngine = route.engineId
@@ -408,6 +410,8 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
      * 恢复朗读
      */
     override fun resumeReadAloud() {
+        // 闸门在 play() 里也会拦，但先拦可省一次"状态翻成播放中"的空转
+        if (stalePlayGuard()) return
         super.resumeReadAloud()
         play()
     }
