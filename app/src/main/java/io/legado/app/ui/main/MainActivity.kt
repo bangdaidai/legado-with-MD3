@@ -45,7 +45,6 @@ import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.BaseComposeActivity
 import io.legado.app.constant.AppConst.appInfo
-import io.legado.app.constant.AppLog
 import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.gateway.MangaSettingsGateway
@@ -67,6 +66,7 @@ import io.legado.app.ui.widget.components.log.CrashLogSheet
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.read.ReadBookInputHandler
 import io.legado.app.ui.book.read.ReadBookRouteHost
+import io.legado.app.ui.book.read.ReaderEntranceDiag
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.readaloud.ReadAloudShellHost
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
@@ -550,13 +550,12 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                             },
                         )
                     }
-                    // 临时诊断：本作用域每成功重组一次打一行 provider 身份码。
-                    // provider 已锁代次后，各次导航后的重组行应显示同一数值——
-                    // 这既是"不换代"生效的凭证，也便于回看闪动是否还与换代有关。
-                    // 定位后连同 MainNavigator 的【返回诊断】一并回退。
+                    // 临时诊断：本作用域每成功重组一次记一个 provider 身份码，
+                    // 不再逐条落日志页——由阅读面入场期满时并进唯一的
+                    // 【返回入场诊断】一条里。定位后随诊断一并回退。
                     SideEffect {
-                        AppLog.put(
-                            "【返回诊断】NavHost重组 provider=" +
+                        ReaderEntranceDiag.add(
+                            "NavHost重组 provider=" +
                                 System.identityHashCode(diagEntryProvider)
                         )
                     }

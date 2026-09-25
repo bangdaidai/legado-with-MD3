@@ -118,6 +118,25 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 /**
+ * 临时诊断：MainNavigator/MainActivity 的【返回诊断】片段不再逐条落日志页，
+ * 全部先攒到这里；阅读面入场窗口期满时由 flushDiagEntranceTrace 与"提交序列"
+ * 合并成**一条**"一次返回＝一条日志"。定位后整块随【入场诊断】一并回退。
+ */
+object ReaderEntranceDiag {
+    private val lines = mutableListOf<String>()
+
+    fun add(line: String) {
+        if (lines.size < 80) lines += line
+    }
+
+    fun drain(): List<String> {
+        val copy = lines.toList()
+        lines.clear()
+        return copy
+    }
+}
+
+/**
  * Encapsulates all the reader logic that used to be in ReadBookActivity.
  * This allows ReadBookRouteScreen to be hosted in any Activity (ReadBookActivity or MainActivity).
  */
@@ -544,9 +563,10 @@ class ReadBookController(
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
         // 临时诊断：从听书页等整页返回、阅读面重新入场后的 2.5 秒里，
-        // 把每一次窗口提交记成"+毫秒 c章p页·来源"片段，连续相同的并成 ×N，
-        // 期满合并成一条【入场诊断】写入日志页。定位后连同【返回诊断】一并回退。
-        flushDiagEntranceTrace()
+        // 把每一次窗口提交记成"+毫秒 c章p页·来源"片段，连同返回段攒下的
+        // 【返回诊断】在期满时合并成**一条**【返回入场诊断】。定位后整体回退。
+        // 注意：入场时不清攒、不结算——那几条返回段正是本次返回的开头，
+        // 要一起进期满那条，才做得到"一次返回只有一条日志"。
         diagEntranceTraceStart = System.currentTimeMillis()
         diagEntranceTraceUntil = diagEntranceTraceStart + 2500
         diagEntranceHoldPlaceholder = null
@@ -561,18 +581,14 @@ class ReadBookController(
         publishReaderPageWindow(from = "入场")
     }
 
-    /** 临时诊断：把记录期攒下的提交合并压缩成一条日志；不在记录期或无提交则静默。 */
-    private fun flushDiagEntranceTrace() {
-        diagEntranceTraceUntil = 0L
-        if (diagEntranceTrace.isEmpty()) return
+    /** 临时诊断：把攒下的片段连续去重并成 ×N，用 " | " 串成一段。 */
+    private fun compressDiagEntries(entries: List<String>): String {
         val merged = StringBuilder()
         var index = 0
-        while (index < diagEntranceTrace.size) {
-            val entry = diagEntranceTrace[index]
+        while (index < entries.size) {
+            val entry = entries[index]
             var repeat = 1
-            while (index + repeat < diagEntranceTrace.size &&
-                diagEntranceTrace[index + repeat] == entry
-            ) {
+            while (index + repeat < entries.size && entries[index + repeat] == entry) {
                 repeat += 1
             }
             if (merged.isNotEmpty()) merged.append(" | ")
@@ -580,7 +596,19 @@ class ReadBookController(
             if (repeat > 1) merged.append('×').append(repeat)
             index += repeat
         }
-        AppLog.put("【入场诊断】重入场 2.5 秒共 ${diagEntranceTrace.size} 次提交: $merged")
+        return merged.toString()
+    }
+
+    /** 临时诊断：返回段+入场段合并成唯一一条日志；两段都空则静默。 */
+    private fun flushDiagEntranceTrace() {
+        diagEntranceTraceUntil = 0L
+        val backStage = ReaderEntranceDiag.drain()
+        if (diagEntranceTrace.isEmpty() && backStage.isEmpty()) return
+        AppLog.put(
+            "【返回入场诊断】返回段: ${compressDiagEntries(backStage)} " +
+                "|| 入场2.5秒共 ${diagEntranceTrace.size} 次提交: " +
+                compressDiagEntries(diagEntranceTrace)
+        )
         diagEntranceTrace.clear()
     }
 

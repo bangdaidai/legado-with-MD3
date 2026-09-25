@@ -3,9 +3,9 @@ package io.legado.app.ui.main
 import android.app.Activity
 import android.content.Intent
 import androidx.navigation3.runtime.NavKey
-import io.legado.app.constant.AppLog
 import io.legado.app.feature.reader.platform.ReaderPerfTrace
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.read.ReaderEntranceDiag
 import io.legado.app.ui.rss.article.MainRouteRssSort
 import io.legado.app.ui.rss.read.MainRouteRssRead
 import kotlinx.coroutines.CoroutineScope
@@ -42,8 +42,8 @@ object MainNavigator {
         tracker: MainNavRouteTracker?,
         resetToHome: Boolean = false,
     ) {
-        AppLog.put(
-            "【返回诊断】navigateTo ${route::class.simpleName} size=${backStack.size}"
+        ReaderEntranceDiag.add(
+            "navigateTo ${route::class.simpleName} size=${backStack.size}"
         )
         navigateToRouteInternal(backStack, route, tracker, resetToHome)
     }
@@ -440,35 +440,35 @@ object MainNavigator {
         backStack: MutableList<NavKey>,
         tracker: MainNavRouteTracker?,
     ) {
-        AppLog.put(
-            "【返回诊断】navigateBack inProgress=$backNavigationInProgress size=${backStack.size} " +
+        ReaderEntranceDiag.add(
+            "navigateBack inProgress=$backNavigationInProgress size=${backStack.size} " +
                 "top=${backStack.lastOrNull()?.let { it::class.simpleName }} " +
                 "from=${if (tracker != null) "pageButton" else "navDisplay"}"
         )
         if (backNavigationInProgress) {
-            AppLog.put("【返回诊断】navigateBack SWALLOWED by debounce")
+            ReaderEntranceDiag.add("navigateBack SWALLOWED by debounce")
             return
         }
         if (backStack.size > 1) {
             backNavigationInProgress = true
             backStack.removeLastOrNull()
             tracker?.onBackStackChanged(backStack)
-            AppLog.put(
-                "【返回诊断】navigateBack POPPED, newTop=${backStack.lastOrNull()?.let { it::class.simpleName }}"
+            ReaderEntranceDiag.add(
+                "navigateBack POPPED, newTop=${backStack.lastOrNull()?.let { it::class.simpleName }}"
             )
         } else {
-            AppLog.put("【返回诊断】navigateBack finish()")
+            ReaderEntranceDiag.add("navigateBack finish()")
             activity.finish()
         }
     }
 
     fun onBackStackChanged() {
-        AppLog.put("【返回诊断】snapshot arrived, scheduling flag clear (+500ms)")
+        ReaderEntranceDiag.add("snapshot arrived, scheduling flag clear (+500ms)")
         backNavigationResetJob?.cancel()
         backNavigationResetJob = navigationScope.launch {
             delay(500)
             backNavigationInProgress = false
-            AppLog.put("【返回诊断】debounce flag cleared")
+            ReaderEntranceDiag.add("debounce flag cleared")
         }
     }
 
