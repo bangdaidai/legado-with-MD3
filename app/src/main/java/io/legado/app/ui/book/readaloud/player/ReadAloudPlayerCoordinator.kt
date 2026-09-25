@@ -237,14 +237,18 @@ class ReadAloudPlayerCoordinator(
     private fun diagVoiceJump(action: String) {
         if (!BaseReadAloudService.isRun) return
         BaseReadAloudService.diagVoice(
-            "$action 声音c${BaseReadAloudService.currentChapterIndex} " +
+            "$action 快照c${BaseReadAloudService.currentChapterIndex} " +
                 "位${sessionStore.state.value.playback.chapterPosition}"
         )
     }
 
-    /** 点跳章瞬间的页面/声音两侧章号与跟随状态——脱离状态是"声音不跟"最常见的一种解释。 */
+    /**
+     * 点跳章瞬间的页面/声音两侧章号与跟随状态——脱离状态是"声音不跟"最常见的一种解释。
+     * "快照"＝[BaseReadAloudService.currentChapterIndex]（补发判据实际读的那个量），
+     * 桶尾结论里的"声音"＝最近一轮真正替换上屏的章号，两者可以不同。
+     */
     private fun diagJumpNote(action: String): String =
-        "$action 页面c${ReadBook.durChapterIndex} 声音c${BaseReadAloudService.currentChapterIndex} " +
+        "$action 页面c${ReadBook.durChapterIndex} 快照c${BaseReadAloudService.currentChapterIndex} " +
             "跟随=${sessionStore.state.value.followReadAloudPosition}"
 
     suspend fun setSpeed(value: Int) {

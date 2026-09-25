@@ -74,6 +74,7 @@ import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -395,10 +396,15 @@ class HttpReadAloudService : BaseReadAloudService(),
     /**
      * 异步启动后续章节的预合成，与当前章节播放并行。
      * 不持有 downloadTaskActiveLock，不阻塞当前章节的合成和播放。
+     *
+     * 必须在 IO 上跑：`lifecycleScope` 默认是 Main.immediate，而合成链里的
+     * `AnalyzeUrl.getResponseAwait()` 沿用调用方的 coroutineContext，等于在主线程发
+     * HTTP —— 平台直接抛 NetworkOnMainThreadException（它的 localizedMessage 是 null，
+     * 所以日志只会看到"失败: null"），预合成逐 cue 全灭、后续章全靠现场合成。
      */
     private fun launchPreDownload(httpTts: HttpTTS) {
         preDownloadJob?.cancel()
-        preDownloadJob = lifecycleScope.launch {
+        preDownloadJob = lifecycleScope.launch(IO) {
             preDownloadAudios(httpTts)
         }
     }
@@ -482,7 +488,10 @@ class HttpReadAloudService : BaseReadAloudService(),
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }
         } catch (e: Exception) {
-            AppLog.put("听书预下载异常: ${e.localizedMessage}", e)
+            // 换章/退出都会 cancel 预合成，JobCancellationException（"job was cancelled"）
+            // 是正常收尾，不是异常——原先每次换章都往日志页塞一条带堆栈的"预下载异常"。
+            if (e is CancellationException) throw e
+            AppLog.put("听书预下载异常: ${e.javaClass.simpleName}:${e.localizedMessage}", e)
         }
     }
 
@@ -744,9 +753,10 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
+    /** 同 [launchPreDownload]：预合成整链必须离开主线程，否则逐 cue 抛 NetworkOnMainThreadException。 */
     private fun launchPreDownloadStream(httpTts: HttpTTS, downloaderChannel: Channel<Downloader>) {
         preDownloadJob?.cancel()
-        preDownloadJob = lifecycleScope.launch {
+        preDownloadJob = lifecycleScope.launch(IO) {
             preDownloadAudiosStream(httpTts, downloaderChannel)
         }
     }
@@ -779,7 +789,9 @@ class HttpReadAloudService : BaseReadAloudService(),
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }
         } catch (e: Exception) {
-            AppLog.put("听书流式预下载异常: ${e.localizedMessage}", e)
+            // 同上：取消是正常收尾，不当异常记
+            if (e is CancellationException) throw e
+            AppLog.put("听书流式预下载异常: ${e.javaClass.simpleName}:${e.localizedMessage}", e)
         }
     }
 

@@ -186,6 +186,12 @@ abstract class BaseReadAloudService : BaseService(),
         private const val DIAG_PAGE_QUIET_MS = 1_200L
         private const val DIAG_VOICE_QUIET_MS = 6_000L
 
+        /** 临时诊断：最近一轮成功替换上屏的朗读章节号，-1 表示这一轮还没走到替换那步。 */
+        @JvmStatic
+        @Volatile
+        var diagVoiceChapter: Int = -1
+            private set
+
         /**
          * 临时诊断：听书一次操作只落**两条**日志——
          * [diagPage] 记页面侧（点了哪个按钮、正文改到哪一章、补发判据怎么走），
@@ -201,17 +207,18 @@ abstract class BaseReadAloudService : BaseService(),
             label = "页面跳转",
             quietMs = DIAG_PAGE_QUIET_MS,
         ) {
-            "文字c${ReadBook.durChapterIndex} 声音c$currentChapterIndex"
+            "文字c${ReadBook.durChapterIndex} 声音c$diagVoiceChapter"
         }
         private val diagVoiceBucket = ReadAloudDiagBucket(
             label = "朗读声音",
             quietMs = DIAG_VOICE_QUIET_MS,
         ) {
-            // 声音实际停在第几章：currentChapterIndex 只随朗读进度从 readerReadAloudChapter 取值，
-            // 一轮准备没替换成功时它就停在上一章——正是要看的量。
-            val voiceChapterIndex = currentChapterIndex
+            // 声音侧真的换章只发生在 readerReadAloudChapter 被替换那一刻（→ diagVoiceChapter）。
+            // currentChapterIndex 要等进度快照才更新，且在服务 onDestroy 时被清成 -1，
+            // 拿它判脱节会在收口点上必然读到旧值而误报；这里两个都打，用于分开"没换章"和"换了但没进度"。
+            val voiceChapterIndex = diagVoiceChapter
             val pageChapterIndex = ReadBook.durChapterIndex
-            "文字c$pageChapterIndex 声音c$voiceChapterIndex " +
+            "文字c$pageChapterIndex 声音c$voiceChapterIndex(快照c$currentChapterIndex) " +
                 if (voiceChapterIndex == pageChapterIndex) "一致" else "脱节(声音仍停在c$voiceChapterIndex)"
         }
 
@@ -643,6 +650,9 @@ abstract class BaseReadAloudService : BaseService(),
             }
             this@BaseReadAloudService.pageIndex = pageIndex
             readerReadAloudChapter = preparedChapter
+            // 临时诊断：声音侧从这一刻起真的换到本章（currentChapterIndex 要等进度快照才更新，
+            // 用它判"脱节"会在收口点上必然读到旧值/-1，自己造出假信号）。定位后随诊断删掉。
+            diagVoiceChapter = preparedChapter.chapterIndex
             contentList = preparedContentList
             contentChapterPositions = preparedContentChapterPositions
             speechPlan = preparedSpeechPlan
@@ -654,7 +664,9 @@ abstract class BaseReadAloudService : BaseService(),
             diagVoice(
                 "换声成功 c${preparedChapter.chapterIndex} 段$preparedNowSpeak/" +
                     "${preparedContentList.size} 偏$preparedParagraphStartPos 位$preparedReadAloudNumber " +
-                    "队列=${if (hasSpeechPlaybackQueue) "多角色" else "无"}"
+                    // 两个引擎都恒定 useSpeechPlaybackQueue=true（HttpReadAloudService:107 /
+                    // TTSReadAloudService:41），这里"有"只表示走了分镜 cue 队列，不代表开了多角色
+                    "队列=${if (hasSpeechPlaybackQueue) "有" else "无"}"
             )
             // 本轮声音侧片段到此为止：立即收口成一条，之后的引擎逐段出声攒进下一条
             flushDiagVoice()
