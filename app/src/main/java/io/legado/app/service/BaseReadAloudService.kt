@@ -396,7 +396,10 @@ abstract class BaseReadAloudService : BaseService(),
         // 单实例接管：见 [activeInstance]。残留实例继续念旧章、盖快照，控制意图又够不着它，
         // 是"文字已换章、声音永远停在上一章"的最自洽解释——发现即销毁。
         val stale = activeInstance
-        if (stale != null && stale !== this) stale.stopSelf()
+        if (stale != null && stale !== this) {
+            AppLog.put("朗读服务残留实例未销毁，已强制回收: ${stale.javaClass.simpleName}")
+            stale.stopSelf()
+        }
         activeInstance = this
         stopRequested = false
         isRun = true
@@ -747,6 +750,10 @@ abstract class BaseReadAloudService : BaseService(),
             if (voiceChapter.chapterIndex == ReadBook.durChapterIndex || pause) return@launch
             playStop()
             pauseReadAloud(abandonFocus = false)
+            diagVoice(
+                "哑声等交接:声音c${voiceChapter.chapterIndex} " +
+                    "页面c${ReadBook.durChapterIndex}"
+            )
         }
     }
 
