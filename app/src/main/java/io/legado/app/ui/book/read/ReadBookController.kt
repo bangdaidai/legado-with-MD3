@@ -839,16 +839,27 @@ class ReadBookController(
         if (!currentInputIsReady &&
             _readerPageWindow.value.current?.id?.chapterIndex != ReadBook.durChapterIndex
         ) {
-            // 入场门控未过时画面还挂着上一次离场的成型窗口（ReaderSessionViewModel 跨重组存活）：
-            // 此刻发加载占位会把成型正文冲成空白页——即"从听书页返回先闪加载页"的元凶。
-            // 暂存不发布，真实页到达（updateReaderPageWindow）或门控收尾时补发。
-            if (readerSessionViewModel.uiState.value.pageWindow.current != null) {
-                diagEntranceHoldPlaceholder = {
-                    publishLoadingReaderWindow(from = "$from·补发")
-                }
-            } else {
-                publishLoadingReaderWindow(from = from)
+            publishLoadingReaderWindowUnlessReal(from)
+        }
+    }
+
+    /**
+     * 装载期的占位发布，一律先问"画面上是不是已经有正文"：
+     * - 已有真实页 → 直接跳过。换章/追章过程中正文输入窗口会反复清空重建，
+     *   每清一次就发占位会把已经露脸的真实页再踩回空白（旧 View 装载新内容
+     *   时同样保留当前页，占位只补真空）。
+     * - 入场门控未过、ReaderSessionViewModel 还挂着上次离场的成型窗口 → 暂存，
+     *   真实页到达即作废、门控收尾仍未等到再补发。
+     * - 两者都没有（真的冷开白屏）→ 立即发"加载中"，语义不变。
+     */
+    private fun publishLoadingReaderWindowUnlessReal(from: String) {
+        _readerPageWindow.value.current?.takeIf { !it.isPlaceholder }?.let { return }
+        if (readerSessionViewModel.uiState.value.pageWindow.current != null) {
+            diagEntranceHoldPlaceholder = {
+                publishLoadingReaderWindow(from = "$from·补发")
             }
+        } else {
+            publishLoadingReaderWindow(from = from)
         }
     }
 
@@ -1282,8 +1293,9 @@ class ReadBookController(
         val chapter = inputWindow.current ?: run {
             // 内容未装载（进入书籍/目录跳转装载中）：发布"加载中"占位页窗口，让
             // 阅读画布保持组合、点击分区与菜单照常可用，装载完成后由分页批次
-            // 整窗替换（对照 shutiao 的加载占位页正文渲染）。
-            publishLoadingReaderWindow(from = "无输入占位")
+            // 整窗替换（对照 shutiao 的加载占位页正文渲染）。画面上已有真实页时
+            // 不踩——追章窗口反复清空时曾把刚露脸的正文闪回空白（26→27 抓取实锤）。
+            publishLoadingReaderWindowUnlessReal("无输入占位")
             return false
         }
         val chapters = listOf(
