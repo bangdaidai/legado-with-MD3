@@ -528,8 +528,15 @@ class ReadBookController(
         viewModel.refreshSeekState()
     }
 
+    /** 临时诊断：阅读面 attach 后的窗口提交记录截止时间戳，0 表示不在记录期。 */
+    private var diagEntranceTraceUntil = 0L
+
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
+        // 临时诊断：从听书页等整页返回、阅读面重新入场后的 2.5 秒里，
+        // 记录每一次窗口提交（章/页/是否占位），把"连跳几次"对上发布者。
+        // 定位后连同【返回诊断】一并回退。
+        diagEntranceTraceUntil = System.currentTimeMillis() + 2500
         ReadBook.registerRender(this)
         publishReaderPageWindow()
     }
@@ -557,6 +564,14 @@ class ReadBookController(
             cancelReaderImageLoadsExcept(activeReaderImageKeys(value))
         }
         _readerPageWindow.value = value
+        if (diagEntranceTraceUntil != 0L &&
+            System.currentTimeMillis() < diagEntranceTraceUntil
+        ) {
+            AppLog.put(
+                "【入场诊断】窗口提交 chapter=${next?.id?.chapterIndex} " +
+                    "page=${next?.id?.pageIndex} placeholder=${next?.isPlaceholder}"
+            )
+        }
         readerSessionViewModel.submitPageWindow(value)
         return value
     }
