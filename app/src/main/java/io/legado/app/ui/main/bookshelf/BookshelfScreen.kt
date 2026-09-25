@@ -1075,7 +1075,11 @@ fun BookshelfScreen(
                                 onMoveBook = { _, _, _ -> },
                                 onDragFinished = {},
                                 onGlobalSearch = { onNavigateToSearch(uiState.searchKey.trim()) },
-                                onBookClick = onBookClick,
+                                // 与分组列表同一道闸门：滑下去点书就不挂封面转场，走普通页面转场。
+                                onBookClick = { book, coverKey ->
+                                    val atTop = isBookshelfGridAtTop(standaloneSearchGridState)
+                                    onBookClick(book, coverKey.takeIf { atTop })
+                                },
                                 onLockedBookClick = requestBookUnlock,
                                 onBookLongClick = onBookLongClick,
                                 isCurrentPage = true,
@@ -1174,14 +1178,15 @@ fun BookshelfScreen(
                                         },
                                         onBookClick = { book, coverKey ->
                                             // 记录本次开书（书名/是否停顶/推进戳/当时顺序），
-                                            // 供返回转场冻结并预排位；不接管时表现与上游一致。
-                                            recordBookshelfOpenHint(
+                                            // 供返回转场冻结并预排位。同一个 atTop 也决定这次
+                                            // 开书挂不挂封面转场：滑下去了就整个不挂。
+                                            val atTop = recordBookshelfOpenHint(
                                                 snapshotKey = "group:${group.groupId}",
                                                 gridState = groupGridState,
                                                 bookUrl = book.bookUrl,
                                                 books = books,
                                             )
-                                            onBookClick(book, coverKey)
+                                            onBookClick(book, coverKey.takeIf { atTop })
                                         },
                                         onLockedBookClick = requestBookUnlock,
                                         onBookLongClick = onBookLongClick,
@@ -1587,23 +1592,29 @@ private fun isBookshelfGridAtTop(gridState: LazyGridState): Boolean =
     gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
 
 /**
- * 点击开书时记录：书名、当时列表是否停在顶部、点击时刻的阅读推进戳和列表顺序。
+ * 点击开书时记录：书名、当时列表是否停在顶部、点击时刻的阅读推进戳和列表顺序，并返回 atTop。
  *
- * 只有"停在顶部"的开书会被 [rememberBooksHeldDuringEnter] 接管转场顺序
- * （上游的闪角问题只发生在这种情况下）；其余情况完全不接管。
+ * atTop 管两件事，缺一不可：
+ * 1. 这次开书挂不挂封面 sharedBounds。列表滑下去之后，被点那行随时可能被阅读进度落库
+ *    引发的重排换掉内容，飞行中的封面会失去终点格子——表现是"那一行变空白、封面往
+ *    屏幕左上角飞"。所以滑动态直接不挂，走普通页面转场（和从阅读页滑动态返回时一样，
+ *    那种情况下本来也看不到封面动）。
+ * 2. 只有停在顶部的开书才会被 [rememberBooksHeldDuringEnter] 接管转场顺序
+ *    （上游的闪角问题只发生在这种情况下）；其余情况完全不接管。
  */
 private fun recordBookshelfOpenHint(
     snapshotKey: String,
     gridState: LazyGridState,
     bookUrl: String,
     books: ImmutableList<BookUiItem>,
-) {
+): Boolean {
     val atTop = isBookshelfGridAtTop(gridState)
     // 记下点击时刻的推进戳：返程只有出现"比这更新"的推进才预排位，
     // 避免上一轮阅读留下的标记让"点开看一眼就返回"也误飞第 1 格。
     val advanceStamp = ReadBook.lastReadProgressAdvanced
         ?.takeIf { it.first == bookUrl }?.second ?: 0L
     bookshelfOpenHints[snapshotKey] = BookshelfOpenHint(bookUrl, atTop, advanceStamp, books)
+    return atTop
 }
 
 /** 按"最近阅读倒序"的最终结果预排：刚读过的书时间戳最新，必然落到第 1 格。 */
