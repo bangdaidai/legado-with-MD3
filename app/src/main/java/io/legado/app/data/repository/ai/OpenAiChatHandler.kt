@@ -115,8 +115,10 @@ class OpenAiChatHandler : AiProtocolHandler {
         // 思考把 max_tokens 花光了：显式关掉思考、抬高输出上限再试一次，比直接失败划算
         body.applyThinkingSwitch(provider, AiReasoningLevel.OFF)
         body.applyZhipuThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
-        body.applySenseNovaThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
+        // 先清掉正常路径可能留下的强度值，再按 OFF 下发各供应商的关闭写法
+        // （SenseNova 的 reasoning_effort="none" 本身就是关闭思考，必须留在请求里）
         body.remove("reasoning_effort")
+        body.applySenseNovaThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
         body["max_tokens"] = maxOf(params.maxOutputTokens ?: 0, REASONING_FALLBACK_MAX_TOKENS)
         return send()
             ?: throw Exception("AI response contains only reasoning content; disable thinking for this model")
@@ -293,25 +295,30 @@ internal fun MutableMap<String, Any?>.applyZhipuThinking(
 }
 
 /**
- * SenseNova（商汤日日新，OpenAI 兼容网关 token.sensenova.cn）的思考开关是
- * `thinking.enabled`（布尔，默认开启，见 sensecore ChatCompletions 文档），不认
- * `enable_thinking`，未知字段被静默忽略——思考关不掉时正文被推理挤空，
- * 调用方只能拿到 "AI response contains only reasoning content"。
- * 与 [applyZhipuThinking] 同理按供应商/模型身份下发，不依赖模型能力标记。
- * 官方模型 id 形如 sensenova-6.7-flash-lite / SenseChat-5，两者都识别。
- * 它没有 effort 类参数，思考深度档位对它只有开/关语义。
+ * SenseNova（商汤日日新，OpenAI 兼容网关 token.sensenova.cn）。平台全部模型共用一套
+ * 思考参数（官方文档「思考模式」）：`thinking` 为字符串 "enabled"/"disabled"（默认
+ * enabled），`reasoning_effort` 取 low/medium/high/max（默认 high），设 "none" 直接
+ * 关闭思考。思考内容经 reasoning_content / reasoning 字段返回，调用方已兼容。
+ * 供应商身份命中后对该供应商的全部模型生效；模型名匹配仅兜底名称未写明的场景。
+ * 不含 xhigh 档，XHIGH 收敛为 high。
  */
 internal fun MutableMap<String, Any?>.applySenseNovaThinking(
     provider: AiProviderConfig,
     modelId: String,
     reasoningLevel: AiReasoningLevel
 ) {
+    if (reasoningLevel == AiReasoningLevel.AUTO) return
     val identity = "${provider.id} ${provider.name} ${provider.baseUrl}".lowercase()
     val isSenseNovaProvider = "sensenova" in identity || "sensecore" in identity
     val normalizedModelId = modelId.lowercase()
     val isSenseNovaModel = "sensechat" in normalizedModelId || "sensenova" in normalizedModelId
     if (!isSenseNovaProvider && !isSenseNovaModel) return
-    this["thinking"] = mapOf("enabled" to (reasoningLevel != AiReasoningLevel.OFF))
+    this["thinking"] = if (reasoningLevel == AiReasoningLevel.OFF) "disabled" else "enabled"
+    this["reasoning_effort"] = when (reasoningLevel) {
+        AiReasoningLevel.OFF -> "none"
+        AiReasoningLevel.XHIGH -> "high"
+        else -> reasoningLevel.effort
+    }
 }
 
 /**
