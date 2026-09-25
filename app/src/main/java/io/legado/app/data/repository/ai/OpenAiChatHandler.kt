@@ -289,9 +289,12 @@ internal fun MutableMap<String, Any?>.applyZhipuThinking(
 
 /**
  * SenseNova（商汤日日新，OpenAI 兼容网关 token.sensenova.cn）。平台全部模型共用一套
- * 思考参数（官方文档「思考模式」）：`thinking` 为字符串 "enabled"/"disabled"（默认
- * enabled），`reasoning_effort` 取 low/medium/high/max（默认 high），设 "none" 直接
- * 关闭思考。思考内容经 reasoning_content / reasoning 字段返回，调用方已兼容。
+ * 思考参数（官方文档「思考模式」）：`reasoning_effort` 取 low/medium/high/max（默认
+ * high），设 "none" 直接关闭思考。`thinking` 字符串开关与它二选一使用——实测把
+ * thinking、reasoning_effort、enable_thinking 三种关思考写法一起下发会触发网关
+ * 400 invalid arguments。因此这里只发 reasoning_effort 一个字段（开思考靠字段缺省
+ * 即 enabled），并撤掉 applyThinkingSwitch 留下的 enable_thinking，思考控制完全
+ * 交给它。思考内容经 reasoning_content / reasoning 字段返回，调用方已兼容。
  * 供应商身份命中后对该供应商的全部模型生效；模型名匹配仅兜底名称未写明的场景。
  * 不含 xhigh 档，XHIGH 收敛为 high。
  */
@@ -306,7 +309,7 @@ internal fun MutableMap<String, Any?>.applySenseNovaThinking(
     val normalizedModelId = modelId.lowercase()
     val isSenseNovaModel = "sensechat" in normalizedModelId || "sensenova" in normalizedModelId
     if (!isSenseNovaProvider && !isSenseNovaModel) return
-    this["thinking"] = if (reasoningLevel == AiReasoningLevel.OFF) "disabled" else "enabled"
+    this.remove("enable_thinking")
     this["reasoning_effort"] = when (reasoningLevel) {
         AiReasoningLevel.OFF -> "none"
         AiReasoningLevel.XHIGH -> "high"
