@@ -161,6 +161,9 @@ object RuleBasedSpeechSegmenter {
     private fun quoteRole(text: String, openIndex: Int, closeIndex: Int): SpeechRoleType {
         val contextBefore = text.substring((openIndex - 24).coerceAtLeast(0), openIndex)
         if (thoughtCueRegex.containsMatchIn(contextBefore)) return SpeechRoleType.Thought
+        // 短对白（"嗯。" "好。"）内容太短不满足长度/标点判据，但引导句（说道:/喊道:）
+        // 就在前面——它是对白不是旁白，误判成旁白会读错音色
+        if (speechCueRegex.containsMatchIn(contextBefore)) return SpeechRoleType.Character
         if (closeIndex < 0) return SpeechRoleType.Character
         val inner = text.substring(openIndex + 1, closeIndex).trim()
         return if (inner.length >= 6 || inner.any(sentencePunctuation::contains)) {
