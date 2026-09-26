@@ -3,6 +3,7 @@ package io.legado.app.domain.usecase
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiTextGateway
@@ -263,6 +264,9 @@ class RefineSpeechWithAiUseCase(
             }
             // 落库同样不随轮次取消中断：结果落了库，补发轮/下次重听才能命中缓存
             withContext(NonCancellable) {
+                // 相邻同说话人的片段合并成一段（原文一句对话一段，逐句出卡片又碎又难看；
+                // 合并后听书页与分镜页按“说话人连续台词”呈现，朗读停顿也随之减少）
+                val refined = mergeSameSpeakerSegments(refined)
                 val status = if (refined.any { segment ->
                         segment.characterId == null && segment.roleType in setOf(
                             SpeechRoleType.Character,
@@ -303,6 +307,54 @@ class RefineSpeechWithAiUseCase(
         )
         runCatching { chapterSpeechGateway.saveAnalysis(analysis, analysisResult.segments) }
     }
+
+    /**
+     * 相邻同说话人的片段合并：原文（书源）普遍按“一句对话一个段落”切，逐段出卡片
+     * 会把一段连续台词拆成七八张。只合并章内无缝且说话人明确的相邻段——
+     * 说话人未识别（characterId=null）的段落不合，避免把两个人的对话错成一人；
+     * 用户手动锁定的段不动。
+     */
+    private fun mergeSameSpeakerSegments(
+        segments: List<ChapterSpeechSegment>,
+    ): List<ChapterSpeechSegment> {
+        if (segments.size < 2) return segments
+        val result = mutableListOf<ChapterSpeechSegment>()
+        segments.forEach { segment ->
+            val previous = result.lastOrNull()
+            val seamless =
+                previous != null && previous.chapterPosition + previous.text.length == segment.chapterPosition
+            val sameNarrator = previous?.roleType == SpeechRoleType.Narrator &&
+                segment.roleType == SpeechRoleType.Narrator
+            // 纯标点/空白碎段（跨段引号的闭合引号等）无条件并入前段：它没有朗读
+            // 内容、说话人也无从谈起，并进前段只为文本完整——分镜与听书页不再出现
+            // 只有引号的卡片
+            val isPunctuationFragment = segment.text.matches(AppPattern.notReadAloudRegex)
+            val sameCharacter = segment.characterId != null &&
+                segment.characterId == previous?.characterId &&
+                previous.roleType != SpeechRoleType.Narrator
+            if (
+                previous != null &&
+                seamless && (isPunctuationFragment || sameNarrator || sameCharacter) &&
+                !previous.userLocked && !segment.userLocked
+            ) {
+                result[result.lastIndex] = previous.copy(
+                    end = segment.end,
+                    text = previous.text + segment.text,
+                    emotion = pickSpokenEmotion(previous.emotion, segment.emotion),
+                    confidence = minOf(previous.confidence, segment.confidence),
+                    updatedAt = segment.updatedAt,
+                )
+            } else {
+                result += segment
+            }
+        }
+        return result
+    }
+
+    /** 合并相邻片段时挑情绪：有明确情绪（非空非 neutral）优先 */
+    private fun pickSpokenEmotion(first: String, second: String): String =
+        listOf(first, second).firstOrNull { it.isNotBlank() && it != SpeechEmotion.Neutral.storageValue }
+            ?: first.ifBlank { second }
 
     private suspend fun completeRuleSegments(
         analysisResult: ChapterSpeechAnalysisResult,
@@ -499,10 +551,24 @@ class RefineSpeechWithAiUseCase(
         var knownProfiles = profiles
         val result = mutableListOf<ChapterSpeechSegment>()
         suspend fun processAtomChunk(chunk: List<AiSpeechAtom>) {
+            val paragraphsById = paragraphs.associateBy(CanonicalSpeechParagraph::index)
             val payload = mapOf(
                 "characters" to knownProfiles.map { it.toPromptMap() },
                 "atoms" to chunk.map { atom ->
-                    mapOf("atomId" to atom.id, "text" to atom.text)
+                    val paragraphText = paragraphsById[atom.paragraphIndex]?.text.orEmpty()
+                    mapOf(
+                        "atomId" to atom.id,
+                        "text" to atom.text,
+                        // 原子所在段内的前后文：说话引导句常紧贴引号
+                        "contextBefore" to paragraphText.substring(
+                            (atom.start - 48).coerceAtLeast(0),
+                            atom.start,
+                        ),
+                        "contextAfter" to paragraphText.substring(
+                            atom.end,
+                            (atom.end + 48).coerceAtMost(paragraphText.length),
+                        ),
+                    )
                 },
             )
             val response = try {

@@ -17,7 +17,7 @@ import io.legado.app.domain.model.readaloud.SpeechSegmentDraft
  */
 object RuleBasedSpeechSegmenter {
 
-    const val VERSION = "rule-segmenter-v4-blank-merge"
+    const val VERSION = "rule-segmenter-v5-merge-narrator"
 
     private val quotePairs = mapOf(
         '“' to '”',
@@ -215,6 +215,19 @@ object RuleBasedSpeechSegmenter {
                 previous.roleType == segment.roleType &&
                 previous.source == segment.source &&
                 previous.emotion == segment.emotion
+            ) {
+                result[result.lastIndex] = previous.copy(
+                    end = segment.end,
+                    text = previous.text + segment.text,
+                    confidence = minOf(previous.confidence, segment.confidence),
+                )
+            } else if (
+                previous != null &&
+                // 连续旁白跨段合并：书源一句对话一个段落，逐段出卡片/逐段停顿太碎；
+                // 旁白无说话人歧义，章内无缝即可安全合并
+                previous.roleType == SpeechRoleType.Narrator &&
+                segment.roleType == SpeechRoleType.Narrator &&
+                segment.chapterPosition == previous.chapterPosition + previous.text.length
             ) {
                 result[result.lastIndex] = previous.copy(
                     end = segment.end,
