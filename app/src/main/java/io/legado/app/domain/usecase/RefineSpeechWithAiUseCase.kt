@@ -492,18 +492,37 @@ class RefineSpeechWithAiUseCase(
         if (atoms.isEmpty()) return analysisResult.segments
         var knownProfiles = profiles
         val result = mutableListOf<ChapterSpeechSegment>()
-        atoms.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
+        suspend fun processAtomChunk(chunk: List<AiSpeechAtom>) {
             val payload = mapOf(
                 "characters" to knownProfiles.map { it.toPromptMap() },
                 "atoms" to chunk.map { atom ->
                     mapOf("atomId" to atom.id, "text" to atom.text)
                 },
             )
-            // 解析失败（JSON 被截断、结构坏）该块按未识别朗读——文本保留、整章不再作废
-            val groups = try {
-                parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel, analysisResult.analysis.chapterIndex, source))
+            val response = try {
+                generateResponse(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel, analysisResult.analysis.chapterIndex, source)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: Throwable) {
+                AppLog.putDebug("AI 理解分块请求失败，该块按未识别朗读（${chunk.size} 原子）：${e.message}")
+                return
+            }
+            // 输出被 max_tokens 硬截断（finishReason=length，JSON 断尾必解析失败）：
+            // 按 legado_NG 的做法对半拆成两块分别请求——每半输出随之减半，递归到单原子
+            if (response.finishReason == "length") {
+                if (chunk.size < 2) {
+                    AppLog.putDebug("AI 理解单原子输出仍被 max_tokens 截断，按未识别朗读")
+                } else {
+                    AppLog.putDebug("AI 理解输出被 max_tokens 截断，块（${chunk.size} 原子）对半重试")
+                    val midpoint = chunk.size / 2
+                    processAtomChunk(chunk.take(midpoint))
+                    processAtomChunk(chunk.drop(midpoint))
+                    return
+                }
+            }
+            // 解析失败（结构坏、字段非法）该块按未识别朗读——文本保留、整章不再作废
+            val groups = try {
+                parseAtomGroups(response.text)
             } catch (e: Throwable) {
                 AppLog.putDebug("AI 理解分块解析失败，该块按未识别朗读（${chunk.size} 原子）：${e.message}")
                 emptyList()
@@ -604,6 +623,9 @@ class RefineSpeechWithAiUseCase(
                     updatedAt = now,
                 )
             }
+        }
+        for (chunk in atoms.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }) {
+            processAtomChunk(chunk)
         }
         return result.sortedWith(compareBy(ChapterSpeechSegment::paragraphIndex, ChapterSpeechSegment::start))
     }

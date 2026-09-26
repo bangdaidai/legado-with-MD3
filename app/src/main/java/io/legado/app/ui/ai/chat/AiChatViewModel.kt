@@ -100,7 +100,10 @@ class AiChatViewModel(
                             modelProfileId = model.id,
                             providerName = providerMap[model.providerId]?.name.orEmpty(),
                             modelName = model.displayName,
-                            isSelected = model.id == currentModelId
+                            isSelected = model.id == currentModelId,
+                            capabilities = model.capabilities.split(',')
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() },
                         )
                     }
                     .toImmutableList()

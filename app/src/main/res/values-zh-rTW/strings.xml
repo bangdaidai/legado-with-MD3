@@ -2241,6 +2241,9 @@
     <string name="ai_no_provider_configured">請先建立供應商</string>
     <string name="ai_no_models_imported">尚未匯入模型</string>
     <string name="ai_select_model">選擇模型</string>
+    <string name="ai_model_cap_reasoning">推理</string>
+    <string name="ai_model_cap_vision">視覺</string>
+    <string name="ai_model_cap_tools">工具</string>
     <string name="ai_search_models">搜尋模型</string>
     <string name="ai_no_model_match">沒有符合的模型</string>
     <string name="ai_add_model_manually">手動新增模型</string>

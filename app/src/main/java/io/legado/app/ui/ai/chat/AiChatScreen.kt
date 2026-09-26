@@ -82,6 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.domain.model.AiCapability
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.ui.ai.AiReasoningModeButton
@@ -734,9 +735,22 @@ private fun AiChatModelPickerContent(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (model.providerName.isNotBlank()) {
+                            val capabilityLabels = model.capabilities.mapNotNull { cap ->
+                                when (cap) {
+                                    AiCapability.REASONING -> stringResource(R.string.ai_model_cap_reasoning)
+                                    AiCapability.VISION -> stringResource(R.string.ai_model_cap_vision)
+                                    AiCapability.TOOLS -> stringResource(R.string.ai_model_cap_tools)
+                                    else -> null
+                                }
+                            }
+                            val subtitle = listOfNotNull(
+                                model.providerName.takeIf { it.isNotBlank() },
+                                capabilityLabels.takeIf { it.isNotEmpty() }
+                                    ?.joinToString("·"),
+                            ).joinToString(" · ")
+                            if (subtitle.isNotBlank()) {
                                 AppText(
-                                    text = model.providerName,
+                                    text = subtitle,
                                     style = LegadoTheme.typography.bodySmall,
                                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

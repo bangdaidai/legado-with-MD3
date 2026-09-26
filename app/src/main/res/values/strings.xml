@@ -2441,6 +2441,9 @@
     <string name="ai_no_provider_configured">Create a provider first</string>
     <string name="ai_no_models_imported">No models imported</string>
     <string name="ai_select_model">Select Model</string>
+    <string name="ai_model_cap_reasoning">Reasoning</string>
+    <string name="ai_model_cap_vision">Vision</string>
+    <string name="ai_model_cap_tools">Tools</string>Select Model</string>
     <string name="ai_search_models">Search models</string>
     <string name="ai_no_model_match">No models match</string>
     <string name="ai_add_model_manually">Add Model Manually</string>

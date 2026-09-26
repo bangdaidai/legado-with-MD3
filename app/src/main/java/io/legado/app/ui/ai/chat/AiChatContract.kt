@@ -68,7 +68,9 @@ data class AiChatModelItemUi(
     val modelProfileId: String,
     val providerName: String,
     val modelName: String,
-    val isSelected: Boolean
+    val isSelected: Boolean,
+    /** 原始能力 key（AiCapability 常量），选择器里映射成本地化标签展示 */
+    val capabilities: List<String> = emptyList()
 )
 
 sealed interface AiChatIntent {
