@@ -414,6 +414,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private suspend fun getPreDownloadChapter(
         book: Book,
         chapter: BookChapter,
+        allowAi: Boolean = true,
     ): PreDownloadChapter? {
         val content = BookHelp.getContent(book, chapter) ?: return null
         val contentProcessor = ContentProcessor.get(book.name, book.origin)
@@ -455,6 +456,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             paragraphs = readAloudChapter.canonicalSpeechParagraphs(splitByPage, splitPolicy),
             splitPolicy = splitPolicy,
             source = "预合成",
+            allowAi = allowAi,
         )
         val queue = runCatching { ReadAloudPlaybackQueue.from(plan).withChapterTitle(displayTitle) }
             .getOrDefault(ReadAloudPlaybackQueue.Empty)
@@ -473,6 +475,9 @@ class HttpReadAloudService : BaseReadAloudService(),
         val currentIdx = ReadBook.durChapterIndex
         val limit = readAloudSettings.audioPreDownloadNum
         val concurrency = readAloudSettings.ttsPreSynthesisConcurrency.coerceIn(1, 8)
+        // AI 预分析章数独立于音频预下载数：预算内的章用完整 AI 分析，之外的章
+        // 预合成只跑纯规则计划（纯本地零成本），避免一次起播连烧 10 次整章分析
+        val aiPreAnalysisChapters = readAloudSettings.speechAiPreAnalysisChapters.coerceIn(0, 3)
         var consecutiveFailures = 0
 
         try {
@@ -486,7 +491,11 @@ class HttpReadAloudService : BaseReadAloudService(),
                 }
                 val targetIndex = currentIdx + i
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
-                val prepared = getPreDownloadChapter(book, chapter) ?: continue
+                val prepared = getPreDownloadChapter(
+                    book = book,
+                    chapter = chapter,
+                    allowAi = i <= aiPreAnalysisChapters,
+                ) ?: continue
                 val chapterFailed = synthesizeChapterCues(prepared, httpTts, concurrency)
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }

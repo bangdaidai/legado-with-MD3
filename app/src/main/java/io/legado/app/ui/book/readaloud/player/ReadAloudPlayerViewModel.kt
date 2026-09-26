@@ -197,6 +197,14 @@ class ReadAloudPlayerViewModel(
                     }
                 }
 
+                ReadAloudConfigOption.SpeechAiPreAnalysisChapters -> {
+                    // AI 预分析章数独立于音频预下载数：预算内的章预合成用完整 AI 分析，
+                    // 之外的章只跑纯规则计划（纯本地），避免后台连烧十次整章分析
+                    readAloudSettingsGateway.update {
+                        it.copy(speechAiPreAnalysisChapters = value.toIntOrNull()?.coerceIn(0, 3) ?: 1)
+                    }
+                }
+
                 ReadAloudConfigOption.UseMultiSpeaker -> {
                     // 正在朗读时必须重启朗读服务才能换掉合成管线；
                     // 重启前记住页内位置，等服务真的回到 Idle 再重放，避免新旧管线叠音。
@@ -328,6 +336,7 @@ private fun toReadAloudSettingsUiState(
     readAloudStreamAudio = aloud.streamReadAloudAudio,
     speechAnalysisMode = aloud.speechAnalysisMode,
     speechAnalysisReasoningLevel = aloud.speechAnalysisReasoningLevel,
+    speechAiPreAnalysisChapters = aloud.speechAiPreAnalysisChapters,
     useMultiSpeaker = aloud.useMultiSpeaker,
     readAloudContentSplitMode = aloud.contentSplitMode,
     readAloudContentSplitSymbols = aloud.contentSplitSymbols,

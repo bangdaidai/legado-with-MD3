@@ -3165,7 +3165,12 @@
     <string name="speech_analysis_ai_summary">AI 综合理解分片边界、说话人和情感，速度较慢且可能产生模型费用</string>
     <string name="speech_analysis_ai_model_required">请先配置 AI 模型，再启用 AI 章节分片</string>
     <string name="speech_analysis_reasoning_level">分析推理级别</string>
-    <string name="speech_analysis_reasoning_level_summary">默认关闭。默认开启思考的模型（智谱 GLM、DeepSeek 等）只把内容放在推理字段里，会导致分析失败</string>
+    <string name="speech_ai_pre_analysis_chapters">AI 预分析章数</string>
+    <string name="speech_ai_pre_analysis_off">关闭</string>
+    <string name="speech_ai_pre_analysis_one">1 章</string>
+    <string name="speech_ai_pre_analysis_two">2 章</string>
+    <string name="speech_ai_pre_analysis_three">3 章</string>
+    <string name="speech_ai_pre_analysis_chapters_summary">预合成提前对后续几章执行较慢的 AI 说话人分析；超出数量的章只按规则预合成，等真实朗读到时再做 AI 分析</string>默认关闭。默认开启思考的模型（智谱 GLM、DeepSeek 等）只把内容放在推理字段里，会导致分析失败</string>
     <string name="use_multi_speaker">多角色朗读</string>
     <string name="use_multi_speaker_summary">为旁白、对话等不同角色使用不同音色</string>
     <string name="read_aloud_content_split_mode">内容划分方式</string>

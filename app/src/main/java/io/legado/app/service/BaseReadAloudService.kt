@@ -741,6 +741,7 @@ abstract class BaseReadAloudService : BaseService(),
         paragraphs: List<CanonicalSpeechParagraph>,
         splitPolicy: ContentSplitPolicy,
         source: String = "朗读",
+        allowAi: Boolean = true,
     ): List<SpeechPlanItem> {
         if (bookUrl.isEmpty() || !ReadConfig.useMultiSpeaker) {
             AppLog.putDebug("跳过多角色朗读计划 有书=${bookUrl.isNotEmpty()} 多角色开关=${ReadConfig.useMultiSpeaker}")
@@ -753,7 +754,10 @@ abstract class BaseReadAloudService : BaseService(),
                 bookUrl = bookUrl,
                 chapterIndex = chapterIndex,
                 paragraphs = paragraphs,
-                analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
+                // 预合成超出 AI 预分析配额的章降级为纯规则：规则分析纯本地零成本，
+                // 等真实朗读推进到该章时朗读轮次会再做 AI 分析并落库
+                analysisMode = if (!allowAi) SpeechAnalysisMode.Rule
+                else SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
                 analysisReasoningLevel = AiReasoningLevel.fromStorage(
                     ReadConfig.speechAnalysisReasoningLevel,
                     AiReasoningLevel.OFF,

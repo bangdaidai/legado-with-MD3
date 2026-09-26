@@ -165,7 +165,9 @@ class RefineSpeechWithAiUseCase(
         val bookUrl = analysisResult.analysis.bookUrl
         // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
         // 避免朗读与分镜页并发各自发一次 AI（竞态下冷却还没写入就都通过了检查）。
-        val guard = bookLocks.getOrPut(bookUrl) { Mutex() }
+        // 锁按"书+章"分粒度：全书一把锁会让预合成的第 8 章分析阻塞第 7 章的朗读分析
+        // （用户实测等 72 秒）；同章仍互斥（防朗读与分镜页并发重复分析）
+        val guard = bookLocks.getOrPut("$bookUrl#${analysisResult.analysis.chapterIndex}") { Mutex() }
         return guard.withLock {
             if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return@withLock analysisResult
             // 等锁期间（上一轮的分析在 NonCancellable 里还在跑）可能已把本章 AI 结果

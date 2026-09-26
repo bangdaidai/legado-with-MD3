@@ -87,6 +87,15 @@ data class ReadAloudSettings(
      * `reasoning_content` and the analysis fails, so thinking must be opted into explicitly.
      */
     val speechAnalysisReasoningLevel: String = AiReasoningLevel.OFF.storageValue,
+    /**
+     * 预合成为后续章节跑 AI 语音分析的章数上限（0-3，默认 1）。
+     *
+     * 预下载循环原本对后续 `audioPreDownloadNum`（默认 10）章全部触发 AI 分析——
+     * 每章 55-70 秒、占书级分析锁，结果是后台连烧 10 次调用、当前章排队，还频繁
+     * 被轮次取消刷日志。这里独立控制：预算内的章用完整 AI 分析，之外的章预合成
+     * 只用规则计划（纯本地），等真实朗读推进到该章时再做 AI 分析。
+     */
+    val speechAiPreAnalysisChapters: Int = 1,
     val useMultiSpeaker: Boolean = true,
     val defaultInterface: String = "classic",
     val contentSelectSpeakMode: Int = 0,
