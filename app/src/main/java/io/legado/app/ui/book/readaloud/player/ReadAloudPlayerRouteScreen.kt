@@ -31,6 +31,13 @@ fun ReadAloudPlayerRouteScreen(
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val playerTheme = rememberPlayerThemeOverride(playerState)
 
+    // 进页即重拍书目快照。没点过播放时朗读状态不翻转、换书/换章也不发那四类事件，
+    // 而胶囊叠层让这个单例 ViewModel 的订阅从不中断——不主动刷新，听书页就会停在
+    // 上一本（甚至上上一本）书的正文、封面和进度上。
+    LaunchedEffect(Unit) {
+        playerViewModel.onIntent(ReadAloudPlayerIntent.Refresh)
+    }
+
     LaunchedEffect(playerViewModel) {
         playerViewModel.effects.collectLatest { effect ->
             when (effect) {

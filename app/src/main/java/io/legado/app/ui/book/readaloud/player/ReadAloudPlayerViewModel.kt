@@ -264,8 +264,13 @@ class ReadAloudPlayerViewModel(
         bgMode: Int,
         sheet: ReadAloudPlayerSheet?,
     ): ReadAloudPlayerUiState {
+        // 服务没在跑（还没点过播放）时，会话里的进度和当前朗读句属于上一本书的残留，
+        // 不能拿来给本页正文定位：进度归零，当前句也不回退到旧会话的文本。
+        val readAloudRunning = BaseReadAloudService.isRun
+        val chapterPosition =
+            if (readAloudRunning) source.chapterPosition else 0
         val activeIndex = source.textLines.indexOfLast {
-            it.chapterPosition <= source.chapterPosition
+            it.chapterPosition <= chapterPosition
         }
         val chapters = source.chapters.map { chapter ->
             PlayerChapterUi(
@@ -287,15 +292,16 @@ class ReadAloudPlayerViewModel(
             chapterText = source.chapterText,
             textLines = source.textLines,
             activeTextLine = activeIndex,
-            currentText = source.textLines.getOrNull(activeIndex)?.text ?: source.playbackText,
+            currentText = source.textLines.getOrNull(activeIndex)?.text
+                ?: source.playbackText.takeIf { readAloudRunning }.orEmpty(),
             nextText = source.textLines.getOrNull(activeIndex + 1)?.text.orEmpty(),
-            chapterPosition = source.chapterPosition,
+            chapterPosition = chapterPosition,
             chapterLength = source.chapterLength,
             engineName = source.engineName,
             speakerName = source.speakerName,
             isPaused = source.isPaused,
             isPreparing = source.isPreparing,
-            readAloudRunning = BaseReadAloudService.isRun,
+            readAloudRunning = readAloudRunning,
             speed = source.speed,
             timerMinutes = source.timerMinutes,
             timerMode = source.timerMode,
