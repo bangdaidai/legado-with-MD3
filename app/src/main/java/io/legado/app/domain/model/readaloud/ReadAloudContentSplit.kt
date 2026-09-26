@@ -172,6 +172,9 @@ enum class ReadAloudSplitSymbol(val symbol: Char, val labelKey: String) {
  */
 object ReadAloudContentSplitter {
 
+    /** 闭合引号：句末标点后紧跟的收尾引号属于前一句，切分时不甩到下一单元 */
+    private val CLOSING_QUOTES = setOf('”', '’', '』', '」', '"')
+
     fun splitLines(
         semanticContent: String,
         policy: ContentSplitPolicy,
@@ -225,6 +228,9 @@ object ReadAloudContentSplitter {
             // 连续标点视为一个整体，切在同一单元末尾
             var end = index + 1
             while (end < text.length && text[end] in symbols) end++
+            // 句末标点后紧跟的闭合引号是前一句的收尾，必须留在同一单元：
+            // 否则 "对白。”" 会被切成 "对白。" + "”"，右引号单独成段
+            while (end < text.length && text[end] in CLOSING_QUOTES) end++
             result += ReadAloudSplitUnit(
                 text = text.substring(start, end),
                 chapterPosition = paragraph.chapterPosition + start,
