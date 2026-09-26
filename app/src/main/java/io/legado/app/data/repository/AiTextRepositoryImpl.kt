@@ -132,8 +132,6 @@ class AiTextRepositoryImpl(
         val model = request.model
         val recording = RecordingTrace(start)
         val suppressLog = request.suppressLog
-        // suppressLog 的调用方（工具感知生成）会自己合并落一条日志，这里不再格式化提示词
-        val promptForLog = if (suppressLog) null else formatAiPromptForLog(request.messages)
         // 事件在发给上层的同时留一份聚合，调用结束后写进 AI 日志
         val reasoningBuilder = StringBuilder()
         val outputBuilder = StringBuilder()
@@ -181,11 +179,11 @@ class AiTextRepositoryImpl(
                         cancelled = cancelled,
                         durationMillis = System.currentTimeMillis() - start,
                         error = logError,
-                        scenario = aiTaskSceneLabel(request.taskType),
+                        scenario = listOfNotNull(
+                            aiTaskSceneLabel(request.taskType),
+                            request.sourceLabel,
+                        ).joinToString(" · "),
                         steps = recording.steps,
-                        prompt = promptForLog,
-                        reasoning = reasoningBuilder.toString().truncateForLog().ifEmpty { null },
-                        output = outputBuilder.toString().truncateForLog().ifEmpty { null },
                     )
                 )
             }
