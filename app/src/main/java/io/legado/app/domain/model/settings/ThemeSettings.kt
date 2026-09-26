@@ -57,6 +57,16 @@ data class ThemeSettings(
     val largeContainerBackgroundImageDark: String? = null,
     val itemBackgroundImageLight: String? = null,
     val itemBackgroundImageDark: String? = null,
+    // 容器背景图的九宫格切分线（与高亮背景图同一口径：四角角块占比，CSV "npL,npR,npT,npB"）。
+    // null 表示未在切图编辑器里保存过：.9.png 走引导线自动探测，普通图保持整图平铺。
+    val largeContainerNineSliceLight: String? = null,
+    val largeContainerNineSliceDark: String? = null,
+    val itemNineSliceLight: String? = null,
+    val itemNineSliceDark: String? = null,
+    // 九宫格图案缩放：四角/四边图案按「原图像素 × scale，1px=1dp 基准」绘制，
+    // 不再跟随容器高度自动缩放；日/夜图共用（对齐高亮规则 bgImageScale 的先例）。
+    val largeContainerNineSliceScale: Float = 1f,
+    val itemNineSliceScale: Float = 1f,
     val enableContainerBackgroundImage: Boolean = false,
     val appColumnBackgroundOpacity: Int = 100,
     val glassCardBackgroundOpacity: Int = 100,
@@ -113,3 +123,35 @@ fun ThemeSettings.customColors(isDark: Boolean): ThemeCustomColors =
 
 fun ThemeSettings.hasBackgroundImage(isDark: Boolean): Boolean =
     if (isDark) !backgroundImageDark.isNullOrBlank() else !backgroundImageLight.isNullOrBlank()
+
+/**
+ * 容器背景九宫格的切分线，存的是四角角块占图宽/图高的比例（与 HighlightRule 的 np* 同语义）。
+ * 渲染时换算成 NinePatchDrawHelper 需要的绝对线位置：左线 = left，右线 = 1 - right。
+ */
+data class ContainerNineSlice(
+    val left: Float,
+    val right: Float,
+    val top: Float,
+    val bottom: Float,
+) {
+    val leftX: Float get() = left
+    val rightX: Float get() = 1f - right
+    val topY: Float get() = top
+    val bottomY: Float get() = 1f - bottom
+}
+
+/** 解析 CSV "npL,npR,npT,npB"；格式不符返回 null（按未切分处理） */
+fun parseContainerNineSlice(csv: String?): ContainerNineSlice? {
+    val parts = csv?.split(',')?.map { it.trim() } ?: return null
+    if (parts.size != 4) return null
+    val values = parts.map { it.toFloatOrNull() ?: return null }
+    return ContainerNineSlice(values[0], values[1], values[2], values[3])
+        .takeIf {
+            it.left in 0f..0.98f && it.right in 0f..0.98f &&
+                it.top in 0f..0.98f && it.bottom in 0f..0.98f
+        }
+}
+
+/** Float.toString 恒用小数点，不受设备 locale 影响，可直接 join */
+fun ContainerNineSlice.toCsv(): String =
+    listOf(left, right, top, bottom).joinToString(",")

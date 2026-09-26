@@ -838,29 +838,45 @@ fun ThemeConfigScreen(
             BackgroundImageTarget.Item -> theme.itemBackgroundImageDark
             null -> null
         },
-        extraOption = when (backgroundImageTarget) {
-            BackgroundImageTarget.App -> BackgroundImageExtraOption.Blur(
-                lightTitle = "日间背景图片虚化",
-                darkTitle = "夜间背景图片虚化",
-                lightValue = theme.backgroundImageBlurring,
-                darkValue = theme.backgroundImageDarkBlurring,
-                onLightChange = { value -> updateTheme { it.copy(backgroundImageBlurring = value) } },
-                onDarkChange = { value -> updateTheme { it.copy(backgroundImageDarkBlurring = value) } },
+        extraOptions = when (backgroundImageTarget) {
+            BackgroundImageTarget.App -> listOf(
+                BackgroundImageExtraOption.Blur(
+                    lightTitle = "日间背景图片虚化",
+                    darkTitle = "夜间背景图片虚化",
+                    lightValue = theme.backgroundImageBlurring,
+                    darkValue = theme.backgroundImageDarkBlurring,
+                    onLightChange = { value -> updateTheme { it.copy(backgroundImageBlurring = value) } },
+                    onDarkChange = { value -> updateTheme { it.copy(backgroundImageDarkBlurring = value) } },
+                )
             )
 
-            BackgroundImageTarget.LargeContainer -> BackgroundImageExtraOption.Opacity(
-                title = "大容器背景图透明度",
-                value = theme.appColumnBackgroundOpacity,
-                onValueChange = { value -> updateTheme { it.copy(appColumnBackgroundOpacity = value) } },
+            BackgroundImageTarget.LargeContainer -> listOf(
+                BackgroundImageExtraOption.Opacity(
+                    title = "大容器背景图透明度",
+                    value = theme.appColumnBackgroundOpacity,
+                    onValueChange = { value -> updateTheme { it.copy(appColumnBackgroundOpacity = value) } },
+                ),
+                BackgroundImageExtraOption.NineScale(
+                    title = "图案大小",
+                    value = theme.largeContainerNineSliceScale,
+                    onValueChange = { value -> updateTheme { it.copy(largeContainerNineSliceScale = value) } },
+                ),
             )
 
-            BackgroundImageTarget.Item -> BackgroundImageExtraOption.Opacity(
-                title = "项目背景图透明度",
-                value = theme.glassCardBackgroundOpacity,
-                onValueChange = { value -> updateTheme { it.copy(glassCardBackgroundOpacity = value) } },
+            BackgroundImageTarget.Item -> listOf(
+                BackgroundImageExtraOption.Opacity(
+                    title = "项目背景图透明度",
+                    value = theme.glassCardBackgroundOpacity,
+                    onValueChange = { value -> updateTheme { it.copy(glassCardBackgroundOpacity = value) } },
+                ),
+                BackgroundImageExtraOption.NineScale(
+                    title = "图案大小",
+                    value = theme.itemNineSliceScale,
+                    onValueChange = { value -> updateTheme { it.copy(itemNineSliceScale = value) } },
+                ),
             )
 
-            null -> null
+            null -> emptyList()
         },
         onSelectLight = { useFilePicker -> requestImage(false, useFilePicker) },
         onSelectDark = { useFilePicker -> requestImage(true, useFilePicker) },

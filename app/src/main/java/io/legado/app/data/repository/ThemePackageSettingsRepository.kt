@@ -117,6 +117,19 @@ class ThemePackageSettingsRepository : ThemePackageSettingsGateway {
         ),
         itemBackgroundImageLight = AppConfigStore.getString(PreferKey.itemBackgroundImageLight),
         itemBackgroundImageDark = AppConfigStore.getString(PreferKey.itemBackgroundImageDark),
+        largeContainerNineSliceLight = AppConfigStore.getString(
+            PreferKey.largeContainerNineSliceLight
+        ),
+        largeContainerNineSliceDark = AppConfigStore.getString(
+            PreferKey.largeContainerNineSliceDark
+        ),
+        itemNineSliceLight = AppConfigStore.getString(PreferKey.itemNineSliceLight),
+        itemNineSliceDark = AppConfigStore.getString(PreferKey.itemNineSliceDark),
+        largeContainerNineSliceScale = float(
+            PreferKey.largeContainerNineSliceScale,
+            1f,
+        ),
+        itemNineSliceScale = float(PreferKey.itemNineSliceScale, 1f),
         enableContainerBackgroundImage = boolean(
             PreferKey.enableContainerBackgroundImage,
             false,
@@ -251,6 +264,15 @@ internal fun ThemeExportData.toPreferenceValues(): Map<String, Any?> {
                     data.largeContainerBackgroundImageDark,
                 PreferKey.itemBackgroundImageLight to data.itemBackgroundImageLight,
                 PreferKey.itemBackgroundImageDark to data.itemBackgroundImageDark,
+                PreferKey.largeContainerNineSliceLight to
+                    data.largeContainerNineSliceLight,
+                PreferKey.largeContainerNineSliceDark to
+                    data.largeContainerNineSliceDark,
+                PreferKey.itemNineSliceLight to data.itemNineSliceLight,
+                PreferKey.itemNineSliceDark to data.itemNineSliceDark,
+                PreferKey.largeContainerNineSliceScale to
+                    data.largeContainerNineSliceScale,
+                PreferKey.itemNineSliceScale to data.itemNineSliceScale,
                 PreferKey.enableContainerBackgroundImage to data.enableContainerBackgroundImage,
                 PreferKey.appColumnBackgroundOpacity to data.appColumnBackgroundOpacity,
                 PreferKey.glassCardBackgroundOpacity to data.glassCardBackgroundOpacity,

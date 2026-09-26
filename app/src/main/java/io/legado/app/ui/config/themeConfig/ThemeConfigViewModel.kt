@@ -11,8 +11,10 @@ import io.legado.app.domain.gateway.LabSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.settings.AppShellSettings
+import io.legado.app.domain.model.settings.ContainerNineSlice
 import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.ThemeSettings
+import io.legado.app.domain.model.settings.toCsv
 import io.legado.app.ui.main.MainDestination
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
@@ -160,6 +162,8 @@ class ThemeConfigViewModel(
                 target = intent.target,
                 dark = intent.dark,
             )
+            is ThemeConfigIntent.SaveContainerBackgroundNineSlice ->
+                saveContainerBackgroundNineSlice(intent)
             is ThemeConfigIntent.RemoveContainerBackground -> removeContainerBackground(
                 target = intent.target,
                 dark = intent.dark,
@@ -466,21 +470,66 @@ class ThemeConfigViewModel(
                     }
                 }
                 themeSettingsGateway.update { theme ->
+                    // 换图即作废旧切分线：与新图同一次 copy 原子提交，
+                    // 未再次在编辑器保存前，.9.png 走引导线自动探测、普通图整图平铺。
                     when (target) {
                         ContainerBackgroundTarget.LargeContainer -> if (dark) {
-                            theme.copy(largeContainerBackgroundImageDark = newPath)
+                            theme.copy(
+                                largeContainerBackgroundImageDark = newPath,
+                                largeContainerNineSliceDark = null,
+                            )
                         } else {
-                            theme.copy(largeContainerBackgroundImageLight = newPath)
+                            theme.copy(
+                                largeContainerBackgroundImageLight = newPath,
+                                largeContainerNineSliceLight = null,
+                            )
                         }
                         ContainerBackgroundTarget.Item -> if (dark) {
-                            theme.copy(itemBackgroundImageDark = newPath)
+                            theme.copy(
+                                itemBackgroundImageDark = newPath,
+                                itemNineSliceDark = null,
+                            )
                         } else {
-                            theme.copy(itemBackgroundImageLight = newPath)
+                            theme.copy(
+                                itemBackgroundImageLight = newPath,
+                                itemNineSliceLight = null,
+                            )
                         }
                     }
                 }
                 deleteOwnedBackground(oldPath, newPath)
+                _effects.tryEmit(
+                    ThemeConfigEffect.OpenContainerNinePatchEditor(target, dark, newPath)
+                )
             }.onFailure(Throwable::printStackTrace)
+        }
+    }
+
+    /** 切图编辑器保存：把绝对线位置换算成四角占比 CSV 落库（与 HighlightRule 的 np* 同语义） */
+    private fun saveContainerBackgroundNineSlice(
+        intent: ThemeConfigIntent.SaveContainerBackgroundNineSlice,
+    ) {
+        val csv = ContainerNineSlice(
+            left = intent.left,
+            right = 1f - intent.right,
+            top = intent.top,
+            bottom = 1f - intent.bottom,
+        ).toCsv()
+        viewModelScope.launch {
+            themeSettingsGateway.update { theme ->
+                when (intent.target) {
+                    ContainerBackgroundTarget.LargeContainer -> if (intent.dark) {
+                        theme.copy(largeContainerNineSliceDark = csv)
+                    } else {
+                        theme.copy(largeContainerNineSliceLight = csv)
+                    }
+                    ContainerBackgroundTarget.Item -> if (intent.dark) {
+                        theme.copy(itemNineSliceDark = csv)
+                    } else {
+                        theme.copy(itemNineSliceLight = csv)
+                    }
+                }
+            }
         }
     }
 
@@ -513,17 +562,29 @@ class ThemeConfigViewModel(
                 when (target) {
                     ContainerBackgroundTarget.LargeContainer -> if (dark) {
                         oldPath = theme.largeContainerBackgroundImageDark
-                        theme.copy(largeContainerBackgroundImageDark = null)
+                        theme.copy(
+                            largeContainerBackgroundImageDark = null,
+                            largeContainerNineSliceDark = null,
+                        )
                     } else {
                         oldPath = theme.largeContainerBackgroundImageLight
-                        theme.copy(largeContainerBackgroundImageLight = null)
+                        theme.copy(
+                            largeContainerBackgroundImageLight = null,
+                            largeContainerNineSliceLight = null,
+                        )
                     }
                     ContainerBackgroundTarget.Item -> if (dark) {
                         oldPath = theme.itemBackgroundImageDark
-                        theme.copy(itemBackgroundImageDark = null)
+                        theme.copy(
+                            itemBackgroundImageDark = null,
+                            itemNineSliceDark = null,
+                        )
                     } else {
                         oldPath = theme.itemBackgroundImageLight
-                        theme.copy(itemBackgroundImageLight = null)
+                        theme.copy(
+                            itemBackgroundImageLight = null,
+                            itemNineSliceLight = null,
+                        )
                     }
                 }
             }

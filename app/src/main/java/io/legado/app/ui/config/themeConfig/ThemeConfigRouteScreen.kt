@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.constant.EventBus
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.config.ThemeConfigStore
+import io.legado.app.ui.widget.components.NinePatchEditorDialog
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.takePersistablePermissionSafely
@@ -35,6 +36,10 @@ fun ThemeConfigRouteScreen(
     var pendingBackgroundDark by remember { mutableStateOf(false) }
     var pendingContainerBackground by remember { mutableStateOf<ContainerBackgroundTarget?>(null) }
     var pendingUseFilePicker by remember { mutableStateOf(false) }
+    // 图片落盘完成后待弹出的九宫格切图编辑器（与高亮背景图共用同一对话框与规则）
+    var pendingNinePatchEditor by remember {
+        mutableStateOf<ThemeConfigEffect.OpenContainerNinePatchEditor?>(null)
+    }
 
     val fontFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -132,10 +137,51 @@ fun ThemeConfigRouteScreen(
                         backgroundImageLauncher.launch("image/*")
                     }
                 }
+                is ThemeConfigEffect.OpenContainerNinePatchEditor -> {
+                    pendingNinePatchEditor = effect
+                }
                 is ThemeConfigEffect.ShowToast -> context.toastOnUi(effect.stringRes)
             }
         }
     }
+
+    // 容器背景图九宫格切图编辑器：与高亮背景图同一对话框。
+    // 初始线位置优先取 .9.png 引导线自动探测值，探测不到时用对半偏内的默认线。
+    val ninePatchEditor = pendingNinePatchEditor
+    val ninePatchInitial = remember(ninePatchEditor) {
+        val auto = ninePatchEditor?.imagePath
+            ?.let { io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader.nineSliceFractions(it) }
+        floatArrayOf(
+            auto?.left ?: 0.25f,
+            auto?.let { 1f - it.right } ?: 0.75f,
+            auto?.top ?: 0.25f,
+            auto?.let { 1f - it.bottom } ?: 0.75f,
+        )
+    }
+    NinePatchEditorDialog(
+        show = ninePatchEditor != null,
+        imagePath = ninePatchEditor?.imagePath.orEmpty(),
+        initialLeft = ninePatchInitial[0],
+        initialRight = ninePatchInitial[1],
+        initialTop = ninePatchInitial[2],
+        initialBottom = ninePatchInitial[3],
+        onDismissRequest = { pendingNinePatchEditor = null },
+        onSave = { left, right, top, bottom ->
+            ninePatchEditor?.let { editor ->
+                viewModel.onIntent(
+                    ThemeConfigIntent.SaveContainerBackgroundNineSlice(
+                        target = editor.target,
+                        dark = editor.dark,
+                        left = left,
+                        right = right,
+                        top = top,
+                        bottom = bottom,
+                    )
+                )
+            }
+            pendingNinePatchEditor = null
+        },
+    )
 
     ThemeConfigScreen(
         state = state,

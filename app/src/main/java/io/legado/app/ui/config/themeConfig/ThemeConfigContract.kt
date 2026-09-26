@@ -82,6 +82,15 @@ sealed interface ThemeConfigIntent {
     data class RemoveBackground(val dark: Boolean) : ThemeConfigIntent
     data class RequestContainerBackgroundImage(val target: ContainerBackgroundTarget, val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigIntent
     data class SelectContainerBackground(val target: ContainerBackgroundTarget, val dark: Boolean, val uri: String) : ThemeConfigIntent
+    /** 切图编辑器保存：left/right/top/bottom 为从左/上数的绝对线位置（0~1），与共享对话框同口径 */
+    data class SaveContainerBackgroundNineSlice(
+        val target: ContainerBackgroundTarget,
+        val dark: Boolean,
+        val left: Float,
+        val right: Float,
+        val top: Float,
+        val bottom: Float,
+    ) : ThemeConfigIntent
     data class RemoveContainerBackground(
         val target: ContainerBackgroundTarget,
         val dark: Boolean,
@@ -106,5 +115,7 @@ sealed interface ThemeConfigEffect {
     data class OpenNavigationIcon(val destination: String) : ThemeConfigEffect
     data class OpenBackgroundImage(val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigEffect
     data class OpenContainerBackgroundImage(val target: ContainerBackgroundTarget, val dark: Boolean, val useFilePicker: Boolean = false) : ThemeConfigEffect
+    /** 图片复制入库完成后，弹出九宫格切图编辑器（imagePath 为落盘后的本地路径） */
+    data class OpenContainerNinePatchEditor(val target: ContainerBackgroundTarget, val dark: Boolean, val imagePath: String) : ThemeConfigEffect
     data class ShowToast(val stringRes: Int) : ThemeConfigEffect
 }

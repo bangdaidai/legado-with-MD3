@@ -33,8 +33,9 @@ import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
 import io.legado.app.ui.widget.components.text.AppText
+import kotlin.math.roundToInt
 
-/** 背景图片对应的额外选项：应用背景图为模糊，大容器/项目背景图为透明度。 */
+/** 背景图片对应的额外选项：应用背景图为模糊，大容器/项目背景图为透明度与九宫格图案缩放。 */
 sealed interface BackgroundImageExtraOption {
     data class Blur(
         val lightTitle: String,
@@ -50,6 +51,13 @@ sealed interface BackgroundImageExtraOption {
         val value: Int,
         val onValueChange: (Int) -> Unit,
     ) : BackgroundImageExtraOption
+
+    /** 九宫格图案缩放：100% = 原图像素按 1px=1dp 绘制四角/四边图案 */
+    data class NineScale(
+        val title: String,
+        val value: Float,
+        val onValueChange: (Float) -> Unit,
+    ) : BackgroundImageExtraOption
 }
 
 /**
@@ -64,7 +72,7 @@ fun BackgroundImageManageSheet(
     title: String,
     lightPath: String?,
     darkPath: String?,
-    extraOption: BackgroundImageExtraOption? = null,
+    extraOptions: List<BackgroundImageExtraOption> = emptyList(),
     onSelectLight: (useFilePicker: Boolean) -> Unit,
     onSelectDark: (useFilePicker: Boolean) -> Unit,
     onRemoveLight: () -> Unit,
@@ -110,40 +118,51 @@ fun BackgroundImageManageSheet(
                 )
             }
 
-            when (val option = extraOption) {
-                is BackgroundImageExtraOption.Blur -> {
-                    if (!lightPath.isNullOrBlank()) {
+            extraOptions.forEach { option ->
+                when (option) {
+                    is BackgroundImageExtraOption.Blur -> {
+                        if (!lightPath.isNullOrBlank()) {
+                            SliderSettingItem(
+                                title = option.lightTitle,
+                                value = option.lightValue.toFloat(),
+                                defaultValue = 0f,
+                                valueRange = 0f..100f,
+                                onValueChange = { option.onLightChange(it.toInt()) },
+                            )
+                        }
+                        if (!darkPath.isNullOrBlank()) {
+                            SliderSettingItem(
+                                title = option.darkTitle,
+                                value = option.darkValue.toFloat(),
+                                defaultValue = 0f,
+                                valueRange = 0f..100f,
+                                onValueChange = { option.onDarkChange(it.toInt()) },
+                            )
+                        }
+                    }
+
+                    is BackgroundImageExtraOption.Opacity -> {
                         SliderSettingItem(
-                            title = option.lightTitle,
-                            value = option.lightValue.toFloat(),
-                            defaultValue = 0f,
+                            title = option.title,
+                            description = "${option.value}%",
+                            value = option.value.toFloat(),
+                            defaultValue = 100f,
                             valueRange = 0f..100f,
-                            onValueChange = { option.onLightChange(it.toInt()) },
+                            onValueChange = { option.onValueChange(it.toInt()) },
                         )
                     }
-                    if (!darkPath.isNullOrBlank()) {
+
+                    is BackgroundImageExtraOption.NineScale -> {
                         SliderSettingItem(
-                            title = option.darkTitle,
-                            value = option.darkValue.toFloat(),
-                            defaultValue = 0f,
-                            valueRange = 0f..100f,
-                            onValueChange = { option.onDarkChange(it.toInt()) },
+                            title = option.title,
+                            description = "${(option.value * 100).roundToInt()}%",
+                            value = option.value,
+                            defaultValue = 1f,
+                            valueRange = 0.25f..4f,
+                            onValueChange = option.onValueChange,
                         )
                     }
                 }
-
-                is BackgroundImageExtraOption.Opacity -> {
-                    SliderSettingItem(
-                        title = option.title,
-                        description = "${option.value}%",
-                        value = option.value.toFloat(),
-                        defaultValue = 100f,
-                        valueRange = 0f..100f,
-                        onValueChange = { option.onValueChange(it.toInt()) },
-                    )
-                }
-
-                null -> Unit
             }
         }
     }
