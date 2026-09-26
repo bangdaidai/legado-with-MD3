@@ -3225,12 +3225,7 @@
     <string name="speech_analysis_ai_summary">AI understands boundaries, speakers and emotions; slower and may incur model costs</string>
     <string name="speech_analysis_ai_model_required">Configure an AI model before enabling AI chapter segmentation</string>
     <string name="speech_analysis_reasoning_level">Analysis reasoning</string>
-    <string name="speech_ai_pre_analysis_chapters">AI pre-analysis chapters ahead</string>
-    <string name="speech_ai_pre_analysis_off">Off</string>
-    <string name="speech_ai_pre_analysis_one">1 chapter</string>
-    <string name="speech_ai_pre_analysis_two">2 chapters</string>
-    <string name="speech_ai_pre_analysis_three">3 chapters</string>
-    <string name="speech_ai_pre_analysis_chapters_summary">How many chapters ahead the pre-synthesis may run the (slow) AI speaker analysis. Extra chapters fall back to the local rule plan and are re-analyzed when actually played</string>Off by default. Models that think by default (Zhipu GLM, DeepSeek, …) return the answer only in the reasoning field, which makes analysis fail</string>
+    <string name="speech_analysis_reasoning_level_summary">Off by default. Models that think by default (Zhipu GLM, DeepSeek, …) return the answer only in the reasoning field, which makes analysis fail</string>
     <string name="use_multi_speaker">Multi-speaker reading</string>
     <string name="use_multi_speaker_summary">Use different voices for narration, dialogue and other roles</string>
     <string name="read_aloud_content_split_mode">Content split</string>

@@ -310,7 +310,6 @@ object PreferKey {
     const val contentSelectSpeakMod = "contentReadAloudMod"
     const val speechAnalysisMode = "speechAnalysisMode"
     const val speechAnalysisReasoningLevel = "speechAnalysisReasoningLevel"
-    const val speechAiPreAnalysisChapters = "speechAiPreAnalysisChapters"
     const val useMultiSpeaker = "useMultiSpeaker"
     const val themePref = "themePref"
     const val bookshelfSortOrder = "bookshelfSortOrder"

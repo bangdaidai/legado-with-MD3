@@ -278,23 +278,6 @@ fun ReadAloudConfigContent(
                         },
                     )
                     TinyDropdownSettingItem(
-                        title = stringResource(R.string.speech_ai_pre_analysis_chapters),
-                        selectedValue = state.speechAiPreAnalysisChapters.toString(),
-                        displayEntries = arrayOf(
-                            stringResource(R.string.speech_ai_pre_analysis_off),
-                            stringResource(R.string.speech_ai_pre_analysis_one),
-                            stringResource(R.string.speech_ai_pre_analysis_two),
-                            stringResource(R.string.speech_ai_pre_analysis_three),
-                        ),
-                        entryValues = arrayOf("0", "1", "2", "3"),
-                        description = stringResource(
-                            R.string.speech_ai_pre_analysis_chapters_summary
-                        ),
-                        onValueChange = {
-                            onIntent(ReadAloudConfigIntent.SetSpeechAiPreAnalysisChapters(it.toInt()))
-                        },
-                    )
-                    TinyDropdownSettingItem(
                         title = stringResource(R.string.read_aloud_content_split_mode),
                         selectedValue = state.readAloudContentSplitMode,
                         displayEntries = arrayOf(

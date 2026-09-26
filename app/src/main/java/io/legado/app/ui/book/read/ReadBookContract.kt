@@ -312,7 +312,6 @@ data class ReadBookUiState(
     val readAloudTimerChapters: Int = 0,
     val speechAnalysisMode: String = "rule",
     val speechAnalysisReasoningLevel: String = AiReasoningLevel.OFF.storageValue,
-    val speechAiPreAnalysisChapters: Int = 1,
     val useMultiSpeaker: Boolean = true,
     val defaultReadAloudInterface: String = ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC,
     val readAloudParagraphInterval: Int = 0,

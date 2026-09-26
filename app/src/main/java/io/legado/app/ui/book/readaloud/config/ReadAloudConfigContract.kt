@@ -39,7 +39,6 @@ sealed interface ReadAloudConfigIntent {
     /** 对话朗读分析模式；非规则模式需要已配置的 AI 模型。 */
     data class SetSpeechAnalysisMode(val value: String) : ReadAloudConfigIntent
     data class SetSpeechAnalysisReasoningLevel(val value: String) : ReadAloudConfigIntent
-    data class SetSpeechAiPreAnalysisChapters(val value: Int) : ReadAloudConfigIntent
 
     /** [value] 是 [ReadAloudContentSplitSetting.encode] 的 `方式|标点` 编码。 */
     data class SetContentSplitMode(val value: String) : ReadAloudConfigIntent
