@@ -134,6 +134,7 @@ class ReadBookController(
     val activity: AppCompatActivity,
     val viewModel: ReadBookViewModel,
     private val readerSessionViewModel: ReaderSessionViewModel,
+    routeBookUrl: String? = null,
 ) : ReadBookRouteHost,
     ReadBookInputHandler,
     ReadBook.ReaderRenderCallback {
@@ -149,6 +150,14 @@ class ReadBookController(
     // Fallback handler for effects not yet migrated to controller
     var onUnhandledEffect: (ReadBookEffect) -> Unit = {}
     var onClose: (() -> Unit)? = null
+
+    /**
+     * 跨书入场闸：本路由要打开的书。全局 ReadBook 单例在退出上一本书时不清理,
+     * 入场发布读到的还是上一本书的正文窗口,会被直接分页上屏——即"点进新书先闪
+     * 旧书内容"。正文窗口的归属书与本值一致前只发加载占位,一致后自动摘闸;
+     * 路由初始化完成时兜底摘闸(书不存在等回退旧行为的场景不能永远卡在加载页)。
+     */
+    private var pendingEntranceBookUrl: String? = routeBookUrl?.takeIf { it.isNotBlank() }
 
     // Page state — moved from Activity
     var pageChanged: Boolean = false
@@ -1291,6 +1300,18 @@ class ReadBookController(
     ): Boolean {
         val contentPadding = layoutController.viewport.value?.contentPadding ?: ReaderPadding()
         val inputWindow = ReadBook.readerChapterInputWindow
+        val pendingEntrance = pendingEntranceBookUrl
+        if (pendingEntrance != null) {
+            val contentBookUrl = inputWindow.current?.book?.bookUrl ?: ReadBook.book?.bookUrl
+            if (contentBookUrl == pendingEntrance) {
+                pendingEntranceBookUrl = null
+            } else {
+                // 要分页的还是上一本书的正文:不发真实页、也不登记身份,只顶一个加载占位;
+                // 新书 resetData/首章落地后的下一次发布自然过闸。
+                publishLoadingReaderWindowUnlessReal("跨书入场")
+                return false
+            }
+        }
         guardDirectReaderPagesBookIdentity()
         val chapter = inputWindow.current ?: run {
             // 内容未装载（进入书籍/目录跳转装载中）：发布"加载中"占位页窗口，让
@@ -1866,6 +1887,9 @@ class ReadBookController(
     }
 
     fun onRouteInitialized() {
+        // 初始化已走完:若正文归属仍与路由请求不符(书不存在、回退到 ReadBook.book 等),
+        // 不能再把画面永远拦在加载页,摘闸回到原有行为。
+        pendingEntranceBookUrl = null
         applyReadBrightness()
         upScreenTimeOut()
     }

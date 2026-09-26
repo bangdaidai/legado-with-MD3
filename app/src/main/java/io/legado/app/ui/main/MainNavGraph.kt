@@ -796,6 +796,7 @@ fun MainActivity.mainEntryProvider(
                 this@mainEntryProvider,
                 readBookViewModel,
                 readerSessionViewModel,
+                routeBookUrl = route.bookUrl,
             )
         }
         // Canvas 阅读面在首次组合时就会请求分页，必须先告诉 ViewModel 本路由要打开哪本书。
