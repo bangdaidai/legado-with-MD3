@@ -27,6 +27,9 @@ import io.legado.app.domain.model.readaloud.SpeechEmotion
 import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.readaloud.SPEAKER_DIALOGUE_FEMALE_NAME
+import io.legado.app.domain.model.readaloud.SPEAKER_DIALOGUE_MALE_NAME
+import io.legado.app.domain.model.readaloud.dialogueFallbackName
 import io.legado.app.help.readaloud.segment.AiSpeechAtom
 import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.utils.GSON
@@ -264,9 +267,11 @@ class RefineSpeechWithAiUseCase(
             }
             // 落库同样不随轮次取消中断：结果落了库，补发轮/下次重听才能命中缓存
             withContext(NonCancellable) {
-                // 相邻同说话人的片段合并成一段（原文一句对话一段，逐句出卡片又碎又难看；
-                // 合并后听书页与分镜页按“说话人连续台词”呈现，朗读停顿也随之减少）
-                val refined = mergeSameSpeakerSegments(refined)
+                // 先做对白兜底性别补全（路人泛称编码成虚拟说话人 + 邻接称呼传播），
+                // 再合并相邻同说话人片段（合并依赖虚拟名一致）——原文（书源）普遍按
+                // “一句对话一个段落”切，合并后听书页与分镜页按“说话人连续台词”呈现，
+                // 朗读停顿也随之减少
+                val refined = mergeSameSpeakerSegments(withDialogueGenderFallback(refined))
                 val status = if (refined.any { segment ->
                         segment.characterId == null && segment.roleType in setOf(
                             SpeechRoleType.Character,
@@ -309,9 +314,53 @@ class RefineSpeechWithAiUseCase(
     }
 
     /**
+     * 邻接称呼性别传播（对齐 legado_NG 的 applyAdjacentGenderEvidence）。
+     *
+     * 泛称段的性别编码（characterName =「对白男/对白女」）在 [completeRuleSegments] /
+     * [understandAtoms] 生成段时已完成；这里补第二种证据：前一段台词以性别称呼开头
+     * （「小妹妹你以后会……」）而当前段完全未知时，称呼指的就是当前说话人——
+     * 把它的性别传播给当前段。只补 characterId、characterName 均空的段，
+     * 已有角色归属或已带虚拟名的段落不动。
+     */
+    private fun withDialogueGenderFallback(
+        segments: List<ChapterSpeechSegment>,
+    ): List<ChapterSpeechSegment> {
+        if (segments.size < 2) return segments
+        val result = segments.toMutableList()
+        var propagated = 0
+        for (index in 1 until result.size) {
+            val previous = result[index - 1]
+            val current = result[index]
+            if (previous.roleType !in SPOKEN_ROLE_TYPES ||
+                current.roleType !in SPOKEN_ROLE_TYPES
+            ) continue
+            // 只补完全未知的段：已有角色归属或已带虚拟名的段落不动
+            if (current.characterId != null || current.characterName.isNotBlank()) continue
+            if (current.paragraphIndex - previous.paragraphIndex !in 0..1) continue
+            // 前一段台词以性别称呼开头（「小妹妹你以后会……」的下一段回答就是「小妹妹」）
+            // 时，称呼指的就是当前说话人——NG 同款邻接性别证据
+            val cue = previous.text.trimStart { it.isWhitespace() || it in "“”‘’\"'" }
+            val address = (FEMALE_ADDRESSES + MALE_ADDRESSES).firstOrNull(cue::startsWith)
+                ?: continue
+            val gender = if (address in FEMALE_ADDRESSES) "female" else "male"
+            val speaker = dialogueFallbackName(gender).orEmpty()
+            result[index] = current.copy(characterName = speaker)
+            propagated++
+            AppLog.putDebug(
+                "对白兜底：前段称呼“$address”把第 ${current.paragraphIndex + 1} 段归为「$speaker」"
+            )
+        }
+        if (propagated > 0) {
+            AppLog.putDebug("对白兜底：本章邻接称呼传播 $propagated 段")
+        }
+        return result
+    }
+
+    /**
      * 相邻同说话人的片段合并：原文（书源）普遍按“一句对话一个段落”切，逐段出卡片
      * 会把一段连续台词拆成七八张。只合并章内无缝且说话人明确的相邻段——
-     * 说话人未识别（characterId=null）的段落不合，避免把两个人的对话错成一人；
+     * 两个都未绑定但 AI 给了同一稳定称呼（含「对白男/对白女」虚拟说话人）的段落
+     * 也合并（NG 同款：规范名相同即同一说话人）；
      * 用户手动锁定的段不动。
      */
     private fun mergeSameSpeakerSegments(
@@ -319,6 +368,7 @@ class RefineSpeechWithAiUseCase(
     ): List<ChapterSpeechSegment> {
         if (segments.size < 2) return segments
         val result = mutableListOf<ChapterSpeechSegment>()
+        var merged = 0
         segments.forEach { segment ->
             val previous = result.lastOrNull()
             val seamless =
@@ -332,11 +382,17 @@ class RefineSpeechWithAiUseCase(
             val sameCharacter = segment.characterId != null &&
                 segment.characterId == previous?.characterId &&
                 previous.roleType != SpeechRoleType.Narrator
+            val sameNamedSpeaker = segment.characterId == null &&
+                previous?.characterId == null &&
+                segment.characterName.isNotBlank() &&
+                segment.characterName == previous.characterName &&
+                previous.roleType != SpeechRoleType.Narrator
             if (
                 previous != null &&
-                seamless && (isPunctuationFragment || sameNarrator || sameCharacter) &&
+                seamless && (isPunctuationFragment || sameNarrator || sameCharacter || sameNamedSpeaker) &&
                 !previous.userLocked && !segment.userLocked
             ) {
+                merged++
                 result[result.lastIndex] = previous.copy(
                     end = segment.end,
                     text = previous.text + segment.text,
@@ -347,6 +403,9 @@ class RefineSpeechWithAiUseCase(
             } else {
                 result += segment
             }
+        }
+        if (merged > 0) {
+            AppLog.putDebug("同说话人合并：本章 $merged 处（${segments.size} 段 → ${result.size} 段）")
         }
         return result
     }
@@ -473,10 +532,27 @@ class RefineSpeechWithAiUseCase(
             val roleType = decision.roleType
             val character = decision.characterId?.let(profilesById::get)
                 ?: decision.speakerName?.trim()?.let(profilesByName::get)
+            // AI 确认是人物声音但没归属到任何角色（路人泛称）时，把性别编码成虚拟
+            // 说话人名（「对白男/对白女」）：音色计划据此走对白兜底绑定，不建角色卡
+            val fallbackName = if (character == null) {
+                dialogueFallbackName(decision.speakerGender)
+            } else {
+                null
+            }
+            if (fallbackName != null) {
+                AppLog.putDebug(
+                    "对白兜底：「${decision.speakerGender}」泛称说话人记为「$fallbackName」" +
+                        "（${segment.text.take(12)}…）"
+                )
+            }
             segment.copy(
                 roleType = roleType,
                 characterId = if (roleType == SpeechRoleType.Narrator) null else character?.id,
-                characterName = if (roleType == SpeechRoleType.Narrator) "" else character?.name.orEmpty(),
+                characterName = when {
+                    roleType == SpeechRoleType.Narrator -> ""
+                    character != null -> character.name
+                    else -> fallbackName.orEmpty()
+                },
                 emotion = decision.emotion,
                 confidence = decision.confidence,
                 source = SpeechResolutionSource.Ai,
@@ -642,6 +718,18 @@ class RefineSpeechWithAiUseCase(
                 val paragraph = paragraphs.first { it.index == first.paragraphIndex }
                 val character = group.characterId?.let(profilesById::get)
                     ?: group.speakerName?.trim()?.let(profilesByName::get)
+                // AI 确认是人物声音但没归属到任何角色（路人泛称）时，把性别编码成
+                // 虚拟说话人名（「对白男/对白女」）：音色计划据此走对白兜底绑定
+                val fallbackName = if (character == null) {
+                    dialogueFallbackName(group.speakerGender)
+                } else {
+                    null
+                }
+                if (fallbackName != null) {
+                    AppLog.putDebug(
+                        "对白兜底：「${group.speakerGender}」泛称说话人记为「$fallbackName」"
+                    )
+                }
                 result += ChapterSpeechSegment(
                     id = SpeechIdentity.segmentId(
                         analysisId = analysisResult.analysis.id,
@@ -659,7 +747,11 @@ class RefineSpeechWithAiUseCase(
                     text = paragraph.text.substring(first.start, last.end),
                     roleType = group.roleType,
                     characterId = if (group.roleType == SpeechRoleType.Narrator) null else character?.id,
-                    characterName = if (group.roleType == SpeechRoleType.Narrator) "" else character?.name.orEmpty(),
+                    characterName = when {
+                        group.roleType == SpeechRoleType.Narrator -> ""
+                        character != null -> character.name
+                        else -> fallbackName.orEmpty()
+                    },
                     emotion = group.emotion,
                     confidence = group.confidence,
                     source = SpeechResolutionSource.Ai,
@@ -814,22 +906,13 @@ class RefineSpeechWithAiUseCase(
             preset.taskType == AiTaskType.ANALYZE_SPEECH && it.isNotBlank()
         }
         return buildString {
+            // 主体（角色设定 + 归因规则）：默认来自 NG 对齐版，用户在提示词预设里
+            // 保存过则整段覆盖；输出 JSON 契约必须与解析器严格一致，永远由代码追加
             append(custom ?: DEFAULT_PROMPT)
-            append("\nReturn only one JSON object. Never rewrite text and never invent IDs.")
-            append(SPEAKER_RULES)
             if (mode == SpeechAnalysisMode.RuleWithAi) {
-                append("\nReturn {\"segments\":[{\"segmentId\":string,\"roleType\":")
-                append("\"narrator|character|thought|unknown\",\"characterId\":string|null,")
-                append("\"speakerName\":string|null,\"speakerGender\":\"male|female|unknown\",")
-                append("\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\",")
-                append("\"confidence\":number}]}. Return one decision for every input segment.")
+                append(SEGMENT_SCHEMA_RULES)
             } else {
-                append("\nGroup every atom exactly once and in input order. Groups cannot cross paragraphs.")
-                append("\nReturn {\"segments\":[{\"atomIds\":[string],\"roleType\":")
-                append("\"narrator|character|thought|unknown\",\"characterId\":string|null,")
-                append("\"speakerName\":string|null,\"speakerGender\":\"male|female|unknown\",")
-                append("\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\",")
-                append("\"confidence\":number}]}.")
+                append(ATOM_SCHEMA_RULES)
             }
         }
     }
@@ -882,7 +965,9 @@ class RefineSpeechWithAiUseCase(
 
     /** 正文给出的稳定称呼；泛称（大汉、老捕头之类）一律当路人，不建卡。 */
     private fun JsonObject.speakerName(): String? =
-        optionalString("speakerName")?.trim()?.takeIf { it.isNotBlank() && it.length <= 24 }
+        optionalString("speakerName")?.trim()?.takeIf {
+            it.isNotBlank() && it.length <= 24 && it !in VIRTUAL_SPEAKER_NAMES
+        }
 
     private fun JsonObject.speakerGender(): String {
         val value = optionalString("speakerGender")?.trim().orEmpty()
@@ -955,7 +1040,11 @@ class RefineSpeechWithAiUseCase(
     )
 
     companion object {
-        const val VERSION = "ai-speech-analysis-v2"
+        /**
+         * v3：提示词对齐 legado_NG（中文归因规则 + 泛称对白兜底），并新增虚拟说话人
+         * 编码与同名合并——旧分析缓存的结论与新版后处理不一致，整体失效重析。
+         */
+        const val VERSION = "ai-speech-analysis-v3"
 
         /**
          * 分块按输入文本长度切，块数决定章的 AI 请求数（3000 字章 1 块、1 万字章 2 块）。
@@ -989,31 +1078,83 @@ class RefineSpeechWithAiUseCase(
                 "text. Return only one JSON object: " +
                 "{\"scenes\":[{\"title\":string,\"segmentIds\":[string]}]}. " +
                 "Never rewrite text and never invent IDs."
-        private const val DEFAULT_PROMPT =
-            "Analyze fiction speech for text-to-speech. Distinguish narration, spoken dialogue, " +
-                "internal thought and unknown speech. Resolve speakers only from the supplied " +
-                "character IDs, infer emotion conservatively, and use null when uncertain."
 
         /**
-         * 说话人归因规则。要点：别名必须映射回已有身份、泛称当路人、性别必须有原文依据。
-         * 允许返回 characterId=null + speakerName，客户端会为它建一张草稿角色卡。
+         * 归因提示词主体，对齐 legado_NG 的 base-routing/protocol 提示词（中文、面向中文网文）。
+         * 提示词预设里保存的自定义内容会整段覆盖它；JSON 输出契约仍由 [SEGMENT_SCHEMA_RULES]
+         * / [ATOM_SCHEMA_RULES] 代码追加。strings.xml 的 ai_prompt_default_analyze_speech
+         * 是同一份文本（提示词配置页的默认值/重置目标），改这里必须同步改它。
          */
-        private const val SPEAKER_RULES =
-            "\nSpeaker attribution rules:" +
-                "\n- Prefer an existing characterId. Nicknames, online handles, titles and childhood " +
-                "names are labels of an existing person: if the text maps such a label to a known " +
-                "character, reuse that characterId instead of reporting a new speaker." +
-                "\n- When the speaker is clearly a person but matches no known character, set " +
-                "characterId to null and put the stable name, nickname or unique title in " +
-                "speakerName. The client will create a draft character for it." +
-                "\n- Generic labels such as a big man, a guard, an old constable, or a passer-by are " +
-                "not stable speakers: leave both characterId and speakerName null." +
-                "\n- speakerGender must be backed by explicit wording in the text such as a gendered " +
-                "pronoun or a gendered form of address. Names, surnames, titles and occupations are " +
-                "not gender evidence; return unknown instead of guessing." +
-                "\n- A high confidence value never substitutes for evidence." +
-                "\n- Narration and other non-person voices: characterId null, speakerName null, " +
-                "speakerGender unknown."
+        internal const val DEFAULT_PROMPT =
+            "你是中文网文有声书的分镜师。结合章节上下文，判断输入分段属于旁白、人物对白、" +
+                "人物心声还是其它内容，并确认说话人。客户端按你的结论为每段路由音色，" +
+                "你只做归因，不改写正文，也不返回正文。\n" +
+                "归因规则：\n" +
+                "1. 人物真正说出口的话用 character；人物脑内直接想法用 thought，" +
+                "心声主人由「某人心想、暗道、心里想」等提示语的主语确定。\n" +
+                "2. 动作、叙述、环境、标题、日期、书信、黑板文字、拟声词用 narrator。" +
+                "引号不等于人物声音：嵌在完整叙述句里的回想、复述、概括或对某句话的指称用 narrator，" +
+                "例如“那句‘靠你了’总往她心窝子钻”。只有人物此刻真正开口、独立呈现的原话才用 character。\n" +
+                "3. 说话人以发言动词、动作承接、声音说明、上下文主语和连续对话关系为依据。" +
+                "被提到、被称呼、被看见或被想到的人不等于说话人。\n" +
+                "4. 先匹配 characters 里的 characterId。网名、昵称、账号名、群名片、代号、乳名和" +
+                "外号首先是已有人物的身份标签：正文出现「X 是 Y 的网名/昵称」或「哦，是 Y」等" +
+                "明确映射时，必须复用 Y 的 characterId，不得为 X 另立说话人。\n" +
+                "5. 说话人是明确的人但没命中任何已有角色时：characterId 留空，把稳定称呼" +
+                "（姓名、外号、唯一称谓）写进 speakerName，客户端会为它建临时角色。" +
+                "即使这个人物只出现一场，只要有稳定称呼也要写；不确定就留空，不要编造。\n" +
+                "6. 「大汉」「侍卫」「老捕头」「下属」这类一次性职业、群体或外貌泛称是路人：" +
+                "characterId 与 speakerName 都留空。但路人只要是人物声音，性别能确认就写 " +
+                "male/female，客户端会用对白兜底音色发声，不要因为身份未知就把对白吞成旁白。\n" +
+                "7. speakerGender 只在正文有依据时返回 male/female：明确性别代词（她/他）、" +
+                "性别称呼（小姐、公子、夫人、姑娘、大哥、小妹妹）、「我叫……」类自述都是依据；" +
+                "姓名和职业本身不是证据。输出前复核每个 male/female 能否引用到正文线索，" +
+                "找不到就写 unknown，不要为了选音瞎猜；也尽量把称呼、代词提供的线索找尽，" +
+                "不要轻易留 unknown。\n" +
+                "8. 无法确认是人物声音时才按 narrator 处理；不得因为说话人身份或性别未知" +
+                "而吞掉已确认的对白。\n" +
+                "9. emotion 只在文本有明确语气线索时给，不确定写 neutral；confidence 如实反映" +
+                "证据强度，高置信度永远不能代替证据。"
+
+        /** 分段复核模式的 JSON 输出契约，必须与 [parseSegmentDecisions] 的解析严格一致 */
+        private const val SEGMENT_SCHEMA_RULES =
+            "\n只返回一个 JSON 对象，不要 Markdown 与解释，不要发明 ID：" +
+                "\n{\"segments\":[{\"segmentId\":\"输入中的 ID\",\"roleType\":" +
+                "\"narrator|character|thought|unknown\",\"characterId\":\"characters 中的 ID 或 null\"," +
+                "\"speakerName\":\"稳定称呼或 null\",\"speakerGender\":\"male|female|unknown\"," +
+                "\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\"," +
+                "\"confidence\":0.88}]}。" +
+                "每个输入分段必须返回且只返回一条决策。"
+
+        /** 原子理解模式的 JSON 输出契约，必须与 [parseAtomGroups] 的解析严格一致 */
+        private const val ATOM_SCHEMA_RULES =
+            "\n只返回一个 JSON 对象，不要 Markdown 与解释，不要发明 ID：" +
+                "\n{\"segments\":[{\"atomIds\":[\"输入中的原子 ID\"],\"roleType\":" +
+                "\"narrator|character|thought|unknown\",\"characterId\":\"characters 中的 ID 或 null\"," +
+                "\"speakerName\":\"稳定称呼或 null\",\"speakerGender\":\"male|female|unknown\"," +
+                "\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\"," +
+                "\"confidence\":0.88}]}。" +
+                "每个原子必须恰好归入一组、按输入顺序分组；一组内的原子必须连续且同属一段，" +
+                "同一段里同一说话人的连续原子要并入同一组，不要拆碎。"
+
+        /** 会开口的角色类型（对白与心声），性别兜底/传播只作用于它们 */
+        private val SPOKEN_ROLE_TYPES = setOf(SpeechRoleType.Character, SpeechRoleType.Thought)
+
+        /** 虚拟说话人名不属于稳定称呼，AI 直接返回时也绝不据此建卡 */
+        private val VIRTUAL_SPEAKER_NAMES = setOf(
+            SPEAKER_DIALOGUE_MALE_NAME,
+            SPEAKER_DIALOGUE_FEMALE_NAME,
+        )
+
+        /** 邻接称呼传播的女性称呼（NG 同款表） */
+        private val FEMALE_ADDRESSES = listOf(
+            "小妹妹", "妹妹", "小姑娘", "姑娘", "小姐", "女士", "女侠", "夫人", "娘子",
+        )
+
+        /** 邻接称呼传播的男性称呼（NG 同款表） */
+        private val MALE_ADDRESSES = listOf(
+            "小弟弟", "弟弟", "小公子", "公子", "少爷", "先生", "小哥", "大哥", "大叔", "老爷",
+        )
     }
 }
 

@@ -1,5 +1,29 @@
 package io.legado.app.domain.model.readaloud
 
+/**
+ * 虚拟说话人（对齐 legado_NG 的 virtualSpeakerName / 对白兜底）。
+ *
+ * AI 确认某段是人物声音、但说话人是「大汉」「侍卫」这类路人泛称时不建角色卡，
+ * 只把性别用虚拟名承载在 segment.characterName 上：分镜页可见「对白男/对白女」，
+ * 音色计划据此走对白兜底绑定（unknown_male / unknown_female）。
+ */
+const val SPEAKER_DIALOGUE_MALE_NAME = "对白男"
+const val SPEAKER_DIALOGUE_FEMALE_NAME = "对白女"
+
+/** 性别 → 虚拟说话人名；性别未知返回 null。 */
+fun dialogueFallbackName(gender: String): String? = when (gender) {
+    "male" -> SPEAKER_DIALOGUE_MALE_NAME
+    "female" -> SPEAKER_DIALOGUE_FEMALE_NAME
+    else -> null
+}
+
+/** 虚拟说话人名 → 性别；不是虚拟名返回 null。 */
+fun dialogueFallbackGender(name: String): String? = when (name) {
+    SPEAKER_DIALOGUE_MALE_NAME -> "male"
+    SPEAKER_DIALOGUE_FEMALE_NAME -> "female"
+    else -> null
+}
+
 data class ReadAloudVoice(
     val id: String,
     val engineType: String,

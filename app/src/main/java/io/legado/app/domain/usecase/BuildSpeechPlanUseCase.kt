@@ -7,6 +7,7 @@ import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.readaloud.dialogueFallbackGender
 
 class BuildSpeechPlanUseCase(
     private val voiceGateway: ReadAloudVoiceGateway,
@@ -42,6 +43,10 @@ class BuildSpeechPlanUseCase(
             val roleVoice = performance?.roleSubject()?.let { subject ->
                 bindings.voice(subject, subject, voicesById)
             }
+            // 性别兜底：已知角色用角色卡的性别；未绑定角色的路人对白（characterId 为空）
+            // 用 AI 结论里编码的虚拟说话人（「对白男/对白女」）——NG 同款对白兜底
+            val segmentGender = performance?.resolvedGender()
+                ?: dialogueFallbackGender(segment.characterName)
             val primary = if (!useMultiSpeaker) {
                 // Multi-speaker disabled — every segment uses the default voice
                 defaultVoice
@@ -53,7 +58,7 @@ class BuildSpeechPlanUseCase(
                         voicesById,
                     )
                 }
-                val genderFallback = when (performance?.resolvedGender()) {
+                val genderFallback = when (segmentGender) {
                     "male" -> bindings.voice(
                         BookVoiceBinding.SUBJECT_UNKNOWN_MALE,
                         BookVoiceBinding.SUBJECT_UNKNOWN_MALE,
@@ -82,7 +87,7 @@ class BuildSpeechPlanUseCase(
                     if (segment.roleType != SpeechRoleType.Narrator) {
                         add(roleVoice)
                         add(
-                            when (performance?.resolvedGender()) {
+                            when (segmentGender) {
                                 "male" -> bindings.voice(
                                 BookVoiceBinding.SUBJECT_UNKNOWN_MALE,
                                 BookVoiceBinding.SUBJECT_UNKNOWN_MALE,
