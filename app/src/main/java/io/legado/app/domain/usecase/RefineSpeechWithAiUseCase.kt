@@ -329,24 +329,35 @@ class RefineSpeechWithAiUseCase(
                     )
                 },
             )
+            // 单块解析失败（JSON 被截断、字段非法等）只丢这一块的决策——对应段保留规则
+            // 结果，其他块照常生效；不再让一个坏块把整章作废回落规则。超时/取消照旧上抛。
+            val chunkDecisions = try {
+                parseSegmentDecisions(
+                    generate(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                AppLog.putDebug(
+                    "AI 语音复核分块解析失败，已跳过该块（${chunk.size} 段保留规则结果）：${e.message}"
+                )
+                emptyList()
+            }
             val chunkIds = chunk.mapTo(hashSetOf(), ChapterSpeechSegment::id)
-            parseSegmentDecisions(
-                generate(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
-            )
-                .forEach { decision ->
-                    // 轻量模型跑严格 JSON 契约时可能幻觉 id、重复返回或指向未知角色。
-                    // 坏决策只丢弃自己（对应段保留规则结果），不再让整章作废回落规则——
-                    // 整章回落会触发 10 分钟冷却，一次坏分块就废掉整本书的多角色。
-                    when {
-                        decision.segmentId !in chunkIds ->
-                            AppLog.putDebug("AI 语音复核返回未知 segmentId，丢弃该条: ${decision.segmentId}")
-                        updates.containsKey(decision.segmentId) ->
-                            AppLog.putDebug("AI 语音复核重复返回 segmentId，仅保留首条: ${decision.segmentId}")
-                        decision.characterId != null && profiles.none { it.id == decision.characterId } ->
-                            AppLog.putDebug("AI 语音复核返回未知 characterId，丢弃该条: ${decision.characterId}")
-                        else -> updates[decision.segmentId] = decision
-                    }
+            chunkDecisions.forEach { decision ->
+                // 轻量模型跑严格 JSON 契约时可能幻觉 id、重复返回或指向未知角色。
+                // 坏决策只丢弃自己（对应段保留规则结果），不再让整章作废回落规则——
+                // 整章回落会触发 10 分钟冷却，一次坏分块就废掉整本书的多角色。
+                when {
+                    decision.segmentId !in chunkIds ->
+                        AppLog.putDebug("AI 语音复核返回未知 segmentId，丢弃该条: ${decision.segmentId}")
+                    updates.containsKey(decision.segmentId) ->
+                        AppLog.putDebug("AI 语音复核重复返回 segmentId，仅保留首条: ${decision.segmentId}")
+                    decision.characterId != null && profiles.none { it.id == decision.characterId } ->
+                        AppLog.putDebug("AI 语音复核返回未知 characterId，丢弃该条: ${decision.characterId}")
+                    else -> updates[decision.segmentId] = decision
                 }
+            }
             // 不再要求 AI 覆盖全部候选段：漏答的段保留规则结果，并同样标记为已复核，
             // 避免每次重听都为它反复发请求；真正想重跑可在分镜页手动重新分析
         }
@@ -422,8 +433,12 @@ class RefineSpeechWithAiUseCase(
                 createdAt = now,
                 updatedAt = now,
             )
-            bookKnowledgeGateway.upsertCharacterProfile(profile)
-            created += profile
+            // 单张草稿卡写库失败（如并发唯一索引冲突）只跳过这张卡，不炸整章分析
+            runCatching { bookKnowledgeGateway.upsertCharacterProfile(profile) }
+                .onSuccess { created += profile }
+                .onFailure {
+                    AppLog.putDebug("草稿角色卡落库失败，已跳过：$trimmed\n${it.message}")
+                }
         }
         return profiles + created
     }
