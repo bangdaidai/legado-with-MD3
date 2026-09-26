@@ -9,6 +9,7 @@ import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.AiGenerateRequest
+import io.legado.app.domain.model.AiGenerateResponse
 import io.legado.app.domain.model.AiGenerationParams
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
@@ -323,7 +324,7 @@ class RefineSpeechWithAiUseCase(
          * 按 legado_NG 的做法对半拆成两块分别请求——每半的输出随之减半，递归到单段
          * 仍截断才放弃（该段保留规则结果），而不是把整章作废回落规则。
          */
-        fun processChunk(chunk: List<ChapterSpeechSegment>) {
+        suspend fun processChunk(chunk: List<ChapterSpeechSegment>) {
             val payload = mapOf(
                 "characters" to profiles.map { it.toPromptMap() },
                 "segments" to chunk.map { segment ->
@@ -391,7 +392,8 @@ class RefineSpeechWithAiUseCase(
             // 不再要求 AI 覆盖全部候选段：漏答的段保留规则结果，并同样标记为已复核，
             // 避免每次重听都为它反复发请求；真正想重跑可在分镜页手动重新分析
         }
-        candidates.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
+        val chunks = candidates.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }
+        for (chunk in chunks) {
             processChunk(chunk)
         }
         val allProfiles = ensureDraftProfiles(
