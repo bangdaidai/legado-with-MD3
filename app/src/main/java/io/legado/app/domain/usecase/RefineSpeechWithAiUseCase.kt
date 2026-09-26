@@ -522,17 +522,28 @@ class RefineSpeechWithAiUseCase(
         mode: SpeechAnalysisMode,
         payload: Any,
         reasoningLevel: AiReasoningLevel,
-    ): String = aiTextGateway.generate(
-        AiGenerateRequest(
-            model = preset.model,
-            messages = listOf(
-                AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode)),
-                AiMessage(AiMessageRole.USER, GSON.toJson(payload)),
-            ),
-            params = speechAnalysisParams(preset, reasoningLevel),
-            taskType = AiTaskType.ANALYZE_SPEECH,
-        )
-    ).getOrThrow().text
+    ): String {
+        // 待决策的分段/原子数量决定输出 JSON 的长度：每条决策（segmentId+UUID+枚举）
+        // 实测约 200-300 字符。按数量放大 max_tokens，否则长章的决策列表会在
+        // max_tokens 处被硬截断，JSON 断尾（EOF at $.segments[N]）解析必炸。
+        val decisionCount = when (payload) {
+            is Map<*, *> -> (payload["segments"] as? List<*>)?.size
+                ?: (payload["atoms"] as? List<*>)?.size
+                ?: 0
+            else -> 0
+        }
+        return aiTextGateway.generate(
+            AiGenerateRequest(
+                model = preset.model,
+                messages = listOf(
+                    AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode)),
+                    AiMessage(AiMessageRole.USER, GSON.toJson(payload)),
+                ),
+                params = speechAnalysisParams(preset, reasoningLevel, decisionCount),
+                taskType = AiTaskType.ANALYZE_SPEECH,
+            )
+        ).getOrThrow().text
+    }
 
     private suspend fun generateScenes(
         preset: AiTaskPresetConfig,
@@ -756,7 +767,14 @@ class RefineSpeechWithAiUseCase(
 
     companion object {
         const val VERSION = "ai-speech-analysis-v2"
-        private const val MAX_CHUNK_CHARS = 6_000
+
+        /**
+         * 分块按输入文本长度切。块越大、一次要返回的决策 JSON 越长——实测一整块
+         * （60+ 段）的决策输出会撞上 max_tokens 上限，JSON 在中途被硬截断
+         * （EOF at $.segments[N]），解析必炸。块小一点，单次输出就远离上限；
+         * 截断万一发生也只影响单块（分块解析有容错）。
+         */
+        private const val MAX_CHUNK_CHARS = 3_000
 
         private const val HYBRID_CONFIDENCE_THRESHOLD = 0.75f
         private const val DRAFT_SPEAKER_CONFIDENCE = 0.6f
@@ -817,17 +835,25 @@ class RefineSpeechWithAiUseCase(
  * on for every analysis: models that think by default (Zhipu GLM, DeepSeek) then spend the answer on
  * `reasoning_content` and the strict JSON contract of this task fails. AUTO keeps the presets in
  * charge, mirroring [io.legado.app.domain.usecase.IdentifyBookCharactersUseCase.identifyStream].
+ *
+ * [decisionCount]（待决策的分段/原子数）决定输出预算：决策 JSON 逐段枚举，分段多的章
+ * 输出远超固定下限，预算不足时模型在 max_tokens 处硬截断，JSON 断尾解析必炸。
  */
 internal fun speechAnalysisParams(
     preset: AiTaskPresetConfig,
     reasoningLevel: AiReasoningLevel,
+    decisionCount: Int = 0,
 ): AiGenerationParams = preset.params.copy(
     temperature = 0f,
     reasoningLevel = reasoningLevel
         .takeUnless { it == AiReasoningLevel.AUTO }
         ?: preset.params.reasoningLevel,
-    // 一块 6000 字要按段返回 JSON，输出上限低于这个数就会被截断
-    maxOutputTokens = maxOf(preset.params.maxOutputTokens ?: 0, MIN_OUTPUT_TOKENS),
+    maxOutputTokens = maxOf(
+        preset.params.maxOutputTokens ?: 0,
+        MIN_OUTPUT_TOKENS,
+        // 每条决策 JSON（hex segmentId + UUID + 枚举）按 250 tokens 留足余量
+        decisionCount * 250 + 2_000,
+    ).coerceAtMost(30_000),
 )
 
 private const val MIN_OUTPUT_TOKENS = 8_000
