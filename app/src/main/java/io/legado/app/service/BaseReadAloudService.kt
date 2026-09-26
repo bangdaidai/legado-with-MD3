@@ -740,6 +740,7 @@ abstract class BaseReadAloudService : BaseService(),
         chapterIndex: Int,
         paragraphs: List<CanonicalSpeechParagraph>,
         splitPolicy: ContentSplitPolicy,
+        source: String = "朗读",
     ): List<SpeechPlanItem> {
         if (bookUrl.isEmpty() || !ReadConfig.useMultiSpeaker) {
             AppLog.putDebug("跳过多角色朗读计划 有书=${bookUrl.isNotEmpty()} 多角色开关=${ReadConfig.useMultiSpeaker}")
@@ -759,6 +760,7 @@ abstract class BaseReadAloudService : BaseService(),
                 ),
                 useMultiSpeaker = ReadConfig.useMultiSpeaker,
                 policy = splitPolicy,
+                source = source,
             )
         }.onFailure {
             // 新一轮起播掐旧轮时也走到这里：取消不是失败，不得记"生成失败"再拿空计划继续——

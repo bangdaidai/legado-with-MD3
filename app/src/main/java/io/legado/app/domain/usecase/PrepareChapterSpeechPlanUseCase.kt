@@ -47,6 +47,8 @@ class PrepareChapterSpeechPlanUseCase(
         analysisReasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
         useMultiSpeaker: Boolean = true,
         policy: ContentSplitPolicy,
+        /** 发起者标注（朗读/预合成），进 AI 日志与回落提示，区分同一章的两条分析链 */
+        source: String = "朗读",
     ): List<SpeechPlanItem> {
         if (paragraphs.isEmpty()) return emptyList()
         val requestedMode = analysisMode
@@ -95,6 +97,7 @@ class PrepareChapterSpeechPlanUseCase(
                     mode = effectiveMode,
                     reasoningLevel = analysisReasoningLevel,
                     policy = policy,
+                    source = source,
                 )
             }.onSuccess {
                 lastNotifiedFallback = null
@@ -143,7 +146,7 @@ class PrepareChapterSpeechPlanUseCase(
      * 静默回落曾让用户以为 AI 生效了，听半天单角色才发现不对。
      */
     private fun notifyFallback(reason: String, error: Throwable, chapterIndex: Int? = null) {
-        val prefix = chapterIndex?.let { "第${it + 1}章 " }.orEmpty()
+        val prefix = chapterIndex?.let { "第${it + 1}章（$source）" }.orEmpty()
         val message = "$prefix$reason\n${error.describeError()}"
         val repeated = message == lastNotifiedFallback
         lastNotifiedFallback = message
