@@ -3,7 +3,6 @@ package io.legado.app.ui.widget.components
 import android.graphics.Bitmap
 import android.graphics.Paint
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -64,7 +63,8 @@ fun Modifier.appContainerBackground(
         null
     }
     val borderPx = if (isRawNinePatchPath(path)) 1f else 0f
-    val (ninePatchBitmap, nineSlice) by produceState<Pair<Bitmap?, ContainerNineSlice?>>(
+    // 局部解构不能用 `by` 委托（Kotlin 限制），先取 State 再解构它的值
+    val nineResolved = produceState<Pair<Bitmap?, ContainerNineSlice?>>(
         initialValue = null to null,
         path,
         savedNineSlice,
@@ -81,6 +81,7 @@ fun Modifier.appContainerBackground(
             }
         }
     }
+    val (ninePatchBitmap, nineSlice) = nineResolved.value
     // 图案缩放：由设置页「图案大小」滑块显式指定，日夜图共用一个值
     val nineScale = if (useConfigured && backgroundImage == null) {
         theme.containerBackgroundNineScale(type)
