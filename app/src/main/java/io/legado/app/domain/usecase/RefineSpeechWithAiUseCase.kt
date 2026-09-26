@@ -382,8 +382,11 @@ class RefineSpeechWithAiUseCase(
             val sameCharacter = segment.characterId != null &&
                 segment.characterId == previous?.characterId &&
                 previous.roleType != SpeechRoleType.Narrator
-            val sameNamedSpeaker = segment.characterId == null &&
-                previous?.characterId == null &&
+            // previous != null 放首位做智能转换的前提：previous?.characterId == null
+            // 无法排除 previous 本身为 null，编译器不会把后续的 previous 当非空
+            val sameNamedSpeaker = previous != null &&
+                segment.characterId == null &&
+                previous.characterId == null &&
                 segment.characterName.isNotBlank() &&
                 segment.characterName == previous.characterName &&
                 previous.roleType != SpeechRoleType.Narrator
