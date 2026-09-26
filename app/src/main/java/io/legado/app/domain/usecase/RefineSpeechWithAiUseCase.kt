@@ -809,12 +809,12 @@ class RefineSpeechWithAiUseCase(
         const val VERSION = "ai-speech-analysis-v2"
 
         /**
-         * 分块按输入文本长度切。块越大、一次要返回的决策 JSON 越长——实测一整块
-         * （60+ 段）的决策输出会撞上 max_tokens 上限，JSON 在中途被硬截断
-         * （EOF at $.segments[N]），解析必炸。块小一点，单次输出就远离上限；
-         * 截断万一发生也只影响单块（分块解析有容错）。
+         * 分块按输入文本长度切，块数决定章的 AI 请求数（3000 字章 1 块、1 万字章 2 块）。
+         * 输出预算已按分段数放大（见 [speechAnalysisParams]，每段 250 tokens 余量），
+         * 6000 字块（约 30 段）的输出也远在预算内；万一仍被 max_tokens 截断，
+         * 块处理会按 finishReason="length" 对半拆分重试，单块不拖垮整章。
          */
-        private const val MAX_CHUNK_CHARS = 3_000
+        private const val MAX_CHUNK_CHARS = 6_000
 
         private const val HYBRID_CONFIDENCE_THRESHOLD = 0.75f
         private const val DRAFT_SPEAKER_CONFIDENCE = 0.6f
