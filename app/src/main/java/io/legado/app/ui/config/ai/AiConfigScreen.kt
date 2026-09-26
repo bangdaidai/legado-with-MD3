@@ -171,7 +171,7 @@ fun AiConfigScreen(
                     SliderSettingItem(
                         title = stringResource(R.string.ai_call_timeout),
                         value = state.aiCallTimeout.toFloat(),
-                        defaultValue = 60f,
+                        defaultValue = 180f,
                         valueRange = 5f..600f,
                         valueLabel = { "${it.toInt()}s" },
                         onValueChange = { onIntent(AiConfigIntent.SetAiCallTimeout(it.toInt())) }

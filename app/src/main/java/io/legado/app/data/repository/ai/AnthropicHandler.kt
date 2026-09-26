@@ -124,7 +124,7 @@ class AnthropicHandler : AiProtocolHandler {
                 ?.joinToString("")
                 ?.takeIf { it.isNotBlank() }
             if (text.isNullOrBlank()) {
-                throw Exception("Empty AI response")
+                throw Exception("Empty AI response: ${response.body.take(300)}")
             } else {
                 AiGenerateResponse(text = text, reasoning = reasoning, rawBody = response.body)
             }

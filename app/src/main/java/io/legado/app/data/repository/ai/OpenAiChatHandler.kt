@@ -80,6 +80,7 @@ class OpenAiChatHandler : AiProtocolHandler {
         body.applyProviderWebSearch(provider, params)
 
         // 返回 null 代表「只有思考内容」，交给外层降级重试；其余失败照旧抛出
+        var reasoningPreview: String? = null
         suspend fun send(): AiGenerateResponse? =
             retryWithBackoff(maxAttempts = 3, keyRotator = keyRotator) {
                 trace.mark("已发送请求")
@@ -103,9 +104,11 @@ class OpenAiChatHandler : AiProtocolHandler {
                 val reasoning = message?.reasoningContent?.takeIf { it.isNotBlank() }
                 if (text.isNullOrBlank()) {
                     if (reasoning != null) {
+                        // 排障关键：把模型实际吐出的思考片段带给日志，一眼看出模型在干嘛
+                        reasoningPreview = reasoning.take(300)
                         null
                     } else {
-                        throw Exception("Empty AI response")
+                        throw Exception("Empty AI response: ${response.body.take(300)}")
                     }
                 } else {
                     AiGenerateResponse(text = text, reasoning = reasoning, rawBody = response.body)
@@ -123,7 +126,10 @@ class OpenAiChatHandler : AiProtocolHandler {
         body.applySenseNovaThinking(provider, request.model.modelId, AiReasoningLevel.OFF)
         body["max_tokens"] = maxOf(params.maxOutputTokens ?: 0, REASONING_FALLBACK_MAX_TOKENS)
         return send()
-            ?: throw Exception("AI response contains only reasoning content; disable thinking for this model")
+            ?: throw Exception(
+                "AI response contains only reasoning content; disable thinking for this model" +
+                    (reasoningPreview?.let { "；思考内容片段：$it" } ?: "")
+            )
     }
 
     private suspend fun streamInternal(

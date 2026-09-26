@@ -43,7 +43,9 @@ class AiTextRepositoryImpl(
     )
 
     private fun callTimeoutMs(): Long {
-        val seconds = AppConfigStore.getInt(PreferKey.aiCallTimeout) ?: 60
+        // 默认 180s：听书整章分析（几十分段 + 严格 JSON 输出）实测常要 50-60s，
+        // 默认 60s 会把正常的长分析掐成「请求超时」。超时只是上限，不拖慢快请求。
+        val seconds = AppConfigStore.getInt(PreferKey.aiCallTimeout) ?: 180
         return seconds.coerceIn(5, 600) * 1000L
     }
 

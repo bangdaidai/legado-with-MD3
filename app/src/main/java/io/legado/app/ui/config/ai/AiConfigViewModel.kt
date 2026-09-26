@@ -33,7 +33,7 @@ class AiConfigViewModel(
         }
         viewModelScope.launch {
             AppConfigStore.observeInt(PreferKey.aiCallTimeout).collect { seconds ->
-                _uiState.update { it.copy(aiCallTimeout = seconds ?: 60) }
+                _uiState.update { it.copy(aiCallTimeout = seconds ?: 180) }
             }
         }
         viewModelScope.launch {

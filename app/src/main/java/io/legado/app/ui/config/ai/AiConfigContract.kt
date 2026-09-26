@@ -14,7 +14,7 @@ data class AiConfigUiState(
     val modelCount: Int = 0,
     val presetCount: Int = 0,
     val aiLogEnabled: Boolean = false,
-    val aiCallTimeout: Int = 60
+    val aiCallTimeout: Int = 180
 )
 
 @Stable
