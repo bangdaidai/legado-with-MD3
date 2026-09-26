@@ -202,7 +202,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun onDestroy() {
         super.onDestroy()
         downloadTask?.cancel()
-        preDownloadJob?.cancel()
+        preDownloadJob?.cancel(CancellationException("朗读服务销毁（停止朗读/关闭应用）"))
         exoPlayer.release()
         cache.release()
         Coroutine.async {
@@ -233,7 +233,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun playStop() {
         exoPlayer.stop()
         playIndexJob?.cancel()
-        preDownloadJob?.cancel()
+        preDownloadJob?.cancel(CancellationException("停止朗读，预合成作废"))
     }
 
     /**
@@ -243,7 +243,7 @@ class HttpReadAloudService : BaseReadAloudService(),
      * 并发/限流配额，实时合成因此整批失败并退化成无声。
      */
     override fun onPlaybackStateReplaced() {
-        preDownloadJob?.cancel()
+        preDownloadJob?.cancel(CancellationException("新朗读会话取代，旧会话预合成作废"))
         preDownloadJob = null
     }
 
