@@ -66,7 +66,7 @@ class PrepareChapterSpeechPlanUseCase(
                         )
                     } else {
                         // 没配 AI 模型时这里就抛了，静默回落会让用户以为 AI 模式生效了
-                        notifyFallback("AI 分析未启用，已按规则模式朗读", it, chapterIndex)
+                        notifyFallback("AI 分析未启用，已按规则模式朗读", it, chapterIndex, source)
                     }
                 }
                 .getOrDefault(ruleVersion)
@@ -109,7 +109,7 @@ class PrepareChapterSpeechPlanUseCase(
                         it,
                     )
                 } else {
-                    notifyFallback("AI 分析说话人失败，已回落规则结果", it, chapterIndex)
+                    notifyFallback("AI 分析说话人失败，已回落规则结果", it, chapterIndex, source)
                 }
             }.getOrDefault(locallyResolved)
         }
@@ -145,7 +145,12 @@ class PrepareChapterSpeechPlanUseCase(
      * 同时发 [EventBus.ALOUD_AI_FALLBACK] 让朗读服务把原因 toast 给用户——
      * 静默回落曾让用户以为 AI 生效了，听半天单角色才发现不对。
      */
-    private fun notifyFallback(reason: String, error: Throwable, chapterIndex: Int? = null) {
+    private fun notifyFallback(
+        reason: String,
+        error: Throwable,
+        chapterIndex: Int? = null,
+        source: String = "朗读",
+    ) {
         val prefix = chapterIndex?.let { "第${it + 1}章（$source）" }.orEmpty()
         val message = "$prefix$reason\n${error.describeError()}"
         val repeated = message == lastNotifiedFallback

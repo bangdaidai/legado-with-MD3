@@ -21,7 +21,6 @@ import io.legado.app.data.repository.ai.formatAiPromptForLog
 import io.legado.app.data.repository.ai.truncateForLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -83,14 +82,11 @@ class AiTextRepositoryImpl(
         }
 
         if (cancellation != null) {
-            // cancel 点带的人话原因挂在 Job 的取消原因上（异常本身可能是
-            // "y1 was cancelled" 这类协程名包装，对排查毫无价值）
+            // cancel 点带的人话原因挂在异常消息上（如"被新一轮起播取代"）；
+            // 异常本身若是协程名包装（"y1 was cancelled"），则提示上层未标注
             cancelReason = cancellation.message
-                ?.takeIf { it.isNotBlank() && !Regex("\w+ was cancelled").matches(it) }
-                ?: runCatching {
-                    coroutineContext[Job]?.getCancellationException()?.message
-                }.getOrNull()
-                    ?.takeIf { it.isNotBlank() && !Regex("\w+ was cancelled").matches(it) }
+                ?.takeIf { it.isNotBlank() && !it.endsWith("was cancelled") }
+                ?: "上层未标注原因"
         }
 
         withContext(NonCancellable) {

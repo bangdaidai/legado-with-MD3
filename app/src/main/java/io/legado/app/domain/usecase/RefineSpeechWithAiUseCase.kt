@@ -219,6 +219,7 @@ class RefineSpeechWithAiUseCase(
                             preset = preset,
                             reasoningLevel = reasoningLevel,
                             now = now,
+                            source = source,
                         )
                         SpeechAnalysisMode.AiUnderstanding -> {
                             // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
@@ -231,6 +232,7 @@ class RefineSpeechWithAiUseCase(
                                     preset = preset,
                                     reasoningLevel = reasoningLevel,
                                     now = now,
+                                    source = source,
                                 )
                             } else {
                                 understandAtoms(
@@ -240,6 +242,7 @@ class RefineSpeechWithAiUseCase(
                                     preset = preset,
                                     reasoningLevel = reasoningLevel,
                                     now = now,
+                                    source = source,
                                 )
                             }
                         }
@@ -666,6 +669,7 @@ class RefineSpeechWithAiUseCase(
                 params = speechAnalysisParams(preset, reasoningLevel, decisionCount),
                 taskType = AiTaskType.ANALYZE_SPEECH,
                 sourceLabel = chapterIndex?.let { "第 ${it + 1} 章（$source）" },
+            )
         ).getOrThrow()
     }
 
