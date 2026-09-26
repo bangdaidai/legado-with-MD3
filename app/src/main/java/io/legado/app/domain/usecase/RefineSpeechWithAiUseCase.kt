@@ -2,6 +2,7 @@ package io.legado.app.domain.usecase
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiTextGateway
@@ -284,23 +285,26 @@ class RefineSpeechWithAiUseCase(
                     )
                 },
             )
+            val chunkIds = chunk.mapTo(hashSetOf(), ChapterSpeechSegment::id)
             parseSegmentDecisions(
                 generate(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
             )
                 .forEach { decision ->
-                    require(decision.segmentId in chunk.map(ChapterSpeechSegment::id)) {
-                        "AI returned an unknown segmentId: ${decision.segmentId}"
-                    }
-                    require(updates.put(decision.segmentId, decision) == null) {
-                        "AI returned duplicate segmentId: ${decision.segmentId}"
-                    }
-                    require(decision.characterId == null || profiles.any { it.id == decision.characterId }) {
-                        "AI returned an unknown characterId: ${decision.characterId}"
+                    // 轻量模型跑严格 JSON 契约时可能幻觉 id、重复返回或指向未知角色。
+                    // 坏决策只丢弃自己（对应段保留规则结果），不再让整章作废回落规则——
+                    // 整章回落会触发 10 分钟冷却，一次坏分块就废掉整本书的多角色。
+                    when {
+                        decision.segmentId !in chunkIds ->
+                            AppLog.putDebug("AI 语音复核返回未知 segmentId，丢弃该条: ${decision.segmentId}")
+                        updates.containsKey(decision.segmentId) ->
+                            AppLog.putDebug("AI 语音复核重复返回 segmentId，仅保留首条: ${decision.segmentId}")
+                        decision.characterId != null && profiles.none { it.id == decision.characterId } ->
+                            AppLog.putDebug("AI 语音复核返回未知 characterId，丢弃该条: ${decision.characterId}")
+                        else -> updates[decision.segmentId] = decision
                     }
                 }
-            require(updates.keys.containsAll(chunk.map(ChapterSpeechSegment::id))) {
-                "AI did not return every requested segment"
-            }
+            // 不再要求 AI 覆盖全部候选段：漏答的段保留规则结果，并同样标记为已复核，
+            // 避免每次重听都为它反复发请求；真正想重跑可在分镜页手动重新分析
         }
         val allProfiles = ensureDraftProfiles(
             bookUrl = analysisResult.analysis.bookUrl,
@@ -313,15 +317,19 @@ class RefineSpeechWithAiUseCase(
         return analysisResult.segments.map { segment ->
             if (segment !in candidates) return@map segment
             val decision = updates[segment.id]
-            val roleType = decision?.roleType ?: segment.roleType
-            val character = decision?.characterId?.let(profilesById::get)
-                ?: decision?.speakerName?.trim()?.let(profilesByName::get)
+            if (decision == null) {
+                // AI 漏答：维持规则结果，但标记为已复核，避免重听时为它反复发请求
+                return@map segment.copy(source = SpeechResolutionSource.Ai, updatedAt = now)
+            }
+            val roleType = decision.roleType
+            val character = decision.characterId?.let(profilesById::get)
+                ?: decision.speakerName?.trim()?.let(profilesByName::get)
             segment.copy(
                 roleType = roleType,
                 characterId = if (roleType == SpeechRoleType.Narrator) null else character?.id,
                 characterName = if (roleType == SpeechRoleType.Narrator) "" else character?.name.orEmpty(),
-                emotion = decision?.emotion ?: segment.emotion,
-                confidence = decision?.confidence ?: segment.confidence,
+                emotion = decision.emotion,
+                confidence = decision.confidence,
                 source = SpeechResolutionSource.Ai,
                 updatedAt = now,
             )
