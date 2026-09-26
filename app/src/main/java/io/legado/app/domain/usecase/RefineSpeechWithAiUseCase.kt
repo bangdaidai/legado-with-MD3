@@ -315,7 +315,15 @@ class RefineSpeechWithAiUseCase(
         }
         if (candidates.isEmpty()) return analysisResult.segments
         val updates = linkedMapOf<String, AiSegmentDecision>()
-        candidates.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
+
+        /**
+         * 处理一个分块：请求 AI 并把合法决策收进 [updates]。
+         *
+         * 输出被 max_tokens 硬截断时（finishReason="length"，JSON 断尾必然解析失败），
+         * 按 legado_NG 的做法对半拆成两块分别请求——每半的输出随之减半，递归到单段
+         * 仍截断才放弃（该段保留规则结果），而不是把整章作废回落规则。
+         */
+        fun processChunk(chunk: List<ChapterSpeechSegment>) {
             val payload = mapOf(
                 "characters" to profiles.map { it.toPromptMap() },
                 "segments" to chunk.map { segment ->
@@ -329,21 +337,43 @@ class RefineSpeechWithAiUseCase(
                     )
                 },
             )
-            // 单块解析失败（JSON 被截断、字段非法等）只丢这一块的决策——对应段保留规则
-            // 结果，其他块照常生效；不再让一个坏块把整章作废回落规则。超时/取消照旧上抛。
-            val chunkDecisions = try {
-                parseSegmentDecisions(
-                    generate(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
-                )
+            val response = try {
+                generateResponse(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: Throwable) {
+                AppLog.putDebug(
+                    "AI 语音复核分块请求失败，已跳过该块（${chunk.size} 段保留规则结果）：${e.message}"
+                )
+                return
+            }
+            if (response.finishReason == "length") {
+                if (chunk.size < 2) {
+                    AppLog.putDebug(
+                        "AI 语音复核单段输出仍被 max_tokens 截断，保留规则结果：" +
+                            chunk.firstOrNull()?.id.orEmpty()
+                    )
+                    return
+                }
+                AppLog.putDebug(
+                    "AI 语音复核输出被 max_tokens 截断，块（${chunk.size} 段）对半重试"
+                )
+                val midpoint = chunk.size / 2
+                processChunk(chunk.take(midpoint))
+                processChunk(chunk.drop(midpoint))
+                return
+            }
+            val chunkIds = chunk.mapTo(hashSetOf(), ChapterSpeechSegment::id)
+            // 单块解析失败（JSON 结构坏、字段非法等）只丢这一块的决策——对应段保留规则
+            // 结果，其他块照常生效；不再让一个坏块把整章作废回落规则。
+            val chunkDecisions = try {
+                parseSegmentDecisions(response.text)
             } catch (e: Throwable) {
                 AppLog.putDebug(
                     "AI 语音复核分块解析失败，已跳过该块（${chunk.size} 段保留规则结果）：${e.message}"
                 )
                 emptyList()
             }
-            val chunkIds = chunk.mapTo(hashSetOf(), ChapterSpeechSegment::id)
             chunkDecisions.forEach { decision ->
                 // 轻量模型跑严格 JSON 契约时可能幻觉 id、重复返回或指向未知角色。
                 // 坏决策只丢弃自己（对应段保留规则结果），不再让整章作废回落规则——
@@ -360,6 +390,9 @@ class RefineSpeechWithAiUseCase(
             }
             // 不再要求 AI 覆盖全部候选段：漏答的段保留规则结果，并同样标记为已复核，
             // 避免每次重听都为它反复发请求；真正想重跑可在分镜页手动重新分析
+        }
+        candidates.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
+            processChunk(chunk)
         }
         val allProfiles = ensureDraftProfiles(
             bookUrl = analysisResult.analysis.bookUrl,
@@ -522,7 +555,14 @@ class RefineSpeechWithAiUseCase(
         mode: SpeechAnalysisMode,
         payload: Any,
         reasoningLevel: AiReasoningLevel,
-    ): String {
+    ): String = generateResponse(preset, mode, payload, reasoningLevel).text
+
+    private suspend fun generateResponse(
+        preset: AiTaskPresetConfig,
+        mode: SpeechAnalysisMode,
+        payload: Any,
+        reasoningLevel: AiReasoningLevel,
+    ): AiGenerateResponse {
         // 待决策的分段/原子数量决定输出 JSON 的长度：每条决策（segmentId+UUID+枚举）
         // 实测约 200-300 字符。按数量放大 max_tokens，否则长章的决策列表会在
         // max_tokens 处被硬截断，JSON 断尾（EOF at $.segments[N]）解析必炸。
@@ -542,7 +582,7 @@ class RefineSpeechWithAiUseCase(
                 params = speechAnalysisParams(preset, reasoningLevel, decisionCount),
                 taskType = AiTaskType.ANALYZE_SPEECH,
             )
-        ).getOrThrow().text
+        ).getOrThrow()
     }
 
     private suspend fun generateScenes(

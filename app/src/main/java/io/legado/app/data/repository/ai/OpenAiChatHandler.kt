@@ -111,7 +111,12 @@ class OpenAiChatHandler : AiProtocolHandler {
                         throw Exception("Empty AI response: ${response.body?.take(300) ?: "<no body>"}")
                     }
                 } else {
-                    AiGenerateResponse(text = text, reasoning = reasoning, rawBody = response.body)
+                    AiGenerateResponse(
+                        text = text,
+                        reasoning = reasoning,
+                        rawBody = response.body,
+                        finishReason = json?.choices?.firstOrNull()?.finish_reason,
+                    )
                 }
             }
 
@@ -482,7 +487,9 @@ internal data class OpenAiChatResponse(
 
 @Keep
 internal data class OpenAiChatChoice(
-    val message: OpenAiChatMessage?
+    val message: OpenAiChatMessage?,
+    /** "stop"=正常结束；"length"=输出因 max_tokens 耗尽被硬截断，调用方必须按截断处理 */
+    val finish_reason: String?
 )
 
 @Keep

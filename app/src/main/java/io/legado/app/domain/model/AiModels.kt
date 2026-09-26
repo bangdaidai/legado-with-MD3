@@ -443,7 +443,13 @@ data class AiGenerateResponse(
     val text: String,
     /** 非流式响应里解析出的模型思考内容；流式思考走 [io.legado.app.domain.gateway.AiStreamEvent.Reasoning]。 */
     val reasoning: String? = null,
-    val rawBody: String? = null
+    val rawBody: String? = null,
+    /**
+     * 模型侧结束原因（OpenAI 的 finish_reason / Anthropic 的 stop_reason）。
+     * "length" 表示输出因 max_tokens 耗尽被硬截断——此时 [text] 是残缺 JSON 等断尾内容，
+     * 调用方必须按截断处理而不是当正常结果解析。
+     */
+    val finishReason: String? = null
 )
 
 @Keep
