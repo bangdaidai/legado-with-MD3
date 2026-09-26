@@ -175,6 +175,15 @@ object ReadAloudContentSplitter {
     /** 闭合引号：句末标点后紧跟的收尾引号属于前一句，切分时不甩到下一单元 */
     private val CLOSING_QUOTES = setOf('”', '’', '』', '」', '"')
 
+    /** 开引号到对应闭引号的配对（与分段器的引号集合一致）：引号对内部不做句末切分 */
+    private val OPENING_QUOTES = mapOf(
+        '“' to '”',
+        '‘' to '’',
+        '「' to '」',
+        '『' to '』',
+        '"' to '"',
+    )
+
     fun splitLines(
         semanticContent: String,
         policy: ContentSplitPolicy,
@@ -221,6 +230,13 @@ object ReadAloudContentSplitter {
         var start = 0
         var index = 0
         while (index < text.length) {
+            if (text[index] in OPENING_QUOTES) {
+                // 引号对内部（哪怕中间有多个句号）不切：一段连续对白就是一个单元，
+                // 否则 "对白一。对白二。" 会被拆成好几段
+                val close = text.indexOf(OPENING_QUOTES.getValue(text[index]), index + 1)
+                index = if (close >= 0) close + 1 else text.length
+                continue
+            }
             if (text[index] !in symbols) {
                 index++
                 continue
