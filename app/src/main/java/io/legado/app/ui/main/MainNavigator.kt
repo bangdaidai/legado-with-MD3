@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.navigation3.runtime.NavKey
 import io.legado.app.feature.reader.platform.ReaderPerfTrace
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.book.read.ReaderEntranceDiag
 import io.legado.app.ui.rss.article.MainRouteRssSort
 import io.legado.app.ui.rss.read.MainRouteRssRead
 import kotlinx.coroutines.CoroutineScope
@@ -42,9 +41,6 @@ object MainNavigator {
         tracker: MainNavRouteTracker?,
         resetToHome: Boolean = false,
     ) {
-        ReaderEntranceDiag.add(
-            "导航→${route::class.simpleName} 栈深=${backStack.size}"
-        )
         navigateToRouteInternal(backStack, route, tracker, resetToHome)
     }
 
@@ -440,35 +436,21 @@ object MainNavigator {
         backStack: MutableList<NavKey>,
         tracker: MainNavRouteTracker?,
     ) {
-        ReaderEntranceDiag.add(
-            "返回 防抖中=$backNavigationInProgress 栈深=${backStack.size} " +
-                "顶=${backStack.lastOrNull()?.let { it::class.simpleName }} " +
-                "发起=${if (tracker != null) "页面按钮" else "系统返回"}"
-        )
-        if (backNavigationInProgress) {
-            ReaderEntranceDiag.add("返回被防抖吞掉(未出栈)")
-            return
-        }
+        if (backNavigationInProgress) return
         if (backStack.size > 1) {
             backNavigationInProgress = true
             backStack.removeLastOrNull()
             tracker?.onBackStackChanged(backStack)
-            ReaderEntranceDiag.add(
-                "返回已出栈 新顶=${backStack.lastOrNull()?.let { it::class.simpleName }}"
-            )
         } else {
-            ReaderEntranceDiag.add("返回:栈到底, finish()")
             activity.finish()
         }
     }
 
     fun onBackStackChanged() {
-        ReaderEntranceDiag.add("导航快照到达, 500ms后清防抖标志")
         backNavigationResetJob?.cancel()
         backNavigationResetJob = navigationScope.launch {
             delay(500)
             backNavigationInProgress = false
-            ReaderEntranceDiag.add("防抖标志已清")
         }
     }
 

@@ -118,15 +118,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 /**
- * 临时诊断的读侧门面：MainNavigator/MainActivity 的返回/导航轨迹，和阅读面入场后的
- * 窗口提交序列，都进同一个桶（[BaseReadAloudService.diagPageTrace]），由入场期满一次
- * 性收口，做到"一次返回＝一条【页面跳转诊断】"，不再逐条刷屏。定位后整块随诊断回退。
- */
-object ReaderEntranceDiag {
-    fun add(line: String) = BaseReadAloudService.diagPageTrace(line)
-}
-
-/**
  * Encapsulates all the reader logic that used to be in ReadBookActivity.
  * This allows ReadBookRouteScreen to be hosted in any Activity (ReadBookActivity or MainActivity).
  */
@@ -256,7 +247,7 @@ class ReadBookController(
                 page
             }
         }
-        if (changed) directReaderPageIndex?.let { publishDirectReaderWindow(it, "图片就绪") }
+        if (changed) directReaderPageIndex?.let(::publishDirectReaderWindow)
     }
 
     /**
@@ -546,34 +537,25 @@ class ReadBookController(
         viewModel.refreshSeekState()
     }
 
-    /** 临时诊断：阅读面 attach 后的窗口提交记录截止时间戳，0 表示不在记录期。 */
-    private var diagEntranceTraceUntil = 0L
     /**
      * 入场时后到的「加载中」占位窗暂存，不直接上屏：冷重入场必然经过"正文输入未就绪"
      * 的几十到几百毫秒，此时 ReaderSessionViewModel 里还挂着上一次离场的成型窗口，
      * 直接发占位页会把它冲掉——这正是返回时先闪空白加载页再跳回正文的原因。
      * 真实页提交或入场收尾时补发，保证语义不丢：新书真的没内容时仍会显示加载页。
      */
-    private var diagEntranceHoldPlaceholder: (() -> Unit)? = null
+    private var entranceHoldPlaceholder: (() -> Unit)? = null
 
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
-        // 临时诊断：从听书页等整页返回、阅读面重新入场后的 2.5 秒里，把每一次窗口提交
-        // 记成 c章p页·来源 片段，连同导航那头攒下的返回/重组轨迹，期满一起收进**唯一一条**
-        // 【页面跳转诊断】。定位后整体回退。
-        // 注意：入场时不清桶、不提前结算——那些返回片段正是本次返回的开头，
-        // 要一起进期满那一条，才做得到"一次返回只有一条日志"。
-        diagEntranceTraceUntil = System.currentTimeMillis() + 2500
-        diagEntranceHoldPlaceholder = null
+        entranceHoldPlaceholder = null
         activity.lifecycleScope.launch {
             delay(2600)
             // 入场仍未等到任何真实页：放行暂存的加载占位，"加载中"语义保持不变。
-            diagEntranceHoldPlaceholder?.invoke()
-            diagEntranceHoldPlaceholder = null
-            BaseReadAloudService.flushDiagPage()
+            entranceHoldPlaceholder?.invoke()
+            entranceHoldPlaceholder = null
         }
         ReadBook.registerRender(this)
-        publishReaderPageWindow(from = "入场")
+        publishReaderPageWindow()
     }
 
     /**
@@ -592,10 +574,7 @@ class ReadBookController(
         ))
     }
 
-    private fun updateReaderPageWindow(
-        value: ReaderPageWindow,
-        from: String = "?",
-    ): ReaderPageWindow {
+    private fun updateReaderPageWindow(value: ReaderPageWindow): ReaderPageWindow {
         val previous = _readerPageWindow.value.current
         val next = value.current
         if (previous?.id != next?.id || previous?.layoutRevision != next?.layoutRevision) {
@@ -603,17 +582,9 @@ class ReadBookController(
         }
         if (next != null && !next.isPlaceholder) {
             // 真实页到达，入场暂存的加载占位不再需要。
-            diagEntranceHoldPlaceholder = null
+            entranceHoldPlaceholder = null
         }
         _readerPageWindow.value = value
-        if (diagEntranceTraceUntil != 0L &&
-            System.currentTimeMillis() < diagEntranceTraceUntil
-        ) {
-            val placeholderMark = if (next?.isPlaceholder == true) "占位" else ""
-            ReaderEntranceDiag.add(
-                "提交c${next?.id?.chapterIndex}p${next?.id?.pageIndex}$placeholderMark·$from"
-            )
-        }
         readerSessionViewModel.submitPageWindow(value)
         return value
     }
@@ -796,7 +767,6 @@ class ReadBookController(
         publishReaderPageWindow(
             paginationStyle = viewportPaginationStyle,
             paginationEnvironmentPublished = viewportChanged,
-            from = "视口",
         )
         ReaderPerfTrace.marker("viewport.published")
     }
@@ -804,7 +774,6 @@ class ReadBookController(
     private fun publishReaderPageWindow(
         paginationStyle: ReaderAndroidPaginationStyle? = null,
         paginationEnvironmentPublished: Boolean = false,
-        from: String = "?",
     ) {
         val viewport = layoutController.viewport.value ?: return
         val width = viewport.widthPx
@@ -815,7 +784,6 @@ class ReadBookController(
             height = height,
             paginationStyle = paginationStyle,
             paginationEnvironmentPublished = paginationEnvironmentPublished,
-            from = from,
         )
         val currentInputIsReady = ReadBook.readerChapterInputWindow.current
             ?.chapter
@@ -831,7 +799,7 @@ class ReadBookController(
         if (!currentInputIsReady &&
             _readerPageWindow.value.current?.id?.chapterIndex != ReadBook.durChapterIndex
         ) {
-            publishLoadingReaderWindowUnlessReal(from)
+            publishLoadingReaderWindowUnlessReal()
         }
     }
 
@@ -844,14 +812,12 @@ class ReadBookController(
      *   真实页到达即作废、门控收尾仍未等到再补发。
      * - 两者都没有（真的冷开白屏）→ 立即发"加载中"，语义不变。
      */
-    private fun publishLoadingReaderWindowUnlessReal(from: String) {
+    private fun publishLoadingReaderWindowUnlessReal() {
         _readerPageWindow.value.current?.takeIf { !it.isPlaceholder }?.let { return }
         if (readerSessionViewModel.uiState.value.pageWindow.current != null) {
-            diagEntranceHoldPlaceholder = {
-                publishLoadingReaderWindow(from = "$from·补发")
-            }
+            entranceHoldPlaceholder = { publishLoadingReaderWindow() }
         } else {
-            publishLoadingReaderWindow(from = from)
+            publishLoadingReaderWindow()
         }
     }
 
@@ -899,7 +865,7 @@ class ReadBookController(
             directReaderChapterPageCounts = emptyMap()
             // 立刻用加载/消息页顶掉画布上的旧正文；不能发空窗，路由层
             // lastReadablePageWindow 兜底会把换源前的内容再画回来。
-            publishLoadingReaderWindow(from = "换书作废")
+            publishLoadingReaderWindow()
         }
         directReaderPagesBookUrl = currentBookUrl
     }
@@ -921,7 +887,7 @@ class ReadBookController(
         paginatedChapterIdentities.clear()
         ReadBook.clearReaderPagination()
         updateReaderPaginationError(null)
-        publishReaderPageWindow(from = "重排")
+        publishReaderPageWindow()
     }
 
     fun retryComposeReaderPagination() {
@@ -933,7 +899,7 @@ class ReadBookController(
      * 普通页，消息一变就重新取页（`TextPageFactory.curPage/nextPage/...` 均优先返回消息页）。
      */
     fun onReaderMessageChanged() {
-        publishReaderPageWindow(from = "消息变")
+        publishReaderPageWindow()
     }
 
     private fun directReaderWindow(index: Int): ReaderPageWindow {
@@ -1051,10 +1017,7 @@ class ReadBookController(
     }
 
     /** 同步平移页窗口并发布；返回发布的窗口，供滚动渲染层当帧折算使用。 */
-    private fun publishDirectReaderWindow(
-        index: Int,
-        from: String = "同步平移",
-    ): ReaderPageWindow? {
+    private fun publishDirectReaderWindow(index: Int): ReaderPageWindow? {
         if (directReaderPages.isEmpty()) return null
         val boundedIndex = ensureBoundaryPlaceholderPages(index.coerceIn(directReaderPages.indices))
         directReaderPageIndex = boundedIndex
@@ -1062,7 +1025,7 @@ class ReadBookController(
             position = ReaderPageNavigator.chapterPosition(directReaderPages, boundedIndex),
             pageContext = directReaderPageContext(boundedIndex),
         )
-        return updateReaderPageWindow(directReaderWindow(boundedIndex), from)
+        return updateReaderPageWindow(directReaderWindow(boundedIndex))
     }
 
     /**
@@ -1116,7 +1079,7 @@ class ReadBookController(
                 ReadBook.durChapterPos,
             ) ?: currentIndex ?: return
         }
-        publishDirectReaderWindow(index, "逐页流出")
+        publishDirectReaderWindow(index)
     }
 
     /**
@@ -1216,7 +1179,7 @@ class ReadBookController(
             chapterPageIndex = chapterPageIndex,
         ) ?: return false
         commitManualReaderPage(globalIndex)
-        publishDirectReaderWindow(globalIndex, "章内跳转")
+        publishDirectReaderWindow(globalIndex)
         pageChanged = true
         viewModel.startBackupJob()
         return true
@@ -1236,7 +1199,7 @@ class ReadBookController(
                     ?.takeIf { it.chapter.index == navigation.result.chapterIndex }
                     ?.let { resolveSearchNavigation(navigation, it) }
             }
-            publishReaderPageWindow(from = "章节输入")
+            publishReaderPageWindow()
         }
     }
 
@@ -1279,8 +1242,7 @@ class ReadBookController(
             pages.any { it.id.chapterIndex == result.chapterIndex }
         }?.let { pages ->
             publishDirectReaderWindow(
-                ReaderPageNavigator.locate(pages, result.chapterIndex, bodyPosition),
-                "搜索跳",
+                ReaderPageNavigator.locate(pages, result.chapterIndex, bodyPosition)
             )
         }
         // 搜索命中只作为页面级高亮（`searchSelection` 已进页面对象的 searchStart/
@@ -1296,7 +1258,6 @@ class ReadBookController(
         height: Int,
         paginationStyle: ReaderAndroidPaginationStyle? = null,
         paginationEnvironmentPublished: Boolean = false,
-        from: String = "?",
     ): Boolean {
         val contentPadding = layoutController.viewport.value?.contentPadding ?: ReaderPadding()
         val inputWindow = ReadBook.readerChapterInputWindow
@@ -1308,7 +1269,7 @@ class ReadBookController(
             } else {
                 // 要分页的还是上一本书的正文:不发真实页、也不登记身份,只顶一个加载占位;
                 // 新书 resetData/首章落地后的下一次发布自然过闸。
-                publishLoadingReaderWindowUnlessReal("跨书入场")
+                publishLoadingReaderWindowUnlessReal()
                 return false
             }
         }
@@ -1318,7 +1279,7 @@ class ReadBookController(
             // 阅读画布保持组合、点击分区与菜单照常可用，装载完成后由分页批次
             // 整窗替换（对照 shutiao 的加载占位页正文渲染）。画面上已有真实页时
             // 不踩——追章窗口反复清空时曾把刚露脸的正文闪回空白（26→27 抓取实锤）。
-            publishLoadingReaderWindowUnlessReal("无输入占位")
+            publishLoadingReaderWindowUnlessReal()
             return false
         }
         val chapters = listOf(
@@ -1411,7 +1372,7 @@ class ReadBookController(
                         )
                     ) {
                         directReaderPageIndex = index
-                        publishDirectReaderWindow(index, "按位置重锚·$from")
+                        publishDirectReaderWindow(index)
                     }
                 }
             scheduleAdjacentReaderChapterPagination(
@@ -1431,8 +1392,7 @@ class ReadBookController(
                         pages,
                         chapter.chapter.index,
                         ReadBook.durChapterPos,
-                    ),
-                    "暖页复用·$from",
+                    )
                 )
             }
         if (directReaderLayoutKey != key) {
@@ -1692,7 +1652,7 @@ class ReadBookController(
                 if (readerChapterPaginationJobs[chapterIndex]?.job === coroutineContext[Job]) {
                     readerChapterPaginationJobs.remove(chapterIndex)
                 }
-                publishReaderPageWindow(from = "批次落地")
+                publishReaderPageWindow()
             }
         }
         readerChapterPaginationJobs[chapterIndex] = ReaderChapterPaginationTask(identity, job)
@@ -1800,7 +1760,7 @@ class ReadBookController(
                     )
                 }
             )
-            directReaderPageIndex?.let { publishDirectReaderWindow(it, "批次换页") }
+            directReaderPageIndex?.let(::publishDirectReaderWindow)
             // 当前章页面被这批新页替换 = 新样式已烘进画面，通知标记域撤掉粘性预览。
             // 邻章批次不通知：它们的提交与当前章可见内容无关。
             if (chapterIndex in replacementChapterIndexes) {
@@ -1850,7 +1810,7 @@ class ReadBookController(
             }) {
             val salt = 31L * isDarkTheme.hashCode() + colorChange.hashCode()
             directReaderPages = directReaderPages.map { it.remapThemeColors(colorChange, salt) }
-            directReaderPageIndex?.let { publishDirectReaderWindow(it, "主题变色") }
+            directReaderPageIndex?.let(::publishDirectReaderWindow)
         }
         layoutController.viewport.value?.let { viewport ->
             updateComposeReaderBackground(viewport.widthPx, viewport.heightPx)
@@ -2422,7 +2382,7 @@ class ReadBookController(
     override fun pageChanged() {
         handler.post {
             this.pageChanged = true
-            publishReaderPageWindow(from = "翻页回调")
+            publishReaderPageWindow()
             viewModel.startBackupJob()
         }
     }
@@ -2514,22 +2474,22 @@ class ReadBookController(
             }
 
             is ReadBookEffect.UpContent -> {
-                publishReaderPageWindow(from = "upContent")
+                publishReaderPageWindow()
                 effect.success?.invoke()
                 if (effect.relativePosition == 0) onUnhandledEffect(ReadBookEffect.UpSeekBar)
                 if (effect.relativePosition == 0) viewModel.refreshSeekState()
             }
 
-            is ReadBookEffect.UpPageAnim -> publishReaderPageWindow(from = "动画变")
+            is ReadBookEffect.UpPageAnim -> publishReaderPageWindow()
             is ReadBookEffect.UpTime, is ReadBookEffect.UpBattery -> {
                 // 时间/电量是烘进页眉页脚 decoration 的动态信息（`directReaderWindow` 里现建），
                 // 必须重发窗口才会刷新；页表还没落地（装载期整窗占位）时也要强制重建。
                 guardDirectReaderPagesBookIdentity()
                 val index = directReaderPageIndex
                 if (index != null && directReaderPages.isNotEmpty()) {
-                    publishDirectReaderWindow(index, "时钟电量")
+                    publishDirectReaderWindow(index)
                 } else {
-                    publishLoadingReaderWindow(force = true, from = "时钟电量")
+                    publishLoadingReaderWindow(force = true)
                 }
             }
             is ReadBookEffect.UpSystemUiVisibility -> upSystemUiVisibility()
@@ -2571,7 +2531,7 @@ class ReadBookController(
 
             is ReadBookEffect.UpAloudState -> {
                 readAloudPosition = null
-                directReaderPageIndex?.let { publishDirectReaderWindow(it, "朗读状态变") }
+                directReaderPageIndex?.let(::publishDirectReaderWindow)
             }
 
             is ReadBookEffect.RefreshBookContent -> {
@@ -2610,7 +2570,7 @@ class ReadBookController(
                     ?.takeIf { it.chapter.index == result.chapterIndex }
                 if (currentInput != null) {
                     resolveSearchNavigation(effect, currentInput)
-                    publishReaderPageWindow(from = "搜索确认")
+                    publishReaderPageWindow()
                 } else {
                     // 定位只对本次跳章有效；openChapter 成功仍未消费时放弃，
                     // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置
@@ -2628,7 +2588,7 @@ class ReadBookController(
             is ReadBookEffect.ExitSearch -> {
                 pendingSearchNavigation = null
                 searchSelection = null
-                directReaderPageIndex?.let { publishDirectReaderWindow(it, "退出搜索") }
+                directReaderPageIndex?.let(::publishDirectReaderWindow)
             }
 
             is ReadBookEffect.SyncBookProgress -> {
@@ -2694,7 +2654,7 @@ class ReadBookController(
             }
 
             is ReadBookEffect.UpBookmarkBadge ->
-                directReaderPageIndex?.let { publishDirectReaderWindow(it, "书签角标") }
+                directReaderPageIndex?.let(::publishDirectReaderWindow)
         }
     }
 
@@ -2708,7 +2668,7 @@ class ReadBookController(
         if (readAloudPosition == anchor) return
         readAloudPosition = anchor
         // 高亮在窗口发布时才计算绘制（directReaderWindow），锚点变化后必须重发布
-        directReaderPageIndex?.let { publishDirectReaderWindow(it, "朗读锚点") }
+        directReaderPageIndex?.let(::publishDirectReaderWindow)
     }
 
     fun setComposeVisibleBodyTextPositionProvider(
@@ -2950,7 +2910,7 @@ class ReadBookController(
         if (!directReaderPages[navigation.pageIndex].isPlaceholder) {
             commitManualReaderPage(navigation.pageIndex)
         }
-        val window = publishDirectReaderWindow(navigation.pageIndex, "手动翻页")
+        val window = publishDirectReaderWindow(navigation.pageIndex)
         pageChanged = true
         viewModel.startBackupJob()
         return window
@@ -3008,7 +2968,7 @@ class ReadBookController(
         // 被丢弃，而是目标章的排版还没落地。旧 View 里这一类边界由 moveToNextChapter 的
         // 装载/重绘承接；这里补一次发布请求让该章排版推进，翻页结果由分页批次发布。
         if (ReadBook.durChapterIndex == targetChapterIndex) {
-            publishReaderPageWindow(from = "边界补发")
+            publishReaderPageWindow()
             return null
         }
         // 占位页是死端：邻章装载完成前不允许从占位页继续向更远处串章
@@ -3036,7 +2996,7 @@ class ReadBookController(
                     ReadBook.durChapterPos,
                 )
                 directReaderPageIndex = targetIndex
-                val window = publishDirectReaderWindow(targetIndex, "边界暖页")
+                val window = publishDirectReaderWindow(targetIndex)
                 pageChanged = true
                 viewModel.startBackupJob()
                 return window
@@ -3046,7 +3006,7 @@ class ReadBookController(
         // “加载数据中…” placeholder page below, exactly like the View reader's page factory
         // fallback（`TextPageFactory.nextPage/prevPage` 在邻章还没有页时给出兜底页）。
         if (ReadBook.readerChapterInputWindow.current?.chapter?.index == targetChapterIndex) {
-            publishReaderPageWindow(from = "边界章就绪")
+            publishReaderPageWindow()
         }
         val placeholder = placeholderReaderPage(targetChapterIndex) ?: return null
         val pages = directReaderPages.toMutableList()
@@ -3057,7 +3017,7 @@ class ReadBookController(
         // 目标章的落点（首页 0 / 末页 lastPageStart），commit 会覆盖上一章的取值。
         val placeholderIndex = pages.indexOfFirst { it === placeholder }
         directReaderPageIndex = placeholderIndex
-        val window = publishDirectReaderWindow(placeholderIndex, "边界占位")
+        val window = publishDirectReaderWindow(placeholderIndex)
         pageChanged = true
         viewModel.startBackupJob()
         return window
@@ -3067,7 +3027,7 @@ class ReadBookController(
      * 内容装载前的整窗占位：窗口里只有消息页（`ReadBook.msg` 优先，其次"加载数据中…"），
      * 点击/菜单走画布正常路径。
      */
-    private fun publishLoadingReaderWindow(force: Boolean = false, from: String = "加载占位") {
+    private fun publishLoadingReaderWindow(force: Boolean = false) {
         // 文案变化（"加载中…" → "加载正文出错…"）必须重绘，否则错误消息会停在上一帧的加载文案上。
         val text = ReadBook.msg ?: activity.getString(R.string.data_loading)
         val current = _readerPageWindow.value.current
@@ -3081,7 +3041,7 @@ class ReadBookController(
         val page = ReadBook.msg?.let(::readerMessagePage)
             ?: placeholderReaderPage(ReadBook.durChapterIndex)
             ?: return
-        updateReaderPageWindow(ReaderPageWindow(current = page), "占位·$from")
+        updateReaderPageWindow(ReaderPageWindow(current = page))
     }
 
     /** 未装载章节的占位页：一屏居中的"加载数据中…"，几何与普通页一致以保持滚动连续。 */

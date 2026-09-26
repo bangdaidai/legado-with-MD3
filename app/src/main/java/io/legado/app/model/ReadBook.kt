@@ -686,22 +686,12 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
     private fun resumeReadAloudWaitingForChapter(snapshots: List<ReaderChapterPaginationSnapshot>) {
         if (!BaseReadAloudService.isRun) return
         // 脱离后朗读位置归用户：分页批次落地不代表朗读要跟到页面所在章节
-        if (!readAloudSessionStore.state.value.followReadAloudPosition) {
-            diagPageMove("分页批次:不补发(已脱离)")
-            return
-        }
-        if (snapshots.none { it.chapterIndex == durChapterIndex }) {
-            diagPageMove("分页批次:不补发(无本章c${durChapterIndex}分页)")
-            return
-        }
+        if (!readAloudSessionStore.state.value.followReadAloudPosition) return
+        if (snapshots.none { it.chapterIndex == durChapterIndex }) return
         if (BaseReadAloudService.currentChapterIndex == durChapterIndex) return
         // 本轮准备已在为当前章干活：不再补发起播。补发会 cancel 在飞轮次（无因 cancel 的异常
         // 消息为 null），曾被误报成「AI 分析失败/未启用」并让每次进页面空转多个批次周期。
-        if (BaseReadAloudService.preparingChapterIndex == durChapterIndex) {
-            diagPageMove("分页批次:不补发(在飞轮次c$durChapterIndex)")
-            return
-        }
-        diagPageMove("分页批次:补发起播c$durChapterIndex")
+        if (BaseReadAloudService.preparingChapterIndex == durChapterIndex) return
         readAloud(play = !BaseReadAloudService.pause)
     }
 
@@ -1177,14 +1167,6 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         return true
     }
 
-    /**
-     * 临时诊断：听书页面侧片段。只有朗读在跑时「页面改到哪一章」才算听书链的一环，
-     * 普通阅读翻页不写日志，避免把日志页刷成翻页流水。定位后随诊断一并回退。
-     */
-    private fun diagPageMove(note: String) {
-        if (BaseReadAloudService.isRun) BaseReadAloudService.diagPage(note)
-    }
-
     fun moveToNextChapter(upContent: Boolean, upContentInPlace: Boolean = true): Boolean {
         prepareManualNavigation()
         if (durChapterIndex < simulatedChapterSize - 1) {
@@ -1193,21 +1175,22 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
             clearExpiredChapterLoadingJob()
             moveReaderChapterInputNext()
             if (readerChapterInputWindow.current == null) {
-                diagPageMove("下一章→c$durChapterIndex 正文未加载,开始加载")
+                AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
                 if (upContentInPlace) renderCallBack?.upContent()
                 loadContent(durChapterIndex, upContent, resetPageOffset = false)
             } else if (upContent && upContentInPlace) {
-                diagPageMove("下一章→c$durChapterIndex 正文已加载,刷新视图")
+                AppLog.putDebug("moveToNextChapter-章节已加载,刷新视图")
                 renderCallBack?.upContent()
             }
             loadContent(durChapterIndex.plus(1), upContent, false)
             saveRead()
             callBack?.upMenuView()
+            AppLog.putDebug("moveToNextChapter-curPageChanged()")
             curPageChanged()
             publishSnapshot()
             return true
         } else {
-            diagPageMove("下一章:没有下一章")
+            AppLog.putDebug("跳转下一章失败,没有下一章")
             return false
         }
     }
@@ -1222,21 +1205,22 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
             clearExpiredChapterLoadingJob()
             moveReaderChapterInputNext()
             if (readerChapterInputWindow.current == null) {
-                diagPageMove("下一章→c$durChapterIndex 正文未加载,开始加载")
+                AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
                 if (upContentInPlace) renderCallBack?.upContentAwait()
                 loadContentAwait(durChapterIndex, upContent, resetPageOffset = false)
             } else if (upContent && upContentInPlace) {
-                diagPageMove("下一章→c$durChapterIndex 正文已加载,刷新视图")
+                AppLog.putDebug("moveToNextChapter-章节已加载,刷新视图")
                 renderCallBack?.upContentAwait()
             }
             loadContent(durChapterIndex.plus(1), upContent, false)
             saveRead()
             callBack?.upMenuView()
+            AppLog.putDebug("moveToNextChapter-curPageChanged()")
             curPageChanged()
             publishSnapshot()
             return true
         } else {
-            diagPageMove("下一章:没有下一章")
+            AppLog.putDebug("跳转下一章失败,没有下一章")
             return false
         }
     }
@@ -1348,31 +1332,13 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
                         )
                     ) {
                         if (isScroll && pageChanged) {
-                            diagPageMove(
-                                "页面c${input.chapter.index} 声音c${BaseReadAloudService.currentChapterIndex}" +
-                                    " → 滚动中不重启(暂停)"
-                            )
                             ReadAloud.pause(appCtx)
                         } else {
-                            diagPageMove(
-                                "页面c${input.chapter.index} 声音c${BaseReadAloudService.currentChapterIndex}" +
-                                    " → 补发起播"
-                            )
                             readAloud(!BaseReadAloudService.pause)
                         }
                     } else {
-                        // 判据认为无需重启（同章/位置对齐）：也记一片，否则这条链看着像"没走到补发"
-                        diagPageMove(
-                            "页面c${input.chapter.index} 声音c${BaseReadAloudService.currentChapterIndex}" +
-                                " → 判据:无需重启"
-                        )
                         ReadAloud.syncLayout()
                     }
-                } else {
-                    diagPageMove(
-                        "页面c${input.chapter.index} → 不补发" +
-                            "(已脱离,声音c${BaseReadAloudService.currentChapterIndex})"
-                    )
                 }
             }
         }

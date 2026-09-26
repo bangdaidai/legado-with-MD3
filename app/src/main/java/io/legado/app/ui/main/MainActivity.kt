@@ -66,7 +66,6 @@ import io.legado.app.ui.widget.components.log.CrashLogSheet
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.read.ReadBookInputHandler
 import io.legado.app.ui.book.read.ReadBookRouteHost
-import io.legado.app.ui.book.read.ReaderEntranceDiag
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.readaloud.ReadAloudShellHost
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
@@ -512,7 +511,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
             PrivateAppStartGate {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    val diagSharedTransitionScope = this@SharedTransitionLayout
+                    val navSharedTransitionScope = this@SharedTransitionLayout
                     // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
                     // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
                     // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
@@ -520,20 +519,20 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                     // NavDisplay 松手校验 targetState == scene 失败就把预测手势判为
                     // "取消"——先退回当前页再重放一次摘栈（两拍闪），已组合的露出页
                     // 也随销毁重建冷启动。用 remember 锁住 provider 代次，跨重组不换代。
-                    val diagEntryProvider = remember(
+                    val navEntryProvider = remember(
                         backStack,
                         configuration,
                         mangaSettings.showMangaUi,
                         useRail,
                         navRouteTracker,
-                        diagSharedTransitionScope,
+                        navSharedTransitionScope,
                     ) {
                         mainEntryProvider(
                             backStack = backStack,
                             configuration = configuration,
                             showMangaUi = mangaSettings.showMangaUi,
                             useRail = useRail,
-                            sharedTransitionScope = diagSharedTransitionScope,
+                            sharedTransitionScope = navSharedTransitionScope,
                             onNavigateToRoute = { route ->
                                 MainNavigator.navigateToRoute(
                                     backStack,
@@ -548,15 +547,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                     navRouteTracker
                                 )
                             },
-                        )
-                    }
-                    // 临时诊断：本作用域每成功重组一次记一个 provider 身份码，
-                    // 不逐条落日志页——由阅读面入场期满时并进唯一的
-                    // 【页面跳转诊断】一条里。定位后随诊断一并回退。
-                    SideEffect {
-                        ReaderEntranceDiag.add(
-                            "NavHost重组 provider=" +
-                                System.identityHashCode(diagEntryProvider)
                         )
                     }
                     NavDisplay(
@@ -628,7 +618,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                             ) + fadeOut(animationSpec = tween()))
                         },
                         onBack = { MainNavigator.navigateBack(this@MainActivity, backStack) },
-                        entryProvider = diagEntryProvider
+                        entryProvider = navEntryProvider
                     )
                     // 朗读悬浮胶囊叠在整个导航之上：阅读器只是其中一个目的地，
                     // 挂在阅读器里会导致离开阅读界面后胶囊消失。
