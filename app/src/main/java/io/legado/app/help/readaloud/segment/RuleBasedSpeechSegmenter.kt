@@ -1,5 +1,6 @@
 package io.legado.app.help.readaloud.segment
 
+import io.legado.app.constant.AppPattern
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechRoleType
@@ -16,7 +17,7 @@ import io.legado.app.domain.model.readaloud.SpeechSegmentDraft
  */
 object RuleBasedSpeechSegmenter {
 
-    const val VERSION = "rule-segmenter-v3-content-split"
+    const val VERSION = "rule-segmenter-v4-blank-merge"
 
     private val quotePairs = mapOf(
         '“' to '”',
@@ -56,7 +57,8 @@ object RuleBasedSpeechSegmenter {
 
         paragraphs.forEach { paragraph ->
             val text = paragraph.text
-            if (text.isEmpty()) return@forEach
+            // 全空白段（全角空格缩进行、空行）不产生分段，否则分镜页会多出空白卡片
+            if (text.isBlank()) return@forEach
             var cursor = 0
 
             openQuote?.let { quote ->
@@ -130,6 +132,8 @@ object RuleBasedSpeechSegmenter {
     ) {
         if (start >= end) return
         val text = paragraph.text
+        // 缩进/空白片段不单独成段（对白段的缩进前缀一并省略，朗读与显示都不需要）
+        if (text.substring(start, end).isBlank()) return
         val colon = (start until end).firstOrNull { text[it] == '：' || text[it] == ':' }
         if (colon != null) {
             val cue = text.substring(start, colon).trimEnd()
@@ -217,6 +221,21 @@ object RuleBasedSpeechSegmenter {
                     text = previous.text + segment.text,
                     confidence = minOf(previous.confidence, segment.confidence),
                 )
+            } else if (
+                previous != null &&
+                segment.text.matches(AppPattern.notReadAloudRegex) &&
+                // 章内无缝（如跨段引号在下一段开头的闭合引号 "）才并入前段；
+                // 有缝隙的孤立碎段直接丢弃——朗读不读标点，留着一节课只会污染分镜
+                segment.chapterPosition == previous.chapterPosition + previous.text.length
+            ) {
+                result[result.lastIndex] = previous.copy(
+                    end = segment.end,
+                    text = previous.text + segment.text,
+                    confidence = minOf(previous.confidence, segment.confidence),
+                )
+            } else if (segment.text.matches(AppPattern.notReadAloudRegex)) {
+                // 无处可并的纯标点/空白碎段直接丢弃：朗读不读它，分镜也不该显示它
+                return@forEach
             } else {
                 result += segment
             }
