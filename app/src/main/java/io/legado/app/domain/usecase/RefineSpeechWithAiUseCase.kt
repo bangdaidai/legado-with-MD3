@@ -160,6 +160,7 @@ class RefineSpeechWithAiUseCase(
         reasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
         policy: ContentSplitPolicy = ContentSplitPolicy.SentenceLevel,
         now: Long = System.currentTimeMillis(),
+        source: String = "朗读",
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
         val bookUrl = analysisResult.analysis.bookUrl
@@ -309,6 +310,7 @@ class RefineSpeechWithAiUseCase(
         preset: AiTaskPresetConfig,
         reasoningLevel: AiReasoningLevel,
         now: Long,
+        source: String,
     ): List<ChapterSpeechSegment> {
         val candidates = analysisResult.segments.filter { segment ->
             !segment.userLocked && segment.source != SpeechResolutionSource.Ai && (
@@ -490,6 +492,7 @@ class RefineSpeechWithAiUseCase(
         preset: AiTaskPresetConfig,
         reasoningLevel: AiReasoningLevel,
         now: Long,
+        source: String,
     ): List<ChapterSpeechSegment> {
         val atoms = paragraphs.flatMap(AiSpeechAtomizer::atomize)
         if (atoms.isEmpty()) return analysisResult.segments
@@ -535,7 +538,7 @@ class RefineSpeechWithAiUseCase(
             // 坏组（未知 characterId、未知 atomId、跨段合并不连续）整组降级为未识别，
             // 组内原子稍后按未识别朗读——文本保留，不再让一个坏组作废整章
             val usableGroups = groups.mapNotNull { group ->
-                val groupedAtoms = group.atomIds.mapNotNull(atomsById[it])
+                val groupedAtoms = group.atomIds.mapNotNull { atomsById[it] }
                 when {
                     group.characterId != null && group.characterId !in knownIds -> {
                         AppLog.putDebug("AI 理解返回未知 characterId，丢弃该组: ${group.characterId}")
