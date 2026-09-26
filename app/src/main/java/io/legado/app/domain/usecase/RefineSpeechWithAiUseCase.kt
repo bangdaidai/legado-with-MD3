@@ -133,6 +133,11 @@ class RefineSpeechWithAiUseCase(
         val preset = resolvePreset()
         val profiles = knownProfiles(bookUrl)
         val characterRevision = profiles
+            // AI 分析自建的草稿卡是分析的产物：计入版本号会让每次分析都让自己下一次的
+            // 缓存失效（草稿卡落库 → revision 变 → 同章下一次朗读 key 对不上 → 重新
+            // 分析 → 又建卡……死循环）。只有用户手动维护的角色（转正/编辑/新增正式卡）
+            // 才构成「角色库变化」，需要让旧分析过期。
+            .filter { it.status != BookCharacterProfile.STATUS_DRAFT }
             .sortedBy(BookCharacterProfile::id)
             .joinToString("|") { "${it.id}:${it.updatedAt}" }
         val promptHash = MD5Utils.md5Encode(systemPrompt(preset, mode))
