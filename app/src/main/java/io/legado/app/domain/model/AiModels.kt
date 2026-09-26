@@ -401,6 +401,11 @@ data class AiGenerateRequest(
      */
     val suppressLog: Boolean = false,
     /**
+     * 调用来源的人话标注（如「第 8 章」），原样进 AI 日志的场景行，
+     * 让用户不用靠 payload 内容去猜这次分析的是哪一章。
+     */
+    val sourceLabel: String? = null,
+    /**
      * 是否注入只读书籍工具（AiToolAwareGenerationUseCase 的默认行为）。
      * 请求本身已带全部所需材料（如人物速查的原文摘录）时置 false，
      * 避免模型多轮翻书浪费请求、触发免费模型限流。

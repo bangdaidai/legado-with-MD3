@@ -21,6 +21,7 @@ import io.legado.app.data.repository.ai.formatAiPromptForLog
 import io.legado.app.data.repository.ai.truncateForLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -55,7 +56,6 @@ class AiTextRepositoryImpl(
         val start = System.currentTimeMillis()
         val provider = request.model.provider
         val model = request.model
-        val promptForLog = formatAiPromptForLog(request.messages)
         val recording = RecordingTrace(start)
 
         var response: AiGenerateResponse? = null
@@ -65,6 +65,7 @@ class AiTextRepositoryImpl(
         // 猜，限流/超时分类全部失效。
         var failure: Throwable? = null
         var cancellation: CancellationException? = null
+        var cancelReason: String? = null
         try {
             response = withContext(Dispatchers.IO) {
                 withTimeout(callTimeoutMs()) {
@@ -76,11 +77,20 @@ class AiTextRepositoryImpl(
             failure = e
         } catch (e: CancellationException) {
             cancellation = e
-            // 取消原因由 cancel 点带在异常消息里（如"被新一轮起播取代"），原样进日志
-            error = e.message?.takeIf { it.isNotBlank() }
         } catch (e: Throwable) {
             error = e.message ?: e.javaClass.simpleName
             failure = e
+        }
+
+        if (cancellation != null) {
+            // cancel 点带的人话原因挂在 Job 的取消原因上（异常本身可能是
+            // "y1 was cancelled" 这类协程名包装，对排查毫无价值）
+            cancelReason = cancellation.message
+                ?.takeIf { it.isNotBlank() && !Regex("\w+ was cancelled").matches(it) }
+                ?: runCatching {
+                    coroutineContext[Job]?.getCancellationException()?.message
+                }.getOrNull()
+                    ?.takeIf { it.isNotBlank() && !Regex("\w+ was cancelled").matches(it) }
         }
 
         withContext(NonCancellable) {
@@ -95,7 +105,7 @@ class AiTextRepositoryImpl(
                     summary = logConclusion(
                         taskType = request.taskType,
                         cancelled = cancellation != null,
-                        error = error,
+                        error = if (cancellation != null) cancelReason else error,
                         outputChars = response?.text?.length ?: 0,
                         hasReasoning = !response?.reasoning.isNullOrBlank(),
                     ),
@@ -103,12 +113,12 @@ class AiTextRepositoryImpl(
                     // 取消单独一档：超时在上面已经按「请求超时」归到失败，不会走到这里
                     cancelled = cancellation != null,
                     durationMillis = System.currentTimeMillis() - start,
-                    error = error,
-                    scenario = aiTaskSceneLabel(request.taskType),
+                    error = if (cancellation != null) cancelReason else error,
+                    scenario = listOfNotNull(
+                        aiTaskSceneLabel(request.taskType),
+                        request.sourceLabel,
+                    ).joinToString(" · "),
                     steps = recording.steps,
-                    prompt = promptForLog,
-                    reasoning = response?.reasoning?.truncateForLog()?.ifEmpty { null },
-                    output = response?.text?.truncateForLog()?.ifEmpty { null },
                 )
             )
         }
@@ -226,9 +236,8 @@ class AiTextRepositoryImpl(
         hasReasoning: Boolean,
     ): String = when {
         cancelled -> when {
-            // 原因由各 cancel 点带在异常消息里；没带的只剩协程名（"y1 was cancelled"）
-            error.isNullOrBlank() || Regex("\\w+ was cancelled$").matches(error) ->
-                "调用被取消：上层未标注原因（朗读轮次重排或停止朗读）"
+            // 原因由 cancel 点带在异常消息上；没带的只剩协程名（"y1 was cancelled"）
+            error.isNullOrBlank() -> "调用被取消：上层未标注原因"
             else -> "调用被取消：$error"
         }
         error != null && error.contains("超时") ->

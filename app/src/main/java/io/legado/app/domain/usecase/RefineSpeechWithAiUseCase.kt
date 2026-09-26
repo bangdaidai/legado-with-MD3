@@ -339,7 +339,7 @@ class RefineSpeechWithAiUseCase(
                 },
             )
             val response = try {
-                generateResponse(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel)
+                generateResponse(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel, analysisResult.analysis.chapterIndex)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -498,7 +498,7 @@ class RefineSpeechWithAiUseCase(
                 },
             )
             val groups =
-                parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel))
+                parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel, analysisResult.analysis.chapterIndex))
             validateCoverage(chunk, groups)
             val knownIds = knownProfiles.mapTo(hashSetOf(), BookCharacterProfile::id)
             require(groups.all { group ->
@@ -557,13 +557,15 @@ class RefineSpeechWithAiUseCase(
         mode: SpeechAnalysisMode,
         payload: Any,
         reasoningLevel: AiReasoningLevel,
-    ): String = generateResponse(preset, mode, payload, reasoningLevel).text
+        chapterIndex: Int? = null,
+    ): String = generateResponse(preset, mode, payload, reasoningLevel, chapterIndex).text
 
     private suspend fun generateResponse(
         preset: AiTaskPresetConfig,
         mode: SpeechAnalysisMode,
         payload: Any,
         reasoningLevel: AiReasoningLevel,
+        chapterIndex: Int? = null,
     ): AiGenerateResponse {
         // 待决策的分段/原子数量决定输出 JSON 的长度：每条决策（segmentId+UUID+枚举）
         // 实测约 200-300 字符。按数量放大 max_tokens，否则长章的决策列表会在
@@ -583,7 +585,7 @@ class RefineSpeechWithAiUseCase(
                 ),
                 params = speechAnalysisParams(preset, reasoningLevel, decisionCount),
                 taskType = AiTaskType.ANALYZE_SPEECH,
-            )
+                sourceLabel = chapterIndex?.let { "第 ${it + 1} 章" },
         ).getOrThrow()
     }
 
