@@ -10,6 +10,7 @@ import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.model.AiAvailableModel
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
+import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.aiTaskSceneLabel
 import io.legado.app.domain.model.AiProviderConfig
 import io.legado.app.domain.model.RecordingTrace
@@ -52,7 +53,6 @@ class AiTextRepositoryImpl(
         val start = System.currentTimeMillis()
         val provider = request.model.provider
         val model = request.model
-        val summary = summarizeRequest(request)
         val promptForLog = formatAiPromptForLog(request.messages)
         val recording = RecordingTrace(start)
 
@@ -74,7 +74,6 @@ class AiTextRepositoryImpl(
             failure = e
         } catch (e: CancellationException) {
             cancellation = e
-            error = e.message?.takeIf { it.isNotBlank() } ?: "已取消"
         } catch (e: Throwable) {
             error = e.message ?: e.javaClass.simpleName
             failure = e
@@ -89,7 +88,13 @@ class AiTextRepositoryImpl(
                     providerProtocol = provider.protocol,
                     modelId = model.modelId,
                     modelDisplayName = model.displayName,
-                    summary = summary,
+                    summary = logConclusion(
+                        taskType = request.taskType,
+                        cancelled = cancellation != null,
+                        error = error,
+                        outputChars = response?.text?.length ?: 0,
+                        hasReasoning = !response?.reasoning.isNullOrBlank(),
+                    ),
                     success = cancellation == null && error == null,
                     // 取消单独一档：超时在上面已经按「请求超时」归到失败，不会走到这里
                     cancelled = cancellation != null,
@@ -115,7 +120,6 @@ class AiTextRepositoryImpl(
         val start = System.currentTimeMillis()
         val provider = request.model.provider
         val model = request.model
-        val summary = summarizeRequest(request)
         val recording = RecordingTrace(start)
         val suppressLog = request.suppressLog
         // suppressLog 的调用方（工具感知生成）会自己合并落一条日志，这里不再格式化提示词
@@ -143,7 +147,7 @@ class AiTextRepositoryImpl(
                 val logError = if (success) {
                     null
                 } else if (cancelled) {
-                    cause?.message?.takeIf { it.isNotBlank() } ?: "已取消"
+                    null
                 } else {
                     cause?.message ?: cause?.javaClass?.simpleName
                 }
@@ -155,7 +159,13 @@ class AiTextRepositoryImpl(
                         providerProtocol = provider.protocol,
                         modelId = model.modelId,
                         modelDisplayName = model.displayName,
-                        summary = summary,
+                        summary = logConclusion(
+                            taskType = request.taskType,
+                            cancelled = cancelled,
+                            error = logError,
+                            outputChars = outputBuilder.length,
+                            hasReasoning = reasoningBuilder.isNotEmpty(),
+                        ),
                         success = success,
                         cancelled = cancelled,
                         durationMillis = System.currentTimeMillis() - start,
@@ -198,12 +208,29 @@ class AiTextRepositoryImpl(
         return result
     }
 
-    private fun summarizeRequest(request: AiGenerateRequest): String {
-        val content = request.messages
-            .lastOrNull { it.role == "user" || it.role == "system" }
-            ?.content
-            ?: request.messages.lastOrNull()?.content
-            .orEmpty()
-        return content.replace("\\s+".toRegex(), " ").trim()
+    /**
+     * 日志卡片的诊断结论（不放弃技术细节：原始异常仍写 [AiLogEntry.error]，原始
+     * 输入输出在展开后可见）。取消按场景翻成人话——"y1 was cancelled" 这类协程
+     * 载体名对排查毫无帮助；失败给一句分类与建议；成功给输出统计。
+     */
+    private fun logConclusion(
+        taskType: String?,
+        cancelled: Boolean,
+        error: String?,
+        outputChars: Int,
+        hasReasoning: Boolean,
+    ): String = when {
+        cancelled -> when (taskType) {
+            AiTaskType.ANALYZE_SPEECH ->
+                "朗读轮次切换或停止朗读时被取消，属正常轮替；本次分析未完成，下次分析会重跑"
+            else -> "调用被上层取消（切换会话/翻页/停止），非模型或网络故障"
+        }
+        error != null && error.contains("超时") ->
+            "请求超时：可在 AI 设置调大「调用超时」，或减少单次输入长度后重试"
+        error != null -> "调用失败：$error"
+        else -> buildString {
+            append("成功，输出 $outputChars 字")
+            if (hasReasoning) append("，含思考内容")
+        }
     }
 }

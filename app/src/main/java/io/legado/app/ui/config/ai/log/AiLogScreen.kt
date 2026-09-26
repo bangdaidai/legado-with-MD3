@@ -244,7 +244,21 @@ private fun LogCard(
                 Text(
                     text = item.summary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (item.success || item.cancelled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                    maxLines = if (expanded) Int.MAX_VALUE else 4,
+                )
+            }
+            // 结论区放最前（summary + error），原始输入输出只在展开后看
+            if (!item.error.isNullOrBlank()) {
+                Text(
+                    text = stringResource(R.string.ai_log_error_format, item.error),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor,
                     modifier = Modifier.padding(top = 4.dp),
                     maxLines = if (expanded) Int.MAX_VALUE else 4,
                 )
@@ -260,15 +274,6 @@ private fun LogCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-            if (!item.success && !item.error.isNullOrBlank()) {
-                Text(
-                    text = stringResource(R.string.ai_log_error_format, item.error),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = statusColor,
-                    modifier = Modifier.padding(top = 4.dp),
-                    maxLines = if (expanded) Int.MAX_VALUE else 4,
-                )
-            }
             if (hasLongContent) {
             Row(
                 modifier = Modifier
