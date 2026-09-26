@@ -50,6 +50,8 @@ data class ReadAloudPlayerUiState(
     val timerChapters: Int = 0,
     val bgMode: Int = 0,
     val activeSheet: ReadAloudPlayerSheet? = null,
+    /** 正文字号（sp），跟随阅读页当前排版样式；随 ReadStyleGateway 的 revision 重建。 */
+    val bodyTextSize: Int = 20,
 )
 
 sealed interface ReadAloudPlayerSheet {

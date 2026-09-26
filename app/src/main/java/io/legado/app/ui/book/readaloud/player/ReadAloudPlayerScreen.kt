@@ -68,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeProgressive
@@ -600,7 +601,8 @@ private fun ChapterTextPage(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(contentPadding),
-                style = LegadoTheme.typography.bodyLarge,
+                style = LegadoTheme.typography.bodyLarge
+                    .copy(fontSize = state.bodyTextSize.sp),
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -629,7 +631,9 @@ private fun ChapterTextPage(
                             .clickable { onIntent(ReadAloudPlayerIntent.SeekTo(line.chapterPosition)) }
                             .padding(horizontal = 12.dp, vertical = 12.dp)
                             .then(flowingTextModifier),
-                        style = LegadoTheme.typography.titleLargeEmphasized,
+                        // 字号跟随阅读页当前排版（state.bodyTextSize），其余观感保持播放器主题
+                        style = LegadoTheme.typography.titleLargeEmphasized
+                            .copy(fontSize = state.bodyTextSize.sp),
                         color = if (active) LegadoTheme.colorScheme.onSurface
                         else LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     )

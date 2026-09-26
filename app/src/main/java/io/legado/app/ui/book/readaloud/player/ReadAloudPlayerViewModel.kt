@@ -10,6 +10,7 @@ import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
+import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
@@ -18,6 +19,7 @@ import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.model.settings.ReadSettings
 import io.legado.app.help.config.AppConfigStore
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.compatDsInt
 import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.service.BaseReadAloudService
@@ -37,6 +39,7 @@ class ReadAloudPlayerViewModel(
     private val coordinator: ReadAloudPlayerCoordinator,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val readSettingsGateway: ReadSettingsGateway,
+    private val readStyleGateway: ReadStyleGateway,
     private val application: Application,
     private val readAloudSessionStore: ReadAloudSessionStore,
     private val aiProfileGateway: AiProfileGateway,
@@ -68,7 +71,10 @@ class ReadAloudPlayerViewModel(
         coordinator.state,
         AppConfigStore.observeInt(PreferKey.readAloudPlayerBgMode),
         activeSheet,
-    ) { source, bgMode, sheet ->
+        // 排版变更（字号/行距等）唯一通知：revision 递增即重建快照，
+        // 正文行字号跟随阅读页当前排版样式（与 ReadBookViewModel.collectReadStyle 同源约定）。
+        readStyleGateway.state,
+    ) { source, bgMode, sheet, _ ->
         toUiState(source, bgMode ?: ReadAloudBgMode.Blur, sheet)
     }.stateIn(
         scope = viewModelScope,
@@ -297,6 +303,7 @@ class ReadAloudPlayerViewModel(
             finishCurrentChapterAfterTimer = source.finishCurrentChapterAfterTimer,
             bgMode = bgMode,
             activeSheet = sheet,
+            bodyTextSize = ReadBookConfig.textSize,
         )
     }
 
