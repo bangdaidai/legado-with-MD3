@@ -453,7 +453,8 @@ abstract class BaseReadAloudService : BaseService(),
         ReadBook.upReadTime()
         super.onDestroy()
         prepareReadAloudGeneration++
-        prepareReadAloudJob?.cancel()
+        // 取消带原因：沿协程树传进 AI 请求的日志，"已取消"不再是没法排查的天书
+        prepareReadAloudJob?.cancel(CancellationException("朗读服务销毁（停止朗读/关闭应用）"))
         if (useWakeLock) {
             wakeLock.release()
             wifiLock?.release()
@@ -537,7 +538,11 @@ abstract class BaseReadAloudService : BaseService(),
         sessionStore.restoreReadAloudFollow()
         clearFinishChapterTimerIfChapterChanged(ReadBook.durChapterIndex)
         val generation = ++prepareReadAloudGeneration
-        prepareReadAloudJob?.cancel()
+        // 取消带原因：旧轮里在飞的 AI 分析（整章动辄五六十秒）会记进 AI 日志，
+        // 让"为什么取消"在日志里一眼可见，而不是一个协程名 "y1 was cancelled"
+        prepareReadAloudJob?.cancel(
+            CancellationException("被新一轮起播取代（第${ReadBook.durChapterIndex + 1}章，播=$play）")
+        )
         // 先把「本章有人在准备」记上；若等轮次跑完才更新，排版批次会一路补发起播掐死在飞轮次
         preparingChapterIndex = ReadBook.durChapterIndex
         if (play) {

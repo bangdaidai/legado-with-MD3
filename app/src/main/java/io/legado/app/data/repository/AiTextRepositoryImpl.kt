@@ -74,6 +74,8 @@ class AiTextRepositoryImpl(
             failure = e
         } catch (e: CancellationException) {
             cancellation = e
+            // 取消原因由 cancel 点带在异常消息里（如"被新一轮起播取代"），原样进日志
+            error = e.message?.takeIf { it.isNotBlank() }
         } catch (e: Throwable) {
             error = e.message ?: e.javaClass.simpleName
             failure = e
@@ -147,7 +149,8 @@ class AiTextRepositoryImpl(
                 val logError = if (success) {
                     null
                 } else if (cancelled) {
-                    null
+                    // 取消原因由 cancel 点带在异常消息里（如"被新一轮起播取代"），原样进日志
+                    cause?.message?.takeIf { it.isNotBlank() }
                 } else {
                     cause?.message ?: cause?.javaClass?.simpleName
                 }
@@ -220,10 +223,11 @@ class AiTextRepositoryImpl(
         outputChars: Int,
         hasReasoning: Boolean,
     ): String = when {
-        cancelled -> when (taskType) {
-            AiTaskType.ANALYZE_SPEECH ->
-                "朗读轮次切换或停止朗读时被取消，属正常轮替；本次分析未完成，下次分析会重跑"
-            else -> "调用被上层取消（切换会话/翻页/停止），非模型或网络故障"
+        cancelled -> when {
+            // 原因由各 cancel 点带在异常消息里；没带的只剩协程名（"y1 was cancelled"）
+            error.isNullOrBlank() || Regex("\\w+ was cancelled$").matches(error) ->
+                "调用被取消：上层未标注原因（朗读轮次重排或停止朗读）"
+            else -> "调用被取消：$error"
         }
         error != null && error.contains("超时") ->
             "请求超时：可在 AI 设置调大「调用超时」，或减少单次输入长度后重试"
