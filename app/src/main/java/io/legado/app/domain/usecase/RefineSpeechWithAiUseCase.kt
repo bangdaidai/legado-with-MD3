@@ -499,27 +499,53 @@ class RefineSpeechWithAiUseCase(
                     mapOf("atomId" to atom.id, "text" to atom.text)
                 },
             )
-            val groups =
+            // 解析失败（JSON 被截断、结构坏）该块按未识别朗读——文本保留、整章不再作废
+            val groups = try {
                 parseAtomGroups(generate(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel, analysisResult.analysis.chapterIndex, source))
-            validateCoverage(chunk, groups)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                AppLog.putDebug("AI 理解分块解析失败，该块按未识别朗读（${chunk.size} 原子）：${e.message}")
+                emptyList()
+            }
+            val atomsById = chunk.associateBy(AiSpeechAtom::id)
             val knownIds = knownProfiles.mapTo(hashSetOf(), BookCharacterProfile::id)
-            require(groups.all { group ->
-                group.characterId == null || group.characterId in knownIds
-            }) { "AI returned an unknown characterId" }
+            // 坏组（未知 characterId、未知 atomId、跨段合并不连续）整组降级为未识别，
+            // 组内原子稍后按未识别朗读——文本保留，不再让一个坏组作废整章
+            val usableGroups = groups.mapNotNull { group ->
+                val groupedAtoms = group.atomIds.mapNotNull(atomsById[it])
+                when {
+                    group.characterId != null && group.characterId !in knownIds -> {
+                        AppLog.putDebug("AI 理解返回未知 characterId，丢弃该组: ${group.characterId}")
+                        null
+                    }
+                    groupedAtoms.size != group.atomIds.size -> {
+                        AppLog.putDebug("AI 理解返回未知 atomId，丢弃该组")
+                        null
+                    }
+                    groupedAtoms.map(AiSpeechAtom::paragraphIndex).distinct().size != 1 -> {
+                        AppLog.putDebug("AI 理解试图跨段合并原子，丢弃该组")
+                        null
+                    }
+                    else -> group to groupedAtoms
+                }
+            }
             knownProfiles = ensureDraftProfiles(
                 bookUrl = analysisResult.analysis.bookUrl,
                 profiles = knownProfiles,
-                speakers = groups.mapNotNull { it.newSpeaker() },
+                speakers = usableGroups.mapNotNull { it.first.newSpeaker() },
                 now = now,
             )
             val profilesById = knownProfiles.associateBy(BookCharacterProfile::id)
             val profilesByName = knownProfiles.associateBy { it.name.trim() }
-            val atomsById = chunk.associateBy(AiSpeechAtom::id)
-            groups.forEach { group ->
-                val groupedAtoms = group.atomIds.map(atomsById::getValue)
-                require(groupedAtoms.map(AiSpeechAtom::paragraphIndex).distinct().size == 1) {
-                    "AI cannot merge atoms across paragraphs"
+            // 覆盖去重：同一原子只进一个段；未被任何可用组引用的原子按未识别朗读
+            val covered = hashSetOf<String>()
+            usableGroups.forEach { (group, groupedAtoms) ->
+                if (groupedAtoms.any { it.id in covered }) {
+                    AppLog.putDebug("AI 理解重复引用原子，丢弃该组")
+                    return@forEach
                 }
+                groupedAtoms.forEach { covered += it.id }
                 val first = groupedAtoms.first()
                 val last = groupedAtoms.last()
                 val paragraph = paragraphs.first { it.index == first.paragraphIndex }
@@ -545,6 +571,34 @@ class RefineSpeechWithAiUseCase(
                     characterName = if (group.roleType == SpeechRoleType.Narrator) "" else character?.name.orEmpty(),
                     emotion = group.emotion,
                     confidence = group.confidence,
+                    source = SpeechResolutionSource.Ai,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            }
+            chunk.filter { it.id !in covered }.forEach { atom ->
+                val paragraph = paragraphs.first { it.index == atom.paragraphIndex }
+                result += ChapterSpeechSegment(
+                    id = SpeechIdentity.segmentId(
+                        analysisId = analysisResult.analysis.id,
+                        paragraphIndex = atom.paragraphIndex,
+                        start = atom.start,
+                        end = atom.end,
+                    ),
+                    analysisId = analysisResult.analysis.id,
+                    bookUrl = analysisResult.analysis.bookUrl,
+                    chapterIndex = analysisResult.analysis.chapterIndex,
+                    paragraphIndex = atom.paragraphIndex,
+                    start = atom.start,
+                    end = atom.end,
+                    chapterPosition = paragraph.chapterPosition + atom.start,
+                    text = paragraph.text.substring(atom.start, atom.end),
+                    roleType = SpeechRoleType.Unknown,
+                    characterId = null,
+                    characterName = "",
+                    emotion = "",
+                    confidence = 0.5f,
+                    // 标记已复核（结论=未识别）：文本保留、走"未知"音色，避免重听反复发请求
                     source = SpeechResolutionSource.Ai,
                     createdAt = now,
                     updatedAt = now,
@@ -752,14 +806,6 @@ class RefineSpeechWithAiUseCase(
 
     private fun JsonObject.optionalString(name: String): String? =
         get(name)?.takeUnless { it.isJsonNull }?.asString
-
-    private fun validateCoverage(atoms: List<AiSpeechAtom>, groups: List<AiAtomGroup>) {
-        require(groups.isNotEmpty()) { "AI returned no speech groups" }
-        val returned = groups.flatMap(AiAtomGroup::atomIds)
-        require(returned == atoms.map(AiSpeechAtom::id)) {
-            "AI atom coverage is incomplete, duplicated, or out of order"
-        }
-    }
 
     private fun BookCharacterProfile.toPromptMap(): Map<String, Any?> = mapOf(
         "characterId" to id,
