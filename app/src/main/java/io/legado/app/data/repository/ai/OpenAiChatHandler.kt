@@ -108,7 +108,7 @@ class OpenAiChatHandler : AiProtocolHandler {
                         reasoningPreview = reasoning.take(300)
                         null
                     } else {
-                        throw Exception("Empty AI response: ${response.body.take(300)}")
+                        throw Exception("Empty AI response: ${response.body?.take(300) ?: "<no body>"}")
                     }
                 } else {
                     AiGenerateResponse(text = text, reasoning = reasoning, rawBody = response.body)

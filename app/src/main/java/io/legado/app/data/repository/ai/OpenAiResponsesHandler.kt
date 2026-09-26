@@ -97,7 +97,7 @@ class OpenAiResponsesHandler : AiProtocolHandler {
             val root = GSON.fromJson(response.body, JsonObject::class.java)
             val text = root?.getString("output_text") ?: root.extractResponsesOutputText()
             if (text.isNullOrBlank()) {
-                throw Exception("Empty AI response: ${response.body.take(300)}")
+                throw Exception("Empty AI response: ${response.body?.take(300) ?: "<no body>"}")
             } else {
                 AiGenerateResponse(
                     text = text,
