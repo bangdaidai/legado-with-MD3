@@ -190,12 +190,17 @@ class BookshelfViewModel(
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
 
     val allGroupsFlow: StateFlow<List<BookGroup>> = bookGroupRepository.flowAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        // 与 uiState 同一道理：这个流由书架界面直接 collect，界面一销毁就没人订阅。
+        // WhileSubscribed(5000) 会让它退回 emptyList()，返回书架时分组标签先空一下再被
+        // 重新查出来的结果填回去，和列表"现场重算"是同一类观感问题。保持常热。
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 标签管理中设置的标签名 -> 颜色（Long），供书架标签按标签系统配色。 */
     val tagColorMapFlow: StateFlow<Map<String, Long>> = bookshelfTagGateway.observeAllBookTags()
         .map { list -> list.associate { it.name to it.color } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+        // 同上：书架界面直接 collect 的另一条链，断供后退回 emptyMap() 会让标签配色
+        // 在返回时重新刷一遍。
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /** 排除标签规则（普通关键字 / 正则），供书架标签过滤。 */
     val excludedTagsFlow: StateFlow<List<io.legado.app.data.entities.ExcludedTag>> =
@@ -809,7 +814,14 @@ class BookshelfViewModel(
         )
     }.stateIn(
         viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
+        // 不能用 WhileSubscribed(5000)：书架界面一被销毁（进阅读页就没人在看了）超过 5 秒，
+        // 这条链就断供，StateFlow 退回下面那个"空书架"初始值；等用户回来时它才现场重新查库、
+        // 重新排序，几帧之后把最终顺序砸下来——观感就是返回途中"那一行空出来、列表往上蹿"。
+        // 离开不到 5 秒（看完一页马上返回）时数据还热着，返回第一帧就是排好的终态，所以没有动画。
+        // 顺序本来就该实时更新，要修的不是把它钉住，而是让它别在背后断电：常热，
+        // 阅读进度落库时这里立刻重算，返回时第一眼即终态。上游是 Room 的反应式查询，
+        // 没有变化就不重算，空闲开销为零。
+        SharingStarted.Eagerly,
         BookshelfUiState(
             settings = initialSettings,
             selectedGroupId = initialSettings.saveTabPosition,
