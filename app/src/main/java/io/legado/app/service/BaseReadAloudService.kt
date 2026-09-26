@@ -428,6 +428,10 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     fun observeLiveBus() {
+        observeEvent<String>(EventBus.ALOUD_AI_FALLBACK) { message ->
+            // AI 分析失败回落规则必须让用户知道，否则听半天单角色还以为 AI 生效了
+            toastOnUi(message)
+        }
         observeEvent<Bundle>(EventBus.READ_ALOUD_PLAY) {
             val play = it.getBoolean("play")
             val pageIndex = it.getInt("pageIndex")

@@ -1,6 +1,7 @@
 package io.legado.app.domain.usecase
 
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
@@ -10,6 +11,7 @@ import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
+import io.legado.app.utils.postEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 
@@ -62,7 +64,7 @@ class PrepareChapterSpeechPlanUseCase(
                         )
                     } else {
                         // 没配 AI 模型时这里就抛了，静默回落会让用户以为 AI 模式生效了
-                        notifyFallback("AI 分析未启用，已按规则模式朗读", it)
+                        notifyFallback("AI 分析未启用，已按规则模式朗读", it, chapterIndex)
                     }
                 }
                 .getOrDefault(ruleVersion)
@@ -104,7 +106,7 @@ class PrepareChapterSpeechPlanUseCase(
                         it,
                     )
                 } else {
-                    notifyFallback("AI 分析说话人失败，已回落规则结果", it)
+                    notifyFallback("AI 分析说话人失败，已回落规则结果", it, chapterIndex)
                 }
             }.getOrDefault(locallyResolved)
         }
@@ -137,12 +139,16 @@ class PrepareChapterSpeechPlanUseCase(
 
     /**
      * 回落提示按「原因」去重：只有换了新原因才弹 toast，重复的只进日志。
+     * 同时发 [EventBus.ALOUD_AI_FALLBACK] 让朗读服务把原因 toast 给用户——
+     * 静默回落曾让用户以为 AI 生效了，听半天单角色才发现不对。
      */
-    private fun notifyFallback(reason: String, error: Throwable) {
-        val message = "$reason\n${error.describeError()}"
+    private fun notifyFallback(reason: String, error: Throwable, chapterIndex: Int? = null) {
+        val prefix = chapterIndex?.let { "第${it + 1}章 " }.orEmpty()
+        val message = "$prefix$reason\n${error.describeError()}"
         val repeated = message == lastNotifiedFallback
         lastNotifiedFallback = message
         AppLog.put(message, error, !repeated)
+        postEvent(EventBus.ALOUD_AI_FALLBACK, message)
     }
 
     /**
