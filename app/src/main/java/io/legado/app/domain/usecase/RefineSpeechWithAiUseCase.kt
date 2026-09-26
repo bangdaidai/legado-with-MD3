@@ -31,6 +31,8 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.Uuid
@@ -160,6 +162,33 @@ class RefineSpeechWithAiUseCase(
         val guard = bookLocks.getOrPut(bookUrl) { Mutex() }
         return guard.withLock {
             if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return@withLock analysisResult
+            // 等锁期间（上一轮的分析在 NonCancellable 里还在跑）可能已把本章 AI 结果
+            // 落库：直接复用最新缓存，否则补发轮会拿着进锁前的规则快照再发一次 AI
+            val latest = runCatching {
+                chapterSpeechGateway.getAnalysis(
+                    bookUrl = analysisResult.analysis.bookUrl,
+                    chapterIndex = analysisResult.analysis.chapterIndex,
+                    contentHash = analysisResult.analysis.contentHash,
+                    resolverVersion = analysisResult.analysis.resolverVersion,
+                )
+            }.getOrNull()
+            if (latest != null &&
+                latest.id == analysisResult.analysis.id &&
+                latest.updatedAt > analysisResult.analysis.updatedAt &&
+                latest.status != SpeechAnalysisStatus.Pending &&
+                latest.status != SpeechAnalysisStatus.Running
+            ) {
+                val latestSegments = runCatching {
+                    chapterSpeechGateway.getSegments(latest.id)
+                }.getOrNull().orEmpty()
+                if (latestSegments.isNotEmpty()) {
+                    return@withLock analysisResult.copy(
+                        analysis = latest,
+                        segments = latestSegments,
+                        fromCache = true,
+                    )
+                }
+            }
             if (
                 mode == SpeechAnalysisMode.AiUnderstanding &&
                 analysisResult.fromCache &&
@@ -168,36 +197,43 @@ class RefineSpeechWithAiUseCase(
             val profiles = knownProfiles(analysisResult.analysis.bookUrl)
             val preset = resolvePreset()
             val refined = try {
-                when (mode) {
-                    SpeechAnalysisMode.Rule -> analysisResult.segments
-                    SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
-                        analysisResult = analysisResult,
-                        profiles = profiles,
-                        preset = preset,
-                        reasoningLevel = reasoningLevel,
-                        now = now,
-                    )
-                    SpeechAnalysisMode.AiUnderstanding -> {
-                        // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
-                        // 拆成多个片段，让用户显式选择的「一段 = 一个播放单元」失效。此时只让 AI
-                        // 补全说话人与情绪，边界仍由规则分段器提供的整单元保持。
-                        if (!policy.allowRoleSplits || analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
-                            completeRuleSegments(
-                                analysisResult = analysisResult,
-                                profiles = profiles,
-                                preset = preset,
-                                reasoningLevel = reasoningLevel,
-                                now = now,
-                            )
-                        } else {
-                            understandAtoms(
-                                analysisResult = analysisResult,
-                                paragraphs = paragraphs,
-                                profiles = profiles,
-                                preset = preset,
-                                reasoningLevel = reasoningLevel,
-                                now = now,
-                            )
+                // 朗读轮次被新轮取代时会 cancel 掉整条准备链——如果不隔离，已经发出去的
+                // AI 请求（整章分析动辄五六十秒）会被连根掐死、结果全扔，该章下次朗读
+                // 又得从零再调一次，表现为「AI 分析总是不成功」。包 NonCancellable 让
+                // 这次调用跑完并落库：当前轮回落规则朗读不受影响，补发轮/下次重听直接
+                // 命中缓存，不再重复烧 token。书级锁保证它不会与下一轮的分析并发。
+                withContext(NonCancellable) {
+                    when (mode) {
+                        SpeechAnalysisMode.Rule -> analysisResult.segments
+                        SpeechAnalysisMode.RuleWithAi -> completeRuleSegments(
+                            analysisResult = analysisResult,
+                            profiles = profiles,
+                            preset = preset,
+                            reasoningLevel = reasoningLevel,
+                            now = now,
+                        )
+                        SpeechAnalysisMode.AiUnderstanding -> {
+                            // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
+                            // 拆成多个片段，让用户显式选择的「一段 = 一个播放单元」失效。此时只让 AI
+                            // 补全说话人与情绪，边界仍由规则分段器提供的整单元保持。
+                            if (!policy.allowRoleSplits || analysisResult.segments.any(ChapterSpeechSegment::userLocked)) {
+                                completeRuleSegments(
+                                    analysisResult = analysisResult,
+                                    profiles = profiles,
+                                    preset = preset,
+                                    reasoningLevel = reasoningLevel,
+                                    now = now,
+                                )
+                            } else {
+                                understandAtoms(
+                                    analysisResult = analysisResult,
+                                    paragraphs = paragraphs,
+                                    profiles = profiles,
+                                    preset = preset,
+                                    reasoningLevel = reasoningLevel,
+                                    now = now,
+                                )
+                            }
                         }
                     }
                 }
@@ -213,25 +249,28 @@ class RefineSpeechWithAiUseCase(
                 }
                 throw e
             }
-            val status = if (refined.any { segment ->
-                    segment.characterId == null && segment.roleType in setOf(
-                        SpeechRoleType.Character,
-                        SpeechRoleType.Thought,
-                    )
-                }) {
-                SpeechAnalysisStatus.Partial
-            } else {
-                SpeechAnalysisStatus.Success
+            // 落库同样不随轮次取消中断：结果落了库，补发轮/下次重听才能命中缓存
+            withContext(NonCancellable) {
+                val status = if (refined.any { segment ->
+                        segment.characterId == null && segment.roleType in setOf(
+                            SpeechRoleType.Character,
+                            SpeechRoleType.Thought,
+                        )
+                    }) {
+                    SpeechAnalysisStatus.Partial
+                } else {
+                    SpeechAnalysisStatus.Success
+                }
+                val analysis = analysisResult.analysis.copy(status = status, error = "", updatedAt = now)
+                chapterSpeechGateway.saveAnalysis(analysis, refined)
+                // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
+                bookAiCooldownUntil.remove(bookUrl)
+                analysisResult.copy(
+                    analysis = analysis,
+                    segments = refined,
+                    fromCache = false,
+                )
             }
-            val analysis = analysisResult.analysis.copy(status = status, error = "", updatedAt = now)
-            chapterSpeechGateway.saveAnalysis(analysis, refined)
-            // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
-            bookAiCooldownUntil.remove(bookUrl)
-            analysisResult.copy(
-                analysis = analysis,
-                segments = refined,
-                fromCache = false,
-            )
         }
     }
 
