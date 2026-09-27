@@ -3116,7 +3116,6 @@
     <string name="speech_storyboard_stat_segments">分段</string>
     <string name="speech_storyboard_stat_dialogues">对白</string>
     <string name="speech_storyboard_stat_speakers">说话人</string>
-    <string name="speech_storyboard_voices_assigned">已分配音色 %1$d / %2$d 段</string>
     <string name="speech_storyboard_scene_title">场景 %1$d</string>
     <string name="speech_storyboard_scene_segments">%1$d 段</string>
     <string name="speech_storyboard_paragraph">第 %1$d 段</string>

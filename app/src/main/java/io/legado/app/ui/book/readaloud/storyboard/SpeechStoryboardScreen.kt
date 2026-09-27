@@ -647,8 +647,8 @@ private fun SegmentRow(
                 // 只洗展示这一层，落库文本与试听合成拿到的仍是原文（与 NG 同一口径）
                 text = item.text.trimStart(' ', '\t', '\u3000'),
                 style = LegadoTheme.typography.bodyMedium,
-                // 本页是核对用的密集列表，正文比主题默认（16sp）收一档到 14sp
-                fontSize = 14.sp,
+                // 本页是核对用的密集列表，正文按用户口径收到 13sp，与小字各档同径
+                fontSize = 13.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )
             if (detailsExpanded) {
@@ -760,7 +760,7 @@ private fun PreviewButton(
 /**
  * 详情页顶部拆成两张卡、内容不互相重复：
  * 配置卡＝现在按什么在读（分析模式 / 多角色朗读），
- * 数据卡＝这一章有多少（场景/分段/对白/说话人四格 + 已分配音色进度）。
+ * 数据卡＝这一章有多少（场景/分段(已分配/总数)/对白/说话人四格）。
  * 之前两行裸文本里段数出现两遍、「已分配音色 39 段」还跟「39 段对白」撞眼。
  */
 @Composable
@@ -799,38 +799,31 @@ private fun SummaryCards(state: SpeechStoryboardUiState) {
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
             ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        if (summary.sceneCount > 0) {
-                            StatCell(
-                                summary.sceneCount,
-                                stringResource(R.string.speech_storyboard_stat_scenes),
-                            )
-                        }
+                    if (summary.sceneCount > 0) {
                         StatCell(
-                            summary.segmentCount,
-                            stringResource(R.string.speech_storyboard_stat_segments),
-                        )
-                        StatCell(
-                            summary.dialogueCount,
-                            stringResource(R.string.speech_storyboard_stat_dialogues),
-                        )
-                        StatCell(
-                            summary.personCount,
-                            stringResource(R.string.speech_storyboard_stat_speakers),
+                            summary.sceneCount.toString(),
+                            stringResource(R.string.speech_storyboard_stat_scenes),
                         )
                     }
-                    AppText(
-                        text = stringResource(
-                            R.string.speech_storyboard_voices_assigned,
-                            voicedSegments,
-                            summary.segmentCount,
-                        ),
-                        style = LegadoTheme.typography.labelMedium,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    // 「分段」格直接写成 已分配/总数：这一格自己讲完进度，
+                    // 下面那行「已分配音色 x/y 段」就是重复，删掉
+                    VoicedSegmentCell(
+                        voiced = voicedSegments,
+                        total = summary.segmentCount,
+                        label = stringResource(R.string.speech_storyboard_stat_segments),
+                    )
+                    StatCell(
+                        summary.dialogueCount.toString(),
+                        stringResource(R.string.speech_storyboard_stat_dialogues),
+                    )
+                    StatCell(
+                        summary.personCount.toString(),
+                        stringResource(R.string.speech_storyboard_stat_speakers),
                     )
                 }
             }
@@ -838,7 +831,7 @@ private fun SummaryCards(state: SpeechStoryboardUiState) {
     }
 }
 
-/** 配置卡一行：左灰色小标签、右正文值 */
+/** 配置卡一行：左右都收 13sp（值不再用正文档），左灰右亮 */
 @Composable
 private fun SummaryLabelRow(label: String, value: String) {
     Row(
@@ -854,7 +847,7 @@ private fun SummaryLabelRow(label: String, value: String) {
         )
         AppText(
             text = value,
-            style = LegadoTheme.typography.bodyMedium,
+            style = LegadoTheme.typography.labelMedium,
             color = LegadoTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
@@ -863,16 +856,45 @@ private fun SummaryLabelRow(label: String, value: String) {
 
 /** 数据卡格子：数字在上（主色）、小标签在下，均分列居中 */
 @Composable
-private fun RowScope.StatCell(value: Int, label: String) {
+private fun RowScope.StatCell(value: String, label: String) {
     Column(
         modifier = Modifier.weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         AppText(
-            text = value.toString(),
+            text = value,
             style = LegadoTheme.typography.titleMedium,
             color = LegadoTheme.colorScheme.primary,
         )
+        AppText(
+            text = label,
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+            maxLines = 1,
+        )
+    }
+}
+
+/** 带音色进度的「分段」格：数字位写成 已分配/总数，分母降一号灰字，标签仍是「分段」 */
+@Composable
+private fun RowScope.VoicedSegmentCell(voiced: Int, total: Int, label: String) {
+    Column(
+        modifier = Modifier.weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(horizontalArrangement = Arrangement.Center) {
+            AppText(
+                text = voiced.toString(),
+                style = LegadoTheme.typography.titleMedium,
+                color = LegadoTheme.colorScheme.primary,
+            )
+            AppText(
+                text = "/$total",
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         AppText(
             text = label,
             style = LegadoTheme.typography.labelMedium,

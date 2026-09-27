@@ -3171,7 +3171,6 @@
     <string name="speech_storyboard_stat_segments">Segments</string>
     <string name="speech_storyboard_stat_dialogues">Dialogues</string>
     <string name="speech_storyboard_stat_speakers">Speakers</string>
-    <string name="speech_storyboard_voices_assigned">Voices assigned: %1$d of %2$d segments</string>
     <string name="speech_storyboard_scene_title">Scene %1$d</string>
     <string name="speech_storyboard_scene_segments">%1$d segments</string>
     <string name="speech_storyboard_paragraph">Paragraph %1$d</string>
