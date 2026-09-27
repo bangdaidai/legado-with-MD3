@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.readaloud.player
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +37,14 @@ fun ReadAloudPlayerRouteScreen(
     // 上一本（甚至上上一本）书的正文、封面和进度上。
     LaunchedEffect(Unit) {
         playerViewModel.onIntent(ReadAloudPlayerIntent.Refresh)
+    }
+
+    // 整页退场（返回阅读页）这一刻请求「页面追声音」：nav3 pop 不重触发阅读页生命周期，
+    // 听书页 ViewModel 又是 Koin 单例不会 onCleared，组合销毁是唯一可靠的退场信号。
+    DisposableEffect(Unit) {
+        onDispose {
+            playerViewModel.onIntent(ReadAloudPlayerIntent.LeavingToReader)
+        }
     }
 
     LaunchedEffect(playerViewModel) {

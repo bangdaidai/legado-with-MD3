@@ -1908,6 +1908,12 @@ class ReadBookViewModel(
                 readAloudDelegate.updateProgress(chapterStart)
             }
         }
+        viewModelScope.launch {
+            // 听书页退场（nav3 pop 不重触发阅读页生命周期）：跟随状态下立即页面追声音
+            eventFlow<Boolean>(EventBus.READ_ALOUD_SYNC_READER_TO_VOICE).collect {
+                readAloudDelegate.syncReaderToVoiceOnReturn()
+            }
+        }
     }
 
     private fun collectReadPreferences() {

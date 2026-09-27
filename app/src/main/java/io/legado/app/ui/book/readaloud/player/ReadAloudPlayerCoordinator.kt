@@ -17,6 +17,7 @@ import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.ReadConfigUpdateBus
+import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -197,6 +198,14 @@ class ReadAloudPlayerCoordinator(
 
     /** 悬浮胶囊与播放界面的停止入口共用。 */
     fun stop() = ReadAloud.stop(application)
+
+    /**
+     * 听书页退场时告知阅读页「页面该追声音了」：nav3 返回不一定重新触发阅读页生命周期，
+     * resumeReader 里的回拉未必会跑；显式发这一事件，由阅读页在跟随状态下立即对齐。
+     */
+    fun notifyReaderToFollowVoice() {
+        postEvent(EventBus.READ_ALOUD_SYNC_READER_TO_VOICE, true)
+    }
 
     fun previousParagraph() {
         ReadAloud.prevParagraph(application)

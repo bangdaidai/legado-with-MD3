@@ -8,6 +8,8 @@ object EventBus {
     /** AI 语音分析失败回落规则时的人话提示（含章号与原因），朗读服务收到后 toast */
     const val ALOUD_AI_FALLBACK = "aloudAiFallback"
     const val TTS_PROGRESS = "ttsStart"
+    /** 离开听书页时通知阅读页：跟随状态下立即把页面追到声音所在处（排版未就绪由批次落地兜底接力） */
+    const val READ_ALOUD_SYNC_READER_TO_VOICE = "readAloudSyncReaderToVoice"
     const val AUDIO_DS = "audioDs"
     const val READ_ALOUD_DS = "readAloudDs"
     const val BATTERY_CHANGED = "batteryChanged"

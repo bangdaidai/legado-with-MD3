@@ -121,6 +121,7 @@ class ReadAloudPlayerViewModel(
                 }
             is ReadAloudPlayerIntent.OpenSheet -> activeSheet.value = intent.sheet
             ReadAloudPlayerIntent.DismissSheet -> activeSheet.value = null
+            ReadAloudPlayerIntent.LeavingToReader -> coordinator.notifyReaderToFollowVoice()
             is ReadAloudPlayerIntent.SeekTo -> coordinator.seekTo(
                 chapterPosition = intent.chapterPosition,
                 chapterLength = uiState.value.chapterLength,

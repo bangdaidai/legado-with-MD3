@@ -201,6 +201,17 @@ class ReadAloudDelegate(
 
     // --- 界面入口 ---
 
+    /**
+     * 离开听书页回到阅读页的那一刻：跟随状态下立即「页面追声音」，不等排版批次落地的兜底。
+     * 用户手动翻页脱离后页面位置归用户，不回拉；backToSpeakingPosition 内部对
+     * 跨章/同章、加载未完成各有承接路径。
+     */
+    fun syncReaderToVoiceOnReturn() {
+        val state = host.uiState
+        if (!state.isReadAloudRunning || !state.readAloudFollow) return
+        backToSpeakingPosition()
+    }
+
     /** 媒体键/胶囊触发的默认朗读界面：按设置决定开播放器还是经典控制面板。 */
     fun openDefaultInterface() {
         syncVoiceToVisiblePage()

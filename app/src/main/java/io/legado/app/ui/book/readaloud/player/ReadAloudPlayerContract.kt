@@ -87,6 +87,8 @@ sealed interface ReadAloudPlayerIntent {
     data class SetFinishCurrentChapterAfterTimer(val value: Boolean) : ReadAloudPlayerIntent
     data class OpenSheet(val sheet: ReadAloudPlayerSheet) : ReadAloudPlayerIntent
     data object DismissSheet : ReadAloudPlayerIntent
+    /** 页面退场（返回阅读页）：请求阅读页在跟随状态下立即把页面追到声音位置。 */
+    data object LeavingToReader : ReadAloudPlayerIntent
     data class SeekTo(val chapterPosition: Int) : ReadAloudPlayerIntent
 }
 
