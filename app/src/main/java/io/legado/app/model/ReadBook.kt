@@ -1325,7 +1325,21 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
             if (BaseReadAloudService.isRun) {
                 // 页面已脱离朗读位置（用户手动导航）：既不重启朗读到当前页，也不把页面拉回朗读位置
                 if (readAloudSessionStore.state.value.followReadAloudPosition) {
-                    if (shouldRestartReadAloudAfterContentLoad(
+                    if (shouldPullPageToSpeechPosition(
+                            preserveReadAloudPosition = preserveReadAloudPosition,
+                            scrollMode = isScroll,
+                            serviceChapterIndex = BaseReadAloudService.currentChapterIndex,
+                            serviceChapterPos = BaseReadAloudService.currentProgress,
+                            loadedChapterIndex = input.chapter.index,
+                            pageChapterPos = durChapterPos,
+                        )
+                    ) {
+                        // 同章、声音已读过可见页页首（听书页盖住期间翻页失败/跳段领先）：
+                        // 页面追声音，绝不重起轮——重起＝把声音拽回这页页首重读。
+                        val speechPos = BaseReadAloudService.currentProgress
+                        syncReadAloudPage(input.chapter.index, speechPos)
+                        upTextChapterAloudSpan(speechPos)
+                    } else if (shouldRestartReadAloudAfterContentLoad(
                             preserveReadAloudPosition = preserveReadAloudPosition,
                             serviceChapterIndex = BaseReadAloudService.currentChapterIndex,
                             loadedChapterIndex = input.chapter.index,

@@ -681,12 +681,14 @@ abstract class BaseReadAloudService : BaseService(),
     /**
      * "播放/继续"落到引擎前的落后闸门（听书页按钮、通知、媒体键都走这里）：
      * 哑声等交接的窗口里引擎状态还指着旧章，原样起播就是"点播放却读上一章"的案发现场。
-     * 跟随开着且声音章落后阅读页章时不起旧章，按"从你看的页读"重起一轮交接；
+     * 跟随开着且声音章**落后**阅读页章时不起旧章，按"从你看的页读"重起一轮交接；
+     * 声音领先页面时绝不按页面重起——那是"返回阅读页把听书拽回旧页页首重读"的引爆器，
+     * 正确方向是页面追声音（curPageChanged 的同章追页分支 / 回到朗读位置）。
      * 本章已有在飞轮次就只止步，不再叠第二轮。返回 true 表示本轮起播已被接管。
      */
     protected fun stalePlayGuard(): Boolean {
         val voiceChapter = readerReadAloudChapter ?: return false
-        if (voiceChapter.chapterIndex == ReadBook.durChapterIndex) return false
+        if (voiceChapter.chapterIndex >= ReadBook.durChapterIndex) return false
         if (!sessionStore.state.value.followReadAloudPosition) return false
         if (preparingChapterIndex != ReadBook.durChapterIndex) {
             ReadBook.readAloud()
