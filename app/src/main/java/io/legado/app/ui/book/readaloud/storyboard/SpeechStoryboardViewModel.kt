@@ -30,12 +30,15 @@ import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import splitties.init.appCtx
@@ -48,6 +51,8 @@ import splitties.init.appCtx
  *
  * 场景分组是朗读分析之外按需补跑的一层（[RefineSpeechWithAiUseCase.assignScenes]）：
  * 只有 AI 分析模式的分镜页会触发，成功才写回库；失败保持扁平列表，不影响朗读。
+ * 这一层的取消口径与说话人分析主链一致——**离开页面不掐 AI**：看一眼没等完就退出去别的地方，
+ * 请求照样跑完、结果照样落库，下次进这章直接命中；只有该章被重新分析或删除才作废。
  */
 class SpeechStoryboardViewModel(
     private val bookUrl: String,
@@ -76,15 +81,32 @@ class SpeechStoryboardViewModel(
     /** 本次打开页面内尝试过场景拆分的章节，失败的不重打 AI */
     private val sceneAttemptedChapters = hashSetOf<Int>()
 
+    /**
+     * 「这一章的分析在本页内被作废」的代次：重新分析、删除章节各 +1。
+     *
+     * 场景拆分现在会跨页面跑完再落库，回写前比对代次，避免拿离开页面那一刻的旧分段
+     * 盖掉用户刚重跑出来的那份分析。
+     */
+    private var sceneGeneration = 0
+
+    /**
+     * 场景拆分串行锁。
+     *
+     * 取消不再掐请求后，"快速连点好几章"会变成多个在飞 AI 请求并发打同一个模型，
+     * 只会互相挤到超时、全部白烧（主链当年就是靠同款锁治的）。这里让它们在锁上排队，
+     * 一轮一轮跑完落库。
+     */
+    private val sceneMutex = Mutex()
+
     init {
-        loadChapters()
+        loadChapters("进入分镜页")
     }
 
     override fun onCleared() {
-        // viewModelScope 销毁时的隐式取消只会留下协程名；先带原因掐掉在飞的
-        // 加载/场景拆分，AI 日志里的取消条目才知道是"用户退了分镜页"
-        loadJob?.cancel(CancellationException("退出分镜页，加载作废"))
-        sceneJob?.cancel(CancellationException("退出分镜页，场景拆分作废"))
+        // 取消带原因：退页不再掐 AI（主链与场景层都跑完落库），这一刀只放弃把结果回投界面，
+        // AI 日志里留下的取消条目说的是"谁放弃了结果"，不是"谁杀了请求"
+        loadJob?.cancel(CancellationException("退出分镜页，本轮加载不再回投界面（在飞的 AI 仍会跑完落库）"))
+        sceneJob?.cancel(CancellationException("退出分镜页，场景拆分不再回投界面（在飞的 AI 仍会跑完落库）"))
         previewJob?.cancel()
         previewJob = null
         super.onCleared()
@@ -94,7 +116,7 @@ class SpeechStoryboardViewModel(
         val selected = _uiState.value.selectedChapterIndex
         when (intent) {
             SpeechStoryboardIntent.Refresh ->
-                if (selected == null) loadChapters() else loadChapter(selected, reanalyze = false)
+                if (selected == null) loadChapters("刷新章节列表") else loadChapter(selected, reanalyze = false)
 
             SpeechStoryboardIntent.Reanalyze ->
                 selected?.let { loadChapter(it, reanalyze = true) }
@@ -103,7 +125,7 @@ class SpeechStoryboardViewModel(
 
             SpeechStoryboardIntent.BackToChapters -> {
                 stopPreview()
-                loadChapters()
+                loadChapters("返回章节列表")
             }
 
             is SpeechStoryboardIntent.PreviewSegment -> previewSegment(intent.itemId)
@@ -142,11 +164,12 @@ class SpeechStoryboardViewModel(
         }
     }
 
-    private fun loadChapters() {
-        // 取消一律带人话原因：原因会沿协程树传进在飞的 AI 请求，
-        // AI 日志里的"已取消"能直接写明是谁把这一刀掐下来的
-        loadJob?.cancel(CancellationException("分镜页刷新章节列表，上一次加载作废"))
-        sceneJob?.cancel(CancellationException("分镜页刷新章节列表，场景拆分作废"))
+    private fun loadChapters(reason: String) {
+        // 取消一律带人话原因：原因会沿协程树传下去，AI 日志里的"已取消"能直接写明
+        // 是谁放弃了这一轮。注意"放弃回投"不等于"掐掉请求"——主链与场景层的 AI 调用
+        // 都包了不可取消上下文，退页/切章都会跑完并落库。
+        loadJob?.cancel(CancellationException("分镜${reason}，本轮加载不再回投界面（在飞的 AI 仍会跑完落库）"))
+        sceneJob?.cancel(CancellationException("分镜${reason}，场景拆分不再回投界面（在飞的 AI 仍会跑完落库）"))
         loadJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -205,8 +228,8 @@ class SpeechStoryboardViewModel(
     }
 
     private fun loadChapter(chapterIndex: Int, reanalyze: Boolean) {
-        loadJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一章的加载作废"))
-        sceneJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一章的场景拆分作废"))
+        loadJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一章的加载不再回投界面（在飞的 AI 仍会跑完落库）"))
+        sceneJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一章的场景拆分不再回投界面（在飞的 AI 仍会跑完落库）"))
         stopPreview()
         val title = _uiState.value.chapters
             .firstOrNull { it.chapterIndex == chapterIndex }
@@ -262,9 +285,12 @@ class SpeechStoryboardViewModel(
     /**
      * 场景拆分是按需补跑的锦上添花层，绝不挡详情页渲染：
      * 扁平列表先发布、试听先可用，AI 再慢也在后台跑，成功才重新归组。
+     *
+     * 取消只放弃"回投这一页"，不掐请求（见 [withScenes]）：切章/退页后那一轮照样跑完落库，
+     * 下次进这章直接命中缓存。
      */
     private fun attachScenes(chapterIndex: Int, plan: List<SpeechPlanItem>) {
-        sceneJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一次场景拆分让位"))
+        sceneJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一次场景拆分不再回投界面（在飞的 AI 仍会跑完落库）"))
         sceneJob = viewModelScope.launch {
             val enriched = withScenes(chapterIndex, plan)
             // 跳过/失败时 withScenes 原样返回同一个实例，不必重发状态
@@ -314,6 +340,8 @@ class SpeechStoryboardViewModel(
             }
             prepareChapterSpeechPlan.clearAiCooldown(bookUrl)
             sceneAttemptedChapters.remove(chapterIndex)
+            // 这一章的分析从头再来一遍：还在飞的场景拆分算作废，不许拿旧分段回写
+            sceneGeneration++
         }
         return prepareChapterSpeechPlan(
             bookUrl = bookUrl,
@@ -346,6 +374,9 @@ class SpeechStoryboardViewModel(
      * 场景只对分镜页的阅读呈现有用、对朗读本身零消费，所以留到点开该章时再按需补。
      * 章节列表按当前音色重算过 [SpeechPlanItem]，这里只把场景字段搬回 plan 里，
      * 音色保持本次算出来的结果不变。
+     *
+     * 取消口径与主链对齐：请求和落库都包在不可取消上下文里，退页/返回/切章只是不再
+     * 回投界面；真正的作废事件只有"这一章重新分析"和"删除这一章"（[sceneGeneration]）。
      */
     private suspend fun withScenes(
         chapterIndex: Int,
@@ -360,30 +391,52 @@ class SpeechStoryboardViewModel(
             return plan
         }
         if (!sceneAttemptedChapters.add(chapterIndex)) return plan
-        // 被取消不算"这一章试过场景"：不清记账的话，切章掐掉一半后
-        // 同一页内再点回这章就不补跑了，AI 白请求了一半
+        val generation = sceneGeneration
+        val analysisId = segments.first().analysisId
         val enriched = try {
-            refineSpeechWithAi.assignScenes(segments)
+            // 取消口径与说话人分析主链一致：AI 请求和回写库都不随"离开这一页"中断。
+            // 用户点开看一眼、没等完就退去别的地方，掐掉等于白烧一次 token，
+            // 下次进这章还得从零再要一遍；跑完落库才是"看一眼"该有的代价。
+            // 回写是先删后插，所以只认"这一章当前那份分析"：期间被重新分析/删除过就放弃回写。
+            withContext(NonCancellable + Dispatchers.IO) {
+                sceneMutex.withLock {
+                    val scenes = refineSpeechWithAi.assignScenes(segments)
+                    if (scenes.none { it.sceneIndex > 0 } ||
+                        generation != sceneGeneration ||
+                        !analysisStillCurrent(chapterIndex, analysisId)
+                    ) {
+                        return@withLock plan
+                    }
+                    chapterSpeechGateway.replaceSegments(analysisId, scenes)
+                    val scenesById = scenes.associateBy({ it.id }, { it.sceneIndex to it.sceneTitle })
+                    plan.map { item ->
+                        val scene = scenesById[item.segment.id] ?: return@map item
+                        if (item.segment.sceneIndex == scene.first) {
+                            item
+                        } else {
+                            item.copy(
+                                segment = item.segment.copy(sceneIndex = scene.first, sceneTitle = scene.second)
+                            )
+                        }
+                    }
+                }
+            }
         } catch (e: CancellationException) {
+            // 走到这里的取消只能来自请求本身（超时等），不再来自退页；
+            // 撤掉记账，下次进这章还会补跑
             sceneAttemptedChapters.remove(chapterIndex)
             throw e
         } catch (e: Throwable) {
             return plan
         }
-        if (enriched.all { it.sceneIndex == 0 }) return plan
-        withContext(Dispatchers.IO) {
-            chapterSpeechGateway.replaceSegments(segments.first().analysisId, enriched)
-        }
-        val scenesById = enriched.associateBy({ it.id }, { it.sceneIndex to it.sceneTitle })
-        return plan.map { item ->
-            val scene = scenesById[item.segment.id] ?: return@map item
-            if (item.segment.sceneIndex == scene.first) {
-                item
-            } else {
-                item.copy(segment = item.segment.copy(sceneIndex = scene.first, sceneTitle = scene.second))
-            }
-        }
+        if (enriched === plan) return plan
+        return enriched
     }
+
+    /** 库里这一章当前那份分析还是不是我手上这份：被删除或被重新分析换掉就不是了 */
+    private suspend fun analysisStillCurrent(chapterIndex: Int, analysisId: String): Boolean =
+        chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
+            .firstOrNull()?.analysisId == analysisId
 
     /** 按「连续相同 sceneIndex」分组；没有任何场景时给一个 sceneNumber=0 的占位组按扁平渲染 */
     private fun groupIntoScenes(items: List<StoryboardItemUi>): List<StoryboardSceneUi> {
@@ -496,7 +549,9 @@ class SpeechStoryboardViewModel(
                 withContext(Dispatchers.IO) {
                     indexes.forEach { chapterSpeechGateway.deleteChapter(bookUrl, it) }
                 }
-                loadChapters()
+                // 删掉的章节分析已不在：在飞的场景拆分算作废（回写还会二次核对库里那份）
+                sceneGeneration++
+                loadChapters("删除章节后重载")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
