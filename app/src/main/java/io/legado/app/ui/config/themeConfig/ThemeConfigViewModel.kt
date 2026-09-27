@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
+import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.CoverSettingsGateway
 import io.legado.app.domain.gateway.LabSettingsGateway
@@ -459,6 +460,10 @@ class ThemeConfigViewModel(
                     append(if (dark) "_dark" else "_light")
                 }
                 val newPath = copyBackgroundImage(uriString, folderName)
+                // 落盘即解码进内存缓存：切图编辑器打开、返回设置页时首帧命中同步快路径，
+                // 不再"页面先出、容器背景图逐块卡出"（真机反馈）
+                ReaderTextBackgroundLoader.load(newPath)
+                ReaderTextBackgroundLoader.nineSliceFractions(newPath)
                 val oldPath = when (target) {
                     ContainerBackgroundTarget.LargeContainer -> if (dark) {
                         _uiState.value.theme.largeContainerBackgroundImageDark

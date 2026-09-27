@@ -93,6 +93,10 @@ fun BookshelfConfigSheet(
             runCatching {
                 val folder = if (dark) "bookshelf_card_dark" else "bookshelf_card_light"
                 val newPath = importBookshelfCardImage(context, uri.toString(), folder)
+                // 落盘即解码进内存缓存：切图编辑器与书卡片首帧命中同步快路径，
+                // 滚动时回收行不再出现"整图 Crop 先大一点、再跳回九宫格"
+                ReaderTextBackgroundLoader.load(newPath)
+                ReaderTextBackgroundLoader.nineSliceFractions(newPath)
                 val oldPath = if (dark) {
                     settings.bookshelfCardImageDark
                 } else {

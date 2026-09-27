@@ -20,6 +20,12 @@ object ReaderTextBackgroundLoader {
         override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
     }
 
+    /** .9.png 引导线探测结果条目：LruCache 不收 null，负结果用包装条目缓存 */
+    private class FractionsEntry(val fractions: NineSliceFractions?)
+
+    /** 按源条数计 64 张足够覆盖设备上的背景素材；键含文件长度/修改时间，换图自动失效 */
+    private val nineSlices = LruCache<String, FractionsEntry>(64)
+
     fun dimensions(source: String): Pair<Int, Int> = runCatching {
         open(source)?.use { input ->
             BitmapFactory.Options().run {
@@ -61,6 +67,16 @@ object ReaderTextBackgroundLoader {
     /** Reads the first stretch run from a raw .9.png guide border. */
     fun nineSliceFractions(source: String): NineSliceFractions? {
         if (!isRawNinePatch(source)) return null
+        // 探测结果（含"没有引导线"的负结果）按源缓存：容器背景/书架卡片每帧重组
+        // 都会同步走这条路，回收行不能再反复 getPixel 扫整行整列
+        val key = cacheKey(source)
+        nineSlices.get(key)?.let { return it.fractions }
+        val fractions = detectNineSliceFractions(source)
+        nineSlices.put(key, FractionsEntry(fractions))
+        return fractions
+    }
+
+    private fun detectNineSliceFractions(source: String): NineSliceFractions? {
         val bitmap = load(source) ?: return null
         if (bitmap.width < 3 || bitmap.height < 3) return null
         fun marked(color: Int): Boolean = android.graphics.Color.alpha(color) > 0 &&

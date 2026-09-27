@@ -61,32 +61,48 @@ fun Modifier.appContainerBackground(
     }
     // 切分线与高亮背景图同一口径：编辑器保存过的手动线优先，
     // 未保存时 .9.png 按引导线自动探测；两者都没有则保持整图平铺。
-    // 自动探测要解码图片，与位图加载一起在 IO 线程完成，不进组合线程。
     val savedNineSlice = nineSliceCsv ?: if (useConfigured && backgroundImage == null) {
         theme.containerBackgroundNineSlice(type, isDark)
     } else {
         null
     }
     val borderPx = if (isRawNinePatchPath(path)) 1f else 0f
-    // 局部解构不能用 `by` 委托（Kotlin 限制），先取 State 再解构它的值
-    val nineResolved = produceState<Pair<Bitmap?, ContainerNineSlice?>>(
-        initialValue = null to null,
-        path,
-        savedNineSlice,
-    ) {
-        value = withContext(Dispatchers.IO) {
-            val slice = parseContainerNineSlice(savedNineSlice)
-                ?: ReaderTextBackgroundLoader.nineSliceFractions(path)?.let {
-                    ContainerNineSlice(it.left, it.right, it.top, it.bottom)
+    // 九宫格解析分三级，核心是消灭"先整图 Crop、解码完再跳回九宫格"的尺寸突变
+    // （真机反馈：书架滚动时刚进入视口的行图案先大一点再回正常）：
+    // 1) 位图已在内存缓存 → 组合线程同步解析（切分线解析与 .9.png 引导线探测结果各有缓存，
+    //    回收行重组不重复解码/扫像素），页面返回与滚动的首帧即九宫格；
+    // 2) 普通图且没有保存切分线 → 永远不会有九宫格，直接走整图绘制，不需要异步；
+    // 3) 其余是冷缓存：异步解码期间什么都不画，让卡片/容器底色透出，就绪后一次成型。
+    //    不再用整图 Crop 当加载预览——那正是"先大一点"本身；也不再每实例各自
+    //    produceState 排队解码，导致整页容器一张一张"卡卡的"补出来。
+    val syncNinePatch = resolveNinePatchSync(path, savedNineSlice)
+    val plainWholeImage = savedNineSlice.isNullOrBlank() && !isRawNinePatchPath(path)
+    val asyncNinePatch = if (syncNinePatch == null && !plainWholeImage) {
+        produceState<Pair<Bitmap?, ContainerNineSlice?>>(
+            initialValue = null to null,
+            path,
+            savedNineSlice,
+        ) {
+            value = withContext(Dispatchers.IO) {
+                val slice = parseContainerNineSlice(savedNineSlice)
+                    ?: ReaderTextBackgroundLoader.nineSliceFractions(path)?.let {
+                        ContainerNineSlice(it.left, it.right, it.top, it.bottom)
+                    }
+                if (slice == null) {
+                    null to null
+                } else {
+                    ReaderTextBackgroundLoader.load(path) to slice
                 }
-            if (slice == null) {
-                null to null
-            } else {
-                ReaderTextBackgroundLoader.load(path) to slice
             }
-        }
+        }.value
+    } else {
+        null
     }
-    val (ninePatchBitmap, nineSlice) = nineResolved.value
+    val bitmap = syncNinePatch?.first ?: asyncNinePatch?.first
+    val lines = syncNinePatch?.second ?: asyncNinePatch?.second
+    // .9.png 无有效引导线等：异步已跑完但判定该图永远走整图，交给下面的 Crop 分支
+    val wholeImageOnly = plainWholeImage ||
+        (syncNinePatch == null && asyncNinePatch != null && lines == null)
     // 图案缩放：由设置页「图案大小」滑块显式指定，日夜图共用一个值；
     // 独立槽位（如书架卡片背景图）直接经参数传入，优先于主题槽位
     val resolvedNineScale = if (nineScale != 1f) {
@@ -98,9 +114,7 @@ fun Modifier.appContainerBackground(
     }
     val resolvedAlpha = alpha.coerceIn(0f, 1f)
 
-    val bitmap = ninePatchBitmap
-    if (bitmap != null && nineSlice != null) {
-        val lines = nineSlice
+    if (bitmap != null && lines != null) {
         // 四角/四边图案目标尺寸 = 原图像素 × scale，以 1px=1 屏幕像素 为基准：
         // 100% 即"这张图在手机上看多大，图案就多大"（真机反馈 1px=1dp 基准
         // 在高密度屏上把图案放大约 3 倍，右下角角块巨大）。
@@ -143,6 +157,10 @@ fun Modifier.appContainerBackground(
             }
             drawContent()
         }
+    }
+    if (!wholeImageOnly) {
+        // 冷缓存异步解码期间：不绘制任何预览，让底色透出，就绪后一次成型
+        return this
     }
 
     val context = LocalContext.current
@@ -213,3 +231,21 @@ private fun ThemeSettings.containerBackgroundNineScale(
 /** 与 ReaderTextBackgroundLoader 的 .9.png 判定保持同一后缀规则 */
 private fun isRawNinePatchPath(path: String): Boolean =
     path.substringBefore('?').substringBefore('#').endsWith(".9.png", ignoreCase = true)
+
+/**
+ * 热路径同步解析：位图已在内存缓存时，切分线解析（纯字符串）与 .9.png 引导线探测
+ * （结果按源缓存在 loader 内）都能在组合线程完成，返回 null 表示需要异步解码。
+ * 这是"设置页返回后容器图逐块卡出、书架回收行图案先大后跳正常"的对症修法：
+ * 首帧即拿到九宫格数据，不经历每实例一次的 IO 往返和整图 Crop 预览帧。
+ */
+private fun resolveNinePatchSync(
+    path: String,
+    savedNineSlice: String?,
+): Pair<Bitmap, ContainerNineSlice>? {
+    val bitmap = ReaderTextBackgroundLoader.cached(path) ?: return null
+    val slice = parseContainerNineSlice(savedNineSlice)
+        ?: ReaderTextBackgroundLoader.nineSliceFractions(path)?.let {
+            ContainerNineSlice(it.left, it.right, it.top, it.bottom)
+        }
+    return slice?.let { bitmap to it }
+}
