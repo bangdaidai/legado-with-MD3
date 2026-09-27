@@ -268,8 +268,12 @@ fun WebViewRouteScreen(
                                 override fun onPageFinished(view: WebView, url: String) {
                                     pageTitle = view.title
                                         ?.takeIf { it.isNotBlank() && it != url && it != view.url }
+                                    // 合并写入，不能整张替换：同一个二级域名（如 qidian.com）下
+                                    // 过签标只压在 www 一侧，验证跳板把 WebView 送到 m 站后再落一次
+                                    // onPageFinished，整张替换会把刚领到的卡片抹成无票集合，
+                                    // 表现就是「点了√还是搜不出书」。
                                     AndroidCookieManager.getInstance().getCookie(url)
-                                        ?.let { CookieStore.setCookie(url, it) }
+                                        ?.let { CookieStore.replaceCookie(url, it) }
                                     if (viewModel.sourceVerificationEnable) view.evaluateJavascript(
                                         "!!window._cf_chl_opt"
                                     ) {
