@@ -2,20 +2,27 @@ package io.legado.app.ui.book.readaloud.storyboard
 
 import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Check
@@ -42,9 +49,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -435,44 +445,34 @@ private fun StoryboardList(
                 )
             }
         } else {
+            // 一个场景一张连续卡（学 NG 的分镜卷轴）：表头与段行同处一张玻璃卡内，
+            // 段与段靠左侧时间轴线和留白分隔，不再一段一张碎卡
             state.scenes.forEach { scene ->
                 val showHeader = grouped && scene.sceneNumber > 0
                 val expanded = !showHeader || scene.sceneNumber !in collapsedScenes
-                if (showHeader) {
-                    item(key = "scene_${scene.sceneNumber}", contentType = "scene") {
-                        SceneHeader(
-                            scene = scene,
-                            expanded = expanded,
-                            onClick = {
-                                collapsedScenes = if (expanded) {
-                                    collapsedScenes + scene.sceneNumber
-                                } else {
-                                    collapsedScenes - scene.sceneNumber
-                                }
-                            },
-                        )
-                    }
-                }
-                if (expanded) {
-                    items(
-                        items = scene.items,
-                        key = StoryboardItemUi::id,
-                        contentType = { "segment" },
-                    ) { item ->
-                        StoryboardCard(
-                            item = item,
-                            previewing = state.previewingItemId == item.id,
-                            detailsExpanded = item.id in expandedItems,
-                            onToggleDetails = {
-                                expandedItems = if (item.id in expandedItems) {
-                                    expandedItems - item.id
-                                } else {
-                                    expandedItems + item.id
-                                }
-                            },
-                            onPreview = { onIntent(SpeechStoryboardIntent.PreviewSegment(item.id)) },
-                        )
-                    }
+                item(key = "scene_${scene.sceneNumber}", contentType = "scene") {
+                    SceneCard(
+                        scene = scene,
+                        showHeader = showHeader,
+                        expanded = expanded,
+                        previewingItemId = state.previewingItemId,
+                        expandedItems = expandedItems,
+                        onToggleScene = {
+                            collapsedScenes = if (expanded) {
+                                collapsedScenes + scene.sceneNumber
+                            } else {
+                                collapsedScenes - scene.sceneNumber
+                            }
+                        },
+                        onToggleDetails = { id ->
+                            expandedItems = if (id in expandedItems) {
+                                expandedItems - id
+                            } else {
+                                expandedItems + id
+                            }
+                        },
+                        onPreview = { id -> onIntent(SpeechStoryboardIntent.PreviewSegment(id)) },
+                    )
                 }
             }
         }
@@ -480,109 +480,168 @@ private fun StoryboardList(
 }
 
 @Composable
-private fun SceneHeader(
+private fun SceneCard(
+    scene: StoryboardSceneUi,
+    showHeader: Boolean,
+    expanded: Boolean,
+    previewingItemId: String?,
+    expandedItems: Set<String>,
+    onToggleScene: () -> Unit,
+    onToggleDetails: (String) -> Unit,
+    onPreview: (String) -> Unit,
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+    ) {
+        if (showHeader) {
+            SceneHeaderRow(
+                scene = scene,
+                expanded = expanded,
+                onClick = onToggleScene,
+            )
+        }
+        if (expanded) {
+            scene.items.forEachIndexed { index, item ->
+                SegmentRow(
+                    item = item,
+                    isFirst = index == 0,
+                    isLast = index == scene.items.lastIndex,
+                    previewing = previewingItemId == item.id,
+                    detailsExpanded = item.id in expandedItems,
+                    onToggleDetails = { onToggleDetails(item.id) },
+                    onPreview = { onPreview(item.id) },
+                )
+            }
+        }
+    }
+}
+
+/** 场景表头：大号主色序号 + 标题/段数两行 + 旋转箭头（整行点击折叠展开） */
+@Composable
+private fun SceneHeaderRow(
     scene: StoryboardSceneUi,
     expanded: Boolean,
     onClick: () -> Unit,
 ) {
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(start = 8.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppText(
-                text = stringResource(R.string.speech_storyboard_scene_title, scene.sceneNumber),
-                style = LegadoTheme.typography.labelLarge,
-                color = LegadoTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+        AppText(
+            text = scene.sceneNumber.coerceAtLeast(1).toString(),
+            style = LegadoTheme.typography.titleMedium,
+            color = LegadoTheme.colorScheme.primary,
+            modifier = Modifier.width(34.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
             AppText(
                 text = scene.title.ifBlank {
-                    stringResource(R.string.speech_storyboard_scene_segments, scene.items.size)
+                    stringResource(R.string.speech_storyboard_scene_title, scene.sceneNumber)
                 },
                 style = LegadoTheme.typography.bodyMedium,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                color = LegadoTheme.colorScheme.onSurface,
                 maxLines = 1,
-                modifier = Modifier.weight(1f),
+                overflow = TextOverflow.Ellipsis,
             )
-            if (scene.title.isNotBlank()) {
-                AppText(
-                    text = stringResource(R.string.speech_storyboard_scene_segments, scene.items.size),
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Icon(
-                imageVector = Icons.Default.ExpandMore,
-                contentDescription = null,
-                tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(22.dp)
-                    .rotate(if (expanded) 180f else 0f),
+            AppText(
+                text = stringResource(R.string.speech_storyboard_scene_segments, scene.items.size),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
+        Icon(
+            imageVector = Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = LegadoTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .size(22.dp)
+                .rotate(if (expanded) 180f else 0f),
+        )
     }
 }
 
+/**
+ * 段行＝卷轴上的一节：左时间轴节点、说话人左锚、正文全展开、右上角小圆试听钮。
+ * 整行点击展开/收起出处详情（对齐 NG 的行内节奏，卡片仍是我们的玻璃卡）。
+ */
 @Composable
-private fun StoryboardCard(
+private fun SegmentRow(
     item: StoryboardItemUi,
+    isFirst: Boolean,
+    isLast: Boolean,
     previewing: Boolean,
     detailsExpanded: Boolean,
     onToggleDetails: () -> Unit,
     onPreview: () -> Unit,
 ) {
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onToggleDetails,
-        containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggleDetails)
+            .height(IntrinsicSize.Min),
     ) {
+        TimelineRail(
+            isFirst = isFirst,
+            isLast = isLast,
+            modifier = Modifier
+                .width(26.dp)
+                .fillMaxHeight(),
+        )
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .width(56.dp)
+                .padding(top = 14.dp, bottom = 14.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AppText(
-                    text = roleLabel(item),
-                    style = LegadoTheme.typography.labelLarge,
-                    color = when (item.role) {
-                        StoryboardRole.Narrator -> LegadoTheme.colorScheme.onSurfaceVariant
-                        StoryboardRole.Unknown -> LegadoTheme.colorScheme.error
-                        else -> LegadoTheme.colorScheme.primary
-                    },
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-                PreviewButton(
-                    previewable = item.previewable,
-                    previewing = previewing,
-                    onClick = onPreview,
-                )
-            }
             AppText(
-                text = item.text,
-                style = LegadoTheme.typography.bodyMedium,
-                maxLines = if (detailsExpanded) Int.MAX_VALUE else 6,
+                text = identityLabel(item),
+                style = LegadoTheme.typography.labelLarge,
+                color = when (item.role) {
+                    StoryboardRole.Narrator -> LegadoTheme.colorScheme.onSurfaceVariant
+                    StoryboardRole.Unknown -> LegadoTheme.colorScheme.error
+                    else -> LegadoTheme.colorScheme.primary
+                },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             AppText(
-                text = footerLabel(item),
+                text = stringResource(R.string.speech_storyboard_paragraph, item.paragraphIndex + 1),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = 14.dp, bottom = 14.dp, end = 8.dp),
+        ) {
+            AppText(
+                text = statusLabel(item),
                 style = LegadoTheme.typography.labelMedium,
                 color = if (item.voiceName.isEmpty()) {
                     LegadoTheme.colorScheme.error
                 } else {
                     LegadoTheme.colorScheme.onSurfaceVariant
                 },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            AppText(
+                // 原文段落普遍带段首缩进（全角空格最常见），卡片里顶格显示才整齐；
+                // 只洗展示这一层，落库文本与试听合成拿到的仍是原文（与 NG 同一口径）
+                text = item.text.trimStart(' ', '\t', '\u3000'),
+                style = LegadoTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
             )
             if (detailsExpanded) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
+                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
                     color = LegadoTheme.colorScheme.outlineVariant,
                 )
                 AppText(
@@ -592,20 +651,80 @@ private fun StoryboardCard(
                 )
             }
         }
+        PreviewButton(
+            previewable = item.previewable,
+            previewing = previewing,
+            onClick = onPreview,
+            modifier = Modifier.padding(top = 14.dp, end = 12.dp),
+        )
     }
 }
 
+/** 时间轴（学 NG 的 StoryboardTimeline）：段段相连的竖线，首末段空心环、中间实心点 */
 @Composable
-private fun PreviewButton(previewable: Boolean, previewing: Boolean, onClick: () -> Unit) {
+private fun TimelineRail(
+    isFirst: Boolean,
+    isLast: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val color = LegadoTheme.colorScheme.primary
+    Canvas(modifier) {
+        val centerX = size.width / 2f
+        val centerY = 21.dp.toPx()
+        val lineWidth = 2.dp.toPx()
+        val endpointRadius = 6.dp.toPx()
+        val nodeRadius = if (isFirst || isLast) endpointRadius else 4.dp.toPx()
+        if (!isFirst) {
+            drawLine(
+                color = color.copy(alpha = 0.52f),
+                start = Offset(centerX, 0f),
+                end = Offset(centerX, centerY - nodeRadius),
+                strokeWidth = lineWidth,
+            )
+        }
+        if (!isLast) {
+            drawLine(
+                color = color.copy(alpha = 0.52f),
+                start = Offset(centerX, centerY + nodeRadius),
+                end = Offset(centerX, size.height),
+                strokeWidth = lineWidth,
+            )
+        }
+        if (isFirst || isLast) {
+            drawCircle(
+                color = color,
+                radius = endpointRadius - 1.dp.toPx(),
+                center = Offset(centerX, centerY),
+                style = Stroke(width = lineWidth),
+            )
+            drawCircle(color = color, radius = 2.dp.toPx(), center = Offset(centerX, centerY))
+        } else {
+            drawCircle(color = color, radius = 4.dp.toPx(), center = Offset(centerX, centerY))
+        }
+    }
+}
+
+/** 试听钮收成角标式：主色 12% 圆底 + 20dp 图标，不抢正文视线 */
+@Composable
+private fun PreviewButton(
+    previewable: Boolean,
+    previewing: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = Modifier
-            .size(40.dp)
+        modifier = modifier
+            .size(36.dp)
+            .background(
+                LegadoTheme.colorScheme.primary.copy(alpha = if (previewable) 0.12f else 0.05f),
+                CircleShape,
+            )
             .clickable(enabled = previewable, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         when {
             previewing -> CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(18.dp),
                 strokeWidth = 2.dp,
                 color = LegadoTheme.colorScheme.primary,
             )
@@ -618,7 +737,7 @@ private fun PreviewButton(previewable: Boolean, previewing: Boolean, onClick: ()
                 } else {
                     LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                 },
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -659,24 +778,27 @@ private fun statsLabel(summary: StoryboardSummaryUi): String = if (summary.scene
     )
 }
 
+/** 左锚第一行：有名字用名字，没名字退回角色词（旁白/对白/内心/未知） */
 @Composable
-private fun roleLabel(item: StoryboardItemUi): String {
-    val role = when (item.role) {
-        StoryboardRole.Narrator -> stringResource(R.string.voice_role_narrator)
-        StoryboardRole.Thought -> stringResource(R.string.speech_role_thought)
-        StoryboardRole.Character -> stringResource(R.string.speech_role_dialogue)
-        StoryboardRole.Unknown -> stringResource(R.string.voice_role_unknown)
-    }
-    val speaker = item.speakerName.ifEmpty { null }
-    return listOfNotNull(role, speaker).joinToString(" · ")
-}
+private fun identityLabel(item: StoryboardItemUi): String =
+    item.speakerName.ifEmpty { roleWord(item.role) }
 
 @Composable
-private fun footerLabel(item: StoryboardItemUi): String {
+private fun roleWord(role: StoryboardRole): String = when (role) {
+    StoryboardRole.Narrator -> stringResource(R.string.voice_role_narrator)
+    StoryboardRole.Thought -> stringResource(R.string.speech_role_thought)
+    StoryboardRole.Character -> stringResource(R.string.speech_role_dialogue)
+    StoryboardRole.Unknown -> stringResource(R.string.voice_role_unknown)
+}
+
+/** 正文上方细灰行：角色词（仅内心/未知补语义）· 情绪 · 音色 */
+@Composable
+private fun statusLabel(item: StoryboardItemUi): String {
+    val role = item.role.takeIf { it == StoryboardRole.Thought || it == StoryboardRole.Unknown }
+        ?.let { roleWord(it) }
     val voice = item.voiceName.ifEmpty { stringResource(R.string.voice_not_assigned) }
     val emotion = item.emotion.takeIf { it.isNotEmpty() && it != "neutral" }
-    val paragraph = stringResource(R.string.speech_storyboard_paragraph, item.paragraphIndex + 1)
-    return listOfNotNull(voice, paragraph, emotion).joinToString(" · ")
+    return listOfNotNull(role, emotion, voice).joinToString(" · ")
 }
 
 @Composable
