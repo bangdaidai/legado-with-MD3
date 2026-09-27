@@ -3101,9 +3101,9 @@
     <string name="voice_preview_text">这是当前音色的试听效果，用来确认语速和音色是否合适。</string>
     <string name="speech_storyboard">分镜结果</string>
     <string name="speech_storyboard_reanalyze">重新分析</string>
-    <string name="speech_storyboard_summary">分析模式 %1$s · %2$s · 分段 %3$d 段 · 已分配音色 %4$d 段</string>
-    <string name="speech_storyboard_multi_on">已开启多角色朗读</string>
-    <string name="speech_storyboard_multi_off">未开启多角色朗读</string>
+    <string name="speech_storyboard_label_analysis_mode">分析模式</string>
+    <string name="speech_storyboard_status_on">已开启</string>
+    <string name="speech_storyboard_status_off">未开启</string>
     <string name="speech_storyboard_empty">这一章没有分出任何段落。</string>
     <string name="speech_storyboard_no_chapter">分镜只能看正在阅读的这一章，请先回到阅读页打开本书。</string>
     <string name="speech_storyboard_desc">按章查看分段、说话人和音色</string>
@@ -3112,8 +3112,11 @@
     <string name="speech_storyboard_chapter_pending">还没分析过</string>
     <string name="speech_storyboard_current_chapter">正在读</string>
     <string name="speech_storyboard_chapters_empty">还没有分析过任何章节，先朗读一章再回来看。</string>
-    <string name="speech_storyboard_stats_scenes">%1$d 个场景 · %2$d 段 · %3$d 段对白 · %4$d 个说话人</string>
-    <string name="speech_storyboard_stats_flat">%1$d 段 · %2$d 段对白 · %3$d 个说话人</string>
+    <string name="speech_storyboard_stat_scenes">场景</string>
+    <string name="speech_storyboard_stat_segments">分段</string>
+    <string name="speech_storyboard_stat_dialogues">对白</string>
+    <string name="speech_storyboard_stat_speakers">说话人</string>
+    <string name="speech_storyboard_voices_assigned">已分配音色 %1$d / %2$d 段</string>
     <string name="speech_storyboard_scene_title">场景 %1$d</string>
     <string name="speech_storyboard_scene_segments">%1$d 段</string>
     <string name="speech_storyboard_paragraph">第 %1$d 段</string>

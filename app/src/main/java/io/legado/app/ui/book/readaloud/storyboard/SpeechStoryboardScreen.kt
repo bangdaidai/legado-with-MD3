@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -53,9 +55,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.ui.theme.LegadoTheme
@@ -72,6 +76,7 @@ import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -420,20 +425,7 @@ private fun StoryboardList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(contentType = "summary") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppText(
-                    text = storyboardSummary(state),
-                    style = LegadoTheme.typography.bodyMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-                state.summary?.let { summary ->
-                    AppText(
-                        text = statsLabel(summary),
-                        style = LegadoTheme.typography.labelLarge,
-                        color = LegadoTheme.colorScheme.primary,
-                    )
-                }
-            }
+            SummaryCards(state = state)
         }
         if (state.scenes.isEmpty() || state.scenes.all { it.items.isEmpty() }) {
             item(contentType = "empty") {
@@ -580,6 +572,13 @@ private fun SegmentRow(
     onToggleDetails: () -> Unit,
     onPreview: () -> Unit,
 ) {
+    // 时间轴小圆点要对齐的是「角色行/音色行」这条文字线的视觉中线。
+    // 行高由主题字体决定、各档不同，写死 dp 必然错位——改为量出来的中线：
+    // 首行 onTextLayout 报一次，量不到时（零高占位等）退回按字号估的中线。
+    val anchorTopPx = with(LocalDensity.current) { 14.dp.toPx() }
+    var nodeCenterY by remember(item.id) {
+        mutableFloatStateOf(anchorTopPx + with(LocalDensity.current) { 9.5.dp.toPx() })
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -589,6 +588,7 @@ private fun SegmentRow(
         TimelineRail(
             isFirst = isFirst,
             isLast = isLast,
+            nodeCenterY = nodeCenterY,
             modifier = Modifier
                 .width(26.dp)
                 .fillMaxHeight(),
@@ -598,16 +598,24 @@ private fun SegmentRow(
                 .width(56.dp)
                 .padding(top = 14.dp, bottom = 14.dp),
         ) {
+            // 左锚只放两三个字的角色词，名字挪到右边细灰行开头，不会再折成两行；
+            // 字号跟右边细灰行、「第N段」同一档（labelMedium），三处一致
             AppText(
-                text = identityLabel(item),
-                style = LegadoTheme.typography.labelLarge,
+                text = roleWord(item.role),
+                style = LegadoTheme.typography.labelMedium,
                 color = when (item.role) {
                     StoryboardRole.Narrator -> LegadoTheme.colorScheme.onSurfaceVariant
                     StoryboardRole.Unknown -> LegadoTheme.colorScheme.error
                     else -> LegadoTheme.colorScheme.primary
                 },
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                onTextLayout = { layout ->
+                    if (layout.lineCount > 0) {
+                        val center = (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f + anchorTopPx
+                        if (abs(center - nodeCenterY) > 0.5f) nodeCenterY = center
+                    }
+                },
             )
             AppText(
                 text = stringResource(R.string.speech_storyboard_paragraph, item.paragraphIndex + 1),
@@ -619,7 +627,7 @@ private fun SegmentRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(top = 14.dp, bottom = 14.dp, end = 8.dp),
+                .padding(top = 14.dp, bottom = 14.dp, end = 6.dp),
         ) {
             AppText(
                 text = statusLabel(item),
@@ -637,6 +645,8 @@ private fun SegmentRow(
                 // 只洗展示这一层，落库文本与试听合成拿到的仍是原文（与 NG 同一口径）
                 text = item.text.trimStart(' ', '\t', '\u3000'),
                 style = LegadoTheme.typography.bodyMedium,
+                // 本页是核对用的密集列表，正文比主题默认（16sp）收一档到 14sp
+                fontSize = 14.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )
             if (detailsExpanded) {
@@ -665,12 +675,14 @@ private fun SegmentRow(
 private fun TimelineRail(
     isFirst: Boolean,
     isLast: Boolean,
+    nodeCenterY: Float,
     modifier: Modifier = Modifier,
 ) {
     val color = LegadoTheme.colorScheme.primary
     Canvas(modifier) {
         val centerX = size.width / 2f
-        val centerY = 21.dp.toPx()
+        // 节点圆心 = 左锚首行文字的中线（SegmentRow 实测传入），不再写死 21dp
+        val centerY = nodeCenterY
         val lineWidth = 2.dp.toPx()
         val endpointRadius = 6.dp.toPx()
         val nodeRadius = if (isFirst || isLast) endpointRadius else 4.dp.toPx()
@@ -704,7 +716,7 @@ private fun TimelineRail(
     }
 }
 
-/** 试听钮收成角标式：主色 12% 圆底 + 20dp 图标，不抢正文视线 */
+/** 试听钮收成角标式：主色 12% 圆底 + 16dp 图标，小一号把行宽还给正文 */
 @Composable
 private fun PreviewButton(
     previewable: Boolean,
@@ -714,7 +726,7 @@ private fun PreviewButton(
 ) {
     Box(
         modifier = modifier
-            .size(36.dp)
+            .size(28.dp)
             .background(
                 LegadoTheme.colorScheme.primary.copy(alpha = if (previewable) 0.12f else 0.05f),
                 CircleShape,
@@ -724,7 +736,7 @@ private fun PreviewButton(
     ) {
         when {
             previewing -> CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(14.dp),
                 strokeWidth = 2.dp,
                 color = LegadoTheme.colorScheme.primary,
             )
@@ -737,51 +749,144 @@ private fun PreviewButton(
                 } else {
                     LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                 },
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(16.dp),
             )
         }
     }
 }
 
+/**
+ * 详情页顶部拆成两张卡、内容不互相重复：
+ * 配置卡＝现在按什么在读（分析模式 / 多角色朗读），
+ * 数据卡＝这一章有多少（场景/分段/对白/说话人四格 + 已分配音色进度）。
+ * 之前两行裸文本里段数出现两遍、「已分配音色 39 段」还跟「39 段对白」撞眼。
+ */
 @Composable
-private fun storyboardSummary(state: SpeechStoryboardUiState): String {
-    val mode = when (state.analysisMode) {
-        "rule_with_ai" -> stringResource(R.string.speech_analysis_rule_ai)
-        "ai_understanding" -> stringResource(R.string.speech_analysis_ai)
-        else -> stringResource(R.string.speech_analysis_rule)
+private fun SummaryCards(state: SpeechStoryboardUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                SummaryLabelRow(
+                    label = stringResource(R.string.speech_storyboard_label_analysis_mode),
+                    value = analysisModeLabel(state.analysisMode),
+                )
+                SummaryLabelRow(
+                    label = stringResource(R.string.use_multi_speaker),
+                    value = stringResource(
+                        if (state.multiSpeakerEnabled) {
+                            R.string.speech_storyboard_status_on
+                        } else {
+                            R.string.speech_storyboard_status_off
+                        },
+                    ),
+                )
+            }
+        }
+        val summary = state.summary
+        if (summary != null) {
+            val voicedSegments = state.scenes.sumOf { scene ->
+                scene.items.count { it.voiceName.isNotEmpty() }
+            }
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        if (summary.sceneCount > 0) {
+                            StatCell(
+                                summary.sceneCount,
+                                stringResource(R.string.speech_storyboard_stat_scenes),
+                            )
+                        }
+                        StatCell(
+                            summary.segmentCount,
+                            stringResource(R.string.speech_storyboard_stat_segments),
+                        )
+                        StatCell(
+                            summary.dialogueCount,
+                            stringResource(R.string.speech_storyboard_stat_dialogues),
+                        )
+                        StatCell(
+                            summary.personCount,
+                            stringResource(R.string.speech_storyboard_stat_speakers),
+                        )
+                    }
+                    AppText(
+                        text = stringResource(
+                            R.string.speech_storyboard_voices_assigned,
+                            voicedSegments,
+                            summary.segmentCount,
+                        ),
+                        style = LegadoTheme.typography.labelMedium,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
-    val multiSpeaker = if (state.multiSpeakerEnabled) {
-        stringResource(R.string.speech_storyboard_multi_on)
-    } else {
-        stringResource(R.string.speech_storyboard_multi_off)
+}
+
+/** 配置卡一行：左灰色小标签、右正文值 */
+@Composable
+private fun SummaryLabelRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(
+            text = label,
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(76.dp),
+            maxLines = 1,
+        )
+        AppText(
+            text = value,
+            style = LegadoTheme.typography.bodyMedium,
+            color = LegadoTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
     }
-    val segmentCount = state.summary?.segmentCount ?: 0
-    val voiceCount = state.scenes.sumOf { scene -> scene.items.count { it.voiceName.isNotEmpty() } }
-    return stringResource(R.string.speech_storyboard_summary, mode, multiSpeaker, segmentCount, voiceCount)
+}
+
+/** 数据卡格子：数字在上（主色）、小标签在下，均分列居中 */
+@Composable
+private fun RowScope.StatCell(value: Int, label: String) {
+    Column(
+        modifier = Modifier.weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AppText(
+            text = value.toString(),
+            style = LegadoTheme.typography.titleMedium,
+            color = LegadoTheme.colorScheme.primary,
+        )
+        AppText(
+            text = label,
+            style = LegadoTheme.typography.labelMedium,
+            color = LegadoTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+            maxLines = 1,
+        )
+    }
 }
 
 @Composable
-private fun statsLabel(summary: StoryboardSummaryUi): String = if (summary.sceneCount > 0) {
-    stringResource(
-        R.string.speech_storyboard_stats_scenes,
-        summary.sceneCount,
-        summary.segmentCount,
-        summary.dialogueCount,
-        summary.personCount,
-    )
-} else {
-    stringResource(
-        R.string.speech_storyboard_stats_flat,
-        summary.segmentCount,
-        summary.dialogueCount,
-        summary.personCount,
-    )
+private fun analysisModeLabel(mode: String): String = when (mode) {
+    "rule_with_ai" -> stringResource(R.string.speech_analysis_rule_ai)
+    "ai_understanding" -> stringResource(R.string.speech_analysis_ai)
+    else -> stringResource(R.string.speech_analysis_rule)
 }
-
-/** 左锚第一行：有名字用名字，没名字退回角色词（旁白/对白/内心/未知） */
-@Composable
-private fun identityLabel(item: StoryboardItemUi): String =
-    item.speakerName.ifEmpty { roleWord(item.role) }
 
 @Composable
 private fun roleWord(role: StoryboardRole): String = when (role) {
@@ -791,14 +896,21 @@ private fun roleWord(role: StoryboardRole): String = when (role) {
     StoryboardRole.Unknown -> stringResource(R.string.voice_role_unknown)
 }
 
-/** 正文上方细灰行：角色词（仅内心/未知补语义）· 情绪 · 音色 */
+/**
+ * 正文上方细灰行：角色名 · 情绪 · 音色。
+ * 音色的 displayName 在 http 书源是「引擎名 · 音色名」拼出来的
+ * （HttpTtsVoiceCatalog），行内只留最后一段音色名，引擎名不进列表。
+ */
 @Composable
 private fun statusLabel(item: StoryboardItemUi): String {
-    val role = item.role.takeIf { it == StoryboardRole.Thought || it == StoryboardRole.Unknown }
-        ?.let { roleWord(it) }
-    val voice = item.voiceName.ifEmpty { stringResource(R.string.voice_not_assigned) }
+    val voice = item.voiceName.substringAfterLast(" · ")
+        .ifEmpty { stringResource(R.string.voice_not_assigned) }
     val emotion = item.emotion.takeIf { it.isNotEmpty() && it != "neutral" }
-    return listOfNotNull(role, emotion, voice).joinToString(" · ")
+    return listOfNotNull(
+        item.speakerName.takeIf { it.isNotEmpty() },
+        emotion,
+        voice,
+    ).joinToString(" · ")
 }
 
 @Composable
