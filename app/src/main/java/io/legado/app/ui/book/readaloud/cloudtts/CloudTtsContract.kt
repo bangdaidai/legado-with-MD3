@@ -150,6 +150,13 @@ sealed interface CloudTtsIntent {
     /** 试听音色表里已保存的一条音色 */
     data class PreviewSavedVoice(val id: String) : CloudTtsIntent
     data class RequestRenameVoice(val id: String) : CloudTtsIntent
+    /**
+     * 长按音色行：把该音色设为/取消全局默认旁白音色。
+     *
+     * 只在多角色朗读计划里本书没绑旁白时兜底生效，与「默认引擎」（未开多角色时使用）互不相干；
+     * 再长按一次当前默认即取消，回到跟随引擎默认。
+     */
+    data class ToggleDefaultNarratorVoice(val id: String) : CloudTtsIntent
     /** 切换音色列表的性别筛选，传空串为取消筛选 */
     data class SetVoiceGenderFilter(val gender: String) : CloudTtsIntent
     data class ConfirmRenameVoice(val name: String) : CloudTtsIntent

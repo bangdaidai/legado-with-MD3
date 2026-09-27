@@ -116,6 +116,7 @@ internal fun Preferences.toReadAloudSettings(): ReadAloudSettings = ReadAloudSet
         AiReasoningLevel.OFF.storageValue,
     ),
     useMultiSpeaker = compatDsValue(ReadAloudKeys.UseMultiSpeaker, true),
+    defaultNarratorVoiceId = compatDsValue(ReadAloudKeys.DefaultNarratorVoiceId, ""),
     defaultInterface = compatDsValue(
         ReadAloudKeys.DefaultInterface,
         ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC,
@@ -177,6 +178,7 @@ internal fun ReadAloudSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.speechAnalysisMode to speechAnalysisMode,
     PreferKey.speechAnalysisReasoningLevel to speechAnalysisReasoningLevel,
     PreferKey.useMultiSpeaker to useMultiSpeaker,
+    PreferKey.defaultNarratorVoiceId to defaultNarratorVoiceId,
     PreferKey.defaultReadAloudInterface to defaultInterface,
     PreferKey.contentSelectSpeakMod to contentSelectSpeakMode,
     PreferKey.audioPreDownloadNum to audioPreDownloadNum,
@@ -222,6 +224,7 @@ private object ReadAloudKeys {
     val SpeechAnalysisReasoningLevel =
         stringPreferencesKey(PreferKey.speechAnalysisReasoningLevel)
     val UseMultiSpeaker = booleanPreferencesKey(PreferKey.useMultiSpeaker)
+    val DefaultNarratorVoiceId = stringPreferencesKey(PreferKey.defaultNarratorVoiceId)
     val DefaultInterface = stringPreferencesKey(PreferKey.defaultReadAloudInterface)
     val ContentSelectSpeakMode = intPreferencesKey(PreferKey.contentSelectSpeakMod)
     val AudioPreDownloadNum = intPreferencesKey(PreferKey.audioPreDownloadNum)

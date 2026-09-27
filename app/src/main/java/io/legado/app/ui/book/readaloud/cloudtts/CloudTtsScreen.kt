@@ -284,6 +284,11 @@ fun CloudTtsScreen(
                         onClick = {
                             if (voice.editable) onIntent(CloudTtsIntent.EditVoice(voice.id))
                         },
+                        // 与引擎行「点一下设默认」同一套语法：长按＝设为/取消默认旁白音色。
+                        // 目录音色不可编辑，但一样能被长按选中
+                        onLongClick = {
+                            onIntent(CloudTtsIntent.ToggleDefaultNarratorVoice(voice.id))
+                        },
                     )
                 }
             } else {

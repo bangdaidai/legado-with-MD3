@@ -88,6 +88,12 @@ data class ReadAloudSettings(
      */
     val speechAnalysisReasoningLevel: String = AiReasoningLevel.OFF.storageValue,
     val useMultiSpeaker: Boolean = true,
+    /**
+     * 全局默认旁白音色 id；空串表示未选，旁白走现状兜底（引擎默认音色）。
+     *
+     * 优先级低于本书配音阵容里的旁白绑定：只有没绑定旁白的书才吃这个全局默认。
+     */
+    val defaultNarratorVoiceId: String = "",
     val defaultInterface: String = "classic",
     val contentSelectSpeakMode: Int = 0,
     val audioPreDownloadNum: Int = 3,

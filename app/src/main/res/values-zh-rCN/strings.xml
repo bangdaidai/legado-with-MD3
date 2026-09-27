@@ -3213,6 +3213,10 @@
     <string name="cloud_tts_http_engines">HTTP 协议 TTS</string>
     <string name="cloud_tts_system_engines">系统 TTS</string>
     <string name="cloud_tts_default_requires_voice">请先为该云 TTS 引擎保存至少一个音色，再设为默认引擎。</string>
+    <string name="cloud_tts_default_narrator_marker">默认旁白</string>
+    <string name="cloud_tts_default_narrator_set">默认旁白音色已更新</string>
+    <string name="cloud_tts_default_narrator_cleared">已取消默认旁白音色，回到跟随引擎默认</string>
+    <string name="cloud_tts_default_narrator_disabled">该音色已禁用，启用后才能设为默认旁白</string>
     <string name="read_aloud_default_engine_updated">默认朗读引擎已更新</string>
     <string name="cloud_tts_delete_voice_message">删除音色预设“%1$s”？使用它的人物绑定将回退到其他音色。</string>
     <string name="cloud_tts_rename_voice">重命名音色</string>

@@ -214,6 +214,7 @@ class CloudTtsViewModel(
             is CloudTtsIntent.EditVoice -> editVoice(intent.id)
             is CloudTtsIntent.PreviewSavedVoice -> previewSavedVoice(intent.id)
             is CloudTtsIntent.RequestRenameVoice -> requestRenameVoice(intent.id)
+            is CloudTtsIntent.ToggleDefaultNarratorVoice -> toggleDefaultNarratorVoice(intent.id)
             is CloudTtsIntent.SetVoiceGenderFilter -> _uiState.update {
                 val gender = intent.gender.takeUnless { value -> value == it.voiceGenderFilter }
                     .orEmpty()
@@ -764,18 +765,51 @@ class CloudTtsViewModel(
     private fun voiceItems(genderFilter: String) = voices.mapNotNull { voice ->
         val traits = ReadAloudVoiceTraits.of(voice)
         if (genderFilter.isNotEmpty() && traits.gender != genderFilter) return@mapNotNull null
+        val defaultNarrator = voice.id ==
+            readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId &&
+            voice.id.isNotBlank()
         CloudTtsVoiceItemUi(
             voice.id,
             voice.displayName,
             buildString {
                 traitLabels(traits).joinTo(this, " · ")
                 if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
+                // 默认旁白标记与性别/风格标签同排展示，写法对齐引擎行的「当前默认」
+                if (defaultNarrator) {
+                    if (isNotEmpty()) append(" · ")
+                    append(application.getString(R.string.cloud_tts_default_narrator_marker))
+                }
             }.removePrefix(" · "),
             deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             gender = traits.gender,
         )
     }.toImmutableList()
+
+    /**
+     * 长按音色行：设为/取消全局默认旁白音色。
+     *
+     * 解析槽在多角色朗读计划里（本书配音没绑旁白时兜底），不影响未开多角色的经典朗读；
+     * 禁用的音色解析不到，长按直接拒绝并说明原因，避免设完听感没变化成哑谜。
+     */
+    private fun toggleDefaultNarratorVoice(id: String) = viewModelScope.launch {
+        val voice = voices.firstOrNull { it.id == id } ?: return@launch
+        if (!voice.enabled) {
+            toast(application.getString(R.string.cloud_tts_default_narrator_disabled))
+            return@launch
+        }
+        val cleared = readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId == id
+        readAloudSettingsGateway.update {
+            it.copy(defaultNarratorVoiceId = if (cleared) "" else id)
+        }
+        _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter)) }
+        toast(
+            application.getString(
+                if (cleared) R.string.cloud_tts_default_narrator_cleared
+                else R.string.cloud_tts_default_narrator_set
+            )
+        )
+    }
 
     /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多两行也放不下 */
     private fun traitLabels(traits: VoiceTraits): List<String> =

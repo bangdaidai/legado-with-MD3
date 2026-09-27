@@ -1,5 +1,6 @@
 package io.legado.app.domain.usecase
 
+import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
@@ -7,6 +8,7 @@ import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.settings.ReadAloudSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -29,7 +31,7 @@ class BuildSpeechPlanUseCaseTest {
             ),
         )
 
-        val plan = BuildSpeechPlanUseCase(gateway)(
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway())(
             bookUrl = "book",
             segments = listOf(segment(SpeechRoleType.Character, "character-1")),
         ).single()
@@ -50,7 +52,7 @@ class BuildSpeechPlanUseCaseTest {
             ),
         )
 
-        val plan = BuildSpeechPlanUseCase(gateway)(
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway())(
             bookUrl = "book",
             segments = listOf(segment(SpeechRoleType.Character, "missing")),
         ).single()
@@ -69,7 +71,7 @@ class BuildSpeechPlanUseCaseTest {
             ),
         )
 
-        val plan = BuildSpeechPlanUseCase(gateway)(
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway())(
             bookUrl = "book",
             segments = listOf(segment(SpeechRoleType.Character, "missing")),
         ).single()
@@ -96,7 +98,7 @@ class BuildSpeechPlanUseCaseTest {
             personality = "冷静",
         )
 
-        val plan = BuildSpeechPlanUseCase(gateway)(
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway())(
             bookUrl = "book",
             segments = listOf(segment(SpeechRoleType.Character, "character-1")),
             characterPerformances = mapOf(performance.characterId to performance),
@@ -121,7 +123,7 @@ class BuildSpeechPlanUseCaseTest {
             role = BookVoiceBinding.SUBJECT_MALE_LEAD,
         )
 
-        val plan = BuildSpeechPlanUseCase(gateway)(
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway())(
             bookUrl = "book",
             segments = listOf(segment(SpeechRoleType.Character, performance.characterId)),
             characterPerformances = mapOf(performance.characterId to performance),
@@ -150,7 +152,7 @@ class BuildSpeechPlanUseCaseTest {
             role = BookVoiceBinding.SUBJECT_FEMALE_LEAD,
         )
 
-        val plan = BuildSpeechPlanUseCase(gateway)(
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway())(
             bookUrl = "book",
             segments = listOf(segment(SpeechRoleType.Character, performance.characterId)),
             characterPerformances = mapOf(performance.characterId to performance),
@@ -159,6 +161,62 @@ class BuildSpeechPlanUseCaseTest {
         assertEquals(characterVoice, plan.voice)
     }
 
+
+    @Test
+    fun `global default narrator voice fills unbound narrator`() = runBlocking {
+        val globalVoice = voice("global-narrator")
+        val gateway = FakeVoiceGateway(
+            voices = listOf(globalVoice),
+            bindings = emptyList(),
+        )
+
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway(globalVoice.id))(
+            bookUrl = "book",
+            segments = listOf(segment(SpeechRoleType.Narrator, null)),
+        ).single()
+
+        assertEquals(globalVoice, plan.voice)
+    }
+
+    @Test
+    fun `book narrator binding overrides global default narrator voice`() = runBlocking {
+        val boundVoice = voice("book-narrator")
+        val globalVoice = voice("global-narrator")
+        val gateway = FakeVoiceGateway(
+            voices = listOf(boundVoice, globalVoice),
+            bindings = listOf(
+                binding(
+                    BookVoiceBinding.SUBJECT_NARRATOR,
+                    BookVoiceBinding.SUBJECT_NARRATOR,
+                    boundVoice.id,
+                ),
+            ),
+        )
+
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway(globalVoice.id))(
+            bookUrl = "book",
+            segments = listOf(segment(SpeechRoleType.Narrator, null)),
+        ).single()
+
+        assertEquals(boundVoice, plan.voice)
+        assertEquals(listOf(globalVoice), plan.fallbackVoices)
+    }
+
+    @Test
+    fun `stale global narrator id degrades to engine default`() = runBlocking {
+        // 偏好里的音色已被删除：解析不到，旁白回到现状的空音色（引擎默认）行为
+        val gateway = FakeVoiceGateway(
+            voices = listOf(voice("other")),
+            bindings = emptyList(),
+        )
+
+        val plan = BuildSpeechPlanUseCase(gateway, FakeSettingsGateway("deleted-voice"))(
+            bookUrl = "book",
+            segments = listOf(segment(SpeechRoleType.Narrator, null)),
+        ).single()
+
+        assertEquals(null, plan.voice)
+    }
 
     private fun voice(id: String) = ReadAloudVoice(
         id = id,
@@ -189,6 +247,17 @@ class BuildSpeechPlanUseCaseTest {
         characterId = characterId,
         source = SpeechResolutionSource.Rule,
     )
+}
+
+private class FakeSettingsGateway(
+    defaultNarratorVoiceId: String = "",
+) : ReadAloudSettingsGateway {
+    private val snapshot = ReadAloudSettings(
+        defaultNarratorVoiceId = defaultNarratorVoiceId,
+    )
+    override val currentSettings: ReadAloudSettings = snapshot
+    override val settings: Flow<ReadAloudSettings> = flowOf(snapshot)
+    override suspend fun update(transform: (ReadAloudSettings) -> ReadAloudSettings) = Unit
 }
 
 private class FakeVoiceGateway(

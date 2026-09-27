@@ -1,5 +1,6 @@
 package io.legado.app.domain.usecase
 
+import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
@@ -11,6 +12,7 @@ import io.legado.app.domain.model.readaloud.dialogueFallbackGender
 
 class BuildSpeechPlanUseCase(
     private val voiceGateway: ReadAloudVoiceGateway,
+    private val readAloudSettingsGateway: ReadAloudSettingsGateway,
 ) {
 
     suspend operator fun invoke(
@@ -34,6 +36,12 @@ class BuildSpeechPlanUseCase(
             BookVoiceBinding.SUBJECT_UNKNOWN,
             voicesById,
         )
+        // 全局默认旁白音色（引擎与音色页长按音色行设置）：优先级低于本书配音阵容的旁白绑定。
+        // 只在音色存在且启用时可解析——voicesById 来自 getEnabledVoices，
+        // 音色被删/被禁用后偏好自然失效，回落到现状的引擎默认行为。
+        val globalNarrator = readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId
+            .takeIf { it.isNotBlank() }
+            ?.let(voicesById::get)
         val defaultVoice = preferredDefaultVoiceId?.let(voicesById::get)
             ?: narrator
 
@@ -75,9 +83,10 @@ class BuildSpeechPlanUseCase(
                 when (segment.roleType) {
                     SpeechRoleType.Character,
                     SpeechRoleType.Thought -> characterVoice ?: roleVoice ?: genderFallback
-                        ?: unknown ?: narrator ?: defaultVoice
-                    SpeechRoleType.Unknown -> unknown ?: narrator ?: defaultVoice
-                    SpeechRoleType.Narrator -> narrator ?: defaultVoice
+                        ?: unknown ?: narrator ?: globalNarrator ?: defaultVoice
+                    SpeechRoleType.Unknown -> unknown ?: narrator ?: globalNarrator
+                        ?: defaultVoice
+                    SpeechRoleType.Narrator -> narrator ?: globalNarrator ?: defaultVoice
                 }
             }
             val fallbackVoices = if (!useMultiSpeaker) {
@@ -104,6 +113,7 @@ class BuildSpeechPlanUseCase(
                         add(unknown)
                     }
                     add(narrator)
+                    add(globalNarrator)
                     add(defaultVoice)
                 }.filterNotNull()
                     .distinctBy(ReadAloudVoice::id)
