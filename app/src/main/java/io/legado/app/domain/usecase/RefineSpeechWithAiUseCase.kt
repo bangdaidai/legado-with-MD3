@@ -35,8 +35,11 @@ import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,6 +78,18 @@ class RefineSpeechWithAiUseCase(
      */
     private val bookLocks = ConcurrentHashMap<String, Mutex>()
 
+    /**
+     * 单飞表（学 legado_NG 的 inFlightRequests）：分析身份键 → 在飞轮次的结果承诺。
+     *
+     * 朗读轮和分镜轮前后脚到达同一章时，后来者不再"锁上排队 → 进锁重查缓存"，
+     * 直接挂在在飞轮的结果上共享——两边输入口径一致（同 contentHash/模型/prompt），
+     * 产出的就是同一份分析。键含 contentHash+resolverVersion（即 analysis.id），
+     * 文本或模式变了自动各走各的，不会错拿别人的结果。在飞轮失败/被取消时
+     * 承诺以异常收尾，等待方自己补跑（锁与冷却兜底）。
+     */
+    private val inFlightAnalyses =
+        ConcurrentHashMap<String, CompletableDeferred<ChapterSpeechAnalysisResult>>()
+
     fun clearAiCooldown(bookUrl: String) {
         bookAiCooldownUntil.remove(bookUrl)
     }
@@ -82,13 +97,15 @@ class RefineSpeechWithAiUseCase(
     /**
      * 给缺少场景分组的分段补上场景：按章分段（含文本顺序）交给 AI 切分成连续的场景组。
      *
-     * 场景只服务分镜页浏览，朗读链路不依赖它，所以刻意与 [invoke] 分开：
-     * - 不在本书 AI 锁内、不进失败冷却 —— 场景拆坏了也不能拖慢起播或毁掉说话人分析；
-     * - 整段调用失败或单个分块校验不过时原样返回 / 跳过该分块，调用方按「无场景」降级展示。
+     * 唯一的发起方是分镜页 withScenes：点开某章、发现该章存在无场景分段时按需补一次
+     * （source=分镜）。说话人分析主链不产出场景——场景只对分镜页的阅读呈现有用，对朗读
+     * 本身零消费，不值得占用起播/预合成那一轮。失败原样返回、不写冷却：场景是锦上添花层，
+     * 拆坏了既不能拖累功能，调用方按「无场景」降级展示，下次进页再补。
      */
     suspend fun assignScenes(
         segments: List<ChapterSpeechSegment>,
         reasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
+        source: String = "分镜",
     ): List<ChapterSpeechSegment> {
         if (segments.size < 2 || segments.none { it.sceneIndex == 0 }) return segments
         val preset = runCatching { resolvePreset() }.getOrNull() ?: return segments
@@ -101,7 +118,7 @@ class RefineSpeechWithAiUseCase(
             val ids = chunk.map(ChapterSpeechSegment::id)
             val scenes = runCatching {
                 parseScenes(
-                    text = generateScenes(preset, chunk, reasoningLevel),
+                    text = generateScenes(preset, chunk, reasoningLevel, source),
                     expectedIds = ids,
                 )
             }.getOrNull()
@@ -167,6 +184,52 @@ class RefineSpeechWithAiUseCase(
         source: String = "朗读",
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
+        // 单飞：键就是 analysis.id（书+章+contentHash+resolverVersion 的确定性身份），
+        // 文本、模型或模式变了自动各飞各的，等待方不会错拿到"不是自己要的那份"结果。
+        val key = analysisResult.analysis.id
+        val mine = CompletableDeferred<ChapterSpeechAnalysisResult>()
+        val running = inFlightAnalyses.putIfAbsent(key, mine)
+        if (running == null) {
+            try {
+                val result = analyzeExclusive(
+                    analysisResult, paragraphs, mode, reasoningLevel, policy, now, source,
+                )
+                mine.complete(result)
+                return result
+            } catch (e: Throwable) {
+                mine.completeExceptionally(e)
+                throw e
+            } finally {
+                inFlightAnalyses.remove(key, mine)
+            }
+        }
+        val shared: ChapterSpeechAnalysisResult? = try {
+            running.await()
+        } catch (e: CancellationException) {
+            // 取消有两种：来自自己（照常传播），来自在飞那一轮（它没跑完，
+            // 这一份没有落库结果可共享）——本轮自己补跑，锁与冷却兜底
+            currentCoroutineContext().ensureActive()
+            AppLog.putDebug(
+                "单飞：同键在飞分析提前结束，本轮自行执行：" +
+                    "${analysisResult.analysis.bookUrl} 第${analysisResult.analysis.chapterIndex + 1}章"
+            )
+            null
+        } catch (e: Throwable) {
+            null
+        }
+        if (shared != null) return shared
+        return analyzeExclusive(analysisResult, paragraphs, mode, reasoningLevel, policy, now, source)
+    }
+
+    private suspend fun analyzeExclusive(
+        analysisResult: ChapterSpeechAnalysisResult,
+        paragraphs: List<CanonicalSpeechParagraph>,
+        mode: SpeechAnalysisMode,
+        reasoningLevel: AiReasoningLevel,
+        policy: ContentSplitPolicy,
+        now: Long,
+        source: String,
+    ): ChapterSpeechAnalysisResult {
         val bookUrl = analysisResult.analysis.bookUrl
         // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
         // 避免朗读与分镜页并发各自发一次 AI（竞态下冷却还没写入就都通过了检查）。
@@ -832,7 +895,8 @@ class RefineSpeechWithAiUseCase(
                 ),
                 params = speechAnalysisParams(preset, reasoningLevel, decisionCount),
                 taskType = AiTaskType.ANALYZE_SPEECH,
-                sourceLabel = chapterIndex?.let { "第 ${it + 1} 章（$source）" },
+                // 章号 + 发起链 + 这次在干什么，全部进日志场景行，不让人猜
+                sourceLabel = chapterIndex?.let { "第 ${it + 1} 章（${source}·说话人分析）" },
             )
         ).getOrThrow()
     }
@@ -841,6 +905,7 @@ class RefineSpeechWithAiUseCase(
         preset: AiTaskPresetConfig,
         chunk: List<ChapterSpeechSegment>,
         reasoningLevel: AiReasoningLevel,
+        source: String,
     ): String = aiTextGateway.generate(
         AiGenerateRequest(
             model = preset.model,
@@ -864,6 +929,10 @@ class RefineSpeechWithAiUseCase(
             ),
             params = speechAnalysisParams(preset, reasoningLevel),
             taskType = AiTaskType.ANALYZE_SPEECH,
+            // 场景拆分此前是语音润色里唯一不带章号的一档，取消记录没法定位到章；
+            // 章号取块内分段自带的（同一次 assignScenes 只处理同一章）。
+            // 发起链只有分镜页按需补这一路（主链不产出场景，见 assignScenes 注释）
+            sourceLabel = "第 ${chunk.first().chapterIndex + 1} 章（${source}·场景拆分）",
         )
     ).getOrThrow().text
 

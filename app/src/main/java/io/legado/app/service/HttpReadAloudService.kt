@@ -237,6 +237,18 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     /**
+     * 预合成只服务于「这本书还活着的朗读会话」。
+     *
+     * 停止（含 requestStop 到服务销毁前的窗口）、换书任一发生即收手：
+     * 不再为没人听的章节烧 AI 分析与 TTS 合成配额。逐 cue 检查，而不是只在
+     * 每章开头检查——一章的 AI 分析动辄几十秒、几十条 cue 全串行排队，
+     * 只在章头看过会导致"关闭朗读后预合成还在做"。
+     * 暂停不收手：预合成是给"之后要听的章"备料，暂停只是暂时没在听，恢复后还要用。
+     */
+    private fun preDownloadSessionAlive(bookUrl: String): Boolean =
+        isRun && ReadBook.book?.bookUrl == bookUrl
+
+    /**
      * 新朗读会话整体替换播放状态时立刻作废旧会话的预合成。
      * 预合成跑在服务 lifecycleScope 上，不受起播 generation 管辖；
      * 换书后若不主动掐掉，旧书的预合成会继续和新书的实时合成抢服务器
@@ -271,7 +283,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     private fun downloadAndPlayAudios() {
         exoPlayer.clearMediaItems()
         downloadTask?.cancel()
-        preDownloadJob?.cancel()
+        // 取消带原因：旧预合成链里有在飞的 AI 分析，日志要能看出是被谁掐的
+        preDownloadJob?.cancel(CancellationException("重建实时播单，旧预合成作废"))
         downloadTask = execute {
             downloadTaskActiveLock.withLock {
                 ensureActive()
@@ -405,7 +418,9 @@ class HttpReadAloudService : BaseReadAloudService(),
      * 所以日志只会看到"失败: null"），预合成逐 cue 全灭、后续章全靠现场合成。
      */
     private fun launchPreDownload(httpTts: HttpTTS) {
-        preDownloadJob?.cancel()
+        preDownloadJob?.cancel(CancellationException("换章后重新拉起预合成，旧链作废"))
+        // 已停止的会话不起新链：预合成只在朗读会话活着时跑（暂停不影响）
+        if (!isRun) return
         preDownloadJob = lifecycleScope.launch(IO) {
             preDownloadAudios(httpTts)
         }
@@ -478,8 +493,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         try {
             for (i in 1..limit) {
                 currentCoroutineContext().ensureActive()
-                // 预合成开始时抓的是旧书：书一换，后面的章节内容全不属于当前会话，立即收手
-                if (book.bookUrl != ReadBook.book?.bookUrl) break
+                // 章与章之间复查会话：书一换/朗读停止，后面的章节不属于当前会话，立即收手
+                if (!preDownloadSessionAlive(book.bookUrl)) break
                 if (consecutiveFailures >= 3) {
                     AppLog.put("TTS预合成连续失败${consecutiveFailures}章，已停止预合成")
                     break
@@ -487,7 +502,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val targetIndex = currentIdx + i
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
                 val prepared = getPreDownloadChapter(book, chapter) ?: continue
-                val chapterFailed = synthesizeChapterCues(prepared, httpTts, concurrency)
+                val chapterFailed = synthesizeChapterCues(prepared, httpTts, concurrency, book.bookUrl)
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }
         } catch (e: Exception) {
@@ -506,6 +521,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         prepared: PreDownloadChapter,
         httpTts: HttpTTS,
         concurrency: Int,
+        bookUrl: String,
     ): Boolean = coroutineScope {
         val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency)
         var failedCount = 0
@@ -515,6 +531,8 @@ class HttpReadAloudService : BaseReadAloudService(),
             async {
                 semaphore.acquire()
                 try {
+                    // 排队等锁期间会话可能已经停了/书一换：发请求前最后一道复查
+                    if (!preDownloadSessionAlive(bookUrl)) return@async
                     val routedVoice = voiceForCue(prepared.queue, index, httpTts)
                     if (routedVoice.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
                         return@async
@@ -674,7 +692,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     private fun downloadAndPlayAudiosStream() {
         exoPlayer.clearMediaItems()
         downloadTask?.cancel()
-        preDownloadJob?.cancel()
+        preDownloadJob?.cancel(CancellationException("重建实时播单（流式），旧预合成作废"))
         downloadTask = execute {
             downloadTaskActiveLock.withLock {
                 ensureActive()
@@ -754,7 +772,9 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     /** 同 [launchPreDownload]：预合成整链必须离开主线程，否则逐 cue 抛 NetworkOnMainThreadException。 */
     private fun launchPreDownloadStream(httpTts: HttpTTS, downloaderChannel: Channel<Downloader>) {
-        preDownloadJob?.cancel()
+        preDownloadJob?.cancel(CancellationException("换章后重新拉起预合成（流式），旧链作废"))
+        // 同 launchPreDownload：已停止的会话不起新链（暂停不影响）
+        if (!isRun) return
         preDownloadJob = lifecycleScope.launch(IO) {
             preDownloadAudiosStream(httpTts, downloaderChannel)
         }
@@ -773,8 +793,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         try {
             for (i in 1..limit) {
                 currentCoroutineContext().ensureActive()
-                // 同文件模式预合成：书一换立即收手，不和新会话抢服务器配额
-                if (book.bookUrl != ReadBook.book?.bookUrl) break
+                // 同文件模式预合成：会话一停/书一换立即收手，不和新会话抢服务器配额
+                if (!preDownloadSessionAlive(book.bookUrl)) break
                 if (consecutiveFailures >= 3) {
                     AppLog.put("TTS流式预合成连续失败${consecutiveFailures}章，已停止")
                     break
@@ -783,7 +803,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
                 val prepared = getPreDownloadChapter(book, chapter) ?: continue
                 val chapterFailed = synthesizeChapterCuesStream(
-                    prepared, httpTts, concurrency, downloaderChannel,
+                    prepared, httpTts, concurrency, downloaderChannel, book.bookUrl,
                 )
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }
@@ -802,6 +822,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         httpTts: HttpTTS,
         concurrency: Int,
         downloaderChannel: Channel<Downloader>,
+        bookUrl: String,
     ): Boolean = coroutineScope {
         val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency)
         var failedCount = 0
@@ -811,6 +832,8 @@ class HttpReadAloudService : BaseReadAloudService(),
             async {
                 semaphore.acquire()
                 try {
+                    // 同文件模式：等锁期间会话可能已收手，投下载前最后一道复查
+                    if (!preDownloadSessionAlive(bookUrl)) return@async
                     val routedVoice = voiceForCue(prepared.queue, index, httpTts)
                     if (routedVoice.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
                         return@async

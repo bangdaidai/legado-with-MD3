@@ -81,6 +81,10 @@ class SpeechStoryboardViewModel(
     }
 
     override fun onCleared() {
+        // viewModelScope 销毁时的隐式取消只会留下协程名；先带原因掐掉在飞的
+        // 加载/场景拆分，AI 日志里的取消条目才知道是"用户退了分镜页"
+        loadJob?.cancel(CancellationException("退出分镜页，加载作废"))
+        sceneJob?.cancel(CancellationException("退出分镜页，场景拆分作废"))
         previewJob?.cancel()
         previewJob = null
         super.onCleared()
@@ -139,8 +143,10 @@ class SpeechStoryboardViewModel(
     }
 
     private fun loadChapters() {
-        loadJob?.cancel()
-        sceneJob?.cancel()
+        // 取消一律带人话原因：原因会沿协程树传进在飞的 AI 请求，
+        // AI 日志里的"已取消"能直接写明是谁把这一刀掐下来的
+        loadJob?.cancel(CancellationException("分镜页刷新章节列表，上一次加载作废"))
+        sceneJob?.cancel(CancellationException("分镜页刷新章节列表，场景拆分作废"))
         loadJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -199,8 +205,8 @@ class SpeechStoryboardViewModel(
     }
 
     private fun loadChapter(chapterIndex: Int, reanalyze: Boolean) {
-        loadJob?.cancel()
-        sceneJob?.cancel()
+        loadJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一章的加载作废"))
+        sceneJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一章的场景拆分作废"))
         stopPreview()
         val title = _uiState.value.chapters
             .firstOrNull { it.chapterIndex == chapterIndex }
@@ -258,7 +264,7 @@ class SpeechStoryboardViewModel(
      * 扁平列表先发布、试听先可用，AI 再慢也在后台跑，成功才重新归组。
      */
     private fun attachScenes(chapterIndex: Int, plan: List<SpeechPlanItem>) {
-        sceneJob?.cancel()
+        sceneJob?.cancel(CancellationException("分镜切到第${chapterIndex + 1}章，上一次场景拆分让位"))
         sceneJob = viewModelScope.launch {
             val enriched = withScenes(chapterIndex, plan)
             // 跳过/失败时 withScenes 原样返回同一个实例，不必重发状态
@@ -316,6 +322,8 @@ class SpeechStoryboardViewModel(
             analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
             useMultiSpeaker = ReadConfig.useMultiSpeaker,
             policy = splitPolicy,
+            // 分镜页触发的分析在 AI 日志里要能看出出处，不混进"朗读"
+            source = "分镜",
         )
     }
 
@@ -334,6 +342,8 @@ class SpeechStoryboardViewModel(
     /**
      * 缺场景且是 AI 分析模式时按需补一次场景拆分，成功才写回库。
      *
+     * 这是场景拆分唯一的发起入口：主链（朗读/预合成）只跑说话人分析、不产出场景，
+     * 场景只对分镜页的阅读呈现有用、对朗读本身零消费，所以留到点开该章时再按需补。
      * 章节列表按当前音色重算过 [SpeechPlanItem]，这里只把场景字段搬回 plan 里，
      * 音色保持本次算出来的结果不变。
      */
@@ -350,8 +360,16 @@ class SpeechStoryboardViewModel(
             return plan
         }
         if (!sceneAttemptedChapters.add(chapterIndex)) return plan
-        val enriched = runCatching { refineSpeechWithAi.assignScenes(segments) }.getOrNull()
-            ?: return plan
+        // 被取消不算"这一章试过场景"：不清记账的话，切章掐掉一半后
+        // 同一页内再点回这章就不补跑了，AI 白请求了一半
+        val enriched = try {
+            refineSpeechWithAi.assignScenes(segments)
+        } catch (e: CancellationException) {
+            sceneAttemptedChapters.remove(chapterIndex)
+            throw e
+        } catch (e: Throwable) {
+            return plan
+        }
         if (enriched.all { it.sceneIndex == 0 }) return plan
         withContext(Dispatchers.IO) {
             chapterSpeechGateway.replaceSegments(segments.first().analysisId, enriched)

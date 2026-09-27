@@ -82,11 +82,10 @@ class AiTextRepositoryImpl(
         }
 
         if (cancellation != null) {
-            // cancel 点带的人话原因挂在异常消息上（如"被新一轮起播取代"）；
-            // 异常本身若是协程名包装（"y1 was cancelled"），则提示上层未标注
-            cancelReason = cancellation.message
-                ?.takeIf { it.isNotBlank() && !it.endsWith("was cancelled") }
-                ?: "上层未标注原因"
+            // cancel 点带的人话原因（如"被新一轮起播取代"）会被协程包成
+            // "xx was cancelled" 的 JobCancellationException，原因本身挂在 cause 上，
+            // 只读最外层消息会把标了原因的取消也显示成"上层未标注原因"
+            cancelReason = cancellationReason(cancellation) ?: "上层未标注原因"
         }
 
         withContext(NonCancellable) {
@@ -155,8 +154,8 @@ class AiTextRepositoryImpl(
                 val logError = if (success) {
                     null
                 } else if (cancelled) {
-                    // 取消原因由 cancel 点带在异常消息里（如"被新一轮起播取代"），原样进日志
-                    cause?.message?.takeIf { it.isNotBlank() }
+                    // 取消原因由 cancel 点带在异常链里（如"被新一轮起播取代"），原样进日志
+                    cancellationReason(cause)
                 } else {
                     cause?.message ?: cause?.javaClass?.simpleName
                 }
@@ -215,6 +214,28 @@ class AiTextRepositoryImpl(
             )
         )
         return result
+    }
+
+    /**
+     * 从取消异常链里取 cancel 点挂上的人话原因。
+     *
+     * job.cancel(CancellationException("原因")) 之后，正在跑的协程拿到的是
+     * "xx was cancelled" 的包装异常，真正的原因在 cause 链上；只读最外层消息
+     * 会把"其实标了原因"的取消也显示成没法读的兜底话。
+     */
+    private fun cancellationReason(e: Throwable?): String? {
+        var cursor: Throwable? = e
+        while (cursor != null) {
+            val message = cursor.message
+            if (!message.isNullOrBlank() &&
+                !message.contains("was cancelled") &&
+                !message.contains("due to cancellation")
+            ) {
+                return message
+            }
+            cursor = cursor.cause
+        }
+        return null
     }
 
     /**
