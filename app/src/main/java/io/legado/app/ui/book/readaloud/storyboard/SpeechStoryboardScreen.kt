@@ -575,9 +575,11 @@ private fun SegmentRow(
     // 时间轴小圆点要对齐的是「角色行/音色行」这条文字线的视觉中线。
     // 行高由主题字体决定、各档不同，写死 dp 必然错位——改为量出来的中线：
     // 首行 onTextLayout 报一次，量不到时（零高占位等）退回按字号估的中线。
-    val anchorTopPx = with(LocalDensity.current) { 14.dp.toPx() }
+    // density 必须在组合上下文取好，remember 的 lambda 里读不了 LocalDensity
+    val density = LocalDensity.current
+    val anchorTopPx = with(density) { 14.dp.toPx() }
     var nodeCenterY by remember(item.id) {
-        mutableFloatStateOf(anchorTopPx + with(LocalDensity.current) { 9.5.dp.toPx() })
+        mutableFloatStateOf(anchorTopPx + with(density) { 9.5.dp.toPx() })
     }
     Row(
         modifier = Modifier
