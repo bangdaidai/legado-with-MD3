@@ -1,6 +1,7 @@
 package io.legado.app.help.http
 
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.help.CacheManager
 import io.legado.app.help.glide.progress.ProgressManager.LISTENER
 import io.legado.app.help.glide.progress.ProgressResponseBody
@@ -184,14 +185,21 @@ fun getHttpCacheSize(type: HttpCacheType): Long {
 
 fun clearHttpCache(type: HttpCacheType) {
     when (type) {
-        // 设置页“封面缓存”条目同时清掉持久化封面文件缓存（CoverFileCache，
-        // 位于 filesDir/cover_cache，不在“清除缓存”目录扫描范围内），
-        // 保证用户能彻底删除封面数据腾空间。
-        HttpCacheType.COVER -> {
-            okHttpClient.cache?.delete()
-            io.legado.app.help.coil.CoverFileCache.clear()
+        // 设置页"封面缓存"这一条只清持久化封面文件缓存（CoverFileCache，位于 filesDir/cover_cache，
+        // 不在"清除缓存"目录扫描范围内），和 getHttpCacheSize 统计的位置保持一致。
+        // 之前这里还顺带清了 okHttpClient 的网络缓存，那是**所有书源响应**共用的目录
+        // （cacheDir/http_cache）：条目写着"封面"，实际把搜索、章节、发现页的响应一起抹掉，
+        // 且面板上显示的大小并不包含它，等于"显示 0MB 却删了别的东西"。
+        // 需要连网络缓存一起清空请走"清除书籍缓存"。
+        HttpCacheType.COVER -> io.legado.app.help.coil.CoverFileCache.clear()
+        // 注意：不能用 Cache.delete()。它会关掉这个 by lazy 单例持有的缓存，之后任何请求都抛
+        // IllegalStateException: cache is closed，只能等进程重启才恢复。清空内容要用 evictAll()，
+        // 它只丢弃条目、不关闭句柄。
+        HttpCacheType.MANGA -> runCatching {
+            okHttpClientManga.cache?.evictAll()
+        }.onFailure {
+            AppLog.put("清除漫画缓存失败\n$it", it)
         }
-        HttpCacheType.MANGA -> okHttpClientManga.cache?.delete()
     }
 }
 
