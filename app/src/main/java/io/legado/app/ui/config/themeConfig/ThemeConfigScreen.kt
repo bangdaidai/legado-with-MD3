@@ -817,6 +817,17 @@ fun ThemeConfigScreen(
             null -> Unit
         }
     }
+
+    // 点已有图片缩略图重开九宫格切图编辑器：仅容器背景图有切图概念，应用背景图返回 null 不可点
+    fun editNineSlice(dark: Boolean): (() -> Unit)? {
+        val target = when (backgroundImageTarget) {
+            BackgroundImageTarget.LargeContainer -> ContainerBackgroundTarget.LargeContainer
+            BackgroundImageTarget.Item -> ContainerBackgroundTarget.Item
+            else -> return null
+        }
+        return { onIntent(ThemeConfigIntent.EditContainerNineSlice(target, dark)) }
+    }
+
     BackgroundImageManageSheet(
         show = backgroundImageSheet != null,
         onDismissRequest = { onIntent(ThemeConfigIntent.DismissSheet) },
@@ -882,6 +893,8 @@ fun ThemeConfigScreen(
         onSelectDark = { useFilePicker -> requestImage(true, useFilePicker) },
         onRemoveLight = { removeImage(false) },
         onRemoveDark = { removeImage(true) },
+        onEditLight = editNineSlice(false),
+        onEditDark = editNineSlice(true),
     )
 
     MainNavigationSettingsSheet(

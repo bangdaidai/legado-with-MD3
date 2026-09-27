@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,6 +33,7 @@ import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
+import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.text.AppText
 import kotlin.math.roundToInt
 
@@ -77,6 +79,9 @@ fun BackgroundImageManageSheet(
     onSelectDark: (useFilePicker: Boolean) -> Unit,
     onRemoveLight: () -> Unit,
     onRemoveDark: () -> Unit,
+    /** 点击已有图片缩略图重新打开九宫格切图编辑器；null（应用背景图）时缩略图不可点 */
+    onEditLight: (() -> Unit)? = null,
+    onEditDark: (() -> Unit)? = null,
 ) {
     var useFilePicker by remember { mutableStateOf(false) }
     AppModalBottomSheet(
@@ -108,6 +113,7 @@ fun BackgroundImageManageSheet(
                     modifier = Modifier.weight(1f),
                     onSelect = { onSelectLight(useFilePicker) },
                     onRemove = onRemoveLight,
+                    onEdit = onEditLight,
                 )
                 BackgroundImageTile(
                     label = stringResource(R.string.night),
@@ -115,6 +121,7 @@ fun BackgroundImageManageSheet(
                     modifier = Modifier.weight(1f),
                     onSelect = { onSelectDark(useFilePicker) },
                     onRemove = onRemoveDark,
+                    onEdit = onEditDark,
                 )
             }
 
@@ -153,13 +160,27 @@ fun BackgroundImageManageSheet(
                     }
 
                     is BackgroundImageExtraOption.NineScale -> {
-                        SliderSettingItem(
+                        // 对齐高亮规则页旧「图片大小」滑块：0.1x~5.0x 连续、0.1 精度。
+                        // 图案按「原图像素×scale」绘制，普通图 1x 往往装不下会被压扁，
+                        // 必须能滑到 1 以下才有意义，整数吸附的滑块做不到这一点。
+                        var scalePreview by remember(option) {
+                            mutableFloatStateOf(option.value)
+                        }
+                        TinySliderSettingItem(
                             title = option.title,
-                            description = "${(option.value * 100).roundToInt()}%",
-                            value = option.value,
-                            defaultValue = 1f,
-                            valueRange = 0.25f..4f,
-                            onValueChange = option.onValueChange,
+                            value = scalePreview,
+                            valueRange = 0.1f..5f,
+                            description = String.format("%.1fx", scalePreview),
+                            stepSize = 0.1f,
+                            showDecimal = true,
+                            // 拖动中只更新本地预览、松手才写设置：
+                            // 拖动中写会与外部 value 回流打架，滑块会跳
+                            onValueChange = { scalePreview = (it * 10).roundToInt() / 10f },
+                            onValueChangeFinished = { option.onValueChange(scalePreview) },
+                            onReset = {
+                                scalePreview = 1f
+                                option.onValueChange(1f)
+                            },
                         )
                     }
                 }
@@ -175,6 +196,7 @@ private fun BackgroundImageTile(
     modifier: Modifier,
     onSelect: () -> Unit,
     onRemove: () -> Unit,
+    onEdit: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier) {
         if (path.isNullOrBlank()) {
@@ -201,6 +223,8 @@ private fun BackgroundImageTile(
         } else {
             Box(modifier = Modifier.fillMaxWidth()) {
                 NormalCard(
+                    // 点图重开九宫格切图编辑器（容器背景图专属；应用背景图无切图不传）
+                    onClick = onEdit,
                     cornerRadius = 12.dp,
                 ) {
                     AsyncImage(

@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.constant.EventBus
+import io.legado.app.domain.model.settings.parseContainerNineSlice
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.config.ThemeConfigStore
 import io.legado.app.ui.widget.components.NinePatchEditorDialog
@@ -146,16 +147,32 @@ fun ThemeConfigRouteScreen(
     }
 
     // 容器背景图九宫格切图编辑器：与高亮背景图同一对话框。
-    // 初始线位置优先取 .9.png 引导线自动探测值，探测不到时用对半偏内的默认线。
+    // 初始线位置优先回读上次保存的切分线（重开编辑场景），
+    // 其次取 .9.png 引导线自动探测值，都没有时用对半偏内的默认线。
     val ninePatchEditor = pendingNinePatchEditor
-    val ninePatchInitial = remember(ninePatchEditor) {
-        val auto = ninePatchEditor?.imagePath
+    val ninePatchInitial = remember(ninePatchEditor, state.theme) {
+        val editor = ninePatchEditor
+        val saved = editor?.let { e ->
+            parseContainerNineSlice(
+                state.theme.run {
+                    when {
+                        e.target == ContainerBackgroundTarget.LargeContainer && e.dark ->
+                            largeContainerNineSliceDark
+                        e.target == ContainerBackgroundTarget.LargeContainer ->
+                            largeContainerNineSliceLight
+                        e.dark -> itemNineSliceDark
+                        else -> itemNineSliceLight
+                    }
+                }
+            )
+        }
+        val auto = editor?.imagePath
             ?.let { io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader.nineSliceFractions(it) }
         floatArrayOf(
-            auto?.left ?: 0.25f,
-            auto?.let { 1f - it.right } ?: 0.75f,
-            auto?.top ?: 0.25f,
-            auto?.let { 1f - it.bottom } ?: 0.75f,
+            saved?.leftX ?: auto?.left ?: 0.25f,
+            saved?.rightX ?: auto?.let { 1f - it.right } ?: 0.75f,
+            saved?.topY ?: auto?.top ?: 0.25f,
+            saved?.bottomY ?: auto?.let { 1f - it.bottom } ?: 0.75f,
         )
     }
     NinePatchEditorDialog(

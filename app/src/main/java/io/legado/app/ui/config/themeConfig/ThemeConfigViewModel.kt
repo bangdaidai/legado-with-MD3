@@ -164,6 +164,8 @@ class ThemeConfigViewModel(
             )
             is ThemeConfigIntent.SaveContainerBackgroundNineSlice ->
                 saveContainerBackgroundNineSlice(intent)
+            is ThemeConfigIntent.EditContainerNineSlice ->
+                editContainerNineSlice(intent.target, intent.dark)
             is ThemeConfigIntent.RemoveContainerBackground -> removeContainerBackground(
                 target = intent.target,
                 dark = intent.dark,
@@ -530,6 +532,31 @@ class ThemeConfigViewModel(
                     }
                 }
             }
+        }
+    }
+
+    /** 缩略图重点重编辑：槽位已有图就直接发切图编辑器 Effect，不重新复制图片 */
+    private fun editContainerNineSlice(
+        target: ContainerBackgroundTarget,
+        dark: Boolean,
+    ) {
+        val theme = _uiState.value.theme
+        val path = when (target) {
+            ContainerBackgroundTarget.LargeContainer -> if (dark) {
+                theme.largeContainerBackgroundImageDark
+            } else {
+                theme.largeContainerBackgroundImageLight
+            }
+            ContainerBackgroundTarget.Item -> if (dark) {
+                theme.itemBackgroundImageDark
+            } else {
+                theme.itemBackgroundImageLight
+            }
+        }
+        if (!path.isNullOrBlank()) {
+            _effects.tryEmit(
+                ThemeConfigEffect.OpenContainerNinePatchEditor(target, dark, path)
+            )
         }
     }
 

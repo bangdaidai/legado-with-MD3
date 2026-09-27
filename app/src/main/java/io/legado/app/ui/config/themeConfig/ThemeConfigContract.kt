@@ -95,6 +95,11 @@ sealed interface ThemeConfigIntent {
         val target: ContainerBackgroundTarget,
         val dark: Boolean,
     ) : ThemeConfigIntent
+    /** 从图片缩略图重新打开切图编辑器：槽位已有图即直接弹编辑，初始线位置回读已保存的切分 */
+    data class EditContainerNineSlice(
+        val target: ContainerBackgroundTarget,
+        val dark: Boolean,
+    ) : ThemeConfigIntent
     data class SelectAppFont(val file: FileDoc) : ThemeConfigIntent
     data object ClearAppFont : ThemeConfigIntent
     data class SetFontFolder(val path: String) : ThemeConfigIntent
