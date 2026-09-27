@@ -60,11 +60,24 @@ object CookieStore : CookieManagerInterface {
         val cookieMap = mergeCookiesToMap(cookie, sessionCookie)
 
         var ck = mapToCookie(cookieMap) ?: ""
+        val originalLength = ck.length
+        val droppedKeys = mutableListOf<String>()
         while (ck.length > 4096) {
             val removeKey = cookieMap.keys.random()
             CookieManager.removeCookie(url, removeKey)
             cookieMap.remove(removeKey)
+            droppedKeys.add(removeKey)
             ck = mapToCookie(cookieMap) ?: ""
+        }
+        // 只在真的发生丢弃时写一条：这个淘汰是**随机**挑键的，所以"某个书源时好时坏、
+        // 过一会儿又自己好了"多半就在这里。日志里点名丢了哪几枚，不用再靠猜。
+        if (droppedKeys.isNotEmpty()) {
+            AppLog.put(
+                "【Cookie】" + domain + " 这一行 " + originalLength.toString() +
+                        " 字节，超过 4096 上限，本次丢掉 " + droppedKeys.size.toString() +
+                        " 枚：" + droppedKeys.joinToString("; ") +
+                        "（若此后该源返回空列表或拦截页，问题就在这几枚里）"
+            )
         }
         return ck
     }
@@ -78,10 +91,22 @@ object CookieStore : CookieManagerInterface {
 
     override fun removeCookie(url: String) {
         val domain = NetworkUtils.getSubDomain(url)
+        // 先读一眼再删，好让日志能说清"清掉的是哪一行、原来有多少枚"。
+        // 这条是「清除 Cookie」这个归零动作的回执：没有它，用户无法区分"我确实清过了但没用"
+        // 和"我根本没清到这一行"（域名对不上时就是后者）。
+        val oldCookie = runCatching { getCookieNoSession(url) }.getOrNull().orEmpty()
+        val oldKeys = oldCookie.split(semicolonRegex)
+            .map { it.substringBefore('=').trim() }
+            .filter { it.isNotEmpty() }
         appDb.cookieDao.delete(domain)
         CacheManager.deleteMemory("${domain}_cookie")
         CacheManager.deleteMemory("${domain}_session_cookie")
         android.webkit.CookieManager.getInstance().removeCookie(url)
+        AppLog.put(
+            "【Cookie】已清除 " + domain + " 整行，原有 " + oldKeys.size.toString() + " 枚" +
+                    (if (oldKeys.isEmpty()) "（本来就是空的：如果这不对，说明书源实际用的域名跟书源地址不是一行）"
+                    else "：" + oldKeys.joinToString("; "))
+        )
     }
 
     override fun cookieToMap(cookie: String): MutableMap<String, String> {
