@@ -876,7 +876,7 @@ private fun RowScope.StatCell(value: String, label: String) {
     }
 }
 
-/** 带音色进度的「分段」格：数字位写成 已分配/总数，分母降一号灰字，标签仍是「分段」 */
+/** 带音色进度的「分段」格：数字位写成 已分配/总数，同号大小、只靠颜色分主次，标签仍是「分段」 */
 @Composable
 private fun RowScope.VoicedSegmentCell(voiced: Int, total: Int, label: String) {
     Column(
@@ -891,7 +891,7 @@ private fun RowScope.VoicedSegmentCell(voiced: Int, total: Int, label: String) {
             )
             AppText(
                 text = "/$total",
-                style = LegadoTheme.typography.labelMedium,
+                style = LegadoTheme.typography.titleMedium,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
             )
         }
