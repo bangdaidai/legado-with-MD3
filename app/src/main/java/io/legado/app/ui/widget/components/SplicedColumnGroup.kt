@@ -43,6 +43,8 @@ data class SplicedColumnGroupState(
 fun SplicedColumnGroup(
     modifier: Modifier = Modifier,
     title: String = "",
+    /** 关掉后本分组不铺「大容器背景图」（未配置图片时无任何视觉差别），用于选择器这类铺图反而奇怪的组 */
+    useLargeBackground: Boolean = true,
     items: @Composable ColumnScope.() -> Unit,
 ) {
     val composeEngine = LegadoTheme.composeEngine
@@ -100,11 +102,13 @@ fun SplicedColumnGroup(
                             .animateContentSize()
                             .clip(RoundedCornerShape(cornerRadius))
                     ) {
-                        Spacer(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .appContainerBackground(AppContainerBackgroundType.Large)
-                        )
+                        if (useLargeBackground) {
+                            Spacer(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .appContainerBackground(AppContainerBackgroundType.Large)
+                            )
+                        }
                         Column(modifier = Modifier.fillMaxWidth()) {
                             currentIndex.intValue = 0
                             items()
@@ -118,11 +122,13 @@ fun SplicedColumnGroup(
                         .animateContentSize()
                         .clip(RoundedCornerShape(cornerRadius))
                 ) {
-                    Spacer(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .appContainerBackground(AppContainerBackgroundType.Large)
-                    )
+                    if (useLargeBackground) {
+                        Spacer(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .appContainerBackground(AppContainerBackgroundType.Large)
+                        )
+                    }
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(2.dp)

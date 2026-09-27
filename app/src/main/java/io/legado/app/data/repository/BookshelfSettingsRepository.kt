@@ -7,8 +7,10 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.config.compatDsBoolean
+import io.legado.app.help.config.compatDsFloat
 import io.legado.app.help.config.compatDsInt
 import io.legado.app.help.config.compatDsLong
+import io.legado.app.help.config.compatDsString
 import io.legado.app.help.config.compatDsStringSet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -78,6 +80,11 @@ internal fun Preferences.toBookshelfSettings() = BookshelfSettings(
     bookshelfCoverShadow = compatDsBoolean(PreferKey.bookshelfCoverShadow) ?: false,
     bookshelfCardColor = compatDsInt(PreferKey.bookshelfCardColor) ?: 0,
     bookshelfCardColorDark = compatDsInt(PreferKey.bookshelfCardColorDark) ?: 0,
+    bookshelfCardImageLight = compatDsString(PreferKey.bookshelfCardImageLight),
+    bookshelfCardImageDark = compatDsString(PreferKey.bookshelfCardImageDark),
+    bookshelfCardNineSliceLight = compatDsString(PreferKey.bookshelfCardNineSliceLight),
+    bookshelfCardNineSliceDark = compatDsString(PreferKey.bookshelfCardNineSliceDark),
+    bookshelfCardNineScale = compatDsFloat(PreferKey.bookshelfCardNineScale) ?: 1f,
     bookshelfGroupListStyle = compatDsInt(PreferKey.bookshelfGroupListStyle) ?: 0,
     bookshelfGroupCoverCount = compatDsInt(PreferKey.bookshelfGroupCoverCount) ?: 4,
     bookshelfListCoverWidth = compatDsInt(PreferKey.bookshelfListCoverWidth) ?: 84,
@@ -139,6 +146,11 @@ internal fun BookshelfSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfCoverShadow to bookshelfCoverShadow,
     PreferKey.bookshelfCardColor to bookshelfCardColor,
     PreferKey.bookshelfCardColorDark to bookshelfCardColorDark,
+    PreferKey.bookshelfCardImageLight to bookshelfCardImageLight,
+    PreferKey.bookshelfCardImageDark to bookshelfCardImageDark,
+    PreferKey.bookshelfCardNineSliceLight to bookshelfCardNineSliceLight,
+    PreferKey.bookshelfCardNineSliceDark to bookshelfCardNineSliceDark,
+    PreferKey.bookshelfCardNineScale to bookshelfCardNineScale,
     PreferKey.bookshelfGroupListStyle to bookshelfGroupListStyle,
     PreferKey.bookshelfGroupCoverCount to bookshelfGroupCoverCount,
     PreferKey.bookshelfListCoverWidth to bookshelfListCoverWidth,

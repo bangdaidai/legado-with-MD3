@@ -2671,6 +2671,8 @@
     <string name="grid_cover_width">网格封面宽度</string>
     <string name="day_card_bg_color">日间卡片背景颜色</string>
     <string name="night_card_bg_color">夜间卡片背景颜色</string>
+    <string name="card_bg_image">卡片背景图片</string>
+    <string name="card_bg_image_desc">在书卡片背景色之上叠加九宫格图案，选图后可直接切图</string>
     <string name="compact_details">精简详情</string>
     <string name="show_more_info">显示更多信息</string>
     <string name="center_cover_vertically">封面垂直居中</string>

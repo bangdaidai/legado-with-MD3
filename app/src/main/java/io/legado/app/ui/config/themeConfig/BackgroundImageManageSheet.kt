@@ -54,7 +54,7 @@ sealed interface BackgroundImageExtraOption {
         val onValueChange: (Int) -> Unit,
     ) : BackgroundImageExtraOption
 
-    /** 九宫格图案缩放：100% = 原图像素按 1px=1dp 绘制四角/四边图案 */
+    /** 九宫格图案缩放：100% = 原图像素按 1px=1 屏幕像素 绘制四角/四边图案（等同图片在手机上看的大小） */
     data class NineScale(
         val title: String,
         val value: Float,
@@ -160,22 +160,30 @@ fun BackgroundImageManageSheet(
                     }
 
                     is BackgroundImageExtraOption.NineScale -> {
-                        // 对齐高亮规则页旧「图片大小」滑块：0.1x~5.0x 连续、0.1 精度。
-                        // 图案按「原图像素×scale」绘制，普通图 1x 往往装不下会被压扁，
-                        // 必须能滑到 1 以下才有意义，整数吸附的滑块做不到这一点。
+                        // 图案大小：0.02x~5x 连续、0.02 精度（100% = 图片在手机上看多大图案就多大，
+                        // 1px=1 屏幕像素基准下按真机反馈保留上下浮动空间，两位小数便于微调）。
                         var scalePreview by remember(option) {
                             mutableFloatStateOf(option.value)
+                        }
+                        // 跨档即写设置：± 步进按钮没有「松手」时机，
+                        // 只等 onValueChangeFinished 会把步进调的值丢掉（真机：显示 0.1x 存的还是 0.6）。
+                        // 相同值会被 gateway 差量过滤成空操作，逐帧调用不产生重复落盘。
+                        fun applyScale(raw: Float) {
+                            val snapped = (raw * 50).roundToInt() / 50f
+                            if (snapped != scalePreview) {
+                                scalePreview = snapped
+                                option.onValueChange(snapped)
+                            }
                         }
                         TinySliderSettingItem(
                             title = option.title,
                             value = scalePreview,
-                            valueRange = 0.1f..5f,
-                            description = String.format("%.1fx", scalePreview),
-                            stepSize = 0.1f,
+                            valueRange = 0.02f..5f,
+                            description = String.format("%.2fx", scalePreview),
+                            stepSize = 0.02f,
                             showDecimal = true,
-                            // 拖动中只更新本地预览、松手才写设置：
-                            // 拖动中写会与外部 value 回流打架，滑块会跳
-                            onValueChange = { scalePreview = (it * 10).roundToInt() / 10f },
+                            valueFormat = { String.format("%.2fx", it) },
+                            onValueChange = ::applyScale,
                             onValueChangeFinished = { option.onValueChange(scalePreview) },
                             onReset = {
                                 scalePreview = 1f

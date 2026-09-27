@@ -74,7 +74,7 @@ import io.legado.app.data.entities.ExcludedTag
 import io.legado.app.help.book.TagManager
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
-import io.legado.app.ui.widget.components.card.GlassCard
+import io.legado.app.ui.widget.components.appContainerBackground
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
@@ -203,6 +203,32 @@ fun BookshelfListItem(
         if (isSelected) LegadoTheme.colorScheme.secondaryContainer else if (cardColor != 0) Color(
             cardColor
         ) else LegadoTheme.colorScheme.cardContainer
+    // 书架卡片背景图：独立槽位，跟随日/夜各自的图与切分线，不受容器背景图总开关影响；
+    // 配置了图才叠在背景色之上，普通图（未切九宫格）整图铺满，与容器背景图同一套绘制
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val cardImage =
+        if (LegadoTheme.isDark) settings.bookshelfCardImageDark else settings.bookshelfCardImageLight
+    val cardImageModifier = if (cardImage.isNullOrBlank()) {
+        Modifier
+    } else {
+        Modifier.appContainerBackground(
+            backgroundImage = cardImage,
+            useThemeBackground = false,
+            backgroundAlpha = 1f,
+            nineSliceCsv = if (LegadoTheme.isDark) {
+                settings.bookshelfCardNineSliceDark
+            } else {
+                settings.bookshelfCardNineSliceLight
+            },
+            nineScale = settings.bookshelfCardNineScale,
+        )
+    }
+    // 与 BaseCard 的圆角解析保持一致，铺图裁切跟随用户的卡片圆角覆盖
+    val cardImageShape = if (themeSettings.overrideBaseCardCornerRadius) {
+        RoundedCornerShape(themeSettings.baseCardCornerRadius.dp)
+    } else {
+        RoundedCornerShape(8.dp)
+    }
     val topContent: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -296,7 +322,6 @@ fun BookshelfListItem(
             val notchPositions = remember { mutableStateMapOf<Any, Float>() }
             var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val notchRegistry = rememberTicketNotchRegistry(notchPositions) { containerCoordinates }
-            val themeSettings = LocalAppUiConfiguration.current.theme
             val ticketCornerRadius = if (themeSettings.overrideBaseCardCornerRadius) {
                 themeSettings.baseCardCornerRadius.dp
             } else {
@@ -322,6 +347,7 @@ fun BookshelfListItem(
                             .onGloballyPositioned { containerCoordinates = it }
                             .clip(ticketShape)
                             .background(containerColor)
+                            .then(cardImageModifier)
                             .then(
                                 if (ticketBorder != null) {
                                     Modifier.border(ticketBorder, ticketShape)
@@ -355,8 +381,24 @@ fun BookshelfListItem(
                 onClick = onClick,
                 onLongClick = onLongClick
             ) {
-                topContent()
-                bottomContent?.invoke()
+                if (cardImage.isNullOrBlank()) {
+                    topContent()
+                    bottomContent?.invoke()
+                } else {
+                    // 图案画在卡片背景色之上、内容之下（与 BaseCardContent 同一层级关系）
+                    Box(Modifier.fillMaxWidth()) {
+                        Spacer(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(cardImageShape)
+                                .then(cardImageModifier)
+                        )
+                        Column(Modifier.fillMaxWidth()) {
+                            topContent()
+                            bottomContent?.invoke()
+                        }
+                    }
+                }
             }
         }
         if (settings.bookshelfShowDivider) {
@@ -1074,17 +1116,12 @@ fun BookItem(
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
                 } else {
-                    GlassCard(
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
-                        cornerRadius = 4.dp,
-                        containerColor = LegadoTheme.colorScheme.cardContainer
-                    ) {
-                        BookItemIntro(
-                            intro = intro!!,
-                            maxLines = settings.bookshelfIntroMaxLines,
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                        )
-                    }
+                    // 简介不再单独铺色/铺图：并进书籍卡片整体，只跟行内容对齐水平边距
+                    BookItemIntro(
+                        intro = intro!!,
+                        maxLines = settings.bookshelfIntroMaxLines,
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    )
                 }
             }
         } else null,

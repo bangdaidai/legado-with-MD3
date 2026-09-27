@@ -63,7 +63,8 @@ data class ThemeSettings(
     val largeContainerNineSliceDark: String? = null,
     val itemNineSliceLight: String? = null,
     val itemNineSliceDark: String? = null,
-    // 九宫格图案缩放：四角/四边图案按「原图像素 × scale，1px=1dp 基准」绘制，
+    // 九宫格图案缩放：四角/四边图案按「原图像素 × scale，1px=1 屏幕像素 基准」绘制，
+    // 100% 即图片直接放在本机屏幕上看时图案的大小；
     // 不再跟随容器高度自动缩放；日/夜图共用（对齐高亮规则 bgImageScale 的先例）。
     val largeContainerNineSliceScale: Float = 1f,
     val itemNineSliceScale: Float = 1f,

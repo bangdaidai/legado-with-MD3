@@ -182,7 +182,11 @@ fun ThemeConfigScreen(
                 }
 
 
-                SplicedColumnGroup(title = stringResource(R.string.theme)) {
+                // 三段选择器和取色圆点行铺大容器背景图反而显脏（真机反馈），本组单独关掉
+                SplicedColumnGroup(
+                    title = stringResource(R.string.theme),
+                    useLargeBackground = false,
+                ) {
                     if (isMiuixEngine) {
                         DropdownListSettingItem(
                             title = stringResource(R.string.theme_mode),

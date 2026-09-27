@@ -49,6 +49,14 @@ data class BookshelfSettings(
     val bookshelfCoverShadow: Boolean = false,
     val bookshelfCardColor: Int = 0,
     val bookshelfCardColorDark: Int = 0,
+    /** 书架卡片背景图（日/夜），配置后叠在卡片背景色之上；与容器背景图同一套九宫格规则 */
+    val bookshelfCardImageLight: String? = null,
+    val bookshelfCardImageDark: String? = null,
+    /** 九宫格切分线 CSV（"npL,npR,npT,npB" 四角占比），由切图编辑器保存 */
+    val bookshelfCardNineSliceLight: String? = null,
+    val bookshelfCardNineSliceDark: String? = null,
+    /** 九宫格图案缩放，日夜共用一个值；100% = 原图 1px 画 1 屏幕像素（与容器「图案大小」同基准） */
+    val bookshelfCardNineScale: Float = 1f,
     val bookshelfGroupListStyle: Int = 0,
     val bookshelfGroupCoverCount: Int = 4,
     val bookshelfListCoverWidth: Int = 84,

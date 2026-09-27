@@ -2746,6 +2746,8 @@
     <string name="grid_cover_width">Grid Cover Width</string>
     <string name="day_card_bg_color">Day Card Background Color</string>
     <string name="night_card_bg_color">Night Card Background Color</string>
+    <string name="card_bg_image">Card Background Image</string>
+    <string name="card_bg_image_desc">Overlay a 9-slice pattern on the book card, pick image to open the slice editor</string>
     <string name="compact_details">Compact Details</string>
     <string name="show_more_info">Show More Info</string>
     <string name="center_cover_vertically">Center Cover Vertically</string>

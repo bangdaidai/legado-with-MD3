@@ -1,6 +1,10 @@
 package io.legado.app.ui.main.bookshelf
 
+import android.content.Context
 import android.content.res.Configuration
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -21,18 +25,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.domain.model.settings.BookshelfSettings
+import io.legado.app.domain.model.settings.ContainerNineSlice
+import io.legado.app.domain.model.settings.parseContainerNineSlice
+import io.legado.app.domain.model.settings.toCsv
+import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
+import io.legado.app.ui.config.themeConfig.BackgroundImageExtraOption
+import io.legado.app.ui.config.themeConfig.BackgroundImageManageSheet
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.widget.components.NinePatchEditorDialog
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.divider.PillDivider
 import io.legado.app.ui.widget.components.divider.PillHeaderDivider
@@ -41,6 +54,15 @@ import io.legado.app.ui.widget.components.settingItem.CompactClickableSettingIte
 import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.CompactSliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.CompactSwitchSettingItem
+import io.legado.app.utils.FileDoc
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.externalFiles
+import io.legado.app.utils.inputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +79,50 @@ fun BookshelfConfigSheet(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var showColorPicker by remember { mutableStateOf(false) }
     var showColorPickerDark by remember { mutableStateOf(false) }
+    var showCardImageSheet by remember { mutableStateOf(false) }
+    // 正在切图的槽位：(本地图片路径, 是否夜间)；null = 编辑器不显示
+    var cardImageEditor by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var pendingCardImageDark by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val importScope = rememberCoroutineScope()
+    // 两个选择器共用同一落盘逻辑：图片应用（GetContent）与文件选择器（OpenDocument，选 .9.png 用）
+    fun onCardImagePicked(uri: Uri?) {
+        if (uri == null) return
+        val dark = pendingCardImageDark
+        importScope.launch(Dispatchers.IO) {
+            runCatching {
+                val folder = if (dark) "bookshelf_card_dark" else "bookshelf_card_light"
+                val newPath = importBookshelfCardImage(context, uri.toString(), folder)
+                val oldPath = if (dark) {
+                    settings.bookshelfCardImageDark
+                } else {
+                    settings.bookshelfCardImageLight
+                }
+                // 换图即作废旧切分线：与新图同一次 copy 原子提交（与容器背景图同口径）
+                onUpdate {
+                    if (dark) {
+                        it.copy(
+                            bookshelfCardImageDark = newPath,
+                            bookshelfCardNineSliceDark = null,
+                        )
+                    } else {
+                        it.copy(
+                            bookshelfCardImageLight = newPath,
+                            bookshelfCardNineSliceLight = null,
+                        )
+                    }
+                }
+                deleteOwnedCardImage(context, oldPath, newPath)
+                cardImageEditor = newPath to dark
+            }
+        }
+    }
+    val cardImageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> onCardImagePicked(uri) }
+    val cardImageFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> onCardImagePicked(uri) }
 
     AppModalBottomSheet(
         title = stringResource(R.string.bookshelf_layout),
@@ -371,6 +437,25 @@ fun BookshelfConfigSheet(
                                             MaterialTheme.colorScheme.outlineVariant,
                                             CircleShape
                                         )
+                                )
+                            }
+                        }
+                    )
+
+                    CompactClickableSettingItem(
+                        title = stringResource(R.string.card_bg_image),
+                        description = stringResource(R.string.card_bg_image_desc),
+                        color = LegadoTheme.colorScheme.surface,
+                        onClick = { showCardImageSheet = true },
+                        trailingContent = {
+                            if (!settings.bookshelfCardImageLight.isNullOrBlank() ||
+                                !settings.bookshelfCardImageDark.isNullOrBlank()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(LegadoTheme.colorScheme.primary)
                                 )
                             }
                         }
@@ -695,5 +780,135 @@ fun BookshelfConfigSheet(
                 onUpdate { it.copy(bookshelfCardColorDark = value) }
             }
         )
+
+        // 卡片背景图：日/夜双图 + 图案大小，复用容器背景图同一套管理面板
+        BackgroundImageManageSheet(
+            show = showCardImageSheet,
+            onDismissRequest = { showCardImageSheet = false },
+            title = stringResource(R.string.card_bg_image),
+            lightPath = settings.bookshelfCardImageLight,
+            darkPath = settings.bookshelfCardImageDark,
+            extraOptions = listOf(
+                BackgroundImageExtraOption.NineScale(
+                    title = "图案大小",
+                    value = settings.bookshelfCardNineScale,
+                    onValueChange = { value ->
+                        onUpdate { it.copy(bookshelfCardNineScale = value) }
+                    },
+                )
+            ),
+            onSelectLight = { useFilePicker ->
+                pendingCardImageDark = false
+                if (useFilePicker) {
+                    cardImageFileLauncher.launch(arrayOf("image/*"))
+                } else {
+                    cardImageLauncher.launch("image/*")
+                }
+            },
+            onSelectDark = { useFilePicker ->
+                pendingCardImageDark = true
+                if (useFilePicker) {
+                    cardImageFileLauncher.launch(arrayOf("image/*"))
+                } else {
+                    cardImageLauncher.launch("image/*")
+                }
+            },
+            onRemoveLight = {
+                onUpdate {
+                    it.copy(bookshelfCardImageLight = null, bookshelfCardNineSliceLight = null)
+                }
+                deleteOwnedCardImage(context, settings.bookshelfCardImageLight, null)
+            },
+            onRemoveDark = {
+                onUpdate {
+                    it.copy(bookshelfCardImageDark = null, bookshelfCardNineSliceDark = null)
+                }
+                deleteOwnedCardImage(context, settings.bookshelfCardImageDark, null)
+            },
+            onEditLight = settings.bookshelfCardImageLight?.let { path ->
+                { cardImageEditor = path to false }
+            },
+            onEditDark = settings.bookshelfCardImageDark?.let { path ->
+                { cardImageEditor = path to true }
+            },
+        )
+
+        // 九宫格切图编辑器：初始线优先回读已保存切分线，其次 .9.png 引导线自动探测，最后默认线
+        val editorSlot = cardImageEditor
+        val editorInitial = remember(editorSlot) {
+            editorSlot?.let { (path, dark) ->
+                val saved = parseContainerNineSlice(
+                    if (dark) {
+                        settings.bookshelfCardNineSliceDark
+                    } else {
+                        settings.bookshelfCardNineSliceLight
+                    }
+                )
+                val auto = ReaderTextBackgroundLoader.nineSliceFractions(path)
+                floatArrayOf(
+                    saved?.leftX ?: auto?.left ?: 0.25f,
+                    saved?.rightX ?: auto?.let { 1f - it.right } ?: 0.75f,
+                    saved?.topY ?: auto?.top ?: 0.25f,
+                    saved?.bottomY ?: auto?.let { 1f - it.bottom } ?: 0.75f,
+                )
+            }
+        }
+        NinePatchEditorDialog(
+            show = editorSlot != null,
+            imagePath = editorSlot?.first.orEmpty(),
+            initialLeft = editorInitial?.get(0) ?: 0.25f,
+            initialRight = editorInitial?.get(1) ?: 0.75f,
+            initialTop = editorInitial?.get(2) ?: 0.25f,
+            initialBottom = editorInitial?.get(3) ?: 0.75f,
+            onDismissRequest = { cardImageEditor = null },
+            onSave = { left, right, top, bottom ->
+                val dark = editorSlot?.second
+                if (dark != null) {
+                    // 绝对线位置 → 四角占比 CSV，与容器背景图同一换算
+                    val csv = ContainerNineSlice(
+                        left = left,
+                        right = 1f - right,
+                        top = top,
+                        bottom = 1f - bottom,
+                    ).toCsv()
+                    onUpdate {
+                        if (dark) {
+                            it.copy(bookshelfCardNineSliceDark = csv)
+                        } else {
+                            it.copy(bookshelfCardNineSliceLight = csv)
+                        }
+                    }
+                }
+                cardImageEditor = null
+            },
+        )
     }
+}
+
+/** 把选中的图片复制进应用目录并以 MD5 命名，返回绝对路径；同一张图重复选择命中同一路径 */
+private fun importBookshelfCardImage(context: Context, uriString: String, folderName: String): String {
+    val uri = Uri.parse(uriString)
+    val fileDoc = FileDoc.fromUri(uri, false)
+    val suffix = if (fileDoc.name.endsWith(".9.png", ignoreCase = true)) {
+        "9.png"
+    } else {
+        fileDoc.name.substringAfterLast(".", "jpg")
+    }
+    val md5 = uri.inputStream(context).getOrThrow().use(MD5Utils::md5Encode)
+    val file = File(File(context.externalFiles, folderName), "$md5.$suffix")
+    if (!file.exists()) {
+        FileUtils.createFileIfNotExist(file.absolutePath)
+        uri.inputStream(context).getOrThrow().use { input ->
+            FileOutputStream(file).use(input::copyTo)
+        }
+    }
+    return file.absolutePath
+}
+
+/** 只删应用自己目录内的落盘副本，绝不触碰用户原始文件 */
+private fun deleteOwnedCardImage(context: Context, oldPath: String?, newPath: String?) {
+    if (oldPath.isNullOrBlank() || oldPath == newPath) return
+    File(oldPath)
+        .takeIf { it.absolutePath.startsWith(context.externalFiles.absolutePath) }
+        ?.delete()
 }
