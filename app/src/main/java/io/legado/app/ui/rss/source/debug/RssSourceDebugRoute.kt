@@ -3,8 +3,6 @@ package io.legado.app.ui.rss.source.debug
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.collectLatest
@@ -23,8 +21,6 @@ fun RssSourceDebugRoute(
             if (effect is RssSourceDebugEffect.ShowMessage) context.toastOnUi(effect.value)
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        viewModel.onIntent(RssSourceDebugIntent.Stop)
-    }
+    // 同书源调试页：验证页盖住本页时不能自动停止，否则会话被取消、后续日志全部丢弃。
     RssSourceDebugScreen(state, viewModel::onIntent, onBack)
 }
