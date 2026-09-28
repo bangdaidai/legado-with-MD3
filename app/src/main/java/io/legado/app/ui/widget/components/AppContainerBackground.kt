@@ -18,12 +18,14 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import io.legado.app.domain.model.settings.ContainerNineSlice
+import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.ThemeSettings
 import io.legado.app.domain.model.settings.parseContainerNineSlice
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.help.highlight.NinePatchDrawHelper
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
+import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -100,9 +102,14 @@ fun Modifier.appContainerBackground(
     }
     val bitmap = syncNinePatch?.first ?: asyncNinePatch?.first
     val lines = syncNinePatch?.second ?: asyncNinePatch?.second
-    // .9.png 无有效引导线等：异步已跑完但判定该图永远走整图，交给下面的 Crop 分支
+    // .9.png 无有效引导线等：异步已跑完（first != null 说明解码完成）但判定该图永远走整图，
+    // 交给下面的 Crop 分支。
+    // 注意：asyncNinePatch 初始值是 null to null（Pair 本身非 null），必须检查 first
+    // 是否已加载——首次冷缓存时 first == null，此时不能判定为"整图"，否则 Coil 整图
+    // Crop 预览会闪一帧再跳回九宫格尺寸（真机反馈：书架滚动新进视口行图案先大再跳正常）。
+    val asyncReady = asyncNinePatch?.first != null
     val wholeImageOnly = plainWholeImage ||
-        (syncNinePatch == null && asyncNinePatch != null && lines == null)
+        (syncNinePatch == null && asyncReady && lines == null)
     // 图案缩放：由设置页「图案大小」滑块显式指定，日夜图共用一个值；
     // 独立槽位（如书架卡片背景图）直接经参数传入，优先于主题槽位
     val resolvedNineScale = if (nineScale != 1f) {
@@ -248,4 +255,49 @@ private fun resolveNinePatchSync(
             ContainerNineSlice(it.left, it.right, it.top, it.bottom)
         }
     return slice?.let { bitmap to it }
+}
+
+/**
+ * 预热背景图内存缓存：在页面首帧前调用一次，让后续 [appContainerBackground] 的同步快路径
+ * 直接命中，避免每实例各自异步解码导致的"一块一块卡出来"和"图案先大再跳正常"。
+ *
+ * 只需在页面可见时触发一次；LRU 缓存会在后台持续命中。书架与设置页各自调用一次即可。
+ */
+@Composable
+fun PreloadContainerBackgrounds(
+    bookshelfSettings: BookshelfSettings? = null,
+) {
+    val themeSettings = LocalAppUiConfiguration.current.theme
+    val isDark = LegadoTheme.isDark
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            // 容器大背景图（SplicedColumnGroup 等使用）
+            if (themeSettings.enableContainerBackgroundImage) {
+                themeSettings.containerBackgroundImagePath(
+                    AppContainerBackgroundType.Large, isDark
+                )?.takeIf(String::isNotBlank)?.let { path ->
+                    ReaderTextBackgroundLoader.load(path)
+                    ReaderTextBackgroundLoader.nineSliceFractions(path)
+                }
+                themeSettings.containerBackgroundImagePath(
+                    AppContainerBackgroundType.Item, isDark
+                )?.takeIf(String::isNotBlank)?.let { path ->
+                    ReaderTextBackgroundLoader.load(path)
+                    ReaderTextBackgroundLoader.nineSliceFractions(path)
+                }
+            }
+            // 书架卡片背景图
+            bookshelfSettings?.let { settings ->
+                val cardImage = if (isDark) {
+                    settings.bookshelfCardImageDark
+                } else {
+                    settings.bookshelfCardImageLight
+                }
+                cardImage?.takeIf(String::isNotBlank)?.let { path ->
+                    ReaderTextBackgroundLoader.load(path)
+                    ReaderTextBackgroundLoader.nineSliceFractions(path)
+                }
+            }
+        }
+    }
 }

@@ -123,6 +123,7 @@ import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPaddingValue
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.PreloadContainerBackgrounds
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
@@ -187,6 +188,11 @@ fun BookshelfRouteScreen(
     val allGroups by viewModel.allGroupsFlow.collectAsStateWithLifecycle()
     val tagColorMap by viewModel.tagColorMapFlow.collectAsStateWithLifecycle()
     val excludedTags by viewModel.excludedTagsFlow.collectAsStateWithLifecycle()
+    // 预热书架卡片/容器背景图内存缓存，让滚动回收行和页面返回时同步快路径直接命中，
+    // 避免每实例各自异步解码导致的"图案先大再跳正常"和"一块一块卡出来"。
+    PreloadContainerBackgrounds(
+        bookshelfSettings = state.settings,
+    )
     BookshelfScreen(
         uiState = state,
         onIntent = viewModel::onIntent,
