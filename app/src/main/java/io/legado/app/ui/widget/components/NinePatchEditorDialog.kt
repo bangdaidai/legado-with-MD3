@@ -213,15 +213,10 @@ fun NinePatchEditorDialog(
                         }
                         }
                 Text(
-                    text = "拖动线条调整切分位置",
+                    text = "拖动线条调整切分位置，不点击保存即为居中裁剪",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp),
-                )
-                Text(
-                    text = "不点击保存即为居中裁剪",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
                 NineSlicePreview(
