@@ -66,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.constant.BookType
@@ -1045,9 +1046,6 @@ fun BookItem(
             {
                 val kindList = bookUi.displayTags
                     .filter { !TagManager.isExcluded(it, excludedTags) }
-                val intro = remember(book.intro) {
-                    HtmlFormatter.formatDisplayText(book.intro).takeIf { it.isNotBlank() }
-                }
                 if ((settings.bookshelfShowTag && kindList.isNotEmpty()) || showReadingProgress) {
                     Row(
                         modifier = Modifier
@@ -1116,11 +1114,13 @@ fun BookItem(
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
                 } else {
-                    // 简介不再单独铺色/铺图：并进书籍卡片整体，只跟行内容对齐水平边距
+                    // 简介不再单独铺色/铺图：并进书籍卡片整体，只跟行内容对齐水平边距；
+                    // 自身不再加 4dp 上下边距——上距信息行、下距卡片底边各 8dp，与简介在右侧时一致
                     BookItemIntro(
                         intro = intro!!,
                         maxLines = settings.bookshelfIntroMaxLines,
                         modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                        verticalPadding = 0.dp,
                     )
                 }
             }
@@ -1237,6 +1237,8 @@ private fun BookItemIntro(
     intro: String,
     maxLines: Int,
     modifier: Modifier = Modifier,
+    // 默认 4dp 供右侧/票券布局使用；下置普通卡片由外部间距凑齐 8dp 节奏，传 0
+    verticalPadding: Dp = 4.dp,
 ) {
     AppText(
         text = intro,
@@ -1246,7 +1248,7 @@ private fun BookItemIntro(
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = verticalPadding),
     )
 }
 
