@@ -29,3 +29,5 @@ commit_msg_tmp.txt
 ver_a.txt
 ver_b.txt
 /next_edge_tts.json
+# 工具自己维护的忽略清单，内容与本文件同源，不入库
+/.zcodeignore
