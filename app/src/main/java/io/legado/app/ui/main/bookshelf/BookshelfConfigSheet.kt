@@ -448,7 +448,6 @@ fun BookshelfConfigSheet(
 
                     CompactClickableSettingItem(
                         title = stringResource(R.string.card_bg_image),
-                        description = stringResource(R.string.card_bg_image_desc),
                         color = LegadoTheme.colorScheme.surface,
                         onClick = { showCardImageSheet = true },
                         trailingContent = {

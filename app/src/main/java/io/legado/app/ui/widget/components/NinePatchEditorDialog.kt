@@ -218,6 +218,11 @@ fun NinePatchEditorDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp),
                 )
+                Text(
+                    text = "不点击保存即为居中裁剪",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(8.dp))
                 NineSlicePreview(
                     imagePath = imagePath,
