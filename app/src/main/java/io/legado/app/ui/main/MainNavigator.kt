@@ -88,8 +88,6 @@ object MainNavigator {
             is MainRouteBookSourceDebug,
             is MainRouteRssSourceDebug -> backStack.add(route)
 
-            MainRouteReadAloudPlayer -> backStack.add(route)
-
             MainRouteHome -> {
                 backStack.clear()
                 backStack.add(MainRouteHome)
@@ -247,6 +245,8 @@ object MainNavigator {
                     currentRoute is MainRouteBookEventDetail ||
                     currentRoute is MainRouteReadBook ||
                     currentRoute is MainRouteReadManga ||
+                    // 整页听书目的地已由播放浮层取代，不再有新导航进入；
+                    // 保留判定只为兼容旧版本进程快照恢复出来的历史栈顶。
                     currentRoute is MainRouteReadAloudPlayer ||
                     // 朗读设置整页上就挂着这四个入口，漏了它会把整栈清到书架，
                     // 返回时设置页和阅读器一起没了。
