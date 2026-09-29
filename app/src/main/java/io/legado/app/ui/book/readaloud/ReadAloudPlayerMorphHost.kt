@@ -77,18 +77,26 @@ fun ReadAloudPlayerMorphHost(
                     }
                 }
 
-                // 跳页与提示类意图统一交给宿主：导航进 nav3 目的地或 toast。
+                // 跳 nav3 目的地前必须先收起浮层：目的地渲染在 NavDisplay 里，
+                // 层级低于浮层，不收起的话新页面会被听书面板整个挡住，
+                // 直到浮层关闭才看得见。
                 is ReadAloudPlayerEffect.OpenEnginesAndVoices,
                 is ReadAloudPlayerEffect.OpenTtsCache,
                 is ReadAloudPlayerEffect.OpenBookVoiceCasting,
                 is ReadAloudPlayerEffect.OpenSpeechStoryboard,
+                -> {
+                    configVisible = false
+                    morph.animateTo(0f)
+                    currentDismiss()
+                    currentOnSettingsEffect(effect)
+                }
+
+                // 系统 TTS 设置是独立窗口的 Activity，离开/返回不影响本窗口层级，
+                // 浮层留在原地，回来还能接着操作；提示类同理，只弹 toast 不动浮层。
                 is ReadAloudPlayerEffect.OpenSystemTtsSettings,
                 is ReadAloudPlayerEffect.TtsCacheCleared,
                 is ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired,
-                -> {
-                    configVisible = false
-                    currentOnSettingsEffect(effect)
-                }
+                -> currentOnSettingsEffect(effect)
 
                 else -> Unit
             }
