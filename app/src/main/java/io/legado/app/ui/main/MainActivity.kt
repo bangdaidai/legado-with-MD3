@@ -855,9 +855,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                             }
                         },
                     )
-                            }
-                        },
-                    )
                     if (playerSource == PlaybackCapsuleSource.AudioBook &&
                         (audioPlayerVisible || morphPresent)
                     ) {
