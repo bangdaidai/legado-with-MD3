@@ -2,10 +2,13 @@ package io.legado.app.ui.book.readRecord
 
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.Stable
+import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
+import io.legado.app.R
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
+import io.legado.app.data.entities.readRecord.CONTINUOUS_READ_SESSION_GAP_MILLIS
 import io.legado.app.data.entities.readRecord.ReadRecordRepairReport
 import io.legado.app.data.local.preferences.LocalPreferencesKeys
 import io.legado.app.data.repository.SettingsRepository
@@ -49,6 +52,7 @@ data class ReadRecordUiState(
     val displayMode: DisplayMode = DisplayMode.AGGREGATE,
     val readRecordEnabled: Boolean = true,
     val bookTypeFilter: Int? = null,
+    val skipDeleteConfirm: Boolean = false,
     val repairReport: ReadRecordRepairReport? = null,
 )
 
@@ -91,6 +95,8 @@ class ReadRecordViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = true
         )
+    val skipDeleteConfirm: StateFlow<Boolean> = repository.skipDeleteConfirm
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val loadedDataFlow = combine(_searchKey, _bookTypeFilter) { q, t -> q to t }
@@ -120,11 +126,10 @@ class ReadRecordViewModel(
             .mapValues { it.value.size }
 
         val dailyTimes = data.sessions
-            .groupBy { it.startTime.toDateString() }
+            .flatMap { session -> session.durationByDate().entries }
+            .groupingBy { it.key }
+            .fold(0L) { total, entry -> total + entry.value }
             .mapKeys { LocalDate.parse(it.key, DateTimeFormatter.ISO_LOCAL_DATE) }
-            .mapValues { (_, sessions) ->
-                sessions.sumOf { (it.endTime - it.startTime).coerceAtLeast(0L) }
-            }
 
         val filteredDetails = data.details.filter { detail ->
             dateStr == null || detail.date == dateStr
@@ -170,7 +175,8 @@ class ReadRecordViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReadRecordUiState(isLoading = true)
-    ).combine(_repairReport) { state, report -> state.copy(repairReport = report) }
+    ).combine(skipDeleteConfirm) { state, skip -> state.copy(skipDeleteConfirm = skip) }
+        .combine(_repairReport) { state, report -> state.copy(repairReport = report) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -187,6 +193,8 @@ class ReadRecordViewModel(
             is ReadRecordIntent.DeleteRecord -> deleteReadRecord(intent.record)
             ReadRecordIntent.ClearRecords -> clearReadRecords()
             is ReadRecordIntent.SetEnabled -> setReadRecordEnabled(intent.enabled)
+            is ReadRecordIntent.SetSkipDeleteConfirm -> setSkipDeleteConfirm(intent.enabled)
+            ReadRecordIntent.RestoreDeleteConfirmation -> restoreDeleteConfirmation()
             is ReadRecordIntent.MergeRecords -> mergeReadRecords(intent.target, intent.sources)
             is ReadRecordIntent.SetBookTypeFilter -> setBookTypeFilter(intent.bookType)
             ReadRecordIntent.ScanRepair -> scanRepair()
@@ -208,7 +216,7 @@ class ReadRecordViewModel(
         viewModelScope.launch {
             runCatching { repository.scanReadRecordIssues() }
                 .onSuccess { _repairReport.value = it }
-                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowError(it.localizedMessage.orEmpty())) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
         }
     }
 
@@ -220,7 +228,7 @@ class ReadRecordViewModel(
                 val sessions = repository.repairDuplicateSessions()
                 identity.copy(duplicateSessionCount = sessions)
             }.onSuccess { _repairReport.value = it }
-                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowError(it.localizedMessage.orEmpty())) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
         }
     }
 
@@ -238,23 +246,62 @@ class ReadRecordViewModel(
     }
 
     fun deleteDetail(detail: ReadRecordDetail) {
-        viewModelScope.launch { repository.deleteDetail(detail) }
+        viewModelScope.launch {
+            runCatching { repository.deleteDetail(detail) }
+                .onSuccess { deleted -> emitMutationResult(deleted, R.string.read_record_deleted) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
+        }
     }
 
     fun deleteSession(session: ReadRecordSession) {
-        viewModelScope.launch { repository.deleteSession(session) }
+        viewModelScope.launch {
+            runCatching { repository.deleteSession(session) }
+                .onSuccess { deleted -> emitMutationResult(deleted, R.string.read_record_deleted) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
+        }
     }
 
     fun deleteReadRecord(record: ReadRecord) {
-        viewModelScope.launch { repository.deleteReadRecord(record) }
+        viewModelScope.launch {
+            runCatching { repository.deleteReadRecord(record) }
+                .onSuccess { deleted -> emitMutationResult(deleted, R.string.read_record_deleted) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
+        }
     }
 
     fun clearReadRecords() {
-        viewModelScope.launch { repository.clearReadRecords() }
+        viewModelScope.launch {
+            runCatching { repository.clearReadRecords() }
+                .onSuccess { cleared -> emitMutationResult(cleared, R.string.read_records_cleared) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
+        }
     }
 
     fun setReadRecordEnabled(enabled: Boolean) {
-        viewModelScope.launch { repository.setReadRecordEnabled(enabled) }
+        viewModelScope.launch {
+            runCatching { repository.setReadRecordEnabled(enabled) }
+                .onSuccess { }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
+        }
+    }
+
+    private fun setSkipDeleteConfirm(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setSkipDeleteConfirm(enabled)
+        }
+    }
+
+    fun restoreDeleteConfirmation() {
+        viewModelScope.launch {
+            runCatching { repository.setSkipDeleteConfirm(false) }
+                .onSuccess { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.delete_confirmation_restored)) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
+        }
+    }
+
+    private fun emitMutationResult(succeeded: Boolean, successMessage: Int) {
+        // 未找到记录是过期列表项或空列表的正常竞态；异常由调用方报告。
+        if (succeeded) _effects.tryEmit(ReadRecordEffect.ShowMessage(successMessage))
     }
 
     private fun mergeContinuousSessions(sessions: List<ReadRecordSession>): List<ReadRecordSession> {
@@ -262,6 +309,8 @@ class ReadRecordViewModel(
         val mergedList = mutableListOf<ReadRecordSession>()
         mergedList.add(sessions.first().copy())
 
+        // 展示层聚合用 5 分钟：写库层已按 20 分钟（CONTINUOUS_READ_SESSION_GAP_MILLIS）
+        // 做过会话合并，这里再宽一格只是收拢碎片观感，不能把两次真实阅读缝成一段。
         val gapLimit = 5 * 60 * 1000L
 
         for (i in 1 until sessions.size) {
@@ -330,14 +379,13 @@ class ReadRecordViewModel(
 
     fun mergeReadRecords(targetRecord: ReadRecord, sourceRecords: List<ReadRecord>) {
         if (sourceRecords.isEmpty()) {
-            _effects.tryEmit(ReadRecordEffect.ShowError(""))
+            _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed))
             return
         }
         viewModelScope.launch {
-            val merged = repository.mergeIndependentReadRecordsInto(targetRecord, sourceRecords)
-            if (!merged) {
-                _effects.tryEmit(ReadRecordEffect.ShowError(""))
-            }
+            runCatching { repository.mergeIndependentReadRecordsInto(targetRecord, sourceRecords) }
+                .onSuccess { merged -> emitMutationResult(merged, R.string.read_records_merged) }
+                .onFailure { _effects.tryEmit(ReadRecordEffect.ShowMessage(R.string.operation_failed)) }
         }
     }
 
@@ -350,6 +398,21 @@ class ReadRecordViewModel(
 
     private fun Long.toDateString(): String =
         Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+
+    private fun ReadRecordSession.durationByDate(): Map<String, Long> {
+        if (endTime <= startTime) return emptyMap()
+        val zone = ZoneId.systemDefault()
+        var cursor = startTime
+        val result = linkedMapOf<String, Long>()
+        while (cursor < endTime) {
+            val date = java.time.Instant.ofEpochMilli(cursor).atZone(zone).toLocalDate()
+            val nextMidnight = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val segmentEnd = minOf(endTime, nextMidnight)
+            result[date.toString()] = (result[date.toString()] ?: 0L) + (segmentEnd - cursor)
+            cursor = segmentEnd
+        }
+        return result
+    }
 }
 
 sealed interface ReadRecordIntent {
@@ -361,6 +424,8 @@ sealed interface ReadRecordIntent {
     data class DeleteRecord(val record: ReadRecord) : ReadRecordIntent
     data object ClearRecords : ReadRecordIntent
     data class SetEnabled(val enabled: Boolean) : ReadRecordIntent
+    data class SetSkipDeleteConfirm(val enabled: Boolean) : ReadRecordIntent
+    data object RestoreDeleteConfirmation : ReadRecordIntent
     data class MergeRecords(val target: ReadRecord, val sources: List<ReadRecord>) : ReadRecordIntent
     data class SetBookTypeFilter(val bookType: Int?) : ReadRecordIntent
     data object ScanRepair : ReadRecordIntent
@@ -369,5 +434,5 @@ sealed interface ReadRecordIntent {
 }
 
 sealed interface ReadRecordEffect {
-    data class ShowError(val message: String) : ReadRecordEffect
+    data class ShowMessage(@StringRes val messageRes: Int) : ReadRecordEffect
 }

@@ -49,8 +49,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -152,8 +155,10 @@ fun ReadBookRouteScreen(
     onEffectsReady: () -> Unit = {},
     onOpenSearch: (word: String?, bookUrl: String, autoFocus: Boolean) -> Unit = { _, _, _ -> },
     onOpenReadAloudConfig: (bookUrl: String?) -> Unit = {},
-    onOpenReadAloudPlayer: () -> Unit = {},
 ) {
+    // 归因定界：与末尾 compose.screen.end 成对。若首帧 `Compose:recompose` 里出现
+    // begin 之前的空档，说明那部分耗时在本屏之外（导航宿主 / 共享转场层）。
+    ReaderPerfTrace.marker("compose.screen.begin")
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val readPreferences by viewModel.readPreferences.collectAsStateWithLifecycle()
     // 笔记选区预览样式：Sheet 会话期间盖在画布选区上，保存后保持到当前章重排批次
@@ -418,7 +423,6 @@ fun ReadBookRouteScreen(
                             is ReadBookEffect.OpenReadAloudConfig -> {
                                 onOpenReadAloudConfig(effect.bookUrl)
                             }
-                            ReadBookEffect.OpenReadAloudPlayer -> onOpenReadAloudPlayer()
                             is ReadBookEffect.MenuSettingReplace -> {
                                 replaceLauncher.launch(
                                     ReplaceRuleActivity.startIntent(
@@ -649,6 +653,7 @@ fun ReadBookRouteScreen(
     Box(
         Modifier
             .fillMaxSize()
+            .semantics { testTagsAsResourceId = true }
             .readerSharedBounds(
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
@@ -678,18 +683,23 @@ fun ReadBookRouteScreen(
             if (!(ReaderViewportLayerPolicy.usesFixedBackground(readerTransitionMode) &&
                         readerCanvasVisible)
             ) {
+                // 归因用：成对 marker 夹住子树，其间隔即该子树的组合耗时（都在
+                // `Compose:recompose` 之内）。子系统不用 tracing 时 marker 是空操作。
+                ReaderPerfTrace.marker("compose.background.begin")
                 ReaderBackgroundSurface(
                     backgroundImage = readerBackground.drawable,
                     backgroundImageAlpha = readerBackgroundAlpha(state.styleConfig.bgAlpha),
                     modifier = Modifier.fillMaxSize(),
                     animateAppearance = true,
                 )
+                ReaderPerfTrace.marker("compose.background.end")
             }
             AnimatedVisibility(
                 visible = readerCanvasVisible,
                 enter = fadeIn(animationSpec = tween(400)),
                 exit = fadeOut(animationSpec = tween(450)),
             ) {
+                ReaderPerfTrace.marker("compose.canvas.begin")
                 ReaderCanvasSurface(
                     hostPages = displayedReaderPageWindow ?: readerPageWindow,
                     transitionMode = readerTransitionMode,
@@ -704,6 +714,11 @@ fun ReadBookRouteScreen(
                 autoPageIndicatorColor = LegadoTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(
+                        if (displayedReaderPageWindow?.current?.isPlaceholder == false) {
+                            Modifier.testTag("reader_content")
+                        } else Modifier
+                    )
                     .then(
                         if (useMenuHazeSource) {
                             Modifier.hazeSource(menuHazeState)
@@ -756,6 +771,7 @@ fun ReadBookRouteScreen(
                 externalSelectionCancels = controller.composeSelectionCancels,
                 onVisibleBodyTextPositionProvider = controller::setComposeVisibleBodyTextPositionProvider,
                 )
+                ReaderPerfTrace.marker("compose.canvas.end")
             }
             AnimatedVisibility(
                 // 旧 View 把消息画成页（chrome 保留）；只有画布无从成页（还没有窗口/视口）
@@ -802,6 +818,7 @@ fun ReadBookRouteScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
+        ReaderPerfTrace.marker("compose.chrome.begin")
         ReadBookColorTheme(
             styleConfig = state.styleConfig,
             preferences = readPreferences,
@@ -847,6 +864,7 @@ fun ReadBookRouteScreen(
                 )
             }
             val bookNavigationSheet = state.activeSheet as? ReadBookSheet.BookNavigation
+            ReaderPerfTrace.marker("compose.sheet.begin")
             ReaderBookSheetRoute(
                 show = bookNavigationSheet != null,
                 bookUrl = state.book?.bookUrl.orEmpty(),
@@ -892,6 +910,8 @@ fun ReadBookRouteScreen(
                     onDisable = { viewModel.onIntent(ReadBookIntent.DisableSource) },
                 ),
             )
+            ReaderPerfTrace.marker("compose.sheet.end")
+            ReaderPerfTrace.marker("compose.selection.begin")
             ReaderTextSelectionOverlay(
                 controller = controller,
                 expandTextMenu = readPreferences.expandTextMenu,
@@ -906,6 +926,7 @@ fun ReadBookRouteScreen(
                     configItems = emptyList()
                 }
             }
+            ReaderPerfTrace.marker("compose.selection.end")
             TextSelectMenuConfigSheet(
                 show = showSelectMenuConfigSheet,
                 items = configItems,
@@ -922,7 +943,9 @@ fun ReadBookRouteScreen(
                 onSaved = { items -> controller.saveMenuConfig(items) }
             )
         }
+        ReaderPerfTrace.marker("compose.chrome.end")
     }
+    ReaderPerfTrace.marker("compose.screen.end")
 }
 
 /**

@@ -31,3 +31,7 @@ ver_b.txt
 /next_edge_tts.json
 # 工具自己维护的忽略清单，内容与本文件同源，不入库
 /.zcodeignore
+# JVM / Gradle daemon 崩溃产物（多 JVM 构建时可能落在仓库根目录）
+hs_err_pid*.log
+replay_pid*.log
+*.hprof

@@ -10,6 +10,7 @@ import coil3.fetch.SourceFetchResult
 import coil3.request.Options
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BaseSource
+import io.legado.app.help.glide.progress.ProgressUrlTag
 import io.legado.app.utils.ImageUtils
 import io.legado.app.utils.isWifiConnect
 import kotlinx.coroutines.CancellationException
@@ -24,6 +25,7 @@ import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.Buffer
+import okio.FileSystem
 import splitties.init.appCtx
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -117,6 +119,12 @@ class CoverFetcher(
         val bookUrl = options.extras[CoverExtras.BookUrl]
 
         val requestHeaders = options.extras[CoverExtras.Headers]
+        // 进度回报键：用书源规则改写前的原始地址，与阅读页持有的 imageUrl 一致
+        val progressUrl = options.extras[CoverExtras.OriginalUrl] ?: url
+        // 无需书源二次解密时可以把响应流直接交给解码器边下边解，
+        // 省掉“整张图先落一份 ByteArray”这一步（高画质大图时这就是转圈等很久的主因）
+        val canStream = isManga && ImageUtils.skipDecode(source, !isManga)
+        var streamedSource: ImageSource? = null
 
         // ===== 第二级：OkHttp HTTP 缓存（FORCE_CACHE 只读缓存，miss 返回 504，不碰网络）=====
         // 注意：WiFi 限制与失败冷却不能挡在本地缓存读取之前，
@@ -128,6 +136,7 @@ class CoverFetcher(
                 val cacheRequest = Request.Builder()
                     .url(url)
                     .tag(io.legado.app.data.entities.BaseSource::class.java, source)
+                    .tag(ProgressUrlTag::class.java, ProgressUrlTag(progressUrl))
                     .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
                     .cacheControl(CacheControl.FORCE_CACHE)
                     .build()
@@ -157,9 +166,20 @@ class CoverFetcher(
             }
 
             try {
-                val (bytes, cacheHit) = awaitSharedDownload(url, isManga, source, requestHeaders)
-                rawBytes = bytes
-                fromCache = cacheHit
+                if (canStream) {
+                    // 漫画免解密大图：响应流直接交给解码器边下边解；
+                    // 合流表按 bytes 语义设计，流式路径独占连接不进表。
+                    streamedSource = openStreamedSource(
+                        url, source, requestHeaders, progressUrl, options.fileSystem
+                    )
+                    rawBytes = null
+                    fromCache = false
+                } else {
+                    val (bytes, cacheHit) =
+                        awaitSharedDownload(url, isManga, source, requestHeaders, progressUrl)
+                    rawBytes = bytes
+                    fromCache = cacheHit
+                }
             } catch (e: CancellationException) {
                 // 滚动书架时 Coil 会取消在途请求，取消不代表这个封面地址有问题，不能拉黑
                 throw e
@@ -197,6 +217,16 @@ class CoverFetcher(
                 }
                 throw e
             }
+        }
+
+        // 流式分支：字节直接由解码器消费，这里只负责收尾，不再落 ByteArray。
+        streamedSource?.let { stream ->
+            clearFailure(url)
+            return SourceFetchResult(
+                source = stream,
+                mimeType = null,
+                dataSource = DataSource.NETWORK,
+            )
         }
 
         // 到这里必定已拿到字节（本地缓存/OkHttp 缓存/网络三选一，否则已抛出）。
@@ -242,10 +272,11 @@ class CoverFetcher(
         isManga: Boolean,
         source: BaseSource?,
         requestHeaders: Map<String, String>?,
+        progressUrl: String,
     ): Pair<ByteArray, Boolean> {
         val key = "$url|$isManga"
         val deferred = inFlight.computeIfAbsent(key) {
-            fetchScope.async { download(url, source, requestHeaders) }
+            fetchScope.async { download(url, source, requestHeaders, progressUrl) }
         }
         // 任务结束即从表中摘除，后续请求走 OkHttp 缓存或重新发起。
         // 注册在 computeIfAbsent 之外，避免回调在 ConcurrentHashMap 计算过程中改表。
@@ -253,11 +284,44 @@ class CoverFetcher(
         return deferred.await()
     }
 
+    /**
+     * 漫画流式下载：不打进在途合流表（那按 bytes 语义设计），直接把网络响应体
+     * 交给解码器边下边解，省掉「整张图先落一份 ByteArray」的等待与内存峰值。
+     */
+    private suspend fun openStreamedSource(
+        url: String,
+        source: BaseSource?,
+        requestHeaders: Map<String, String>?,
+        progressUrl: String,
+        fileSystem: FileSystem,
+    ): ImageSource = withContext(Dispatchers.IO) {
+        val networkRequest = Request.Builder()
+            .url(url)
+            .tag(BaseSource::class.java, source)
+            .tag(ProgressUrlTag::class.java, ProgressUrlTag(progressUrl))
+            .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
+            .tag(COVER_REQUEST_TAG)
+            .cacheControl(
+                CacheControl.Builder()
+                    .maxAge(30, TimeUnit.DAYS)
+                    .build()
+            )
+            .build()
+        val networkResponse = callFactory.newCall(networkRequest).execute()
+        val body = networkResponse.body
+        if (!networkResponse.isSuccessful) {
+            body.close()
+            throw CoverHttpException(networkResponse.code)
+        }
+        ImageSource(source = body.source(), fileSystem = fileSystem)
+    }
+
     /** 先探 OkHttp 缓存（FORCE_CACHE 命中即返回，miss 返回 504），未命中再走网络。 */
     private suspend fun download(
         url: String,
         source: BaseSource?,
         requestHeaders: Map<String, String>?,
+        progressUrl: String,
     ): Pair<ByteArray, Boolean> = withContext(Dispatchers.IO) {
         val cacheRequest = Request.Builder()
             .url(url)
@@ -274,6 +338,7 @@ class CoverFetcher(
             val networkRequest = Request.Builder()
                 .url(url)
                 .tag(BaseSource::class.java, source)
+                .tag(ProgressUrlTag::class.java, ProgressUrlTag(progressUrl))
                 .apply { requestHeaders?.forEach { (key, value) -> addHeader(key, value) } }
                 .tag(COVER_REQUEST_TAG)
                 .cacheControl(

@@ -189,6 +189,7 @@ class BookshelfViewModel(
         }
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
 
+    // 与 uiState 同理：常驻订阅，返回书架时首帧就是最新分组，避免补一次跳动
     val allGroupsFlow: StateFlow<List<BookGroup>> = bookGroupRepository.flowAll()
         // 与 uiState 同一道理：这个流由书架界面直接 collect，界面一销毁就没人订阅。
         // WhileSubscribed(5000) 会让它退回 emptyList()，返回书架时分组标签先空一下再被
@@ -812,6 +813,11 @@ class BookshelfViewModel(
             themeColor = themeSettings.themeColor,
             pendingUploadUrl = pendingUploadUrl,
         )
+        // 常驻订阅：进入阅读页后 UI 停止收集，若让上游在超时后停掉，返回书架的前几帧
+        // 读到的仍是「阅读前」那一版排序，等 Room 重新查询到达再跳一次，重排就发生在
+        // 书架已经可见之后。管道挂在 viewModelScope（ViewModel 随返回栈条目存活），
+        // 因此返回首帧即是最新排序。与 komikku 的 LibraryScreenModel 同思路：
+        // 状态管道由 ScreenModel/ViewModel 自己持有，不随 UI 订阅启停。
     }.stateIn(
         viewModelScope,
         // 不能用 WhileSubscribed(5000)：书架界面一被销毁（进阅读页就没人在看了）超过 5 秒，

@@ -844,6 +844,13 @@ FROM books
     @Query("SELECT * FROM books WHERE bookUrl = :bookUrl")
     fun getBook(bookUrl: String): Book?
 
+    /**
+     * 按 bookUrl 批量取书，供跨分组多选解析选中实体（选中项可能不在当前分组列表里）。
+     * 调用方负责分批，避免单次绑定参数超过 SQLite 上限。
+     */
+    @Query("SELECT * FROM books WHERE bookUrl IN (:bookUrls)")
+    suspend fun getBooksByUrls(bookUrls: Set<String>): List<Book>
+
     @Query(
         """
         SELECT
@@ -1031,6 +1038,9 @@ FROM books
         """update books set lastCheckCount = 0, durChapterIndex = :durChapterIndex, durChapterPos = :durChapterPos, durChapterTime = :durChapterTime where bookUrl = :bookUrl"""
     )
     fun upReadProgress(bookUrl: String, durChapterIndex: Int, durChapterPos: Int, durChapterTime: Long)
+
+    @Query("UPDATE books SET syncTime = :syncTime WHERE bookUrl = :bookUrl AND syncTime < :syncTime")
+    fun upSyncTime(bookUrl: String, syncTime: Long)
 
     @Query("update books set `group` = :newGroupId where `group` = :oldGroupId")
     fun upGroup(oldGroupId: Long, newGroupId: Long)

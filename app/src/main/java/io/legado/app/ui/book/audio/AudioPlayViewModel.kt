@@ -28,6 +28,7 @@ import io.legado.app.help.config.compatDsInt
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.postEvent
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,11 @@ class AudioPlayViewModel(
 ) : ViewModel() {
 
     private val activeSheet = MutableStateFlow<AudioPlaySheet?>(null)
+
+    // uiState 的 initialValue 会同步读取缓存，必须先完成缓存初始化。
+    // 歌词仅在切章 / 换曲时变化，避免随每秒 AUDIO_PROGRESS 重复解析整篇 LRC。
+    private var lyricCacheKey: String? = null
+    private var lyricCache: ImmutableList<AudioLyricLine> = persistentListOf()
 
     val uiState = combine(
         coordinator.state,
@@ -233,6 +239,7 @@ class AudioPlayViewModel(
         } else {
             AudioPlay.resetData(book)
         }
+        coordinator.prepareBook(book.bookUrl)
         if (book.tocUrl.isEmpty() && !loadBookInfo(book)) {
             return
         }
@@ -289,6 +296,14 @@ class AudioPlayViewModel(
         AppConfigStore.preferences.compatDsInt(PreferKey.audioPlayBgMode)
             ?: ReadAloudBgMode.Blur
 
+    private fun lyricLines(lyric: String?): ImmutableList<AudioLyricLine> {
+        if (lyric == lyricCacheKey) return lyricCache
+        return parseAudioLyrics(lyric).also {
+            lyricCacheKey = lyric
+            lyricCache = it
+        }
+    }
+
     private fun toUiState(
         source: AudioPlaySourceState,
         bgMode: Int,
@@ -303,7 +318,7 @@ class AudioPlayViewModel(
         chapterIndex = source.chapterIndex,
         chapterTitle = source.chapterTitle,
         chapters = source.chapters,
-        lyricLines = parseAudioLyrics(source.lyric),
+        lyricLines = lyricLines(source.lyric),
         status = source.status,
         isLoading = source.isLoading,
         position = source.position,

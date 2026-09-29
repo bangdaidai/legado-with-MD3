@@ -98,11 +98,13 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -137,6 +139,7 @@ import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.divider.PillHeaderDivider
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
 import io.legado.app.ui.widget.components.icon.AppIcons
+import io.legado.app.ui.widget.components.image.cover.bookshelfSharedCoverSourceId
 import io.legado.app.ui.widget.components.importComponents.SourceInputDialog
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyVerticalGrid
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
@@ -190,6 +193,7 @@ fun BookshelfRouteScreen(
     val excludedTags by viewModel.excludedTagsFlow.collectAsStateWithLifecycle()
     // 预热书架卡片/容器背景图内存缓存，让滚动回收行和页面返回时同步快路径直接命中，
     // 避免每实例各自异步解码导致的"图案先大再跳正常"和"一块一块卡出来"。
+    // 上游的 PostExit 离场快照不采用：本地返回转场已用预排位一段到位方案覆盖同一问题。
     PreloadContainerBackgrounds(
         bookshelfSettings = state.settings,
     )
@@ -1838,7 +1842,11 @@ fun BookshelfPage(
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .semantics { contentDescription = listContentDescription }
+                .semantics {
+                    contentDescription = listContentDescription
+                    testTagsAsResourceId = true
+                }
+                .testTag("bookshelf_list")
                 .then(
                     with(sharedTransitionScope) {
                         if (this != null) Modifier.skipToLookaheadSize() else Modifier
@@ -1857,7 +1865,7 @@ fun BookshelfPage(
                 val isSelected = selectedBookUrls.contains(bookUi.book.bookUrl)
                 val sharedCoverKey = bookCoverSharedElementKey(
                     bookUi.book.bookUrl,
-                    "bookshelf:$sharedCoverGroupId"
+                    bookshelfSharedCoverSourceId(sharedCoverGroupId)
                 )
                 ReorderableItem(
                     state = reorderableState,

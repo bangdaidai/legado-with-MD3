@@ -162,9 +162,13 @@ fun TextActionSelectionMenu(
             ) {
                 if (expandTextMenu) {
                     Box(modifier = Modifier.padding(menuShadowPadding)) {
-                        Column(modifier = Modifier.width(menuCardWidth)) {
+                        Column(
+                            modifier = Modifier
+                                .widthIn(max = menuCardWidth)
+                                .wrapContentWidth(Alignment.Start)
+                        ) {
                             NormalCard(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.wrapContentWidth(Alignment.Start),
                                 containerColor = LegadoTheme.colorScheme.surfaceBright,
                                 elevation = 12.dp,
                                 cornerRadius = 12.dp,
@@ -203,9 +207,13 @@ fun TextActionSelectionMenu(
                             }
                             .padding(menuShadowPadding),
                     ) {
-                        Column(modifier = Modifier.width(menuCardWidth)) {
+                        Column(
+                            modifier = Modifier
+                                .widthIn(max = menuCardWidth)
+                                .wrapContentWidth(Alignment.Start)
+                        ) {
                             NormalCard(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.wrapContentWidth(Alignment.Start),
                                 containerColor = LegadoTheme.colorScheme.surfaceBright,
                                 elevation = 6.dp,
                                 cornerRadius = 12.dp,

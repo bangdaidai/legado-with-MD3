@@ -453,7 +453,8 @@ fun ReadBookScreen(
         scene = state.shareCardScene,
     )
 
-    // 朗读设置已改为 Navigation 3 整页（ReadAloudConfigScreen），阅读页不再挂弹层宿主。
+    // 朗读设置已改为 Navigation 3 整页（ReadAloudConfigScreen），阅读页不再挂弹层宿主；
+    // 听书播放浮层的设置弹窗由 ReadAloudPlayerMorphHost 自己承载。
 
     val dictSheet = state.activeSheet as? ReadBookSheet.Dict
     DictSheet(

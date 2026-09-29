@@ -969,16 +969,9 @@ sealed interface ReadBookEffect {
     data class OpenTitleBarCustomIconPicker(val id: String) : ReadBookEffect
 
     /**
-     * 打开听书播放界面。
-     *
-     * 播放界面是 Navigation 3 目的地（[io.legado.app.ui.main.MainRouteReadAloudPlayer]），
-     * 不再是阅读器内的弹层，因此这里只发导航意图，不写 `activeSheet`。
-     */
-    data object OpenReadAloudPlayer : ReadBookEffect
-
-    /**
      * 打开朗读设置整页（Navigation 3 目的地）。原来是阅读器内的底部弹层；
      * [bookUrl] 供设置页里「角色配音/分镜」等入口定位当前书籍，可为空。
+     * 听书播放浮层不再经 effect 打开：Delegate.openPlayer 直接请求 OverlayBus。
      */
     data class OpenReadAloudConfig(val bookUrl: String?) : ReadBookEffect
     data object OpenHighlightRuleImportPicker : ReadBookEffect

@@ -5,7 +5,7 @@ import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 /**
  * 把朗读设置页的 [ReadAloudConfigIntent] 翻译成全局设置写入或跳页 Effect。
  *
- * 设置页是 Navigation 3 整页，阅读页与听书页都跳进同一个目的地，
+ * 设置页是 Navigation 3 整页，阅读页与听书播放浮层都进同一个设置界面，
  * 所以写入统一落到 [ReadAloudPlayerViewModel.onConfigIntent]，
  * 跳页经 Effect 交给路由层，由 MainNavGraph 执行导航。
  */
