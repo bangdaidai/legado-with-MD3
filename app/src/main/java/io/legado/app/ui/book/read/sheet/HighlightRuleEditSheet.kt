@@ -58,6 +58,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -1119,6 +1122,13 @@ fun HighlightRuleEditSheet(
 
 private val previewBaseFontSize: Int get() = ReadBookConfig.textSize
 
+/** 预览排版分段：文本（可能插入外边距占位空格）、偏移后的命中区间、占位描述。 */
+private data class MarginSegmentation(
+    val text: String,
+    val ranges: List<IntRange>,
+    val placeholders: List<AnnotatedString.Range<Placeholder>>,
+)
+
 /** 排版背景图的加载地址；bgType 0 是纯色，1 是 assets 内置图，2 是外部图片 */
 private fun pageBgImagePathOf(bgType: Int, bgStr: String): String? = when (bgType) {
     1 -> "file:///android_asset/bg/$bgStr"
@@ -1214,12 +1224,79 @@ internal fun HighlightRulePreview(
         }
     }
 
+    // 外边距预览：引擎只在九宫格（fit==3）背景下消费 bgMargin——背景 run 起点前 x 推进
+    // marginStart、终点后推进 marginEnd（负值钳为 0），把命中段前后的文字推开
+    // （ReaderPaginator.backgroundMarginBefore/After）。预览在命中段前后插入宽度=外边距的
+    // 占位空格复现同一排版：占位本身无字形，背景图/下划线仍画在命中文字矩形上，间隙留在图外。
+    // 引擎把相邻的同图文字视作一个 run（中间不产生间隙），先合并贴合的命中区间再插占位。
+    val density = LocalDensity.current
+    val marginStartWidth = with(density) { bgMarginStart.coerceAtLeast(0f).dp.toSp() }
+    val marginEndWidth = with(density) { bgMarginEnd.coerceAtLeast(0f).dp.toSp() }
+    val applyBgMargins = bgBitmap != null && bgImageFit == 3 &&
+            (marginStartWidth.value > 0f || marginEndWidth.value > 0f)
+    val marginSegmentation = remember(
+        sampleText, matchRanges, applyBgMargins, marginStartWidth, marginEndWidth
+    ) {
+        if (!applyBgMargins) {
+            MarginSegmentation(sampleText, matchRanges, emptyList())
+        } else {
+            val runs = ArrayList<IntRange>(matchRanges.size)
+            matchRanges.forEach { range ->
+                val last = runs.lastOrNull()
+                if (last != null && range.first <= last.last + 1) {
+                    runs[runs.lastIndex] = last.first..maxOf(last.last, range.last)
+                } else {
+                    runs += range
+                }
+            }
+            val builder = StringBuilder(sampleText.length)
+            val shifted = ArrayList<IntRange>(runs.size)
+            val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>(runs.size * 2)
+            var cursor = 0
+            runs.forEach { range ->
+                builder.append(sampleText, cursor, range.first)
+                if (marginStartWidth.value > 0f) {
+                    val at = builder.length
+                    builder.append(' ')
+                    placeholders += AnnotatedString.Range(
+                        Placeholder(
+                            width = marginStartWidth,
+                            height = previewBaseFontSize.sp,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                        at,
+                        at + 1,
+                    )
+                }
+                val hitStart = builder.length
+                builder.append(sampleText, range.first, range.last + 1)
+                shifted += hitStart until builder.length
+                if (marginEndWidth.value > 0f) {
+                    val at = builder.length
+                    builder.append(' ')
+                    placeholders += AnnotatedString.Range(
+                        Placeholder(
+                            width = marginEndWidth,
+                            height = previewBaseFontSize.sp,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                        at,
+                        at + 1,
+                    )
+                }
+                cursor = range.last + 1
+            }
+            builder.append(sampleText, cursor, sampleText.length)
+            MarginSegmentation(builder.toString(), shifted, placeholders)
+        }
+    }
+
     val annotated = remember(
-        sampleText, matchRanges, resolvedTextColor, bgColor, fontWeight, isItalic, fontSizeOffset
+        marginSegmentation, bgBitmap, resolvedTextColor, bgColor, fontWeight, isItalic, fontSizeOffset
     ) {
         buildAnnotatedString {
-            append(sampleText)
-            matchRanges.forEach { range ->
+            append(marginSegmentation.text)
+            marginSegmentation.ranges.forEach { range ->
                 addStyle(
                     SpanStyle(
                         color = resolvedTextColor,
@@ -1238,7 +1315,7 @@ internal fun HighlightRulePreview(
                         },
                     ),
                     range.first,
-                    (range.last + 1).coerceAtMost(sampleText.length),
+                    (range.last + 1).coerceAtMost(marginSegmentation.text.length),
                 )
             }
         }
@@ -1306,7 +1383,6 @@ internal fun HighlightRulePreview(
                 )
             }
             // 预先测量文本以获取实际高度（使用卡片内容宽度估计值）
-            val density = LocalDensity.current
             val previewConstraintWidth = with(density) {
                 // 卡片内内容宽度 ≈ 屏幕宽 - sheet水平padding*2(16*2) - 卡片内padding*2(16*2)
                 (LocalConfiguration.current.screenWidthDp.dp - 64.dp).roundToPx()
@@ -1339,6 +1415,7 @@ internal fun HighlightRulePreview(
                 ),
                 maxLines = 5,
                 constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
+                placeholders = marginSegmentation.placeholders,
             )
             // 九宫格背景会向外扩角块与 padding，超出行高的部分要给 Canvas 预留空间，否则预览被裁掉
             var ninePatchTopOverhang = 0f
@@ -1373,12 +1450,12 @@ internal fun HighlightRulePreview(
                     drawContext.canvas.translate(0f, ninePatchTopOverhang)
                 }
 
-                // 在匹配区域画背景图
-                if (bgBitmap != null && matchRanges.isNotEmpty()) {
+                // 在匹配区域画背景图（区间已按外边距占位偏移，指向占位后的命中文字）
+                if (bgBitmap != null && marginSegmentation.ranges.isNotEmpty()) {
                     val density = this.density
-                    matchRanges.forEach { range ->
+                    marginSegmentation.ranges.forEach { range ->
                         val start = range.first
-                        val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                        val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
                         previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
                             if (bgImageFit == 3 && bgRawBitmap != null) {
                                 // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
@@ -1420,9 +1497,9 @@ internal fun HighlightRulePreview(
                 val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
                     if (underlineMode > 0) {
                         val strokeWidth = underlineWidth.dp.toPx()
-                        matchRanges.forEach { range ->
+                        marginSegmentation.ranges.forEach { range ->
                             val start = range.first
-                            val endExclusive = (range.last + 1).coerceAtMost(sampleText.length)
+                            val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
                             previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
                                 when (underlineMode) {
                                     // 7 荧光：下半行铺半透明色带，几何与新引擎 mode7 同口径
