@@ -616,6 +616,49 @@ class ReaderPaginatorTest {
     }
 
     /**
+     * 外边距收缩断行时，最近候选点违反避头尾（下一行将以句号开头）必须跳过禁则
+     * 继续向前找合法断点，不能放弃收缩保留整行：未让出外边距的行尾会越出版心，
+     * 内容层按版心裁字（contentClipPadPx 常规为 0），行尾文字被整字剪掉（真机丢字）。
+     */
+    @Test
+    fun marginShrinkWalksPastForbiddenBreaksInsteadOfOverflowingTheLine() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 11f,
+            marginEndPx = 2f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        // 内容区宽 34：原始断行 3 字整行放下（30≤34），加外边距后 43>34 必须收缩；
+        // 首个候选断点在 乙|。 之间（句号不能起行，禁则），更早的 甲|乙 才合法。
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = listOf(
+                        ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 0),
+                        ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 1),
+                        ReaderMeasuredInlineItem.Text("。", 10f, framedStyle, 2),
+                    ),
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 34, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        // 收缩落点前移一字：第一行只放「甲」，「乙。」整体换行，行尾不越内容区（34）。
+        assertEquals(listOf("甲", "乙", "。"), glyphs.map { it.value })
+        assertEquals(listOf(0f, 20f, 20f), glyphs.map { it.bounds.top })
+        assertEquals(listOf(11f, 11f, 21f), glyphs.map { it.bounds.left })
+        assertTrue(glyphs.all { it.bounds.right <= 34f })
+    }
+
+    /**
      * 标题行距收紧到 1.0（设置值 10）时，本段行距留白为 0，但九宫格上下两条边不能整条消失：
      * 纵向预算回落到正文行距——旧 View 的预算取自全局 `ChapterProvider.lineSpacingExtra`，
      * 标题与正文共用一份。只有正文行距同样为 1.0 时才退回上一条用例的「中心 + 左右两条边」。

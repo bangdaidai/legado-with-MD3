@@ -672,12 +672,20 @@ internal class ReaderPaginationSession(
                             backgroundMarginAfter(index, endExclusive)).toDouble()
                 }.toFloat() + letterSpacing * (endExclusive - from - 1).coerceAtLeast(0)
             while (until - from > 1 && occupiedWidth(until) > available) {
-                val candidate = until - 1
-                if (ChineseLineBreaker.isForbiddenBreak(
+                var candidate = until - 1
+                // 禁则落点不能就此放弃：断在候选点上违规（标点悬挂行首/前引号挂行尾）时
+                // 继续向前找最近的合法断点。直接放弃收缩会让该行保留未让出外边距的旧长度，
+                // 行尾越出版心——内容层按版心裁字（contentClipPadPx 常规为 0），行尾文字
+                // 会被整字剪掉（2026-09-30 用户真机：整段九宫格高亮 + 外边距，行尾丢字）。
+                // 退到行首仍无合法断点时才维持旧行为（保留整行、交由绘制层溢出）。
+                while (candidate > from && ChineseLineBreaker.isForbiddenBreak(
                         clusters[candidate - 1],
                         clusters[candidate]
                     )
-                ) break
+                ) {
+                    candidate--
+                }
+                if (candidate == from) break
                 until = candidate
             }
             starts += until
