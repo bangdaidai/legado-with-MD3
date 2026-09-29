@@ -40,7 +40,6 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.ToggleChip
-import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TagChip
 import io.legado.app.ui.widget.components.card.TagChipSize
 import io.legado.app.ui.widget.components.card.TicketNotchDivider
@@ -641,46 +640,44 @@ internal fun MemoryBookCard(
         },
         bottomContent = if (showIntroBelowContent || showReviewBelowContent) {
             {
-                val belowContent: @Composable () -> Unit = {
-                    Column {
-                        if (showIntroBelowContent) {
-                            AppText(
-                                text = intro.orEmpty(),
-                                style = LegadoTheme.typography.bodySmall,
-                                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                            )
-                        }
-                        if (showIntroBelowContent && showReviewBelowContent) {
-                            TicketNotchDivider(
-                                color = ticketBorderColor,
-                                strokeWidth = themeSettings.baseCardBorderWidth.dp,
-                                dotted = settings.bookshelfTicketDotted,
-                            )
-                        }
-                        if (showReviewBelowContent) {
-                            AppText(
-                                text = memory.review.orEmpty(),
-                                style = LegadoTheme.typography.bodySmall,
-                                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                            )
-                        }
+                // 与书架 BookItem 的下置简介同节奏：并入主卡片（不再单独铺色/铺图）。
+                // 非票券时文本距上方信息 8dp、距卡片底边 8dp；票券样式保持分割线上下各 4dp
+                val lastBottom = if (ticketStyle) 4.dp else 8.dp
+                Column {
+                    if (showIntroBelowContent) {
+                        AppText(
+                            text = intro.orEmpty(),
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (settings.bookshelfIntroMaxLines == 0) Int.MAX_VALUE else settings.bookshelfIntroMaxLines,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().padding(
+                                start = 8.dp,
+                                end = 8.dp,
+                                top = 4.dp,
+                                bottom = if (showReviewBelowContent) 4.dp else lastBottom,
+                            ),
+                        )
                     }
-                }
-                if (ticketStyle) {
-                    belowContent()
-                } else {
-                    GlassCard(
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = 0.dp),
-                        cornerRadius = 4.dp,
-                        containerColor = LegadoTheme.colorScheme.cardContainer
-                    ) {
-                        belowContent()
+                    if (showIntroBelowContent && showReviewBelowContent) {
+                        TicketNotchDivider(
+                            color = ticketBorderColor,
+                            strokeWidth = themeSettings.baseCardBorderWidth.dp,
+                            dotted = settings.bookshelfTicketDotted,
+                        )
+                    }
+                    if (showReviewBelowContent) {
+                        AppText(
+                            text = memory.review.orEmpty(),
+                            style = LegadoTheme.typography.bodySmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(
+                                start = 8.dp,
+                                end = 8.dp,
+                                top = 4.dp,
+                                bottom = lastBottom,
+                            ),
+                        )
                     }
                 }
             }
