@@ -1,5 +1,12 @@
 package io.legado.app.ui.widget.components.dialog
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.graphics.PixelCopy
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -21,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -51,6 +59,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
@@ -78,6 +87,9 @@ fun ColorPickerSheet(
     var isPaletteMode by remember { mutableStateOf(true) }
     // 色板模式实测高度(px)，用于色块面板对齐总高
     var paletteHeightPx by remember { mutableFloatStateOf(0f) }
+    val context = LocalContext.current
+    // 取色笔抓到的窗口快照；非空时显示全屏取色覆盖层
+    var eyedropperBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(show, initialColor) {
         if (show) {
@@ -113,6 +125,35 @@ fun ColorPickerSheet(
         },
         endAction = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色后回填
+                MediumTonalButton(
+                    onClick = {
+                        val window = context.findActivity()?.window
+                        val decor = window?.decorView
+                        if (window == null || decor.width <= 0 || decor.height <= 0) {
+                            return@MediumTonalButton
+                        }
+                        // PixelCopy 只复制 Activity 窗口自身内容；
+                        // 取色弹层在独立窗口里，不会出现在快照中
+                        val bitmap = Bitmap.createBitmap(
+                            decor.width,
+                            decor.height,
+                            Bitmap.Config.ARGB_8888
+                        )
+                        PixelCopy.request(
+                            window,
+                            bitmap,
+                            { result ->
+                                if (result == PixelCopy.SUCCESS) {
+                                    eyedropperBitmap = bitmap
+                                }
+                            },
+                            Handler(Looper.getMainLooper())
+                        )
+                    },
+                    icon = Icons.Default.Colorize,
+                    contentDescription = stringResource(R.string.color_eyedropper),
+                )
                 // 取色方式切换：与保存按钮同形式、紧邻保存按钮（对齐分享卡片「切换模板」按钮）
                 MediumTonalButton(
                     onClick = { isPaletteMode = !isPaletteMode },
@@ -205,6 +246,27 @@ fun ColorPickerSheet(
             }
         }
     }
+
+    eyedropperBitmap?.let { bitmap ->
+        EyedropperOverlay(
+            snapshot = bitmap,
+            onConfirm = { argb ->
+                applyColor(Color(argb))
+                eyedropperBitmap = null
+            },
+            onDismiss = { eyedropperBitmap = null },
+        )
+    }
+}
+
+/** 沿 ContextWrapper 链解出宿主 Activity；弹层/对话框的组合里 LocalContext 可能被包了一层主题 */
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
 
 /** 原始色板模式：Miuix 色板网格，透明度由色板自身提供 */

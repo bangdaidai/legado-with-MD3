@@ -223,6 +223,8 @@
     <string name="select_color">选择颜色</string>
     <string name="color_palette">色板</string>
     <string name="color_mixer">调色</string>
+    <string name="color_eyedropper">取色笔</string>
+    <string name="color_eyedropper_hint">在页面上拖动取色</string>
     <string name="color_value">色值</string>
     <string name="start">开始</string>
     <string name="stop">停止</string>

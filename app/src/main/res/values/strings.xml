@@ -253,6 +253,8 @@
     <string name="select_color">Select Color</string>
     <string name="color_palette">Palette</string>
     <string name="color_mixer">Mixer</string>
+    <string name="color_eyedropper">Eyedropper</string>
+    <string name="color_eyedropper_hint">Drag on the page to pick a color</string>
     <string name="color_value">Color Value</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
