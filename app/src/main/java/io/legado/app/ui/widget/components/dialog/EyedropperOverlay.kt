@@ -7,14 +7,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -128,65 +129,68 @@ fun EyedropperOverlay(
             )
 
             val color = pickedColor
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(LegadoTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f))
-                    .padding(horizontal = 4.dp),
+                    .padding(bottom = 24.dp),
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = stringResource(R.string.cancel),
-                        tint = LegadoTheme.colorScheme.onSurface,
+                if (color == null) {
+                    Text(
+                        text = stringResource(R.string.color_eyedropper_hint),
+                        fontSize = 14.sp,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(LegadoTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                Box(
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(color ?: Color.Transparent)
-                        .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = color?.toArgb()
-                        ?.let { "#${Integer.toHexString(it).uppercase().padStart(8, '0')}" }
-                        ?: "——",
-                    fontSize = 14.sp,
-                    color = LegadoTheme.colorScheme.onSurface,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = { color?.let { onConfirm(it.toArgb()) } },
-                    enabled = color != null,
-                ) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = stringResource(R.string.confirm),
-                        tint = LegadoTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-
-            if (color == null) {
-                Text(
-                    text = stringResource(R.string.color_eyedropper_hint),
-                    fontSize = 14.sp,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 32.dp)
                         .clip(RoundedCornerShape(50))
                         .background(LegadoTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                        .padding(horizontal = 4.dp),
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.cancel),
+                            tint = LegadoTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(color ?: Color.Transparent)
+                            .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = color?.toArgb()
+                            ?.let { "#${Integer.toHexString(it).uppercase().padStart(8, '0')}" }
+                            ?: "——",
+                        fontSize = 14.sp,
+                        color = LegadoTheme.colorScheme.onSurface,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { color?.let { onConfirm(it.toArgb()) } },
+                        enabled = color != null,
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = stringResource(R.string.confirm),
+                            tint = LegadoTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
 
             val touch = touchPoint
@@ -200,6 +204,7 @@ fun EyedropperOverlay(
                 centerX = centerX.coerceIn(loupeSizePx / 2, rootSize.width - loupeSizePx / 2)
                 centerY = centerY.coerceIn(loupeSizePx / 2, rootSize.height - loupeSizePx / 2)
 
+                val focusColor = LegadoTheme.colorScheme.primary
                 Canvas(
                     modifier = Modifier
                         .size(LoupeSize)
@@ -214,6 +219,7 @@ fun EyedropperOverlay(
                         imageBitmap = imageBitmap,
                         center = snapshotPoint ?: IntOffset.Zero,
                         scale = snapshot.width.toFloat() / rootSize.width,
+                        focusColor = focusColor,
                     )
                 }
             }
@@ -221,11 +227,12 @@ fun EyedropperOverlay(
     }
 }
 
-/** 从快照中取放大镜中心附近 1/zoom 区域放大绘制，叠加白圈描边与取色十字线 */
+/** 从快照中取放大镜中心附近 1/zoom 区域放大绘制，叠加白圈描边与主题色取色十字线 */
 private fun DrawScope.drawLoupe(
     imageBitmap: ImageBitmap,
     center: IntOffset,
     scale: Float,
+    focusColor: Color,
 ) {
     val radius = size.minDimension / 2f
     val srcHalf = (radius / LoupeZoom * scale).roundToInt().coerceAtLeast(1)
@@ -261,16 +268,18 @@ private fun DrawScope.drawLoupe(
     )
     val cross = 6.dp.toPx()
     val stroke = 1.5.dp.toPx()
+    val cx = size.width / 2
+    val cy = size.height / 2
     drawLine(
-        color = Color.White,
-        start = Offset(size.width / 2 - cross, size.height / 2),
-        end = Offset(size.width / 2 + cross, size.height / 2),
+        color = focusColor,
+        start = Offset(cx - cross, cy),
+        end = Offset(cx + cross, cy),
         strokeWidth = stroke,
     )
     drawLine(
-        color = Color.White,
-        start = Offset(size.width / 2, size.height / 2 - cross),
-        end = Offset(size.width / 2, size.height / 2 + cross),
+        color = focusColor,
+        start = Offset(cx, cy - cross),
+        end = Offset(cx, cy + cross),
         strokeWidth = stroke,
     )
 }

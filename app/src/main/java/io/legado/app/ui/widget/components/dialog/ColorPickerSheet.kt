@@ -113,18 +113,16 @@ fun ColorPickerSheet(
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.select_color),
         startAction = {
-            MediumTonalButton(
-                onClick = {
-                    currentColor = Color.Transparent
-                    hexInput = "#00000000"
-                    isHexInputError = false
-                },
-                icon = Icons.Default.Restore,
-                contentDescription = stringResource(R.string.reset),
-            )
-        },
-        endAction = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MediumTonalButton(
+                    onClick = {
+                        currentColor = Color.Transparent
+                        hexInput = "#00000000"
+                        isHexInputError = false
+                    },
+                    icon = Icons.Default.Restore,
+                    contentDescription = stringResource(R.string.reset),
+                )
                 // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色后回填
                 MediumTonalButton(
                     onClick = {
@@ -154,6 +152,10 @@ fun ColorPickerSheet(
                     icon = Icons.Default.Colorize,
                     contentDescription = stringResource(R.string.color_eyedropper),
                 )
+            }
+        },
+        endAction = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 取色方式切换：与保存按钮同形式、紧邻保存按钮（对齐分享卡片「切换模板」按钮）
                 MediumTonalButton(
                     onClick = { isPaletteMode = !isPaletteMode },
