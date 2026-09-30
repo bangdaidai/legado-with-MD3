@@ -4,9 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
-import android.graphics.PixelCopy
 import android.os.Handler
 import android.os.Looper
+import android.view.PixelCopy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -128,9 +128,9 @@ fun ColorPickerSheet(
                 // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色后回填
                 MediumTonalButton(
                     onClick = {
-                        val window = context.findActivity()?.window
-                        val decor = window?.decorView
-                        if (window == null || decor.width <= 0 || decor.height <= 0) {
+                        val window = context.findActivity()?.window ?: return@MediumTonalButton
+                        val decor = window.decorView
+                        if (decor.width <= 0 || decor.height <= 0) {
                             return@MediumTonalButton
                         }
                         // PixelCopy 只复制 Activity 窗口自身内容；
