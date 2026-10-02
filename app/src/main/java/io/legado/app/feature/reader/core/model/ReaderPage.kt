@@ -85,7 +85,29 @@ data class ReaderUnderline(
     val featherPx: Float = 0f,
     /** true=画在文字层之下（旧 underlineBelowText，被字形笔画遮挡）。 */
     val belowText: Boolean = false,
-)
+) {
+    /** 圆头补偿只按线芯宽度；羽化加粗后的 pass 不得加大内缩，否则外圈圆头被吃掉。 */
+    val capInsetPx: Float
+        get() = if (roundCap || featherPx > 0f) widthPx.coerceAtLeast(1f) / 2f else 0f
+
+    /**
+     * 下划线画出文字包围盒外的最大半径（圆头/羽化/偏移/双线/波浪），
+     * 供内容裁剪与预览画布预留，避免贴边把圆头和柔边切掉。
+     */
+    val overflowPadPx: Float
+        get() {
+            val half = widthPx.coerceAtLeast(1f) / 2f
+            val feather = featherPx.coerceAtLeast(0f)
+            val horizontal = if (roundCap || feather > 0f) half + feather else 0f
+            val below = half + feather + offsetPx.coerceAtLeast(0f) + when (mode) {
+                3 -> waveAmplitudePx.coerceAtLeast(0f)
+                4 -> doubleLineGapPx.coerceAtLeast(0f) + widthPx.coerceAtLeast(1f)
+                else -> 0f
+            }
+            val above = half + feather + (-offsetPx).coerceAtLeast(0f)
+            return maxOf(horizontal, below, above)
+        }
+}
 
 sealed interface ReaderElement {
     val bounds: ReaderRect

@@ -1437,8 +1437,25 @@ internal fun HighlightRulePreview(
                     ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
                 }
             }
+            // 下划线画在行底 + offset 处，圆头/羽化/双线/波浪还要向下延伸，
+            // 画布按最大外扩预留，否则贴底时整条线连同柔边一起被裁掉
+            val underlineBottomOverhangPx = if (underlineMode in 1..4) {
+                with(density) {
+                    val extra = when (underlineMode) {
+                        3 -> 2.5.dp.toPx()
+                        4 -> 2.dp.toPx()
+                        else -> 0f
+                    }
+                    underlineOffset.dp.toPx().coerceAtLeast(0f) +
+                        underlineWidth.dp.toPx() / 2f +
+                        underlineFeather.dp.toPx() + extra
+                }
+            } else {
+                0f
+            }
             val canvasHeightDp = with(density) {
-                (previewTextResult.size.height + ninePatchTopOverhang + ninePatchBottomOverhang).toDp()
+                (previewTextResult.size.height + ninePatchTopOverhang +
+                    maxOf(ninePatchBottomOverhang, underlineBottomOverhangPx)).toDp()
             }
             Canvas(
                 modifier = Modifier
@@ -1603,6 +1620,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
     dashGap: Float = 5f,
 ) {
     val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
+    // 圆头内缩只按线芯宽度：羽化 pass 的加粗圆头向外扩散，内缩若随加粗增大，
+    // 两端渐隐区会被整段吃掉，羽化和圆头一起失效
+    val capInset = if (cap == StrokeCap.Round) strokeWidth.coerceAtLeast(1f) / 2f else 0f
     if (feather > 0f) {
         val passes = (feather * 3f).toInt().coerceIn(6, 24)
         val baseAlpha = color.alpha
@@ -1630,10 +1650,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegmen
                 start = Offset(startX, 0f),
                 end = Offset(endX, 0f),
             )
-            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, brush, dashLen, dashGap)
+            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, capInset, brush, dashLen, dashGap)
         }
     } else {
-        drawUnderlineShape(mode, color, strokeWidth, startX, endX, y, cap, dashLen = dashLen, dashGap = dashGap)
+        drawUnderlineShape(mode, color, strokeWidth, startX, endX, y, cap, capInset, dashLen = dashLen, dashGap = dashGap)
     }
 }
 
@@ -1645,12 +1665,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
     endX: Float,
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
+    capInset: Float = 0f,
     brush: Brush? = null,
     dashLen: Float = 8f,
     dashGap: Float = 5f,
 ) {
-    // 圆头向外延伸半个宽度，收缩补偿以保持总长不变
-    val capInset = if (cap == StrokeCap.Round) strokeWidth / 2f else 0f
     val sx = startX + capInset
     val ex = endX - capInset
     if (sx >= ex) return

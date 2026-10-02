@@ -19,6 +19,9 @@ val ReaderPage.contentClipPadPx: Float
             if (text.style.italic) {
                 pad = maxOf(pad, text.style.fontSizePx * ITALIC_PAD_RATIO)
             }
+            text.style.underline?.let { underline ->
+                pad = maxOf(pad, underline.overflowPadPx)
+            }
         }
         return pad
     }

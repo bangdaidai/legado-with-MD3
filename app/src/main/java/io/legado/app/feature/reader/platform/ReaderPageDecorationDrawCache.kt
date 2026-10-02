@@ -131,8 +131,8 @@ internal class ReaderUnderlineDrawCommand(
     }
 
     /**
-     * 以 [strokeWidthPx] 描边画一段。圆头端点会向外延伸半个宽度，需要向内收缩补偿以保持
-     * 总长不变（旧 `drawUnderlineShape` 的 capInset）；[shader] 仅羽化 pass 传入。
+     * 以 [strokeWidthPx] 描边画一段。圆头端点会向外延伸半个宽度，按线芯宽度向内收缩
+     * 以保持总长不变；羽化 pass 的加粗圆头向外扩散。[shader] 仅羽化 pass 传入。
      */
     private fun drawShape(
         canvas: Canvas,
@@ -143,8 +143,7 @@ internal class ReaderUnderlineDrawCommand(
         paint.color = colorArgb
         paint.strokeWidth = strokeWidthPx.coerceAtLeast(1f)
         paint.shader = shader
-        val width = paint.strokeWidth
-        val capInset = if (paint.strokeCap == Paint.Cap.ROUND) width / 2f else 0f
+        val capInset = underline.capInsetPx
         val start = bounds.left + capInset
         val end = bounds.right - capInset
         val y = bounds.bottom + underline.offsetPx
