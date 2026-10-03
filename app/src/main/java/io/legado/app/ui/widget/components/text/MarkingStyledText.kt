@@ -21,7 +21,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.JustificationMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -112,11 +111,6 @@ fun MarkingStyledText(
     color: Color = Color.Unspecified,
     style: TextStyle? = null,
     textAlign: TextAlign? = null,
-    /**
-     * 配合 [textAlign] 使用。中文两端对齐必须传 `InterCharacter`：
-     * Compose 默认的 `InterWord` 只拉伸词间距，中文没有空格，拉伸量为 0。
-     */
-    justificationMode: JustificationMode = JustificationMode.Unspecified,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
 ) {
@@ -157,7 +151,6 @@ fun MarkingStyledText(
             color = color,
             style = style,
             textAlign = textAlign,
-            justificationMode = justificationMode,
             maxLines = maxLines,
             overflow = overflow,
         )
@@ -202,7 +195,6 @@ fun MarkingStyledText(
         color = color,
         style = style,
         textAlign = textAlign,
-        justificationMode = justificationMode,
         maxLines = maxLines,
         overflow = overflow,
         onTextLayout = { layoutState.value = it },

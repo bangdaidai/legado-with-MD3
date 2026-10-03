@@ -73,6 +73,8 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+// Dp.isFinite 是这个包里的扩展属性，不是 kotlin.math 那个 Float 版本，必须显式导入
+import androidx.compose.ui.unit.isFinite
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle

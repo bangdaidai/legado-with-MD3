@@ -52,7 +52,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.JustificationMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -700,8 +699,6 @@ private fun ExcerptSection(
                         color = LegadoTheme.colorScheme.primary,
                         lineHeight = 22.sp,
                         textAlign = TextAlign.Justify,
-                        // 中文没有空格，默认的 InterWord 拉伸量为 0，必须按字距拉伸
-                        justificationMode = JustificationMode.InterCharacter,
                     )
                 }
                 if (excerpt.selectedText.isNotBlank()) {
@@ -713,7 +710,6 @@ private fun ExcerptSection(
                         style = excerptTextStyle,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Justify,
-                        justificationMode = JustificationMode.InterCharacter,
                     )
                 }
             }

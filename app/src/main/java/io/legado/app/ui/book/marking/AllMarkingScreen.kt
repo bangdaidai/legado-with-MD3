@@ -53,7 +53,6 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.style.JustificationMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -419,7 +418,6 @@ private fun MarkingRow(
                 style = LegadoTheme.typography.bodyMedium,
                 color = LegadoTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Justify,
-                justificationMode = JustificationMode.InterCharacter,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -430,8 +428,6 @@ private fun MarkingRow(
                 style = LegadoTheme.typography.bodyMedium,
                 color = LegadoTheme.colorScheme.primary,
                 textAlign = TextAlign.Justify,
-                // 中文没有空格，默认的 InterWord 拉伸量为 0，必须按字距拉伸
-                justificationMode = JustificationMode.InterCharacter,
             )
         }
     }
