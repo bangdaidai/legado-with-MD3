@@ -32,8 +32,9 @@ class ReaderUnderlineOverflowTest {
 
     @Test
     fun `wave and double line add their own vertical extension`() {
-        val wave = ReaderUnderline(3, 0, widthPx = 2f, offsetPx = 2f, waveAmplitudePx = 3f)
-        assertEquals(2f + 1f + 3f, wave.overflowPadPx, 0f)
+        // 波浪按控制点的一半留：quadTo 的中点只到控制点的 50%
+        val wave = ReaderUnderline(3, 0, widthPx = 2f, offsetPx = 2f, waveControlOffsetPx = 3f)
+        assertEquals(2f + 1f + 1.5f, wave.overflowPadPx, 0f)
         val double = ReaderUnderline(4, 0, widthPx = 2f, offsetPx = 2f, doubleLineGapPx = 3f)
         // 下方 = offset + 半宽 + 间隙 + 线宽
         assertEquals(2f + 1f + 3f + 2f, double.overflowPadPx, 0f)

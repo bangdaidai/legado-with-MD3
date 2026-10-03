@@ -73,6 +73,12 @@ data class HighlightRule(
     // 虚线间隔长度（dp）
     @ColumnInfo(defaultValue = "5")
     var underlineDashGap: Float = 5f,
+    // 波浪实际峰高（dp）。渲染时控制点取 2 倍：quad 中点只到控制点的一半
+    @ColumnInfo(defaultValue = "1.5")
+    var underlineWavePeak: Float = DEFAULT_WAVE_PEAK_DP,
+    // 波浪波长（dp，一个完整「上-下」周期）
+    @ColumnInfo(defaultValue = "24")
+    var underlineWaveLength: Float = DEFAULT_WAVE_LENGTH_DP,
     // 下划线端点圆角
     @ColumnInfo(defaultValue = "0")
     var underlineRoundCap: Boolean = false,
@@ -109,6 +115,12 @@ data class HighlightRule(
                     else -> "下划线"
                 } + underlineColor?.let { " ${it.toHexColor()}" }.orEmpty()
             )
+            // 波浪的形状参数：只有偏离默认才写出来，避免每行都挂一串数字
+            if (underlineMode == 3 &&
+                (underlineWavePeak != DEFAULT_WAVE_PEAK_DP || underlineWaveLength != DEFAULT_WAVE_LENGTH_DP)
+            ) {
+                parts.add("峰高${trimDp(underlineWavePeak)}dp 波长${trimDp(underlineWaveLength)}dp")
+            }
         }
         if (!bgImage.isNullOrBlank()) {
             parts.add(
@@ -172,6 +184,26 @@ data class HighlightRule(
         const val TARGET_TITLE = 1
         const val TARGET_BODY = 2
 
+        /**
+         * 波浪实际峰高（dp），默认保持迁移前的观感。
+         * 渲染时二次贝塞尔的控制点取 2 倍（[ReaderUnderlineGeometry.READER_WAVE_CONTROL_OFFSET_DP]
+         * = 本值 × 2），因为 quad 中点只到控制点的一半。
+         */
+        const val DEFAULT_WAVE_PEAK_DP = 1.5f
+
+        /** 波浪波长（dp，一个完整「上-下」周期）。 */
+        const val DEFAULT_WAVE_LENGTH_DP = 24f
+
         fun Int.toHexColor(): String = String.format("#%08X", this)
+
+        /** dp 值展示用：去掉无意义的尾零（1.50 → 1.5，2.00 → 2）。 */
+        private fun trimDp(value: Float): String {
+            val rounded = Math.round(value * 10f) / 10f
+            return if (rounded == rounded.toInt().toFloat()) {
+                rounded.toInt().toString()
+            } else {
+                String.format("%.1f", rounded)
+            }
+        }
     }
 }

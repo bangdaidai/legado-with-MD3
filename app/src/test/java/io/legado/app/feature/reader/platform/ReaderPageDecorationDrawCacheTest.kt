@@ -86,6 +86,22 @@ class ReaderPageDecorationDrawCacheTest {
         assertEquals(0, cache.styledUnderlines.size)
     }
 
+    @Test(timeout = 1_000)
+    fun `fluorescent band survives round cap and extreme feather without stalling`() {
+        val canvas = Canvas(Bitmap.createBitmap(40, 20, Bitmap.Config.ARGB_8888))
+        val bounds = ReaderRect(2f, 0f, 38f, 16f)
+
+        // 圆头 + 羽化：色带要真画得出来；羽化半径远超色带高度时向内收缩不能把矩形收成负数
+        listOf(false, true).forEach { roundCap ->
+            listOf(0f, 1f, 40f).forEach { featherPx ->
+                ReaderHalfHighlightDrawCommand(
+                    bounds,
+                    ReaderUnderline(7, 0x88ffd54f, 1f, 0f, roundCap = roundCap, featherPx = featherPx),
+                ).draw(canvas)
+            }
+        }
+    }
+
     @Test(timeout = 1_000) fun zeroDashAndWaveLengthsCannotStallDrawing() {
         val canvas = Canvas(Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888))
         val bounds = ReaderRect(0f, 0f, 10f, 10f)
@@ -96,7 +112,7 @@ class ReaderPageDecorationDrawCacheTest {
         ).draw(canvas)
         ReaderUnderlineDrawCommand(
             bounds,
-            ReaderUnderline(3, 0xff000000.toInt(), 1f, 0f, waveLengthPx = 0f),
+            ReaderUnderline(3, 0xff000000.toInt(), 1f, 0f, waveHalfWavePx = 0f),
         ).draw(canvas)
     }
 

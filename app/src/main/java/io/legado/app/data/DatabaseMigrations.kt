@@ -701,6 +701,12 @@ object DatabaseMigrations {
             db.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineBelowText INTEGER NOT NULL DEFAULT 0")
             db.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashLen REAL NOT NULL DEFAULT 8")
             db.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineDashGap REAL NOT NULL DEFAULT 5")
+            // 波浪形状参数。默认 1.5dp 峰高 / 24dp 波长 = 迁移前的观感，不改变已有规则的表现。
+            // 注意：只加这两个新列。underlineRoundCap / underlineFeather 等列在本文件里没有
+            // 对应 ALTER，它们要么来自上游 103→107 的 autoMigration，要么本身就存在缺口，
+            // 不要在这里补——重复 ADD COLUMN 会让整个 migration_100_101 失败。
+            db.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineWavePeak REAL NOT NULL DEFAULT 1.5")
+            db.execSQL("ALTER TABLE highlightRules ADD COLUMN underlineWaveLength REAL NOT NULL DEFAULT 24")
             // 本地额外: 分享模板表
             db.execSQL(
                 """

@@ -76,8 +76,10 @@ data class ReaderUnderline(
     val svgPath: String = "",
     val dashOnPx: Float = 8f,
     val dashOffPx: Float = 5f,
-    val waveAmplitudePx: Float = 3f,
-    val waveLengthPx: Float = 12f,
+    /** 波浪控制点竖直偏移。注意实际峰高是它的一半（quad 中点只到控制点的 50%）。 */
+    val waveControlOffsetPx: Float = 3f,
+    /** 波浪半波长：一次 `quadTo` 覆盖的宽度，整波长是它的两倍。 */
+    val waveHalfWavePx: Float = 12f,
     val doubleLineGapPx: Float = 3f,
     /** 端点圆头（旧 underlineRoundCap）；羽化 >0 时同样强制圆头，与旧绘制一致。 */
     val roundCap: Boolean = false,
@@ -100,7 +102,11 @@ data class ReaderUnderline(
             val feather = featherPx.coerceAtLeast(0f)
             val horizontal = if (roundCap || feather > 0f) half + feather else 0f
             val below = half + feather + offsetPx.coerceAtLeast(0f) + when (mode) {
-                3 -> waveAmplitudePx.coerceAtLeast(0f)
+                // 波浪的 waveControlOffsetPx 是二次贝塞尔的控制点偏移，中点只到它的一半，
+                // 真正画出到基线外的距离只有一半；这里按实际峰高留白，和
+                // ReaderUnderlineGeometry 的几何口径一致。
+                3 -> waveControlOffsetPx.coerceAtLeast(0f) / 2f
+                // 双下划线第二条在下方：净间隙 + 线宽
                 4 -> doubleLineGapPx.coerceAtLeast(0f) + widthPx.coerceAtLeast(1f)
                 else -> 0f
             }

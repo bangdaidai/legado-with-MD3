@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
@@ -80,6 +81,9 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
+import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
+import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
+import io.legado.app.feature.reader.core.style.underlineControlSupport
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.help.config.ReadBookConfig
@@ -105,6 +109,9 @@ import io.legado.app.utils.SelectImageContract
 import io.legado.app.utils.launch
 import io.legado.app.utils.textHeight
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.text.drawFluorescentBand
+import io.legado.app.ui.widget.components.text.drawUnderlineSegment
+import io.legado.app.ui.widget.components.text.forEachLineSegment
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -159,6 +166,8 @@ fun HighlightRuleEditSheet(
     var underlineFeather by remember(show, rule) { mutableFloatStateOf(initial.underlineFeather) }
     var underlineDashLen by remember(show, rule) { mutableFloatStateOf(initial.underlineDashLen) }
     var underlineDashGap by remember(show, rule) { mutableFloatStateOf(initial.underlineDashGap) }
+    var underlineWavePeak by remember(show, rule) { mutableFloatStateOf(initial.underlineWavePeak) }
+    var underlineWaveLength by remember(show, rule) { mutableFloatStateOf(initial.underlineWaveLength) }
     var useProtagonist by remember(show, rule) { mutableStateOf(initial.useProtagonist) }
     var characterRole by remember(show, rule) { mutableStateOf(initial.characterRole.orEmpty()) }
     var bgImage by remember(show, rule) { mutableStateOf(initial.bgImage.orEmpty()) }
@@ -314,6 +323,8 @@ fun HighlightRuleEditSheet(
                             underlineBelowText = underlineBelowText,
                             underlineDashLen = underlineDashLen,
                             underlineDashGap = underlineDashGap,
+                            underlineWavePeak = underlineWavePeak,
+                            underlineWaveLength = underlineWaveLength,
                             bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
                             bgImageFit = if (hasBgImage && bgImage.isNotBlank()) bgImageFit else 0,
                             bgImageScale = bgImageScale,
@@ -521,6 +532,10 @@ fun HighlightRuleEditSheet(
             )
             AnimatedVisibility(visible = underlineMode > 0) {
                 Column {
+                    // 哪些参数对当前线型真的有效果，由共享几何判定，和正文渲染同一口径。
+                    // 荧光(7) 是铺下半行的填充色带、删除线(6) 固定在行高 52%，
+                    // 宽度/偏移/圆头/羽化对它们都是死参数，露出来只会让人白调。
+                    val support = underlineControlSupport(underlineMode)
                     AnimatedVisibility(visible = underlineMode == 5) {
                         AppTextField(
                             value = underlineSvgPath,
@@ -545,45 +560,55 @@ fun HighlightRuleEditSheet(
                         },
                     )
 
-                    TinySliderSettingItem(
-                        title = stringResource(R.string.underline_width),
-                        value = underlineWidth,
-                        valueRange = 0.1f..20f,
-                        description = String.format("%.1f dp", underlineWidth),
-                        onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
-                        onReset = { underlineWidth = 1f },
-                    )
+                    AnimatedVisibility(visible = support.width) {
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.underline_width),
+                            value = underlineWidth,
+                            valueRange = 0.1f..20f,
+                            description = String.format("%.1f dp", underlineWidth),
+                            onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
+                            onReset = { underlineWidth = 1f },
+                        )
+                    }
 
-                    TinySliderSettingItem(
-                        title = stringResource(R.string.underline_offset),
-                        value = underlineOffset,
-                        valueRange = -20f..10f,
-                        description = String.format("%+.1f dp", underlineOffset),
-                        onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
-                        onReset = { underlineOffset = 2f },
-                    )
+                    AnimatedVisibility(visible = support.offset) {
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.underline_offset),
+                            value = underlineOffset,
+                            valueRange = -20f..10f,
+                            description = String.format("%+.1f dp", underlineOffset),
+                            onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
+                            onReset = { underlineOffset = 2f },
+                        )
+                    }
 
-                    TinySwitchSettingItem(
-                        title = stringResource(R.string.underline_below_text),
-                        checked = underlineBelowText,
-                        onCheckedChange = { underlineBelowText = it },
-                    )
+                    AnimatedVisibility(visible = support.layer) {
+                        TinySwitchSettingItem(
+                            title = stringResource(R.string.underline_below_text),
+                            checked = underlineBelowText,
+                            onCheckedChange = { underlineBelowText = it },
+                        )
+                    }
 
-                    TinySwitchSettingItem(
-                        title = stringResource(R.string.underline_round_cap),
-                        checked = underlineRoundCap,
-                        onCheckedChange = { underlineRoundCap = it },
-                    )
+                    AnimatedVisibility(visible = support.roundCap) {
+                        TinySwitchSettingItem(
+                            title = stringResource(R.string.underline_round_cap),
+                            checked = underlineRoundCap,
+                            onCheckedChange = { underlineRoundCap = it },
+                        )
+                    }
 
-                    TinySliderSettingItem(
-                        title = stringResource(R.string.underline_feather),
-                        value = underlineFeather,
-                        valueRange = 0f..5f,
-                        description = String.format("%.1f dp", underlineFeather),
-                        onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
-                    )
+                    AnimatedVisibility(visible = support.feather) {
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.underline_feather),
+                            value = underlineFeather,
+                            valueRange = 0f..5f,
+                            description = String.format("%.1f dp", underlineFeather),
+                            onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
+                        )
+                    }
 
-                    AnimatedVisibility(visible = underlineMode == 2) {
+                    AnimatedVisibility(visible = support.dashPattern) {
                         Column {
                             TinySliderSettingItem(
                                 title = stringResource(R.string.underline_dash_len),
@@ -600,6 +625,29 @@ fun HighlightRuleEditSheet(
                                 description = String.format("%.1f dp", underlineDashGap),
                                 onValueChange = { underlineDashGap = (it * 10).toInt() / 10f },
                                 onReset = { underlineDashGap = 5f },
+                            )
+                        }
+                    }
+
+                    // 波浪形状：峰高是实际画出来的高度（渲染时控制点取 2 倍），
+                    // 波长是一个完整「上-下」周期。默认值与迁移前一致。
+                    AnimatedVisibility(visible = support.waveShape) {
+                        Column {
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_wave_peak),
+                                value = underlineWavePeak,
+                                valueRange = 0.5f..12f,
+                                description = String.format("%.1f dp", underlineWavePeak),
+                                onValueChange = { underlineWavePeak = (it * 10).toInt() / 10f },
+                                onReset = { underlineWavePeak = HighlightRule.DEFAULT_WAVE_PEAK_DP },
+                            )
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_wave_length),
+                                value = underlineWaveLength,
+                                valueRange = 4f..60f,
+                                description = String.format("%.1f dp", underlineWaveLength),
+                                onValueChange = { underlineWaveLength = (it * 2).toInt() / 2f },
+                                onReset = { underlineWaveLength = HighlightRule.DEFAULT_WAVE_LENGTH_DP },
                             )
                         }
                     }
@@ -889,6 +937,7 @@ fun HighlightRuleEditSheet(
                 underlineColor = if (underlineMode > 0) underlineColor else null,
                 underlineWidth = underlineWidth,
                 underlineOffset = underlineOffset,
+                underlineSvgPath = underlineSvgPath,
                 pageBgColor = previewDayBgColor,
                 pageTextColor = previewConfig.getTextColor().toPreviewColor(0xFF3E3D3B.toInt()),
                 pageBgImagePath = previewDayBgImage,
@@ -946,6 +995,7 @@ fun HighlightRuleEditSheet(
                     underlineColor = nightUnderlineColor,
                     underlineWidth = underlineWidth,
                     underlineOffset = underlineOffset,
+                    underlineSvgPath = underlineSvgPath,
                     pageBgColor = previewNightBgColor,
                     pageTextColor = previewConfig.getTextColorNight()
                         .toPreviewColor(0xFFADADAD.toInt()),
@@ -1162,6 +1212,8 @@ internal fun HighlightRulePreview(
     underlineColor: Int?,
     underlineWidth: Float,
     underlineOffset: Float,
+    /** 自定义 SVG 下划线的 pathData，只有 underlineMode == 5 会用。 */
+    underlineSvgPath: String = "",
     pageBgColor: Int,
     pageTextColor: Int,
     /** 排版背景是图片时的加载地址，为 null 表示纯色背景 */
@@ -1186,6 +1238,10 @@ internal fun HighlightRulePreview(
     underlineFeather: Float = 0f,
     underlineDashLen: Float = 8f,
     underlineDashGap: Float = 5f,
+    /** 波浪实际峰高（dp）。渲染时控制点取 2 倍，见 drawUnderlineSegment。 */
+    underlineWavePeak: Float = 1.5f,
+    /** 波浪波长（dp，一个完整「上-下」周期）。 */
+    underlineWaveLength: Float = 24f,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -1438,12 +1494,14 @@ internal fun HighlightRulePreview(
                 }
             }
             // 下划线画在行底 + offset 处，圆头/羽化/双线/波浪还要向下延伸，
-            // 画布按最大外扩预留，否则贴底时整条线连同柔边一起被裁掉
-            val underlineBottomOverhangPx = if (underlineMode in 1..4) {
+            // 画布按最大外扩预留，否则贴底时整条线连同柔边一起被裁掉。
+            // extra 与正文 overflowPadPx 同一口径：波浪按实际峰高（控制点的一半），
+            // 双线按净间隙 + 线宽。荧光(7) 是行盒内的填充色带，不需要额外外扩。
+            val underlineBottomOverhangPx = if (underlineMode in 1..5) {
                 with(density) {
                     val extra = when (underlineMode) {
-                        3 -> 2.5.dp.toPx()
-                        4 -> 2.dp.toPx()
+                        3 -> underlineWavePeak.dp.toPx()
+                        4 -> READER_DOUBLE_LINE_GAP_DP.dp.toPx() + underlineWidth.dp.toPx()
                         else -> 0f
                     }
                     underlineOffset.dp.toPx().coerceAtLeast(0f) +
@@ -1513,27 +1571,33 @@ internal fun HighlightRulePreview(
                 // 下划线绘制块（可在文字上层或下层）
                 val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
                     if (underlineMode > 0) {
-                        val strokeWidth = underlineWidth.dp.toPx()
                         marginSegmentation.ranges.forEach { range ->
                             val start = range.first
                             val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
                             previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
                                 when (underlineMode) {
-                                    // 7 荧光：下半行铺半透明色带，几何与新引擎 mode7 同口径
-                                    7 -> drawRect(
-                                        color = resolvedUnderlineColor.copy(alpha = 0.4f),
-                                        topLeft = Offset(left, top + (bottom - top) * 0.5f),
-                                        size = Size(right - left, (bottom - top) * 0.5f),
+                                    // 7 荧光：不是下划线，是铺下半行的填充色带（正文
+                                    // ReaderHalfHighlightDrawCommand 同口径）。宽度/偏移/圆头/
+                                    // 羽化对它无效，只有颜色生效，透明度用颜色自带的 alpha，
+                                    // 不额外压暗（对照 MarkingEffect.toStyle 的口径）。
+                                    7 -> drawFluorescentBand(
+                                        left = left,
+                                        right = right,
+                                        top = top,
+                                        bottom = bottom,
+                                        color = resolvedUnderlineColor,
+                                        roundCap = underlineRoundCap,
+                                        feather = if (underlineControlSupport(7).feather) underlineFeather else 0f,
                                     )
 
-                                    // 6 删除线：行高 52% 处横线，几何与新引擎 mode6 同口径
+                                    // 6 删除线：固定落在行高 READER_STRIKE_HEIGHT_RATIO 处，不吃偏移
                                     6 -> drawUnderlineSegment(
                                         mode = 1,
                                         color = resolvedUnderlineColor,
-                                        strokeWidth = strokeWidth,
+                                        widthDp = underlineWidth,
                                         startX = left,
                                         endX = right,
-                                        y = top + (bottom - top) * 0.52f,
+                                        y = top + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
                                         roundCap = underlineRoundCap,
                                         feather = underlineFeather,
                                         dashLen = underlineDashLen,
@@ -1543,14 +1607,22 @@ internal fun HighlightRulePreview(
                                     else -> drawUnderlineSegment(
                                         mode = underlineMode,
                                         color = resolvedUnderlineColor,
-                                        strokeWidth = strokeWidth,
+                                        widthDp = underlineWidth,
                                         startX = left,
                                         endX = right,
                                         y = bottom + underlineOffset.dp.toPx(),
                                         roundCap = underlineRoundCap,
-                                        feather = underlineFeather,
+                                        // 自定义 SVG 没有可定义的"两端"，羽化对它不生效
+                                        feather = if (underlineControlSupport(underlineMode).feather) {
+                                            underlineFeather
+                                        } else {
+                                            0f
+                                        },
                                         dashLen = underlineDashLen,
                                         dashGap = underlineDashGap,
+                                        svgPath = underlineSvgPath,
+                                        wavePeakDp = underlineWavePeak,
+                                        waveLengthDp = underlineWaveLength,
                                     )
                                 }
                             }
@@ -1569,186 +1641,6 @@ internal fun HighlightRulePreview(
                     drawContext.canvas.translate(0f, -ninePatchTopOverhang)
                 }
             }
-        }
-    }
-}
-
-/**
- * 把匹配区间按行切开，用每字包围盒算这一行的左右边界。
- * [TextLayoutResult.getHorizontalPosition] 在换行边界会给出下一行行首，
- * 跨行引用会把下划线/背景图画到行首未匹配文字上。
- */
-private inline fun TextLayoutResult.forEachLineSegment(
-    start: Int,
-    endExclusive: Int,
-    action: (left: Float, right: Float, top: Float, bottom: Float, line: Int) -> Unit,
-) {
-    if (start >= endExclusive) return
-    var offset = start
-    while (offset < endExclusive) {
-        val line = getLineForOffset(offset)
-        val visibleEnd = getLineEnd(line, visibleEnd = true)
-        val rawEnd = getLineEnd(line, visibleEnd = false)
-        val segEnd = minOf(endExclusive, visibleEnd)
-        if (segEnd > offset) {
-            var left = Float.POSITIVE_INFINITY
-            var right = Float.NEGATIVE_INFINITY
-            for (i in offset until segEnd) {
-                val box = getBoundingBox(i)
-                left = minOf(left, box.left)
-                right = maxOf(right, box.right)
-            }
-            if (left < right) {
-                action(left, right, getLineTop(line), getLineBottom(line), line)
-            }
-        }
-        // 软换行时 visibleEnd==rawEnd；硬换行时 visibleEnd 停在 \\n 前，必须跳过否则死循环
-        offset = maxOf(segEnd, rawEnd).coerceAtLeast(offset + 1)
-    }
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineSegment(
-    mode: Int,
-    color: Color,
-    strokeWidth: Float,
-    startX: Float,
-    endX: Float,
-    y: Float,
-    roundCap: Boolean = false,
-    feather: Float = 0f,
-    dashLen: Float = 8f,
-    dashGap: Float = 5f,
-) {
-    val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
-    // 圆头内缩只按线芯宽度：羽化 pass 的加粗圆头向外扩散，内缩若随加粗增大，
-    // 两端渐隐区会被整段吃掉，羽化和圆头一起失效
-    val capInset = if (cap == StrokeCap.Round) strokeWidth.coerceAtLeast(1f) / 2f else 0f
-    if (feather > 0f) {
-        val passes = (feather * 3f).toInt().coerceIn(6, 24)
-        val baseAlpha = color.alpha
-        val featherPx = feather.dp.toPx()
-        val sigma = 0.55f
-        // 端部渐隐长度：至少覆盖羽化扩散半径与线宽
-        val featherLen = maxOf(feather.dp.toPx() * 1.5f, strokeWidth)
-        val segLen = endX - startX
-        val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
-        for (i in passes downTo 0) {
-            val d = i.toFloat() / passes
-            val gaussian = kotlin.math.exp(-(d * d) / (2f * sigma * sigma)).toFloat()
-            val alpha = baseAlpha * gaussian
-            if (alpha <= 0.001f) continue
-            val passColor = color.copy(alpha = alpha)
-            val passWidth = strokeWidth + d * featherPx * 2f
-            // 端点水平渐隐：两端 alpha 渐变为 0
-            val brush = Brush.linearGradient(
-                colorStops = arrayOf(
-                    0f to Color.Transparent,
-                    edgePos to passColor,
-                    1f - edgePos to passColor,
-                    1f to Color.Transparent,
-                ),
-                start = Offset(startX, 0f),
-                end = Offset(endX, 0f),
-            )
-            drawUnderlineShape(mode, passColor, passWidth, startX, endX, y, cap, capInset, brush, dashLen, dashGap)
-        }
-    } else {
-        drawUnderlineShape(mode, color, strokeWidth, startX, endX, y, cap, capInset, dashLen = dashLen, dashGap = dashGap)
-    }
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnderlineShape(
-    mode: Int,
-    color: Color,
-    strokeWidth: Float,
-    startX: Float,
-    endX: Float,
-    y: Float,
-    cap: StrokeCap = StrokeCap.Butt,
-    capInset: Float = 0f,
-    brush: Brush? = null,
-    dashLen: Float = 8f,
-    dashGap: Float = 5f,
-) {
-    val sx = startX + capInset
-    val ex = endX - capInset
-    if (sx >= ex) return
-    when (mode) {
-        1 -> drawLine(
-            brush = brush ?: Brush.linearGradient(listOf(color, color)),
-            start = Offset(sx, y),
-            end = Offset(ex, y),
-            strokeWidth = strokeWidth,
-            cap = cap,
-        )
-
-        2 -> {
-            val dashLength = dashLen.dp.toPx()
-            val gapLength = dashGap.dp.toPx()
-            if (dashLength + gapLength <= 0f) {
-                drawLine(
-                    brush = brush ?: Brush.linearGradient(listOf(color, color)),
-                    start = Offset(sx, y),
-                    end = Offset(ex, y),
-                    strokeWidth = strokeWidth,
-                    cap = cap,
-                )
-                return
-            }
-            var x = sx
-            while (x < ex) {
-                val segEndX = minOf(x + dashLength, ex)
-                drawLine(
-                    brush = brush ?: Brush.linearGradient(listOf(color, color)),
-                    start = Offset(x, y),
-                    end = Offset(segEndX, y),
-                    strokeWidth = strokeWidth,
-                    cap = cap,
-                )
-                x += dashLength + gapLength
-            }
-        }
-
-        3 -> {
-            // 波浪：控制点需 2 倍振幅，二次贝塞尔在中点的实际高度是 (基线Y + 控制点Y)/2
-            val amplitude = 2.5.dp.toPx()
-            val halfPeriod = 8.dp.toPx()
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(sx, y)
-                var x = sx
-                var up = true
-                while (x < ex) {
-                    val nextX = minOf(x + halfPeriod, ex)
-                    val midX = (x + nextX) / 2f
-                    val controlY = if (up) y - 2f * amplitude else y + 2f * amplitude
-                    quadraticTo(midX, controlY, nextX, y)
-                    x = nextX
-                    up = !up
-                }
-            }
-            drawPath(
-                path = path,
-                brush = brush ?: Brush.linearGradient(listOf(color, color)),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-            )
-        }
-
-        4 -> {
-            val gap = 2.dp.toPx()
-            drawLine(
-                brush = brush ?: Brush.linearGradient(listOf(color, color)),
-                start = Offset(sx, y - gap),
-                end = Offset(ex, y - gap),
-                strokeWidth = strokeWidth,
-                cap = cap,
-            )
-            drawLine(
-                brush = brush ?: Brush.linearGradient(listOf(color, color)),
-                start = Offset(sx, y + gap),
-                end = Offset(ex, y + gap),
-                strokeWidth = strokeWidth,
-                cap = cap,
-            )
         }
     }
 }

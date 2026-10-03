@@ -209,6 +209,13 @@ class HighlightRuleRepository(
             // 旧版遗漏：整表保存会经 sanitize 重建对象，这 4 个字段不落进去就会被静默重置回默认值
             underlineDashLen = runCatching { rule.underlineDashLen }.getOrDefault(8f).coerceIn(0f, 20f),
             underlineDashGap = runCatching { rule.underlineDashGap }.getOrDefault(5f).coerceIn(0f, 20f),
+            // 波浪形状：默认与迁移前观感一致（峰高 1.5dp / 波长 24dp）
+            underlineWavePeak = runCatching { rule.underlineWavePeak }.getOrDefault(
+                HighlightRule.DEFAULT_WAVE_PEAK_DP
+            ).coerceIn(0.5f, 12f),
+            underlineWaveLength = runCatching { rule.underlineWaveLength }.getOrDefault(
+                HighlightRule.DEFAULT_WAVE_LENGTH_DP
+            ).coerceIn(4f, 60f),
             underlineRoundCap = runCatching { rule.underlineRoundCap }.getOrDefault(false),
             underlineFeather = runCatching { rule.underlineFeather }.getOrDefault(0f).coerceIn(0f, 5f),
             bgImage = runCatching { rule.bgImage }.getOrNull()?.takeIf { it.isNotBlank() },

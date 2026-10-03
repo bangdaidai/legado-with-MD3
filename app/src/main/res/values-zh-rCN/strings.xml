@@ -887,6 +887,8 @@
     <string name="underline_solid">实线下划线</string>
     <string name="underline_dashed">虚线下划线</string>
     <string name="underline_wave">波浪下划线</string>
+    <string name="underline_wave_peak">波浪峰高</string>
+    <string name="underline_wave_length">波浪波长</string>
     <string name="underline_title_bar">双实线</string>
     <string name="underline_svg">自定义SVG</string>
     <string name="underline_width">下划线宽度</string>

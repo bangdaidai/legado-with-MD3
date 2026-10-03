@@ -123,7 +123,13 @@ import io.legado.app.feature.reader.core.selection.ReaderSelectionPolicy
 import io.legado.app.feature.reader.core.selection.mergeSelectionBounds
 import io.legado.app.feature.reader.core.selection.selectionPages
 import io.legado.app.feature.reader.core.selection.stylePreviewBounds
+import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
+import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
+import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
+import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
 import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
+import io.legado.app.feature.reader.core.style.scaledDashSegments
+import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.feature.reader.core.transition.CurlPoint
 import io.legado.app.feature.reader.core.transition.PageCurlFrame
 import io.legado.app.feature.reader.core.transition.PageCurlGeometry
@@ -150,8 +156,6 @@ import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.feature.reader.platform.ReaderBookmarkBadgeRenderer
 import io.legado.app.feature.reader.platform.ReaderPageDecorationDrawCache
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
-import io.legado.app.feature.reader.platform.scaledDashSegments
-import io.legado.app.feature.reader.platform.waveHalfWaveCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -2438,8 +2442,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSelectionStyleP
             bounds.forEach { rect ->
                 drawRect(
                     Color(color),
-                    Offset(rect.left, rect.top + rect.height * 0.5f),
-                    Size(rect.width, rect.height * 0.5f),
+                    Offset(rect.left, rect.top + rect.height * READER_HALF_HIGHLIGHT_TOP_RATIO),
+                    Size(rect.width, rect.height * (1f - READER_HALF_HIGHLIGHT_TOP_RATIO)),
                 )
             }
         }
@@ -2449,7 +2453,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSelectionStyleP
     val stroke = style.underlineWidth.dp.toPx().coerceAtLeast(1f)
     bounds.forEach { rect ->
         val y = when (style.underlineMode) {
-            6 -> rect.top + rect.height * 0.52f
+            6 -> rect.top + rect.height * READER_STRIKE_HEIGHT_RATIO
             else -> rect.bottom + style.underlineOffset.dp.toPx()
         }
         when (style.underlineMode) {
@@ -2474,21 +2478,27 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSelectionStyleP
             }
 
             3 -> {
-                val amplitude = 3.dp.toPx()
-                val width = rect.right - rect.left
-                // 与正式渲染同一套半波均摊算法，预览拖拽时的波浪疏密与落定后一致
-                val halfWaves = waveHalfWaveCount(width, 12.dp.toPx())
-                val step = width / halfWaves
-                val path = Path().apply {
-                    moveTo(rect.left, y)
-                    var x = rect.left
-                    for (i in 0 until halfWaves) {
-                        val next = if (i == halfWaves - 1) rect.right else x + step
-                        quadraticTo((x + next) / 2f, y + if (i % 2 == 0) -amplitude else amplitude, next, y)
-                        x = next
+                // 节点来自共享几何，与正式渲染和高亮规则预览同一套半波均摊/收口逻辑
+                val halfWaves = waveHalfWaves(
+                    rect.left,
+                    rect.right,
+                    READER_WAVE_HALF_WAVE_DP.dp.toPx(),
+                    READER_WAVE_CONTROL_OFFSET_DP.dp.toPx(),
+                )
+                if (halfWaves.isNotEmpty()) {
+                    val path = Path().apply {
+                        moveTo(halfWaves.first().startX, y)
+                        halfWaves.forEach { wave ->
+                            quadraticTo(
+                                (wave.startX + wave.endX) / 2f,
+                                y + wave.controlOffsetY,
+                                wave.endX,
+                                y,
+                            )
+                        }
                     }
+                    drawPath(path, Color(color), style = Stroke(stroke))
                 }
-                drawPath(path, Color(color), style = Stroke(stroke))
             }
         }
     }

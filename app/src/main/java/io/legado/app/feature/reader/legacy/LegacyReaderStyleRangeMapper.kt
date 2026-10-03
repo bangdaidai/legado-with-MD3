@@ -11,7 +11,11 @@ import io.legado.app.feature.reader.core.model.withBitmapSize
 import io.legado.app.feature.reader.core.source.ReaderChapterInlineSource
 import io.legado.app.feature.reader.core.source.ReaderChapterSource
 import io.legado.app.feature.reader.core.source.ReaderChapterSourceBlock
+import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
+import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
+import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
 import io.legado.app.feature.reader.core.style.ReaderCharacterStyle
+import io.legado.app.feature.reader.core.style.underlineControlSupport
 import io.legado.app.feature.reader.core.style.ReaderStyleRange
 import io.legado.app.feature.reader.core.style.ReaderStyleTarget
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
@@ -141,11 +145,19 @@ object LegacyReaderStyleRangeMapper {
                 svgPath = underlineSvgPath.orEmpty(),
                 dashOnPx = underlineDashLen.dpToPx(),
                 dashOffPx = underlineDashGap.dpToPx(),
-                waveAmplitudePx = 3f.dpToPx(),
-                waveLengthPx = 12f.dpToPx(),
-                doubleLineGapPx = 3f.dpToPx(),
+                // 用户调的是实际峰高，渲染要的是控制点偏移：quad 中点只到控制点的一半，
+                // 所以控制点 = 峰高 × 2（默认 1.5dp × 2 = 3dp，与迁移前一致）
+                waveControlOffsetPx = (underlineWavePeak * 2f).dpToPx(),
+                waveHalfWavePx = (underlineWaveLength / 2f).dpToPx(),
+                doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
                 roundCap = underlineRoundCap,
-                featherPx = underlineFeather.dpToPx(),
+                // 羽化不是所有线型都成立（自定义 SVG 没有可定义的"两端"），
+                // 渲染侧只接受生效的值，避免旧数据里的死参数画出错误渐变
+                featherPx = if (underlineControlSupport(it).feather) {
+                    underlineFeather.dpToPx()
+                } else {
+                    0f
+                },
                 belowText = underlineBelowText,
             )
         },
@@ -203,9 +215,10 @@ object LegacyReaderStyleRangeMapper {
                 svgPath = underlineSvgPath.orEmpty(),
                 dashOnPx = 8f.dpToPx(),
                 dashOffPx = 5f.dpToPx(),
-                waveAmplitudePx = 3f.dpToPx(),
-                waveLengthPx = 12f.dpToPx(),
-                doubleLineGapPx = 3f.dpToPx(),
+                // 笔记样式没有波浪调节项，沿用共享几何的默认值
+                waveControlOffsetPx = READER_WAVE_CONTROL_OFFSET_DP.dpToPx(),
+                waveHalfWavePx = READER_WAVE_HALF_WAVE_DP.dpToPx(),
+                doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
             )
         },
         markingId = markingId,

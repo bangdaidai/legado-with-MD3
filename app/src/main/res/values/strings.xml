@@ -911,6 +911,8 @@
     <string name="underline_solid">Solid</string>
     <string name="underline_dashed">Dashed</string>
     <string name="underline_wave">Wave</string>
+    <string name="underline_wave_peak">Wave height</string>
+    <string name="underline_wave_length">Wave length</string>
     <string name="underline_title_bar">Title Bar</string>
     <string name="underline_svg">Custom SVG</string>
     <string name="underline_width">Underline Width</string>

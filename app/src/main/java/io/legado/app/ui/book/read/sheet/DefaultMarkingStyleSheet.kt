@@ -97,6 +97,7 @@ fun DefaultMarkingStyleSheet(
                 underlineColor = editingStyle.underlineColor,
                 underlineWidth = editingStyle.underlineWidth,
                 underlineOffset = editingStyle.underlineOffset,
+                underlineSvgPath = editingStyle.underlineSvgPath.orEmpty(),
                 // 荧光笔在正文里画在文字层之下，预览也照此，文字压在色带上面
                 underlineBelowText = effect == MarkingEffect.HIGHLIGHT,
                 pageBgColor = runCatching {

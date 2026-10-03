@@ -214,10 +214,21 @@ KMP 任务名在模块实际创建后才存在；不要假装运行尚未定义�
   应用内部加密主体仍用现有 JCA（`javax.crypto`/`java.security`）与 `help/crypto` 路径，KMP 抽取时
   再通过能力契约替换 JVM API。
 - 代码 namespace 为 `io.legado.app`，Android `applicationId` 为 `io.legato.kazusa`，不要混用。
-- `AppDatabase.version` 必须与上游保持一致，不得自行提升。本 fork 的 schema 变更（新增列、新增表）追加到与
-  上游最新版本对应的手写迁移里（当前是 `DatabaseMigrations.kt` 的 `migration_102_103`，对应
-  `AppDatabase.version = 103`）；上游提版本（例如 103→104）时把本地新增搬进新迁移，而不是创建 fork 专属版本号。
-  这样 `version =` 那一行永远不会冲突，`fallbackToDestructiveMigration` 继续作为兜底。
+- `AppDatabase.version` 必须与上游保持一致，不得自行提升，也不在本文件里硬写具体数字——
+  以 `AppDatabase.kt` 的 `version =` 和 `autoMigrations` 为准，两者必须自洽。
+- 本 fork 的 schema 变更（新增列、新增表）追加到承载本地扩展列的手写迁移里（`DatabaseMigrations.migrations`
+  中 `migration_98_99` / `migration_99_100` / `migration_100_101` 这类），不要新建 fork 专属版本号。
+  这条路线已有先例（`f6a2b9cae` 追加 `underlineDashLen`/`underlineDashGap`）：线上库靠 `autoMigrations`
+  链升到当前版本，任何真实设备都完整跑过那些手写迁移，表结构在那一刻已定型，因此追加 `ALTER` 对新旧设备都生效。
+  **不要因为"版本号不变 Room 就不重跑迁移"而拒绝追加**——该顾虑只适用于 fork 跳过手写迁移直接发新版的情形，
+  本仓库不是这样发布的。
+- 同一迁移里**不要补加看起来"漏了"的列**：`underlineRoundCap` / `underlineFeather` / `characterRole` /
+  `manualNineSlice` 等列在本 fork 的手写迁移里没有对应 `ALTER`，它们由上游 `AutoMigration` 补齐。
+  重复 `ADD COLUMN` 会让整个迁移失败，把设备卡在旧版本上。补列前先在 `app/schemas/` 对应版本的 JSON 里
+  核对该列是否已存在。
+- `app/schemas/` 下的 JSON 只反映导出时的历史 schema，可能落后于当前 `@Entity`（例如 `HighlightRule`
+  的字段数远超 `107.json` 记录的列数）。**判断"某列在用户库里是否存在"不能只看 JSON**，
+  要同时看 `DatabaseMigrations` 的手写 `ALTER` 和 `autoMigrations` 的覆盖区间。
 - 改动**已有表的结构**（改主键、加唯一索引、改列类型）不能只往当前迁移里追加：已经处在该版本的库不会重跑迁移，
   Room 打开时 identity hash 校验失败会直接抛 `IllegalStateException`（destructive fallback 只覆盖版本变更时
   找不到迁移路径的情况）。这类变更要么等上游提版本，要么在交付说明里明确要求卸载重装/清数据后从备份恢复，
