@@ -58,6 +58,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -71,6 +73,7 @@ import top.yukonga.miuix.kmp.basic.ColorPalette
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,7 +126,7 @@ fun ColorPickerSheet(
                     icon = Icons.Default.Restore,
                     contentDescription = stringResource(R.string.reset),
                 )
-                // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色后回填
+                // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色，确认后直接定稿
                 MediumTonalButton(
                     onClick = {
                         val window = context.findActivity()?.window ?: return@MediumTonalButton
@@ -252,9 +255,12 @@ fun ColorPickerSheet(
     eyedropperBitmap?.let { bitmap ->
         EyedropperOverlay(
             snapshot = bitmap,
+            // 取色即定稿：胶囊上确认后直接回填并关闭弹层，
+            // 不再要求用户回到色板面板点第二次保存
             onConfirm = { argb ->
-                applyColor(Color(argb))
                 eyedropperBitmap = null
+                onColorSelected(argb)
+                onDismissRequest()
             },
             onDismiss = { eyedropperBitmap = null },
         )
@@ -357,9 +363,7 @@ private fun FieldMode(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(26.dp),
-            gradientBrush = Brush.horizontalGradient(
-                colors = (0..360 step 30).map { Color.hsv(it.toFloat(), 1f, 1f) }
-            ),
+            gradientColors = (0..360 step 30).map { Color.hsv(it.toFloat(), 1f, 1f) },
             position = hue / 360f,
             onPositionChanged = { pos -> emit(pos * 360f, saturation, brightness, alpha) },
         )
@@ -371,11 +375,9 @@ private fun FieldMode(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(26.dp),
-            gradientBrush = Brush.horizontalGradient(
-                colors = listOf(
-                    opaqueColor.copy(alpha = 0f),
-                    opaqueColor,
-                )
+            gradientColors = listOf(
+                opaqueColor.copy(alpha = 0f),
+                opaqueColor,
             ),
             checkerboard = true,
             position = alpha,
@@ -485,10 +487,16 @@ private fun SelectionRing(modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * 渐变滑块：与 Miuix 色板内置滑块（ColorSlider / SliderIndicator）对齐——
+ * 20dp 空心圆环滑块头，行程按**轨道高度的一半**内缩，
+ * 因此圆环外沿与轨道两端各留 3dp 空隙，而不是紧贴端头；
+ * 渐变也按同一区间绘制，保证圆环压着的颜色就是环内显示的颜色。
+ */
 @Composable
 private fun GradientSlider(
     modifier: Modifier,
-    gradientBrush: Brush,
+    gradientColors: List<Color>,
     position: Float,
     onPositionChanged: (Float) -> Unit,
     checkerboard: Boolean = false,
@@ -496,12 +504,14 @@ private fun GradientSlider(
     val density = LocalDensity.current
     // 与 Miuix ColorPalette 内置滑块同款：20dp 空心圆环滑块头
     val thumbSizeDp = 20.dp
-    var trackWidthPx by remember { mutableFloatStateOf(0f) }
+    var trackSizePx by remember { mutableStateOf(IntSize.Zero) }
+    // 行程内缩量＝轨道高度的一半（26dp 轨道 → 13dp），圆环半径 10dp，故两端各留 3dp
+    val travelInsetPx = trackSizePx.height / 2f
 
     Box(
         modifier = modifier
             .onGloballyPositioned { coords ->
-                trackWidthPx = coords.size.width.toFloat()
+                trackSizePx = coords.size
             }
             .clip(RoundedCornerShape(percent = 50))
             .drawBehind {
@@ -526,43 +536,53 @@ private fun GradientSlider(
                         }
                     }
                 }
-                // 与色板内置滑块一致：胶囊轨道，无描边
+                // 渐变按滑块行程区间绘制（两端各内缩轨道高度的一半），与 Miuix ColorSlider
+                // 的 startX/endX 一致：环内颜色 = 环下颜色；胶囊轨道，无描边
+                val halfHeight = size.height / 2f
                 drawRoundRect(
-                    brush = gradientBrush,
+                    brush = Brush.horizontalGradient(
+                        colors = gradientColors,
+                        startX = halfHeight,
+                        endX = (size.width - halfHeight).coerceAtLeast(halfHeight + 1f),
+                    ),
                     cornerRadius = CornerRadius(size.height / 2f),
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(trackSizePx) {
                 detectTapGestures { offset ->
-                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                    onPositionChanged(fraction)
+                    onPositionChanged(fractionAtOffset(offset.x, size.width.toFloat(), travelInsetPx))
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(trackSizePx) {
                 detectDragGestures { change, _ ->
                     change.consume()
-                    val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                    onPositionChanged(fraction)
+                    onPositionChanged(
+                        fractionAtOffset(change.position.x, size.width.toFloat(), travelInsetPx)
+                    )
                 }
             },
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (trackWidthPx > 0f) {
+        if (trackSizePx.width > 0 && travelInsetPx > 0f) {
             val thumbSizePx = with(density) { thumbSizeDp.toPx() }
-            val thumbOffsetPx = (position * trackWidthPx).coerceIn(
-                thumbSizePx / 2,
-                trackWidthPx - thumbSizePx / 2
-            )
+            val thumbCenterPx = (travelInsetPx + position * (trackSizePx.width - travelInsetPx * 2))
+                .coerceIn(travelInsetPx, trackSizePx.width - travelInsetPx)
             SelectionRing(
                 modifier = Modifier
                     .size(thumbSizeDp)
-                    .offset(
-                        x = with(density) { (thumbOffsetPx - thumbSizePx / 2).toDp() },
-                        y = 0.dp,
-                    )
+                    .offset {
+                        IntOffset((thumbCenterPx - thumbSizePx / 2).roundToInt(), 0)
+                    }
             )
         }
     }
+}
+
+/** 触点 x → 0f..1f 位置：与滑块头行程共用同一段内缩区间，避免「手指滑到头、圆环还差一点」 */
+private fun fractionAtOffset(x: Float, trackWidthPx: Float, travelInsetPx: Float): Float {
+    val effectiveWidth = trackWidthPx - travelInsetPx * 2
+    if (effectiveWidth <= 0f) return 0f
+    return ((x - travelInsetPx) / effectiveWidth).coerceIn(0f, 1f)
 }
 
 private fun colorToHsv(color: Color): FloatArray {
