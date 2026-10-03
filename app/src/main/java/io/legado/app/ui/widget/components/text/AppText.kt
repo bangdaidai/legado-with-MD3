@@ -12,6 +12,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.JustificationMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,6 +32,14 @@ fun AppText(
     textDecoration: TextDecoration? = null,
     textAlign: TextAlign? = null,
     lineHeight: TextUnit = TextUnit.Unspecified,
+    /**
+     * [TextAlign.Justify] 时拉伸哪里：默认 InterWord 只拉伸词间距，中文没有空格
+     * 会毫无效果，中文两端对齐要传 InterCharacter（拉伸字间距）。
+     *
+     * 显式传参而不是只靠 [style]：merge 对 Unspecified 是覆盖还是保留取决于
+     * Compose 实现，传入确定的非默认值两种语义下都成立。
+     */
+    justificationMode: JustificationMode = JustificationMode.Unspecified,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
@@ -59,6 +68,7 @@ fun AppText(
             textDecoration = textDecoration,
             fontStyle = fontStyle,
             letterSpacing = letterSpacing,
+            justificationMode = justificationMode,
         ),
         onTextLayout = onTextLayout,
         overflow = overflow,
@@ -81,6 +91,8 @@ fun AppText(
     textDecoration: TextDecoration? = null,
     textAlign: TextAlign? = null,
     lineHeight: TextUnit = TextUnit.Unspecified,
+    /** 见 [String] 重载的同名参数。 */
+    justificationMode: JustificationMode = JustificationMode.Unspecified,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
@@ -113,6 +125,7 @@ fun AppText(
             textDecoration = textDecoration,
             fontStyle = fontStyle,
             letterSpacing = letterSpacing,
+            justificationMode = justificationMode,
         ),
         onTextLayout = onTextLayout,
         overflow = overflow,
