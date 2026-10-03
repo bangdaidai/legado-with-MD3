@@ -78,7 +78,7 @@ import io.legado.app.utils.fromJsonObject
  *
  * 样式来源两种：复用用户已有的一条高亮规则（[MarkingUiState.highlightRules]），
  * 或直接自定义本次的样式——上面一行颜色（头部为色板入口 + 预设颜色），下面一行效果格
- * （单实线/波浪线/虚线/双下划线/荧光笔/背景色/字体色，见 [SelectableEffects]）。
+ * （单实线/波浪线/虚线/双实线/荧光笔/背景色/字体色，见 [SelectableEffects]）。
  * 背景色自动加 ~20% 透明度。另带备注输入。
  * 两种进入方式：
  * - 新增：选中文本后点「笔记」（[MarkingUiState.selection]），样式预选 [DefaultMarkingStyle]；
@@ -680,7 +680,9 @@ internal fun MarkingEffect.labelRes(): Int = when (this) {
     MarkingEffect.WAVE -> R.string.bookmark_mark_effect_wave
     MarkingEffect.DASHED -> R.string.bookmark_mark_effect_dash
     MarkingEffect.STRIKE -> R.string.bookmark_mark_effect_strike
-    MarkingEffect.DOUBLE -> R.string.bookmark_mark_effect_double
+    // mode 4 复用高亮规则面板的同一字符串：同一条线型不该在两个面板里两个名字
+    // （key 名 underline_title_bar 是历史遗留，中文值早已是「双实线」）
+    MarkingEffect.DOUBLE -> R.string.underline_title_bar
     MarkingEffect.HIGHLIGHT -> R.string.bookmark_mark_effect_highlight
     MarkingEffect.BG -> R.string.bookmark_mark_effect_bg
     MarkingEffect.TEXT -> R.string.bookmark_mark_effect_text

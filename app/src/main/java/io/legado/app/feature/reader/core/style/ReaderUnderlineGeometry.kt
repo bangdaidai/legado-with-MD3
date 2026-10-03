@@ -26,7 +26,7 @@ const val READER_WAVE_HALF_WAVE_DP = 12f
  */
 const val READER_WAVE_CONTROL_OFFSET_DP = 3f
 
-/** 双下划线两条线之间的净间隙，不含线宽。 */
+/** 双实线两条线之间的净间隙，不含线宽。 */
 const val READER_DOUBLE_LINE_GAP_DP = 3f
 
 /** 删除线固定落在行高的这个比例处，与偏移参数无关。 */
@@ -217,7 +217,7 @@ private val BAND_SUPPORT = UnderlineControlSupport(
 )
 
 /**
- * 双下划线：两条线各自独立成段，端点圆头和羽化都作用在「整段」上而不是单条线，
+ * 双实线：两条线各自独立成段，端点圆头和羽化都作用在「整段」上而不是单条线，
  * 视觉上和单实线没有区别、参数却互相干扰（圆头会把两条线的间距吃掉），
  * 所以这两个参数对双线不开放。
  */
@@ -236,7 +236,7 @@ fun underlineControlSupport(mode: Int): UnderlineControlSupport = when (mode) {
     1 -> strokeSupport() // 实线
     2 -> strokeSupport(dashPattern = true) // 虚线
     3 -> strokeSupport(waveShape = true) // 波浪
-    4 -> DOUBLE_LINE_SUPPORT // 双下划线：不开放圆头与羽化
+    4 -> DOUBLE_LINE_SUPPORT // 双实线：不开放圆头与羽化
     5 -> strokeSupport(roundCap = false, feather = false) // 自定义 SVG：不开放圆头与羽化
     6 -> strokeSupport(offset = false, roundCap = false, feather = false) // 删除线
     7 -> BAND_SUPPORT // 荧光：填充色带，颜色 + 圆头 + 边缘柔化

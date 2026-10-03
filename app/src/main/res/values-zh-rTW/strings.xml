@@ -326,7 +326,6 @@
     <string name="bookmark_mark_effect_wave">波浪線</string>
     <string name="bookmark_mark_effect_dash">虛線</string>
     <string name="bookmark_mark_effect_strike">刪除線</string>
-    <string name="bookmark_mark_effect_double">雙底線</string>
     <string name="bookmark_mark_effect_highlight">螢光</string>
     <string name="bookmark_mark_effect_bg">背景色</string>
     <string name="bookmark_mark_effect_text">字體色</string>
@@ -1653,7 +1652,7 @@
     <string name="underline_solid">實線</string>
     <string name="underline_dashed">虛線</string>
     <string name="underline_wave">波浪</string>
-    <string name="underline_title_bar">標題列</string>
+    <string name="underline_title_bar">雙實線</string>
     <string name="underline_svg">自訂 SVG</string>
     <string name="underline_width">底線寬度</string>
     <string name="underline_offset">底線偏移</string>

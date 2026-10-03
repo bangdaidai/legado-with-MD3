@@ -25,7 +25,7 @@ class MarkingEffectTest {
     }
 
     @Test
-    fun `效果到样式 - 双下划线是 mode 4 且吃线宽`() {
+    fun `效果到样式 - 双实线是 mode 4 且吃线宽`() {
         val style = MarkingEffect.DOUBLE.toStyle(0xFFFF0000.toInt())
         assertEquals(4, style.underlineMode)
         assertEquals(0xFFFF0000.toInt(), style.underlineColor)

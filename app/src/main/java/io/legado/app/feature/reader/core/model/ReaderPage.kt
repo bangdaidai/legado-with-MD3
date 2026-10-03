@@ -93,7 +93,7 @@ data class ReaderUnderline(
     /**
      * 圆头与羽化按线型适用性取。
      *
-     * 双下划线的两条线各自成段（圆头会吃掉两线间距）、删除线固定在行高比例处、
+     * 双实线的两条线各自成段（圆头会吃掉两线间距）、删除线固定在行高比例处、
      * 自定义 SVG 的两端由用户路径决定——这三个线型都不开放这两项，编辑弹层已隐藏
      * 对应控件，旧数据里存的值也不该继续生效。渲染层与 UI 必须读同一份判定。
      */
@@ -121,7 +121,7 @@ data class ReaderUnderline(
                 // 真正画出到基线外的距离只有一半；这里按实际峰高留白，和
                 // ReaderUnderlineGeometry 的几何口径一致。
                 3 -> waveControlOffsetPx.coerceAtLeast(0f) / 2f
-                // 双下划线第二条在下方：净间隙 + 线宽
+                // 双实线第二条在下方：净间隙 + 线宽
                 4 -> doubleLineGapPx.coerceAtLeast(0f) + widthPx.coerceAtLeast(1f)
                 else -> 0f
             }

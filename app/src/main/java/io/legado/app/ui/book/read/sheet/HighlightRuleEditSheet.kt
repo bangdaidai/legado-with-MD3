@@ -158,8 +158,14 @@ fun HighlightRuleEditSheet(
     ) { mutableIntStateOf(initial.underlineMode) }
     var underlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor) }
     var underlineColorNight by remember(show, rule) { mutableStateOf(initial.underlineColorNight) }
-    var underlineWidth by remember(show, rule) { mutableFloatStateOf(initial.underlineWidth) }
-    var underlineOffset by remember(show, rule) { mutableFloatStateOf(initial.underlineOffset) }
+    // 初值钳到滑块范围：sanitizeRule 只在保存/整表加载时跑，备份导入或直接改库的
+    // 越界值会一路带到滑块上，越界状态下组件行为不可预期
+    var underlineWidth by remember(show, rule) {
+        mutableFloatStateOf(initial.underlineWidth.coerceIn(0.1f, 10f))
+    }
+    var underlineOffset by remember(show, rule) {
+        mutableFloatStateOf(initial.underlineOffset.coerceIn(-10f, 20f))
+    }
     var underlineSvgPath by remember(
         show,
         rule
@@ -587,7 +593,10 @@ fun HighlightRuleEditSheet(
                             TinySliderSettingItem(
                                 title = stringResource(R.string.underline_width),
                                 value = underlineWidth,
-                                valueRange = 0.1f..20f,
+                                // 上限与 HighlightRuleRepository.sanitizeRule 的
+                                // coerceIn(0.1f, 10f) 一致：滑块放到 20 会让用户拖到
+                                // 10dp 以上，保存时被静默压回 10dp 且无任何提示
+                                valueRange = 0.1f..10f,
                                 description = String.format("%.1f dp", underlineWidth),
                                 onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
                                 onReset = { underlineWidth = 1f },
@@ -598,7 +607,8 @@ fun HighlightRuleEditSheet(
                             TinySliderSettingItem(
                                 title = stringResource(R.string.underline_offset),
                                 value = underlineOffset,
-                                valueRange = -20f..10f,
+                                // 同上，与 sanitizeRule 的 coerceIn(-10f, 20f) 对齐
+                                valueRange = -10f..20f,
                                 description = String.format("%+.1f dp", underlineOffset),
                                 onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
                                 onReset = { underlineOffset = 2f },
@@ -1672,7 +1682,7 @@ internal fun HighlightRulePreview(
                                             startX = left,
                                             endX = right,
                                             y = bottom + underlineOffset.dp.toPx(),
-                                            // 圆头与羽化都按线型适用性取：双下划线/删除线/自定义 SVG 不开放这两项，
+                                            // 圆头与羽化都按线型适用性取：双实线/删除线/自定义 SVG 不开放这两项，
                                             // 旧数据里存的值也不该在这里画出来。正文侧走 ReaderUnderline 的
                                             // roundCapEffective / featherEffective，两边读同一份 underlineControlSupport
                                             roundCap = underlineControlSupport(underlineMode).roundCap &&
