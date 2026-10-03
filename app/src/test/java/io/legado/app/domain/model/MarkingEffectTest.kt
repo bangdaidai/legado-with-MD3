@@ -1,5 +1,6 @@
 package io.legado.app.domain.model
 
+import io.legado.app.feature.reader.core.style.underlineControlSupport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -21,6 +22,23 @@ class MarkingEffectTest {
     fun `效果到样式 - 波浪线和虚线映射到对应 mode`() {
         assertEquals(3, MarkingEffect.WAVE.toStyle(0xFFFF0000.toInt()).underlineMode)
         assertEquals(2, MarkingEffect.DASHED.toStyle(0xFFFF0000.toInt()).underlineMode)
+    }
+
+    @Test
+    fun `效果到样式 - 双下划线是 mode 4 且吃线宽`() {
+        val style = MarkingEffect.DOUBLE.toStyle(0xFFFF0000.toInt())
+        assertEquals(4, style.underlineMode)
+        assertEquals(0xFFFF0000.toInt(), style.underlineColor)
+        assertTrue(MarkingEffect.DOUBLE.isUnderline)
+        assertTrue(underlineControlSupport(4).width)
+    }
+
+    @Test
+    fun `效果到样式 - 荧光笔不吃线宽但仍归入下划线类`() {
+        // isUnderline 为 true 而 width 为 false：笔记面板据此判定不继承存量荧光笔
+        // 笔记里的线宽/偏移，避免切到实线时被搬运（见 MarkingSheet 的几何门控）
+        assertTrue(MarkingEffect.HIGHLIGHT.isUnderline)
+        assertFalse(underlineControlSupport(7).width)
     }
 
     @Test
@@ -79,6 +97,10 @@ class MarkingEffectTest {
             MarkingEffect.fromStyle(TextProcessStyle(underlineMode = 6))
         )
         assertEquals(
+            MarkingEffect.DOUBLE,
+            MarkingEffect.fromStyle(TextProcessStyle(underlineMode = 4))
+        )
+        assertEquals(
             MarkingEffect.HIGHLIGHT,
             MarkingEffect.fromStyle(TextProcessStyle(underlineMode = 7))
         )
@@ -97,13 +119,13 @@ class MarkingEffectTest {
     }
 
     @Test
-    fun `样式到效果 - 未知模式回退单实线`() {
+    fun `样式到效果 - 自定义 SVG 与未知模式回退单实线`() {
         assertEquals(MarkingEffect.SOLID, MarkingEffect.fromStyle(TextProcessStyle()))
         assertEquals(MarkingEffect.SOLID, MarkingEffect.fromStyle(null))
-        // mode 4（标题强调条）/ mode 5（SVG）不属于 5x1，回退单实线
+        // mode 5（自定义 SVG）在效果格里没有对应格，回退单实线
         assertEquals(
             MarkingEffect.SOLID,
-            MarkingEffect.fromStyle(TextProcessStyle(underlineMode = 4))
+            MarkingEffect.fromStyle(TextProcessStyle(underlineMode = 5))
         )
     }
 

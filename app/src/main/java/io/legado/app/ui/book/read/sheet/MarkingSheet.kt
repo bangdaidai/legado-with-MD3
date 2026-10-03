@@ -56,7 +56,6 @@ import io.legado.app.data.entities.HighlightRule
 import io.legado.app.domain.model.MarkingEffect
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
-import io.legado.app.feature.reader.core.style.underlineControlSupport
 import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.book.read.TextMenuPositionProvider
@@ -78,8 +77,9 @@ import io.legado.app.utils.fromJsonObject
  * 划线/高亮笔记配置 Sheet。
  *
  * 样式来源两种：复用用户已有的一条高亮规则（[MarkingUiState.highlightRules]），
- * 或直接自定义本次的样式——上面一行颜色（头部为色板入口 + 预设颜色），下面 5x1 效果格
- * （单实线/波浪线/虚线/背景色/字体色）。背景色自动加 ~20% 透明度。另带备注输入。
+ * 或直接自定义本次的样式——上面一行颜色（头部为色板入口 + 预设颜色），下面一行效果格
+ * （单实线/波浪线/虚线/双下划线/荧光笔/背景色/字体色，见 [SelectableEffects]）。
+ * 背景色自动加 ~20% 透明度。另带备注输入。
  * 两种进入方式：
  * - 新增：选中文本后点「笔记」（[MarkingUiState.selection]），样式预选 [DefaultMarkingStyle]；
  * - 编辑：点正文已有划线，或从目录 Sheet 点标记项
@@ -130,21 +130,21 @@ fun MarkingSheet(
     }
     // 隐藏透传：线宽/偏移/SVG 三个字段在笔记面板里没有任何控件（这里不是
     // HighlightRuleEditSheet，没有宽度滑块），用户既看不到也改不了。它们只有在
-    // 「这条笔记本来就是同一个下划线线型」时才值得继承，其余一律回规范值。
+    // 「这条笔记的效果本身就会读线宽」时才值得继承，其余一律回规范值。
     //
-    // 判定用的是「该线型是否真的吃线宽」（[underlineControlSupport]），不是
-    // [MarkingEffect.isUnderline]：荧光笔（mode 7）是铺下半行的填充色带，渲染层
-    // 根本不读线宽（underlineControlSupport(7).width == false），但它 isUnderline
-    // 为 true。若按 isUnderline 判定，一条旧荧光笔笔记里遗留的粗线宽会被带进来，
-    // 用户切到实线/波浪/虚线时宽度就跟着过去——这正是「莫名变粗」的来源：划线当下
-    // 无任何控件显示这个值，正文里却看得见。
+    // 判定用 [MarkingEffect.consumesUnderlineWidth] 而不是 isUnderline：荧光笔
+    // （mode 7）是铺下半行的填充色带，渲染层不读线宽，但它 isUnderline 为 true。
+    // 若按 isUnderline 判定，一条旧荧光笔笔记里遗留的粗线宽会被带进来，用户切到
+    // 实线/波浪/虚线时宽度就跟着过去——这正是「莫名变粗」的来源：划线当下无任何
+    // 控件显示这个值，正文里却看得见。BG/TEXT 笔记同理。
     //
-    // 同样按 isUnderline 判定挡不住的还有 BG/TEXT 笔记：它们的 styleJson 里带着
-    // 早期「荧光笔粗细/偏移」时代的脏宽度，切到任意线型时同样会被搬运。
+    // 效果切换时的重置在 onEffectSelected 里，两处缺一不可：这里管「进门」，
+    // 那里管「进门后换效果」。
     val editingKeepsGeometry = remember(show, editing) {
-        val style = editingStyle ?: return@remember false
-        // mode 5（自定义 SVG）没有可调的线宽/偏移，面板也选不到它，不继承
-        underlineControlSupport(style.underlineMode).width
+        // 判「这个效果是否真的读线宽」问的是领域模型（[MarkingEffect.consumesUnderlineWidth]），
+        // 不是渲染层：荧光笔虽然是下划线类却是填充色带、根本不读线宽，它 styleJson 里
+        // 那个值是早期「荧光笔粗细/偏移」时代留下的废值。BG/TEXT 连下划线都没有。
+        MarkingEffect.fromStyle(editingStyle).consumesUnderlineWidth
     }
     var underlineWidth by remember(show, editing) {
         mutableStateOf(if (editingKeepsGeometry) editingStyle?.underlineWidth ?: 1f else 1f)

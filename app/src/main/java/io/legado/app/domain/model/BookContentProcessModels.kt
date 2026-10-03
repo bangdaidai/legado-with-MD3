@@ -55,19 +55,40 @@ data class TextProcessStyle(
  * 渲染引擎按 styleJson 画线，效果本身与「划线 vs 高亮」的老二元 kind 等价。
  */
 @Keep
-enum class MarkingEffect {
-    SOLID, WAVE, DASHED, STRIKE, DOUBLE, HIGHLIGHT, BG, TEXT;
+enum class MarkingEffect(val underlineMode: Int = 0) {
+    SOLID(1), WAVE(3), DASHED(2), STRIKE(6), DOUBLE(4), HIGHLIGHT(7), BG, TEXT;
 
     /**
-     * 是否属于下划线类效果（对应 underlineMode != 0）。
+     * 是否属于下划线类效果（对应 [TextProcessStyle.underlineMode] != 0）。
      *
      * [STRIKE] 属于此列，但不在笔记面板的效果格里（划线笔记里很少用），见
      * `MarkingSheet.SelectableEffects`；它只用于解析存量笔记，保留是为了不把
      * 已有的删除线笔记降级成实线。
      */
     val isUnderline: Boolean
-        get() = this == SOLID || this == WAVE || this == DASHED ||
-                this == STRIKE || this == DOUBLE || this == HIGHLIGHT
+        get() = underlineMode != 0
+
+    /**
+     * 该效果是否真的消费 [TextProcessStyle.underlineWidth]。
+     *
+     * 与 [isUnderline] **不是一回事**，这是笔记样式污染的根源：
+     * [HIGHLIGHT] 属于下划线类（styleJson 里确实带 mode 7），但它是铺下半行的
+     * **填充色带**，不是描边——渲染层压根不读线宽，所以对荧光笔来说
+     * `underlineWidth` 是个没有任何含义的字段。而 [BG]/[TEXT] 连下划线都没有。
+     *
+     * 判定放在这里而不是让 UI 去问渲染层（`ReaderUnderlineGeometry.underlineControlSupport`）：
+     * 那是 feature 层，domain 不得反向依赖。「哪些参数对某线型生效」是效果自身的
+     * 语义，属于领域知识。两侧一致性由 `MarkingEffectTest` 钉住：改了任一侧而忘了
+     * 另一侧，测试即红。
+     *
+     * 用途：笔记面板只在这条为真时才允许继承存量样式里的线宽/偏移；否则一律回规范值，
+     * 免得早期「荧光笔粗细/偏移」时代留下的脏值被搬到实线/波浪等真吃线宽的线型上。
+     */
+    val consumesUnderlineWidth: Boolean
+        get() = when (this) {
+            SOLID, WAVE, DASHED, STRIKE, DOUBLE -> true
+            HIGHLIGHT, BG, TEXT -> false
+        }
 
     /**
      * 由效果 + 选中颜色生成样式。背景色自动半透明（约 20% alpha），
@@ -75,12 +96,11 @@ enum class MarkingEffect {
      * alpha 决定，不再附加默认透明度。
      */
     fun toStyle(color: Int): TextProcessStyle = when (this) {
-        SOLID -> TextProcessStyle(underlineMode = 1, underlineColor = color)
-        WAVE -> TextProcessStyle(underlineMode = 3, underlineColor = color)
-        DASHED -> TextProcessStyle(underlineMode = 2, underlineColor = color)
-        STRIKE -> TextProcessStyle(underlineMode = 6, underlineColor = color)
-        DOUBLE -> TextProcessStyle(underlineMode = 4, underlineColor = color)
-        HIGHLIGHT -> TextProcessStyle(underlineMode = 7, underlineColor = color)
+        SOLID, WAVE, DASHED, STRIKE, DOUBLE, HIGHLIGHT -> TextProcessStyle(
+            underlineMode = underlineMode,
+            underlineColor = color,
+        )
+
         BG -> TextProcessStyle(bgColor = (color and 0x00FFFFFF) or 0x33000000)
         TEXT -> TextProcessStyle(textColor = color)
     }
@@ -89,17 +109,21 @@ enum class MarkingEffect {
         /** 标记默认颜色（绿色）。 */
         const val DEFAULT_COLOR = 0xFF63C37D.toInt()
 
-        /** 从样式反推效果：编辑已有标记时预填 5x1 格。未知下划线模式回退单实线。 */
-        fun fromStyle(style: TextProcessStyle?): MarkingEffect = when {
-            style?.underlineMode == 1 -> SOLID
-            style?.underlineMode == 3 -> WAVE
-            style?.underlineMode == 2 -> DASHED
-            style?.underlineMode == 6 -> STRIKE
-            style?.underlineMode == 4 -> DOUBLE
-            style?.underlineMode == 7 -> HIGHLIGHT
-            style?.bgColor != null -> BG
-            style?.textColor != null -> TEXT
-            else -> SOLID
+        /**
+         * 从样式反推效果：编辑已有标记时预填效果格（[SelectableEffects]，7 格）。
+         *
+         * 按 [underlineMode] 反查，查不到再回退背景色/字体色：mode 5（自定义 SVG）
+         * 在效果格里没有对应格，回退单实线——枚举里没有它，反推时不能匹配到任何项。
+         */
+        fun fromStyle(style: TextProcessStyle?): MarkingEffect {
+            val mode = style?.underlineMode ?: 0
+            val byMode = entries.firstOrNull { it.underlineMode == mode && mode != 0 }
+            return byMode
+                ?: when {
+                    style?.bgColor != null -> BG
+                    style?.textColor != null -> TEXT
+                    else -> SOLID
+                }
         }
 
         /** 取样式的「展示色」：下划线取线色，背景剥掉 alpha 取底色，字体取字色。 */

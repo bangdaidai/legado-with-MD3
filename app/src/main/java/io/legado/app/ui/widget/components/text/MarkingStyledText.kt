@@ -36,6 +36,7 @@ import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
 import io.legado.app.feature.reader.core.style.featherBandPasses
 import io.legado.app.feature.reader.core.style.featherGaussian
 import io.legado.app.feature.reader.core.style.featherPassCount
+import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.feature.reader.platform.ReaderSvgPathCache
@@ -372,9 +373,10 @@ internal fun DrawScope.drawUnderlineSegment(
     waveLengthDp: Float = READER_WAVE_HALF_WAVE_DP * 2f,
 ) {
     val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
-    // 线宽在这里换算。刻意不做 coerceAtLeast(1f)：羽化 pass 的基准宽度一旦被抬高，
-    // 向两侧扩散的量随之错位，柔边会比原始实现更糊。亚像素宽度的抬升只发生在
-    // 最终描边那一趟（drawUnderlineShape 内部），不参与扩散量的计算。
+    // 线宽在这里换算。刻意不做下限抬升：羽化 pass 的基准宽度一旦被抬高，向两侧
+    // 扩散的量随之错位，柔边会比原始实现更糊。亚像素宽度的抬升只发生在最终描边
+    // 那一趟（drawUnderlineShape 内的 finalStrokeWidthPx），不参与扩散量的计算；
+    // 正文走同一个函数，两侧粗细一致。
     val coreWidth = widthDp.dp.toPx()
     // 圆头内缩只按线芯宽度：羽化 pass 的加粗圆头向外扩散，内缩若随加粗增大，
     // 两端渐隐区会被整段吃掉，羽化和圆头一起失效
@@ -496,12 +498,16 @@ internal fun DrawScope.drawUnderlineShape(
     val ex = endX - capInset
     if (sx >= ex) return
     val solidBrush = brush ?: Brush.linearGradient(listOf(color, color))
+    // 线宽只在这一处（所有线型的单一出口）抬到最小可见宽度：亚像素线宽在低密度屏上
+    // 几乎不可见。正文走同一个 finalStrokeWidthPx，保证同一条笔记在正文与列表里
+    // 粗细一致。羽化的基准宽度在 drawUnderlineSegment 里刻意没抬，两者不是同一趟。
+    val stroke = finalStrokeWidthPx(strokeWidth)
     when (mode) {
         1 -> drawLine(
             brush = solidBrush,
             start = Offset(sx, y),
             end = Offset(ex, y),
-            strokeWidth = strokeWidth,
+            strokeWidth = stroke,
             cap = cap,
         )
 
@@ -519,7 +525,7 @@ internal fun DrawScope.drawUnderlineShape(
                     brush = solidBrush,
                     start = Offset(segStart, y),
                     end = Offset((segStart + on).coerceAtMost(ex), y),
-                    strokeWidth = strokeWidth,
+                    strokeWidth = stroke,
                     cap = cap,
                 )
             }
@@ -550,26 +556,27 @@ internal fun DrawScope.drawUnderlineShape(
             drawPath(
                 path = path,
                 brush = solidBrush,
-                style = Stroke(width = strokeWidth, cap = cap),
+                style = Stroke(width = stroke, cap = cap),
             )
         }
 
         4 -> {
             // 双线全部画在基线下方：第二条 = y + 净间隙 + 线宽（与正文同），
-            // 不是围绕 y 上下对称
+            // 不是围绕 y 上下对称。间隙用线芯宽度而非抬升后的 stroke，与正文
+            // ReaderPageDecorationDrawCommand 的 secondY 保持同一口径
             val secondY = y + READER_DOUBLE_LINE_GAP_DP.dp.toPx() + strokeWidth
             drawLine(
                 brush = solidBrush,
                 start = Offset(sx, y),
                 end = Offset(ex, y),
-                strokeWidth = strokeWidth,
+                strokeWidth = stroke,
                 cap = cap,
             )
             drawLine(
                 brush = solidBrush,
                 start = Offset(sx, secondY),
                 end = Offset(ex, secondY),
-                strokeWidth = strokeWidth,
+                strokeWidth = stroke,
                 cap = cap,
             )
         }
@@ -589,7 +596,7 @@ internal fun DrawScope.drawUnderlineShape(
                     pivot = Offset.Zero,
                 )
             }) {
-                drawPath(path = path, brush = solidBrush, style = Stroke(width = strokeWidth, cap = cap))
+                drawPath(path = path, brush = solidBrush, style = Stroke(width = stroke, cap = cap))
             }
         }
     }

@@ -324,6 +324,7 @@
     <string name="bookmark_mark_effect_wave">波浪線</string>
     <string name="bookmark_mark_effect_dash">虛線</string>
     <string name="bookmark_mark_effect_strike">刪除線</string>
+    <string name="bookmark_mark_effect_double">雙底線</string>
     <string name="bookmark_mark_effect_highlight">螢光</string>
     <string name="bookmark_mark_effect_bg">背景色</string>
     <string name="bookmark_mark_effect_text">字體色</string>

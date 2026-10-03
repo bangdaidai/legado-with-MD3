@@ -44,6 +44,22 @@ const val READER_HALF_HIGHLIGHT_TOP_RATIO = 0.5f
 const val READER_SVG_BASE_WIDTH = 100f
 const val READER_SVG_BASELINE_Y = 50f
 
+/**
+ * 下划线实际描边时的最小线宽（**px**，不是 dp）。
+ *
+ * 亚像素线宽在低密度屏上会细到几乎不可见（0.5dp × density 1.0 = 0.5px），
+ * 所以最终描边那一趟统一抬到 1px。
+ *
+ * 只在「真正画线」时抬升，绝不能抬羽化的基准宽度：羽化是「基准宽度 + 扩散量」
+ * 多趟叠加，基准一旦被抬高，向两侧扩散的量就与之错位，柔边会比原始实现更糊
+ * （见 `MarkingStyledText.drawUnderlineSegment` 里刻意不抬基准的注释）。
+ *
+ * 正文（`ReaderPageDecorationDrawCache`）与笔记列表（`MarkingStyledText`）必须共用
+ * 本函数，否则同一条笔记在两处的粗细不一致——这是「同一个宽度两处看起来不同」的
+ * 唯一来源。
+ */
+fun finalStrokeWidthPx(coreWidthPx: Float): Float = coreWidthPx.coerceAtLeast(1f)
+
 /** 周期笔画（波浪/虚线）的最小段长，防止除零和退化配置。 */
 const val READER_MIN_STROKE_SEGMENT_PX = 0.1f
 

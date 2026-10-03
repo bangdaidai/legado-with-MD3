@@ -21,6 +21,7 @@ import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
 import io.legado.app.feature.reader.core.style.featherBandPasses
 import io.legado.app.feature.reader.core.style.featherGaussian
 import io.legado.app.feature.reader.core.style.featherPassCount
+import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.utils.dpToPx
@@ -146,7 +147,10 @@ internal class ReaderUnderlineDrawCommand(
     private val roundCap = underline.roundCapEffective
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = underline.colorArgb
-        strokeWidth = underline.widthPx.coerceAtLeast(1f)
+        // 这里存的是线芯宽度（羽化的基准），刻意不抬到 1px：羽化是「基准 + 扩散量」
+        // 多趟叠加，基准被抬高会让扩散量错位、柔边更糊。抬升只发生在 drawShape
+        // 里真正描边的那一趟，见 [finalStrokeWidthPx]。
+        strokeWidth = underline.widthPx
         style = Paint.Style.STROKE
         // 羽化靠圆头端点做柔边，旧 drawUnderlineSegment 同为 `roundCap || feather > 0`
         strokeCap = if (roundCap || feathered) Paint.Cap.ROUND else Paint.Cap.BUTT
@@ -156,7 +160,7 @@ internal class ReaderUnderlineDrawCommand(
 
     fun draw(canvas: Canvas) {
         if (!feathered) {
-            drawShape(canvas, paint.strokeWidth.coerceAtLeast(1f), underline.colorArgb)
+            drawShape(canvas, underline.widthPx, underline.colorArgb)
             return
         }
         // 羽化：多 pass 叠加、高斯权重的 alpha，从外到内逐层变窄，模拟全边缘柔化；
@@ -185,6 +189,10 @@ internal class ReaderUnderlineDrawCommand(
     /**
      * 以 [strokeWidthPx] 描边画一段。圆头端点会向外延伸半个宽度，按线芯宽度向内收缩
      * 以保持总长不变；羽化 pass 的加粗圆头向外扩散。[shader] 仅羽化 pass 传入。
+     *
+     * 线宽在这里才抬到 [finalStrokeWidthPx]：亚像素线宽在低密度屏上几乎不可见，
+     * 但羽化的基准宽度不能抬（见 paint 初始化处的注释）。与笔记列表
+     * `MarkingStyledText` 共用同一个函数，保证同一条笔记两处粗细一致。
      */
     private fun drawShape(
         canvas: Canvas,
@@ -193,7 +201,7 @@ internal class ReaderUnderlineDrawCommand(
         shader: LinearGradient? = null,
     ) {
         paint.color = colorArgb
-        paint.strokeWidth = strokeWidthPx.coerceAtLeast(1f)
+        paint.strokeWidth = finalStrokeWidthPx(strokeWidthPx)
         paint.shader = shader
         val capInset = underline.capInsetPx
         val start = bounds.left + capInset
