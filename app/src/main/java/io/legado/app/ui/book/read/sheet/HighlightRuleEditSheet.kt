@@ -1663,6 +1663,7 @@ internal fun HighlightRulePreview(
                                             startX = left,
                                             endX = right,
                                             y = top + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
+                                        )
 
                                         else -> drawUnderlineSegment(
                                             mode = underlineMode,
@@ -1674,12 +1675,14 @@ internal fun HighlightRulePreview(
                                             // 圆头与羽化都按线型适用性取：双下划线/删除线/自定义 SVG 不开放这两项，
                                             // 旧数据里存的值也不该在这里画出来。正文侧走 ReaderUnderline 的
                                             // roundCapEffective / featherEffective，两边读同一份 underlineControlSupport
-                                            roundCap = underlineControlSupport(underlineMode).roundCap && underlineRoundCap,
+                                            roundCap = underlineControlSupport(underlineMode).roundCap &&
+                                                    underlineRoundCap,
                                             feather = if (underlineControlSupport(underlineMode).feather) {
-                                                underlineFeather
                                                 underlineFeather
                                             } else {
                                                 0f
+                                            },
+                                            dashLen = underlineDashLen,
                                             dashGap = underlineDashGap,
                                             svgPath = underlineSvgPath,
                                             wavePeakDp = underlineWavePeak,

@@ -1,5 +1,7 @@
 package io.legado.app.feature.reader.core.model
 
+import io.legado.app.feature.reader.core.style.underlineControlSupport
+
 data class ReaderPageId(val chapterIndex: Int, val pageIndex: Int)
 
 data class ReaderRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
@@ -88,9 +90,22 @@ data class ReaderUnderline(
     /** true=画在文字层之下（旧 underlineBelowText，被字形笔画遮挡）。 */
     val belowText: Boolean = false,
 ) {
+    /**
+     * 圆头与羽化按线型适用性取。
+     *
+     * 双下划线的两条线各自成段（圆头会吃掉两线间距）、删除线固定在行高比例处、
+     * 自定义 SVG 的两端由用户路径决定——这三个线型都不开放这两项，编辑弹层已隐藏
+     * 对应控件，旧数据里存的值也不该继续生效。渲染层与 UI 必须读同一份判定。
+     */
+    val roundCapEffective: Boolean
+        get() = underlineControlSupport(mode).roundCap && roundCap
+
+    val featherEffective: Boolean
+        get() = underlineControlSupport(mode).feather && featherPx > 0f
+
     /** 圆头补偿只按线芯宽度；羽化加粗后的 pass 不得加大内缩，否则外圈圆头被吃掉。 */
     val capInsetPx: Float
-        get() = if (roundCap || featherPx > 0f) widthPx.coerceAtLeast(1f) / 2f else 0f
+        get() = if (roundCapEffective || featherEffective) widthPx.coerceAtLeast(1f) / 2f else 0f
 
     /**
      * 下划线画出文字包围盒外的最大半径（圆头/羽化/偏移/双线/波浪），
@@ -99,8 +114,8 @@ data class ReaderUnderline(
     val overflowPadPx: Float
         get() {
             val half = widthPx.coerceAtLeast(1f) / 2f
-            val feather = featherPx.coerceAtLeast(0f)
-            val horizontal = if (roundCap || feather > 0f) half + feather else 0f
+            val feather = if (featherEffective) featherPx.coerceAtLeast(0f) else 0f
+            val horizontal = if (roundCapEffective || feather > 0f) half + feather else 0f
             val below = half + feather + offsetPx.coerceAtLeast(0f) + when (mode) {
                 // 波浪的 waveControlOffsetPx 是二次贝塞尔的控制点偏移，中点只到它的一半，
                 // 真正画出到基线外的距离只有一半；这里按实际峰高留白，和

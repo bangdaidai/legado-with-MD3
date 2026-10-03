@@ -150,9 +150,10 @@ object LegacyReaderStyleRangeMapper {
                 waveControlOffsetPx = (underlineWavePeak * 2f).dpToPx(),
                 waveHalfWavePx = (underlineWaveLength / 2f).dpToPx(),
                 doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
-                roundCap = underlineRoundCap,
-                // 羽化不是所有线型都成立（自定义 SVG 没有可定义的"两端"），
-                // 渲染侧只接受生效的值，避免旧数据里的死参数画出错误渐变
+                // 圆头与羽化按线型适用性取：双下划线/删除线/自定义 SVG 都不开放这两项，
+                // 这里就把旧数据里存的值滤掉，ReaderUnderline 的派生属性与编辑弹层
+                // 读的是同一份 underlineControlSupport
+roundCap = underlineControlSupport(it).roundCap && underlineRoundCap,
                 featherPx = if (underlineControlSupport(it).feather) {
                     underlineFeather.dpToPx()
                 } else {

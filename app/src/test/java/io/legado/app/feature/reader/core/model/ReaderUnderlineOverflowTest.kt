@@ -1,6 +1,8 @@
 package io.legado.app.feature.reader.core.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderUnderlineOverflowTest {
@@ -44,6 +46,41 @@ class ReaderUnderlineOverflowTest {
     fun `negative offset reserves space above the text box`() {
         val underline = ReaderUnderline(1, 0, widthPx = 2f, offsetPx = -6f)
         assertEquals(6f + 1f, underline.overflowPadPx, 0f)
+    }
+
+    @Test
+    fun `double line and strike ignore stored round cap and feather`() {
+        // 这两个线型在编辑弹层不开放圆头/羽化，旧数据里存的值不该继续生效，
+        // 否则正文会画出 UI 无法复现的效果，且与预览走偏
+        listOf(4, 6).forEach { mode ->
+            val underline = ReaderUnderline(
+                mode, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 3f,
+            )
+            assertFalse("mode $mode 不该应用圆头", underline.roundCapEffective)
+            assertFalse("mode $mode 不该应用羽化", underline.featherEffective)
+            // 收不到预留，也就不会多留白
+            assertEquals(0f, underline.capInsetPx, 0f)
+            assertEquals(2f + 2f, underline.overflowPadPx, 0f)
+        }
+    }
+
+    @Test
+    fun `custom svg ignores stored round cap and feather`() {
+        val underline = ReaderUnderline(
+            5, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 3f,
+        )
+
+        assertFalse(underline.roundCapEffective)
+        assertFalse(underline.featherEffective)
+        assertEquals(0f, underline.capInsetPx, 0f)
+    }
+
+    @Test
+    fun `fluorescent band still honours round cap and feather`() {
+        val underline = ReaderUnderline(7, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 3f)
+
+        assertTrue(underline.roundCapEffective)
+        assertTrue(underline.featherEffective)
     }
 
     @Test

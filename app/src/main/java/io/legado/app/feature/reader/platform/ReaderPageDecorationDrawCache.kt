@@ -22,7 +22,6 @@ import io.legado.app.feature.reader.core.style.featherBandPasses
 import io.legado.app.feature.reader.core.style.featherGaussian
 import io.legado.app.feature.reader.core.style.featherPassCount
 import io.legado.app.feature.reader.core.style.scaledDashSegments
-import io.legado.app.feature.reader.core.style.underlineControlSupport
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.utils.dpToPx
 
@@ -73,18 +72,17 @@ internal class ReaderHalfHighlightDrawCommand(
     private val underline: ReaderUnderline,
 ) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val featherPx = underline.featherPx.coerceAtLeast(0f)
 
     fun draw(canvas: Canvas) {
         val bandTop = bounds.top + bounds.height * READER_HALF_HIGHLIGHT_TOP_RATIO
         val bandHeight = (bounds.bottom - bandTop).coerceAtLeast(0f)
-        val radius = if (underline.roundCap) bandHeight / 2f else 0f
+        // 圆头与柔化取 underline 上的生效值（已按线型适用性过滤），不直接读原始字段：
+        // 某线型不开放某个参数时，旧数据里存的值也不该在正文继续生效
+        val radius = if (underline.roundCapEffective) bandHeight / 2f else 0f
         val baseAlpha = Color.alpha(underline.colorArgb)
         val rgb = underline.colorArgb and 0x00FFFFFF
-        val featherDp = if (underlineControlSupport(underline.mode).feather) {
-            underline.featherPx.coerceAtLeast(0f) / 1f.dpToPx()
-        } else {
-            0f
-        }
+        val featherDp = if (underline.featherEffective) featherPx / 1f.dpToPx() else 0f
         // 边缘柔化：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
         // 收缩量钳在色带短边的一半以内，窄命中段也不会把矩形收成负数。
         val maxInset = if (featherDp <= 0f) {
@@ -132,18 +130,26 @@ internal class ReaderUnderlineDrawCommand(
     private val underline: ReaderUnderline,
 ) {
     private val featherPx = underline.featherPx.coerceAtLeast(0f)
+
     /**
-     * 羽化是否对这个线型成立。自定义 SVG 的"两端"是用户画的路径，无从定义柔边，
-     * 所以即便旧数据里存了羽化半径也不生效——否则渐变端点还会被 SVG 的
-     * translate/scale 带偏（那条路径本来就有 bug）。
+     * 圆头与羽化按线型适用性取，不直接读underline。
+     *
+     * 双下划线的两条线各自成段，圆头会吃掉两线间距；删除线固定在行高比例处，
+     * 两者只会让它看起来像渲染错误；自定义 SVG 的"两端"是用户画的路径，无从
+     * 定义柔边（且渐变端点还会被 translate/scale 带偏）。这些线型在编辑弹层已
+     * 隐藏对应控件，旧数据里存的值也不该在正文继续生效——渲染层与 UI 读同一份
+     * [underlineControlSupport]，才不会再次走偏。
+     *
+     * 判定直接取 [ReaderUnderline] 上的派生属性，绘制层与裁剪层共用同一份口径。
      */
-    private val feathered = featherPx > 0f && underlineControlSupport(underline.mode).feather
+    private val feathered = underline.featherEffective
+    private val roundCap = underline.roundCapEffective
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = underline.colorArgb
         strokeWidth = underline.widthPx.coerceAtLeast(1f)
         style = Paint.Style.STROKE
         // 羽化靠圆头端点做柔边，旧 drawUnderlineSegment 同为 `roundCap || feather > 0`
-        strokeCap = if (underline.roundCap || feathered) Paint.Cap.ROUND else Paint.Cap.BUTT
+        strokeCap = if (roundCap || feathered) Paint.Cap.ROUND else Paint.Cap.BUTT
     }
     private val wavePath = if (underline.mode == 3) createWavePath(bounds, underline) else null
     private val svgPath = if (underline.mode == 5) ReaderSvgPathCache.parse(underline.svgPath) else null

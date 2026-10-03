@@ -56,6 +56,7 @@ import io.legado.app.data.entities.HighlightRule
 import io.legado.app.domain.model.MarkingEffect
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
+import io.legado.app.feature.reader.core.style.underlineControlSupport
 import io.legado.app.ui.book.read.DefaultMarkingStyle
 import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.book.read.TextMenuPositionProvider
@@ -120,32 +121,39 @@ fun MarkingSheet(
     val baseStyle = editingStyle ?: remember(show) { DefaultMarkingStyle.get() }
     var useRule by remember(show, editing) { mutableStateOf(false) }
     var selectedRuleId by remember(show, editing) { mutableStateOf<String?>(null) }
-    // 5x1 效果格 + 选中颜色：从基准样式反推
+    // 效果格（SelectableEffects）+ 选中颜色：从基准样式反推
     var effect by remember(show, editing) {
         mutableStateOf(MarkingEffect.fromStyle(baseStyle))
     }
     var markColor by remember(show, editing) {
         mutableStateOf(MarkingEffect.colorOf(baseStyle))
     }
-    // 隐藏透传：仅当已有笔记本身就是下划线类效果时，才保留它的宽度/偏移/SVG；
-    // 背景色与字体色笔记这三个字段没有意义，一律回规范值。
+    // 隐藏透传：线宽/偏移/SVG 三个字段在笔记面板里没有任何控件（这里不是
+    // HighlightRuleEditSheet，没有宽度滑块），用户既看不到也改不了。它们只有在
+    // 「这条笔记本来就是同一个下划线线型」时才值得继承，其余一律回规范值。
     //
-    // 这里原来写的是「只要 editingStyle 非 null 就透传」，与上一句注释不符，是宽度被
-    // 污染的来源：笔记若是用「样式来源 → 高亮规则」划的，styleJson 里存的是规则面板
-    // 里调过的宽度（规则有宽度滑块，笔记面板没有）。划线当下没有任何控件显示这个值，
-    // 用户也无从察觉；之后在列表里编辑这条笔记、哪怕只改个颜色，buildStyle 就会把
-    // 这个看不见的宽度写回样式，于是「莫名变粗/变细」。
-    val editingIsUnderline = remember(show, editing) {
-        MarkingEffect.fromStyle(editingStyle).isUnderline
+    // 判定用的是「该线型是否真的吃线宽」（[underlineControlSupport]），不是
+    // [MarkingEffect.isUnderline]：荧光笔（mode 7）是铺下半行的填充色带，渲染层
+    // 根本不读线宽（underlineControlSupport(7).width == false），但它 isUnderline
+    // 为 true。若按 isUnderline 判定，一条旧荧光笔笔记里遗留的粗线宽会被带进来，
+    // 用户切到实线/波浪/虚线时宽度就跟着过去——这正是「莫名变粗」的来源：划线当下
+    // 无任何控件显示这个值，正文里却看得见。
+    //
+    // 同样按 isUnderline 判定挡不住的还有 BG/TEXT 笔记：它们的 styleJson 里带着
+    // 早期「荧光笔粗细/偏移」时代的脏宽度，切到任意线型时同样会被搬运。
+    val editingKeepsGeometry = remember(show, editing) {
+        val style = editingStyle ?: return@remember false
+        // mode 5（自定义 SVG）没有可调的线宽/偏移，面板也选不到它，不继承
+        underlineControlSupport(style.underlineMode).width
     }
     var underlineWidth by remember(show, editing) {
-        mutableStateOf(if (editingIsUnderline) editingStyle?.underlineWidth ?: 1f else 1f)
+        mutableStateOf(if (editingKeepsGeometry) editingStyle?.underlineWidth ?: 1f else 1f)
     }
     var underlineOffset by remember(show, editing) {
-        mutableStateOf(if (editingIsUnderline) editingStyle?.underlineOffset ?: 2f else 2f)
+        mutableStateOf(if (editingKeepsGeometry) editingStyle?.underlineOffset ?: 2f else 2f)
     }
     var underlineSvgPath by remember(show, editing) {
-        mutableStateOf(if (editingIsUnderline) editingStyle?.underlineSvgPath else null)
+        mutableStateOf(if (editingKeepsGeometry) editingStyle?.underlineSvgPath else null)
     }
     var showColorPicker by remember(show, editing) { mutableStateOf(false) }
     // 打开取色器的种子色：点色板入口用当前选中色，长按预设色则以被长按的色为基准微调。
@@ -271,7 +279,18 @@ fun MarkingSheet(
                     )
                     MarkingEffectGrid(
                         selectedEffect = effect,
-                        onEffectSelected = { effect = it },
+                        onEffectSelected = {
+                            effect = it
+                            // 换效果就把隐藏几何参数一起换成新线型的规范值。这三个
+                            // 字段面板上没有控件，继承来的旧值用户看不见也改不了，
+                            // 却会被 buildStyle 写回 styleJson 并在正文里画出来。
+                            // 不重置的话：存量荧光笔笔记切实线 / 复用高亮规则后切实线，
+                            // 都会把上一个线型的宽度搬到新线型上。
+                            val canonical = it.toStyle(markColor)
+                            underlineWidth = canonical.underlineWidth
+                            underlineOffset = canonical.underlineOffset
+                            underlineSvgPath = canonical.underlineSvgPath
+                        },
                     )
 
                     Spacer(Modifier.height(4.dp))
@@ -566,19 +585,6 @@ private fun MarkingColorSwatch(
 }
 
 /**
- * 7 选 1 效果组：单实线 / 波浪线 / 虚线 / 删除线 / 荧光笔 / 背景色 / 字体色。
- *
- * 条目直接取 [MarkingEffect.entries]，顺序即枚举声明顺序；线型编号见
- * [io.legado.app.feature.reader.core.style.ReaderUnderlineGeometry.underlineControlSupport]。
- * 双下划线（mode 4）与自定义 SVG（mode 5）不在这一组里：笔记面板选不到它们，
- * 只能通过「样式来源 → 高亮规则」复用规则的样式。
- *
- * 连接式外观（首尾大圆角、中间小圆角、间隔 2dp 连成一体），但容器色自己给：
- * M3 ToggleButton 未选中态用的是 surface 系颜色，和 AppModalBottomSheet 的底色撞车，
- * 未选中的按钮会整个隐形、只看得见选中那一个。
- * 语义按 RadioButton，读屏能识别成单选。
- */
-/**
  * 笔记面板效果格里可选的效果，顺序即显示顺序。
  *
  * 刻意不等于 [MarkingEffect.entries`：删除线（[MarkingEffect.STRIKE]）在划线笔记里
@@ -597,6 +603,17 @@ internal val SelectableEffects = listOf(
     MarkingEffect.TEXT,
 )
 
+/**
+ * 效果格：渲染 [SelectableEffects]，语义上是单选（role = RadioButton）。
+ *
+ * 线型编号与各线型「哪些参数真的有效果」的判定统一来自
+ * [io.legado.app.feature.reader.core.style.ReaderUnderlineGeometry.underlineControlSupport]，
+ * 与正文渲染同一口径，面板不自己另判一套。
+ *
+ * 连接式外观（首尾大圆角、中间小圆角、间隔 2dp 连成一体），但容器色自己给：
+ * M3 ToggleButton 未选中态用的是 surface 系颜色，和 AppModalBottomSheet 的底色撞车，
+ * 未选中的按钮会整个隐形、只看得见选中那一个。
+ */
 @Composable
 internal fun MarkingEffectGrid(
     selectedEffect: MarkingEffect,
