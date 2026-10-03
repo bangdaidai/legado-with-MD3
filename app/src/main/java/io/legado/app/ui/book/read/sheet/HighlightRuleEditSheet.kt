@@ -6,20 +6,19 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -28,6 +27,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -292,6 +294,20 @@ fun HighlightRuleEditSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(titleRes),
+        startAction = {
+            // 预览折叠开关与右侧「保存」对称，都走标题栏图标按钮
+            MediumTonalButton(
+                icon = if (previewDockExpanded) {
+                    Icons.Default.KeyboardArrowDown
+                } else {
+                    Icons.Default.KeyboardArrowUp
+                },
+                contentDescription = stringResource(
+                    if (previewDockExpanded) R.string.collapse else R.string.expand
+                ),
+                onClick = { previewDockExpanded = !previewDockExpanded },
+            )
+        },
         endAction = {
             MediumTonalButton(
                 onClick = {
@@ -913,49 +929,23 @@ fun HighlightRuleEditSheet(
 
             // === 停靠预览区（原 Section 5）===
             // 预览常驻弹层底部：调上面的正则、颜色、下划线、九宫格时不用滚到末尾也能看到效果。
-            // 折叠后只留一条标题行，把高度全部让给表单。
+            // 折叠开关在标题栏左侧（与「保存」对称），这里只在展开时占高度。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp, bottom = 16.dp),
             ) {
+                // 折叠时留一条分隔线，让「底部有个可展开的面板」这件事仍然看得出来
                 HorizontalDivider(color = LegadoTheme.colorScheme.outlineVariant)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AppText(
-                        text = stringResource(R.string.preview_effect),
-                        style = LegadoTheme.typography.labelMediumEmphasized,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    val arrowRotation by animateFloatAsState(
-                        targetValue = if (previewDockExpanded) 180f else 0f,
-                        label = "previewDockArrowRotation",
-                    )
-                    IconButton(onClick = { previewDockExpanded = !previewDockExpanded }) {
-                        Icon(
-                            imageVector = Icons.Default.ExpandMore,
-                            contentDescription = stringResource(
-                                if (previewDockExpanded) R.string.collapse else R.string.expand
-                            ),
-                            tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.rotate(arrowRotation),
-                        )
-                    }
-                }
                 if (previewDockExpanded) {
+                    Spacer(Modifier.height(8.dp))
+                    // 停靠区高度有限：示例文本按 4 行封顶，再长就在框里滚动，不能把上方的表单挤没
                     AppTextField(
                         value = sampleText,
                         onValueChange = { sampleText = it },
                         label = stringResource(R.string.sample_text),
-                        // 停靠区高度有限：示例文本再长也只在自己框里滚，不能把表单挤没
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 88.dp),
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
                     // 预览页面底色跟随「应用排版」绑定的排版；「全局」没绑定具体排版，用当前正在用的那份
@@ -984,12 +974,14 @@ fun HighlightRuleEditSheet(
                         0xFF000000.toInt()
                     }
 
-                    // 日、夜并排，一眼对比昼夜。两块共用同一批样式参数，只有排版底色与色板不同，
-                    // 抽成本地 composable，避免把这三十来个参数在「并排 / 整宽」两处各抄一遍。
+                    // 日、夜两块共用同一批样式参数，只有排版底色与色板不同，抽成本地 composable
+                    // 免得把这三十来个参数抄两遍。卡片内不画标题（label 传 null），
+                    // 靠底色深浅区分日夜，省下的高度留给表单。
                     @Composable
-                    fun DayPreview(modifier: Modifier = Modifier) {
+                    fun DayPreview() {
                         HighlightRulePreview(
-                            label = stringResource(R.string.day),
+                            // 不画「日间」标题：日夜上下相邻，靠底色深浅就能分辨
+                            label = null,
                             sampleText = sampleText,
                             pattern = pattern,
                             textColor = textColor,
@@ -1027,14 +1019,15 @@ fun HighlightRuleEditSheet(
                             underlineDashGap = underlineDashGap,
                             underlineWavePeak = underlineWavePeak,
                             underlineWaveLength = underlineWaveLength,
-                            modifier = modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
 
                     @Composable
-                    fun NightPreview(modifier: Modifier = Modifier) {
+                    fun NightPreview() {
                         HighlightRulePreview(
-                            label = stringResource(R.string.night),
+                            // 同上，不画「夜间」标题
+                            label = null,
                             sampleText = sampleText,
                             pattern = pattern,
                             textColor = nightTextColor,
@@ -1073,22 +1066,17 @@ fun HighlightRuleEditSheet(
                             underlineDashGap = underlineDashGap,
                             underlineWavePeak = underlineWavePeak,
                             underlineWaveLength = underlineWaveLength,
-                            modifier = modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
 
-                    // 配了高亮背景图时正文只用那张图，夜间色不参与渲染，
-                    // 这时只显示日间预览并占满宽度，不留一块空白
+                    // 日夜上下堆叠、各占满宽：并排会把卡片压到半宽，
+                    // 下划线、九宫格这类以行高为锚的效果在半宽里看不出真实表现。
+                    // 配了高亮背景图时正文只用那张图，夜间色不参与渲染，这时只显示日间。
+                    DayPreview()
                     if (!hasBgImage || bgImage.isBlank()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            DayPreview(Modifier.weight(1f))
-                            NightPreview(Modifier.weight(1f))
-                        }
-                    } else {
-                        DayPreview()
+                        Spacer(Modifier.height(8.dp))
+                        NightPreview()
                     }
                 }
             }
@@ -1267,7 +1255,8 @@ private data class NineSliceValues(
 
 @Composable
 internal fun HighlightRulePreview(
-    label: String,
+    /** 卡片内的标题行。传 null 不画——并排停靠时靠底色深浅就能分清日夜，省一行是一行。 */
+    label: String?,
     sampleText: String,
     pattern: String,
     textColor: Int?,
@@ -1455,257 +1444,263 @@ internal fun HighlightRulePreview(
     } else {
         null
     }
-    NormalCard(
-        modifier = modifier,
-        cornerRadius = 12.dp,
-        containerColor = Color(pageBgColor),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (pageBgPainter != null) {
-                        // 不用 Modifier.paint：它在高度无界的滚动容器里会拿图片固有尺寸
-                        // 反算 minHeight，把卡片撑成整张图那么高（sizeToIntrinsics=false 也挡不住，
-                        // 那个分支还要求宽高都有界）。drawBehind 只画不测量，尺寸仍由文字决定。
-                        Modifier.drawBehind {
-                            val src = pageBgPainter.intrinsicSize
-                            if (!src.isSpecified || src.width <= 0f || src.height <= 0f) {
-                                return@drawBehind
-                            }
-                            // 等比放大到铺满后居中裁切，等价于 ContentScale.Crop
-                            val factor = ContentScale.Crop.computeScaleFactor(src, size)
-                            val dst = Size(src.width * factor.scaleX, src.height * factor.scaleY)
-                            clipRect {
-                                translate(
-                                    (size.width - dst.width) / 2f,
-                                    (size.height - dst.height) / 2f,
-                                ) {
-                                    with(pageBgPainter) { draw(dst) }
-                                }
-                            }
-                        }
-                    } else {
-                        Modifier
-                    }
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+    // 卡片内容的水平内边距：既是 Column 的 padding，也是文本测量要从可用宽度里扣掉的量，
+    // 两者必须同源，否则测出来的折行位置和画出来的画布对不上
+    val cardContentPadding = 16.dp
+    // 文本按卡片真实宽度测量：预览并排停靠后卡片不再满宽，
+    // 继续按「屏宽 - 64dp」估算只会让文字按错误的宽度折行、超出画布被裁掉
+    BoxWithConstraints(modifier = modifier) {
+        val previewConstraintWidth = with(density) {
+            val contentWidth = if (maxWidth.isFinite) maxWidth - cardContentPadding * 2 else maxWidth
+            contentWidth.coerceAtLeast(0.dp).roundToPx()
+        }
+        NormalCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 12.dp,
+            containerColor = Color(pageBgColor),
         ) {
-            AppText(
-                text = label,
-                style = LegadoTheme.typography.labelSmall,
-                color = labelColor,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
-            if (pattern.isNotBlank() && matchRanges.isEmpty()) {
-                AppText(
-                    text = stringResource(R.string.highlight_preview_no_match),
-                    style = LegadoTheme.typography.labelSmall,
-                    color = labelColor,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-            }
-            // 预先测量文本以获取实际高度（使用卡片内容宽度估计值）
-            val previewConstraintWidth = with(density) {
-                // 卡片内内容宽度 ≈ 屏幕宽 - sheet水平padding*2(16*2) - 卡片内padding*2(16*2)
-                (LocalConfiguration.current.screenWidthDp.dp - 64.dp).roundToPx()
-            }
-            // 与正文 ChapterProvider.contentPaint 同口径计算行高（descent - ascent + leading）：
-            // Compose 默认行高会取 CJK 回退字体的高度量，比正文 Paint 的 fontMetrics 高，
-            // 九宫格这类以行高为锚的背景会因此预览偏大、正文偏小，必须强制对齐
-            val bodyLineHeight = remember(previewBaseFontSize) {
-                val textBoldWeight = when (val bold = ReadBookConfig.textBold) {
-                    1 -> 900
-                    2 -> 300
-                    0 -> 400
-                    in 100..900 -> bold
-                    else -> 400
-                }
-                android.text.TextPaint().apply {
-                    textSize = with(density) { previewBaseFontSize.sp.toPx() }
-                    letterSpacing = ReadBookConfig.letterSpacing
-                    typeface = ReaderAndroidPaintFactory
-                        .loadTypeface(ReadBookConfig.textFont, textBoldWeight, false)
-                }.textHeight
-            }
-            val previewTextResult = textMeasurer.measure(
-                text = annotated,
-                style = TextStyle(
-                    fontSize = previewBaseFontSize.sp,
-                    color = defaultTextColor,
-                    lineHeight = with(density) { bodyLineHeight.toSp() },
-                    letterSpacing = ReadBookConfig.letterSpacing.em,
-                ),
-                maxLines = 5,
-                constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
-                placeholders = marginSegmentation.placeholders,
-            )
-            // 九宫格背景会向外扩角块与 padding，超出行高的部分要给 Canvas 预留空间，否则预览被裁掉
-            var ninePatchTopOverhang = 0f
-            var ninePatchBottomOverhang = 0f
-            if (bgImageFit == 3 && bgRawBitmap != null) {
-                val maxLineHeight = (0 until previewTextResult.lineCount)
-                    .maxOf { previewTextResult.getLineBottom(it) - previewTextResult.getLineTop(it) }
-                    .coerceAtLeast(1f)
-                // 用足够宽的矩形探测：角块只在文字放不下时才缩小，宽矩形给出上下外扩的最大值
-                val probeBox = io.legado.app.help.highlight.NinePatchDrawHelper.layout(
-                    0f, 0f, 10000f, maxLineHeight,
-                    bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
-                    npLeft, npRight, npTop, npBottom,
-                    bgPadStart * density.density, bgPadEnd * density.density,
-                    bgPadTop * density.density, bgPadBottom * density.density,
-                )
-                if (probeBox != null) {
-                    ninePatchTopOverhang = -probeBox.top
-                    ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
-                }
-            }
-            // 下划线画在行底 + offset 处，圆头/羽化/双线/波浪还要向下延伸，
-            // 画布按最大外扩预留，否则贴底时整条线连同柔边一起被裁掉。
-            // extra 与正文 overflowPadPx 同一口径：波浪按实际峰高（控制点的一半），
-            // 双线按净间隙 + 线宽。荧光(7) 是行盒内的填充色带，不需要额外外扩。
-            val underlineBottomOverhangPx = if (underlineMode in 1..5) {
-                with(density) {
-                    val extra = when (underlineMode) {
-                        3 -> underlineWavePeak.dp.toPx()
-                        4 -> READER_DOUBLE_LINE_GAP_DP.dp.toPx() + underlineWidth.dp.toPx()
-                        else -> 0f
-                    }
-                    underlineOffset.dp.toPx().coerceAtLeast(0f) +
-                        underlineWidth.dp.toPx() / 2f +
-                        underlineFeather.dp.toPx() + extra
-                }
-            } else {
-                0f
-            }
-            val canvasHeightDp = with(density) {
-                (previewTextResult.size.height + ninePatchTopOverhang +
-                    maxOf(ninePatchBottomOverhang, underlineBottomOverhangPx)).toDp()
-            }
-            Canvas(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(canvasHeightDp)
-            ) {
-                // 九宫格外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
-                if (ninePatchTopOverhang != 0f) {
-                    drawContext.canvas.translate(0f, ninePatchTopOverhang)
-                }
-
-                // 在匹配区域画背景图（区间已按外边距占位偏移，指向占位后的命中文字）
-                if (bgBitmap != null && marginSegmentation.ranges.isNotEmpty()) {
-                    val density = this.density
-                    marginSegmentation.ranges.forEach { range ->
-                        val start = range.first
-                        val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
-                        previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
-                            if (bgImageFit == 3 && bgRawBitmap != null) {
-                                // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
-                                // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内；
-                                // 渲染层矩形上下各内缩 1dp（TextLine.bgPaddingTop/Bottom），这里保持一致
-                                val nineSliceInset = minOf(1.dp.toPx(), (rectB - rectT) / 4f)
-                                io.legado.app.help.highlight.NinePatchDrawHelper.layout(
-                                    rectL, rectT + nineSliceInset, rectR, rectB - nineSliceInset,
-                                    bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
-                                    npLeft, npRight, npTop, npBottom,
-                                    bgPadStart * density, bgPadEnd * density,
-                                    bgPadTop * density, bgPadBottom * density,
-                                )?.let { box ->
-                                    io.legado.app.help.highlight.NinePatchDrawHelper.draw(
-                                        drawContext.canvas.nativeCanvas,
-                                        bgRawBitmap,
-                                        box.left, box.top, box.right, box.bottom,
-                                        ninePatchPaint,
-                                        leftX = npLeft, rightX = 1f - npRight,
-                                        topY = npTop, bottomY = 1f - npBottom,
-                                        box.cornerL, box.cornerR, box.cornerT, box.cornerB,
-                                    )
+                    .then(
+                        if (pageBgPainter != null) {
+                            // 不用 Modifier.paint：它在高度无界的滚动容器里会拿图片固有尺寸
+                            // 反算 minHeight，把卡片撑成整张图那么高（sizeToIntrinsics=false 也挡不住，
+                            // 那个分支还要求宽高都有界）。drawBehind 只画不测量，尺寸仍由文字决定。
+                            Modifier.drawBehind {
+                                val src = pageBgPainter.intrinsicSize
+                                if (!src.isSpecified || src.width <= 0f || src.height <= 0f) {
+                                    return@drawBehind
                                 }
-                            } else {
-                                drawImage(
-                                    image = bgBitmap,
-                                    dstOffset = androidx.compose.ui.unit.IntOffset(rectL.toInt(), rectT.toInt()),
-                                    dstSize = androidx.compose.ui.unit.IntSize(
-                                        (rectR - rectL).toInt().coerceAtLeast(1),
-                                        (rectB - rectT).toInt().coerceAtLeast(1)
-                                    ),
-                                )
+                                // 等比放大到铺满后居中裁切，等价于 ContentScale.Crop
+                                val factor = ContentScale.Crop.computeScaleFactor(src, size)
+                                val dst = Size(src.width * factor.scaleX, src.height * factor.scaleY)
+                                clipRect {
+                                    translate(
+                                        (size.width - dst.width) / 2f,
+                                        (size.height - dst.height) / 2f,
+                                    ) {
+                                        with(pageBgPainter) { draw(dst) }
+                                    }
+                                }
                             }
+                        } else {
+                            Modifier
                         }
+                    )
+                    .padding(horizontal = cardContentPadding, vertical = 12.dp)
+            ) {
+                if (!label.isNullOrEmpty()) {
+                    AppText(
+                        text = label,
+                        style = LegadoTheme.typography.labelSmall,
+                        color = labelColor,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+                if (pattern.isNotBlank() && matchRanges.isEmpty()) {
+                    AppText(
+                        text = stringResource(R.string.highlight_preview_no_match),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = labelColor,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+                // 与正文 ChapterProvider.contentPaint 同口径计算行高（descent - ascent + leading）：
+                // Compose 默认行高会取 CJK 回退字体的高度量，比正文 Paint 的 fontMetrics 高，
+                // 九宫格这类以行高为锚的背景会因此预览偏大、正文偏小，必须强制对齐
+                val bodyLineHeight = remember(previewBaseFontSize) {
+                    val textBoldWeight = when (val bold = ReadBookConfig.textBold) {
+                        1 -> 900
+                        2 -> 300
+                        0 -> 400
+                        in 100..900 -> bold
+                        else -> 400
+                    }
+                    android.text.TextPaint().apply {
+                        textSize = with(density) { previewBaseFontSize.sp.toPx() }
+                        letterSpacing = ReadBookConfig.letterSpacing
+                        typeface = ReaderAndroidPaintFactory
+                            .loadTypeface(ReadBookConfig.textFont, textBoldWeight, false)
+                    }.textHeight
+                }
+                val previewTextResult = textMeasurer.measure(
+                    text = annotated,
+                    style = TextStyle(
+                        fontSize = previewBaseFontSize.sp,
+                        color = defaultTextColor,
+                        lineHeight = with(density) { bodyLineHeight.toSp() },
+                        letterSpacing = ReadBookConfig.letterSpacing.em,
+                    ),
+                    maxLines = 5,
+                    constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
+                    placeholders = marginSegmentation.placeholders,
+                )
+                // 九宫格背景会向外扩角块与 padding，超出行高的部分要给 Canvas 预留空间，否则预览被裁掉
+                var ninePatchTopOverhang = 0f
+                var ninePatchBottomOverhang = 0f
+                if (bgImageFit == 3 && bgRawBitmap != null) {
+                    val maxLineHeight = (0 until previewTextResult.lineCount)
+                        .maxOf { previewTextResult.getLineBottom(it) - previewTextResult.getLineTop(it) }
+                        .coerceAtLeast(1f)
+                    // 用足够宽的矩形探测：角块只在文字放不下时才缩小，宽矩形给出上下外扩的最大值
+                    val probeBox = io.legado.app.help.highlight.NinePatchDrawHelper.layout(
+                        0f, 0f, 10000f, maxLineHeight,
+                        bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
+                        npLeft, npRight, npTop, npBottom,
+                        bgPadStart * density.density, bgPadEnd * density.density,
+                        bgPadTop * density.density, bgPadBottom * density.density,
+                    )
+                    if (probeBox != null) {
+                        ninePatchTopOverhang = -probeBox.top
+                        ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
                     }
                 }
+                // 下划线画在行底 + offset 处，圆头/羽化/双线/波浪还要向下延伸，
+                // 画布按最大外扩预留，否则贴底时整条线连同柔边一起被裁掉。
+                // extra 与正文 overflowPadPx 同一口径：波浪按实际峰高（控制点的一半），
+                // 双线按净间隙 + 线宽。荧光(7) 是行盒内的填充色带，不需要额外外扩。
+                val underlineBottomOverhangPx = if (underlineMode in 1..5) {
+                    with(density) {
+                        val extra = when (underlineMode) {
+                            3 -> underlineWavePeak.dp.toPx()
+                            4 -> READER_DOUBLE_LINE_GAP_DP.dp.toPx() + underlineWidth.dp.toPx()
+                            else -> 0f
+                        }
+                        underlineOffset.dp.toPx().coerceAtLeast(0f) +
+                            underlineWidth.dp.toPx() / 2f +
+                            underlineFeather.dp.toPx() + extra
+                    }
+                } else {
+                    0f
+                }
+                val canvasHeightDp = with(density) {
+                    (previewTextResult.size.height + ninePatchTopOverhang +
+                        maxOf(ninePatchBottomOverhang, underlineBottomOverhangPx)).toDp()
+                }
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(canvasHeightDp)
+                ) {
+                    // 九宫格外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
+                    if (ninePatchTopOverhang != 0f) {
+                        drawContext.canvas.translate(0f, ninePatchTopOverhang)
+                    }
 
-                // 下划线绘制块（可在文字上层或下层）
-                val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
-                    if (underlineMode > 0) {
+                    // 在匹配区域画背景图（区间已按外边距占位偏移，指向占位后的命中文字）
+                    if (bgBitmap != null && marginSegmentation.ranges.isNotEmpty()) {
+                        val density = this.density
                         marginSegmentation.ranges.forEach { range ->
                             val start = range.first
                             val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
-                            previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
-                                when (underlineMode) {
-                                    // 7 荧光：不是下划线，是铺下半行的填充色带（正文
-                                    // ReaderHalfHighlightDrawCommand 同口径）。宽度/偏移/圆头/
-                                    // 羽化对它无效，只有颜色生效，透明度用颜色自带的 alpha，
-                                    // 不额外压暗（对照 MarkingEffect.toStyle 的口径）。
-                                    7 -> drawFluorescentBand(
-                                        left = left,
-                                        right = right,
-                                        top = top,
-                                        bottom = bottom,
-                                        color = resolvedUnderlineColor,
-                                        roundCap = underlineRoundCap,
-                                        feather = if (underlineControlSupport(7).feather) underlineFeather else 0f,
-                                    )
-
-                                    // 6 删除线：固定落在行高 READER_STRIKE_HEIGHT_RATIO 处，不吃偏移
-                                    6 -> drawUnderlineSegment(
-                                        mode = 1,
-                                        color = resolvedUnderlineColor,
-                                        widthDp = underlineWidth,
-                                        startX = left,
-                                        endX = right,
-                                        y = top + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
-                                        roundCap = underlineRoundCap,
-                                        feather = underlineFeather,
-                                        dashLen = underlineDashLen,
-                                        dashGap = underlineDashGap,
-                                    )
-
-                                    else -> drawUnderlineSegment(
-                                        mode = underlineMode,
-                                        color = resolvedUnderlineColor,
-                                        widthDp = underlineWidth,
-                                        startX = left,
-                                        endX = right,
-                                        y = bottom + underlineOffset.dp.toPx(),
-                                        roundCap = underlineRoundCap,
-                                        // 自定义 SVG 没有可定义的"两端"，羽化对它不生效
-                                        feather = if (underlineControlSupport(underlineMode).feather) {
-                                            underlineFeather
-                                        } else {
-                                            0f
-                                        },
-                                        dashLen = underlineDashLen,
-                                        dashGap = underlineDashGap,
-                                        svgPath = underlineSvgPath,
-                                        wavePeakDp = underlineWavePeak,
-                                        waveLengthDp = underlineWaveLength,
+                            previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
+                                if (bgImageFit == 3 && bgRawBitmap != null) {
+                                    // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
+                                    // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内；
+                                    // 渲染层矩形上下各内缩 1dp（TextLine.bgPaddingTop/Bottom），这里保持一致
+                                    val nineSliceInset = minOf(1.dp.toPx(), (rectB - rectT) / 4f)
+                                    io.legado.app.help.highlight.NinePatchDrawHelper.layout(
+                                        rectL, rectT + nineSliceInset, rectR, rectB - nineSliceInset,
+                                        bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
+                                        npLeft, npRight, npTop, npBottom,
+                                        bgPadStart * density, bgPadEnd * density,
+                                        bgPadTop * density, bgPadBottom * density,
+                                    )?.let { box ->
+                                        io.legado.app.help.highlight.NinePatchDrawHelper.draw(
+                                            drawContext.canvas.nativeCanvas,
+                                            bgRawBitmap,
+                                            box.left, box.top, box.right, box.bottom,
+                                            ninePatchPaint,
+                                            leftX = npLeft, rightX = 1f - npRight,
+                                            topY = npTop, bottomY = 1f - npBottom,
+                                            box.cornerL, box.cornerR, box.cornerT, box.cornerB,
+                                        )
+                                    }
+                                } else {
+                                    drawImage(
+                                        image = bgBitmap,
+                                        dstOffset = androidx.compose.ui.unit.IntOffset(rectL.toInt(), rectT.toInt()),
+                                        dstSize = androidx.compose.ui.unit.IntSize(
+                                            (rectR - rectL).toInt().coerceAtLeast(1),
+                                            (rectB - rectT).toInt().coerceAtLeast(1)
+                                        ),
                                     )
                                 }
                             }
                         }
                     }
-                }
 
-                // 荧光色带必须压在文字层之下，与正文渲染一致，不受「下层」开关影响
-                val belowText = underlineBelowText || underlineMode == 7
-                if (belowText) drawUnderlinesBlock()
-                drawText(previewTextResult)
-                if (!belowText) drawUnderlinesBlock()
+                    // 下划线绘制块（可在文字上层或下层）
+                    val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
+                        if (underlineMode > 0) {
+                            marginSegmentation.ranges.forEach { range ->
+                                val start = range.first
+                                val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
+                                previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
+                                    when (underlineMode) {
+                                        // 7 荧光：不是下划线，是铺下半行的填充色带（正文
+                                        // ReaderHalfHighlightDrawCommand 同口径）。宽度/偏移/圆头/
+                                        // 羽化对它无效，只有颜色生效，透明度用颜色自带的 alpha，
+                                        // 不额外压暗（对照 MarkingEffect.toStyle 的口径）。
+                                        7 -> drawFluorescentBand(
+                                            left = left,
+                                            right = right,
+                                            top = top,
+                                            bottom = bottom,
+                                            color = resolvedUnderlineColor,
+                                            roundCap = underlineRoundCap,
+                                            feather = if (underlineControlSupport(7).feather) underlineFeather else 0f,
+                                        )
 
-                // 恢复画布，避免平移泄漏到后续绘制
-                if (ninePatchTopOverhang != 0f) {
-                    drawContext.canvas.translate(0f, -ninePatchTopOverhang)
+                                        // 6 删除线：固定落在行高 READER_STRIKE_HEIGHT_RATIO 处，不吃偏移；
+                                        // 圆头与羽化对该线型不开放，这里显式不传，免得旧数据
+                                        // 里存的值画出与正文不同的效果
+                                        6 -> drawUnderlineSegment(
+                                            mode = 1,
+                                            color = resolvedUnderlineColor,
+                                            widthDp = underlineWidth,
+                                            startX = left,
+                                            endX = right,
+                                            y = top + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
+
+                                        else -> drawUnderlineSegment(
+                                            mode = underlineMode,
+                                            color = resolvedUnderlineColor,
+                                            widthDp = underlineWidth,
+                                            startX = left,
+                                            endX = right,
+                                            y = bottom + underlineOffset.dp.toPx(),
+                                            // 圆头与羽化都按线型适用性取：双下划线/删除线/自定义 SVG 不开放这两项，
+                                            // 旧数据里存的值也不该在这里画出来。正文侧走 ReaderUnderline 的
+                                            // roundCapEffective / featherEffective，两边读同一份 underlineControlSupport
+                                            roundCap = underlineControlSupport(underlineMode).roundCap && underlineRoundCap,
+                                            feather = if (underlineControlSupport(underlineMode).feather) {
+                                                underlineFeather
+                                                underlineFeather
+                                            } else {
+                                                0f
+                                            dashGap = underlineDashGap,
+                                            svgPath = underlineSvgPath,
+                                            wavePeakDp = underlineWavePeak,
+                                            waveLengthDp = underlineWaveLength,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 荧光色带必须压在文字层之下，与正文渲染一致，不受「下层」开关影响
+                    val belowText = underlineBelowText || underlineMode == 7
+                    if (belowText) drawUnderlinesBlock()
+                    drawText(previewTextResult)
+                    if (!belowText) drawUnderlinesBlock()
+
+                    // 恢复画布，避免平移泄漏到后续绘制
+                    if (ninePatchTopOverhang != 0f) {
+                        drawContext.canvas.translate(0f, -ninePatchTopOverhang)
+                    }
                 }
             }
         }
