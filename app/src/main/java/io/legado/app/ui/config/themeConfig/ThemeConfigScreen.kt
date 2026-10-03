@@ -318,11 +318,6 @@ fun ThemeConfigScreen(
                         }
                     )
                     ClickableSettingItem(
-                        title = stringResource(R.string.theme_pack),
-                        description = stringResource(R.string.theme_pack_s),
-                        onClick = onNavigateToThemeManage
-                    )
-                    ClickableSettingItem(
                         title = stringResource(R.string.background_image),
                         description = "日间/夜间背景图与背景虚化",
                         onClick = {
@@ -334,6 +329,11 @@ fun ThemeConfigScreen(
                                 )
                             )
                         }
+                    )
+                    ClickableSettingItem(
+                        title = stringResource(R.string.theme_pack),
+                        description = stringResource(R.string.theme_pack_s),
+                        onClick = onNavigateToThemeManage
                     )
                     ClickableSettingItem(
                         title = stringResource(R.string.theme_config_reset_defaults),
