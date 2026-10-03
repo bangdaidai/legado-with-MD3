@@ -411,6 +411,7 @@
     <string name="bookmark_mark_effect_wave">Wave</string>
     <string name="bookmark_mark_effect_dash">Dash</string>
     <string name="bookmark_mark_effect_strike">Strike</string>
+    <string name="bookmark_mark_effect_double">Double</string>
     <string name="bookmark_mark_effect_highlight">Highlight</string>
     <string name="bookmark_mark_effect_bg">Bg</string>
     <string name="bookmark_mark_effect_text">Text</string>

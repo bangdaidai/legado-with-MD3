@@ -56,12 +56,18 @@ data class TextProcessStyle(
  */
 @Keep
 enum class MarkingEffect {
-    SOLID, WAVE, DASHED, STRIKE, HIGHLIGHT, BG, TEXT;
+    SOLID, WAVE, DASHED, STRIKE, DOUBLE, HIGHLIGHT, BG, TEXT;
 
-    /** 是否属于下划线类效果（对应 underlineMode != 0）。 */
+    /**
+     * 是否属于下划线类效果（对应 underlineMode != 0）。
+     *
+     * [STRIKE] 属于此列，但不在笔记面板的效果格里（划线笔记里很少用），见
+     * `MarkingSheet.SelectableEffects`；它只用于解析存量笔记，保留是为了不把
+     * 已有的删除线笔记降级成实线。
+     */
     val isUnderline: Boolean
         get() = this == SOLID || this == WAVE || this == DASHED ||
-                this == STRIKE || this == HIGHLIGHT
+                this == STRIKE || this == DOUBLE || this == HIGHLIGHT
 
     /**
      * 由效果 + 选中颜色生成样式。背景色自动半透明（约 20% alpha），
@@ -73,6 +79,7 @@ enum class MarkingEffect {
         WAVE -> TextProcessStyle(underlineMode = 3, underlineColor = color)
         DASHED -> TextProcessStyle(underlineMode = 2, underlineColor = color)
         STRIKE -> TextProcessStyle(underlineMode = 6, underlineColor = color)
+        DOUBLE -> TextProcessStyle(underlineMode = 4, underlineColor = color)
         HIGHLIGHT -> TextProcessStyle(underlineMode = 7, underlineColor = color)
         BG -> TextProcessStyle(bgColor = (color and 0x00FFFFFF) or 0x33000000)
         TEXT -> TextProcessStyle(textColor = color)
@@ -88,6 +95,7 @@ enum class MarkingEffect {
             style?.underlineMode == 3 -> WAVE
             style?.underlineMode == 2 -> DASHED
             style?.underlineMode == 6 -> STRIKE
+            style?.underlineMode == 4 -> DOUBLE
             style?.underlineMode == 7 -> HIGHLIGHT
             style?.bgColor != null -> BG
             style?.textColor != null -> TEXT

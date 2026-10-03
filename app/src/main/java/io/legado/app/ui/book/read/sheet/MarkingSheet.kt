@@ -127,16 +127,25 @@ fun MarkingSheet(
     var markColor by remember(show, editing) {
         mutableStateOf(MarkingEffect.colorOf(baseStyle))
     }
-    // 隐藏透传：仅编辑下划线类标记时保留已有宽度/偏移/SVG（自定义模式没有这些控件）；
-    // 新建走 effect 的规范值，避免存量脏宽度传染给新笔记
+    // 隐藏透传：仅当已有笔记本身就是下划线类效果时，才保留它的宽度/偏移/SVG；
+    // 背景色与字体色笔记这三个字段没有意义，一律回规范值。
+    //
+    // 这里原来写的是「只要 editingStyle 非 null 就透传」，与上一句注释不符，是宽度被
+    // 污染的来源：笔记若是用「样式来源 → 高亮规则」划的，styleJson 里存的是规则面板
+    // 里调过的宽度（规则有宽度滑块，笔记面板没有）。划线当下没有任何控件显示这个值，
+    // 用户也无从察觉；之后在列表里编辑这条笔记、哪怕只改个颜色，buildStyle 就会把
+    // 这个看不见的宽度写回样式，于是「莫名变粗/变细」。
+    val editingIsUnderline = remember(show, editing) {
+        MarkingEffect.fromStyle(editingStyle).isUnderline
+    }
     var underlineWidth by remember(show, editing) {
-        mutableStateOf(editingStyle?.underlineWidth ?: 1f)
+        mutableStateOf(if (editingIsUnderline) editingStyle?.underlineWidth ?: 1f else 1f)
     }
     var underlineOffset by remember(show, editing) {
-        mutableStateOf(editingStyle?.underlineOffset ?: 2f)
+        mutableStateOf(if (editingIsUnderline) editingStyle?.underlineOffset ?: 2f else 2f)
     }
     var underlineSvgPath by remember(show, editing) {
-        mutableStateOf(editingStyle?.underlineSvgPath)
+        mutableStateOf(if (editingIsUnderline) editingStyle?.underlineSvgPath else null)
     }
     var showColorPicker by remember(show, editing) { mutableStateOf(false) }
     // 打开取色器的种子色：点色板入口用当前选中色，长按预设色则以被长按的色为基准微调。
@@ -569,12 +578,31 @@ private fun MarkingColorSwatch(
  * 未选中的按钮会整个隐形、只看得见选中那一个。
  * 语义按 RadioButton，读屏能识别成单选。
  */
+/**
+ * 笔记面板效果格里可选的效果，顺序即显示顺序。
+ *
+ * 刻意不等于 [MarkingEffect.entries`：删除线（[MarkingEffect.STRIKE]）在划线笔记里
+ * 很少用，从格子里去掉，把位置让给更常用的双实线（[MarkingEffect.DOUBLE]）。
+ * 枚举值本身保留——存量删除线笔记要能正确反推回 STRIKE，否则一编辑就被降级成实线。
+ *
+ * 选中项不在此列表时（存量删除线笔记）不会高亮任何一格，这是预期行为。
+ */
+internal val SelectableEffects = listOf(
+    MarkingEffect.SOLID,
+    MarkingEffect.WAVE,
+    MarkingEffect.DASHED,
+    MarkingEffect.DOUBLE,
+    MarkingEffect.HIGHLIGHT,
+    MarkingEffect.BG,
+    MarkingEffect.TEXT,
+)
+
 @Composable
 internal fun MarkingEffectGrid(
     selectedEffect: MarkingEffect,
     onEffectSelected: (MarkingEffect) -> Unit,
 ) {
-    val entries = MarkingEffect.entries
+    val entries = SelectableEffects
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -635,6 +663,7 @@ internal fun MarkingEffect.labelRes(): Int = when (this) {
     MarkingEffect.WAVE -> R.string.bookmark_mark_effect_wave
     MarkingEffect.DASHED -> R.string.bookmark_mark_effect_dash
     MarkingEffect.STRIKE -> R.string.bookmark_mark_effect_strike
+    MarkingEffect.DOUBLE -> R.string.bookmark_mark_effect_double
     MarkingEffect.HIGHLIGHT -> R.string.bookmark_mark_effect_highlight
     MarkingEffect.BG -> R.string.bookmark_mark_effect_bg
     MarkingEffect.TEXT -> R.string.bookmark_mark_effect_text
