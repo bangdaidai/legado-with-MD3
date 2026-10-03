@@ -961,6 +961,8 @@ fun HighlightRuleEditSheet(
                 underlineFeather = underlineFeather,
                 underlineDashLen = underlineDashLen,
                 underlineDashGap = underlineDashGap,
+                underlineWavePeak = underlineWavePeak,
+                underlineWaveLength = underlineWaveLength,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -1020,6 +1022,8 @@ fun HighlightRuleEditSheet(
                     underlineFeather = underlineFeather,
                     underlineDashLen = underlineDashLen,
                     underlineDashGap = underlineDashGap,
+                    underlineWavePeak = underlineWavePeak,
+                    underlineWaveLength = underlineWaveLength,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),

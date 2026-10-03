@@ -83,12 +83,24 @@ class ReaderUnderlineGeometryTest {
     }
 
     @Test
-    fun `custom svg rejects feather because its ends are user drawn`() {
+    fun `custom svg exposes neither round cap nor feather`() {
         val support = underlineControlSupport(5)
 
         assertTrue(support.width)
-        assertTrue(support.roundCap)
-        assertFalse(support.feather)
+        assertFalse("SVG 两端由用户路径决定，不开放圆头", support.roundCap)
+        assertFalse("SVG 羽化语义不成立", support.feather)
+    }
+
+    @Test
+    fun `double line and strike expose neither round cap nor feather`() {
+        // 双线两条独立成段，圆头会吃掉两线间距；删除线固定在行高比例处，
+        // 圆头与羽化都只会让它看起来像渲染错误
+        listOf(4, 6).forEach { mode ->
+            val support = underlineControlSupport(mode)
+            assertTrue("mode $mode 应保留线宽", support.width)
+            assertFalse("mode $mode 不该开放圆头", support.roundCap)
+            assertFalse("mode $mode 不该开放羽化", support.feather)
+        }
     }
 
     @Test
@@ -119,18 +131,22 @@ class ReaderUnderlineGeometryTest {
         val passes = featherBandPasses(0f)
 
         assertEquals(1, passes.size)
+        assertEquals(0f, passes.single().insetFactor, 0f)
         assertEquals(1f, passes.single().alphaScale, 0f)
     }
 
     @Test
-    fun `band feather stacks alpha from opaque to transparent`() {
+    fun `band feather insets and fades together from solid core to transparent edge`() {
         val passes = featherBandPasses(2f)
 
         assertEquals(featherPassCount(2f) + 1, passes.size)
-        // 第一趟最实（alpha = 1），往后逐趟变淡，靠叠加模拟模糊
+        // 第一趟最实：不内缩、满 alpha
+        assertEquals(0f, passes.first().insetFactor, 0f)
         assertEquals(1f, passes.first().alphaScale, 1e-6f)
+        // 末趟最虚：内缩到最大、alpha 最低
+        assertEquals(1f, passes.last().insetFactor, 0f)
+        assertTrue("内缩与 alpha 应同步", passes.first().insetFactor < passes.last().insetFactor)
         assertTrue("alpha 应逐趟递减", passes.first().alphaScale > passes.last().alphaScale)
-        assertTrue(passes.all { it.alphaScale in 0f..1f })
     }
 
     @Test
@@ -139,8 +155,6 @@ class ReaderUnderlineGeometryTest {
 
         assertTrue(support.width)
         assertFalse(support.offset)
-        assertTrue(support.roundCap)
-        assertTrue(support.feather)
         assertFalse(support.dashPattern)
     }
 

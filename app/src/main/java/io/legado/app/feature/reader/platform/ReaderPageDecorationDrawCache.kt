@@ -85,18 +85,23 @@ internal class ReaderHalfHighlightDrawCommand(
         } else {
             0f
         }
-        // 模拟模糊：每趟都画满同一个矩形，靠 alpha 叠加让边界化开。
-        // 刻意不做「向内收缩」——那会让色带整体变小、上边缘与文字裂开一条缝，
-        // 边界反而更生硬。
+        // 边缘柔化：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
+        // 收缩量钳在色带短边的一半以内，窄命中段也不会把矩形收成负数。
+        val maxInset = if (featherDp <= 0f) {
+            0f
+        } else {
+            minOf(featherDp.dpToPx(), minOf(bandHeight, bounds.width) / 2f)
+        }
         featherBandPasses(featherDp).forEach { pass ->
             val alpha = (baseAlpha * pass.alphaScale).toInt().coerceIn(0, 255)
             if (alpha <= 0) return@forEach
+            val inset = pass.insetFactor * maxInset
             paint.color = rgb or (alpha shl 24)
             canvas.drawRoundRect(
-                bounds.left,
-                bandTop,
-                bounds.right,
-                bounds.bottom,
+                bounds.left + inset,
+                bandTop + inset,
+                bounds.right - inset,
+                bounds.bottom - inset,
                 radius,
                 radius,
                 paint,

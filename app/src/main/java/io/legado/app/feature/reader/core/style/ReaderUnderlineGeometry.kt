@@ -69,26 +69,27 @@ fun featherGaussian(d: Float, sigma: Float = READER_FEATHER_SIGMA): Float =
     kotlin.math.exp(-(d * d) / (2f * sigma * sigma)).toFloat()
 
 /**
- * 荧光色带的柔化趟次。**每趟都是同一个矩形**，靠 alpha 叠加模拟模糊：
- * 色带范围不因柔化而缩小，边界是「实色逐渐化开到透明」，而不是「内缩一圈留下硬边」。
+ * 荧光色带的边缘柔化趟次：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
  *
- * [alphaScale] 是该趟的 alpha 比例（0 最实 → 1 最虚）。
+ * [insetFactor] 是相对柔化半径的内缩比例（1 最外最虚 → 0 最实），
+ * [alphaScale] 是该趟的 alpha 比例。
  *
- * 描边羽化是「向外加粗 + 端点渐隐」，色带柔化是「同矩形叠加」，两者共用同一份
+ * 描边羽化是「向外加粗 + 端点渐隐」，色带柔化是「向内收缩」，两者共用同一份
  * 高斯权重序列，所以同半径下手感一致。
  */
 fun featherBandPasses(featherDp: Float): List<FeatherPass> {
-    if (featherDp <= 0f) return listOf(FeatherPass(1f))
+    if (featherDp <= 0f) return listOf(FeatherPass(0f, 1f))
     val passes = featherPassCount(featherDp)
-    // 从最实到最虚：alpha 递增，每趟都画满整个矩形
+    // 从最实到最虚：内缩比例与 alpha 同步递增
     return List(passes + 1) { index ->
         val d = index.toFloat() / passes
-        FeatherPass(alphaScale = featherGaussian(d))
+        FeatherPass(insetFactor = d, alphaScale = featherGaussian(d))
     }
 }
 
-/** 柔化一趟的 alpha 比例：1 最实，0 完全透明。 */
+/** 柔化一趟：[insetFactor] 相对半径的内缩比例，[alphaScale] 该趟的 alpha 比例。 */
 data class FeatherPass(
+    val insetFactor: Float,
     val alphaScale: Float,
 )
 
@@ -199,15 +200,29 @@ private val BAND_SUPPORT = UnderlineControlSupport(
     dashPattern = false,
 )
 
+/**
+ * 双下划线：两条线各自独立成段，端点圆头和羽化都作用在「整段」上而不是单条线，
+ * 视觉上和单实线没有区别、参数却互相干扰（圆头会把两条线的间距吃掉），
+ * 所以这两个参数对双线不开放。
+ */
+private val DOUBLE_LINE_SUPPORT = UnderlineControlSupport(
+    width = true,
+    offset = true,
+    layer = true,
+    roundCap = false,
+    feather = false,
+    dashPattern = false,
+)
+
 /** 线型编号与 `HighlightRule.underlineMode` / `ReaderUnderline.mode` 一致。 */
 fun underlineControlSupport(mode: Int): UnderlineControlSupport = when (mode) {
     0 -> NO_GEOMETRY // 无
     1 -> strokeSupport() // 实线
     2 -> strokeSupport(dashPattern = true) // 虚线
     3 -> strokeSupport(waveShape = true) // 波浪
-    4 -> strokeSupport() // 双下划线
-    5 -> strokeSupport(feather = false) // 自定义 SVG：羽化语义不成立
-    6 -> strokeSupport(offset = false) // 删除线：固定在行高比例处
+    4 -> DOUBLE_LINE_SUPPORT // 双下划线：不开放圆头与羽化
+    5 -> strokeSupport(roundCap = false, feather = false) // 自定义 SVG：不开放圆头与羽化
+    6 -> strokeSupport(offset = false, roundCap = false, feather = false) // 删除线
     7 -> BAND_SUPPORT // 荧光：填充色带，颜色 + 圆头 + 边缘柔化
     else -> NO_GEOMETRY
 }
@@ -215,13 +230,14 @@ fun underlineControlSupport(mode: Int): UnderlineControlSupport = when (mode) {
 private fun strokeSupport(
     offset: Boolean = true,
     dashPattern: Boolean = false,
+    roundCap: Boolean = true,
     feather: Boolean = true,
     waveShape: Boolean = false,
 ) = UnderlineControlSupport(
     width = true,
     offset = offset,
     layer = true,
-    roundCap = true,
+    roundCap = roundCap,
     feather = feather,
     dashPattern = dashPattern,
     waveShape = waveShape,

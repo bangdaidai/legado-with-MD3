@@ -287,16 +287,24 @@ internal fun DrawScope.drawFluorescentBand(
     val bandHeight = (bottom - bandTop).coerceAtLeast(0f)
     val radius = if (roundCap) bandHeight / 2f else 0f
     val baseAlpha = color.alpha
-    // 模拟模糊：每趟都画满同一个矩形，靠 alpha 叠加让边界化开。
-    // 刻意不做「向内收缩」——那会让色带整体变小、上边缘与文字裂开一条缝，
-    // 边界反而更生硬。
+    // 边缘柔化：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
+    // 收缩量钳在色带短边的一半以内，窄命中段也不会把矩形收成负数。
+    val maxInset = if (feather <= 0f) {
+        0f
+    } else {
+        minOf(feather.dp.toPx(), minOf(bandHeight, right - left) / 2f)
+    }
     featherBandPasses(feather).forEach { pass ->
         val alpha = baseAlpha * pass.alphaScale
         if (alpha <= 0.001f) return@forEach
+        val inset = pass.insetFactor * maxInset
         drawRoundRect(
             color = color.copy(alpha = alpha),
-            topLeft = Offset(left, bandTop),
-            size = Size(right - left, bandHeight),
+            topLeft = Offset(left + inset, bandTop + inset),
+            size = Size(
+                (right - left) - inset * 2f,
+                bandHeight - inset * 2f,
+            ),
             cornerRadius = CornerRadius(radius, radius),
         )
     }
