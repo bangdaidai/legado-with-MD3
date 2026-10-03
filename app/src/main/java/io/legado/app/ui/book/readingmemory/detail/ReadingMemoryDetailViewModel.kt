@@ -3,12 +3,18 @@ package io.legado.app.ui.book.readingmemory.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.model.TextProcessAnchor
+import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.help.book.TagManager
+import io.legado.app.ui.widget.components.text.toMarkingTextDecoration
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,7 +73,7 @@ class ReadingMemoryDetailViewModel(
             val (memory, _) = memoryAbandoned
             val book = repository.getBook(bookUrl)
             val statistics = repository.computeStatistics(bookUrl)
-            val excerpts = repository.getExcerpts(bookUrl)
+            val excerpts = repository.getExcerpts(bookUrl).map { it.toExcerptUi() }
             val protagonists = repository.getProtagonistNames(bookUrl)
             val readRecordTimelineDays = repository.getReadRecordTimelineDays(bookUrl)
             val readRecordTotalTime = repository.getReadRecordTotalTime(bookUrl)
@@ -349,4 +355,24 @@ class ReadingMemoryDetailViewModel(
         val scale = if (text.contains("万")) 10000 else 1
         return (number * scale).toLong().coerceAtLeast(0L)
     }
+
+    /**
+     * 书摘实体 → 列表项：原文（anchorJson）与划线样式（styleJson）都在这里解析一次。
+     *
+     * 与「所有笔记」页用同一套映射（`toMarkingTextDecoration`），两个列表的划线观感
+     * 才一致。样式为 null 时按纯文本渲染，不影响旧数据。
+     */
+    private fun BookMarking.toExcerptUi(): ExcerptUi = ExcerptUi(
+        id = id,
+        chapterName = chapterName,
+        note = note,
+        selectedText = GSON.fromJsonObject<TextProcessAnchor>(anchorJson)
+            .getOrNull()
+            ?.selectedText
+            .orEmpty(),
+        decoration = GSON.fromJsonObject<TextProcessStyle>(styleJson)
+            .getOrNull()
+            ?.toMarkingTextDecoration(),
+        raw = this,
+    )
 }

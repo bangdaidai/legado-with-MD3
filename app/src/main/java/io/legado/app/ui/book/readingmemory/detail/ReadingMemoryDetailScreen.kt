@@ -52,6 +52,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.JustificationMode
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -65,11 +67,8 @@ import io.legado.app.ui.book.tagmanage.TagEditData
 import io.legado.app.ui.book.tagmanage.TagEditSheet
 import androidx.compose.foundation.background
 import io.legado.app.data.entities.BookMarking
-import io.legado.app.domain.model.TextProcessAnchor
 import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.book.read.sheet.MarkingSheet
-import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -85,6 +84,7 @@ import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressInd
 import io.legado.app.ui.widget.components.ReadingSessionTimeline
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.text.MarkingStyledText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
@@ -674,13 +674,11 @@ private fun ExcerptSection(
         ticketThemeSettings.baseCardBorderColor
     }).takeIf { it != 0 }?.let(::Color) ?: LegadoTheme.colorScheme.outlineVariant
     val ticketStrokeWidth = ticketThemeSettings.baseCardBorderWidth.dp
+    // labelLarge 默认 Medium 字重，这里是长文本，回到 Normal 与正文观感一致
+    val excerptTextStyle = LegadoTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal)
     SectionCard(title = "书摘笔记") {
         state.excerpts.forEachIndexed { index, excerpt ->
-            val selectedText = remember(excerpt.anchorJson) {
-                GSON.fromJsonObject<TextProcessAnchor>(excerpt.anchorJson)
-                    .getOrNull()?.selectedText.orEmpty()
-            }
-            Column(modifier = Modifier.clickable { onEditMarking(excerpt) }) {
+            Column(modifier = Modifier.clickable { onEditMarking(excerpt.raw) }) {
                 if (index > 0) {
                     TicketNotchDivider(
                         modifier = Modifier.padding(vertical = 10.dp),
@@ -698,19 +696,24 @@ private fun ExcerptSection(
                     Spacer(modifier = Modifier.height(4.dp))
                     AppText(
                         text = excerpt.note,
-                        style = LegadoTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Normal,
+                        style = excerptTextStyle,
                         color = LegadoTheme.colorScheme.primary,
                         lineHeight = 22.sp,
+                        textAlign = TextAlign.Justify,
+                        // 中文没有空格，默认的 InterWord 拉伸量为 0，必须按字距拉伸
+                        justificationMode = JustificationMode.InterCharacter,
                     )
                 }
-                if (selectedText.isNotBlank()) {
+                if (excerpt.selectedText.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    AppText(
-                        text = selectedText,
-                        style = LegadoTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Normal,
+                    // 与「所有笔记」页共用 MarkingStyledText：还原正文里的划线观感
+                    MarkingStyledText(
+                        text = excerpt.selectedText,
+                        decoration = excerpt.decoration,
+                        style = excerptTextStyle,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Justify,
+                        justificationMode = JustificationMode.InterCharacter,
                     )
                 }
             }

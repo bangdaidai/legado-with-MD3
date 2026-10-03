@@ -1,10 +1,36 @@
 package io.legado.app.ui.book.readingmemory.detail
 
+import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.BookTagGroup
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadingStatistics
 import io.legado.app.ui.book.shareCard.ShareCardScene
+import io.legado.app.ui.widget.components.text.MarkingTextDecoration
+
+/**
+ * 书摘笔记的列表项。
+ *
+ * 原先 [ReadingMemoryDetailUiState.excerpts] 直接放 [BookMarking] 实体，由 Screen 自己
+ * `GSON.fromJsonObject` 解析 anchorJson 取原文——JSON 解析是数据层职责，留在 Screen 既违反
+ * UDF，也会随重组重复解析。这里把展示需要的字段在 ViewModel 一次算好；实体只作为编辑入口
+ * 与分享卡片的数据源随 [raw] 带过。
+ */
+@Stable
+data class ExcerptUi(
+    val id: String,
+    val chapterName: String,
+    val note: String,
+    /** 锚点里的选中文本，即书摘原文。 */
+    val selectedText: String,
+    /**
+     * 划线样式（线型/线色/背景色/字体色），由 `styleJson` 解析而来。
+     * 为 null 表示没有样式信息，按纯文本渲染。
+     */
+    val decoration: MarkingTextDecoration? = null,
+    /** 编辑弹层与分享卡片需要原始实体。 */
+    val raw: BookMarking,
+)
 
 /**
  * 阅读记忆详情页的 UI 状态。
@@ -35,7 +61,7 @@ data class ReadingMemoryDetailUiState(
     val statistics: ReadingStatistics? = null,
     val protagonistNames: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
-    val excerpts: List<BookMarking> = emptyList(),
+    val excerpts: List<ExcerptUi> = emptyList(),
     val readRecordTimelineDays: List<ReadRecordTimelineDay> = emptyList(),
     val readRecordTotalTime: Long = 0L,
     val availableTags: List<String> = emptyList(),
