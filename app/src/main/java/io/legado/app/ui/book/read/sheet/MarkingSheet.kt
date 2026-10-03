@@ -557,7 +557,12 @@ private fun MarkingColorSwatch(
 }
 
 /**
- * 6 选 1 效果组：单实线 / 波浪线 / 虚线 / 荧光笔 / 背景色 / 字体色。
+ * 7 选 1 效果组：单实线 / 波浪线 / 虚线 / 删除线 / 荧光笔 / 背景色 / 字体色。
+ *
+ * 条目直接取 [MarkingEffect.entries]，顺序即枚举声明顺序；线型编号见
+ * [io.legado.app.feature.reader.core.style.ReaderUnderlineGeometry.underlineControlSupport]。
+ * 双下划线（mode 4）与自定义 SVG（mode 5）不在这一组里：笔记面板选不到它们，
+ * 只能通过「样式来源 → 高亮规则」复用规则的样式。
  *
  * 连接式外观（首尾大圆角、中间小圆角、间隔 2dp 连成一体），但容器色自己给：
  * M3 ToggleButton 未选中态用的是 surface 系颜色，和 AppModalBottomSheet 的底色撞车，
