@@ -75,6 +75,7 @@ import io.legado.app.ui.widget.components.card.TicketNotchDivider
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.text.MarkingStyledText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
@@ -408,8 +409,11 @@ private fun MarkingRow(
             )
         }
         item.textSnippet?.let {
-            AppText(
+            // 还原正文里那条划线：线型/线色/荧光色带/背景色/字体色都由 styleJson 驱动，
+            // 与阅读页共用同一份几何与笔形（MarkingStyledText）
+            MarkingStyledText(
                 text = it,
+                decoration = item.decoration,
                 style = LegadoTheme.typography.bodyMedium,
                 color = LegadoTheme.colorScheme.onSurface,
                 maxLines = 3,

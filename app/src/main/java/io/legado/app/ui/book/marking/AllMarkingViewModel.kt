@@ -11,7 +11,10 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.model.TextProcessAnchor
+import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.help.book.ShareCardDataBuilder
+import io.legado.app.ui.widget.components.text.MarkingTextDecoration
+import io.legado.app.ui.widget.components.text.toMarkingTextDecoration
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.createFileIfNotExist
@@ -55,6 +58,12 @@ data class MarkingItemUi(
     val chapterName: String?,
     val note: String?,
     val textSnippet: String?,
+    /**
+     * 划线样式（线型/线色/背景色/字体色），由 `book_marks.styleJson` 解析而来。
+     * 列表渲染原文片段时用它还原正文里的那条划线；为 null 表示没有样式信息，
+     * 按纯文本显示。
+     */
+    val decoration: MarkingTextDecoration? = null,
     val bookName: String,
     val bookAuthor: String,
     val raw: BookMarking
@@ -124,14 +133,18 @@ class AllMarkingViewModel(
     ) { query, collapsed, allMarkings ->
         val grouped = allMarkings.asSequence()
             .map { marking ->
-                val snippet = GSON.fromJsonObject<TextProcessAnchor>(marking.anchorJson)
+                val anchor = GSON.fromJsonObject<TextProcessAnchor>(marking.anchorJson).getOrNull()
+                val snippet = anchor?.selectedText
+                // 样式即类型：styleJson 为空只可能来自没写过样式的旧数据，UI 侧按纯文本渲染
+                val decoration = GSON.fromJsonObject<TextProcessStyle>(marking.styleJson)
                     .getOrNull()
-                    ?.selectedText
+                    ?.toMarkingTextDecoration()
                 MarkingItemUi(
                     id = marking.id,
                     chapterName = marking.chapterName.ifBlank { null },
                     note = marking.note.ifBlank { null },
                     textSnippet = snippet?.ifBlank { null },
+                    decoration = decoration,
                     bookName = marking.bookName,
                     bookAuthor = marking.bookAuthor,
                     raw = marking

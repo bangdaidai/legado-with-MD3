@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -38,6 +39,7 @@ import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.feature.reader.platform.ReaderSvgPathCache
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.utils.ColorUtils
 
 /**
  * 笔记（划线/高亮）在普通文本上的表现参数。
@@ -46,10 +48,9 @@ import io.legado.app.ui.theme.LegadoTheme
  * `underlineMode` 用同一套线型编号，线宽/偏移单位都是 dp。划线、荧光色带、
  * 背景色、字体色四类效果都在这里表达，不额外引入「笔记类型」枚举。
  *
- * 颜色一律不做夜间明度反相：正文 `LegacyReaderStyleRangeMapper.resolveModeColor`
- * 的反相依赖阅读器纸张背景与阅读器夜间开关，列表卡片没有同一语境；而用户选色
- * 时看到的预览（`HighlightRulePreview`）是原色直接显示，这里跟预览保持一致，
- * 否则会变成「选的时候这样、列表里那样」。
+ * 颜色字段存的是**日间原色**（不做反相），夜间派生在 [MarkingStyledText] 渲染时按
+ * [LegadoTheme.isDark] 现算，与正文 `LegacyReaderStyleRangeMapper.resolveModeColor`
+ * 同一语义。这样主题切换不需要重新解析 JSON。
  */
 @Stable
 data class MarkingTextDecoration(
@@ -111,12 +112,19 @@ fun MarkingStyledText(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
 ) {
-    val textColor = decoration?.textColor
-    val backgroundColor = decoration?.backgroundColor
+    // 笔记样式没有夜间色，夜间按明度反相派生，与正文 resolveModeColor 同一语义。
+    // 判定用应用主题而不是阅读器夜间开关：列表卡片不在阅读器语境里，
+    // 后者只对正在阅读的那一页有意义。
+    val isNight = LegadoTheme.isDark
+    val textColor = decoration?.textColor.resolveMarkingColor(isNight)
+    val backgroundColor = decoration?.backgroundColor.resolveMarkingColor(isNight)
     val underlineMode = decoration?.underlineMode ?: 0
     // 线色兜底跟随字色，与正文 `underlineColor ?: textColor ?: 正文色` 同序；
-    // 最后一级用主题正文色而不是阅读器配置——列表不在阅读器语境里。
-    val lineColor = decoration?.underlineColor ?: textColor ?: LegadoTheme.colorScheme.onSurface
+    // 最后一级用主题正文色而不是阅读器配置——列表不在阅读器语境里，
+    // 且与正文一致：兜底色不参与反相（正文的兜底在 resolveModeColor 之后才取）。
+    val lineColor = decoration?.underlineColor.resolveMarkingColor(isNight)
+        ?: textColor
+        ?: LegadoTheme.colorScheme.onSurface
 
     val annotated = remember(text, textColor, backgroundColor) {
         buildAnnotatedString {
@@ -187,6 +195,18 @@ fun MarkingStyledText(
         overflow = overflow,
         onTextLayout = { layoutState.value = it },
     )
+}
+
+/**
+ * 夜间把日间色按 HSL 明度反相（[ColorUtils.flipLightness]），alpha 原样保留。
+ *
+ * 对应正文 `LegacyReaderStyleRangeMapper.resolveModeColor` 在 `nightColor == null`
+ * 时的派生分支：笔记样式不存夜间色，所以夜间只能在日间色上派生。null 保持 null
+ * ——正文同样不会拿兜底色去做反相。
+ */
+private fun Color?.resolveMarkingColor(isNight: Boolean): Color? {
+    val dayColor = this ?: return null
+    return if (isNight) Color(ColorUtils.flipLightness(dayColor.toArgb())) else dayColor
 }
 
 /** 荧光（`underlineMode == 7`）：铺下半行的填充色带，按行盒切开逐行画。 */
