@@ -372,13 +372,13 @@ internal fun DrawScope.drawUnderlineSegment(
     waveLengthDp: Float = READER_WAVE_HALF_WAVE_DP * 2f,
 ) {
     val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
-    // 线芯宽度在这里换算并抬到 1px，与正文 drawShape 的
-    // strokeWidth.coerceAtLeast(1f) 同口径：亚像素线宽正文会抬到 1px，
-    // 预览不抬的话两侧粗细不同
-    val coreWidth = widthDp.dp.toPx().coerceAtLeast(1f)
+    // 线宽在这里换算。刻意不做 coerceAtLeast(1f)：羽化 pass 的基准宽度一旦被抬高，
+    // 向两侧扩散的量随之错位，柔边会比原始实现更糊。亚像素宽度的抬升只发生在
+    // 最终描边那一趟（drawUnderlineShape 内部），不参与扩散量的计算。
+    val coreWidth = widthDp.dp.toPx()
     // 圆头内缩只按线芯宽度：羽化 pass 的加粗圆头向外扩散，内缩若随加粗增大，
     // 两端渐隐区会被整段吃掉，羽化和圆头一起失效
-    val capInset = if (cap == StrokeCap.Round) coreWidth / 2f else 0f
+    val capInset = if (cap == StrokeCap.Round) coreWidth.coerceAtLeast(1f) / 2f else 0f
     if (feather > 0f) {
         val passes = featherPassCount(feather)
         val baseAlpha = color.alpha

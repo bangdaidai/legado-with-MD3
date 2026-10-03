@@ -6,8 +6,8 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -233,6 +234,9 @@ fun HighlightRuleEditSheet(
     // Validation
     var patternError by remember(show, rule) { mutableStateOf<String?>(null) }
 
+    // 停靠预览区是否展开：默认展开，调参时随时能看到效果；折叠后只留标题行把高度让给表单
+    var previewDockExpanded by remember(show, rule) { mutableStateOf(true) }
+
     // File picker for background images (uses SelectImageContract for visual photo picker)
     val imagePicker = rememberLauncherForActivityResult(
         SelectImageContract()
@@ -356,678 +360,737 @@ fun HighlightRuleEditSheet(
             )
         },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            // === Section 1: Rule Info ===
-            SectionTitle(stringResource(R.string.rule_info))
-
-            AppTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = stringResource(R.string.rule_name),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            AppTextField(
-                value = pattern,
-                onValueChange = {
-                    pattern = it
-                    patternError = null
-                },
-                label = stringResource(R.string.rule_pattern),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                isError = patternError != null,
-                enabled = !useProtagonist,
-                supportingText = patternError?.let {
-                    { AppText(it, color = MaterialTheme.colorScheme.error) }
-                },
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            // 跟随主角：用知识图谱中的人物名代替正则
-            TinySwitchSettingItem(
-                title = stringResource(R.string.use_protagonist),
-                checked = useProtagonist,
-                onCheckedChange = { useProtagonist = it },
-            )
-            AnimatedVisibility(visible = useProtagonist) {
-                TinyDropdownSettingItem(
-                    title = stringResource(R.string.character_role_filter),
-                    selectedValue = characterRole,
-                    displayEntries = arrayOf(
-                        stringResource(R.string.character_role_all),
-                        stringResource(R.string.character_role_male_lead),
-                        stringResource(R.string.character_role_female_lead),
-                        stringResource(R.string.character_role_male_supporting),
-                        stringResource(R.string.character_role_female_supporting),
-                    ),
-                    entryValues = arrayOf(
-                        "",
-                        BookCharacterProfile.ROLE_MALE_LEAD,
-                        BookCharacterProfile.ROLE_FEMALE_LEAD,
-                        BookCharacterProfile.ROLE_MALE_SUPPORTING,
-                        BookCharacterProfile.ROLE_FEMALE_SUPPORTING,
-                    ),
-                    onValueChange = { characterRole = it },
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            val scopeEntries = arrayOf(
-                stringResource(R.string.target_all),
-                stringResource(R.string.target_title),
-                stringResource(R.string.target_body),
-            )
-            val scopeValues = arrayOf(
-                HighlightRule.TARGET_ALL.toString(),
-                HighlightRule.TARGET_TITLE.toString(),
-                HighlightRule.TARGET_BODY.toString(),
-            )
-            TinyDropdownSettingItem(
-                title = stringResource(R.string.target_scope),
-                selectedValue = targetScope.toString(),
-                displayEntries = scopeEntries,
-                entryValues = scopeValues,
-                onValueChange = { targetScope = it.toIntOrNull() ?: HighlightRule.TARGET_ALL },
-            )
-
-            TinySwitchSettingItem(
-                title = stringResource(R.string.enable_rule),
-                checked = enabled,
-                onCheckedChange = { enabled = it },
-            )
-
-            // === Section 2: Style Settings ===
-            SectionTitle(stringResource(R.string.style_settings))
-
-            // 自定义字体
-            TinySwitchSettingItem(
-                title = "自定义字体",
-                checked = hasFont,
-                onCheckedChange = { hasFont = it },
-            )
-            AnimatedVisibility(visible = hasFont) {
-                TinyClickableSettingItem(
-                    title = stringResource(R.string.select_font),
-                    description = fontPath.ifBlank { null }?.let { File(it).name },
-                    onClick = { showFontSelect = true },
-                )
-            }
-
-            // Text color
-            TinyClearColorModeSettingItem(
-                title = stringResource(R.string.text_color),
-                dayColor = textColor,
-                nightColor = textColorNight,
-                onClickColor = { isNight ->
-                    if (isNight) showTextColorNightPicker = true
-                    else showTextColorPicker = true
-                },
-                onClearColor = { _ ->
-                    // 刷新：同时清除日间色和夜间色
-                    textColor = null
-                    textColorNight = null
-                },
-            )
-
-            // Font weight — three options: Regular(400), Bold(700), Light(300)
-            val weightEntries = stringArrayResource(R.array.text_font_weight)
-            TinyDropdownSettingItem(
-                title = stringResource(R.string.font_weight_text),
-                selectedValue = fontWeight.toString(),
-                displayEntries = weightEntries,
-                entryValues = arrayOf("400", "700", "300"),
-                onValueChange = { fontWeight = it.toIntOrNull() ?: 400 },
-            )
-
-            // Italic
-            TinySwitchSettingItem(
-                title = stringResource(R.string.read_config_italic),
-                checked = isItalic,
-                onCheckedChange = { isItalic = it },
-            )
-
-            // Font size offset
-            TinySliderSettingItem(
-                title = stringResource(R.string.font_size_offset),
-                value = fontSizeOffset.toFloat(),
-                valueRange = -10f..10f,
-                steps = 19,
-                description = if (fontSizeOffset == 0) {
-                    stringResource(R.string.text_default)
-                } else {
-                    stringResource(R.string.font_size_offset_value, fontSizeOffset)
-                },
-                onValueChange = { fontSizeOffset = it.toInt() },
-            )
-
-            // Underline — 「无」即原来的关闭，选中具体线型即原来的开启；下拉常驻，细节项按选中态展开
-            val underlineEntries = arrayOf(
-                stringResource(R.string.underline_none),
-                stringResource(R.string.underline_solid),
-                stringResource(R.string.underline_dashed),
-                stringResource(R.string.underline_wave),
-                stringResource(R.string.underline_title_bar),
-                stringResource(R.string.underline_svg),
-                stringResource(R.string.bookmark_mark_effect_strike),
-                stringResource(R.string.bookmark_mark_effect_highlight),
-            )
-            val underlineValues = arrayOf("0", "1", "2", "3", "4", "5", "6", "7")
-            TinyDropdownSettingItem(
-                title = stringResource(R.string.underline_style),
-                selectedValue = underlineMode.toString(),
-                displayEntries = underlineEntries,
-                entryValues = underlineValues,
-                onValueChange = { underlineMode = it.toIntOrNull() ?: 0 },
-            )
-            AnimatedVisibility(visible = underlineMode > 0) {
-                Column {
-                    // 哪些参数对当前线型真的有效果，由共享几何判定，和正文渲染同一口径。
-                    // 荧光(7) 是铺下半行的填充色带、删除线(6) 固定在行高 52%，
-                    // 宽度/偏移/圆头/羽化对它们都是死参数，露出来只会让人白调。
-                    val support = underlineControlSupport(underlineMode)
-                    AnimatedVisibility(visible = underlineMode == 5) {
-                        AppTextField(
-                            value = underlineSvgPath,
-                            onValueChange = { underlineSvgPath = it },
-                            label = stringResource(R.string.svg_path),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    TinyClearColorModeSettingItem(
-                        title = stringResource(R.string.underline_color),
-                        dayColor = underlineColor,
-                        nightColor = underlineColorNight,
-                        onClickColor = { isNight ->
-                            if (isNight) showUnderlineColorNightPicker = true
-                            else showUnderlineColorPicker = true
-                        },
-                        onClearColor = { _ ->
-                            // 刷新：同时清除日间色和夜间色
-                            underlineColor = null
-                            underlineColorNight = null
-                        },
-                    )
-
-                    AnimatedVisibility(visible = support.width) {
-                        TinySliderSettingItem(
-                            title = stringResource(R.string.underline_width),
-                            value = underlineWidth,
-                            valueRange = 0.1f..20f,
-                            description = String.format("%.1f dp", underlineWidth),
-                            onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
-                            onReset = { underlineWidth = 1f },
-                        )
-                    }
-
-                    AnimatedVisibility(visible = support.offset) {
-                        TinySliderSettingItem(
-                            title = stringResource(R.string.underline_offset),
-                            value = underlineOffset,
-                            valueRange = -20f..10f,
-                            description = String.format("%+.1f dp", underlineOffset),
-                            onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
-                            onReset = { underlineOffset = 2f },
-                        )
-                    }
-
-                    AnimatedVisibility(visible = support.layer) {
-                        TinySwitchSettingItem(
-                            title = stringResource(R.string.underline_below_text),
-                            checked = underlineBelowText,
-                            onCheckedChange = { underlineBelowText = it },
-                        )
-                    }
-
-                    AnimatedVisibility(visible = support.roundCap) {
-                        TinySwitchSettingItem(
-                            title = stringResource(R.string.underline_round_cap),
-                            checked = underlineRoundCap,
-                            onCheckedChange = { underlineRoundCap = it },
-                        )
-                    }
-
-                    AnimatedVisibility(visible = support.feather) {
-                        TinySliderSettingItem(
-                            title = stringResource(R.string.underline_feather),
-                            value = underlineFeather,
-                            valueRange = 0f..5f,
-                            description = String.format("%.1f dp", underlineFeather),
-                            onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
-                        )
-                    }
-
-                    AnimatedVisibility(visible = support.dashPattern) {
-                        Column {
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_dash_len),
-                                value = underlineDashLen,
-                                valueRange = 0f..20f,
-                                description = String.format("%.1f dp", underlineDashLen),
-                                onValueChange = { underlineDashLen = (it * 10).toInt() / 10f },
-                                onReset = { underlineDashLen = 8f },
-                            )
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_dash_gap),
-                                value = underlineDashGap,
-                                valueRange = 0f..20f,
-                                description = String.format("%.1f dp", underlineDashGap),
-                                onValueChange = { underlineDashGap = (it * 10).toInt() / 10f },
-                                onReset = { underlineDashGap = 5f },
-                            )
-                        }
-                    }
-
-                    // 波浪形状：峰高是实际画出来的高度（渲染时控制点取 2 倍），
-                    // 波长是一个完整「上-下」周期。默认值与迁移前一致。
-                    AnimatedVisibility(visible = support.waveShape) {
-                        Column {
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_wave_peak),
-                                value = underlineWavePeak,
-                                valueRange = 0.5f..12f,
-                                description = String.format("%.1f dp", underlineWavePeak),
-                                onValueChange = { underlineWavePeak = (it * 10).toInt() / 10f },
-                                onReset = { underlineWavePeak = HighlightRule.DEFAULT_WAVE_PEAK_DP },
-                            )
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_wave_length),
-                                value = underlineWaveLength,
-                                valueRange = 4f..60f,
-                                description = String.format("%.1f dp", underlineWaveLength),
-                                onValueChange = { underlineWaveLength = (it * 2).toInt() / 2f },
-                                onReset = { underlineWaveLength = HighlightRule.DEFAULT_WAVE_LENGTH_DP },
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Background color
-            TinyClearColorModeSettingItem(
-                title = stringResource(R.string.bg_color),
-                dayColor = bgColor,
-                nightColor = bgColorNight,
-                onClickColor = { isNight ->
-                    if (isNight) showBgColorNightPicker = true
-                    else showBgColorPicker = true
-                },
-                onClearColor = { _ ->
-                    // 刷新：同时清除日间色和夜间色
-                    bgColor = null
-                    bgColorNight = null
-                },
-            )
-
-            // Background image
-            TinySwitchSettingItem(
-                title = stringResource(R.string.highlight_bg_image),
-                checked = hasBgImage,
-                onCheckedChange = { hasBgImage = it },
-            )
-            AnimatedVisibility(visible = hasBgImage) {
-                TinyClickableSettingItem(
-                    title = stringResource(R.string.highlight_bg_image),
-                    description = bgImage.ifBlank { null }?.let { File(it).name },
-                    onClick = {
-                        imagePicker.launch()
-                    },
-                )
-            }
-            AnimatedVisibility(visible = hasBgImage && bgImage.isNotBlank()) {
-                Column {
-                    val fitEntries = arrayOf(
-                        stringResource(R.string.bg_fit_tile),
-                        stringResource(R.string.bg_fit_stretch),
-                        stringResource(R.string.bg_fit_crop),
-                        stringResource(R.string.bg_fit_nine_patch),
-                    )
-                    val fitValues = arrayOf("0", "1", "2", "3")
-                    TinyDropdownSettingItem(
-                        title = stringResource(R.string.bg_image_fit),
-                        selectedValue = bgImageFit.toString(),
-                        displayEntries = fitEntries,
-                        entryValues = fitValues,
-                        onValueChange = {
-                            val newFit = it.toIntOrNull() ?: 0
-                            bgImageFit = newFit
-                            if (newFit == 3) {
-                                showNinePatchEditor = true
-                            }
-                        },
-                    )
-
-                    AnimatedVisibility(visible = bgImageFit == 3) {
-                        Column {
-                            TinyClickableSettingItem(
-                                title = "内边距",
-                                description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom),
-                                onClick = { showInsetEditor = !showInsetEditor },
-                            )
-                            AnimatedVisibility(visible = showInsetEditor) {
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                    // 一行四个按钮，点击切换哪个方向的滑块
-                                    var activeInset by remember { mutableIntStateOf(-1) }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
-                                            val selected = activeInset == idx
-                                            val values = listOf(bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom)
-                                            NormalCard(
-                                                onClick = { activeInset = if (selected) -1 else idx },
-                                                containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                                                    else LegadoTheme.colorScheme.surfaceContainerLow,
-                                                cornerRadius = 8.dp,
-                                                modifier = Modifier.weight(1f),
-                                            ) {
-                                                AppText(
-                                                    "$label ${values[idx].toInt()}",
-                                                    style = LegadoTheme.typography.labelSmall,
-                                                    color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                                                        else LegadoTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
-                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                )
-                                            }
-                                        }
-                                    }
-                                    // 选中方向的滑块
-                                    AnimatedVisibility(visible = activeInset >= 0) {
-                                        val range = -32f..64f
-                                        val currentVal = when (activeInset) {
-                                            0 -> bgPaddingStart; 1 -> bgPaddingEnd
-                                            2 -> bgPaddingTop; else -> bgPaddingBottom
-                                        }
-                                        val updateInset: (Float) -> Unit = { v ->
-                                            val rounded = v.toInt().toFloat()
-                                            when (activeInset) {
-                                                0 -> bgPaddingStart = rounded
-                                                1 -> bgPaddingEnd = rounded
-                                                2 -> bgPaddingTop = rounded
-                                                else -> bgPaddingBottom = rounded
-                                            }
-                                        }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Slider(
-                                                value = currentVal,
-                                                onValueChange = updateInset,
-                                                valueRange = range,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                            // 步进按钮：1dp 精调，滑块粗调
-                                            ValueStepper(
-                                                value = currentVal,
-                                                displayValue = currentVal,
-                                                valueRange = range,
-                                                onValueChange = updateInset,
-                                                stepSize = 1f,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            TinyClickableSettingItem(
-                                title = "外边距",
-                                description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom),
-                                onClick = { showMarginEditor = !showMarginEditor },
-                            )
-                            AnimatedVisibility(visible = showMarginEditor) {
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                    var activeMargin by remember { mutableIntStateOf(-1) }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
-                                            val selected = activeMargin == idx
-                                            val values = listOf(bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom)
-                                            NormalCard(
-                                                onClick = { activeMargin = if (selected) -1 else idx },
-                                                containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                                                    else LegadoTheme.colorScheme.surfaceContainerLow,
-                                                cornerRadius = 8.dp,
-                                                modifier = Modifier.weight(1f),
-                                            ) {
-                                                AppText(
-                                                    "$label ${values[idx].toInt()}",
-                                                    style = LegadoTheme.typography.labelSmall,
-                                                    color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                                                        else LegadoTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
-                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                )
-                                            }
-                                        }
-                                    }
-                                    AnimatedVisibility(visible = activeMargin >= 0) {
-                                        val currentVal = when (activeMargin) {
-                                            0 -> bgMarginStart; 1 -> bgMarginEnd
-                                            2 -> bgMarginTop; else -> bgMarginBottom
-                                        }
-                                        val updateMargin: (Float) -> Unit = { v ->
-                                            val rounded = v.toInt().toFloat()
-                                            when (activeMargin) {
-                                                0 -> bgMarginStart = rounded
-                                                1 -> bgMarginEnd = rounded
-                                                2 -> bgMarginTop = rounded
-                                                else -> bgMarginBottom = rounded
-                                            }
-                                        }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Slider(
-                                                value = currentVal,
-                                                onValueChange = updateMargin,
-                                                valueRange = -16f..64f,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                            // 步进按钮：1dp 精调，滑块粗调
-                                            ValueStepper(
-                                                value = currentVal,
-                                                displayValue = currentVal,
-                                                valueRange = -16f..64f,
-                                                onValueChange = updateMargin,
-                                                stepSize = 1f,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // === Section 3: Config Binding ===
-            if (allConfigNames.isNotEmpty()) {
-                SectionTitle("应用排版")
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Global toggle
-                    item {
-                        val selected = configNames.isEmpty()
-                        val bg = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                        else LegadoTheme.colorScheme.surfaceContainerLow
-                        val fg = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                        else LegadoTheme.colorScheme.onSurfaceVariant
-                        NormalCard(
-                            onClick = { configNames = emptySet() },
-                            containerColor = bg,
-                            cornerRadius = 8.dp,
-                        ) {
-                            AppText(
-                                "全局",
-                                style = LegadoTheme.typography.labelMedium,
-                                color = fg,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            )
-                        }
-                    }
-                    itemsIndexed(allConfigNames) { _, cn ->
-                        val selected = cn in configNames
-                        val bg = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                        else LegadoTheme.colorScheme.surfaceContainerLow
-                        val fg = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                        else LegadoTheme.colorScheme.onSurfaceVariant
-                        NormalCard(
-                            onClick = {
-                                configNames = if (selected) configNames - cn
-                                else configNames + cn
-                            },
-                            containerColor = bg,
-                            cornerRadius = 8.dp,
-                        ) {
-                            AppText(
-                                cn,
-                                style = LegadoTheme.typography.labelMedium,
-                                color = fg,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            )
-                        }
-                    }
-                }
-            }
-
-            // === Section 5: Preview ===
-            SectionTitle(stringResource(R.string.preview_effect))
-
-            AppTextField(
-                value = sampleText,
-                onValueChange = { sampleText = it },
-                label = stringResource(R.string.sample_text),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            // 预览页面底色跟随「应用排版」绑定的排版；「全局」没绑定具体排版，用当前正在用的那份
-            val previewConfig = remember(configNames) {
-                configNames.firstNotNullOfOrNull { ReadBookConfig.configByName(it) }
-                    ?: ReadBookConfig.durConfig
-            }
-            val previewDayBgImage = pageBgImagePathOf(previewConfig.bgType, previewConfig.bgStr)
-            val previewDayBgColor = if (previewDayBgImage == null) {
-                previewConfig.bgStr.toPreviewColor(0xFFEEEEEE.toInt())
-            } else {
-                0xFFEEEEEE.toInt()
-            }
-
-            HighlightRulePreview(
-                label = stringResource(R.string.day),
-                sampleText = sampleText,
-                pattern = pattern,
-                textColor = textColor,
-                bgColor = bgColor,
-                bgImage = if (hasBgImage) bgImage else "",
-                bgImageFit = bgImageFit,
-                bgImageScale = bgImageScale,
-                underlineMode = underlineMode,
-                underlineColor = if (underlineMode > 0) underlineColor else null,
-                underlineWidth = underlineWidth,
-                underlineOffset = underlineOffset,
-                underlineSvgPath = underlineSvgPath,
-                pageBgColor = previewDayBgColor,
-                pageTextColor = previewConfig.getTextColor().toPreviewColor(0xFF3E3D3B.toInt()),
-                pageBgImagePath = previewDayBgImage,
-                npLeft = effectiveNineSlice.left,
-                npRight = effectiveNineSlice.right,
-                npTop = effectiveNineSlice.top,
-                npBottom = effectiveNineSlice.bottom,
-                bgPadStart = bgPaddingStart,
-                bgPadEnd = bgPaddingEnd,
-                bgPadTop = bgPaddingTop,
-                bgPadBottom = bgPaddingBottom,
-                bgMarginStart = bgMarginStart,
-                bgMarginEnd = bgMarginEnd,
-                bgMarginTop = bgMarginTop,
-                bgMarginBottom = bgMarginBottom,
-                fontSizeOffset = fontSizeOffset,
-                fontWeight = fontWeight,
-                isItalic = isItalic,
-                underlineBelowText = underlineBelowText,
-                underlineRoundCap = underlineRoundCap,
-                underlineFeather = underlineFeather,
-                underlineDashLen = underlineDashLen,
-                underlineDashGap = underlineDashGap,
-                underlineWavePeak = underlineWavePeak,
-                underlineWaveLength = underlineWaveLength,
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 设置项滚动区：预览停到底部后，表单只能分到「弹层高度 - 预览高度」，
+            // 用 weight 吃满剩余高度；fill = false 保证表单内容不足时弹层不被撑到最大高度。
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-            )
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // === Section 1: Rule Info ===
+                SectionTitle(stringResource(R.string.rule_info))
 
-            // Night preview — hidden when bgImage is active
-            if (!hasBgImage || bgImage.isBlank()) {
-                // 夜间预览：夜间色优先，否则从日间色派生
-                val nightTextColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) }
-                val nightBgColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) }
-                val nightUnderlineColor = if (underlineMode > 0) {
-                    underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) }
-                } else null
-                val previewNightBgImage = pageBgImagePathOf(
-                    previewConfig.bgTypeNight, previewConfig.bgStrNight
+                AppTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = stringResource(R.string.rule_name),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                val previewNightBgColor = if (previewNightBgImage == null) {
-                    previewConfig.bgStrNight.toPreviewColor(0xFF000000.toInt())
-                } else {
-                    0xFF000000.toInt()
+
+                Spacer(Modifier.height(8.dp))
+
+                AppTextField(
+                    value = pattern,
+                    onValueChange = {
+                        pattern = it
+                        patternError = null
+                    },
+                    label = stringResource(R.string.rule_pattern),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = patternError != null,
+                    enabled = !useProtagonist,
+                    supportingText = patternError?.let {
+                        { AppText(it, color = MaterialTheme.colorScheme.error) }
+                    },
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // 跟随主角：用知识图谱中的人物名代替正则
+                TinySwitchSettingItem(
+                    title = stringResource(R.string.use_protagonist),
+                    checked = useProtagonist,
+                    onCheckedChange = { useProtagonist = it },
+                )
+                AnimatedVisibility(visible = useProtagonist) {
+                    TinyDropdownSettingItem(
+                        title = stringResource(R.string.character_role_filter),
+                        selectedValue = characterRole,
+                        displayEntries = arrayOf(
+                            stringResource(R.string.character_role_all),
+                            stringResource(R.string.character_role_male_lead),
+                            stringResource(R.string.character_role_female_lead),
+                            stringResource(R.string.character_role_male_supporting),
+                            stringResource(R.string.character_role_female_supporting),
+                        ),
+                        entryValues = arrayOf(
+                            "",
+                            BookCharacterProfile.ROLE_MALE_LEAD,
+                            BookCharacterProfile.ROLE_FEMALE_LEAD,
+                            BookCharacterProfile.ROLE_MALE_SUPPORTING,
+                            BookCharacterProfile.ROLE_FEMALE_SUPPORTING,
+                        ),
+                        onValueChange = { characterRole = it },
+                    )
                 }
-                HighlightRulePreview(
-                    label = stringResource(R.string.night),
-                    sampleText = sampleText,
-                    pattern = pattern,
-                    textColor = nightTextColor,
-                    bgColor = nightBgColor,
-                    bgImage = "",
-                    bgImageFit = bgImageFit,
-                    bgImageScale = bgImageScale,
-                    underlineMode = underlineMode,
-                    underlineColor = nightUnderlineColor,
-                    underlineWidth = underlineWidth,
-                    underlineOffset = underlineOffset,
-                    underlineSvgPath = underlineSvgPath,
-                    pageBgColor = previewNightBgColor,
-                    pageTextColor = previewConfig.getTextColorNight()
-                        .toPreviewColor(0xFFADADAD.toInt()),
-                    pageBgImagePath = previewNightBgImage,
-                    npLeft = npLeft,
-                    npRight = npRight,
-                    npTop = npTop,
-                    npBottom = npBottom,
-                    bgPadStart = bgPaddingStart,
-                    bgPadEnd = bgPaddingEnd,
-                    bgPadTop = bgPaddingTop,
-                    bgPadBottom = bgPaddingBottom,
-                    bgMarginStart = bgMarginStart,
-                    bgMarginEnd = bgMarginEnd,
-                    bgMarginTop = bgMarginTop,
-                    bgMarginBottom = bgMarginBottom,
-                    fontSizeOffset = fontSizeOffset,
-                    fontWeight = fontWeight,
-                    isItalic = isItalic,
-                    underlineBelowText = underlineBelowText,
-                    underlineRoundCap = underlineRoundCap,
-                    underlineFeather = underlineFeather,
-                    underlineDashLen = underlineDashLen,
-                    underlineDashGap = underlineDashGap,
-                    underlineWavePeak = underlineWavePeak,
-                    underlineWaveLength = underlineWaveLength,
+
+                Spacer(Modifier.height(8.dp))
+
+                val scopeEntries = arrayOf(
+                    stringResource(R.string.target_all),
+                    stringResource(R.string.target_title),
+                    stringResource(R.string.target_body),
+                )
+                val scopeValues = arrayOf(
+                    HighlightRule.TARGET_ALL.toString(),
+                    HighlightRule.TARGET_TITLE.toString(),
+                    HighlightRule.TARGET_BODY.toString(),
+                )
+                TinyDropdownSettingItem(
+                    title = stringResource(R.string.target_scope),
+                    selectedValue = targetScope.toString(),
+                    displayEntries = scopeEntries,
+                    entryValues = scopeValues,
+                    onValueChange = { targetScope = it.toIntOrNull() ?: HighlightRule.TARGET_ALL },
+                )
+
+                TinySwitchSettingItem(
+                    title = stringResource(R.string.enable_rule),
+                    checked = enabled,
+                    onCheckedChange = { enabled = it },
+                )
+
+                // === Section 2: Style Settings ===
+                SectionTitle(stringResource(R.string.style_settings))
+
+                // 自定义字体
+                TinySwitchSettingItem(
+                    title = "自定义字体",
+                    checked = hasFont,
+                    onCheckedChange = { hasFont = it },
+                )
+                AnimatedVisibility(visible = hasFont) {
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.select_font),
+                        description = fontPath.ifBlank { null }?.let { File(it).name },
+                        onClick = { showFontSelect = true },
+                    )
+                }
+
+                // Text color
+                TinyClearColorModeSettingItem(
+                    title = stringResource(R.string.text_color),
+                    dayColor = textColor,
+                    nightColor = textColorNight,
+                    onClickColor = { isNight ->
+                        if (isNight) showTextColorNightPicker = true
+                        else showTextColorPicker = true
+                    },
+                    onClearColor = { _ ->
+                        // 刷新：同时清除日间色和夜间色
+                        textColor = null
+                        textColorNight = null
+                    },
+                )
+
+                // Font weight — three options: Regular(400), Bold(700), Light(300)
+                val weightEntries = stringArrayResource(R.array.text_font_weight)
+                TinyDropdownSettingItem(
+                    title = stringResource(R.string.font_weight_text),
+                    selectedValue = fontWeight.toString(),
+                    displayEntries = weightEntries,
+                    entryValues = arrayOf("400", "700", "300"),
+                    onValueChange = { fontWeight = it.toIntOrNull() ?: 400 },
+                )
+
+                // Italic
+                TinySwitchSettingItem(
+                    title = stringResource(R.string.read_config_italic),
+                    checked = isItalic,
+                    onCheckedChange = { isItalic = it },
+                )
+
+                // Font size offset
+                TinySliderSettingItem(
+                    title = stringResource(R.string.font_size_offset),
+                    value = fontSizeOffset.toFloat(),
+                    valueRange = -10f..10f,
+                    steps = 19,
+                    description = if (fontSizeOffset == 0) {
+                        stringResource(R.string.text_default)
+                    } else {
+                        stringResource(R.string.font_size_offset_value, fontSizeOffset)
+                    },
+                    onValueChange = { fontSizeOffset = it.toInt() },
+                )
+
+                // Underline — 「无」即原来的关闭，选中具体线型即原来的开启；下拉常驻，细节项按选中态展开
+                val underlineEntries = arrayOf(
+                    stringResource(R.string.underline_none),
+                    stringResource(R.string.underline_solid),
+                    stringResource(R.string.underline_dashed),
+                    stringResource(R.string.underline_wave),
+                    stringResource(R.string.underline_title_bar),
+                    stringResource(R.string.underline_svg),
+                    stringResource(R.string.bookmark_mark_effect_strike),
+                    stringResource(R.string.bookmark_mark_effect_highlight),
+                )
+                val underlineValues = arrayOf("0", "1", "2", "3", "4", "5", "6", "7")
+                TinyDropdownSettingItem(
+                    title = stringResource(R.string.underline_style),
+                    selectedValue = underlineMode.toString(),
+                    displayEntries = underlineEntries,
+                    entryValues = underlineValues,
+                    onValueChange = { underlineMode = it.toIntOrNull() ?: 0 },
+                )
+                AnimatedVisibility(visible = underlineMode > 0) {
+                    Column {
+                        // 哪些参数对当前线型真的有效果，由共享几何判定，和正文渲染同一口径。
+                        // 荧光(7) 是铺下半行的填充色带、删除线(6) 固定在行高 52%，
+                        // 宽度/偏移/圆头/羽化对它们都是死参数，露出来只会让人白调。
+                        val support = underlineControlSupport(underlineMode)
+                        AnimatedVisibility(visible = underlineMode == 5) {
+                            AppTextField(
+                                value = underlineSvgPath,
+                                onValueChange = { underlineSvgPath = it },
+                                label = stringResource(R.string.svg_path),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+
+                        TinyClearColorModeSettingItem(
+                            title = stringResource(R.string.underline_color),
+                            dayColor = underlineColor,
+                            nightColor = underlineColorNight,
+                            onClickColor = { isNight ->
+                                if (isNight) showUnderlineColorNightPicker = true
+                                else showUnderlineColorPicker = true
+                            },
+                            onClearColor = { _ ->
+                                // 刷新：同时清除日间色和夜间色
+                                underlineColor = null
+                                underlineColorNight = null
+                            },
+                        )
+
+                        AnimatedVisibility(visible = support.width) {
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_width),
+                                value = underlineWidth,
+                                valueRange = 0.1f..20f,
+                                description = String.format("%.1f dp", underlineWidth),
+                                onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
+                                onReset = { underlineWidth = 1f },
+                            )
+                        }
+
+                        AnimatedVisibility(visible = support.offset) {
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_offset),
+                                value = underlineOffset,
+                                valueRange = -20f..10f,
+                                description = String.format("%+.1f dp", underlineOffset),
+                                onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
+                                onReset = { underlineOffset = 2f },
+                            )
+                        }
+
+                        AnimatedVisibility(visible = support.layer) {
+                            TinySwitchSettingItem(
+                                title = stringResource(R.string.underline_below_text),
+                                checked = underlineBelowText,
+                                onCheckedChange = { underlineBelowText = it },
+                            )
+                        }
+
+                        AnimatedVisibility(visible = support.roundCap) {
+                            TinySwitchSettingItem(
+                                title = stringResource(R.string.underline_round_cap),
+                                checked = underlineRoundCap,
+                                onCheckedChange = { underlineRoundCap = it },
+                            )
+                        }
+
+                        AnimatedVisibility(visible = support.feather) {
+                            TinySliderSettingItem(
+                                title = stringResource(R.string.underline_feather),
+                                value = underlineFeather,
+                                valueRange = 0f..5f,
+                                description = String.format("%.1f dp", underlineFeather),
+                                onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
+                            )
+                        }
+
+                        AnimatedVisibility(visible = support.dashPattern) {
+                            Column {
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.underline_dash_len),
+                                    value = underlineDashLen,
+                                    valueRange = 0f..20f,
+                                    description = String.format("%.1f dp", underlineDashLen),
+                                    onValueChange = { underlineDashLen = (it * 10).toInt() / 10f },
+                                    onReset = { underlineDashLen = 8f },
+                                )
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.underline_dash_gap),
+                                    value = underlineDashGap,
+                                    valueRange = 0f..20f,
+                                    description = String.format("%.1f dp", underlineDashGap),
+                                    onValueChange = { underlineDashGap = (it * 10).toInt() / 10f },
+                                    onReset = { underlineDashGap = 5f },
+                                )
+                            }
+                        }
+
+                        // 波浪形状：峰高是实际画出来的高度（渲染时控制点取 2 倍），
+                        // 波长是一个完整「上-下」周期。默认值与迁移前一致。
+                        AnimatedVisibility(visible = support.waveShape) {
+                            Column {
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.underline_wave_peak),
+                                    value = underlineWavePeak,
+                                    valueRange = 0.5f..12f,
+                                    description = String.format("%.1f dp", underlineWavePeak),
+                                    onValueChange = { underlineWavePeak = (it * 10).toInt() / 10f },
+                                    onReset = { underlineWavePeak = HighlightRule.DEFAULT_WAVE_PEAK_DP },
+                                )
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.underline_wave_length),
+                                    value = underlineWaveLength,
+                                    valueRange = 4f..60f,
+                                    description = String.format("%.1f dp", underlineWaveLength),
+                                    onValueChange = { underlineWaveLength = (it * 2).toInt() / 2f },
+                                    onReset = { underlineWaveLength = HighlightRule.DEFAULT_WAVE_LENGTH_DP },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Background color
+                TinyClearColorModeSettingItem(
+                    title = stringResource(R.string.bg_color),
+                    dayColor = bgColor,
+                    nightColor = bgColorNight,
+                    onClickColor = { isNight ->
+                        if (isNight) showBgColorNightPicker = true
+                        else showBgColorPicker = true
+                    },
+                    onClearColor = { _ ->
+                        // 刷新：同时清除日间色和夜间色
+                        bgColor = null
+                        bgColorNight = null
+                    },
+                )
+
+                // Background image
+                TinySwitchSettingItem(
+                    title = stringResource(R.string.highlight_bg_image),
+                    checked = hasBgImage,
+                    onCheckedChange = { hasBgImage = it },
+                )
+                AnimatedVisibility(visible = hasBgImage) {
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.highlight_bg_image),
+                        description = bgImage.ifBlank { null }?.let { File(it).name },
+                        onClick = {
+                            imagePicker.launch()
+                        },
+                    )
+                }
+                AnimatedVisibility(visible = hasBgImage && bgImage.isNotBlank()) {
+                    Column {
+                        val fitEntries = arrayOf(
+                            stringResource(R.string.bg_fit_tile),
+                            stringResource(R.string.bg_fit_stretch),
+                            stringResource(R.string.bg_fit_crop),
+                            stringResource(R.string.bg_fit_nine_patch),
+                        )
+                        val fitValues = arrayOf("0", "1", "2", "3")
+                        TinyDropdownSettingItem(
+                            title = stringResource(R.string.bg_image_fit),
+                            selectedValue = bgImageFit.toString(),
+                            displayEntries = fitEntries,
+                            entryValues = fitValues,
+                            onValueChange = {
+                                val newFit = it.toIntOrNull() ?: 0
+                                bgImageFit = newFit
+                                if (newFit == 3) {
+                                    showNinePatchEditor = true
+                                }
+                            },
+                        )
+
+                        AnimatedVisibility(visible = bgImageFit == 3) {
+                            Column {
+                                TinyClickableSettingItem(
+                                    title = "内边距",
+                                    description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom),
+                                    onClick = { showInsetEditor = !showInsetEditor },
+                                )
+                                AnimatedVisibility(visible = showInsetEditor) {
+                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                        // 一行四个按钮，点击切换哪个方向的滑块
+                                        var activeInset by remember { mutableIntStateOf(-1) }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
+                                                val selected = activeInset == idx
+                                                val values = listOf(bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom)
+                                                NormalCard(
+                                                    onClick = { activeInset = if (selected) -1 else idx },
+                                                    containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                                                        else LegadoTheme.colorScheme.surfaceContainerLow,
+                                                    cornerRadius = 8.dp,
+                                                    modifier = Modifier.weight(1f),
+                                                ) {
+                                                    AppText(
+                                                        "$label ${values[idx].toInt()}",
+                                                        style = LegadoTheme.typography.labelSmall,
+                                                        color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                                                            else LegadoTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        // 选中方向的滑块
+                                        AnimatedVisibility(visible = activeInset >= 0) {
+                                            val range = -32f..64f
+                                            val currentVal = when (activeInset) {
+                                                0 -> bgPaddingStart; 1 -> bgPaddingEnd
+                                                2 -> bgPaddingTop; else -> bgPaddingBottom
+                                            }
+                                            val updateInset: (Float) -> Unit = { v ->
+                                                val rounded = v.toInt().toFloat()
+                                                when (activeInset) {
+                                                    0 -> bgPaddingStart = rounded
+                                                    1 -> bgPaddingEnd = rounded
+                                                    2 -> bgPaddingTop = rounded
+                                                    else -> bgPaddingBottom = rounded
+                                                }
+                                            }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Slider(
+                                                    value = currentVal,
+                                                    onValueChange = updateInset,
+                                                    valueRange = range,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                // 步进按钮：1dp 精调，滑块粗调
+                                                ValueStepper(
+                                                    value = currentVal,
+                                                    displayValue = currentVal,
+                                                    valueRange = range,
+                                                    onValueChange = updateInset,
+                                                    stepSize = 1f,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                TinyClickableSettingItem(
+                                    title = "外边距",
+                                    description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom),
+                                    onClick = { showMarginEditor = !showMarginEditor },
+                                )
+                                AnimatedVisibility(visible = showMarginEditor) {
+                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                        var activeMargin by remember { mutableIntStateOf(-1) }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
+                                                val selected = activeMargin == idx
+                                                val values = listOf(bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom)
+                                                NormalCard(
+                                                    onClick = { activeMargin = if (selected) -1 else idx },
+                                                    containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                                                        else LegadoTheme.colorScheme.surfaceContainerLow,
+                                                    cornerRadius = 8.dp,
+                                                    modifier = Modifier.weight(1f),
+                                                ) {
+                                                    AppText(
+                                                        "$label ${values[idx].toInt()}",
+                                                        style = LegadoTheme.typography.labelSmall,
+                                                        color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                                                            else LegadoTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        AnimatedVisibility(visible = activeMargin >= 0) {
+                                            val currentVal = when (activeMargin) {
+                                                0 -> bgMarginStart; 1 -> bgMarginEnd
+                                                2 -> bgMarginTop; else -> bgMarginBottom
+                                            }
+                                            val updateMargin: (Float) -> Unit = { v ->
+                                                val rounded = v.toInt().toFloat()
+                                                when (activeMargin) {
+                                                    0 -> bgMarginStart = rounded
+                                                    1 -> bgMarginEnd = rounded
+                                                    2 -> bgMarginTop = rounded
+                                                    else -> bgMarginBottom = rounded
+                                                }
+                                            }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Slider(
+                                                    value = currentVal,
+                                                    onValueChange = updateMargin,
+                                                    valueRange = -16f..64f,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                // 步进按钮：1dp 精调，滑块粗调
+                                                ValueStepper(
+                                                    value = currentVal,
+                                                    displayValue = currentVal,
+                                                    valueRange = -16f..64f,
+                                                    onValueChange = updateMargin,
+                                                    stepSize = 1f,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // === Section 3: Config Binding ===
+                if (allConfigNames.isNotEmpty()) {
+                    SectionTitle("应用排版")
+                    LazyRow(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Global toggle
+                        item {
+                            val selected = configNames.isEmpty()
+                            val bg = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                            else LegadoTheme.colorScheme.surfaceContainerLow
+                            val fg = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                            else LegadoTheme.colorScheme.onSurfaceVariant
+                            NormalCard(
+                                onClick = { configNames = emptySet() },
+                                containerColor = bg,
+                                cornerRadius = 8.dp,
+                            ) {
+                                AppText(
+                                    "全局",
+                                    style = LegadoTheme.typography.labelMedium,
+                                    color = fg,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                        itemsIndexed(allConfigNames) { _, cn ->
+                            val selected = cn in configNames
+                            val bg = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                            else LegadoTheme.colorScheme.surfaceContainerLow
+                            val fg = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                            else LegadoTheme.colorScheme.onSurfaceVariant
+                            NormalCard(
+                                onClick = {
+                                    configNames = if (selected) configNames - cn
+                                    else configNames + cn
+                                },
+                                containerColor = bg,
+                                cornerRadius = 8.dp,
+                            ) {
+                                AppText(
+                                    cn,
+                                    style = LegadoTheme.typography.labelMedium,
+                                    color = fg,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+            }
+
+            // === 停靠预览区（原 Section 5）===
+            // 预览常驻弹层底部：调上面的正则、颜色、下划线、九宫格时不用滚到末尾也能看到效果。
+            // 折叠后只留一条标题行，把高度全部让给表单。
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 16.dp),
+            ) {
+                HorizontalDivider(color = LegadoTheme.colorScheme.outlineVariant)
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
-                )
+                        .padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppText(
+                        text = stringResource(R.string.preview_effect),
+                        style = LegadoTheme.typography.labelMediumEmphasized,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (previewDockExpanded) 180f else 0f,
+                        label = "previewDockArrowRotation",
+                    )
+                    IconButton(onClick = { previewDockExpanded = !previewDockExpanded }) {
+                        Icon(
+                            imageVector = Icons.Default.ExpandMore,
+                            contentDescription = stringResource(
+                                if (previewDockExpanded) R.string.collapse else R.string.expand
+                            ),
+                            tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.rotate(arrowRotation),
+                        )
+                    }
+                }
+                if (previewDockExpanded) {
+                    AppTextField(
+                        value = sampleText,
+                        onValueChange = { sampleText = it },
+                        label = stringResource(R.string.sample_text),
+                        // 停靠区高度有限：示例文本再长也只在自己框里滚，不能把表单挤没
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 88.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    // 预览页面底色跟随「应用排版」绑定的排版；「全局」没绑定具体排版，用当前正在用的那份
+                    val previewConfig = remember(configNames) {
+                        configNames.firstNotNullOfOrNull { ReadBookConfig.configByName(it) }
+                            ?: ReadBookConfig.durConfig
+                    }
+                    val previewDayBgImage = pageBgImagePathOf(previewConfig.bgType, previewConfig.bgStr)
+                    val previewDayBgColor = if (previewDayBgImage == null) {
+                        previewConfig.bgStr.toPreviewColor(0xFFEEEEEE.toInt())
+                    } else {
+                        0xFFEEEEEE.toInt()
+                    }
+                    // 夜间预览：夜间色优先，否则从日间色派生
+                    val nightTextColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) }
+                    val nightBgColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) }
+                    val nightUnderlineColor = if (underlineMode > 0) {
+                        underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) }
+                    } else null
+                    val previewNightBgImage = pageBgImagePathOf(
+                        previewConfig.bgTypeNight, previewConfig.bgStrNight
+                    )
+                    val previewNightBgColor = if (previewNightBgImage == null) {
+                        previewConfig.bgStrNight.toPreviewColor(0xFF000000.toInt())
+                    } else {
+                        0xFF000000.toInt()
+                    }
+
+                    // 日、夜并排，一眼对比昼夜。两块共用同一批样式参数，只有排版底色与色板不同，
+                    // 抽成本地 composable，避免把这三十来个参数在「并排 / 整宽」两处各抄一遍。
+                    @Composable
+                    fun DayPreview(modifier: Modifier = Modifier) {
+                        HighlightRulePreview(
+                            label = stringResource(R.string.day),
+                            sampleText = sampleText,
+                            pattern = pattern,
+                            textColor = textColor,
+                            bgColor = bgColor,
+                            bgImage = if (hasBgImage) bgImage else "",
+                            bgImageFit = bgImageFit,
+                            bgImageScale = bgImageScale,
+                            underlineMode = underlineMode,
+                            underlineColor = if (underlineMode > 0) underlineColor else null,
+                            underlineWidth = underlineWidth,
+                            underlineOffset = underlineOffset,
+                            underlineSvgPath = underlineSvgPath,
+                            pageBgColor = previewDayBgColor,
+                            pageTextColor = previewConfig.getTextColor().toPreviewColor(0xFF3E3D3B.toInt()),
+                            pageBgImagePath = previewDayBgImage,
+                            npLeft = effectiveNineSlice.left,
+                            npRight = effectiveNineSlice.right,
+                            npTop = effectiveNineSlice.top,
+                            npBottom = effectiveNineSlice.bottom,
+                            bgPadStart = bgPaddingStart,
+                            bgPadEnd = bgPaddingEnd,
+                            bgPadTop = bgPaddingTop,
+                            bgPadBottom = bgPaddingBottom,
+                            bgMarginStart = bgMarginStart,
+                            bgMarginEnd = bgMarginEnd,
+                            bgMarginTop = bgMarginTop,
+                            bgMarginBottom = bgMarginBottom,
+                            fontSizeOffset = fontSizeOffset,
+                            fontWeight = fontWeight,
+                            isItalic = isItalic,
+                            underlineBelowText = underlineBelowText,
+                            underlineRoundCap = underlineRoundCap,
+                            underlineFeather = underlineFeather,
+                            underlineDashLen = underlineDashLen,
+                            underlineDashGap = underlineDashGap,
+                            underlineWavePeak = underlineWavePeak,
+                            underlineWaveLength = underlineWaveLength,
+                            modifier = modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    @Composable
+                    fun NightPreview(modifier: Modifier = Modifier) {
+                        HighlightRulePreview(
+                            label = stringResource(R.string.night),
+                            sampleText = sampleText,
+                            pattern = pattern,
+                            textColor = nightTextColor,
+                            bgColor = nightBgColor,
+                            bgImage = "",
+                            bgImageFit = bgImageFit,
+                            bgImageScale = bgImageScale,
+                            underlineMode = underlineMode,
+                            underlineColor = nightUnderlineColor,
+                            underlineWidth = underlineWidth,
+                            underlineOffset = underlineOffset,
+                            underlineSvgPath = underlineSvgPath,
+                            pageBgColor = previewNightBgColor,
+                            pageTextColor = previewConfig.getTextColorNight()
+                                .toPreviewColor(0xFFADADAD.toInt()),
+                            pageBgImagePath = previewNightBgImage,
+                            npLeft = npLeft,
+                            npRight = npRight,
+                            npTop = npTop,
+                            npBottom = npBottom,
+                            bgPadStart = bgPaddingStart,
+                            bgPadEnd = bgPaddingEnd,
+                            bgPadTop = bgPaddingTop,
+                            bgPadBottom = bgPaddingBottom,
+                            bgMarginStart = bgMarginStart,
+                            bgMarginEnd = bgMarginEnd,
+                            bgMarginTop = bgMarginTop,
+                            bgMarginBottom = bgMarginBottom,
+                            fontSizeOffset = fontSizeOffset,
+                            fontWeight = fontWeight,
+                            isItalic = isItalic,
+                            underlineBelowText = underlineBelowText,
+                            underlineRoundCap = underlineRoundCap,
+                            underlineFeather = underlineFeather,
+                            underlineDashLen = underlineDashLen,
+                            underlineDashGap = underlineDashGap,
+                            underlineWavePeak = underlineWavePeak,
+                            underlineWaveLength = underlineWaveLength,
+                            modifier = modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    // 配了高亮背景图时正文只用那张图，夜间色不参与渲染，
+                    // 这时只显示日间预览并占满宽度，不留一块空白
+                    if (!hasBgImage || bgImage.isBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            DayPreview(Modifier.weight(1f))
+                            NightPreview(Modifier.weight(1f))
+                        }
+                    } else {
+                        DayPreview()
+                    }
+                }
             }
         }
     }
