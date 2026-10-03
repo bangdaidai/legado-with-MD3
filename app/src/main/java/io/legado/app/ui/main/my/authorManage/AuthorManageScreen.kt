@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,6 +48,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.card.NormalCard
+import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
@@ -219,18 +221,25 @@ fun AuthorManageScreen(
     }
 }
 
+/**
+ * 按名称排序时的分组字母（拼音首字母 / `#`）。
+ *
+ * 用带内边距的圆角标签而不是满宽色块：字母紧贴满宽背景左缘会看起来缺内边距，直角色块也不符合卡片圆角节奏。
+ */
 @Composable
-private fun AuthorIndexHeader(label: String) {
-    AppText(
-        text = label,
-        style = LegadoTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = LegadoTheme.colorScheme.primary,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(LegadoTheme.colorScheme.surface)
-            .padding(vertical = 6.dp),
-    )
+private fun AuthorIndexHeader(label: String, modifier: Modifier = Modifier) {
+    Box(modifier = modifier) {
+        TextCard(
+            text = label,
+            backgroundColor = LegadoTheme.colorScheme.primaryContainer,
+            contentColor = LegadoTheme.colorScheme.onPrimaryContainer,
+            cornerRadius = 8.dp,
+            horizontalPadding = 12.dp,
+            verticalPadding = 4.dp,
+            textStyle = LegadoTheme.typography.labelMediumEmphasized,
+            maxLines = 1,
+        )
+    }
 }
 
 @Composable
