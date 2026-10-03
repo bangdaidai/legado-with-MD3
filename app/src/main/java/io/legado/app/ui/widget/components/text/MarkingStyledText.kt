@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -24,6 +23,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.PathCompat
+import androidx.core.graphics.PathIterator
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
@@ -403,6 +404,55 @@ internal fun DrawScope.drawUnderlineSegment(
 }
 
 /**
+ * 把 `ReaderSvgPathCache` 缓存的 `android.graphics.Path` 重放成 Compose Path。
+ *
+ * 为什么需要转换：`ReaderSvgPathCache` 给的是 `android.graphics.Path`（正文用
+ * android Canvas 画），而 Compose 的 `drawPath` 只收 Compose Path，且 Compose 只提供了
+ * compose→android 的 `asAndroidPath()`，**没有** android→compose 的反向扩展。
+ *
+ * 为什么放在 UI 层而不是给 `ReaderSvgPathCache` 加一个 Compose 版本：正文绘制层不该
+ * 为了预览引入 Compose 依赖。代价是 mode 5 每次绘制重放一遍顶点；SVG 路径顶点数有限、
+ * 自定义 SVG 又是少数场景，这点开销可以接受。
+ *
+ * CONIC_TO（带 weight 的二次贝塞尔）Compose 没有对应 API，整条放弃而不是画错。
+ */
+private fun android.graphics.Path.toComposePath(): Path? = try {
+    val iterator = PathCompat.getPathIterator(this)
+    val compose = Path()
+    while (!iterator.isAtEnd) {
+        when (iterator.currentSegmentType) {
+            PathIterator.SegmentType.MOVE_TO ->
+                compose.moveTo(iterator.currentX, iterator.currentY)
+
+            PathIterator.SegmentType.LINE_TO ->
+                compose.lineTo(iterator.currentX, iterator.currentY)
+
+            // current* 是控制点，next* 是终点
+            PathIterator.SegmentType.QUAD_TO -> compose.quadraticBezierTo(
+                iterator.currentX, iterator.currentY,
+                iterator.nextX, iterator.nextY,
+            )
+
+            // current* / next* 是两个控制点，nextNext* 是终点
+            PathIterator.SegmentType.CUBIC_TO -> compose.cubicTo(
+                iterator.currentX, iterator.currentY,
+                iterator.nextX, iterator.nextY,
+                iterator.nextNextX, iterator.nextNextY,
+            )
+
+            PathIterator.SegmentType.CLOSE -> compose.close()
+
+            PathIterator.SegmentType.CONIC_TO -> return null
+        }
+        iterator.next()
+    }
+    compose
+} catch (e: IllegalArgumentException) {
+    // PathCompat 对非法 path 会抛，视为这条 SVG 画不了
+    null
+}
+
+/**
  * 各线型的实际笔形。几何常量全部来自
  * [io.legado.app.feature.reader.core.style.ReaderUnderlineGeometry]，与正文
  * `ReaderUnderlineDrawCommand` 同一份来源，绘制代码不再自带一套数字。
@@ -470,7 +520,7 @@ internal fun DrawScope.drawUnderlineShape(
             val path = Path().apply {
                 moveTo(halfWaves.first().startX, y)
                 halfWaves.forEach { wave ->
-                    quadraticTo(
+                    quadraticBezierTo(
                         (wave.startX + wave.endX) / 2f,
                         y + wave.controlOffsetY,
                         wave.endX,
@@ -511,10 +561,14 @@ internal fun DrawScope.drawUnderlineShape(
             // 否则开了圆头/羽化时画出来的 SVG 比正文窄半个线宽。
             val svgLeft = sx - capInset
             val svgRight = ex + capInset
-            val path = ReaderSvgPathCache.parse(svgPath)?.asAndroidPath() ?: return
+            val path = ReaderSvgPathCache.parse(svgPath)?.toComposePath() ?: return
             withTransform({
-                translate(Offset(svgLeft, y - READER_SVG_BASELINE_Y))
-                scale(scaleX = (svgRight - svgLeft) / READER_SVG_BASE_WIDTH, scaleY = 1f, pivot = Offset.Zero)
+                translate(left = svgLeft, top = y - READER_SVG_BASELINE_Y)
+                scale(
+                    scaleX = (svgRight - svgLeft) / READER_SVG_BASE_WIDTH,
+                    scaleY = 1f,
+                    pivot = Offset.Zero,
+                )
             }) {
                 drawPath(path = path, brush = solidBrush, style = Stroke(width = strokeWidth, cap = cap))
             }
