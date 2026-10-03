@@ -23,8 +23,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.PathCompat
-import androidx.core.graphics.PathIterator
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
@@ -414,43 +412,44 @@ internal fun DrawScope.drawUnderlineSegment(
  * 为了预览引入 Compose 依赖。代价是 mode 5 每次绘制重放一遍顶点；SVG 路径顶点数有限、
  * 自定义 SVG 又是少数场景，这点开销可以接受。
  *
- * CONIC_TO（带 weight 的二次贝塞尔）Compose 没有对应 API，整条放弃而不是画错。
+ * 怎么重放：用平台自带的 `Path.approximate()`（API 26 引入，本项目 minSdk 26）把整条路径
+ * 近似成 MOVE_TO/LINE_TO 折线再逐点重放，**不需要版本分支、也不需要新依赖**。
+ *
+ * 两个刻意不用的 API：`android.graphics.PathIterator` 是 API 34 才有的类型，收进来就得加
+ * `Build.VERSION` 分支；`androidx.core.graphics` 下也**没有** `PathCompat` / `PathIterator`
+ * 这两个类（那个包里只有 `Path.flatten`、`PathUtils`、`PathSegment`），早期版本曾误用，
+ * 表现为 `Unresolved reference` 编译失败。
+ *
+ * 代价是曲线被近似成折线：0.5px 弦高误差对几 dp 粗的下划线不可见。正文仍走原生
+ * `canvas.drawPath` 保持精确曲线，预览只求形状与位置对齐。
  */
-private fun android.graphics.Path.toComposePath(): Path? = try {
-    val iterator = PathCompat.getPathIterator(this)
+private fun android.graphics.Path.toComposePath(): Path? {
+    val flat = approximate(READER_SVG_FLATTEN_TOLERANCE_PX)
+    val pointCount = flat.size / 3
+    // 只有一个起点画不出任何笔画，直接当作画不了
+    if (pointCount < 2) return null
     val compose = Path()
-    while (!iterator.isAtEnd) {
-        when (iterator.currentSegmentType) {
-            PathIterator.SegmentType.MOVE_TO ->
-                compose.moveTo(iterator.currentX, iterator.currentY)
-
-            PathIterator.SegmentType.LINE_TO ->
-                compose.lineTo(iterator.currentX, iterator.currentY)
-
-            // current* 是控制点，next* 是终点
-            PathIterator.SegmentType.QUAD_TO -> compose.quadraticBezierTo(
-                iterator.currentX, iterator.currentY,
-                iterator.nextX, iterator.nextY,
-            )
-
-            // current* / next* 是两个控制点，nextNext* 是终点
-            PathIterator.SegmentType.CUBIC_TO -> compose.cubicTo(
-                iterator.currentX, iterator.currentY,
-                iterator.nextX, iterator.nextY,
-                iterator.nextNextX, iterator.nextNextY,
-            )
-
-            PathIterator.SegmentType.CLOSE -> compose.close()
-
-            PathIterator.SegmentType.CONIC_TO -> return null
+    for (index in 0 until pointCount) {
+        val base = index * 3
+        val x = flat[base + 1]
+        val y = flat[base + 2]
+        // approximate 只产出 MOVE_TO / LINE_TO；出现别的动词说明平台行为变了，
+        // 与原来的 CONIC_TO 一样整条放弃，而不是画错
+        when (flat[base].toInt()) {
+            PATH_VERB_MOVE -> compose.moveTo(x, y)
+            PATH_VERB_LINE -> compose.lineTo(x, y)
+            else -> return null
         }
-        iterator.next()
     }
-    compose
-} catch (e: IllegalArgumentException) {
-    // PathCompat 对非法 path 会抛，视为这条 SVG 画不了
-    null
+    return compose
 }
+
+/** `Path.approximate` 的动词：0 = MOVE_TO，1 = LINE_TO */
+private const val PATH_VERB_MOVE = 0
+private const val PATH_VERB_LINE = 1
+
+/** 折线近似容差（px），与 `androidx.core.graphics.Path.flatten` 的默认值一致 */
+private const val READER_SVG_FLATTEN_TOLERANCE_PX = 0.5f
 
 /**
  * 各线型的实际笔形。几何常量全部来自
