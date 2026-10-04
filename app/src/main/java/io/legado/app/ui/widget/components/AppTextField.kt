@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.LocalTextStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
@@ -195,10 +196,10 @@ fun AppTextField(
             singleLine = singleLine,
             maxLines = maxLines,
             minLines = minLines,
-            // 刻意不做 `textStyle ?: <某个默认样式>`：MiuixTextField 的默认取值
-            // 无法在本机确认（找不到 gradle cache，不能反编译），填一个猜的字段名
-            // 只会换来编译失败。textStyle 为 null 时完全保持原样。
-            textStyle = textStyle,
+            // MiuixTextField 的 textStyle 是**非空**参数，默认 `MiuixTheme.textStyles.main`
+            // （见 miuix v0.9.4 basic/TextField.kt）。这里补同一个默认值，null 时
+            // 与不传该参数的行为完全一致。
+            textStyle = textStyle ?: MiuixTheme.textStyles.main,
             interactionSource = interactionSource
         )
     } else {
@@ -237,7 +238,9 @@ fun AppTextField(
             maxLines = maxLines,
             minLines = minLines,
             shape = shape,
-            textStyle = textStyle.orEmpty,
+            // TextStyle 是 value class，没有 orEmpty() 扩展（编译报 Unresolved reference）。
+            // M3 TextField 的默认值是 LocalTextStyle.current，null 时保持它。
+            textStyle = textStyle ?: LocalTextStyle.current,
             colors = resolvedColors,
             interactionSource = interactionSource
         )

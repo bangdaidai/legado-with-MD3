@@ -128,61 +128,6 @@ internal class ReaderUnderlineDrawCommand(
     private val bounds: ReaderRect,
     private val underline: ReaderUnderline,
 ) {
-    companion object {
-        /**
-         * 从显式几何构造一条绘制命令，供**正文之外的渲染方**（高亮规则预览、笔记列表）
-         * 复用同一条绘制路径。
-         *
-         * 预览此前自己实现了一套多趟羽化叠加，与正文反复分叉：alpha 是否 8bit 量化、
-         * 渐变在 premultiplied 还是 unpremultiplied 空间插值、每趟线宽基准抬不抬下限、
-         * 端部渐隐长度取 1.5 倍还是 2 倍——每一项不同都会在 7~24 趟叠加后放大成
-         * 肉眼可辨的深浅差。改成构造同一条命令后，这些差异在物理上不可能存在。
-         *
-         * [y] 是基线（正文是 `bounds.bottom + offsetPx`），这里直接传绝对值：
-         * 预览的行盒几何与正文不同，用 bottom 反推会差一个行距。
-         *
-         * 只支持羽化适用的线型（[underlineControlSupport] 排除 mode 4/5/6）。这些线型
-         * 只读 [ReaderRect] 的 left/right/bottom——唯一用到 height 的删除线
-         * （`bounds.top + height * 0.52`）走不到这里，故无需传行高。
-         */
-        fun forSegment(
-            mode: Int,
-            colorArgb: Int,
-            widthPx: Float,
-            startX: Float,
-            endX: Float,
-            y: Float,
-            roundCap: Boolean,
-            featherPx: Float,
-            dashOnPx: Float = 8f,
-            dashOffPx: Float = 5f,
-            svgPath: String = "",
-            waveControlOffsetPx: Float = 3f,
-            waveHalfWavePx: Float = 12f,
-        ): ReaderUnderlineDrawCommand {
-            val underline = ReaderUnderline(
-                mode = mode,
-                colorArgb = colorArgb,
-                widthPx = widthPx,
-                // 绘制命令只用 offsetPx 推基线（bounds.bottom + offsetPx）；
-                // 这里让 bottom 落在传入的 y 上、offset 归零，保持绝对基线与调用方一致
-                offsetPx = 0f,
-                svgPath = svgPath,
-                dashOnPx = dashOnPx,
-                dashOffPx = dashOffPx,
-                waveControlOffsetPx = waveControlOffsetPx,
-                waveHalfWavePx = waveHalfWavePx,
-                doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
-                roundCap = roundCap,
-                featherPx = featherPx,
-            )
-            return ReaderUnderlineDrawCommand(
-                bounds = ReaderRect(startX, y, endX, y),
-                underline = underline,
-            )
-        }
-    }
-
     private val featherPx = underline.featherPx.coerceAtLeast(0f)
 
     /**
@@ -317,13 +262,66 @@ internal class ReaderUnderlineDrawCommand(
         }
     }
 
-    private companion object {
+    companion object {
+
+        /**
+         * 从显式几何构造一条绘制命令，供**正文之外的渲染方**（高亮规则预览、笔记列表）
+         * 复用同一条绘制路径。
+         *
+         * 预览此前自己实现了一套多趟羽化叠加，与正文反复分叉：alpha 是否 8bit 量化、
+         * 渐变在 premultiplied 还是 unpremultiplied 空间插值、每趟线宽基准抬不抬下限、
+         * 端部渐隐长度取 1.5 倍还是 2 倍——每一项不同都会在 7~24 趟叠加后放大成
+         * 肉眼可辨的深浅差。改成构造同一条命令后，这些差异在物理上不可能存在。
+         *
+         * [y] 是基线（正文是 `bounds.bottom + offsetPx`），这里直接传绝对值：
+         * 预览的行盒几何与正文不同，用 bottom 反推会差一个行距。
+         *
+         * 只支持羽化适用的线型（[underlineControlSupport] 排除 mode 4/5/6）。这些线型
+         * 只读 [ReaderRect] 的 left/right/bottom——唯一用到 height 的删除线
+         * （`bounds.top + height * 0.52`）走不到这里，故无需传行高。
+         */
+        fun forSegment(
+            mode: Int,
+            colorArgb: Int,
+            widthPx: Float,
+            startX: Float,
+            endX: Float,
+            y: Float,
+            roundCap: Boolean,
+            featherPx: Float,
+            dashOnPx: Float = 8f,
+            dashOffPx: Float = 5f,
+            svgPath: String = "",
+            waveControlOffsetPx: Float = 3f,
+            waveHalfWavePx: Float = 12f,
+        ): ReaderUnderlineDrawCommand {
+            val underline = ReaderUnderline(
+                mode = mode,
+                colorArgb = colorArgb,
+                widthPx = widthPx,
+                // 绘制命令只用 offsetPx 推基线（bounds.bottom + offsetPx）；
+                // 这里让 bottom 落在传入的 y 上、offset 归零，保持绝对基线与调用方一致
+                offsetPx = 0f,
+                svgPath = svgPath,
+                dashOnPx = dashOnPx,
+                dashOffPx = dashOffPx,
+                waveControlOffsetPx = waveControlOffsetPx,
+                waveHalfWavePx = waveHalfWavePx,
+                doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
+                roundCap = roundCap,
+                featherPx = featherPx,
+            )
+            return ReaderUnderlineDrawCommand(
+                bounds = ReaderRect(startX, y, endX, y),
+                underline = underline,
+            )
+        }
 
         /**
          * 波浪节点来自共享几何（[waveHalfWaves]），正文、选中样式预览与规则预览
          * 共用同一份均摊与收口逻辑，避免三处各自写死振幅/波长。
          */
-        fun createWavePath(bounds: ReaderRect, underline: ReaderUnderline): Path? {
+        private fun createWavePath(bounds: ReaderRect, underline: ReaderUnderline): Path? {
             val y = bounds.bottom + underline.offsetPx
             val halfWaves = waveHalfWaves(
                 bounds.left,
