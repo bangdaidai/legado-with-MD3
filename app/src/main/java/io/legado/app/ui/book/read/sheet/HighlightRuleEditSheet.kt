@@ -954,13 +954,26 @@ fun HighlightRuleEditSheet(
                     // 停靠区高度有限：示例文本按 4 行封顶，再长就在框里滚动，不能把上方的表单挤没。
                     // 不给 label——标题栏已有「预览效果」说明这里是什么，浮动标签白占一行高度；
                     // 改用 placeholder，只在空内容时出现，输入后不占位。
+                    // 字号跟卡片里的预览一致（同为 previewBaseFontSize = 正文字号）：
+                    // 输入框与它下面那张卡片本来就是同一段文字的两种呈现，字号不一致
+                    // 看起来像两个不相干的东西。字距也对齐，否则汉字间距会差一截。
+                    val sampleTextStyle = remember(previewBaseFontSize, ReadBookConfig.letterSpacing) {
+                        TextStyle(
+                            fontSize = previewBaseFontSize.sp,
+                            letterSpacing = ReadBookConfig.letterSpacing.em,
+                        )
+                    }
                     AppTextField(
                         value = sampleText,
                         onValueChange = { sampleText = it },
                         placeholder = {
-                            AppText(stringResource(R.string.sample_text))
+                            AppText(
+                                text = stringResource(R.string.sample_text),
+                                style = sampleTextStyle,
+                            )
                         },
                         maxLines = 4,
+                        textStyle = sampleTextStyle,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))

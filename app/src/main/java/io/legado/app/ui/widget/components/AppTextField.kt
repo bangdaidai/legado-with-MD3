@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -162,6 +163,11 @@ fun AppTextField(
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     minLines: Int = 1,
     shape: Shape = TextFieldDefaults.shape,
+    /**
+     * 输入文字的样式。默认 null = 走主题默认（`TextFieldDefaults` 的 typography），
+     * 对现有调用方零影响；需要与旁侧正文预览对齐字号时显式传入。
+     */
+    textStyle: TextStyle? = null,
     interactionSource: MutableInteractionSource? = null,
 ) {
     val isMiuix = ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)
@@ -189,6 +195,10 @@ fun AppTextField(
             singleLine = singleLine,
             maxLines = maxLines,
             minLines = minLines,
+            // 刻意不做 `textStyle ?: <某个默认样式>`：MiuixTextField 的默认取值
+            // 无法在本机确认（找不到 gradle cache，不能反编译），填一个猜的字段名
+            // 只会换来编译失败。textStyle 为 null 时完全保持原样。
+            textStyle = textStyle,
             interactionSource = interactionSource
         )
     } else {
@@ -227,6 +237,7 @@ fun AppTextField(
             maxLines = maxLines,
             minLines = minLines,
             shape = shape,
+            textStyle = textStyle.orEmpty,
             colors = resolvedColors,
             interactionSource = interactionSource
         )
