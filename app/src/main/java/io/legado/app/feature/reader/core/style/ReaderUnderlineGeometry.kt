@@ -57,6 +57,9 @@ const val READER_SVG_BASELINE_Y = 50f
  * 正文（`ReaderPageDecorationDrawCache`）与笔记列表（`MarkingStyledText`）必须共用
  * 本函数，否则同一条笔记在两处的粗细不一致——这是「同一个宽度两处看起来不同」的
  * 唯一来源。
+ *
+ * 端点圆头的半径也由本函数决定：圆头半径是实际描边宽度的一半，若按未抬升的
+ * 线芯宽度算，亚像素线宽的圆头会比线芯多探出小半个像素。
  */
 fun finalStrokeWidthPx(coreWidthPx: Float): Float = coreWidthPx.coerceAtLeast(1f)
 
@@ -227,7 +230,10 @@ data class UnderlineControlSupport(
     /**
      * 边缘柔化（UI 文案「羽化」）。
      *
-     * 描边：向外加粗 + 端点渐隐。填充色带：同矩形多层 alpha 叠加模拟模糊。
+     * 描边：向上下向外加粗的多趟 alpha 叠加 + 两端水平渐隐，两端用与上下同一
+     * 空间尺度（羽化半径 × 2）。羽化**不**改端点形状，端头是平切口还是半圆只看
+     * [roundCap]——否则圆角关闭时圆弧与渐隐叠加会削出尖锥。
+     * 填充色带：同矩形多层 alpha 叠加模拟模糊。
      * 自定义 SVG 不支持——它画的是用户给的路径，"两端"无从定义。
      */
     val feather: Boolean,

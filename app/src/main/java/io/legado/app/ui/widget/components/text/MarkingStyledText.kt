@@ -428,16 +428,14 @@ internal fun DrawScope.drawUnderlineSegment(
     wavePeakDp: Float = READER_WAVE_CONTROL_OFFSET_DP / 2f,
     waveLengthDp: Float = READER_WAVE_HALF_WAVE_DP * 2f,
 ) {
-    val cap = if (roundCap || feather > 0f) StrokeCap.Round else StrokeCap.Butt
+    // 羽化不再强制圆头：端点形状只看端点圆角开关，否则圆角关闭时也会用圆弧收头。
+    // 羽化分支整体委托给 ReaderUnderlineDrawCommand，由那边按同一口径判定。
+    val cap = if (roundCap) StrokeCap.Round else StrokeCap.Butt
     // 线宽在这里换算。刻意不做下限抬升：羽化 pass 的基准宽度一旦被抬高，向两侧
     // 扩散的量随之错位，柔边会比原始实现更糊。亚像素宽度的抬升只发生在最终描边
     // 那一趟（drawUnderlineShape 内的 finalStrokeWidthPx），不参与扩散量的计算；
     // 正文走同一个函数，两侧粗细一致。
     val coreWidth = widthDp.dp.toPx()
-    // 与正文 ReaderUnderline.capInsetPx 同一公式（widthPx.coerceAtLeast(1f) / 2），
-    // 圆头在预览与正文才探出同样多。
-    // 羽化分支不走这里：它整体委托给 ReaderUnderlineDrawCommand，由那边算自己的 capInsetPx。
-    val capInset = if (cap == StrokeCap.Round) coreWidth.coerceAtLeast(1f) / 2f else 0f
     if (feather > 0f) {
         // 羽化**直接复用正文的绘制命令**：预览自己那套多趟叠加曾多次与正文分叉
         // （插值空间、8bit 量化、趟宽、端部渐隐长度），改成同一处绘制后物理上
@@ -460,7 +458,7 @@ internal fun DrawScope.drawUnderlineSegment(
     } else {
         drawUnderlineShape(
             mode = mode, color = color, strokeWidth = coreWidth,
-            startX = startX, endX = endX, y = y, cap = cap, capInset = capInset,
+            startX = startX, endX = endX, y = y, cap = cap,
             dashLen = dashLen, dashGap = dashGap, svgPath = svgPath,
             wavePeakDp = wavePeakDp, waveLengthDp = waveLengthDp,
         )
@@ -534,7 +532,6 @@ internal fun DrawScope.drawUnderlineShape(
     endX: Float,
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
-    capInset: Float = 0f,
     brush: Brush? = null,
     dashLen: Float = 8f,
     dashGap: Float = 5f,
@@ -542,8 +539,8 @@ internal fun DrawScope.drawUnderlineShape(
     wavePeakDp: Float = READER_WAVE_CONTROL_OFFSET_DP / 2f,
     waveLengthDp: Float = READER_WAVE_HALF_WAVE_DP * 2f,
 ) {
-    val sx = startX + capInset
-    val ex = endX - capInset
+    val sx = startX
+    val ex = endX
     if (sx >= ex) return
     // 兜底笔刷也用原生 shader：Compose 的 Brush.linearGradient 在 unpremultiplied
     // 空间插值，与正文（premultiplied）不同，半透明色会有偏差
@@ -633,10 +630,10 @@ internal fun DrawScope.drawUnderlineShape(
 
         5 -> {
             // 自定义 SVG：与正文同一套变换（按 viewBox 宽横向拉伸、基线对齐到 y）。
-            // 正文用的是整段 bounds 而不是圆头内缩后的区间，这里把内缩加回去，
-            // 否则开了圆头/羽化时画出来的 SVG 比正文窄半个线宽。
-            val svgLeft = sx - capInset
-            val svgRight = ex + capInset
+            // SVG 不开放端点圆角（见 underlineControlSupport），笔形不内缩，
+            // svgLeft/svgRight 就等于整段 bounds。
+            val svgLeft = sx
+            val svgRight = ex
             val path = ReaderSvgPathCache.parse(svgPath)?.toComposePath() ?: return
             withTransform({
                 translate(left = svgLeft, top = y - READER_SVG_BASELINE_Y)

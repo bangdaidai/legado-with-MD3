@@ -150,14 +150,20 @@ internal class ReaderUnderlineDrawCommand(
         // 里真正描边的那一趟，见 [finalStrokeWidthPx]。
         strokeWidth = underline.widthPx
         style = Paint.Style.STROKE
-        // 羽化靠圆头端点做柔边，旧 drawUnderlineSegment 同为 `roundCap || feather > 0`
-        strokeCap = if (roundCap || feathered) Paint.Cap.ROUND else Paint.Cap.BUTT
+        // 羽化**不**强制圆头：端点形状只看端点圆角开关。旧口径
+        // `roundCap || feathered` 在圆角关闭时也用圆弧收头，再叠加端部 alpha
+        // 渐隐（alpha=0 点就在段边界），端头就成了被削掉的尖锥——宽度 1dp、
+        // 羽化 5dp 时最外那趟宽 11dp，圆弧与渐隐互相打架，肉眼看到的是两头尖。
+        // 关闭圆角时用平切口：宽度不收窄，端头只随水平渐隐淡出。
+        strokeCap = if (roundCap) Paint.Cap.ROUND else Paint.Cap.BUTT
     }
     private val wavePath = if (underline.mode == 3) createWavePath(bounds, underline) else null
     private val svgPath = if (underline.mode == 5) ReaderSvgPathCache.parse(underline.svgPath) else null
 
     fun draw(canvas: Canvas) {
-        if (!feathered) {
+        // 零宽段不能进羽化分支：LinearGradient 的零长度坐标轴会直接抛异常，
+        // 交给 drawShape 的退化路径画成一个点。
+        if (!feathered || bounds.right <= bounds.left) {
             drawShape(canvas, underline.widthPx, underline.colorArgb)
             return
         }
@@ -169,29 +175,57 @@ internal class ReaderUnderlineDrawCommand(
         // 此前用 1.5 倍：上下扩散 2 倍、两端只渐隐 1.5 倍，两个尺度打架使四个角被
         // 重复施色、糊成一团，而四边中间相对干净。
         val featherLen = (featherPx * 2f).coerceAtLeast(underline.widthPx)
-        val segLen = bounds.right - bounds.left
-        val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
             val centerColor = featherPassArgb(underline.colorArgb, d)
             if (Color.alpha(centerColor) <= 0) continue
-            val shader = LinearGradient(
-                bounds.left, 0f, bounds.right, 0f,
-                intArrayOf(0, centerColor, centerColor, 0),
-                floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
-                Shader.TileMode.CLAMP,
+            drawShape(
+                canvas,
+                underline.widthPx + d * featherPx * 2f,
+                centerColor,
+                endFadeShader(centerColor, featherLen),
             )
-            drawShape(canvas, underline.widthPx + d * featherPx * 2f, centerColor, shader)
         }
     }
 
     /**
-     * 以 [strokeWidthPx] 描边画一段。圆头端点会向外延伸半个宽度，按线芯宽度向内收缩
-     * 以保持总长不变；羽化 pass 的加粗圆头向外扩散。[shader] 仅羽化 pass 传入。
+     * 两端水平渐隐的 shader：段边界处仍是半透明，一路淡到 `±featherLen / 2`。
      *
-     * 线宽在这里才抬到 [finalStrokeWidthPx]：亚像素线宽在低密度屏上几乎不可见，
-     * 但羽化的基准宽度不能抬（见 paint 初始化处的注释）。与笔记列表
-     * `MarkingStyledText` 共用同一个函数，保证同一条笔记两处粗细一致。
+     * 窗口中心必须**对齐段边界**，而不是像旧实现那样整个落在段内
+     * （`[left, left + 2F]`，中心偏到 `left + F`）。圆头的尖端恰好在段边界上，
+     * 中心偏一段距离就等于把尖端按在 alpha=0 的位置——圆弧画得再圆，从全透明
+     * 长出来的东西看着都是尖的，而且羽化半径越大偏得越远。
+     *
+     * 圆头关闭时笔形齐边、段外没有任何几何覆盖，窗口留在段内即可（`bleed = 0`）；
+     * 开着时圆弧自然探出段外，淡出必须跨过边界才画得出来。
+     */
+    private fun endFadeShader(colorArgb: Int, featherLen: Float): LinearGradient {
+        val bleed = if (roundCap) featherLen / 2f else 0f
+        val start = bounds.left - bleed
+        val end = bounds.right + bleed
+        val span = end - start
+        val edgePos = if (span > 0f) (featherLen / span).coerceIn(0f, 0.5f) else 0.5f
+        return LinearGradient(
+            start, 0f, end, 0f,
+            intArrayOf(0, colorArgb, colorArgb, 0),
+            floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
+            Shader.TileMode.CLAMP,
+        )
+    }
+
+    /**
+     * 以 [strokeWidthPx] 描边画一段，起止就是段边界：[strokeWidthPx] 是线芯宽度，
+     * 端点圆角开启时由 `strokeCap = ROUND` 自然向外探出半个宽度，不再内缩补偿。
+     *
+     * 旧实现按线芯宽度向内收缩以"保持总长不变"，代价是圆弧尖端被压在段边界上，
+     * 而羽化的端部渐隐恰好在那里归零——尖端落在全透明处，端头看着是尖的，
+     * 探出去的部分也画不出来。让圆弧自然伸出反而是正确的：真实模糊会把周围的
+     * 颜色渗到端点外，端点不是全透明的。
+     *
+     * [shader] 仅羽化 pass 传入（自带两端水平渐隐）。线宽在这里才抬到
+     * [finalStrokeWidthPx]：亚像素线宽在低密度屏上几乎不可见，但羽化的基准宽度
+     * 不能抬（见 paint 初始化处的注释）。与笔记列表 `MarkingStyledText` 共用同一
+     * 份宽度口径，保证同一条笔记两处粗细一致。
      */
     private fun drawShape(
         canvas: Canvas,
@@ -202,9 +236,8 @@ internal class ReaderUnderlineDrawCommand(
         paint.color = colorArgb
         paint.strokeWidth = finalStrokeWidthPx(strokeWidthPx)
         paint.shader = shader
-        val capInset = underline.capInsetPx
-        val start = bounds.left + capInset
-        val end = bounds.right - capInset
+        val start = bounds.left
+        val end = bounds.right
         val y = bounds.bottom + underline.offsetPx
         if (start >= end) {
             // 线太短，退化为一个点/圆
@@ -215,17 +248,7 @@ internal class ReaderUnderlineDrawCommand(
         when (underline.mode) {
             1 -> canvas.drawLine(start, y, end, y, paint)
             2 -> drawDashed(canvas, start, end, y)
-            3 -> {
-                val path = if (capInset > 0f) {
-                    createWavePath(
-                        ReaderRect(start, bounds.top, end, bounds.bottom),
-                        underline,
-                    )
-                } else {
-                    wavePath
-                }
-                path?.let { canvas.drawPath(it, paint) }
-            }
+            3 -> wavePath?.let { canvas.drawPath(it, paint) }
             4 -> {
                 canvas.drawLine(start, y, end, y, paint)
                 val secondY = y + underline.doubleLineGapPx + underline.widthPx

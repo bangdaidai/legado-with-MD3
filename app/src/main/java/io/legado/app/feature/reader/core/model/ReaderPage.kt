@@ -1,5 +1,6 @@
 package io.legado.app.feature.reader.core.model
 
+import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.underlineControlSupport
 
 data class ReaderPageId(val chapterIndex: Int, val pageIndex: Int)
@@ -83,7 +84,7 @@ data class ReaderUnderline(
     /** 波浪半波长：一次 `quadTo` 覆盖的宽度，整波长是它的两倍。 */
     val waveHalfWavePx: Float = 12f,
     val doubleLineGapPx: Float = 3f,
-    /** 端点圆头（旧 underlineRoundCap）；羽化 >0 时同样强制圆头，与旧绘制一致。 */
+    /** 端点圆头（旧 underlineRoundCap）。羽化**不**再强制圆头，开关语义即字面语义。 */
     val roundCap: Boolean = false,
     /** 羽化半径（px），0=不羽化（旧 underlineFeather 多趟高斯 alpha + 端点渐隐）。 */
     val featherPx: Float = 0f,
@@ -103,26 +104,30 @@ data class ReaderUnderline(
     val featherEffective: Boolean
         get() = underlineControlSupport(mode).feather && featherPx > 0f
 
-    /** 圆头补偿只按线芯宽度；羽化加粗后的 pass 不得加大内缩，否则外圈圆头被吃掉。 */
-    val capInsetPx: Float
-        get() = if (roundCapEffective || featherEffective) widthPx.coerceAtLeast(1f) / 2f else 0f
-
     /**
      * 下划线画出文字包围盒外的最大半径（圆头/羽化/偏移/双线/波浪），
      * 供内容裁剪与预览画布预留，避免贴边把圆头和柔边切掉。
+     *
+     * 横向只圆头需要留白：笔触从段边界起笔，圆弧自然向外探出**当趟**描边宽度
+     * 的一半，羽化最外那趟探出 `widthPx/2 + featherPx`。平切口齐边、段外没有
+     * 任何几何覆盖，所以不留白。
+     *
+     * 横向外扩量恰好与 `half + feather` 同量，因此不会比纵向更宽、也不会因此
+     * 收窄内容区——它存在的意义是把「圆头探出段外」这个事实显式记下来，别让
+     * 后人以为横向根本不需要留白。
      */
     val overflowPadPx: Float
         get() {
-            val half = widthPx.coerceAtLeast(1f) / 2f
+            val half = finalStrokeWidthPx(widthPx) / 2f
             val feather = if (featherEffective) featherPx.coerceAtLeast(0f) else 0f
-            val horizontal = if (roundCapEffective || feather > 0f) half + feather else 0f
+            val horizontal = if (roundCapEffective) half + feather else 0f
             val below = half + feather + offsetPx.coerceAtLeast(0f) + when (mode) {
                 // 波浪的 waveControlOffsetPx 是二次贝塞尔的控制点偏移，中点只到它的一半，
                 // 真正画出到基线外的距离只有一半；这里按实际峰高留白，和
                 // ReaderUnderlineGeometry 的几何口径一致。
                 3 -> waveControlOffsetPx.coerceAtLeast(0f) / 2f
                 // 双实线第二条在下方：净间隙 + 线宽
-                4 -> doubleLineGapPx.coerceAtLeast(0f) + widthPx.coerceAtLeast(1f)
+                4 -> doubleLineGapPx.coerceAtLeast(0f) + finalStrokeWidthPx(widthPx)
                 else -> 0f
             }
             val above = half + feather + (-offsetPx).coerceAtLeast(0f)

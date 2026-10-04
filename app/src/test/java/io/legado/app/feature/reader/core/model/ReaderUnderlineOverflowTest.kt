@@ -8,27 +8,34 @@ import org.junit.Test
 class ReaderUnderlineOverflowTest {
 
     @Test
-    fun `cap inset uses core width even when feather thickens the pass`() {
-        val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 5f)
-        assertEquals(2f, underline.capInsetPx, 0f)
-    }
-
-    @Test
-    fun `feather alone forces round cap inset`() {
+    fun `feather alone does not force a round cap`() {
         val underline = ReaderUnderline(1, 0, widthPx = 3f, offsetPx = 0f, roundCap = false, featherPx = 2f)
-        assertEquals(1.5f, underline.capInsetPx, 0f)
+        assertTrue(underline.featherEffective)
+        // 端点圆角关闭 + 羽化：平切口，端头只做水平渐隐，不收成尖锥
+        assertFalse(underline.roundCapEffective)
     }
 
     @Test
-    fun `butt cap without feather has no inset`() {
+    fun `plain stroke reserves no horizontal room`() {
         val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f)
-        assertEquals(0f, underline.capInsetPx, 0f)
+        // 平切口齐边，且线宽已含在纵向半宽里，横向不额外留白
+        assertEquals(2f, underline.overflowPadPx, 0f)
+    }
+
+    @Test
+    fun `round cap overhang stays within the feather spread`() {
+        // 圆弧探出量 = 当趟描边宽度的一半，羽化最外那趟 = half + feather。
+        // 这与纵向的「半宽 + 羽化」同量，所以开启圆角不会比不开更收窄内容区。
+        val roundCap = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = true, featherPx = 5f)
+        val butt = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = false, featherPx = 5f)
+        assertEquals(2f + 5f, roundCap.overflowPadPx, 0f)
+        assertEquals(roundCap.overflowPadPx, butt.overflowPadPx, 0f)
     }
 
     @Test
     fun `overflow pad covers offset plus half width plus feather`() {
         val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 5f)
-        // 下方 = offset 2 + 半宽 2 + 羽化 5 = 9；水平 = 半宽 2 + 羽化 5 = 7
+        // 下方 = offset 2 + 半宽 2 + 羽化 5 = 9；横向 = 半宽 2 + 羽化 5 = 7
         assertEquals(9f, underline.overflowPadPx, 0f)
     }
 
@@ -59,7 +66,6 @@ class ReaderUnderlineOverflowTest {
             assertFalse("mode $mode 不该应用圆头", underline.roundCapEffective)
             assertFalse("mode $mode 不该应用羽化", underline.featherEffective)
             // 收不到预留，也就不会多留白
-            assertEquals(0f, underline.capInsetPx, 0f)
             assertEquals(2f + 2f, underline.overflowPadPx, 0f)
         }
     }
@@ -72,7 +78,6 @@ class ReaderUnderlineOverflowTest {
 
         assertFalse(underline.roundCapEffective)
         assertFalse(underline.featherEffective)
-        assertEquals(0f, underline.capInsetPx, 0f)
     }
 
     @Test
