@@ -18,8 +18,9 @@ import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
+import io.legado.app.feature.reader.core.style.bandFeatherMaxInsetPx
 import io.legado.app.feature.reader.core.style.featherBandPasses
-import io.legado.app.feature.reader.core.style.featherGaussian
+import io.legado.app.feature.reader.core.style.featherPassArgb
 import io.legado.app.feature.reader.core.style.featherPassCount
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
@@ -81,21 +82,15 @@ internal class ReaderHalfHighlightDrawCommand(
         // 圆头与柔化取 underline 上的生效值（已按线型适用性过滤），不直接读原始字段：
         // 某线型不开放某个参数时，旧数据里存的值也不该在正文继续生效
         val radius = if (underline.roundCapEffective) bandHeight / 2f else 0f
-        val baseAlpha = Color.alpha(underline.colorArgb)
-        val rgb = underline.colorArgb and 0x00FFFFFF
         val featherDp = if (underline.featherEffective) featherPx / 1f.dpToPx() else 0f
-        // 边缘柔化：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
-        // 收缩量钳在色带短边的一半以内，窄命中段也不会把矩形收成负数。
-        val maxInset = if (featherDp <= 0f) {
-            0f
-        } else {
-            minOf(featherDp.dpToPx(), minOf(bandHeight, bounds.width) / 2f)
-        }
+        // 边缘柔化：同一矩形从最虚画到最实（顺序与描边羽化一致），靠 alpha 叠加化开边界。
+        // 内缩量按羽化半径取并受色带短边约束，避免半行高的色带被吃掉一大半。
+        val maxInset = bandFeatherMaxInsetPx(featherDp.dpToPx(), bandHeight, bounds.width)
         featherBandPasses(featherDp).forEach { pass ->
-            val alpha = (baseAlpha * pass.alphaScale).toInt().coerceIn(0, 255)
-            if (alpha <= 0) return@forEach
+            val passArgb = pass.argb(underline.colorArgb)
+            if (Color.alpha(passArgb) <= 0) return@forEach
             val inset = pass.insetFactor * maxInset
-            paint.color = rgb or (alpha shl 24)
+            paint.color = passArgb
             canvas.drawRoundRect(
                 bounds.left + inset,
                 bandTop + inset,
@@ -165,17 +160,15 @@ internal class ReaderUnderlineDrawCommand(
         }
         // 羽化：多 pass 叠加、高斯权重的 alpha，从外到内逐层变窄，模拟全边缘柔化；
         // 中心保持满 alpha 形成清晰线芯，端点额外做水平渐隐消除硬切（移植旧 TextLine）。
+        // 每趟颜色走 featherPassArgb —— 预览侧共用，保证两边逐位一致。
         val passes = featherPassCount(featherPx / 1f.dpToPx())
-        val baseAlpha = Color.alpha(underline.colorArgb)
-        val rgb = underline.colorArgb and 0x00FFFFFF
         val featherLen = (featherPx * 1.5f).coerceAtLeast(underline.widthPx)
         val segLen = bounds.right - bounds.left
         val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
-            val alpha = (baseAlpha * featherGaussian(d)).toInt().coerceIn(0, 255)
-            if (alpha <= 0) continue
-            val centerColor = rgb or (alpha shl 24)
+            val centerColor = featherPassArgb(underline.colorArgb, d)
+            if (Color.alpha(centerColor) <= 0) continue
             val shader = LinearGradient(
                 bounds.left, 0f, bounds.right, 0f,
                 intArrayOf(0, centerColor, centerColor, 0),

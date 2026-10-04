@@ -85,29 +85,65 @@ fun featherGaussian(d: Float, sigma: Float = READER_FEATHER_SIGMA): Float =
     kotlin.math.exp(-(d * d) / (2f * sigma * sigma)).toFloat()
 
 /**
+ * 一趟羽化叠加后的 ARGB。
+ *
+ * 正文与预览必须算得一模一样，否则同一条规则在两处颜色不同。羽化是**层层叠加**的
+ * （从最虚画到最实），所以哪怕每趟只差一个 alpha 分量，累积到 7~24 趟后就是肉眼
+ * 可辨的深浅差。这里统一做 8bit 量化——Android 的 [android.graphics.LinearGradient]
+ * 只吃 int 色标，预览即便用 Compose 的 float alpha，中间 stop 交给 shader 时也要
+ * 量化一次；与其两边各量化一次（方式还不同），不如在这里定死。
+ */
+fun featherPassArgb(colorArgb: Int, d: Float, sigma: Float = READER_FEATHER_SIGMA): Int {
+    val baseAlpha = (colorArgb ushr 24) and 0xFF
+    val alpha = (baseAlpha * featherGaussian(d, sigma)).toInt().coerceIn(0, 255)
+    return (colorArgb and 0x00FFFFFF) or (alpha shl 24)
+}
+
+/**
  * 荧光色带的边缘柔化趟次：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
  *
- * [insetFactor] 是相对柔化半径的内缩比例（1 最外最虚 → 0 最实），
- * [alphaScale] 是该趟的 alpha 比例。
- *
  * 描边羽化是「向外加粗 + 端点渐隐」，色带柔化是「向内收缩」，两者共用同一份
- * 高斯权重序列，所以同半径下手感一致。
+ * 高斯权重与 8bit alpha 量化，所以同半径下手感一致。
  */
 fun featherBandPasses(featherDp: Float): List<FeatherPass> {
-    if (featherDp <= 0f) return listOf(FeatherPass(0f, 1f))
+    if (featherDp <= 0f) return listOf(FeatherPass(0f))
     val passes = featherPassCount(featherDp)
-    // 从最实到最虚：内缩比例与 alpha 同步递增
+    // **从最外画到最实**（distance 由 1 递减到 0），与描边羽化的 `for (i in passes downTo 0)`
+    // 同一个叠加顺序。反过来（先画最实的实心矩形、再叠更淡更大的矩形）会让外圈半透明
+    // 盖在实心核上，边界糊不掉，看上去就是一层层平铺的颜色而没有柔化。
     return List(passes + 1) { index ->
-        val d = index.toFloat() / passes
-        FeatherPass(insetFactor = d, alphaScale = featherGaussian(d))
+        FeatherPass(distance = (passes - index).toFloat() / passes)
     }
 }
 
-/** 柔化一趟：[insetFactor] 相对半径的内缩比例，[alphaScale] 该趟的 alpha 比例。 */
+/**
+ * 色带柔化的最大内缩量（px）。
+ *
+ * 内缩量按羽化半径取，但要受色带自身尺寸约束：荧光色带只有半行高（约 12dp），
+ * 5dp 羽化直接全额内缩会吃掉 40% 高度，看起来像「色带变窄」而不是「边界化开」。
+ * 这里再按短边封一次顶，短色带/窄命中段才有柔和的边缘而不是塌掉一块。
+ */
+fun bandFeatherMaxInsetPx(featherPx: Float, bandHeightPx: Float, bandWidthPx: Float): Float {
+    if (featherPx <= 0f) return 0f
+    val shortSide = minOf(bandHeightPx, bandWidthPx)
+    return minOf(featherPx, shortSide / 2f)
+}
+
+/**
+ * 边缘柔化的一趟。
+ *
+ * 用 [distance]（0 最实、1 最虚）作为唯一状态，内缩比例与 alpha 都由它派生，
+ * 保证「收缩多少」和「淡多少」不会各走一套。
+ */
 data class FeatherPass(
-    val insetFactor: Float,
-    val alphaScale: Float,
-)
+    val distance: Float,
+) {
+    /** 相对柔化半径的内缩比例。 */
+    val insetFactor: Float get() = distance
+
+    /** 该趟叠加后的 ARGB，与描边羽化共用同一个 8bit 量化口径。 */
+    fun argb(colorArgb: Int): Int = featherPassArgb(colorArgb, distance)
+}
 
 /** 把 [widthPx] 均摊成整数个半波后的半波数。 */
 fun waveHalfWaveCount(widthPx: Float, halfWavePx: Float): Int =

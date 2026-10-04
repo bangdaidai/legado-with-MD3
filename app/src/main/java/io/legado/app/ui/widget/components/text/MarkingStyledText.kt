@@ -32,8 +32,9 @@ import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
 import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
 import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
+import io.legado.app.feature.reader.core.style.bandFeatherMaxInsetPx
 import io.legado.app.feature.reader.core.style.featherBandPasses
-import io.legado.app.feature.reader.core.style.featherGaussian
+import io.legado.app.feature.reader.core.style.featherPassArgb
 import io.legado.app.feature.reader.core.style.featherPassCount
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
@@ -276,8 +277,8 @@ private fun DrawScope.drawMarkingUnderlines(
  * 荧光色带：铺满行盒下半行的填充矩形，不是描边。
  *
  * 与正文 `ReaderHalfHighlightDrawCommand` 同一份几何（矩形范围、圆头半径、
- * 柔化趟次都来自 `ReaderUnderlineGeometry`）。柔化是「同矩形多层 alpha 叠加」
- * 模拟模糊：色带范围不缩小，边界靠实色逐渐化开到透明。
+ * 柔化趟次与 alpha 都来自 `ReaderUnderlineGeometry`）。边缘柔化是「同一矩形从最虚
+ * 画到最实」，靠多层 alpha 叠加把硬边化成渐变。
  */
 internal fun DrawScope.drawFluorescentBand(
     left: Float,
@@ -291,20 +292,17 @@ internal fun DrawScope.drawFluorescentBand(
     val bandTop = top + (bottom - top) * READER_HALF_HIGHLIGHT_TOP_RATIO
     val bandHeight = (bottom - bandTop).coerceAtLeast(0f)
     val radius = if (roundCap) bandHeight / 2f else 0f
-    val baseAlpha = color.alpha
-    // 边缘柔化：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
-    // 收缩量钳在色带短边的一半以内，窄命中段也不会把矩形收成负数。
-    val maxInset = if (feather <= 0f) {
-        0f
-    } else {
-        minOf(feather.dp.toPx(), minOf(bandHeight, right - left) / 2f)
-    }
+    val baseArgb = color.toArgb()
+    // 边缘柔化：同一矩形从最虚画到最实（顺序与描边羽化一致），靠 alpha 叠加化开边界。
+    // 内缩量按羽化半径取并受色带短边约束，避免半行高的色带被吃掉一大半。
+    val maxInset = bandFeatherMaxInsetPx(feather.dp.toPx(), bandHeight, right - left)
     featherBandPasses(feather).forEach { pass ->
-        val alpha = baseAlpha * pass.alphaScale
-        if (alpha <= 0.001f) return@forEach
+        // 每趟颜色走 pass.argb —— 与正文共用同一个 8bit 量化口径
+        val passColor = Color(pass.argb(baseArgb))
+        if (passColor.alpha <= 0f) return@forEach
         val inset = pass.insetFactor * maxInset
         drawRoundRect(
-            color = color.copy(alpha = alpha),
+            color = passColor,
             topLeft = Offset(left + inset, bandTop + inset),
             size = Size(
                 (right - left) - inset * 2f,
@@ -375,7 +373,7 @@ internal fun DrawScope.drawUnderlineSegment(
     val capInset = if (cap == StrokeCap.Round) coreWidth.coerceAtLeast(1f) / 2f else 0f
     if (feather > 0f) {
         val passes = featherPassCount(feather)
-        val baseAlpha = color.alpha
+        val baseArgb = color.toArgb()
         val featherPx = feather.dp.toPx()
         // 端部渐隐长度：至少覆盖羽化扩散半径与线宽
         val featherLen = maxOf(featherPx * 1.5f, coreWidth)
@@ -383,9 +381,12 @@ internal fun DrawScope.drawUnderlineSegment(
         val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
-            val alpha = baseAlpha * featherGaussian(d)
-            if (alpha <= 0.001f) continue
-            val passColor = color.copy(alpha = alpha)
+            // 每趟颜色走 featherPassArgb（与正文共用）。此前这里用 float alpha，
+            // 正文的 8bit 截断会累积成肉眼可辨的深浅差：预览更暗、外圈光晕更重，
+            // 看起来像"更糊"。
+            val passArgb = featherPassArgb(baseArgb, d)
+            val passColor = Color(passArgb)
+            if (passColor.alpha <= 0.001f) continue
             val passWidth = coreWidth + d * featherPx * 2f
             // 端点水平渐隐：两端 alpha 渐变为 0
             val brush = Brush.linearGradient(
