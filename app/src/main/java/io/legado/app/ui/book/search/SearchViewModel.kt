@@ -34,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -400,6 +401,8 @@ class SearchViewModel(
     override fun onCleared() {
         stopSearch(manualStop = false)
         contentQualityJob?.cancel()
+        // 自建 scope 的 SupervisorJob 不随 ViewModel 销毁，不 cancel 就是一次泄漏
+        preferenceWriteScope.cancel()
         super.onCleared()
     }
 

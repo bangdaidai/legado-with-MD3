@@ -218,6 +218,15 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
 
     private val ioScope = CoroutineScope(SupervisorJob() + IO)
 
+    /**
+     * 退出阅读时的收尾专用 scope。
+     *
+     * 不能用 ioScope/downloadScope：unregister 里的 cancelChildren() 会把它们清空，
+     * 收尾任务随之被取消。曾经这里每次调用都 new 一个 CoroutineScope(SupervisorJob())，
+     * 无人持有、永不取消，等于每退一次阅读就漏一个 Job。
+     */
+    private val cleanupScope = CoroutineScope(SupervisorJob() + IO)
+
     private var autoSaveJob: Job? = null
 
     private var currentActiveSession: ReadRecordSession? = null
@@ -2169,10 +2178,16 @@ object ReadBook : CoroutineScope by MainScope(), KoinComponent {
         coroutineContext.cancelChildren()
         clearExpiredChapterLoadingJob(true)
         // Move expensive cleanup off the main thread
-        CoroutineScope(SupervisorJob() + IO).launch {
-            ImageProvider.clear()
-            if (!CacheBookService.isRun) {
-                CacheBook.close()
+        // runCatching 不能省：SupervisorJob 只隔离兄弟协程，不会把未捕获异常交给 handler，
+        // 清理过程抛出去会落到线程默认 handler 直接崩进程
+        cleanupScope.launch {
+            runCatching {
+                ImageProvider.clear()
+                if (!CacheBookService.isRun) {
+                    CacheBook.close()
+                }
+            }.onFailure {
+                AppLog.put("退出阅读时清理缓存失败", it)
             }
         }
     }

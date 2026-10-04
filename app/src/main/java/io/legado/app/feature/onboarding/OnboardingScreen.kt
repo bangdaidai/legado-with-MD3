@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
@@ -60,7 +63,9 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            // WebDav 页有输入框，BaseComposeActivity 又开了 edge-to-edge。
+            // safeDrawing 不含 IME inset，键盘弹出后会盖住底部「下一步」按钮
+            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime))
     ) {
         Column(
             modifier = Modifier
@@ -94,7 +99,9 @@ fun OnboardingScreen(
                     .padding(top = 4.dp, bottom = 12.dp)
             )
             AppLinearProgressIndicator(
-                progress = state.page * 1f / state.pageCount,
+                // page 是 0-based：直接除会得到 0/25%/50%/75%，首页看着像没进度、末页「完成」按钮
+                // 所在页也永远走不满
+                progress = (state.page + 1f) / state.pageCount,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -178,7 +185,10 @@ private fun BackupSelectorDialog(state: OnboardingUiState, onIntent: (Onboarding
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onIntent(OnboardingIntent.RestoreBackup(name)) }
+                            .clickable(
+                                role = Role.Button,
+                                onClickLabel = stringResource(R.string.restore),
+                            ) { onIntent(OnboardingIntent.RestoreBackup(name)) }
                             .padding(vertical = 10.dp, horizontal = 4.dp)
                     )
                 }

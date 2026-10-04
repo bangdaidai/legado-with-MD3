@@ -18,6 +18,15 @@ object MainNavigator {
 
     var backNavigationInProgress = false
         private set
+
+    /**
+     * 防连击窗口长度。必须明显大于 MainNavGraph 的 pop 转场时长（480ms），
+     * 否则转场还没结束窗口就到期，同一次手势会被判成两次返回。
+     */
+    private const val BACK_GESTURE_RESET_MS = 700L
+
+    /** 窗口内被挡下的返回动作，等窗口结束后补执行一次；null 表示没有待补的返回 */
+    private var backPendingAction: (() -> Unit)? = null
     private val navigationScope by lazy(LazyThreadSafetyMode.NONE) {
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
@@ -386,15 +395,11 @@ object MainNavigator {
                 }
             }
 
+            // 不在这里合成 MainRouteTagManagement：书名/详情/阅读页也能进标签详情，
+            // 原来 clear() 掉真实来源栈、再插一个用户没去过的标签管理页，
+            // 返回会落到标签管理页，来源彻底丢失。直接压栈，返回即回真实来源页。
             is MainRouteTagDetail -> {
-                if (currentRoute == MainRouteTagManagement || currentRoute == MainRouteHome) {
-                    backStack.add(route)
-                } else {
-                    backStack.clear()
-                    backStack.add(MainRouteHome)
-                    backStack.add(MainRouteTagManagement)
-                    backStack.add(route)
-                }
+                backStack.add(route)
             }
 
             MainRouteExcludedTag -> {
@@ -426,7 +431,13 @@ object MainNavigator {
         backStack: MutableList<NavKey>,
         tracker: MainNavRouteTracker?,
     ) {
-        if (backNavigationInProgress) return
+        if (backNavigationInProgress) {
+            // 防连击的窗口只该挡住同一次手势里的重复回调，不该把用户真的第二次按返回吞掉：
+            // 记下要执行的返回，等窗口结束补一次，返回层级连续。
+            // lambda 只活到下一次 onBackStackChanged（≤BACK_GESTURE_RESET_MS）后立即置空。
+            backPendingAction = { navigateBack(activity, backStack, tracker) }
+            return
+        }
         if (backStack.size > 1) {
             backNavigationInProgress = true
             backStack.removeLastOrNull()
@@ -439,8 +450,12 @@ object MainNavigator {
     fun onBackStackChanged() {
         backNavigationResetJob?.cancel()
         backNavigationResetJob = navigationScope.launch {
-            delay(500)
+            delay(BACK_GESTURE_RESET_MS)
             backNavigationInProgress = false
+            // 先取后置空：补执行的 navigateBack 可能再排一次 pending
+            val pending = backPendingAction
+            backPendingAction = null
+            pending?.invoke()
         }
     }
 

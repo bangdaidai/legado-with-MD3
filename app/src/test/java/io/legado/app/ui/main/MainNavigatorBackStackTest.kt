@@ -51,6 +51,18 @@ class MainNavigatorBackStackTest {
     }
 
     @Test
+    fun `tag detail keeps the real source page in back stack`() {
+        // 书名页也能进标签详情：必须保留来源，不能 clear() 掉再塞一个用户没去过的标签管理页
+        val bookInfo = MainRouteBookInfo("Book", "Author", "book-url")
+        val tagDetail = MainRouteTagDetail(0L)
+        val backStack = mutableListOf<NavKey>(MainRouteHome, bookInfo)
+
+        MainNavigator.navigateToRoute(backStack, tagDetail)
+
+        assertEquals(listOf(MainRouteHome, bookInfo, tagDetail), backStack)
+    }
+
+    @Test
     fun `read aloud sub pages from read aloud config keep config in back stack`() {
         val config = MainRouteReadAloudConfig("book-url")
 

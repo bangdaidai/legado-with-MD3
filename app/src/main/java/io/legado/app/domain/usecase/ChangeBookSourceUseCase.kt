@@ -200,6 +200,9 @@ class ChangeBookSourceUseCase(
                 database.readingMemoryDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
                 database.readingMemoryDao.deleteMigrated(oldBookUrl)
                 database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
+                // 与 changeTo() 同理：不迁移的话角色数据会留在旧 bookUrl 上（人物/关系/大纲页全空），
+                // 而且旧行还在时换源回该源会撞 book_character_profiles 的 UNIQUE(bookUrl,name) 整体失败
+                bookKnowledgeGateway.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
             }
         }
         if (oldBookUrl != newBook.bookUrl) {

@@ -190,7 +190,11 @@ abstract class VerifyConfigArchitectureTask : DefaultTask() {
 
 buildscript {
     extra.apply {
-        set("compile_sdk_version", 36)
+        // 这两个 extra 目前全仓库没有任何消费方（没有 extra[...] / getProperty 读取它们），
+        // 真正的生效值在 app/build.gradle.kts：compileSdk = 37 / targetSdk = 37。
+        // 保留是为了兼容可能的外部脚本读取，但必须与实际值一致，
+        // 否则会像原来那样写着 36 而实际编译 37，误导后来人。
+        set("compile_sdk_version", 37)
         set("build_tool_version", "34.0.0")
     }
 }

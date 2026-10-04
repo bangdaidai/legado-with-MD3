@@ -485,7 +485,9 @@ fun BookshelfScreen(
         onIntent(BookshelfIntent.ToggleBookSelection(bookUrl))
     }
 
-    LaunchedEffect(pagerState.currentPage, isInFolderRoot) {
+    // 必须用 settledPage：currentPage 在滑动过程中每帧都变，当 key 会让整个书架页逐帧重组，
+    // 且 fling 期间对每个中间页重复派发一次 ClearSelection（同文件 433/447/922 行均用 settledPage）
+    LaunchedEffect(pagerState.settledPage, isInFolderRoot) {
         clearSelection()
     }
 

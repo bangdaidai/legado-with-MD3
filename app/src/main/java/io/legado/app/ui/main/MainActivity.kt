@@ -542,7 +542,15 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         val morphPresent by remember { derivedStateOf { readAloudMorph.progress.value > 0f } }
         // 「从哪里来，就回到哪里去」：浮层设置弹窗跳 nav3 页面时记下
         // (跳转目标, 跳页时的来源栈顶)；返回栈顶回到来源页时重新展开浮层。
-        var playerReopenOnBack by remember { mutableStateOf<Pair<NavKey, NavKey>?>(null) }
+        // 上面几个 player 状态都用 rememberSaveable，这里也必须一致：
+        // manifest 里 MainActivity 的 configChanges 不含 orientation|screenSize，
+        // 旋转会重建 Activity，remember 的标记会被丢掉，返回时浮层不再自动展开
+        // rememberSaveable 只能存 Bundle 支持的类型，NavKey 不在其中。
+        // 这里存 toString()：MainRoute 全是 data object / data class，
+        // 字符串形式与实例一一对应，比较效果和原来的 == 一致。
+        var playerReopenOnBack by rememberSaveable {
+            mutableStateOf<Pair<String, String>?>(null)
+        }
 
         suspend fun openPlayer(request: PlaybackCapsuleState) = playerOpenMutex.withLock {
             val source = request.source ?: PlaybackCapsuleSource.ReadAloud
@@ -645,7 +653,9 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                     // 跳页时的来源栈顶（阅读页/主页）时自动重新展开浮层。
                     // 朗读已被停止（胶囊状态没有活跃源）时不重开，只清标记。
                     val reopen = playerReopenOnBack
-                    if (reopen != null && it.lastOrNull() == reopen.second) {
+                    // 存的是 toString（rememberSaveable 只能存 Bundle 支持的类型），
+                    // 用字符串比较；注意 null 栈顶也会映成 "null"，与 MainRouteHome 不冲突
+                    if (reopen != null && it.lastOrNull().toString() == reopen.second) {
                         playerReopenOnBack = null
                         val capsule = playbackGateway.state.value
                         if (capsule.source == PlaybackCapsuleSource.ReadAloud) {
@@ -839,7 +849,8 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
                                     val target = MainRouteCloudTtsEngines(effect.bookUrl)
                                     playerReopenOnBack =
-                                        target to (backStack.lastOrNull() ?: MainRouteHome)
+                                        target.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
                                         backStack, target, navRouteTracker,
                                     )
@@ -847,7 +858,8 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
                                     val target = MainRouteBookVoiceCasting(effect.bookUrl)
                                     playerReopenOnBack =
-                                        target to (backStack.lastOrNull() ?: MainRouteHome)
+                                        target.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
                                         backStack, target, navRouteTracker,
                                     )
@@ -855,14 +867,16 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
                                     val target = MainRouteSpeechStoryboard(effect.bookUrl)
                                     playerReopenOnBack =
-                                        target to (backStack.lastOrNull() ?: MainRouteHome)
+                                        target.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
                                         backStack, target, navRouteTracker,
                                     )
                                 }
                                 ReadAloudPlayerEffect.OpenTtsCache -> {
                                     playerReopenOnBack =
-                                        MainRouteTtsCache to (backStack.lastOrNull() ?: MainRouteHome)
+                                        MainRouteTtsCache.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
                                         backStack,
                                         MainRouteTtsCache,

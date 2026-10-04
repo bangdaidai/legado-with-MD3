@@ -30,6 +30,9 @@ data class BookTagUi(
     val color: Long,
 )
 
+// 字段全是 val，但内部集合未标注稳定类型：不给 @Stable 的话 Compose
+// 无法跳过重组，书籍详情多源更新会带动整页重算
+@Stable
 data class BookInfoUiState(
     val book: BookInfoBookUi? = null,
     val hasChapters: Boolean = false,

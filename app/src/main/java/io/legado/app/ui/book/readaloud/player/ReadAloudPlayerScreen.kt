@@ -66,6 +66,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -636,7 +637,9 @@ private fun ChapterTextPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .clickable { onIntent(ReadAloudPlayerIntent.SeekTo(line.chapterPosition)) }
+                            .clickable(role = Role.Tab) {
+                            onIntent(ReadAloudPlayerIntent.SeekTo(line.chapterPosition))
+                        }
                             .padding(horizontal = 12.dp, vertical = 12.dp)
                             .then(flowingTextModifier),
                         // 字号跟随阅读页当前排版（state.bodyTextSize），其余观感保持播放器主题

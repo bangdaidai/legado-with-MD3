@@ -21,6 +21,7 @@ import io.legado.app.data.appDb
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.ImageUtils
 import io.legado.app.utils.isWifiConnect
+import androidx.collection.LruCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.SupervisorJob
@@ -54,11 +55,33 @@ class OkHttpStreamFetcher(
     private var call: Call? = null
 
     companion object {
-        private val failUrl = hashSetOf<String>()
+        /**
+         * 加载失败的封面地址黑名单。
+         *
+         * 写方来自 OkHttp dispatcher 线程与 Coroutine 的 IO 线程，读方来自 Glide loader 线程，
+         * 必须用线程安全容器；否则并发 add 会丢条目（已知坏地址被反复重试、白耗流量）。
+         *
+         * 同时用 LruCache 封顶：原来是只增不减的静态集合，翻几百本书后
+         * 就是一份无上限的内存驻留。
+         */
+        private const val FAIL_URL_MAX_SIZE = 512
+
+        private val failUrl = LruCache<String, Boolean>(FAIL_URL_MAX_SIZE)
+
+        /** LruCache 本身也不是线程安全的，读写都要过同一把锁 */
+        private val failUrlLock = Any()
+
+        fun isFailedUrl(key: String): Boolean = synchronized(failUrlLock) {
+            failUrl.get(key) != null
+        }
+
+        fun markFailedUrl(key: String) = synchronized(failUrlLock) {
+            failUrl.put(key, true)
+        }
     }
 
     override fun loadData(priority: Priority, callback: DataFetcher.DataCallback<in InputStream>) {
-        if (failUrl.contains(url.toStringUrl())) {
+        if (isFailedUrl(url.toStringUrl())) {
             callback.onLoadFailed(NoStackTraceException("跳过加载失败的图片"))
             return
         }
@@ -161,7 +184,7 @@ class OkHttpStreamFetcher(
         responseBody = response.body
         if (!response.isSuccessful) {
             if (!manga) {
-                failUrl.add(url.toStringUrl())
+                markFailedUrl(url.toStringUrl())
             }
             callback?.onLoadFailed(HttpException(response.message, response.code))
             return
@@ -194,7 +217,7 @@ class OkHttpStreamFetcher(
     private fun onStreamReady(inputStream: InputStream?) {
         if (inputStream == null) {
             if (!manga) {
-                failUrl.add(url.toStringUrl())
+                markFailedUrl(url.toStringUrl())
             }
             callback?.onLoadFailed(NoStackTraceException("封面二次解密失败"))
         } else {

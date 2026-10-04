@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.cache.manage
 
 import android.app.Application
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.entities.Book
@@ -35,6 +36,9 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.min
 
+// 无 @Stable 时 Compose 认为每次 copy 出来的新实例都不相等，
+// 缓存页多源更新（分组/展开/下载进度）会让整棵列表树无法跳过重组
+@Stable
 data class BookCacheManageUiState(
     val isLoading: Boolean = true,
     val shelfBooks: List<BookCacheBookItem> = emptyList(),

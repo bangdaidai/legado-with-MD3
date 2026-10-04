@@ -227,6 +227,18 @@ fun ReadingMemoryScreen(
                     EmptyMessage(stringResource(R.string.reading_memory_empty))
                 }
             } else {
+                // 折叠分组集合必须在 item 之外算一次：放进 items{} 里会让每个可见项
+                // 每帧都对全量 items 做一遍 filterIsInstance + 线性查找，
+                // 阅读记录上千条时等于每帧 O(可见数×N) 次分配，滚动直接掉帧
+                val collapsedGroupKeys = remember(uiState.items, uiState.groupBy) {
+                    if (uiState.groupBy == ReadingMemoryGroupBy.None) {
+                        emptySet()
+                    } else {
+                        uiState.items.filterIsInstance<ReadingMemoryListItem.GroupHeader>()
+                            .filter { it.collapsed }
+                            .mapTo(mutableSetOf()) { it.key }
+                    }
+                }
                 AppPullToRefresh(
                     isRefreshing = uiState.loading,
                     onRefresh = { onIntent(ReadingMemoryIntent.Refresh) },
@@ -240,7 +252,12 @@ fun ReadingMemoryScreen(
                         contentPadding = adaptiveContentPadding(top = 0.dp, bottom = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
-                        items(uiState.items) { item ->
+                        items(uiState.items, key = { item ->
+                            when (item) {
+                                is ReadingMemoryListItem.GroupHeader -> "h:${item.key}"
+                                is ReadingMemoryListItem.BookItem -> "b:${item.memory.bookUrl}"
+                            }
+                        }) { item ->
                             when (item) {
                                 is ReadingMemoryListItem.GroupHeader -> {
                                     GroupHeaderRow(
@@ -252,9 +269,8 @@ fun ReadingMemoryScreen(
                                 }
 
                                 is ReadingMemoryListItem.BookItem -> {
-                                    val collapsed = uiState.groupBy != ReadingMemoryGroupBy.None &&
-                                        uiState.items.filterIsInstance<ReadingMemoryListItem.GroupHeader>()
-                                            .any { it.key == groupKeyFor(uiState, item.memory) && it.collapsed }
+                                    val collapsed = collapsedGroupKeys
+                                        .contains(groupKeyFor(uiState, item.memory))
                                     if (!collapsed) {
                                         MemoryBookCard(
                                             memory = item.memory,

@@ -25,10 +25,13 @@ interface BookmarkDao {
     )
     fun flowByBook(bookName: String, bookAuthor: String): Flow<List<Bookmark>>
 
+    // content like 分支必须带括号：SQLite 里 AND 优先级高于 OR，
+    // 不加括号时实际语义是 (书名+作者+章节名匹配) OR (正文匹配)，
+    // 「在某书里搜书签」会把全库正文命中的书签一起返回来
     @Query(
         """SELECT * FROM bookmarks 
         where bookName = :bookName and bookAuthor = :bookAuthor 
-        and chapterName like '%'||:key||'%' or content like '%'||:key||'%'
+        and (chapterName like '%'||:key||'%' or content like '%'||:key||'%')
         order by chapterIndex"""
     )
     fun flowSearch(bookName: String, bookAuthor: String, key: String): Flow<List<Bookmark>>
@@ -40,11 +43,11 @@ interface BookmarkDao {
     )
     fun getByBook(bookName: String, bookAuthor: String): List<Bookmark>
 
+    // 同 flowSearch：content like 分支漏了括号会跨书返回
     @Query(
         """SELECT * FROM bookmarks 
-
         where bookName = :bookName and bookAuthor = :bookAuthor 
-        and chapterName like '%'||:key||'%' or content like '%'||:key||'%'
+        and (chapterName like '%'||:key||'%' or content like '%'||:key||'%')
         order by chapterIndex"""
     )
     fun search(bookName: String, bookAuthor: String, key: String): List<Bookmark>

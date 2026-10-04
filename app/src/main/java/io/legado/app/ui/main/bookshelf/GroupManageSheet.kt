@@ -28,7 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,7 +83,9 @@ fun GroupManageSheet(
     tagGroupRuleViewModel: TagGroupRuleViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
-    val groups by bookshelfViewModel.allGroupsFlow.collectAsState()
+    // 这个 sheet 在 BookshelfScreen 里是无条件组合的，只靠 show 参数控制显隐，
+    // 所以普通 collectAsState() 会在书架页整个生命周期里持续收集（含 App 退到后台）
+    val groups by bookshelfViewModel.allGroupsFlow.collectAsStateWithLifecycle()
 
     var editingGroup by remember { mutableStateOf<BookGroup?>(null) }
     var isEditing by remember { mutableStateOf(false) }

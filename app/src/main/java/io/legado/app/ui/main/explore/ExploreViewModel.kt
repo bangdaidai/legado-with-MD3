@@ -20,6 +20,7 @@ import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -160,6 +161,11 @@ class ExploreViewModel(
                         )
                     } else it
                 }
+            } catch (e: CancellationException) {
+                // 上面 kindsJob?.cancel() 取消的旧协程会走到这里。
+                // CancellationException 是 Exception 的子类，不单独抛掉的话会继续执行
+                // 下面的 update，在新书源还在加载时就把 loadingKinds 提前置 false。
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(loadingKinds = false) }
             }

@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -552,7 +553,9 @@ private fun AudioLyricPage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .clickable { onIntent(AudioPlayIntent.SeekTo(line.timestampMs)) }
+                    .clickable(role = Role.Tab) {
+                        onIntent(AudioPlayIntent.SeekTo(line.timestampMs))
+                    }
                     .padding(horizontal = 12.dp, vertical = 12.dp),
                 style = LegadoTheme.typography.titleLargeEmphasized,
                 color = if (active) {
