@@ -1,5 +1,7 @@
 package io.legado.app.ui.widget.components.text
 
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
@@ -12,10 +14,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -34,12 +39,11 @@ import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
 import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
 import io.legado.app.feature.reader.core.style.bandFeatherMaxInsetPx
 import io.legado.app.feature.reader.core.style.featherBandPasses
-import io.legado.app.feature.reader.core.style.featherPassArgb
-import io.legado.app.feature.reader.core.style.featherPassCount
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.feature.reader.platform.ReaderSvgPathCache
+import io.legado.app.feature.reader.platform.ReaderUnderlineDrawCommand
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.utils.ColorUtils
 
@@ -301,6 +305,8 @@ internal fun DrawScope.drawFluorescentBand(
         val passColor = Color(pass.argb(baseArgb))
         if (passColor.alpha <= 0f) return@forEach
         val inset = pass.insetFactor * maxInset
+        // 圆头开着时半径 = 色带高度一半，内缩会吃掉半径：两者同步收缩才保持端部半圆形状
+        val passRadius = (radius - inset).coerceAtLeast(0f)
         drawRoundRect(
             color = passColor,
             topLeft = Offset(left + inset, bandTop + inset),
@@ -308,7 +314,7 @@ internal fun DrawScope.drawFluorescentBand(
                 (right - left) - inset * 2f,
                 bandHeight - inset * 2f,
             ),
-            cornerRadius = CornerRadius(radius, radius),
+            cornerRadius = CornerRadius(passRadius, passRadius),
         )
     }
 }
@@ -347,6 +353,66 @@ internal fun TextLayoutResult.forEachLineSegment(
     }
 }
 
+/**
+ * 纯色笔刷，用原生 [android.graphics.LinearGradient] 生成。
+ *
+ * 羽化路径已经整体委托给 `ReaderUnderlineDrawCommand`（见 [drawWithReaderUnderlineCommand]），
+ * 那里自带端部渐隐 shader；这里只服务**非羽化**的兜底绘制。用原生 shader 而非
+ * Compose 的 `Brush.linearGradient`：后者在 unpremultiplied 空间插值，半透明色
+ * 与正文（premultiplied）会有偏差。
+ */
+private fun solidShaderBrush(colorArgb: Int): Brush {
+    // 不改 alpha：色标原样进 shader，半透明色仍是半透明
+    val shader = LinearGradient(
+        0f, 0f, 1f, 0f,
+        intArrayOf(colorArgb, colorArgb),
+        floatArrayOf(0f, 1f),
+        Shader.TileMode.CLAMP,
+    )
+    return ShaderBrush(shader)
+}
+
+/**
+ * 用**正文那条绘制命令**画一段下划线。
+ *
+ * 预览此前自己实现了一套羽化叠加，与正文在 alpha 量化、渐变插值空间、每趟线宽基准、
+ * 端部渐隐长度上都不同，任何一项分叉都会在多趟叠加后放大成肉眼可辨的深浅差。
+ * 现在改为构造同一条 [ReaderUnderlineDrawCommand] 并直接画，两边共用同一份代码，
+ * 预览即所见即正文。
+ */
+private fun DrawScope.drawWithReaderUnderlineCommand(
+    mode: Int,
+    colorArgb: Int,
+    widthPx: Float,
+    startX: Float,
+    endX: Float,
+    y: Float,
+    roundCap: Boolean,
+    featherPx: Float,
+    dashOnPx: Float,
+    dashOffPx: Float,
+    svgPath: String,
+    waveControlOffsetPx: Float,
+    waveHalfWavePx: Float,
+) {
+    val command = ReaderUnderlineDrawCommand.forSegment(
+        mode = mode,
+        colorArgb = colorArgb,
+        widthPx = widthPx,
+        startX = startX,
+        endX = endX,
+        y = y,
+        roundCap = roundCap,
+        featherPx = featherPx,
+        dashOnPx = dashOnPx,
+        dashOffPx = dashOffPx,
+        svgPath = svgPath,
+        waveControlOffsetPx = waveControlOffsetPx,
+        waveHalfWavePx = waveHalfWavePx,
+    )
+    drawIntoCanvas { canvas -> command.draw(canvas.nativeCanvas) }
+}
+
 internal fun DrawScope.drawUnderlineSegment(
     mode: Int,
     color: Color,
@@ -368,44 +434,29 @@ internal fun DrawScope.drawUnderlineSegment(
     // 那一趟（drawUnderlineShape 内的 finalStrokeWidthPx），不参与扩散量的计算；
     // 正文走同一个函数，两侧粗细一致。
     val coreWidth = widthDp.dp.toPx()
-    // 圆头内缩只按线芯宽度：羽化 pass 的加粗圆头向外扩散，内缩若随加粗增大，
-    // 两端渐隐区会被整段吃掉，羽化和圆头一起失效
+    // 与正文 ReaderUnderline.capInsetPx 同一公式（widthPx.coerceAtLeast(1f) / 2），
+    // 圆头在预览与正文才探出同样多。
+    // 羽化分支不走这里：它整体委托给 ReaderUnderlineDrawCommand，由那边算自己的 capInsetPx。
     val capInset = if (cap == StrokeCap.Round) coreWidth.coerceAtLeast(1f) / 2f else 0f
     if (feather > 0f) {
-        val passes = featherPassCount(feather)
-        val baseArgb = color.toArgb()
-        val featherPx = feather.dp.toPx()
-        // 端部渐隐长度：至少覆盖羽化扩散半径与线宽
-        val featherLen = maxOf(featherPx * 1.5f, coreWidth)
-        val segLen = endX - startX
-        val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
-        for (i in passes downTo 0) {
-            val d = i.toFloat() / passes
-            // 每趟颜色走 featherPassArgb（与正文共用）。此前这里用 float alpha，
-            // 正文的 8bit 截断会累积成肉眼可辨的深浅差：预览更暗、外圈光晕更重，
-            // 看起来像"更糊"。
-            val passArgb = featherPassArgb(baseArgb, d)
-            val passColor = Color(passArgb)
-            if (passColor.alpha <= 0.001f) continue
-            val passWidth = coreWidth + d * featherPx * 2f
-            // 端点水平渐隐：两端 alpha 渐变为 0
-            val brush = Brush.linearGradient(
-                colorStops = arrayOf(
-                    0f to Color.Transparent,
-                    edgePos to passColor,
-                    1f - edgePos to passColor,
-                    1f to Color.Transparent,
-                ),
-                start = Offset(startX, 0f),
-                end = Offset(endX, 0f),
-            )
-            drawUnderlineShape(
-                mode = mode, color = passColor, strokeWidth = passWidth,
-                startX = startX, endX = endX, y = y, cap = cap, capInset = capInset,
-                brush = brush, dashLen = dashLen, dashGap = dashGap, svgPath = svgPath,
-                wavePeakDp = wavePeakDp, waveLengthDp = waveLengthDp,
-            )
-        }
+        // 羽化**直接复用正文的绘制命令**：预览自己那套多趟叠加曾多次与正文分叉
+        // （插值空间、8bit 量化、趟宽、端部渐隐长度），改成同一处绘制后物理上
+        // 不可能再不一致。
+        drawWithReaderUnderlineCommand(
+            mode = mode,
+            colorArgb = color.toArgb(),
+            widthPx = coreWidth,
+            startX = startX,
+            endX = endX,
+            y = y,
+            roundCap = roundCap,
+            featherPx = feather.dp.toPx(),
+            dashOnPx = dashLen.dp.toPx(),
+            dashOffPx = dashGap.dp.toPx(),
+            svgPath = svgPath,
+            waveControlOffsetPx = (wavePeakDp * 2f).dp.toPx(),
+            waveHalfWavePx = (waveLengthDp / 2f).dp.toPx(),
+        )
     } else {
         drawUnderlineShape(
             mode = mode, color = color, strokeWidth = coreWidth,
@@ -494,7 +545,9 @@ internal fun DrawScope.drawUnderlineShape(
     val sx = startX + capInset
     val ex = endX - capInset
     if (sx >= ex) return
-    val solidBrush = brush ?: Brush.linearGradient(listOf(color, color))
+    // 兜底笔刷也用原生 shader：Compose 的 Brush.linearGradient 在 unpremultiplied
+    // 空间插值，与正文（premultiplied）不同，半透明色会有偏差
+    val solidBrush = brush ?: solidShaderBrush(color.toArgb())
     // 线宽只在这一处（所有线型的单一出口）抬到最小可见宽度：亚像素线宽在低密度屏上
     // 几乎不可见。正文走同一个 finalStrokeWidthPx，保证同一条笔记在正文与列表里
     // 粗细一致。羽化的基准宽度在 drawUnderlineSegment 里刻意没抬，两者不是同一趟。

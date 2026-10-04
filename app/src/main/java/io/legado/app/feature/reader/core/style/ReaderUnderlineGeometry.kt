@@ -88,10 +88,10 @@ fun featherGaussian(d: Float, sigma: Float = READER_FEATHER_SIGMA): Float =
  * 一趟羽化叠加后的 ARGB。
  *
  * 正文与预览必须算得一模一样，否则同一条规则在两处颜色不同。羽化是**层层叠加**的
- * （从最虚画到最实），所以哪怕每趟只差一个 alpha 分量，累积到 7~24 趟后就是肉眼
- * 可辨的深浅差。这里统一做 8bit 量化——Android 的 [android.graphics.LinearGradient]
- * 只吃 int 色标，预览即便用 Compose 的 float alpha，中间 stop 交给 shader 时也要
- * 量化一次；与其两边各量化一次（方式还不同），不如在这里定死。
+ * （从最虚画到最实），哪怕每趟只差一个 alpha 分量，累积到 7~24 趟后也是肉眼可辨的
+ * 深浅差。这里统一做 8bit 量化——Android 的 [android.graphics.LinearGradient] 只吃
+ * int 色标，预览即便用 Compose 的 float alpha，中间 stop 交给 shader 时也要量化
+ * 一次；与其两边各量化一次（方式还可能不同），不如在这里定死。
  */
 fun featherPassArgb(colorArgb: Int, d: Float, sigma: Float = READER_FEATHER_SIGMA): Int {
     val baseAlpha = (colorArgb ushr 24) and 0xFF
@@ -138,8 +138,15 @@ fun bandFeatherMaxInsetPx(featherPx: Float, bandHeightPx: Float, bandWidthPx: Fl
 data class FeatherPass(
     val distance: Float,
 ) {
-    /** 相对柔化半径的内缩比例。 */
-    val insetFactor: Float get() = distance
+    /**
+     * 相对柔化半径的内缩比例，**与 [distance] 反向**。
+     *
+     * 叠加顺序是从最虚画到最实（distance 由 1 递减到 0），所以内缩必须同步反向：
+     * 最虚那一趟不内缩（铺满整个色带），最实那一趟内缩到最深（收成核心）。
+     * 两者同向会自我抵消——最后画的那趟既满不透明又铺满整个色带，把前面全盖住，
+     * 结果是一块没有柔边的实心矩形。
+     */
+    val insetFactor: Float get() = 1f - distance
 
     /** 该趟叠加后的 ARGB，与描边羽化共用同一个 8bit 量化口径。 */
     fun argb(colorArgb: Int): Int = featherPassArgb(colorArgb, distance)

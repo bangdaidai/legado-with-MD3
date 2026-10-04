@@ -165,23 +165,42 @@ class ReaderUnderlineGeometryTest {
 
         assertEquals(1, passes.size)
         assertEquals(0f, passes.single().distance, 0f)
+        // 无羽化时不内缩，色带保持原尺寸
+        assertEquals(0f, passes.single().insetFactor, 0f)
         assertEquals(0xFFFFFFFF.toInt(), passes.single().argb(0xFFFFFFFF.toInt()))
     }
 
     @Test
-    fun `band feather paints outermost first so the solid core lands last`() {
+    fun `band feather insets opposite to the draw order`() {
         val passes = featherBandPasses(2f)
         val color = 0xFF3366CC.toInt()
 
         assertEquals(featherPassCount(2f) + 1, passes.size)
-        // 与描边羽化的 `for (i in passes downTo 0)` 同一顺序：先最外最虚，最后最实。
-        // 反过来会让外圈半透明盖在实心核上，边界糊不掉，看上去只是平铺的颜色。
+        // 与描边羽化的 `for (i in passes downTo 0)` 同一顺序：先最虚，最后最实
         assertEquals(1f, passes.first().distance, 1e-6f)
         assertEquals(0f, passes.last().distance, 0f)
-        // 内缩同步：最外内缩最多
-        assertTrue(passes.first().insetFactor > passes.last().insetFactor)
-        // alpha 同步：最外最淡
+        // 内缩必须与叠加顺序反向：最虚那趟铺满色带，最实那趟收成核心。
+        // 同向会自我抵消——最后画的那趟满不透明又铺满整个色带，把前面全盖住。
+        assertEquals(0f, passes.first().insetFactor, 1e-6f)
+        assertEquals(1f, passes.last().insetFactor, 1e-6f)
+        // alpha 仍是最虚 → 最实
         assertTrue(passes.first().argb(color) < passes.last().argb(color))
+    }
+
+    @Test
+    fun `band feather inset and alpha move in opposite directions`() {
+        val passes = featherBandPasses(2f)
+
+        passes.zipWithNext().forEach { (outer, inner) ->
+            assertTrue(
+                "越靠内应该内缩越多",
+                outer.insetFactor < inner.insetFactor,
+            )
+            assertTrue(
+                "越靠内应该越不透明",
+                outer.argb(0xFF3366CC.toInt()) < inner.argb(0xFF3366CC.toInt()),
+            )
+        }
     }
 
     @Test

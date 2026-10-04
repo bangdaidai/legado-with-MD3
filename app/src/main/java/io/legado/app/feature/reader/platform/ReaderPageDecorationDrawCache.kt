@@ -14,6 +14,7 @@ import io.legado.app.feature.reader.core.model.ReaderPage
 import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderUnderline
 import io.legado.app.feature.reader.core.model.underlineRuns
+import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
@@ -96,8 +97,10 @@ internal class ReaderHalfHighlightDrawCommand(
                 bandTop + inset,
                 bounds.right - inset,
                 bounds.bottom - inset,
-                radius,
-                radius,
+                // 圆头开着时半径 = 色带高度一半，内缩会吃掉半径：两者同步收缩才保持
+                // 端部半圆的形状，否则内缩过头后圆弧互相重叠
+                (radius - inset).coerceAtLeast(0f),
+                (radius - inset).coerceAtLeast(0f),
                 paint,
             )
         }
@@ -125,6 +128,61 @@ internal class ReaderUnderlineDrawCommand(
     private val bounds: ReaderRect,
     private val underline: ReaderUnderline,
 ) {
+    companion object {
+        /**
+         * 从显式几何构造一条绘制命令，供**正文之外的渲染方**（高亮规则预览、笔记列表）
+         * 复用同一条绘制路径。
+         *
+         * 预览此前自己实现了一套多趟羽化叠加，与正文反复分叉：alpha 是否 8bit 量化、
+         * 渐变在 premultiplied 还是 unpremultiplied 空间插值、每趟线宽基准抬不抬下限、
+         * 端部渐隐长度取 1.5 倍还是 2 倍——每一项不同都会在 7~24 趟叠加后放大成
+         * 肉眼可辨的深浅差。改成构造同一条命令后，这些差异在物理上不可能存在。
+         *
+         * [y] 是基线（正文是 `bounds.bottom + offsetPx`），这里直接传绝对值：
+         * 预览的行盒几何与正文不同，用 bottom 反推会差一个行距。
+         *
+         * 只支持羽化适用的线型（[underlineControlSupport] 排除 mode 4/5/6）。这些线型
+         * 只读 [ReaderRect] 的 left/right/bottom——唯一用到 height 的删除线
+         * （`bounds.top + height * 0.52`）走不到这里，故无需传行高。
+         */
+        fun forSegment(
+            mode: Int,
+            colorArgb: Int,
+            widthPx: Float,
+            startX: Float,
+            endX: Float,
+            y: Float,
+            roundCap: Boolean,
+            featherPx: Float,
+            dashOnPx: Float = 8f,
+            dashOffPx: Float = 5f,
+            svgPath: String = "",
+            waveControlOffsetPx: Float = 3f,
+            waveHalfWavePx: Float = 12f,
+        ): ReaderUnderlineDrawCommand {
+            val underline = ReaderUnderline(
+                mode = mode,
+                colorArgb = colorArgb,
+                widthPx = widthPx,
+                // 绘制命令只用 offsetPx 推基线（bounds.bottom + offsetPx）；
+                // 这里让 bottom 落在传入的 y 上、offset 归零，保持绝对基线与调用方一致
+                offsetPx = 0f,
+                svgPath = svgPath,
+                dashOnPx = dashOnPx,
+                dashOffPx = dashOffPx,
+                waveControlOffsetPx = waveControlOffsetPx,
+                waveHalfWavePx = waveHalfWavePx,
+                doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
+                roundCap = roundCap,
+                featherPx = featherPx,
+            )
+            return ReaderUnderlineDrawCommand(
+                bounds = ReaderRect(startX, y, endX, y),
+                underline = underline,
+            )
+        }
+    }
+
     private val featherPx = underline.featherPx.coerceAtLeast(0f)
 
     /**
@@ -162,7 +220,10 @@ internal class ReaderUnderlineDrawCommand(
         // 中心保持满 alpha 形成清晰线芯，端点额外做水平渐隐消除硬切（移植旧 TextLine）。
         // 每趟颜色走 featherPassArgb —— 预览侧共用，保证两边逐位一致。
         val passes = featherPassCount(featherPx / 1f.dpToPx())
-        val featherLen = (featherPx * 1.5f).coerceAtLeast(underline.widthPx)
+        // 端部渐隐长度 = 上下方向的扩散量（羽化半径 × 2），两端与上下用同一个空间尺度。
+        // 此前用 1.5 倍：上下扩散 2 倍、两端只渐隐 1.5 倍，两个尺度打架使四个角被
+        // 重复施色、糊成一团，而四边中间相对干净。
+        val featherLen = (featherPx * 2f).coerceAtLeast(underline.widthPx)
         val segLen = bounds.right - bounds.left
         val edgePos = if (segLen > 0f) (featherLen / segLen).coerceIn(0f, 0.5f) else 0.5f
         for (i in passes downTo 0) {
