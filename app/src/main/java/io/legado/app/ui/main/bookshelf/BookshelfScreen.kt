@@ -1210,7 +1210,21 @@ fun BookshelfScreen(
                                             onBookClick(book, coverKey.takeIf { holdsTransition })
                                         },
                                         onLockedBookClick = requestBookUnlock,
-                                        onBookLongClick = onBookLongClick,
+                                        // 长按进详情页同样算一次"开书"：详情页 → 阅读页 →
+                                        // 返回详情页 → 再返回书架，这一腿回到书架时列表已经
+                                        // 按最近阅读重排过。不记录提示就既不冻结顺序也不预排，
+                                        // 而详情页那端照样挂着 sharedBounds——终点格会在转场
+                                        // 里从第 N 格甩到第 1 格（封面闪到屏幕角落）。
+                                        onBookLongClick = { book, coverKey ->
+                                            recordBookshelfOpenHint(
+                                                snapshotKey = "group:${group.groupId}",
+                                                gridState = groupGridState,
+                                                bookUrl = book.bookUrl,
+                                                books = books,
+                                                mayMoveToFrontOnReturn = predictMoveToFrontOnReturn,
+                                            )
+                                            onBookLongClick(book, coverKey)
+                                        },
                                         isCurrentPage = isSelectedGroup,
                                         sharedCoverGroupId = group.groupId,
                                         sharedTransitionScope = sharedTransitionScope,
