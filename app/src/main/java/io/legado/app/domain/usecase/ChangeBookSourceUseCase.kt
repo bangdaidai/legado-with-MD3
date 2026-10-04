@@ -147,7 +147,9 @@ class ChangeBookSourceUseCase(
                 database.readingMemoryDao.deleteMigrated(oldBookUrl)
                 // 笔记高亮的渲染查询按 bookUrl 过滤，不跟着搬就会静默画不出来
                 database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
-                // 迁移角色数据：保留旧角色，避免换源后丢失
+                // 迁移角色数据：保留旧角色，避免换源后丢失。
+                // 目标 bookUrl 已有同名角色时由 Gateway 内部去重让位，不会像裸 UPDATE 那样撞
+                // unique(bookUrl, name) 把整个换源事务炸掉
                 bookKnowledgeGateway.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
             }
         }
@@ -201,7 +203,7 @@ class ChangeBookSourceUseCase(
                 database.readingMemoryDao.deleteMigrated(oldBookUrl)
                 database.bookMarkingDao.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
                 // 与 changeTo() 同理：不迁移的话角色数据会留在旧 bookUrl 上（人物/关系/大纲页全空），
-                // 而且旧行还在时换源回该源会撞 book_character_profiles 的 UNIQUE(bookUrl,name) 整体失败
+                // 旧行留着还会挡住下次换源（目标侧同名角色撞 unique(bookUrl, name)，已由 Gateway 去重兜住）
                 bookKnowledgeGateway.migrateToNewBookUrl(oldBookUrl, newBook.bookUrl)
             }
         }

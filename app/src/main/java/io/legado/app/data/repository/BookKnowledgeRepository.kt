@@ -142,8 +142,6 @@ class BookKnowledgeRepository(
 
     override suspend fun migrateToNewBookUrl(oldBookUrl: String, newBookUrl: String) =
         withContext(Dispatchers.IO) {
-            dao.migrateCharacterProfilesToNewBookUrl(oldBookUrl, newBookUrl)
-            dao.migrateCharacterEventsToNewBookUrl(oldBookUrl, newBookUrl)
-            dao.migrateCharacterRelationsToNewBookUrl(oldBookUrl, newBookUrl)
+            dao.mergeToNewBookUrl(oldBookUrl, newBookUrl)
         }
 }

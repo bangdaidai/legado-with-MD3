@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import io.legado.app.data.entities.BookCharacterEvent
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.BookCharacterRelation
@@ -176,6 +177,14 @@ interface BookKnowledgeDao {
     @Query("delete from book_character_relations where id = :relationId")
     suspend fun deleteCharacterRelation(relationId: String)
 
+    /**
+     * 真删某个角色的全部关系行，和 [deleteRelationsForCharacter] 的软删除区分开：
+     * 后者是用户主动删角色，要留 status=DELETED 的历史；换源去重丢弃目标侧残留时角色本身都要删掉，
+     * 留软删行只会变成指向已删角色的悬空引用。
+     */
+    @Query("delete from book_character_relations where fromCharacterId = :characterId or toCharacterId = :characterId")
+    suspend fun hardDeleteRelationsOfCharacter(characterId: String)
+
     @Query("delete from book_knowledge_entries where id = :entryId")
     suspend fun deleteKnowledgeEntry(entryId: String)
 
@@ -283,6 +292,58 @@ interface BookKnowledgeDao {
     /** 换源迁移：将旧 bookUrl 的角色、事件、关系迁移到新 bookUrl */
     @Query("UPDATE book_character_profiles SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
     suspend fun migrateCharacterProfilesToNewBookUrl(oldBookUrl: String, newBookUrl: String)
+
+    /**
+     * 目标 bookUrl 下与旧 bookUrl 同名的角色 id。这些行挡住了 [migrateCharacterProfilesToNewBookUrl]：
+     * 角色名是自然键，同一本书在两个源下各自识别过人物就一定重名（历史孤儿行、备份恢复全量写回、
+     * 来回换源都会留下这种数据）。
+     */
+    @Query(
+        """
+        select newProfile.id from book_character_profiles newProfile
+        where newProfile.bookUrl = :newBookUrl
+          and exists (
+            select 1 from book_character_profiles oldProfile
+            where oldProfile.bookUrl = :oldBookUrl and oldProfile.name = newProfile.name
+          )
+        """
+    )
+    suspend fun getDuplicatedCharacterIds(oldBookUrl: String, newBookUrl: String): List<String>
+
+    @Query("delete from book_character_profiles where id in (:ids)")
+    suspend fun deleteCharacterProfilesByIds(ids: List<String>)
+
+    /**
+     * 换源迁移：把旧 bookUrl 的角色、事件、关系并到新 bookUrl。
+     *
+     * 不要退回成裸 UPDATE 依次调三个 migrate*：[book_character_profiles] 上有
+     * `unique(bookUrl, name)`，目标 bookUrl 一旦已有同名角色就会抛 2067；而换源把这一步放在
+     * 同一个事务里（见 ChangeBookSourceUseCase），一炸整单回滚，用户看到的就是「换源失败」，
+     * 而且旧角色还留在旧 bookUrl 上，再点多少次都是同样的结果。
+     *
+     * 关系表不用额外去重：它的唯一键 `unique(bookUrl, fromCharacterId, toCharacterId)` 里两个
+     * characterId 都全局唯一，同一对端点全局只可能存在一行，改 bookUrl 不会撞。
+     *
+     * 取舍是保留旧书的角色数据（换源调用处的意图），所以冲突时让目标侧的重复行让位，并连同它的
+     * events / relations 一起删掉——那些行本就是「书已经不在这个 bookUrl」状态下的残留，删了不会
+     * 留下指向已删角色的悬空引用。
+     */
+    @Transaction
+    suspend fun mergeToNewBookUrl(oldBookUrl: String, newBookUrl: String) {
+        // 两个 url 相同时下面的去重会把要搬的数据自己删光，必须先挡住
+        if (oldBookUrl == newBookUrl) return
+        val duplicatedIds = getDuplicatedCharacterIds(oldBookUrl, newBookUrl)
+        duplicatedIds.forEach { characterId ->
+            deleteEventsForCharacter(newBookUrl, characterId)
+            hardDeleteRelationsOfCharacter(characterId)
+        }
+        if (duplicatedIds.isNotEmpty()) {
+            deleteCharacterProfilesByIds(duplicatedIds)
+        }
+        migrateCharacterProfilesToNewBookUrl(oldBookUrl, newBookUrl)
+        migrateCharacterEventsToNewBookUrl(oldBookUrl, newBookUrl)
+        migrateCharacterRelationsToNewBookUrl(oldBookUrl, newBookUrl)
+    }
 
     @Query("UPDATE book_character_events SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
     suspend fun migrateCharacterEventsToNewBookUrl(oldBookUrl: String, newBookUrl: String)

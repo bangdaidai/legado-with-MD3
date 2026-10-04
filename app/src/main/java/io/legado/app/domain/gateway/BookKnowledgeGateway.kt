@@ -75,6 +75,10 @@ interface BookKnowledgeGateway {
     suspend fun deleteCharacterRelation(relationId: String)
     suspend fun deleteKnowledgeEntry(entryId: String)
 
-    /** 换源迁移：将旧 bookUrl 的角色、事件、关系迁移到新 bookUrl */
+    /**
+     * 换源迁移：将旧 bookUrl 的角色、事件、关系并到新 bookUrl。
+     * 新 bookUrl 已有同名角色时以旧数据为准，目标侧的重复行让位（实现见
+     * [io.legado.app.data.dao.BookKnowledgeDao.mergeToNewBookUrl]）。
+     */
     suspend fun migrateToNewBookUrl(oldBookUrl: String, newBookUrl: String)
 }
