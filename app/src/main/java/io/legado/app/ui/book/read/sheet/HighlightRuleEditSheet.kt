@@ -543,17 +543,19 @@ fun HighlightRuleEditSheet(
                 )
 
                 // Underline — 「无」即原来的关闭，选中具体线型即原来的开启；下拉常驻，细节项按选中态展开
+                // 排列按使用频率：基础线型在前，自定义 SVG 挪到最后（少数场景、选项里最长）
                 val underlineEntries = arrayOf(
                     stringResource(R.string.underline_none),
                     stringResource(R.string.underline_solid),
                     stringResource(R.string.underline_dashed),
+                    stringResource(R.string.bookmark_mark_effect_highlight),
                     stringResource(R.string.underline_wave),
                     stringResource(R.string.underline_title_bar),
-                    stringResource(R.string.underline_svg),
                     stringResource(R.string.bookmark_mark_effect_strike),
-                    stringResource(R.string.bookmark_mark_effect_highlight),
+                    stringResource(R.string.underline_svg),
                 )
-                val underlineValues = arrayOf("0", "1", "2", "3", "4", "5", "6", "7")
+                // 与 displayEntries 一一对应：值是实际的 underlineMode，不能随排序变
+                val underlineValues = arrayOf("0", "1", "2", "7", "3", "4", "6", "5")
                 TinyDropdownSettingItem(
                     title = stringResource(R.string.underline_style),
                     selectedValue = underlineMode.toString(),
