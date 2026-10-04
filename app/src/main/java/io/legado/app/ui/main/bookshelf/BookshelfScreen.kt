@@ -1715,12 +1715,14 @@ private fun rememberBooksHeldDuringEnter(
 
     // 预排到第 1 格时把列表瞬时拉回顶部：终点格子（第 1 格）必须尽早进屏，否则它落在
     // 视口外、压根没被组合，飞行中的封面就拿不到终点。用 SideEffect 而不是 LaunchedEffect
-    // ——后者要等首帧布局之后才跑。
+    // ——后者要等首帧布局之后才跑。scrollToItem 是 suspend，SideEffect 里只能经
+    // rememberCoroutineScope 立即 launch，launch 同步调度后仍在下一帧前生效。
     // 这一跳发生在阅读器淡出还没结束时，正常返回看不见；预测返回在松手提交那一刻才触发
     // （手势过程中 currentState 仍是 Visible），取消手势不会动列表位置。
+    val scrollScope = rememberCoroutineScope()
     SideEffect {
         if (moveToFront && !isBookshelfGridAtTop(gridState)) {
-            gridState.scrollToItem(0, 0)
+            scrollScope.launch { gridState.scrollToItem(0, 0) }
         }
     }
 
