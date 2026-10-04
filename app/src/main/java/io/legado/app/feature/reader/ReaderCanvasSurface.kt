@@ -123,6 +123,7 @@ import io.legado.app.feature.reader.core.selection.ReaderSelectionPolicy
 import io.legado.app.feature.reader.core.selection.mergeSelectionBounds
 import io.legado.app.feature.reader.core.selection.selectionPages
 import io.legado.app.feature.reader.core.selection.stylePreviewBounds
+import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
@@ -156,6 +157,7 @@ import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.feature.reader.platform.ReaderBookmarkBadgeRenderer
 import io.legado.app.feature.reader.platform.ReaderPageDecorationDrawCache
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
+import io.legado.app.ui.widget.components.text.drawUnderlineSegment
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -2458,6 +2460,36 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSelectionStyleP
         }
         when (style.underlineMode) {
             1, 6 -> drawLine(Color(color), Offset(rect.left, y), Offset(rect.right, y), stroke)
+            4 -> {
+                // 双线第二条 = y + 净间隙 + 线宽，与正文 ReaderPageDecorationDrawCache
+                // 和 MarkingStyledText.drawUnderlineShape 的 mode 4 同一口径。
+                // 少了这个分支，选词时选双实线什么都不画。
+                val secondY = y + READER_DOUBLE_LINE_GAP_DP.dp.toPx() + style.underlineWidth.dp.toPx()
+                drawLine(Color(color), Offset(rect.left, y), Offset(rect.right, y), stroke)
+                drawLine(
+                    Color(color),
+                    Offset(rect.left, secondY),
+                    Offset(rect.right, secondY),
+                    stroke,
+                )
+            }
+            5 -> {
+                // 自定义 SVG：转发到 MarkingStyledText.drawUnderlineSegment 的 mode 5，
+                // 与正文 ReaderPageDecorationDrawCache、笔记列表共用同一套变换（按 viewBox 宽
+                // 横向拉伸、基线对齐到 y）。自己再写一遍必然与正文漂移。
+                // widthDp 传原始值而非上面抬升过的 stroke：SVG 描边要走函数内部的
+                // 线芯宽度，与 finalStrokeWidthPx 不是同一个量。
+                // 少了这个分支，选词时复用带自定义 SVG 的规则看不到效果。
+                drawUnderlineSegment(
+                    mode = 5,
+                    color = Color(color),
+                    widthDp = style.underlineWidth,
+                    startX = rect.left,
+                    endX = rect.right,
+                    y = y,
+                    svgPath = style.underlineSvgPath.orEmpty(),
+                )
+            }
             2 -> {
                 // 与正式渲染同一套周期均摊算法，段尾不再被截出碎段
                 val (periods, on, off) = scaledDashSegments(

@@ -427,6 +427,10 @@ internal fun DrawScope.drawUnderlineSegment(
  * 为了预览引入 Compose 依赖。代价是 mode 5 每次绘制重放一遍顶点；SVG 路径顶点数有限、
  * 自定义 SVG 又是少数场景，这点开销可以接受。
  *
+ * 可见性保持 private：选区实时预览（`ReaderCanvasSurface.drawSelectionStylePreview`）
+ * 不自己转路径，而是经 [drawUnderlineSegment] 转发到 `drawUnderlineShape`，
+ * 两处共用同一份转换与变换，不会各自实现后与正文漂移。
+ *
  * 怎么重放：用平台自带的 `Path.approximate()`（API 26 引入，本项目 minSdk 26）把整条路径
  * 近似成 MOVE_TO/LINE_TO 折线再逐点重放，**不需要版本分支、也不需要新依赖**。
  *

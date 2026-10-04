@@ -951,11 +951,15 @@ fun HighlightRuleEditSheet(
                 HorizontalDivider(color = LegadoTheme.colorScheme.outlineVariant)
                 if (previewDockExpanded) {
                     Spacer(Modifier.height(8.dp))
-                    // 停靠区高度有限：示例文本按 4 行封顶，再长就在框里滚动，不能把上方的表单挤没
+                    // 停靠区高度有限：示例文本按 4 行封顶，再长就在框里滚动，不能把上方的表单挤没。
+                    // 不给 label——标题栏已有「预览效果」说明这里是什么，浮动标签白占一行高度；
+                    // 改用 placeholder，只在空内容时出现，输入后不占位。
                     AppTextField(
                         value = sampleText,
                         onValueChange = { sampleText = it },
-                        label = stringResource(R.string.sample_text),
+                        placeholder = {
+                            AppText(stringResource(R.string.sample_text))
+                        },
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )

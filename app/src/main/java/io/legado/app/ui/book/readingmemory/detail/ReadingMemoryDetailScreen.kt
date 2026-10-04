@@ -691,16 +691,8 @@ private fun ExcerptSection(
                     style = LegadoTheme.typography.labelMediumEmphasized,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
-                if (excerpt.note.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    AppText(
-                        text = excerpt.note,
-                        style = excerptTextStyle,
-                        color = LegadoTheme.colorScheme.primary,
-                        lineHeight = 22.sp,
-                        textAlign = TextAlign.Justify,
-                    )
-                }
+                // 原文在上、备注文下：原文是划线本体（含 MarkingStyledText 的还原渲染），
+                // 备注是补充说明，视觉层级上先看原文更符合预期
                 if (excerpt.selectedText.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     // 与「所有笔记」页共用 MarkingStyledText：还原正文里的划线观感
@@ -709,6 +701,16 @@ private fun ExcerptSection(
                         decoration = excerpt.decoration,
                         style = excerptTextStyle,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Justify,
+                    )
+                }
+                if (excerpt.note.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AppText(
+                        text = excerpt.note,
+                        style = excerptTextStyle,
+                        color = LegadoTheme.colorScheme.primary,
+                        lineHeight = 22.sp,
                         textAlign = TextAlign.Justify,
                     )
                 }
