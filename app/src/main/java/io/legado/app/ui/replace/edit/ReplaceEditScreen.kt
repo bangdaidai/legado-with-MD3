@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -205,6 +206,8 @@ fun ReplaceEditScreen(
             Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                // 键盘弹出时收窄可视区：底部快捷条贴到键盘上方，聚焦的输入框也能完整滚入
+                .imePadding()
         ) {
             AnimatedVisibility(
                 visible = isKeyboardVisible,
@@ -471,7 +474,10 @@ fun QuickInputBar(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        contentPadding = PaddingValues(horizontal = 16.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        // 只在键盘弹出时展示，IME inset 已覆盖导航条区域；BottomAppBar 默认的
+        // navigationBars inset 会在外层 imePadding 之上再垫一层空隙，这里关掉
+        windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         symbols.forEach { symbol ->
             AssistChip(
