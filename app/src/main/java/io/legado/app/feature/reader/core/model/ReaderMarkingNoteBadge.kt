@@ -14,8 +14,9 @@ import kotlin.math.min
  * 三条落位口径：
  * - **横向**：圆**心**对齐划线末字的右边界（也就是下划线的末端），所以圆有一半压在末字
  *   与下划线上、一半落在外侧。**不收口**到页边或内容区右边界。
- * - **纵向**：与该划线的**下划线居中对齐**（[ReaderUnderline.referenceCenterY]，与画线
- *   同一份 y 口径）；没有下划线的笔记（背景色/字体色）退回行盒竖直中心。
+ * - **纵向**：圆心统一压在**行盒底边**上。荧光色带铺行盒下半行、背景色块铺满整行盒，
+ *   两者的样式底边都是行盒底边；描边类下划线也从这条线再下沉 offset。全部样式统一
+ *   到同一条底线，图标看过去都落在样式的右下角、同一高度，不再随线型上下漂。
  * - **命中**：24dp 见方的方框，竖向以圆心对称、横向只在左边多让 [HIT_GROW_LEFT_DP]
  *   （见该常量注释），同样不收口。
  */
@@ -74,9 +75,9 @@ data class ReaderMarkingNoteBadge(
             return lastByMarking.mapNotNull { (markingId, text) ->
                 val line = text.bounds
                 if (line.width <= 0f || line.height <= 0f) return@mapNotNull null
-                // 纵向与下划线居中；没有下划线（背景色/字体色笔记）就与行盒居中。
-                val centerY = text.style.underline?.referenceCenterY(line)
-                    ?: (line.top + line.bottom) / 2f
+                // 纵向统一压行盒底边：荧光带与背景块的样式底边都是它，描边类也从
+                // 这里下沉 offset——所有线型的图标落在同一条底线（右下角）。
+                val centerY = line.bottom
                 // 横向：圆心压在末字右边界上，一半盖住末字与下划线末端，一半落在外侧。
                 val centerX = line.right
                 val hitLeft = centerX - half - growLeft

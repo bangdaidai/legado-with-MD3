@@ -6,8 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 笔记角标的落位与命中。落位口径：**贴末字右侧 1dp**、**与下划线居中对齐**、**不收口**
- * （可以探出页边），命中区是绘制矩形外扩到 24dp。
+ * 笔记角标的落位与命中。落位口径：**贴末字右侧**、**纵向统一压行盒底边**（所有线型的
+ * 图标都落在样式右下角同一高度）、**不收口**（可以探出页边），命中区是绘制矩形外扩到
+ * 24dp（横向只在圆左边多让 4dp）。
  */
 class ReaderMarkingNoteBadgeTest {
     private val density = 2f
@@ -43,24 +44,38 @@ class ReaderMarkingNoteBadgeTest {
         )
 
         // 12dp 直径 @2x = 24px，圆心压在末字右边界 40 上 → 横向 (28,52)：
-        // 一半盖住末字、一半在外侧。没有下划线 → 与行盒竖直中心（(30+60)/2 = 45）对齐。
+        // 一半盖住末字、一半在外侧。纵向统一压行盒底边 60。
         assertEquals(1, badges.size)
-        assertEquals(ReaderRect(28f, 33f, 52f, 57f), badges.single().bounds)
+        assertEquals(ReaderRect(28f, 48f, 52f, 72f), badges.single().bounds)
     }
 
     @Test
-    fun `badge is centered on the underline instead of the line box`() {
+    fun `badge sits on the line bottom instead of following the underline`() {
         val underline = ReaderUnderline(1, 0xFFFF0000.toInt(), 1f, offsetPx = 4f)
         val badges = badges(
             text(0f, 30f, 40f, 60f, chapterPosition = 0, markingId = "m1", style = marked(underline)),
             notes = mapOf("m1" to "note"),
         )
 
-        // 下划线画在行盒下沿 60 + 偏移 4 = 64 处，圆心就该在 64（而不是行盒中心 45）。
+        // 所有线型统一：圆心压行盒底边 60；下划线画在 60+4=64 处，圆心贴样式底部、
+        // 不跟着下划线的下沉量走。
         val bounds = badges.single().bounds
-        assertEquals(64f, bounds.top + bounds.height / 2f)
+        assertEquals(60f, bounds.top + bounds.height / 2f)
         assertEquals(40f, bounds.left + bounds.width / 2f)
-        assertEquals(ReaderRect(28f, 52f, 52f, 76f), bounds)
+        assertEquals(ReaderRect(28f, 48f, 52f, 72f), bounds)
+    }
+
+    @Test
+    fun `fluorescent badge sits on the band bottom instead of the band centre`() {
+        // 荧光色带铺行盒下半行，色带中点在 30 + 30*0.75 = 52.5；圆心改压样式
+        // 底边（= 行盒底 60），与背景色/描边类落在同一条线上。
+        val underline = ReaderUnderline(7, 0xFFFF0000.toInt(), 1f, offsetPx = 4f)
+        val badges = badges(
+            text(0f, 30f, 40f, 60f, chapterPosition = 0, markingId = "m1", style = marked(underline)),
+            notes = mapOf("m1" to "note"),
+        )
+
+        assertEquals(ReaderRect(28f, 48f, 52f, 72f), badges.single().bounds)
     }
 
     @Test
@@ -72,7 +87,7 @@ class ReaderMarkingNoteBadgeTest {
         )
 
         // 页宽只有 100，圆心在末字末端 100，圆有 12px 探出页边；不做任何收口。
-        assertEquals(ReaderRect(88f, 22f, 112f, 46f), badges.single().bounds)
+        assertEquals(ReaderRect(88f, 18f, 112f, 42f), badges.single().bounds)
     }
 
     @Test
@@ -84,9 +99,9 @@ class ReaderMarkingNoteBadgeTest {
         )
 
         assertEquals(listOf("m1", "m2"), badges.map { it.markingId })
-        // 圆 (8,3)-(32,27)；触控区 48px 见方（24dp），竖向以圆心对称；横向左沿在圆左边
+        // 圆 (8,18)-(32,42)；触控区 48px 见方（24dp），竖向以圆心对称；横向左沿在圆左边
         // 再多 4dp（8px）到 0，右沿到 48——只比圆本身盖住末字的 12px 多吃 8px。
-        assertEquals(ReaderRect(0f, -9f, 48f, 39f), badges.first().hitBounds)
+        assertEquals(ReaderRect(0f, 6f, 48f, 54f), badges.first().hitBounds)
     }
 
     @Test
@@ -106,11 +121,13 @@ class ReaderMarkingNoteBadgeTest {
             ),
         )
 
-        // 圆 (48,52)-(72,76)、圆心 (60,64)；触控区 (28,40)-(96,88)。
+        // 圆 (48,48)-(72,72)、圆心 (60,60)；触控区 (40,36)-(88,84)：横向左沿比圆
+        // 左边只多 4dp（8px），其余往右边的空白里长。
         assertEquals("m1", page.markingNoteBadgeAt(60f, 64f)?.markingId)
-        assertEquals("m1", page.markingNoteBadgeAt(29f, 41f)?.markingId)
+        assertEquals("m1", page.markingNoteBadgeAt(41f, 37f)?.markingId)
         // 行左侧仍然归「点划线 → 笔记弹层」，不能被触控区吃掉。
         assertNull(page.markingNoteBadgeAt(20f, 45f))
+        assertNull(page.markingNoteBadgeAt(39f, 60f))
         assertNull(page.markingNoteBadgeAt(60f, 100f))
     }
 

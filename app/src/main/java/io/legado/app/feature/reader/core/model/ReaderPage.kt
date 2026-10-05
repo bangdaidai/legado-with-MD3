@@ -116,16 +116,18 @@ data class ReaderUnderline(
         underlineCornerRadiusPx(strokeWidthPx, cornerRadiusPx)
 
     /**
-     * 这条下划线在**行盒**里的竖直中心（px）。
+     * 这条下划线**描边**的竖直中心（px），供正文描边绘制取 y。
      *
-     * 用途：正文里的划线备注角标要与下划线**居中对齐**，因此必须与绘制侧同一个 y 口径。
      * 线型编号与 [io.legado.app.feature.reader.core.style.underlineControlSupport] 一致：
      * - 删除线固定在行高比例处，不吃偏移；
-     * - 荧光是铺下半行的填充色带，中心在色带中点，不吃偏移；
+     * - 荧光是铺下半行的填充色带，中心在色带中点，不吃偏移（正文把 mode 7 分流到
+     *   填充色带路径，走不到描边，这里保留分支让口径完整）；
      * - 其余线型都落在行盒下沿再按偏移量下沉。
      *
-     * 画线处（`ReaderPageDecorationDrawCache`）与角标处都调本函数：两处各写一份
-     * `bounds.bottom + offsetPx` 的日子，只要有人改了其中一处，角标就会和它错开。
+     * 画线处（`ReaderPageDecorationDrawCache`）的 `draw` 与波浪路径都调本函数：
+     * 两处各写一份 `bounds.bottom + offsetPx` 的日子，只要有人改了其中一处，
+     * 虚线段和波浪就会错开。笔记角标的纵向落位已改为统一压行盒底边
+     * （见 `ReaderMarkingNoteBadge`），按样式底部对齐，与本函数各按各的参考线走。
      */
     fun referenceCenterY(lineBounds: ReaderRect): Float = when (mode) {
         6 -> lineBounds.top + lineBounds.height * READER_STRIKE_HEIGHT_RATIO
