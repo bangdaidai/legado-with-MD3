@@ -319,13 +319,15 @@ internal fun DrawScope.drawFluorescentBand(
             hPos,
             Shader.TileMode.CLAMP,
         )
-        // 全限定名：本文件同时用 Compose 的 `Paint`（drawPath 那套）与
-        // android.graphics 的 `Paint`（要挂 ComposeShader，Compose 的 Brush 没有
-        // 二维相乘的等价物），同名不限定会被解析成 Compose 那个。
+        // 必须用 android.graphics 的 `Paint` 与**原生** Canvas：ComposeShader 要的是
+        // android.graphics.Shader（Compose 的 Brush 没有二维相乘的等价物），而
+        // drawIntoCanvas 给的 receiver 是 Compose 的 Canvas，它的 drawRoundRect 只收
+        // Compose 的 Paint。所以这里两处都要落到原生侧；Paint 写全限定名避免与
+        // Compose 的同名类型混淆。
         val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             shader = ComposeShader(horizontal, vertical, PorterDuff.Mode.DST_IN)
         }
-        canvas.drawRoundRect(left, bandTop, right, bottom, radius, radius, paint)
+        canvas.nativeCanvas.drawRoundRect(left, bandTop, right, bottom, radius, radius, paint)
     }
 }
 
