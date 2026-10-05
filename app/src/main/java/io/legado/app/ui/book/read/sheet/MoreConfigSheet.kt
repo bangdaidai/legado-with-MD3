@@ -76,12 +76,6 @@ fun MoreConfigSheet(
                 onReadBodyToLhChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadBodyToLh(it)))
                 },
-                onAdaptSpecialStyleChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AdaptSpecialStyle(it)))
-                },
-                onUseZhLayoutChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.UseZhLayout(it)))
-                },
                 onOpenEyeProtectionConfig = {
                     onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.EyeProtection))
                 }
@@ -109,6 +103,10 @@ fun MoreConfigSheet(
                 onKeyPageOnLongPressChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.KeyPageOnLongPress(it)))
                 },
+                onOpenPageKeyConfig = onOpenPageKeyConfig,
+                onNoAnimScrollPageChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.NoAnimScrollPage(it)))
+                },
                 onSwipeToAddBookmarkChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SwipeToAddBookmark(it)))
                 },
@@ -116,6 +114,18 @@ fun MoreConfigSheet(
                 onResetBookmarkBadge = onResetBookmarkBadge,
                 onBookmarkBadgeSizeChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.BookmarkBadgeSize(it)))
+                },
+            )
+
+            // 正文排版
+            SectionTitle(stringResource(R.string.more_config_section_typography))
+            TypographySettings(
+                preferences = preferences,
+                onAdaptSpecialStyleChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AdaptSpecialStyle(it)))
+                },
+                onUseZhLayoutChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.UseZhLayout(it)))
                 },
             )
 
@@ -149,7 +159,6 @@ fun MoreConfigSheet(
                 onSelectVibratorChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectVibrator(it)))
                 },
-                onOpenPageKeyConfig = onOpenPageKeyConfig,
                 onDisableReturnKeyChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.DisableReturnKey(it)))
                 },
@@ -180,9 +189,6 @@ fun MoreConfigSheet(
                 onOptimizeRenderChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.OptimizeRender(it)))
                 },
-                onNoAnimScrollPageChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.NoAnimScrollPage(it)))
-                },
                 onShowReadTitleAdditionChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowReadTitleAddition(it)))
                 },
@@ -209,8 +215,6 @@ private fun ScreenSettings(
     onHideNavigationBarChange: (Boolean) -> Unit,
     onPaddingDisplayCutoutsChange: (Boolean) -> Unit,
     onReadBodyToLhChange: (Boolean) -> Unit,
-    onAdaptSpecialStyleChange: (Boolean) -> Unit,
-    onUseZhLayoutChange: (Boolean) -> Unit,
     onOpenEyeProtectionConfig:() -> Unit,
 ) {
     val screenDirectionEntries = stringArrayResource(R.array.screen_direction_title)
@@ -252,6 +256,19 @@ private fun ScreenSettings(
         checked = preferences.readBodyToLh,
         onCheckedChange = onReadBodyToLhChange,
     )
+    TinyClickableSettingItem(
+        title = stringResource(R.string.eye_protection),
+        onClick = onOpenEyeProtectionConfig,
+    )
+}
+
+/** 正文排版：都是书源 HTML 怎么排的开关，跟屏幕本身无关，故与 [ScreenSettings] 分开。 */
+@Composable
+private fun TypographySettings(
+    preferences: ReadPreferences,
+    onAdaptSpecialStyleChange: (Boolean) -> Unit,
+    onUseZhLayoutChange: (Boolean) -> Unit,
+) {
     TinySwitchSettingItem(
         title = stringResource(R.string.adapt_special_style),
         checked = preferences.adaptSpecialStyle,
@@ -261,10 +278,6 @@ private fun ScreenSettings(
         title = stringResource(R.string.use_zh_layout),
         checked = preferences.useZhLayout,
         onCheckedChange = onUseZhLayoutChange,
-    )
-    TinyClickableSettingItem(
-        title = stringResource(R.string.eye_protection),
-        onClick = onOpenEyeProtectionConfig,
     )
 }
 
@@ -277,6 +290,8 @@ private fun PageControlSettings(
     onVolumeKeyPageChange: (Boolean) -> Unit,
     onVolumeKeyPageOnPlayChange: (Boolean) -> Unit,
     onKeyPageOnLongPressChange: (Boolean) -> Unit,
+    onOpenPageKeyConfig: () -> Unit,
+    onNoAnimScrollPageChange: (Boolean) -> Unit,
     onSwipeToAddBookmarkChange: (Boolean) -> Unit,
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
@@ -320,6 +335,15 @@ private fun PageControlSettings(
         title = stringResource(R.string.key_page_on_long_press),
         checked = preferences.keyPageOnLongPress,
         onCheckedChange = onKeyPageOnLongPressChange,
+    )
+    TinyClickableSettingItem(
+        title = stringResource(R.string.custom_page_key),
+        onClick = onOpenPageKeyConfig,
+    )
+    TinySwitchSettingItem(
+        title = stringResource(R.string.no_anim_scroll_page),
+        checked = preferences.noAnimScrollPage,
+        onCheckedChange = onNoAnimScrollPageChange,
     )
     TinySwitchSettingItem(
         title = stringResource(R.string.swipe_to_add_bookmark),
@@ -395,7 +419,6 @@ private fun GestureSettings(
     onClickImgWayChange: (String) -> Unit,
     onSliderVibratorChange: (Boolean) -> Unit,
     onSelectVibratorChange: (Boolean) -> Unit,
-    onOpenPageKeyConfig: () -> Unit,
     onDisableReturnKeyChange: (Boolean) -> Unit,
 ) {
     val clickImageWayEntries = stringArrayResource(R.array.click_image_way_title)
@@ -424,11 +447,6 @@ private fun GestureSettings(
         title = stringResource(R.string.enable_select_vibrator),
         checked = preferences.selectVibrator,
         onCheckedChange = onSelectVibratorChange,
-    )
-
-    TinyClickableSettingItem(
-        title = stringResource(R.string.custom_page_key),
-        onClick = onOpenPageKeyConfig,
     )
 
     TinySwitchSettingItem(
@@ -483,7 +501,6 @@ private fun SourceSettings(
 private fun DisplaySettings(
     preferences: ReadPreferences,
     onOptimizeRenderChange: (Boolean) -> Unit,
-    onNoAnimScrollPageChange: (Boolean) -> Unit,
     onShowReadTitleAdditionChange: (Boolean) -> Unit,
     onShowMenuIconChange: (Boolean) -> Unit,
     onAutoSuggestDayNightChange: (Boolean) -> Unit,
@@ -493,12 +510,6 @@ private fun DisplaySettings(
         title = stringResource(R.string.enable_optimize_render),
         checked = preferences.optimizeRender,
         onCheckedChange = onOptimizeRenderChange,
-    )
-
-    TinySwitchSettingItem(
-        title = stringResource(R.string.no_anim_scroll_page),
-        checked = preferences.noAnimScrollPage,
-        onCheckedChange = onNoAnimScrollPageChange,
     )
 
     TinySwitchSettingItem(

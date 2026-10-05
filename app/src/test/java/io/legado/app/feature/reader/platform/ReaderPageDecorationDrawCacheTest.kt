@@ -146,16 +146,13 @@ class ReaderPageDecorationDrawCacheTest {
     }
 
     /**
-     * 羽化 + 端点圆角开启：圆弧尖端落在段边界上，且**边界处仍有颜色**。
+     * 羽化 + 端点圆角：圆弧半径锁在半个线宽上，**不能**跟着羽化加粗涨出去。
      *
-     * 这是"圆头 vs 尖头"的判据。旧实现把渐隐窗口整个放在段内（`[left, left+2F]`，
-     * 中心偏到 `left+F`），尖端恰好落在 alpha=0 处——圆弧画得再圆，从全透明长
-     * 出来的东西都是尖的。窗口中心对齐段边界后，端点带着约一半 alpha。
-     *
-     * 同时锁住"不往外多接一段"：圆弧按当趟宽度内缩，总长恒等于段宽，段外无覆盖。
+     * round cap 的半径恒等于 strokeWidth/2。若让加粗到 `widthPx + 2 × featherPx`
+     * 的外圈趟也带圆头，半径就是半个羽化半径那么远，端头看着像在段外多接一段。
      */
-    @Test
-    fun `feathered round cap keeps its tip inside the segment with visible alpha`() {
+    @Test(timeout = 1_000)
+    fun `feathered round cap never reaches past half a line width`() {
         val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
         val bounds = ReaderRect(20f, 0f, 60f, 16f)
 
@@ -164,11 +161,36 @@ class ReaderPageDecorationDrawCacheTest {
             ReaderUnderline(1, 0xff000000.toInt(), 1f, 0f, roundCap = true, featherPx = 5f),
         ).draw(Canvas(bitmap))
 
-        assertTrue("圆头内缩，段外不该有覆盖", alpha(bitmap, 18, BASELINE_Y) == 0)
-        assertTrue("圆头内缩，段外不该有覆盖", alpha(bitmap, 61, BASELINE_Y) == 0)
-        val edge = alpha(bitmap, 20, BASELINE_Y)
-        assertTrue("段边界处不是全透明才是圆头，实际 $edge", edge > 0)
-        assertTrue("端部仍应淡于中部：$edge", edge < alpha(bitmap, 40, BASELINE_Y))
+        // 线宽 1px → 圆头最多探出 0.5px；往左 3px 处必然什么都没有
+        assertTrue("段外不该有覆盖", alpha(bitmap, 16, BASELINE_Y) == 0)
+        assertTrue("段外不该有覆盖", alpha(bitmap, 63, BASELINE_Y) == 0)
+    }
+
+    /**
+     * 羽化 + 端部柔边：端部必须**同时**变淡和变窄。
+     *
+     * 只降 alpha、不动几何时，端部那条带子线宽恒为 `widthPx + 2 × featherPx`，
+     * 它的上、下边缘是垂直硬线，只有左边缘在渐变——看着就是生硬切口。端部靠逐趟
+     * 内缩收窄（与荧光色带 `featherBandPasses` 同口径），上下边缘才跟着柔化。
+     *
+     * 端点也不能空掉：外圈那几趟齐边、低 alpha，端点因此是「淡但有颜色」，不是尖。
+     */
+    @Test(timeout = 1_000)
+    fun `feathered ends soften in width as well as alpha`() {
+        val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
+        val bounds = ReaderRect(20f, 0f, 60f, 16f)
+
+        ReaderUnderlineDrawCommand(
+            bounds,
+            ReaderUnderline(1, 0xff000000.toInt(), 1f, 0f, featherPx = 5f),
+        ).draw(Canvas(bitmap))
+
+        assertTrue("段外不该有覆盖", alpha(bitmap, 16, BASELINE_Y) == 0)
+        assertTrue("端点应有颜色而不是空的", alpha(bitmap, 21, BASELINE_Y) > 0)
+        assertTrue(
+            "越靠中段越浓",
+            alpha(bitmap, 21, BASELINE_Y) < alpha(bitmap, 40, BASELINE_Y),
+        )
     }
 
     /**
@@ -189,6 +211,50 @@ class ReaderPageDecorationDrawCacheTest {
 
         val centre = alpha(bitmap, 40, BASELINE_Y)
         assertTrue("中段应接近不透明，实际 $centre", centre > 200)
+    }
+
+    /**
+     * 羽化 + 周期笔形：虚线与波浪画得出来，且全程只按一个内缩量画形状。
+     *
+     * 逐趟变内缩量会让 `waveHalfWaves` / `scaledDashSegments` 每趟按新段宽重新
+     * 均摊一次，多趟叠起来是一团波长/周期各不相同的交错重影。
+     */
+    @Test(timeout = 1_000)
+    fun `feathered periodic strokes draw with one fixed inset`() {
+        val bounds = ReaderRect(20f, 0f, 60f, 16f)
+        listOf(2, 3).forEach { mode ->
+            val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
+            ReaderUnderlineDrawCommand(
+                bounds,
+                ReaderUnderline(mode, 0xff000000.toInt(), 1f, 0f, roundCap = true, featherPx = 5f),
+            ).draw(Canvas(bitmap))
+            // 固定内缩 = 线芯半宽 0.5，段内仍有 39px 可画
+            assertTrue("mode $mode 中段应有像素", alpha(bitmap, 40, BASELINE_Y) > 0)
+        }
+    }
+
+    /**
+     * 羽化 + 端点圆角：圆弧半径锁在半个线宽上，**不能**跟着羽化加粗涨出去。
+     *
+     * round cap 的半径恒等于 strokeWidth/2。若让加粗到 `widthPx + 2 × featherPx`
+     * 的外圈趟也带圆头，半径就是半个羽化半径那么远，端头看着像在段外多接一段。
+     * 锁成线芯半宽后，圆头只在高亮范围内把直线收成半圆，端点仍在段边界上，
+     * 而 alpha 由 shader 独立给，所以端点不是全透明、也不显尖。
+     */
+    @Test(timeout = 1_000)
+    fun `feathered round cap stays half a line width past the segment`() {
+        val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
+        val bounds = ReaderRect(20f, 0f, 60f, 16f)
+
+        ReaderUnderlineDrawCommand(
+            bounds,
+            ReaderUnderline(1, 0xff000000.toInt(), 1f, 0f, roundCap = true, featherPx = 5f),
+        ).draw(Canvas(bitmap))
+
+        // 线宽 1px → 圆头探出 0.5px；往左 3px 处必然什么都没有
+        assertTrue("段外不该有覆盖", alpha(bitmap, 16, BASELINE_Y) == 0)
+        val edge = alpha(bitmap, 20, BASELINE_Y)
+        assertTrue("端点应带有颜色而不是全透明，实际 $edge", edge > 0)
     }
 
     private fun alpha(bitmap: Bitmap, x: Int, y: Int): Int =

@@ -1,5 +1,7 @@
 package io.legado.app.feature.reader.core.model
 
+import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
+import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.underlineControlSupport
 
@@ -84,54 +86,75 @@ data class ReaderUnderline(
     /** 波浪半波长：一次 `quadTo` 覆盖的宽度，整波长是它的两倍。 */
     val waveHalfWavePx: Float = 12f,
     val doubleLineGapPx: Float = 3f,
-    /** 端点圆头（旧 underlineRoundCap）。羽化**不**再强制圆头，开关语义即字面语义。 */
+    /**
+     * 遗留字段（旧 `HighlightRule.underlineRoundCap`），**不再参与渲染**。
+     *
+     * 端点原先是二选一：开着给半圆、关着给方角。两种极端都不好看，而且同一份样式
+     * 会有两套形态。现在所有线型统一收 1dp 小圆角（[underlineCornerRadiusPx]），
+     * 开关已从编辑弹层移除。数据库列不能删，故保留。
+     */
     val roundCap: Boolean = false,
-    /** 羽化半径（px），0=不羽化（旧 underlineFeather 多趟高斯 alpha + 端点渐隐）。 */
+    /** 羽化半径（px），0=不羽化。 */
     val featherPx: Float = 0f,
     /** true=画在文字层之下（旧 underlineBelowText，被字形笔画遮挡）。 */
     val belowText: Boolean = false,
 ) {
-    /**
-     * 圆头与羽化按线型适用性取。
-     *
-     * 双实线的两条线各自成段（圆头会吃掉两线间距）、删除线固定在行高比例处、
-     * 自定义 SVG 的两端由用户路径决定——这三个线型都不开放这两项，编辑弹层已隐藏
-     * 对应控件，旧数据里存的值也不该继续生效。渲染层与 UI 必须读同一份判定。
-     */
-    val roundCapEffective: Boolean
-        get() = underlineControlSupport(mode).roundCap && roundCap
-
     val featherEffective: Boolean
         get() = underlineControlSupport(mode).feather && featherPx > 0f
 
     /**
-     * 端点圆头的向内收缩量（px）：半径 = **当趟实际描边宽度**的一半。
+     * 端点圆角的向内收缩量（px）：把原来的直线端点收成小圆角，总长仍等于段宽。
      *
-     * 作用是把原来的直线端点变成半圆，而不是在段外多接一段——笔触仍从段边界
-     * 起笔到段边界收，总长恒等于段宽。内缩量必须跟着当趟宽度走：羽化最外那趟
-     * 描到 `widthPx + 2 × featherPx`，若按线芯宽度统一收缩，它那半圆会探出段外
-     * `featherPx`，端头就像多出一截。
-     *
-     * 羽化本身**不**产生圆头：[roundCap] 关闭时这里是 0，端头是平切口。
+     * [cornerRadiusPx] 是 [underlineCornerRadiusPx] 里那个统一圆角的 px 值，由绘制层
+     * 换算后传进来——本模块不碰 dp→px，好让纯 JVM 单测能覆盖。
      */
-    fun capInsetPx(strokeWidthPx: Float): Float =
-        if (roundCapEffective) finalStrokeWidthPx(strokeWidthPx) / 2f else 0f
+    fun capInsetPx(strokeWidthPx: Float, cornerRadiusPx: Float): Float =
+        underlineCornerRadiusPx(strokeWidthPx, cornerRadiusPx)
 
     /**
-     * 下划线画出文字包围盒外的最大半径（圆头/羽化/偏移/双线/波浪），
-     * 供内容裁剪与预览画布预留，避免贴边把圆头和柔边切掉。
+     * 周期笔形（虚线、波浪）专用的内缩量：**全程固定**，不随羽化的趟变化。
      *
-     * 横向只圆头需要留白：圆弧探出量 = 当趟描边宽度的一半，羽化最外那趟
-     * `widthPx/2 + featherPx`。平切口齐边、段外没有任何几何覆盖，所以不留白。
+     * 这两类线型的形状由段宽决定——`waveHalfWaves` 按段宽均摊波长、
+     * `scaledDashSegments` 按段宽缩放虚线周期。逐趟改内缩量就等于每趟重新
+     * 均摊一次，多趟叠起来是一团波长/周期各不相同、多边形线交错的重影。
+     * 实线没这个问题：各趟都在同一条 y 上，只是长短不同。
+     */
+    fun fixedCapInsetPx(cornerRadiusPx: Float): Float =
+        capInsetPx(widthPx, cornerRadiusPx)
+
+    /**
+     * 这条下划线在**行盒**里的竖直中心（px）。
      *
-     * 横向外扩量恰好与 `half + feather` 同量，不会比纵向更宽、也不会因此收窄
-     * 内容区——它存在的意义是把「圆头会探出段外」这个事实显式记下来。
+     * 用途：正文里的划线备注角标要与下划线**居中对齐**，因此必须与绘制侧同一个 y 口径。
+     * 线型编号与 [io.legado.app.feature.reader.core.style.underlineControlSupport] 一致：
+     * - 删除线固定在行高比例处，不吃偏移；
+     * - 荧光是铺下半行的填充色带，中心在色带中点，不吃偏移；
+     * - 其余线型都落在行盒下沿再按偏移量下沉。
+     *
+     * 画线处（`ReaderPageDecorationDrawCache`）与角标处都调本函数：两处各写一份
+     * `bounds.bottom + offsetPx` 的日子，只要有人改了其中一处，角标就会和它错开。
+     */
+    fun referenceCenterY(lineBounds: ReaderRect): Float = when (mode) {
+        6 -> lineBounds.top + lineBounds.height * READER_STRIKE_HEIGHT_RATIO
+        7 -> lineBounds.top + lineBounds.height * (READER_HALF_HIGHLIGHT_TOP_RATIO + 1f) / 2f
+        else -> lineBounds.bottom + offsetPx
+    }
+
+    /**
+     * 下划线画出文字包围盒外的最大半径（圆角/羽化/偏移/双线/波浪），
+     * 供内容裁剪与预览画布预留，避免贴边把圆角和柔边切掉。
+     *
+     * 横向：所有描边线型都收圆角，羽化最外那趟的探出量 = 半宽 + 羽化。荧光色带
+     * 走 `drawRoundRect`，圆角切在矩形内部、绝不外扩，所以不留白。
+     *
+     * 横向外扩量与纵向的 `half + feather` 同量，不会比纵向更宽、也不会因此收窄
+     * 内容区——它存在的意义是把「端点会探出段外」这个事实显式记下来。
      */
     val overflowPadPx: Float
         get() {
             val half = finalStrokeWidthPx(widthPx) / 2f
             val feather = if (featherEffective) featherPx.coerceAtLeast(0f) else 0f
-            val horizontal = if (roundCapEffective) half + feather else 0f
+            val horizontal = if (mode == 7) 0f else half + feather
             val below = half + feather + offsetPx.coerceAtLeast(0f) + when (mode) {
                 // 波浪的 waveControlOffsetPx 是二次贝塞尔的控制点偏移，中点只到它的一半，
                 // 真正画出到基线外的距离只有一半；这里按实际峰高留白，和

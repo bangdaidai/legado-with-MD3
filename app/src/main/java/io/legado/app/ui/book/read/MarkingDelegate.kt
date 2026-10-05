@@ -196,7 +196,7 @@ class MarkingDelegate(
     }
 
     /** 点正文划线或从目录 Sheet 点标记项进入编辑模式：按 id 取完整标记预填。 */
-    fun openForEdit(markingId: String) {
+    fun openForEdit(markingId: String, anchor: ReaderSelectionMenuAnchor? = null) {
         val book = ReadBook.book
         // 进编辑会话即收起只读浮窗：同一页上同时挂着「看备注」和「改备注」两层浮层没意义。
         dismissNote()
@@ -208,7 +208,8 @@ class MarkingDelegate(
                 highlightRules = persistentListOf(),
                 loading = true,
                 previewStyle = null,
-                floatingAnchor = null,
+                // 有正文位置就悬浮在笔记旁；目录等无位置入口传 null，走底部弹层。
+                floatingAnchor = anchor,
             )
         }
         scope.launch(IO) {

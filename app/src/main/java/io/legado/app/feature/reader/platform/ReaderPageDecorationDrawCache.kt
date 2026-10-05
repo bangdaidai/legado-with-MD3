@@ -17,9 +17,9 @@ import io.legado.app.feature.reader.core.model.underlineRuns
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_EDGE_FADE_SEG_RATIO
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
-import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
+import io.legado.app.feature.reader.core.style.READER_UNDERLINE_CORNER_DP
 import io.legado.app.feature.reader.core.style.bandFeatherMaxInsetPx
 import io.legado.app.feature.reader.core.style.featherBandPasses
 import io.legado.app.feature.reader.core.style.featherPassArgb
@@ -28,6 +28,14 @@ import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.utils.dpToPx
+import kotlin.math.roundToInt
+
+/** 线型编号与 `HighlightRule.underlineMode` / `ReaderUnderline.mode` 一致。 */
+private const val DASH_MODE = 2
+private const val WAVE_MODE = 3
+
+/** 自定义 SVG：形状完全由用户给的路径决定，收边与柔化都不参与。 */
+private const val SVG_MODE = 5
 
 /** Immutable Android draw data prepared once for a page snapshot revision. */
 internal data class ReaderPageDecorationDrawCache(
@@ -38,6 +46,7 @@ internal data class ReaderPageDecorationDrawCache(
     val styledUnderlines: List<ReaderUnderlineDrawCommand>,
     val overlayRules: List<ReaderRuleDrawCommand>,
 ) {
+
     companion object {
         fun create(page: ReaderPage) = ReaderPageDecorationDrawCache(
             contentRules = page.elements.filterIsInstance<ReaderElement.Rule>()
@@ -66,9 +75,12 @@ internal data class ReaderPageDecorationDrawCache(
 /**
  * 荧光色带：铺满行盒下半行的填充矩形，不是描边。
  *
- * 只有颜色、圆头和羽化有意义——线宽/偏移对色带没有意义（见
- * `underlineControlSupport`）。圆头把两端做成半圆（半径 = 色带高度的一半）；
- * 羽化用向内收缩的多趟叠加让边缘渐隐，权重与描边羽化共用 [featherBandPasses]。
+ * 只有颜色和羽化有意义——线宽/偏移对色带没有意义（见 `underlineControlSupport`）。
+ * 两端**统一收 [READER_UNDERLINE_CORNER_DP] 的小圆角**，没有开关：方角边生硬，
+ * 半圆又太圆，而同一份样式有两套形态更难预期。圆角切在矩形内部、绝不外扩。
+ *
+ * 羽化用向内收缩的多趟叠加让**四边**一起化开，权重与描边羽化共用
+ * [featherBandPasses]——描边侧（`ReaderUnderlineDrawCommand`）也是同一套几何。
  * 透明度完全由所选颜色的 alpha 决定，不额外压暗（对照 `MarkingEffect.toStyle`）。
  */
 internal class ReaderHalfHighlightDrawCommand(
@@ -81,12 +93,11 @@ internal class ReaderHalfHighlightDrawCommand(
     fun draw(canvas: Canvas) {
         val bandTop = bounds.top + bounds.height * READER_HALF_HIGHLIGHT_TOP_RATIO
         val bandHeight = (bounds.bottom - bandTop).coerceAtLeast(0f)
-        // 圆头与柔化取 underline 上的生效值（已按线型适用性过滤），不直接读原始字段：
-        // 某线型不开放某个参数时，旧数据里存的值也不该在正文继续生效
-        val radius = if (underline.roundCapEffective) bandHeight / 2f else 0f
+        val cornerRadius = READER_UNDERLINE_CORNER_DP.dpToPx().coerceAtMost(bandHeight / 2f)
         val featherDp = if (underline.featherEffective) featherPx / 1f.dpToPx() else 0f
         // 边缘柔化：同一矩形从最虚画到最实（顺序与描边羽化一致），靠 alpha 叠加化开边界。
-        // 内缩量按羽化半径取并受色带短边约束，避免半行高的色带被吃掉一大半。
+        // 内缩量按羽化半径取，并受色带短边与段宽约束，避免半行高的色带被吃掉一大半、
+        // 以及窄命中段被内缩成「两端内陷」。
         val maxInset = bandFeatherMaxInsetPx(featherDp.dpToPx(), bandHeight, bounds.width)
         featherBandPasses(featherDp).forEach { pass ->
             val passArgb = pass.argb(underline.colorArgb)
@@ -98,10 +109,9 @@ internal class ReaderHalfHighlightDrawCommand(
                 bandTop + inset,
                 bounds.right - inset,
                 bounds.bottom - inset,
-                // 圆头开着时半径 = 色带高度一半，内缩会吃掉半径：两者同步收缩才保持
-                // 端部半圆的形状，否则内缩过头后圆弧互相重叠
-                (radius - inset).coerceAtLeast(0f),
-                (radius - inset).coerceAtLeast(0f),
+                // 内缩会吃掉圆角：两者同步收缩，否则内缩过头后圆角互相重叠
+                (cornerRadius - inset).coerceAtLeast(0f),
+                (cornerRadius - inset).coerceAtLeast(0f),
                 paint,
             )
         }
@@ -132,18 +142,32 @@ internal class ReaderUnderlineDrawCommand(
     private val featherPx = underline.featherPx.coerceAtLeast(0f)
 
     /**
-     * 圆头与羽化按线型适用性取，不直接读underline。
+     * 统一的小圆角半径（px）。所有线型共用，不再有「端点圆角」开关。
      *
-     * 双实线的两条线各自成段，圆头会吃掉两线间距；删除线固定在行高比例处，
-     * 两者只会让它看起来像渲染错误；自定义 SVG 的"两端"是用户画的路径，无从
-     * 定义柔边（且渐变端点还会被 translate/scale 带偏）。这些线型在编辑弹层已
-     * 隐藏对应控件，旧数据里存的值也不该在正文继续生效——渲染层与 UI 读同一份
-     * [underlineControlSupport]，才不会再次走偏。
+     * 收进上限由 [ReaderUnderline.capInsetPx] 保证：圆角最多半个线宽，外圈那些
+     * 加粗到 `widthPx + 2 × featherPx` 的趟若也带圆角，圆角会跟着涨到半个羽化
+     * 半径那么远，端头看着像在高亮范围外多接一段。所以圆角只由线芯那一趟承担。
+     */
+    private val cornerRadiusPx = READER_UNDERLINE_CORNER_DP.dpToPx()
+
+    /**
+     * 周期笔形的内缩量全程固定，见 [ReaderUnderline.fixedCapInsetPx]：逐趟变化
+     * 会让每趟重新均摊波长/周期，多趟叠起来是一团交错重影。
+     */
+    private val fixedCapInset = underline.fixedCapInsetPx(cornerRadiusPx)
+
+    /**
+     * 羽化按线型适用性取，不直接读 [ReaderUnderline.featherPx]。
      *
-     * 判定直接取 [ReaderUnderline] 上的派生属性，绘制层与裁剪层共用同一份口径。
+     * 双实线的两条线各自成段、删除线固定在行高比例处、自定义 SVG 的两端由用户
+     * 路径决定——这三个线型都不开放柔化，编辑弹层已隐藏对应控件，旧数据里存的值
+     * 也不该在正文继续生效。绘制层与裁剪层读同一份 [underlineControlSupport]。
+     *
+     * 端点圆角则**对所有线型无条件生效**（统一小圆角），不走这个判定。
      */
     private val feathered = underline.featherEffective
-    private val roundCap = underline.roundCapEffective
+    /** 自定义 SVG 的两端是用户画的路径，收边/柔化都会改形状，保持原样。 */
+    private val rounded = underline.mode != SVG_MODE
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = underline.colorArgb
         // 这里存的是线芯宽度（羽化的基准），刻意不抬到 1px：羽化是「基准 + 扩散量」
@@ -151,151 +175,177 @@ internal class ReaderUnderlineDrawCommand(
         // 里真正描边的那一趟，见 [finalStrokeWidthPx]。
         strokeWidth = underline.widthPx
         style = Paint.Style.STROKE
-        // 羽化**不**强制圆头：端点形状只看端点圆角开关。旧口径
-        // `roundCap || feathered` 在圆角关闭时也用圆弧收头，再叠加端部 alpha
-        // 渐隐（alpha=0 点就在段边界），端头就成了被削掉的尖锥——宽度 1dp、
-        // 羽化 5dp 时最外那趟宽 11dp，圆弧与渐隐互相打架，肉眼看到的是两头尖。
-        // 关闭圆角时用平切口：宽度不收窄，端头只随水平渐隐淡出。
-        strokeCap = if (roundCap) Paint.Cap.ROUND else Paint.Cap.BUTT
     }
-    private val wavePath = if (underline.mode == 3) createWavePath(bounds, underline) else null
     private val svgPath = if (underline.mode == 5) ReaderSvgPathCache.parse(underline.svgPath) else null
 
     fun draw(canvas: Canvas) {
         // 零宽段不能进羽化分支：LinearGradient 的零长度坐标轴会直接抛异常，
         // 交给 drawShape 的退化路径画成一个点。
         if (!feathered || bounds.right <= bounds.left) {
-            drawShape(canvas, underline.widthPx, underline.colorArgb)
+            drawShape(canvas, underline.widthPx, underline.colorArgb, 0f, true)
             return
         }
-        // 羽化：多 pass 叠加、高斯权重的 alpha，从外到内逐层变窄，模拟全边缘柔化；
-        // 中心保持满 alpha 形成清晰线芯，端点额外做水平渐隐消除硬切（移植旧 TextLine）。
+        // 羽化 = **各向同性**模糊：每趟是四周同时缩向核心的形状，alpha 按高斯递增。
+        //   - 上下：逐趟加粗，半宽从 `widthPx/2 + 羽化半径` 收到线芯
+        //   - 左右：逐趟内缩，长度从整段收到「整段 − 2 × 羽化半径」
+        // 两条合起来上下左右一样糊。只加粗不内缩，端部那条带子的上、下边缘就是
+        // 垂直硬线（生硬切口）；只内缩不加粗则上下是刀锋。荧光色带的
+        // ReaderHalfHighlightDrawCommand 走的是同一套几何。
         // 每趟颜色走 featherPassArgb —— 预览侧共用，保证两边逐位一致。
         val passes = featherPassCount(featherPx / 1f.dpToPx())
-        // 端部渐隐长度 = 上下方向的扩散量（羽化半径 × 2），两端与上下用同一个空间尺度。
-        // 此前用 1.5 倍：上下扩散 2 倍、两端只渐隐 1.5 倍，两个尺度打架使四个角被
-        // 重复施色、糊成一团，而四边中间相对干净。
-        // 再按段宽封顶：短高亮段（1~3 字）撑不住 2×羽化半径，两端淡出会重叠成纺锤形。
-        val featherLen = (featherPx * 2f)
-            .coerceAtMost((bounds.right - bounds.left) * READER_EDGE_FADE_SEG_RATIO)
+        // 端部柔边宽度 = 羽化半径，与上下方向的扩散量同量（各向同性即各方向等量）。
+        // 再按段宽封顶：短高亮段（1~3 字）撑不住，两端柔边会重叠成纺锤形。
+        val edgeSoft =
+            featherPx.coerceAtMost((bounds.right - bounds.left) * READER_EDGE_FADE_SEG_RATIO)
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
             val centerColor = featherPassArgb(underline.colorArgb, d)
             if (Color.alpha(centerColor) <= 0) continue
+            // 端部内缩与叠加顺序反向：最虚那趟齐边铺满，最实那趟收成核心，
+            // 与荧光色带 FeatherPass.insetFactor 完全同一口径。
+            val edgeInset = (1f - d) * edgeSoft
             drawShape(
                 canvas,
                 underline.widthPx + d * featherPx * 2f,
                 centerColor,
-                endFadeShader(centerColor, featherLen),
+                edgeInset,
+                isCore = i == 0,
             )
         }
     }
 
     /**
-     * 两端水平渐隐的 shader：**段边界处保留一半 alpha**，向段外 `±featherLen / 2`
-     * 淡到全透明。
+     * 以 [strokeWidthPx] 描边画一段。[edgeInset] 是端部内缩量（端部柔边靠它，见
+     * [draw]）；[isCore] 标记这是不是羽化的线芯那一趟。
      *
-     * 窗口中心必须对齐段边界。旧实现把窗口整个放在段内（`[left, left + 2F]`，
-     * 中心偏到 `left + F`），而端点恰好在段边界上——等于把端点按在 alpha=0 的位置。
-     * 直线端是这样看着淡出，圆弧端就是从全透明长出来，看着是尖的；羽化半径越大
-     * 偏得越远。居中之后端点带着约一半 alpha，圆头才看得出是圆的。
+     * 统一小圆角由**线芯那一趟**承担，理由是 Android 的 round cap 半径恒等于
+     * `strokeWidth / 2`：外圈那些加粗到 `widthPx + 2 × featherPx` 的趟若也带
+     * 圆角，圆角半径就是半个羽化半径那么远（宽度 1dp / 羽化 5dp 时约 5.5dp），
+     * 端头看着像在高亮范围外多接一段。外圈是模糊的一部分，本就不该有端点。
      *
-     * 窗口往段外延伸的那半段没有几何覆盖（笔形被内缩回段内），不会画出多余东西，
-     * 它只是把段边界的 alpha 从 0 抬到 0.5。
-     */
-    private fun endFadeShader(colorArgb: Int, featherLen: Float): LinearGradient {
-        val bleed = featherLen / 2f
-        val start = bounds.left - bleed
-        val end = bounds.right + bleed
-        val span = end - start
-        val edgePos = (featherLen / span).coerceIn(0f, 0.5f)
-        return LinearGradient(
-            start, 0f, end, 0f,
-            intArrayOf(0, colorArgb, colorArgb, 0),
-            floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
-            Shader.TileMode.CLAMP,
-        )
-    }
-
-    /**
-     * 以 [strokeWidthPx] 描边画一段。
+     * 虚线与波浪按**固定**内缩量收边：形状由段宽决定（周期、波长都在段宽上
+     * 均摊），逐趟变化等于每趟重排一次，叠起来是一团交错重影。见
+     * [ReaderUnderline.fixedCapInsetPx]。
      *
-     * 圆头按当趟描边宽度向内收缩半宽，让**直线端点变成半圆**而不是在段外多接
-     * 一段：笔触仍从段边界起笔、到段边界收，总长恒等于段宽。内缩量必须跟着
-     * 当趟宽度走——羽化最外那趟描到 `widthPx + 2 × featherPx`，按线芯宽度统一
-     * 收缩会让它的圆弧探出段外，看起来就是端头多出一截。
-     *
-     * [shader] 仅羽化 pass 传入（自带两端水平渐隐）。线宽在这里才抬到
-     * [finalStrokeWidthPx]：亚像素线宽在低密度屏上几乎不可见，但羽化的基准宽度
-     * 不能抬（见 paint 初始化处的注释）。与笔记列表 `MarkingStyledText` 共用同一
-     * 份宽度口径，保证同一条笔记两处粗细一致。
+     * 线宽在这里才抬到 [finalStrokeWidthPx]：亚像素线宽在低密度屏上几乎不可见，
+     * 但羽化的基准宽度不能抬（见 paint 初始化处的注释）。与笔记列表
+     * `MarkingStyledText` 共用同一份宽度口径，保证同一条笔记两处粗细一致。
      */
     private fun drawShape(
         canvas: Canvas,
         strokeWidthPx: Float,
         colorArgb: Int,
-        shader: LinearGradient? = null,
+        edgeInset: Float,
+        isCore: Boolean,
     ) {
         paint.color = colorArgb
         paint.strokeWidth = finalStrokeWidthPx(strokeWidthPx)
-        paint.shader = shader
-        val capInset = underline.capInsetPx(paint.strokeWidth)
-        val start = bounds.left + capInset
-        val end = bounds.right - capInset
-        val y = bounds.bottom + underline.offsetPx
-        if (start >= end) {
-            // 线太短，退化为一个点/圆
-            canvas.drawPoint((bounds.left + bounds.right) / 2f, y, paint)
-            paint.shader = null
-            return
+        paint.strokeCap = if (isCore && rounded) Paint.Cap.ROUND else Paint.Cap.BUTT
+        val capInset = when {
+            // 周期笔形：形状由段宽决定，全程同一内缩量
+            underline.mode == DASH_MODE || underline.mode == WAVE_MODE -> fixedCapInset
+            !rounded -> 0f
+            else -> underline.capInsetPx(paint.strokeWidth, cornerRadiusPx)
         }
+        val y = underline.referenceCenterY(bounds)
         when (underline.mode) {
-            1 -> canvas.drawLine(start, y, end, y, paint)
-            2 -> drawDashed(canvas, start, end, y)
-            3 -> {
-                val path = if (capInset > 0f) {
-                    createWavePath(
-                        ReaderRect(start, bounds.top, end, bounds.bottom),
-                        underline,
-                    )
-                } else {
-                    wavePath
-                }
-                path?.let { canvas.drawPath(it, paint) }
-            }
-            4 -> {
-                canvas.drawLine(start, y, end, y, paint)
-                val secondY = y + underline.doubleLineGapPx + underline.widthPx
-                canvas.drawLine(start, secondY, end, secondY, paint)
-            }
-            5 -> svgPath?.takeIf { bounds.right > bounds.left }?.let { path ->
-                canvas.save()
-                canvas.translate(bounds.left, y - READER_SVG_BASELINE_Y)
-                canvas.scale((bounds.right - bounds.left) / READER_SVG_BASE_WIDTH, 1f)
-                canvas.drawPath(path, paint)
-                canvas.restore()
-            }
-            6 -> canvas.drawLine(
-                start,
-                bounds.top + bounds.height * READER_STRIKE_HEIGHT_RATIO,
-                end,
-                bounds.top + bounds.height * READER_STRIKE_HEIGHT_RATIO,
-                paint
+            DASH_MODE -> drawDashed(
+                canvas,
+                bounds.left + capInset + edgeInset,
+                bounds.right - capInset - edgeInset,
+                y,
+                bounds.left + fixedCapInset,
+                bounds.right - fixedCapInset,
             )
+            WAVE_MODE -> wavePath(bounds, capInset, edgeInset)?.let { canvas.drawPath(it, paint) }
+            else -> {
+                val start = bounds.left + capInset + edgeInset
+                val end = bounds.right - capInset - edgeInset
+                if (start >= end) {
+                    // 线太短，退化为一个点/圆
+                    canvas.drawPoint((bounds.left + bounds.right) / 2f, y, paint)
+                } else {
+                    when (underline.mode) {
+                        1 -> canvas.drawLine(start, y, end, y, paint)
+                        4 -> {
+                            canvas.drawLine(start, y, end, y, paint)
+                            val secondY = y + underline.doubleLineGapPx + underline.widthPx
+                            canvas.drawLine(start, secondY, end, secondY, paint)
+                        }
+                        5 -> svgPath?.takeIf { bounds.right > bounds.left }?.let { path ->
+                            canvas.save()
+                            canvas.translate(bounds.left, y - READER_SVG_BASELINE_Y)
+                            canvas.scale((bounds.right - bounds.left) / READER_SVG_BASE_WIDTH, 1f)
+                            canvas.drawPath(path, paint)
+                            canvas.restore()
+                        }
+                        else -> canvas.drawLine(start, y, end, y, paint)
+                    }
+                }
+            }
         }
-        paint.shader = null
     }
 
-    private fun drawDashed(canvas: Canvas, start: Float, end: Float, y: Float) {
+    /**
+     * 虚线：周期按**未内缩的整段**均摊，各趟只裁掉超出 [start, end] 的部分。
+     *
+     * 若跟着内缩后的长度重新均摊，每趟的段长/间隙都不同，虚线会「呼吸」成
+     * 一团交错重影。位置固定、只裁两端，端部才有柔边又没有重影。
+     */
+    private fun drawDashed(
+        canvas: Canvas,
+        start: Float,
+        end: Float,
+        y: Float,
+        refStart: Float,
+        refEnd: Float,
+    ) {
+        if (refEnd <= refStart) return
         val (periods, on, off) = scaledDashSegments(
-            end - start,
+            refEnd - refStart,
             underline.dashOnPx,
             underline.dashOffPx,
         )
         for (i in 0 until periods) {
-            val segStart = start + i * (on + off)
+            val segStart = refStart + i * (on + off)
             if (segStart >= end) break
-            canvas.drawLine(segStart, y, (segStart + on).coerceAtMost(end), y, paint)
+            val from = segStart.coerceAtLeast(start)
+            val to = (segStart + on).coerceAtMost(refEnd, end)
+            if (to <= from) continue
+            canvas.drawLine(from, y, to, y, paint)
+        }
+    }
+
+    /**
+     * 波浪路径。[trimPx] 是端部内缩量，**量化到半波长的整数倍**后再取节点子序列。
+     *
+     * 直接用内缩后的区间重新均摊波长，每趟波长都不同 → 多趟叠成交错重影。
+     * 按整段均摊一次、只丢首尾节点，波长恒定不变。
+     */
+    private fun wavePath(box: ReaderRect, capInset: Float, trimPx: Float): Path? {
+        val left = box.left + capInset
+        val right = box.right - capInset
+        val all = waveHalfWaves(
+            left,
+            right,
+            underline.waveHalfWavePx,
+            underline.waveControlOffsetPx,
+        )
+        if (all.isEmpty()) return null
+        val step = (right - left) / all.size
+        val drop = if (step <= 0f) 0 else (trimPx / step).roundToInt()
+        val kept = all.drop(drop).dropLast(drop)
+        val nodes = if (kept.size >= 2) kept else all
+        return Path().apply {
+            moveTo(nodes.first().startX, box.bottom + underline.offsetPx)
+            nodes.forEach { wave ->
+                quadTo(
+                    (wave.startX + wave.endX) / 2f,
+                    box.bottom + underline.offsetPx + wave.controlOffsetY,
+                    wave.endX,
+                    box.bottom + underline.offsetPx,
+                )
+            }
         }
     }
 
@@ -354,25 +404,6 @@ internal class ReaderUnderlineDrawCommand(
             )
         }
 
-        /**
-         * 波浪节点来自共享几何（[waveHalfWaves]），正文、选中样式预览与规则预览
-         * 共用同一份均摊与收口逻辑，避免三处各自写死振幅/波长。
-         */
-        private fun createWavePath(bounds: ReaderRect, underline: ReaderUnderline): Path? {
-            val y = bounds.bottom + underline.offsetPx
-            val halfWaves = waveHalfWaves(
-                bounds.left,
-                bounds.right,
-                underline.waveHalfWavePx,
-                underline.waveControlOffsetPx,
-            ).takeIf { it.isNotEmpty() } ?: return null
-            return Path().apply {
-                moveTo(halfWaves.first().startX, y)
-                halfWaves.forEach { wave ->
-                    quadTo((wave.startX + wave.endX) / 2f, y + wave.controlOffsetY, wave.endX, y)
-                }
-            }
-        }
     }
 }
 

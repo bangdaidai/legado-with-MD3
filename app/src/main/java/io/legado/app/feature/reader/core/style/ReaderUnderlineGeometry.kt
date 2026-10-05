@@ -66,6 +66,34 @@ fun finalStrokeWidthPx(coreWidthPx: Float): Float = coreWidthPx.coerceAtLeast(1f
 /** 周期笔画（波浪/虚线）的最小段长，防止除零和退化配置。 */
 const val READER_MIN_STROKE_SEGMENT_PX = 0.1f
 
+/**
+ * 所有下划线两端统一使用的圆角半径（dp）。
+ *
+ * 原先是「端点圆角」开关，开着给半圆（描边半径 = 半个线宽）、关着给方角。两种
+ * 极端都不好看：方角边生硬，半圆又太圆，而且开关让同一份样式有两套形态。
+ * 现在统一给一个 1dp 小圆角——在原有笔形上收一点边，不改变整体形状。
+ *
+ * 必须**固定**而不是跟着线宽走。Android 的 round cap 半径恒等于 `strokeWidth / 2`，
+ * 若让羽化加粗到 `widthPx + 2 × feather` 的外圈趟也带圆头，半径就是半个羽化半径
+ * 那么远（宽度 1dp / 羽化 5dp 时约 5.5dp），端头看着像在高亮范围外多接一段。
+ * 所以圆头只由**线芯那一趟**承担，见 `ReaderUnderline.cornerRadiusPx`。
+ */
+const val READER_UNDERLINE_CORNER_DP = 1f
+
+/**
+ * 圆角半径（px）。半径不超过半个线宽：线芯本来就只有那么粗，圆角再大就只是
+ * 把端点变成半圆，那正是旧「端点圆角」开关开着的样子。
+ *
+ * 收进上限是**必须**的：Android 的 round cap 半径恒等于 `strokeWidth / 2`，
+ * 外圈那些加粗到 `widthPx + 2 × feather` 的趟若也带圆头，半径就是半个羽化半径
+ * 那么远（宽度 1dp / 羽化 5dp 时约 5.5dp），端头看着像在高亮范围外多接一段。
+ *
+ * dp→px 由调用方换算：本模块要能被纯 JVM 单测覆盖，不引入 Android 依赖。
+ */
+fun underlineCornerRadiusPx(strokeWidthPx: Float, cornerRadiusPx: Float): Float =
+    if (cornerRadiusPx <= 0f) 0f
+    else cornerRadiusPx.coerceAtMost(strokeWidthPx.coerceAtLeast(1f) / 2f)
+
 /** 每 1dp 羽化半径对应的叠加趟数。 */
 const val READER_FEATHER_PASSES_PER_DP = 3f
 
@@ -79,14 +107,13 @@ const val READER_FEATHER_MAX_PASSES = 24
 const val READER_FEATHER_SIGMA = 0.55f
 
 /**
- * 端部水平渐隐长度占**段宽**的上限。
+ * 端部柔边宽度占**段宽**的上限。
  *
- * 渐隐长度名义上取羽化半径 × 2（与上下扩散同尺度），但高亮段常常只有 1~3 个字：
- * 宽度 1dp / 羽化 5dp 时上下已经糊成 11dp 粗，段宽才 15~45dp，两端各 10dp 的
- * 淡出互相重叠，`edgePos` 被 0.5 截住 —— 整条线只剩中点最浓、两端淡到 0，
- * 是个纺锤形，看上去就是"两头尖"。
+ * 端部柔边名义上取羽化半径（与上下扩散同量，模糊才各向同性），但高亮段常常只有
+ * 1~3 个字：宽度 1dp / 羽化 5dp 时上下已经糊成 11dp 粗，段宽才 15~45dp，两端的
+ * 柔边互相重叠 —— 整条线只剩中段最实、两端淡掉，是个纺锤形。
  *
- * 封顶到段宽的这个比例后，短段保住"端部有柔边"的手感，又不会把线芯淡没。
+ * 封顶到这个比例后，短段两端仍有柔边，中段又保得住实心。
  */
 const val READER_EDGE_FADE_SEG_RATIO = 0.25f
 
@@ -136,12 +163,16 @@ fun featherBandPasses(featherDp: Float): List<FeatherPass> {
  *
  * 内缩量按羽化半径取，但要受色带自身尺寸约束：荧光色带只有半行高（约 12dp），
  * 5dp 羽化直接全额内缩会吃掉 40% 高度，看起来像「色带变窄」而不是「边界化开」。
- * 这里再按短边封一次顶，短色带/窄命中段才有柔和的边缘而不是塌掉一块。
+ * 这里再按短边封一次顶。
+ *
+ * **还要按段宽封顶。** 短边约束只看垂直方向，可内缩是四边一起收的：1 个字的高亮
+ * 段宽约 15dp，两端各内缩 5dp 就是实心区只剩 5dp，整条色带看着像「两端内陷了
+ * 一截」。`bandWidth / 4` 保证内缩合计不超过段宽一半，实心区始终留得住。
  */
 fun bandFeatherMaxInsetPx(featherPx: Float, bandHeightPx: Float, bandWidthPx: Float): Float {
     if (featherPx <= 0f) return 0f
     val shortSide = minOf(bandHeightPx, bandWidthPx)
-    return minOf(featherPx, shortSide / 2f)
+    return minOf(featherPx, shortSide / 2f, bandWidthPx / 4f)
 }
 
 /**
@@ -237,16 +268,13 @@ data class UnderlineControlSupport(
     val offset: Boolean,
     /** 画在文字上方还是下方。荧光恒在文字下方（否则糊字）。 */
     val layer: Boolean,
-    /** 端点圆角。荧光色带可整体圆头化（半径取色带高度的一半）。 */
-    val roundCap: Boolean,
     /**
      * 边缘柔化（UI 文案「羽化」）。
      *
-     * 描边：向上下向外加粗的多趟 alpha 叠加 + 两端水平渐隐，两端用与上下同一
-     * 空间尺度（羽化半径 × 2）。羽化**不**改端点形状，端头是平切口还是半圆只看
-     * [roundCap]——否则圆角关闭时圆弧与渐隐叠加会削出尖锥。
-     * 填充色带：同矩形多层 alpha 叠加模拟模糊。
-     * 自定义 SVG 不支持——它画的是用户给的路径，"两端"无从定义。
+     * 描边：**各向同性**——每趟是四周同时缩向核心的形状（上下靠加粗、两端靠内缩），
+     * alpha 按高斯递增，于是上下左右一样糊。自定义 SVG 不支持：它的形状是用户
+     * 给的路径，柔边无从定义。
+     * 填充色带：同矩形多层 alpha 叠加 + 向内收缩，与描边同一口径。
      */
     val feather: Boolean,
     /** 自定义虚线段长 / 间隔。只有虚线用。 */
@@ -259,34 +287,30 @@ private val NO_GEOMETRY = UnderlineControlSupport(
     width = false,
     offset = false,
     layer = false,
-    roundCap = false,
     feather = false,
     dashPattern = false,
 )
 
 /**
- * 荧光色带：不是描边，但色带本身有边缘，所以圆头和柔化都成立——
- * 圆头 = 整条色带两端半圆化；柔化 = 同矩形多层 alpha 叠加，边界化开到透明。
+ * 荧光色带：不是描边，但色带本身有边缘，所以柔化成立——同矩形多层 alpha 叠加，
+ * 边界化开到透明。
  */
 private val BAND_SUPPORT = UnderlineControlSupport(
     width = false,
     offset = false,
     layer = false,
-    roundCap = true,
     feather = true,
     dashPattern = false,
 )
 
 /**
- * 双实线：两条线各自独立成段，端点圆头和羽化都作用在「整段」上而不是单条线，
- * 视觉上和单实线没有区别、参数却互相干扰（圆头会把两条线的间距吃掉），
- * 所以这两个参数对双线不开放。
+ * 双实线：两条线各自独立成段，柔化作用在「整段」上而不是单条线，视觉上和单实线
+ * 没有区别、参数却互相干扰（会把两条线之间的间隙糊掉），所以羽化对双线不开放。
  */
 private val DOUBLE_LINE_SUPPORT = UnderlineControlSupport(
     width = true,
     offset = true,
     layer = true,
-    roundCap = false,
     feather = false,
     dashPattern = false,
 )
@@ -297,24 +321,24 @@ fun underlineControlSupport(mode: Int): UnderlineControlSupport = when (mode) {
     1 -> strokeSupport() // 实线
     2 -> strokeSupport(dashPattern = true) // 虚线
     3 -> strokeSupport(waveShape = true) // 波浪
-    4 -> DOUBLE_LINE_SUPPORT // 双实线：不开放圆头与羽化
-    5 -> strokeSupport(roundCap = false, feather = false) // 自定义 SVG：不开放圆头与羽化
-    6 -> strokeSupport(offset = false, roundCap = false, feather = false) // 删除线
-    7 -> BAND_SUPPORT // 荧光：填充色带，颜色 + 圆头 + 边缘柔化
+    4 -> DOUBLE_LINE_SUPPORT // 双实线：羽化会把两线之间的间隙糊掉，不开放
+    // 自定义 SVG：形状是用户给的路径，柔边与收边都无从定义
+    5 -> strokeSupport(feather = false)
+    // 删除线：固定落在行高比例处，不吃偏移；羽化同样会把删除线糊到字上
+    6 -> strokeSupport(offset = false, feather = false)
+    7 -> BAND_SUPPORT // 荧光：填充色带，颜色 + 边缘柔化
     else -> NO_GEOMETRY
 }
 
 private fun strokeSupport(
     offset: Boolean = true,
     dashPattern: Boolean = false,
-    roundCap: Boolean = true,
     feather: Boolean = true,
     waveShape: Boolean = false,
 ) = UnderlineControlSupport(
     width = true,
     offset = offset,
     layer = true,
-    roundCap = roundCap,
     feather = feather,
     dashPattern = dashPattern,
     waveShape = waveShape,

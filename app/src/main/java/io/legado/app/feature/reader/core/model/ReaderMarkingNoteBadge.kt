@@ -5,14 +5,19 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * 带备注的划线在**末行右下角**的小图标（点击只看备注的入口）。
+ * 带备注的划线在**末字右下角**的小图标（点击只看备注的入口）。
  *
- * 放在页装饰而不是元素里：绘制与点击命中必须读同一份矩形。角标压在划线末行的包围盒内，
+ * 放在页装饰而不是元素里：绘制与点击命中必须读同一份矩形。角标紧挨着划线末行，
  * 若绘制时重算一次、命中时再算一次，翻页/卷动后两者很容易落到不同位置，于是「看得到
  * 却点不到」或「点空白处弹出别人的备注」。
  *
- * [bounds] 是绘制包围盒，[hitBounds] 只在触控维度上外扩：视觉必须小（9dp 才不遮正文），
- * 手指却点不中 9dp，所以命中区至少 [MIN_HIT_SIZE_DP] 见方，且以外扩后仍落在页内为准。
+ * 三条落位口径：
+ * - **横向**：贴末字右侧 [GAP_DP]，**不收口**——角标可以探出页边。收口到内容区右边界会
+ *   正好压在末字上（划线几乎总是结束在行尾），那是它唯一真正碍事的地方。
+ * - **纵向**：与该划线的**下划线居中对齐**（[ReaderUnderline.referenceCenterY]，与画线
+ *   同一份 y 口径）；没有下划线的笔记（背景色/字体色）退回行盒竖直中心。
+ * - **命中**：24dp 见方的方框，竖向以角标中心对称、横向只在左边多让
+ *   [HIT_GROW_LEFT_DP]（见该常量注释），同样不收口。
  */
 @Stable
 data class ReaderMarkingNoteBadge(
@@ -25,16 +30,26 @@ data class ReaderMarkingNoteBadge(
 
     companion object {
         /** 视觉直径（dp）。 */
-        const val SIZE_DP = 9f
+        const val SIZE_DP = 12f
 
-        /** 命中区最小边长（dp）：视觉 9dp 直接当命中区几乎点不中。 */
+        /** 末字与角标之间的间距（dp）：角标不压在末字上。 */
+        const val GAP_DP = 1f
+
+        /** 命中区最小边长（dp）。 */
         const val MIN_HIT_SIZE_DP = 24f
 
-        /** 末字右侧的让位（dp）：正文右边还有空档时角标落在空档里，不压字。 */
-        private const val TRAILING_GAP_DP = 1.5f
+        /**
+         * 命中区允许向左多吃的宽度（dp）。
+         *
+         * 命中区要够大才点得中，但不能以图标为中心左右对称外扩：图标左边 1dp 就是末字，
+         * 对称外扩 6dp 会把末字小半圈进触控区，点末字就变成"看备注"而不是"编辑笔记"——
+         * 而后者是这个功能必须保留的另一个入口。所以左边只让出这么一点，其余宽度全往
+         * 右侧（页边空白）长。
+         */
+        const val HIT_GROW_LEFT_DP = 4f
 
         /**
-         * 扫本页元素，给每条**有备注**的划线在末行右下角放一个角标。
+         * 扫本页元素，给每条**有备注**的划线在末字右下角放一个角标。
          *
          * [notes] 是「标记 id → 备注」的当前书快照（见 `ReaderMarkingNoteState`），
          * 空表时直接短路——没有备注的划线在正文里只画线，不出角标。
@@ -42,54 +57,52 @@ data class ReaderMarkingNoteBadge(
          * 角标挂在**章节内位置最靠后**的那个元素上：一条划线可以跨行跨页，末行才是它的
          * 收尾处。判定口径与点划线重建选区（`ReaderCanvasSurface` 里按 chapterPosition
          * 排序取首末）一致，两处不会对「这条划线的末行是谁」给出不同答案。
+         *
+         * [badgeColorOf] 由 Android 侧给（`LegacyReaderPageDecorationFactory`）：颜色要跟随
+         * 划线自己的线色/背景色/字体色再压深一档，涉及 `ColorUtils` 的 HSV 运算，不该进
+         * `core/model`（JVM 单测里 `android.graphics.Color` 不可用）。
          */
         fun createAll(
             page: ReaderPage,
             notes: Map<String, String>,
-            accentColorArgb: Int,
+            badgeColorOf: (ReaderElement.Text) -> Int,
             density: Float,
         ): List<ReaderMarkingNoteBadge> {
             if (notes.isEmpty() || density <= 0f) return emptyList()
             val lastByMarking = lastMarkedElements(page, notes)
             if (lastByMarking.isEmpty()) return emptyList()
             val size = SIZE_DP * density
+            val half = size / 2f
             val hitSize = max(size, MIN_HIT_SIZE_DP * density)
-            val gap = TRAILING_GAP_DP * density
-            val pageBottom = max(page.heightPx.toFloat(), page.scrollExtentPx)
-            // 竖向收口只能对页自身的范围：连续卷动页是整章（`heightPx` 只是视口高、
-            // `contentBottomPx` 恒为视口下沿），按内容区下沿收口会把第一屏以下的角标
-            // 全钉在视口底边。
+            val gap = GAP_DP * density
+            val growLeft = min(hitSize - size, HIT_GROW_LEFT_DP * density)
             return lastByMarking.mapNotNull { (markingId, text) ->
                 val line = text.bounds
                 if (line.width <= 0f || line.height <= 0f) return@mapNotNull null
-                // 横向相反：正文右边（contentRightPx）在两种模式下都是同一道边，
-                // 末字右边还有空档就落在空档里，贴到内容边为止；否则退回压在末字右下角
-                // （行盒下沿本就是降部留白，压上去也只盖住字形的一角）。
-                val right = min(line.right + gap, page.contentRightPx)
-                val bottom = min(line.bottom, pageBottom)
-                if (right <= 0f || bottom <= 0f) return@mapNotNull null
-                val bounds = ReaderRect(
-                    left = right - size,
-                    top = bottom - size,
-                    right = right,
-                    bottom = bottom,
-                )
-                val centerX = bounds.left + size / 2f
-                val centerY = bounds.top + size / 2f
-                val hitLeft = (centerX - hitSize / 2f).coerceAtLeast(0f)
-                val hitTop = (centerY - hitSize / 2f).coerceAtLeast(0f)
+                // 纵向与下划线居中；没有下划线（背景色/字体色笔记）就与行盒居中。
+                val centerY = text.style.underline?.referenceCenterY(line)
+                    ?: (line.top + line.bottom) / 2f
+                val left = line.right + gap
+                val top = centerY - half
+                val hitLeft = left - growLeft
                 ReaderMarkingNoteBadge(
                     markingId = markingId,
-                    bounds = bounds,
+                    bounds = ReaderRect(
+                        left = left,
+                        top = top,
+                        right = left + size,
+                        bottom = top + size,
+                    ),
+                    // 触控区 = 24dp 见方的方框，左沿在图标左侧 HIT_GROW_LEFT_DP 处，
+                    // 其余宽度全在右边（页边空白）；竖向以角标中心对称。
+                    // 不收口到页边：探出页边那部分手指点不到，自然不参与命中。
                     hitBounds = ReaderRect(
                         left = hitLeft,
-                        top = hitTop,
-                        right = min(hitLeft + hitSize, page.widthPx.toFloat()),
-                        bottom = min(hitTop + hitSize, pageBottom),
+                        top = centerY - hitSize / 2f,
+                        right = hitLeft + hitSize,
+                        bottom = centerY + hitSize / 2f,
                     ),
-                    colorArgb = text.style.underline?.colorArgb
-                        ?: text.style.backgroundArgb
-                        ?: accentColorArgb,
+                    colorArgb = badgeColorOf(text),
                 )
             }
         }

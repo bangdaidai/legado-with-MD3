@@ -7,6 +7,7 @@ import io.legado.app.constant.AppConst.timeFormat
 import io.legado.app.constant.ReadTipType
 import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.feature.reader.core.model.ReaderBookmarkBadge
+import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderMarkingNoteBadge
 import io.legado.app.feature.reader.core.model.ReaderPage
 import io.legado.app.feature.reader.core.model.ReaderPageDecoration
@@ -23,6 +24,7 @@ import io.legado.app.feature.reader.measureTipWidthPx
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.spToPx
 import org.koin.core.component.KoinComponent
@@ -35,6 +37,34 @@ import java.util.Date
 /** Android settings adapter for the Canvas reader's page header and footer. */
 object LegacyReaderPageDecorationFactory : KoinComponent {
     private val readSettings: ReadSettingsGateway by inject()
+
+    /**
+     * 角标相对划线原色的明度系数（HSV 的 V 分量，< 1 即压深）。
+     *
+     * 0.72 是「一眼能看出深一档、又不至于黑成一片」的量：默认标记绿 0xFF63C37D 压到
+     * 0.72 后仍认得出是同一个绿，只是从下划线的浅色里跳出来。
+     */
+    private const val BADGE_DARKEN = 0.72f
+
+    /**
+     * 角标颜色：跟随这条划线自己的颜色（线色 → 背景色 → 字体色），再**压深一档**。
+     *
+     * 压深有两个理由：
+     * - 角标就画在下划线旁边，同色同位会糊成一片，看不出那里多了一个入口；
+     * - 背景色笔记的色值自带 20% 透明度（`MarkingEffect.toStyle`），直接用会淡到看不见。
+     *
+     * 因此先 [ColorUtils.stripAlpha] 强制不透明，再按 [BADGE_DARKEN] 压暗明度（HSV 的 V
+     * 分量，保留色相与饱和度）。字体色只在它确实来自划线/规则时才认——
+     * [ReaderElement.Text.colorFromStyleRange] 为 false 说明这就是普通正文色，拿来当角标
+     * 颜色会和正文混成一体。
+     */
+    private fun markingNoteBadgeColor(text: ReaderElement.Text): Int {
+        val base = text.style.underline?.colorArgb
+            ?: text.style.backgroundArgb
+            ?: text.style.colorArgb.takeIf { text.colorFromStyleRange }
+            ?: ReadBookConfig.textAccentColor
+        return ColorUtils.shiftColor(ColorUtils.stripAlpha(base), BADGE_DARKEN)
+    }
 
     /**
      * 旧 `PageView` 的页眉页脚字体解析：`tipTypeface ?: ChapterProvider.typeface` —— 没设就回落
@@ -200,7 +230,7 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
             markingNoteBadges = ReaderMarkingNoteBadge.createAll(
                 page = page,
                 notes = markingNotes,
-                accentColorArgb = ReadBookConfig.textColor,
+                badgeColorOf = this::markingNoteBadgeColor,
                 density = density,
             ),
             header = ReaderTipRow(

@@ -210,8 +210,18 @@ class ReaderUnderlineGeometryTest {
         assertEquals(9f, bandFeatherMaxInsetPx(9f, 36f, 200f), 1e-4f)
         // 超过短边一半时封顶
         assertEquals(18f, bandFeatherMaxInsetPx(40f, 36f, 200f), 1e-4f)
-        // 窄命中段同理
-        assertEquals(6f, bandFeatherMaxInsetPx(40f, 36f, 12f), 1e-4f)
+    }
+
+    @Test
+    fun `band feather inset never eats more than half the band width`() {
+        // 内缩是四边一起收的，短边约束只看垂直方向。1 个字的高亮段宽约 45px、
+        // 羽化 15px，不按段宽封顶的话两端各内缩 15px、实心区只剩 15px，
+        // 整条色带看着像「两端内陷了一截」。
+        assertEquals(11.25f, bandFeatherMaxInsetPx(15f, 36f, 45f), 1e-4f)
+        // 超大羽化同样被段宽卡住（20 / 4 = 5）
+        assertEquals(5f, bandFeatherMaxInsetPx(40f, 36f, 20f), 1e-4f)
+        // 窄命中段：原先按短边取 6px，两端合计 12px 会把 12px 宽的段吃光
+        assertEquals(3f, bandFeatherMaxInsetPx(40f, 36f, 12f), 1e-4f)
     }
 
     @Test

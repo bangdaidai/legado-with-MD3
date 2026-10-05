@@ -18,6 +18,17 @@ class ReaderUnderlineOverflowTest {
     }
 
     @Test
+    fun `periodic strokes use one fixed cap inset across all passes`() {
+        val wave = ReaderUnderline(3, 0, widthPx = 4f, offsetPx = 0f, roundCap = true, featherPx = 5f)
+        // 逐趟变内缩量 = 每趟按新段宽重新均摊波长，羽化多趟叠起来是一团交错重影。
+        // 固定取线芯半宽：圆头只在羽化的线芯那一趟生效（外圈趟是平齐切口），
+        // 所以线芯半宽就是这段笔形最大的内缩量，总长不超过段宽。
+        assertEquals(2f, wave.fixedCapInsetPx(), 0f)
+        // 不开放圆角时没有内缩
+        assertEquals(0f, ReaderUnderline(3, 0, widthPx = 4f, roundCap = false).fixedCapInsetPx(), 0f)
+    }
+
+    @Test
     fun `round cap inset applies the minimum visible stroke width`() {
         val underline = ReaderUnderline(1, 0, widthPx = 0.2f, offsetPx = 0f, roundCap = true)
         // 亚像素线宽描边时抬到 1px，半径也得按抬升后的 1px 算，否则圆头探出

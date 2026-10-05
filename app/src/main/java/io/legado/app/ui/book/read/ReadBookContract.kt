@@ -731,7 +731,15 @@ sealed interface ReadBookIntent {
     data class OpenMarking(val selection: Bookmark) : ReadBookIntent
 
     /** 从正文点划线或正文处理 Sheet 点标记项进入编辑模式。 */
-    data class EditMarking(val id: String) : ReadBookIntent
+    data class EditMarking(
+        val id: String,
+        /**
+         * 弹层锚点（画布坐标系）。非空时弹层悬浮在这条笔记旁而不是走底部弹层——从备注
+         * 浮窗点进来时角标就在眼前，弹层自然该贴在那儿，改线型/颜色时能直接看到正文效果。
+         * 从目录等无正文位置的入口进来为 null，保持底部弹层。
+         */
+        val anchor: ReaderSelectionMenuAnchor? = null,
+    ) : ReadBookIntent
     data object DismissMarking : ReadBookIntent
     data class SaveMarking(val style: TextProcessStyle, val note: String) : ReadBookIntent
     /** 笔记 Sheet 内的样式选择实时预览到正文选区（不落库、不重排）。 */
