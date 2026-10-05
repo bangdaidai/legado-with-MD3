@@ -15,6 +15,7 @@ import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderUnderline
 import io.legado.app.feature.reader.core.model.underlineRuns
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
+import io.legado.app.feature.reader.core.style.READER_EDGE_FADE_SEG_RATIO
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
@@ -174,7 +175,9 @@ internal class ReaderUnderlineDrawCommand(
         // 端部渐隐长度 = 上下方向的扩散量（羽化半径 × 2），两端与上下用同一个空间尺度。
         // 此前用 1.5 倍：上下扩散 2 倍、两端只渐隐 1.5 倍，两个尺度打架使四个角被
         // 重复施色、糊成一团，而四边中间相对干净。
-        val featherLen = (featherPx * 2f).coerceAtLeast(underline.widthPx)
+        // 再按段宽封顶：短高亮段（1~3 字）撑不住 2×羽化半径，两端淡出会重叠成纺锤形。
+        val featherLen = (featherPx * 2f)
+            .coerceAtMost((bounds.right - bounds.left) * READER_EDGE_FADE_SEG_RATIO)
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
             val centerColor = featherPassArgb(underline.colorArgb, d)
@@ -189,22 +192,23 @@ internal class ReaderUnderlineDrawCommand(
     }
 
     /**
-     * 两端水平渐隐的 shader：段边界处仍是半透明，一路淡到 `±featherLen / 2`。
+     * 两端水平渐隐的 shader：**段边界处保留一半 alpha**，向段外 `±featherLen / 2`
+     * 淡到全透明。
      *
-     * 窗口中心必须**对齐段边界**，而不是像旧实现那样整个落在段内
-     * （`[left, left + 2F]`，中心偏到 `left + F`）。圆头的尖端恰好在段边界上，
-     * 中心偏一段距离就等于把尖端按在 alpha=0 的位置——圆弧画得再圆，从全透明
-     * 长出来的东西看着都是尖的，而且羽化半径越大偏得越远。
+     * 窗口中心必须对齐段边界。旧实现把窗口整个放在段内（`[left, left + 2F]`，
+     * 中心偏到 `left + F`），而端点恰好在段边界上——等于把端点按在 alpha=0 的位置。
+     * 直线端是这样看着淡出，圆弧端就是从全透明长出来，看着是尖的；羽化半径越大
+     * 偏得越远。居中之后端点带着约一半 alpha，圆头才看得出是圆的。
      *
-     * 圆头关闭时笔形齐边、段外没有任何几何覆盖，窗口留在段内即可（`bleed = 0`）；
-     * 开着时圆弧自然探出段外，淡出必须跨过边界才画得出来。
+     * 窗口往段外延伸的那半段没有几何覆盖（笔形被内缩回段内），不会画出多余东西，
+     * 它只是把段边界的 alpha 从 0 抬到 0.5。
      */
     private fun endFadeShader(colorArgb: Int, featherLen: Float): LinearGradient {
-        val bleed = if (roundCap) featherLen / 2f else 0f
+        val bleed = featherLen / 2f
         val start = bounds.left - bleed
         val end = bounds.right + bleed
         val span = end - start
-        val edgePos = if (span > 0f) (featherLen / span).coerceIn(0f, 0.5f) else 0.5f
+        val edgePos = (featherLen / span).coerceIn(0f, 0.5f)
         return LinearGradient(
             start, 0f, end, 0f,
             intArrayOf(0, colorArgb, colorArgb, 0),
@@ -214,13 +218,12 @@ internal class ReaderUnderlineDrawCommand(
     }
 
     /**
-     * 以 [strokeWidthPx] 描边画一段，起止就是段边界：[strokeWidthPx] 是线芯宽度，
-     * 端点圆角开启时由 `strokeCap = ROUND` 自然向外探出半个宽度，不再内缩补偿。
+     * 以 [strokeWidthPx] 描边画一段。
      *
-     * 旧实现按线芯宽度向内收缩以"保持总长不变"，代价是圆弧尖端被压在段边界上，
-     * 而羽化的端部渐隐恰好在那里归零——尖端落在全透明处，端头看着是尖的，
-     * 探出去的部分也画不出来。让圆弧自然伸出反而是正确的：真实模糊会把周围的
-     * 颜色渗到端点外，端点不是全透明的。
+     * 圆头按当趟描边宽度向内收缩半宽，让**直线端点变成半圆**而不是在段外多接
+     * 一段：笔触仍从段边界起笔、到段边界收，总长恒等于段宽。内缩量必须跟着
+     * 当趟宽度走——羽化最外那趟描到 `widthPx + 2 × featherPx`，按线芯宽度统一
+     * 收缩会让它的圆弧探出段外，看起来就是端头多出一截。
      *
      * [shader] 仅羽化 pass 传入（自带两端水平渐隐）。线宽在这里才抬到
      * [finalStrokeWidthPx]：亚像素线宽在低密度屏上几乎不可见，但羽化的基准宽度
@@ -236,8 +239,9 @@ internal class ReaderUnderlineDrawCommand(
         paint.color = colorArgb
         paint.strokeWidth = finalStrokeWidthPx(strokeWidthPx)
         paint.shader = shader
-        val start = bounds.left
-        val end = bounds.right
+        val capInset = underline.capInsetPx(paint.strokeWidth)
+        val start = bounds.left + capInset
+        val end = bounds.right - capInset
         val y = bounds.bottom + underline.offsetPx
         if (start >= end) {
             // 线太短，退化为一个点/圆
@@ -248,7 +252,17 @@ internal class ReaderUnderlineDrawCommand(
         when (underline.mode) {
             1 -> canvas.drawLine(start, y, end, y, paint)
             2 -> drawDashed(canvas, start, end, y)
-            3 -> wavePath?.let { canvas.drawPath(it, paint) }
+            3 -> {
+                val path = if (capInset > 0f) {
+                    createWavePath(
+                        ReaderRect(start, bounds.top, end, bounds.bottom),
+                        underline,
+                    )
+                } else {
+                    wavePath
+                }
+                path?.let { canvas.drawPath(it, paint) }
+            }
             4 -> {
                 canvas.drawLine(start, y, end, y, paint)
                 val secondY = y + underline.doubleLineGapPx + underline.widthPx

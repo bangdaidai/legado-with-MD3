@@ -8,11 +8,30 @@ import org.junit.Test
 class ReaderUnderlineOverflowTest {
 
     @Test
+    fun `round cap inset follows the stroke width of each pass`() {
+        val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 5f)
+        // 线芯那一趟：半径 = 4 / 2 = 2，圆弧尖端落在段边界上
+        assertEquals(2f, underline.capInsetPx(4f), 0f)
+        // 羽化最外那一趟描到 4 + 2×5 = 14 宽：半径跟着变成 7，圆弧仍在段内。
+        // 按线芯宽度统一收缩会让这一趟的半圆探出段外 5px，端头像多接了一段。
+        assertEquals(7f, underline.capInsetPx(14f), 0f)
+    }
+
+    @Test
+    fun `round cap inset applies the minimum visible stroke width`() {
+        val underline = ReaderUnderline(1, 0, widthPx = 0.2f, offsetPx = 0f, roundCap = true)
+        // 亚像素线宽描边时抬到 1px，半径也得按抬升后的 1px 算，否则圆头探出
+        assertEquals(0.5f, underline.capInsetPx(0.2f), 0f)
+    }
+
+    @Test
     fun `feather alone does not force a round cap`() {
         val underline = ReaderUnderline(1, 0, widthPx = 3f, offsetPx = 0f, roundCap = false, featherPx = 2f)
         assertTrue(underline.featherEffective)
-        // 端点圆角关闭 + 羽化：平切口，端头只做水平渐隐，不收成尖锥
+        // 端点圆角关闭 + 羽化：平切口齐边，端头只做水平渐隐，不收成尖锥
         assertFalse(underline.roundCapEffective)
+        assertEquals(0f, underline.capInsetPx(3f), 0f)
+        assertEquals(0f, underline.capInsetPx(7f), 0f)
     }
 
     @Test
@@ -66,6 +85,7 @@ class ReaderUnderlineOverflowTest {
             assertFalse("mode $mode 不该应用圆头", underline.roundCapEffective)
             assertFalse("mode $mode 不该应用羽化", underline.featherEffective)
             // 收不到预留，也就不会多留白
+            assertEquals(0f, underline.capInsetPx(4f), 0f)
             assertEquals(2f + 2f, underline.overflowPadPx, 0f)
         }
     }
@@ -78,6 +98,7 @@ class ReaderUnderlineOverflowTest {
 
         assertFalse(underline.roundCapEffective)
         assertFalse(underline.featherEffective)
+        assertEquals(0f, underline.capInsetPx(4f), 0f)
     }
 
     @Test

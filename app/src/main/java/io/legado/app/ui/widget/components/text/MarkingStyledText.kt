@@ -436,6 +436,10 @@ internal fun DrawScope.drawUnderlineSegment(
     // 那一趟（drawUnderlineShape 内的 finalStrokeWidthPx），不参与扩散量的计算；
     // 正文走同一个函数，两侧粗细一致。
     val coreWidth = widthDp.dp.toPx()
+    // 与正文 ReaderUnderline.capInsetPx 同一公式（finalStrokeWidthPx(宽度) / 2）：
+    // 圆弧向内收缩半宽，直线端点变半圆，总长仍等于段宽。本分支不羽化，没有
+    // 加粗的趟，半径固定；羽化分支不走这里，由 ReaderUnderlineDrawCommand 自己算。
+    val capInset = if (roundCap) finalStrokeWidthPx(coreWidth) / 2f else 0f
     if (feather > 0f) {
         // 羽化**直接复用正文的绘制命令**：预览自己那套多趟叠加曾多次与正文分叉
         // （插值空间、8bit 量化、趟宽、端部渐隐长度），改成同一处绘制后物理上
@@ -458,7 +462,7 @@ internal fun DrawScope.drawUnderlineSegment(
     } else {
         drawUnderlineShape(
             mode = mode, color = color, strokeWidth = coreWidth,
-            startX = startX, endX = endX, y = y, cap = cap,
+            startX = startX, endX = endX, y = y, cap = cap, capInset = capInset,
             dashLen = dashLen, dashGap = dashGap, svgPath = svgPath,
             wavePeakDp = wavePeakDp, waveLengthDp = waveLengthDp,
         )
@@ -532,6 +536,7 @@ internal fun DrawScope.drawUnderlineShape(
     endX: Float,
     y: Float,
     cap: StrokeCap = StrokeCap.Butt,
+    capInset: Float = 0f,
     brush: Brush? = null,
     dashLen: Float = 8f,
     dashGap: Float = 5f,
@@ -539,8 +544,8 @@ internal fun DrawScope.drawUnderlineShape(
     wavePeakDp: Float = READER_WAVE_CONTROL_OFFSET_DP / 2f,
     waveLengthDp: Float = READER_WAVE_HALF_WAVE_DP * 2f,
 ) {
-    val sx = startX
-    val ex = endX
+    val sx = startX + capInset
+    val ex = endX - capInset
     if (sx >= ex) return
     // 兜底笔刷也用原生 shader：Compose 的 Brush.linearGradient 在 unpremultiplied
     // 空间插值，与正文（premultiplied）不同，半透明色会有偏差
@@ -630,9 +635,9 @@ internal fun DrawScope.drawUnderlineShape(
 
         5 -> {
             // 自定义 SVG：与正文同一套变换（按 viewBox 宽横向拉伸、基线对齐到 y）。
-            // SVG 不开放端点圆角（见 underlineControlSupport），笔形不内缩，
-            // svgLeft/svgRight 就等于整段 bounds。
-            val svgLeft = sx
+            // 正文用的是整段 bounds 而不是圆头内缩后的区间，这里把内缩加回去。
+            // SVG 不开放端点圆角（见 underlineControlSupport），capInset 实际恒为 0。
+            val svgLeft = sx - capInset
             val svgRight = ex
             val path = ReaderSvgPathCache.parse(svgPath)?.toComposePath() ?: return
             withTransform({

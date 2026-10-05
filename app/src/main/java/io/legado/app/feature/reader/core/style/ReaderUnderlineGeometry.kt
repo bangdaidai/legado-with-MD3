@@ -78,6 +78,18 @@ const val READER_FEATHER_MAX_PASSES = 24
 /** 羽化权重的高斯 sigma。 */
 const val READER_FEATHER_SIGMA = 0.55f
 
+/**
+ * 端部水平渐隐长度占**段宽**的上限。
+ *
+ * 渐隐长度名义上取羽化半径 × 2（与上下扩散同尺度），但高亮段常常只有 1~3 个字：
+ * 宽度 1dp / 羽化 5dp 时上下已经糊成 11dp 粗，段宽才 15~45dp，两端各 10dp 的
+ * 淡出互相重叠，`edgePos` 被 0.5 截住 —— 整条线只剩中点最浓、两端淡到 0，
+ * 是个纺锤形，看上去就是"两头尖"。
+ *
+ * 封顶到段宽的这个比例后，短段保住"端部有柔边"的手感，又不会把线芯淡没。
+ */
+const val READER_EDGE_FADE_SEG_RATIO = 0.25f
+
 /** 羽化叠加趟数。 */
 fun featherPassCount(featherDp: Float): Int =
     (featherDp * READER_FEATHER_PASSES_PER_DP).toInt()

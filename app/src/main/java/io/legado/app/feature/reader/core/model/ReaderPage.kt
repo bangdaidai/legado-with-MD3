@@ -105,16 +105,27 @@ data class ReaderUnderline(
         get() = underlineControlSupport(mode).feather && featherPx > 0f
 
     /**
+     * 端点圆头的向内收缩量（px）：半径 = **当趟实际描边宽度**的一半。
+     *
+     * 作用是把原来的直线端点变成半圆，而不是在段外多接一段——笔触仍从段边界
+     * 起笔到段边界收，总长恒等于段宽。内缩量必须跟着当趟宽度走：羽化最外那趟
+     * 描到 `widthPx + 2 × featherPx`，若按线芯宽度统一收缩，它那半圆会探出段外
+     * `featherPx`，端头就像多出一截。
+     *
+     * 羽化本身**不**产生圆头：[roundCap] 关闭时这里是 0，端头是平切口。
+     */
+    fun capInsetPx(strokeWidthPx: Float): Float =
+        if (roundCapEffective) finalStrokeWidthPx(strokeWidthPx) / 2f else 0f
+
+    /**
      * 下划线画出文字包围盒外的最大半径（圆头/羽化/偏移/双线/波浪），
      * 供内容裁剪与预览画布预留，避免贴边把圆头和柔边切掉。
      *
-     * 横向只圆头需要留白：笔触从段边界起笔，圆弧自然向外探出**当趟**描边宽度
-     * 的一半，羽化最外那趟探出 `widthPx/2 + featherPx`。平切口齐边、段外没有
-     * 任何几何覆盖，所以不留白。
+     * 横向只圆头需要留白：圆弧探出量 = 当趟描边宽度的一半，羽化最外那趟
+     * `widthPx/2 + featherPx`。平切口齐边、段外没有任何几何覆盖，所以不留白。
      *
-     * 横向外扩量恰好与 `half + feather` 同量，因此不会比纵向更宽、也不会因此
-     * 收窄内容区——它存在的意义是把「圆头探出段外」这个事实显式记下来，别让
-     * 后人以为横向根本不需要留白。
+     * 横向外扩量恰好与 `half + feather` 同量，不会比纵向更宽、也不会因此收窄
+     * 内容区——它存在的意义是把「圆头会探出段外」这个事实显式记下来。
      */
     val overflowPadPx: Float
         get() {

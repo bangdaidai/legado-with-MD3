@@ -146,15 +146,16 @@ class ReaderPageDecorationDrawCacheTest {
     }
 
     /**
-     * 羽化 + 端点圆角开启：圆弧自然探出段外，且**段边界处仍有颜色**。
+     * 羽化 + 端点圆角开启：圆弧尖端落在段边界上，且**边界处仍有颜色**。
      *
-     * 这是"圆头 vs 尖头"的判据。旧实现按线芯宽度内缩，圆弧尖端被压在段边界上；
-     * 羽化的端部渐隐窗口又是 `[left, left + 2F]`（中心偏到 `left + F`），于是
-     * 尖端恰好落在 alpha=0 处——圆弧画得再圆，从全透明长出来的东西都是尖的。
-     * 窗口中心对齐段边界后，端点带着约一半 alpha，圆头才看得见。
+     * 这是"圆头 vs 尖头"的判据。旧实现把渐隐窗口整个放在段内（`[left, left+2F]`，
+     * 中心偏到 `left+F`），尖端恰好落在 alpha=0 处——圆弧画得再圆，从全透明长
+     * 出来的东西都是尖的。窗口中心对齐段边界后，端点带着约一半 alpha。
+     *
+     * 同时锁住"不往外多接一段"：圆弧按当趟宽度内缩，总长恒等于段宽，段外无覆盖。
      */
     @Test
-    fun `feathered round cap shows a visible arc outside the segment`() {
+    fun `feathered round cap keeps its tip inside the segment with visible alpha`() {
         val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
         val bounds = ReaderRect(20f, 0f, 60f, 16f)
 
@@ -163,13 +164,31 @@ class ReaderPageDecorationDrawCacheTest {
             ReaderUnderline(1, 0xff000000.toInt(), 1f, 0f, roundCap = true, featherPx = 5f),
         ).draw(Canvas(bitmap))
 
-        // 渐变窗口左端在 20 - 5 = 15，更外侧既无几何覆盖也无 alpha
-        assertTrue("窗口外不该有覆盖", alpha(bitmap, 13, BASELINE_Y) == 0)
-        // 最外那趟描到 1 + 2×5 = 11 宽，半径 5.5，圆弧端点在 20 - 5.5 = 14.5
-        assertTrue("圆弧探出段外就该画得出来", alpha(bitmap, 18, BASELINE_Y) > 0)
+        assertTrue("圆头内缩，段外不该有覆盖", alpha(bitmap, 18, BASELINE_Y) == 0)
+        assertTrue("圆头内缩，段外不该有覆盖", alpha(bitmap, 61, BASELINE_Y) == 0)
         val edge = alpha(bitmap, 20, BASELINE_Y)
         assertTrue("段边界处不是全透明才是圆头，实际 $edge", edge > 0)
         assertTrue("端部仍应淡于中部：$edge", edge < alpha(bitmap, 40, BASELINE_Y))
+    }
+
+    /**
+     * 短高亮段不能被端部淡出吃成纺锤形。
+     *
+     * 渐隐长度名义上取 `2 × 羽化半径`，但 1~3 个字的段宽撑不住：段宽 20px、
+     * 羽化 5px 时名义渐隐 10px 占掉半段，两端窗口重叠、`edgePos` 被 0.5 截住，
+     * 只剩中点最浓 —— 就是"两头尖"。封顶到段宽的 1/4 后中段仍是实心。
+     */
+    @Test
+    fun `short segment keeps a solid core instead of tapering to a spindle`() {
+        val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
+
+        ReaderUnderlineDrawCommand(
+            ReaderRect(30f, 0f, 50f, 16f),
+            ReaderUnderline(1, 0xff000000.toInt(), 1f, 0f, roundCap = false, featherPx = 5f),
+        ).draw(Canvas(bitmap))
+
+        val centre = alpha(bitmap, 40, BASELINE_Y)
+        assertTrue("中段应接近不透明，实际 $centre", centre > 200)
     }
 
     private fun alpha(bitmap: Bitmap, x: Int, y: Int): Int =
