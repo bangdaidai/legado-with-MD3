@@ -2,7 +2,6 @@ package io.legado.app.ui.widget.components.text
 
 import android.graphics.ComposeShader
 import android.graphics.LinearGradient
-import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.Shader
 import androidx.compose.runtime.Composable
@@ -320,7 +319,10 @@ internal fun DrawScope.drawFluorescentBand(
             hPos,
             Shader.TileMode.CLAMP,
         )
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // 全限定名：本文件同时用 Compose 的 `Paint`（drawPath 那套）与
+        // android.graphics 的 `Paint`（要挂 ComposeShader，Compose 的 Brush 没有
+        // 二维相乘的等价物），同名不限定会被解析成 Compose 那个。
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             shader = ComposeShader(horizontal, vertical, PorterDuff.Mode.DST_IN)
         }
         canvas.drawRoundRect(left, bandTop, right, bottom, radius, radius, paint)
