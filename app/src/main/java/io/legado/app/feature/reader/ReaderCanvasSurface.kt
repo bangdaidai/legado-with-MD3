@@ -99,6 +99,7 @@ import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderEmphasisUnderlineRun
 import io.legado.app.feature.reader.core.model.ReaderImageDrawLayout
 import io.legado.app.feature.reader.core.model.ReaderPage
+import io.legado.app.feature.reader.core.model.markingNoteBadgeAt
 import io.legado.app.feature.reader.core.model.ReaderPageId
 import io.legado.app.feature.reader.core.model.ReaderPageTip
 import io.legado.app.feature.reader.core.model.ReaderPageWindow
@@ -155,6 +156,7 @@ import io.legado.app.feature.reader.core.transition.ReaderViewportLayerPolicy
 import io.legado.app.feature.reader.core.transition.transforms
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.feature.reader.platform.ReaderBookmarkBadgeRenderer
+import io.legado.app.feature.reader.platform.ReaderMarkingNoteBadgeRenderer
 import io.legado.app.feature.reader.platform.ReaderPageDecorationDrawCache
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.ui.widget.components.text.drawUnderlineSegment
@@ -223,6 +225,12 @@ fun ReaderCanvasSurface(
     onDismissSelectionMenu: () -> Unit,
     /** 点击正文已有划线时上报选区锚点：笔记弹层据此悬浮在笔记旁，不弹划词菜单。 */
     onMarkingSheetAnchor: (ReaderSelectionMenuAnchor) -> Unit,
+    /**
+     * 点击划线末行右下角的**笔记角标**：只弹备注浮窗。
+     * 与 [onElementClick]（点原文 → 笔记弹层）是两条独立入口，不能合并：角标压在
+     * 划线包围盒内，先判角标才不会把「看备注」误判成「编辑笔记」。
+     */
+    onMarkingNoteClick: (markingId: String, anchor: ReaderSelectionMenuAnchor) -> Unit,
     onElementClick: (ReaderElement) -> Boolean,
     onElementLongPress: (ReaderElement, Float, Float) -> Boolean,
     selectionEnabled: Boolean,
@@ -295,6 +303,7 @@ fun ReaderCanvasSurface(
     val latestShowSelectionMenu by rememberUpdatedState(onShowSelectionMenu)
     val latestDismissSelectionMenu by rememberUpdatedState(onDismissSelectionMenu)
     val latestMarkingSheetAnchor by rememberUpdatedState(onMarkingSheetAnchor)
+    val latestMarkingNoteClick by rememberUpdatedState(onMarkingNoteClick)
     val latestSelectionHapticsEnabled by rememberUpdatedState(selectionHapticsEnabled)
     val latestSelectionEnabled by rememberUpdatedState(selectionEnabled)
     val latestTapActionGrid by rememberUpdatedState(tapActionGrid)
@@ -1396,8 +1405,23 @@ fun ReaderCanvasSurface(
                     // 元素命中复用 DOWN 时刻的布局：与长按同一坐标系，且不被
                     // 松手前可能发生的窗口替换干扰。
                     val hitPage = downPlacement?.page
-                    val hitElement = hitPage?.elementAt(down.position.x, downPageY)
-                    val elementHandled = if (
+                    // 笔记角标压在划线末行的包围盒里，先判它：否则点角标会被当成点划线，
+                    // 直接弹出笔记对话框，角标就永远点不开。点正文划线的行为保持不变。
+                    val noteBadge = downPage?.markingNoteBadgeAt(down.position.x, downPageY)
+                    val hitElement =
+                        if (noteBadge == null) hitPage?.elementAt(down.position.x, downPageY) else null
+                    val elementHandled = if (noteBadge != null) {
+                        // 浮窗锚点必须换算成视口坐标：卷动模式下角标是随页平移着画的
+                        // （downPageY 已减去页偏移），直接把页内坐标交给 Popup 会浮错位置。
+                        latestMarkingNoteClick(
+                            noteBadge.markingId,
+                            ReaderSelectionMenuAnchor.of(
+                                noteBadge.bounds.offsetY(downPlacement?.offsetY ?: 0f),
+                            ),
+                        )
+                        // 只看备注：不建选区、不弹笔记弹层，也不弹划词菜单。
+                        true
+                    } else if (
                         hitPage != null && hitElement is ReaderElement.Text &&
                         hitElement.markingId != null
                     ) {
@@ -1944,6 +1968,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrollPageConte
     visibleDecorationCache.styledUnderlines.forEach { it.draw(native) }
     drawSelectionStylePreview(selectionPreviewStyle, previewBounds, beforeText = false)
     visibleDecorationCache.overlayRules.forEach { it.draw(native) }
+    // 角标压在末行上，必须晚于字与划线，否则会被正文笔画盖掉。
+    drawMarkingNoteBadges(native, page)
 }
 
 @Composable
@@ -2401,7 +2427,11 @@ private fun ReaderPageCanvas(
         // 之外），不受 `visibleRect` 约束；页脚整体位于 `contentBottomPx` 之下、页眉在
         // `contentTopPx` 之上，若留在裁剪里会被整条裁掉。
         native.restoreToCount(contentClipSave)
-        if (drawDecoration) drawPageDecoration(native, page, tipPaints, badgeImage)
+        if (drawDecoration) {
+            drawPageDecoration(native, page, tipPaints, badgeImage)
+            // 角标跟着页走，画在页内（不走 drawPageDecoration 的固定视口层），见 drawMarkingNoteBadges。
+            drawMarkingNoteBadges(native, page)
+        }
     }
 }
 
@@ -2660,6 +2690,21 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPageDecoration(
                 badgeImage?.takeIf { it.first == badge }?.second,
             )
         }
+    }
+}
+
+/**
+ * 笔记角标（带备注的划线在末行右下角的小图标）。
+ *
+ * 只在**随页走**的两条绘制路径里画（分页/卷曲走 `ReaderPageCanvas`，连续卷动走
+ * `drawScrollPageContent`），**不能**挂进 [drawPageDecoration]：滚动模式下页装饰是固定的
+ * 视口层（`ReaderViewportLayerPolicy.usesFixedPageChrome`），角标贴着正文走，放进固定层
+ * 就会停在原地不随卷动。绘制与点击命中读的是同一份矩形（页装饰里的角标），因此两条
+ * 路径画出来的位置与手指判定必然一致。
+ */
+private fun drawMarkingNoteBadges(canvas: android.graphics.Canvas, page: ReaderPage) {
+    page.decoration.markingNoteBadges.forEach { badge ->
+        ReaderMarkingNoteBadgeRenderer.draw(canvas, badge)
     }
 }
 

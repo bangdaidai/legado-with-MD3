@@ -31,6 +31,7 @@ import io.legado.app.ui.book.read.sheet.EyeProtectionConfigSheet
 import io.legado.app.ui.book.read.sheet.FloatingBarIconConfigSheet
 import io.legado.app.ui.book.read.sheet.HighlightRuleConfigSheet
 import io.legado.app.ui.book.read.sheet.MarkingSheet
+import io.legado.app.ui.book.read.sheet.MarkingNotePopup
 import io.legado.app.ui.book.read.sheet.MoreConfigSheet
 import io.legado.app.ui.book.read.sheet.PageAnimConfigSheet
 import io.legado.app.ui.book.read.sheet.PageKeyConfigSheet
@@ -90,6 +91,8 @@ fun ReadBookOverlayRoute(
     val markingState = if (markingActive) {
         viewModel.markingState.collectAsStateWithLifecycle().value
     } else MarkingUiState()
+    // 备注浮窗独立于笔记弹层：不跟着 markingActive 门控，否则「弹层没开」时它也收集不到。
+    val markingNotePreview = viewModel.markingNotePreview.collectAsStateWithLifecycle().value
     val contentEditState = if (contentEditActive) {
         viewModel.contentEditState.collectAsStateWithLifecycle().value
     } else ContentEditUiState()
@@ -101,6 +104,7 @@ fun ReadBookOverlayRoute(
         aiState = aiState,
         highlightRuleState = highlightRuleState,
         markingState = markingState,
+        markingNotePreview = markingNotePreview,
         contentEditState = contentEditState,
         contentProcessState = contentProcessState,
         preferences = preferences,
@@ -126,6 +130,7 @@ fun ReadBookScreen(
     aiState: ReadAiUiState,
     highlightRuleState: HighlightRuleConfigUiState,
     markingState: MarkingUiState,
+    markingNotePreview: MarkingNotePreview?,
     contentEditState: ContentEditUiState,
     contentProcessState: ContentProcessConfigUiState,
     preferences: ReadPreferences,
@@ -383,6 +388,14 @@ fun ReadBookScreen(
             null
         },
     )
+    // 只读备注浮窗：点正文笔记角标打开，与笔记弹层并存（这里没有编辑控件）。
+    markingNotePreview?.let { preview ->
+        MarkingNotePopup(
+            anchor = preview.anchor,
+            note = preview.note,
+            onDismissRequest = { onIntent(ReadBookIntent.DismissMarkingNote) },
+        )
+    }
     ContentEditSheet(
         show = state.activeSheet is ReadBookSheet.ContentEdit,
         state = contentEditState,

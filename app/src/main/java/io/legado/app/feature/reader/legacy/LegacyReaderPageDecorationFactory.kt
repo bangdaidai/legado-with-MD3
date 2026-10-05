@@ -7,6 +7,7 @@ import io.legado.app.constant.AppConst.timeFormat
 import io.legado.app.constant.ReadTipType
 import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.feature.reader.core.model.ReaderBookmarkBadge
+import io.legado.app.feature.reader.core.model.ReaderMarkingNoteBadge
 import io.legado.app.feature.reader.core.model.ReaderPage
 import io.legado.app.feature.reader.core.model.ReaderPageDecoration
 import io.legado.app.feature.reader.core.model.ReaderPageTip
@@ -111,6 +112,8 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
         contentPaddingTopPx: Int = 0,
         contentPaddingRightPx: Int = 0,
         contentPaddingBottomPx: Int = 0,
+        /** 当前书的「划线 id → 备注」快照（`ReaderMarkingNoteState`）；决定哪些划线出角标。 */
+        markingNotes: Map<String, String> = emptyMap(),
     ): ReaderPageDecoration {
         val settings = readSettings.currentSettings
         val wholeBook = ReadBook.getWholeBookPageState(page.id.chapterIndex, page.id.pageIndex)
@@ -193,6 +196,12 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
                 imageSource = settings.bookmarkBadgeImage,
                 imageVersion = settings.bookmarkBadgeImage.takeIf { hasBookmark && it.isNotBlank() }
                     ?.let { File(it).let { file -> "${file.lastModified()}:${file.length()}" } }.orEmpty(),
+            ),
+            markingNoteBadges = ReaderMarkingNoteBadge.createAll(
+                page = page,
+                notes = markingNotes,
+                accentColorArgb = ReadBookConfig.textColor,
+                density = density,
             ),
             header = ReaderTipRow(
                 visible = headerVisible(),

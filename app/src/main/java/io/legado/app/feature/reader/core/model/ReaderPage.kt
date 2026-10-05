@@ -320,4 +320,9 @@ data class ReaderPageDecoration(
     val header: ReaderTipRow? = null,
     val footer: ReaderTipRow? = null,
     val bookmarkBadge: ReaderBookmarkBadge? = null,
+    /**
+     * 带备注的划线角标。与书签角标同为「贴正文内容」而非贴视口的装饰，因此也随页面
+     * 变换与卷曲裁剪一起走；绘制与点击命中都从这里取矩形（见 [ReaderMarkingNoteBadge]）。
+     */
+    val markingNoteBadges: List<ReaderMarkingNoteBadge> = emptyList(),
 )

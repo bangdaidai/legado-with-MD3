@@ -743,6 +743,18 @@ sealed interface ReadBookIntent {
      * 走标准底部样式（目录等入口没有正文位置）。
      */
     data class SetMarkingSheetAnchor(val anchor: ReaderSelectionMenuAnchor?) : ReadBookIntent
+
+    /**
+     * 点正文划线末行右下角的**笔记角标**：只弹只读的备注浮窗。
+     * 与 [EditMarking]（点原文 → 笔记弹层）并存：看备注不改样式/备注，编辑才进弹层。
+     * [anchor] 是角标在画布坐标系里的矩形。
+     */
+    data class ShowMarkingNote(
+        val markingId: String,
+        val anchor: ReaderSelectionMenuAnchor,
+    ) : ReadBookIntent
+
+    data object DismissMarkingNote : ReadBookIntent
     data object DeleteMarking : ReadBookIntent
     data object GenerateShareCardFromMarking : ReadBookIntent
 
@@ -892,6 +904,9 @@ sealed interface ReadBookEffect {
 
     /** 书签集合变化后刷新三页的右上角书签角标。 */
     data object UpBookmarkBadge : ReadBookEffect
+
+    /** 划线备注集合变化后刷新三页的笔记角标（哪些划线带备注变了）。 */
+    data object UpMarkingNoteBadges : ReadBookEffect
     data object CancelSelect : ReadBookEffect
     data object UpSystemUiVisibility : ReadBookEffect
     data class SetBrightness(val value: Int) : ReadBookEffect

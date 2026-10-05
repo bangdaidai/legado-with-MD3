@@ -69,6 +69,7 @@ import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadSessionState
+import io.legado.app.model.ReaderMarkingNoteState
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
@@ -500,6 +501,20 @@ class ReadBookController(
     fun onComposeReaderMarkingSheetAnchor(anchor: ReaderSelectionMenuAnchor) {
         viewModel.onIntent(ReadBookIntent.SetMarkingSheetAnchor(anchor))
     }
+
+    /**
+     * 画布点笔记角标：只弹备注浮窗，不开笔记弹层、不建选区。
+     * 角标锚点由画布按角标矩形上报（和点正文划线走的是两条独立入口）。
+     */
+    fun onComposeReaderMarkingNoteClick(markingId: String, anchor: ReaderSelectionMenuAnchor) {
+        viewModel.onIntent(ReadBookIntent.ShowMarkingNote(markingId, anchor))
+    }
+
+    /** 当前书的「划线 id → 备注」快照（渲染层画笔记角标用）；未开书时为空。 */
+    private fun currentMarkingNotes(): Map<String, String> {
+        val book = ReadBook.book ?: return emptyMap()
+        return ReaderMarkingNoteState.notesFor(book.name, book.author)
+    }
     private val popupAction by lazy { PopupAction(activity) }
     private var screenTimeOut: Long = 0
     private var appliedDarkTheme: Boolean? = null
@@ -590,6 +605,11 @@ class ReadBookController(
     private fun updateReaderPageWindow(value: ReaderPageWindow): ReaderPageWindow {
         val previous = _readerPageWindow.value.current
         val next = value.current
+        // 翻页后备注浮窗的锚点已失效：它按画布坐标定位在角标旁，继续留着就会悬在别的
+        // 段落上方。角标本身随新页重算，浮窗不能带着旧锚点跨页。
+        if (previous?.id != next?.id) {
+            viewModel.onIntent(ReadBookIntent.DismissMarkingNote)
+        }
         if (previous?.id != next?.id || previous?.layoutRevision != next?.layoutRevision) {
             cancelReaderImageLoadsExcept(activeReaderImageKeys(value))
         }
@@ -932,6 +952,8 @@ class ReadBookController(
             }
         }
         val window = ReaderPageNavigator.window(directReaderPages, index)
+        // 一次取页窗口共用同一份备注快照：角标按页算，但书只有一本，没必要逐页再查一次。
+        val markingNotes = currentMarkingNotes()
         // 当前章是否还在逐页流出：决定尾部要不要接"加载中"页。
         val streamingChapter = window.current?.id?.chapterIndex
             ?.takeIf { it in directReaderStreamingChapters }
@@ -955,6 +977,7 @@ class ReadBookController(
                     contentPaddingTopPx = contentPadding.top,
                     contentPaddingRightPx = contentPadding.right,
                     contentPaddingBottomPx = contentPadding.bottom,
+                    markingNotes = markingNotes,
                 ),
                 revision = source.revision xor dynamicState.time.hashCode().toLong() xor dynamicState.battery.toLong(),
             )
@@ -2711,6 +2734,10 @@ class ReadBookController(
             }
 
             is ReadBookEffect.UpBookmarkBadge ->
+                directReaderPageIndex?.let(::publishDirectReaderWindow)
+
+            // 备注快照变了（保存/删除备注、目录 Sheet 改备注）：重发窗口让角标重算。
+            is ReadBookEffect.UpMarkingNoteBadges ->
                 directReaderPageIndex?.let(::publishDirectReaderWindow)
         }
     }

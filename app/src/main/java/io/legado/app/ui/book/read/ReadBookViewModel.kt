@@ -34,6 +34,7 @@ import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.AppUiConfigurationGateway
 import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.gateway.BookContentProcessGateway
+import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
@@ -142,6 +143,7 @@ class ReadBookViewModel(
     private val verifyBookmarkTargetUseCase: VerifyBookmarkTargetUseCase,
     private val relocateMarkingTargetUseCase: RelocateMarkingTargetUseCase,
     private val bookContentProcessGateway: BookContentProcessGateway,
+    private val bookMarkingGateway: BookMarkingGateway,
     private val aiArtifactGateway: AiArtifactGateway,
     private val aiPromptPresetGateway: AiPromptPresetGateway,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
@@ -233,6 +235,8 @@ class ReadBookViewModel(
         context = context,
         highlightRuleRepository = highlightRuleRepository,
         saveMarkingUseCase = saveMarkingUseCase,
+        bookMarkingGateway = bookMarkingGateway,
+        bookKey = _uiState.map { it.book?.let { book -> book.name to book.author } },
         host = object : MarkingDelegate.Host {
             override fun reloadCurrentChapter() {
                 contentProcessDelegate.reloadCurrentChapterPreservingSnapshot()
@@ -255,10 +259,17 @@ class ReadBookViewModel(
             override fun showToast(message: String) {
                 _effects.tryEmit(ReadBookEffect.ShowToast(message))
             }
+
+            override fun emitEffect(effect: ReadBookEffect) {
+                _effects.tryEmit(effect)
+            }
         },
     ) }
 
     val markingState get() = markingDelegate.uiState
+
+    /** 正文里的只读备注浮窗（点笔记角标打开）；笔记弹层不开时它也要能显示，故独立暴露。 */
+    val markingNotePreview get() = markingDelegate.notePreview
     /**
      * 选区预览样式的窄流，交给排版层画布消费。只在此字段变化时重组，
      * 避免标记域其它状态（规则加载、编辑预填）触发整窗口重组。
@@ -730,6 +741,7 @@ class ReadBookViewModel(
         collectReaderSession()
         collectReadStyle()
         replaceRuleDelegate.start()
+        markingDelegate.start()
     }
 
     /** Starts non-renderer features only after navigation/shared-bounds animation is idle. */
@@ -1531,6 +1543,12 @@ class ReadBookViewModel(
 
             is ReadBookIntent.SetMarkingSheetAnchor ->
                 markingDelegate.setSheetAnchor(intent.anchor)
+
+            is ReadBookIntent.ShowMarkingNote ->
+                markingDelegate.showNote(intent.markingId, intent.anchor)
+
+            is ReadBookIntent.DismissMarkingNote ->
+                markingDelegate.dismissNote()
 
             is ReadBookIntent.DeleteMarking -> {
                 markingDelegate.deleteCurrent()

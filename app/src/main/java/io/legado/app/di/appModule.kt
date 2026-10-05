@@ -898,6 +898,7 @@ val appModule = module {
             verifyBookmarkTargetUseCase = get(),
             relocateMarkingTargetUseCase = get(),
             bookContentProcessGateway = get(),
+            bookMarkingGateway = get(),
             aiArtifactGateway = get(),
             aiPromptPresetGateway = get(),
             syncReadAloudVoicesUseCase = get(),

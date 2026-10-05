@@ -748,6 +748,7 @@ fun ReadBookRouteScreen(
                 onShowSelectionMenu = controller::showComposeTextActionMenu,
                 onDismissSelectionMenu = controller::dismissTextActionMenu,
                 onMarkingSheetAnchor = controller::onComposeReaderMarkingSheetAnchor,
+                onMarkingNoteClick = controller::onComposeReaderMarkingNoteClick,
                 onElementClick = controller::onComposeReaderElementClick,
                 onElementLongPress = controller::onComposeReaderElementLongPress,
                 selectionEnabled = readPreferences.selectText,

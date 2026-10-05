@@ -21,5 +21,18 @@ data class ReaderSelectionMenuAnchor(
                 endBottomY = last.bottom,
             )
         }
+
+        /**
+         * 单个矩形（如笔记角标）当作锚点：退化成一个「只有一行、左右同宽」的选区，
+         * 于是浮窗能直接复用选区浮层的落位规则（[io.legado.app.ui.book.read.TextMenuPositionProvider]），
+         * 不必为角标再写一套定位。
+         */
+        fun of(bounds: ReaderRect): ReaderSelectionMenuAnchor = ReaderSelectionMenuAnchor(
+            startX = bounds.left,
+            startTopY = bounds.top,
+            startBottomY = bounds.bottom,
+            endX = bounds.right,
+            endBottomY = bounds.bottom,
+        )
     }
 }

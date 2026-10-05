@@ -39,3 +39,20 @@ data class MarkingUiState(
      */
     val floatingAnchor: ReaderSelectionMenuAnchor? = null,
 )
+
+/**
+ * 正文里点笔记角标后弹出的**只读**备注浮窗内容（[MarkingUiState] 之外的独立状态）。
+ *
+ * 与笔记弹层是两条路：这里只把备注摊开给人看，不带样式/备注编辑，也不落库；
+ * 想改仍然点原文进笔记弹层。之所以不并进 [MarkingUiState]：那个状态的会话生命周期
+ * 跟着笔记弹层开关走（关闭即重置），而备注浮窗与弹层互不干涉——弹层没开时它也得能显示。
+ *
+ * [anchor] 是角标在画布坐标系里的矩形，浮窗据此贴在角标旁。
+ */
+@Immutable
+@Stable
+data class MarkingNotePreview(
+    val markingId: String,
+    val note: String,
+    val anchor: ReaderSelectionMenuAnchor,
+)
