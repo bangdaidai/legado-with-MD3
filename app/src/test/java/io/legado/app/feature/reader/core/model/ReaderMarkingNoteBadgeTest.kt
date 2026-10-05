@@ -35,17 +35,17 @@ class ReaderMarkingNoteBadgeTest {
     }
 
     @Test
-    fun `badge follows the last line and sits one dp right of the last glyph`() {
+    fun `badge follows the last line and its center sits on the last glyph edge`() {
         val badges = badges(
             text(0f, 0f, 20f, 30f, chapterPosition = 0, markingId = "m1"),
             text(0f, 30f, 40f, 60f, chapterPosition = 5, markingId = "m1"),
             notes = mapOf("m1" to "note"),
         )
 
-        // 12dp 直径 @2x = 24px；末字 right=40，右侧留 1dp（2px）。
-        // 没有下划线 → 与行盒竖直中心（(30+60)/2 = 45）对齐。
+        // 12dp 直径 @2x = 24px，圆心压在末字右边界 40 上 → 横向 (28,52)：
+        // 一半盖住末字、一半在外侧。没有下划线 → 与行盒竖直中心（(30+60)/2 = 45）对齐。
         assertEquals(1, badges.size)
-        assertEquals(ReaderRect(42f, 33f, 66f, 57f), badges.single().bounds)
+        assertEquals(ReaderRect(28f, 33f, 52f, 57f), badges.single().bounds)
     }
 
     @Test
@@ -56,10 +56,11 @@ class ReaderMarkingNoteBadgeTest {
             notes = mapOf("m1" to "note"),
         )
 
-        // 下划线画在行盒下沿 60 + 偏移 4 = 64 处，角标中心就该在 64（而不是行盒中心 45）。
+        // 下划线画在行盒下沿 60 + 偏移 4 = 64 处，圆心就该在 64（而不是行盒中心 45）。
         val bounds = badges.single().bounds
         assertEquals(64f, bounds.top + bounds.height / 2f)
-        assertEquals(ReaderRect(42f, 52f, 66f, 76f), bounds)
+        assertEquals(40f, bounds.left + bounds.width / 2f)
+        assertEquals(ReaderRect(28f, 52f, 52f, 76f), bounds)
     }
 
     @Test
@@ -70,12 +71,12 @@ class ReaderMarkingNoteBadgeTest {
             notes = mapOf("m1" to "note"),
         )
 
-        // 页宽只有 100，角标探出页边 26px：收口会正好压在末字上，那是不该收的地方。
-        assertEquals(ReaderRect(102f, 22f, 126f, 46f), badges.single().bounds)
+        // 页宽只有 100，圆心在末字末端 100，圆有 12px 探出页边；不做任何收口。
+        assertEquals(ReaderRect(88f, 22f, 112f, 46f), badges.single().bounds)
     }
 
     @Test
-    fun `one badge per marking and the hit box grows mostly into the page margin`() {
+    fun `one badge per marking and the hit box grows mostly to the right`() {
         val badges = badges(
             text(0f, 0f, 20f, 30f, chapterPosition = 0, markingId = "m1"),
             text(0f, 0f, 20f, 30f, chapterPosition = 0, markingId = "m2"),
@@ -83,9 +84,9 @@ class ReaderMarkingNoteBadgeTest {
         )
 
         assertEquals(listOf("m1", "m2"), badges.map { it.markingId })
-        // 角标矩形 (22,3)-(46,27)；命中区竖向 48px（24dp），横向只左长 4dp（8px）到 14，
-        // 其余全往右长到 62：末字在右边，对称外扩会把「点原文」的手感一起吃掉。
-        assertEquals(ReaderRect(14f, -9f, 62f, 39f), badges.first().hitBounds)
+        // 圆 (8,3)-(32,27)；触控区 48px 见方（24dp），竖向以圆心对称；横向左沿在圆左边
+        // 再多 4dp（8px）到 0，右沿到 48——只比圆本身盖住末字的 12px 多吃 8px。
+        assertEquals(ReaderRect(0f, -9f, 48f, 39f), badges.first().hitBounds)
     }
 
     @Test
@@ -105,12 +106,12 @@ class ReaderMarkingNoteBadgeTest {
             ),
         )
 
-        // 角标矩形 (62,52)-(86,76)，命中区 (54,40)-(102,88)。
-        assertEquals("m1", page.markingNoteBadgeAt(74f, 64f)?.markingId)
-        assertEquals("m1", page.markingNoteBadgeAt(55f, 41f)?.markingId)
-        // 行左侧仍然归「点划线 → 笔记弹层」，不能被角标的命中区吃掉。
+        // 圆 (48,52)-(72,76)、圆心 (60,64)；触控区 (28,40)-(96,88)。
+        assertEquals("m1", page.markingNoteBadgeAt(60f, 64f)?.markingId)
+        assertEquals("m1", page.markingNoteBadgeAt(29f, 41f)?.markingId)
+        // 行左侧仍然归「点划线 → 笔记弹层」，不能被触控区吃掉。
         assertNull(page.markingNoteBadgeAt(20f, 45f))
-        assertNull(page.markingNoteBadgeAt(74f, 100f))
+        assertNull(page.markingNoteBadgeAt(60f, 100f))
     }
 
     @Test

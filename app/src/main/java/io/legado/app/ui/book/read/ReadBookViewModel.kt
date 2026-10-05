@@ -1526,7 +1526,7 @@ class ReadBookViewModel(
             is ReadBookIntent.EditMarking -> {
                 // 从目录 Sheet 进入：记住原 sheet，保存/删除/取消后返回
                 markingReturnSheet = _uiState.value.activeSheet
-                markingDelegate.openForEdit(intent.id)
+                markingDelegate.openForEdit(intent.id, intent.anchor)
                 _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
             }
 

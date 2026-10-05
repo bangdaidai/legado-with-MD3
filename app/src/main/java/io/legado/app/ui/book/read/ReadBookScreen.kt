@@ -388,11 +388,17 @@ fun ReadBookScreen(
             null
         },
     )
-    // 只读备注浮窗：点正文笔记角标打开，与笔记弹层并存（这里没有编辑控件）。
+    // 备注浮窗：点角标打开（只读）；点浮窗里的备注则进笔记弹层改线型/颜色/备注，
+    // 锚点沿用角标，弹层贴着角标浮出来、正文实时预览不被挡住。
     markingNotePreview?.let { preview ->
         MarkingNotePopup(
             anchor = preview.anchor,
             note = preview.note,
+            onEditNote = {
+                // EditMarking 会顺带收起只读浮窗（openForEdit 开头就 dismissNote），
+                // 不必先发一次 DismissMarkingNote，否则中间会多一帧空窗。
+                onIntent(ReadBookIntent.EditMarking(preview.markingId, preview.anchor))
+            },
             onDismissRequest = { onIntent(ReadBookIntent.DismissMarkingNote) },
         )
     }

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.sheet
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -12,6 +13,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -23,10 +27,14 @@ import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.text.AppText
 
 /**
- * 正文里的**只读**备注浮窗：点划线末行右下角的笔记角标打开，把备注摊开看一眼。
+ * 正文里的**只读**备注浮窗：点划线末字右下角的笔记角标打开，把备注摊开看一眼。
  *
- * 与笔记弹层（`MarkingSheet`）分工明确：这里只读，不带样式/备注控件，也不落库；
- * 想改仍然点划线原文进笔记弹层。因此它比笔记弹层窄得多，也不抢焦点做输入。
+ * 两级入口，与笔记弹层（`MarkingSheet`）分工明确：
+ * - 点**角标**或浮窗外的正文 → 这里，只读，不带样式/备注控件，也不落库；
+ * - 点浮窗里的**备注文本** → 直接进笔记弹层改线型/颜色/备注（[onEditNote]），
+ *   锚点仍是这个角标，弹层贴着角标浮出来，改样式时正文里的实时预览不被挡住。
+ *
+ * 因此它比笔记弹层窄得多，也不抢焦点做输入。
  *
  * 定位复用划词菜单的 [TextMenuPositionProvider]（角标锚点由画布按角标矩形合成），
  * 于是「有上方空间就贴角标上沿向上展开」这条落位规则与划词菜单、笔记弹层完全一致，
@@ -36,6 +44,7 @@ import io.legado.app.ui.widget.components.text.AppText
 fun MarkingNotePopup(
     anchor: ReaderSelectionMenuAnchor,
     note: String,
+    onEditNote: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -68,7 +77,13 @@ fun MarkingNotePopup(
         ProvideAppDensity {
             Box(modifier = Modifier.padding(shadowPadding)) {
                 NormalCard(
-                    modifier = Modifier.width(popupWidth),
+                    modifier = Modifier
+                        .width(popupWidth)
+                        // 备注文本整块可点：点它进笔记弹层改线型/颜色/备注。role=Button
+                        // 让读屏念成"按钮"而不是一段纯文本，否则这条入口对键盘/读屏用户
+                        // 根本不存在。
+                        .clickable(onClick = onEditNote)
+                        .semantics { role = Role.Button },
                     containerColor = LegadoTheme.colorScheme.surfaceBright,
                     elevation = 12.dp,
                     cornerRadius = 12.dp,
