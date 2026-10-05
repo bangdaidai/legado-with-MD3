@@ -41,6 +41,7 @@ import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
 import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
 import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
+import io.legado.app.feature.reader.core.style.doubleLineSecondOffsetPx
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.featherEdgeColors
 import io.legado.app.feature.reader.core.style.featherEdgeStops
@@ -620,10 +621,9 @@ internal fun DrawScope.drawUnderlineShape(
         }
 
         4 -> {
-            // 双线全部画在基线下方：第二条 = y + 净间隙 + 线宽（与正文同），
-            // 不是围绕 y 上下对称。间隙用线芯宽度而非抬升后的 stroke，与正文
-            // ReaderPageDecorationDrawCommand 的 secondY 保持同一口径
-            val secondY = y + READER_DOUBLE_LINE_GAP_DP.dp.toPx() + strokeWidth
+            // 双线全部画在基线下方，与正文同一套偏移口径（净间隙 + 线芯宽度），
+            // 偏移算法来自共享几何 doubleLineSecondOffsetPx。
+            val secondY = y + doubleLineSecondOffsetPx(READER_DOUBLE_LINE_GAP_DP.dp.toPx(), strokeWidth)
             drawLine(
                 brush = solidBrush,
                 start = Offset(sx, y),

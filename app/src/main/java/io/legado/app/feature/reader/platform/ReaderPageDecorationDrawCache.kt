@@ -17,17 +17,17 @@ import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderUnderline
 import io.legado.app.feature.reader.core.model.underlineRuns
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
-import io.legado.app.feature.reader.core.style.READER_FEATHER_PROFILE_POSITIONS
-import io.legado.app.feature.reader.core.style.READER_FEATHER_PROFILE_WEIGHTS
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
 import io.legado.app.feature.reader.core.style.READER_UNDERLINE_CORNER_DP
+import io.legado.app.feature.reader.core.style.doubleLineSecondOffsetPx
 import io.legado.app.feature.reader.core.style.edgeFadeRatio
 import io.legado.app.feature.reader.core.style.featherEdgeColors
 import io.legado.app.feature.reader.core.style.featherEdgeStops
 import io.legado.app.feature.reader.core.style.featherSpreadPx
+import io.legado.app.feature.reader.core.style.featherVerticalStops
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
@@ -36,6 +36,7 @@ import io.legado.app.utils.dpToPx
 /** 线型编号与 `HighlightRule.underlineMode` / `ReaderUnderline.mode` 一致。 */
 private const val DASH_MODE = 2
 private const val WAVE_MODE = 3
+private const val DOUBLE_LINE_MODE = 4
 
 /** 自定义 SVG：形状完全由用户给的路径决定，收边与柔化都不参与。 */
 private const val SVG_MODE = 5
@@ -195,8 +196,8 @@ internal class ReaderUnderlineDrawCommand(
          * 所以两者用同一个线色、只有 alpha 剖面不同。四个角因此在两个方向一起淡下去，
          * 是真正的各向同性；端点处两个方向的 alpha 都接近 0，既不生硬也不尖。
          *
-         * 剖面采样点见 [READER_FEATHER_PROFILE_POSITIONS]，由 [ComposeShader] 一次
-         * 插值完成，不需要逐趟。
+         * 垂直剖面的采样点由 [featherVerticalStops] 生成（线芯最浓、上下对称），
+         * 水平剖面两端渐隐、中段满浓。由 [ComposeShader] 一次插值完成，不需要逐趟。
          */
     private fun featherShader(y: Float, halfSpread: Float): Shader {
             val alpha = (underline.colorArgb ushr 24) and 0xFF
@@ -212,17 +213,21 @@ internal class ReaderUnderlineDrawCommand(
                 Shader.TileMode.CLAMP,
             )
 
-            // 垂直剖面：中心最浓、边缘最淡，归一化距离 0..1 映射到 ±halfSpread。
-            // 同样用线色而非剥 alpha 的颜色：ComposeShader 两个构造的参数顺序相反
-            //（谁当 dst 会调换），两种顺序都正确才不依赖调用形式。
-            val verticalColors = IntArray(READER_FEATHER_PROFILE_POSITIONS.size) { i ->
-                val a = (alpha * READER_FEATHER_PROFILE_WEIGHTS[i]).toInt().coerceIn(0, 255)
+            // 垂直剖面：线芯处最浓、向上向下对称衰减到描边带两缘。归一化位置 0..1
+            // 对应 y±halfSpread 的整条描边带。旧实现把单调剖面直接铺满整带，上缘
+            // 满浓生硬、下缘几乎透明（「只有下方模糊」）；必须用中心对称的
+            // [featherVerticalStops]。同样用线色而非剥 alpha 的颜色：ComposeShader
+            // 两个构造的参数顺序相反（谁当 dst 会调换），两种顺序都正确才不依赖
+            // 调用形式。
+            val (vPositions, vWeights) = featherVerticalStops()
+            val verticalColors = IntArray(vWeights.size) { i ->
+                val a = (alpha * vWeights[i]).toInt().coerceIn(0, 255)
                 (underline.colorArgb and 0x00FFFFFF) or (a shl 24)
             }
             val vertical = LinearGradient(
                 0f, y - halfSpread, 0f, y + halfSpread,
                 verticalColors,
-                READER_FEATHER_PROFILE_POSITIONS,
+                vPositions,
                 Shader.TileMode.CLAMP,
             )
 
@@ -253,6 +258,7 @@ internal class ReaderUnderlineDrawCommand(
                 when (underline.mode) {
                     DASH_MODE -> drawDashed(canvas, left, right, y)
                     WAVE_MODE -> wavePath?.let { canvas.drawPath(it, paint) }
+                    DOUBLE_LINE_MODE -> drawDoubleLine(canvas, left, right, y)
                     SVG_MODE -> drawSvg(canvas, y)
                     else -> canvas.drawLine(left, y, right, y, paint)
                 }
@@ -261,6 +267,18 @@ internal class ReaderUnderlineDrawCommand(
                 canvas.drawPoint((bounds.left + bounds.right) / 2f, y, paint)
             }
             paint.shader = null
+        }
+
+        /**
+         * 双实线：第二条在净间隙 + 线芯宽度处，偏移口径来自
+         * [doubleLineSecondOffsetPx]。缺了这个分支，正文与高亮规则的双实线
+         * 都会掉进 else 塌成单实线。两条线共用同一 paint（圆头与内缩已在
+         * [draw] 里按描边宽度算好）。
+         */
+        private fun drawDoubleLine(canvas: Canvas, start: Float, end: Float, y: Float) {
+            val secondY = y + doubleLineSecondOffsetPx(underline.doubleLineGapPx, underline.widthPx)
+            canvas.drawLine(start, y, end, y, paint)
+            canvas.drawLine(start, secondY, end, secondY, paint)
         }
 
         /** 虚线：段长与间隙按本段宽度均摊，段尾不再被截出碎段。 */

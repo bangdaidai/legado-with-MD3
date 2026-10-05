@@ -130,12 +130,50 @@ class ReaderUnderlineGeometryTest {
     }
 
     @Test
+    fun `double line second offset is gap plus core width`() {
+        // 回归背景：正文绘制分支丢失后双实线塌成单线、选区预览却还是双线。
+        // 三处（正文/选区预览/笔记列表）共用这一个偏移口径：净间隙 + 线芯宽度。
+        assertEquals(3f + 4f, doubleLineSecondOffsetPx(3f, 4f), 1e-6f)
+        // 负间隙钳到 0：第二条线贴着第一条，不画到第一条上方
+        assertEquals(4f, doubleLineSecondOffsetPx(-1f, 4f), 1e-6f)
+    }
+
+    @Test
     fun `feather profile is monotonically decreasing from the centre`() {
         val weights = READER_FEATHER_PROFILE_WEIGHTS
         assertEquals(1f, weights.first(), 1e-6f)
         weights.zipWithNext().forEach { (a, b) -> assertTrue("应递减", a > b) }
         // 边缘保留一点 alpha，不能掉到 0：端点全透明会让边界看着被切掉
         assertTrue(weights.last() > 0f)
+    }
+
+    @Test
+    fun `vertical feather stops are symmetric around the stroke core`() {
+        // 回归背景：旧实现把单调剖面直接铺在描边带自上而下的方向上，上缘满浓生硬、
+        // 下缘几乎透明 —— 正文「只有下方模糊、波浪下半部糊成平带」正是它。
+        // 垂直剖面必须沿线芯（0.5）上下对称。
+        val (positions, alphas) = featherVerticalStops()
+        val n = READER_FEATHER_PROFILE_POSITIONS.size
+
+        assertEquals(n * 2 - 1, positions.size)
+        assertEquals(positions.size, alphas.size)
+        // 位置覆盖整条描边带：0=上缘、0.5=线芯、1=下缘
+        assertEquals(0f, positions.first(), 1e-6f)
+        assertEquals(1f, positions.last(), 1e-6f)
+        assertEquals(0.5f, positions[n - 1], 1e-6f)
+
+        // 与中点等距的色标位置和权重一致
+        for (i in positions.indices) {
+            val mirror = positions.size - 1 - i
+            assertEquals("位置应关于 0.5 对称", 1f - positions[i], positions[mirror], 1e-5f)
+            assertEquals("权重应上下对称", alphas[i], alphas[mirror], 1e-6f)
+        }
+
+        // 线芯最浓、两缘最弱（与半剖面同表），且两段各自单调
+        assertEquals(1f, alphas[n - 1], 1e-6f)
+        assertEquals(READER_FEATHER_PROFILE_WEIGHTS.last(), alphas.first(), 1e-6f)
+        for (i in 0 until n - 1) assertTrue("向上缘应变淡", alphas[i] < alphas[i + 1])
+        for (i in n - 1 until alphas.size - 1) assertTrue("向下缘应变淡", alphas[i] > alphas[i + 1])
     }
 
     @Test

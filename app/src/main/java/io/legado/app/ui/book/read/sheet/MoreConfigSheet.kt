@@ -128,6 +128,9 @@ fun MoreConfigSheet(
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectionUnit(it)))
                 },
                 onOpenTextSelectMenuConfig = onOpenTextSelectMenuConfig,
+                onShowMenuIconChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowMenuIcon(it)))
+                },
                 onReadAloudDetachReminderEnabledChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadAloudDetachReminderEnabled(it)))
                 },
@@ -179,9 +182,6 @@ fun MoreConfigSheet(
                 },
                 onShowReadTitleAdditionChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowReadTitleAddition(it)))
-                },
-                onShowMenuIconChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowMenuIcon(it)))
                 },
                 onAdaptSpecialStyleChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AdaptSpecialStyle(it)))
@@ -355,6 +355,7 @@ private fun SelectionSettings(
     onSelectTextChange: (Boolean) -> Unit,
     onSelectTextUnitChange: (String) -> Unit,
     onOpenTextSelectMenuConfig: () -> Unit,
+    onShowMenuIconChange: (Boolean) -> Unit,
     onReadAloudDetachReminderEnabledChange: (Boolean) -> Unit,
 ) {
     val selectionUnitEntries = stringArrayResource(R.array.select_text_unit_title)
@@ -377,6 +378,13 @@ private fun SelectionSettings(
     TinyClickableSettingItem(
         title = stringResource(R.string.edit_select_menu),
         onClick = onOpenTextSelectMenuConfig,
+    )
+
+    // 菜单项图标跟划词菜单走：控制菜单项显不显示图标，归到划词组而不是显示组
+    TinySwitchSettingItem(
+        title = stringResource(R.string.show_menu_icon),
+        checked = preferences.showMenuIcon,
+        onCheckedChange = onShowMenuIconChange,
     )
 
     TinySwitchSettingItem(
@@ -481,7 +489,6 @@ private fun DisplaySettings(
     preferences: ReadPreferences,
     onOptimizeRenderChange: (Boolean) -> Unit,
     onShowReadTitleAdditionChange: (Boolean) -> Unit,
-    onShowMenuIconChange: (Boolean) -> Unit,
     onAdaptSpecialStyleChange: (Boolean) -> Unit,
     onUseZhLayoutChange: (Boolean) -> Unit,
     onAutoSuggestDayNightChange: (Boolean) -> Unit,
@@ -509,12 +516,6 @@ private fun DisplaySettings(
         title = stringResource(R.string.show_read_title_addition),
         checked = preferences.showReadTitleAddition,
         onCheckedChange = onShowReadTitleAdditionChange,
-    )
-
-    TinySwitchSettingItem(
-        title = stringResource(R.string.show_menu_icon),
-        checked = preferences.showMenuIcon,
-        onCheckedChange = onShowMenuIconChange,
     )
 
     TinySwitchSettingItem(

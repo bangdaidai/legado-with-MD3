@@ -130,6 +130,7 @@ import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
 import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
+import io.legado.app.feature.reader.core.style.doubleLineSecondOffsetPx
 import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
@@ -2500,10 +2501,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSelectionStyleP
         when (style.underlineMode) {
             1, 6 -> drawLine(Color(color), Offset(rect.left, y), Offset(rect.right, y), stroke)
             4 -> {
-                // 双线第二条 = y + 净间隙 + 线宽，与正文 ReaderPageDecorationDrawCache
+                // 双线第二条 = y + 净间隙 + 线芯宽度，偏移算法来自共享几何
+                // doubleLineSecondOffsetPx，与正文 ReaderPageDecorationDrawCache
                 // 和 MarkingStyledText.drawUnderlineShape 的 mode 4 同一口径。
                 // 少了这个分支，选词时选双实线什么都不画。
-                val secondY = y + READER_DOUBLE_LINE_GAP_DP.dp.toPx() + style.underlineWidth.dp.toPx()
+                val secondY = y + doubleLineSecondOffsetPx(
+                    READER_DOUBLE_LINE_GAP_DP.dp.toPx(),
+                    style.underlineWidth.dp.toPx(),
+                )
                 drawLine(Color(color), Offset(rect.left, y), Offset(rect.right, y), stroke)
                 drawLine(
                     Color(color),

@@ -29,6 +29,17 @@ const val READER_WAVE_CONTROL_OFFSET_DP = 3f
 /** 双实线两条线之间的净间隙，不含线宽。 */
 const val READER_DOUBLE_LINE_GAP_DP = 3f
 
+/**
+ * 双实线第二条线的纵坐标偏移（px）：净间隙 + **线芯**宽度，画在第一条线下方。
+ *
+ * 正文（`ReaderUnderlineDrawCommand`）、选区预览（`ReaderCanvasSurface`）和笔记列表
+ * （`MarkingStyledText.drawUnderlineShape`）三处共用：正文与笔记列表曾各自实现，
+ * 正文的绘制分支丢失后双实线塌成单线、选区预览却还是双线 —— 两处看起来不同。
+ * 偏移用线芯宽度（未抬下限），与两端描边口径的关系由绘制层自己处理。
+ */
+fun doubleLineSecondOffsetPx(gapPx: Float, coreWidthPx: Float): Float =
+    gapPx.coerceAtLeast(0f) + coreWidthPx
+
 /** 删除线固定落在行高的这个比例处，与偏移参数无关。 */
 const val READER_STRIKE_HEIGHT_RATIO = 0.52f
 
@@ -172,6 +183,38 @@ fun featherEdgeStops(featherPx: Float, extentPx: Float): Pair<FloatArray, FloatA
         // 下降沿：位置 1-rise → 1，alpha 由最强降到最弱；中间自然连成平台
         positions[n + i] = (1f - rise) + READER_FEATHER_PROFILE_POSITIONS[i] * rise
         alphas[n + i] = READER_FEATHER_PROFILE_WEIGHTS[i]
+    }
+    return positions to alphas
+}
+
+/**
+ * 描边羽化的**垂直**剖面色标：线芯处最浓、上下两缘对称衰减。
+ *
+ * 与 [featherEdgeStops] 的「边缘型」剖面（软化填充块的边、中间保持实心）不同，
+ * 描边是「一条线」：垂直渐变铺满整条描边带（线芯 ± [featherSpreadPx]），线芯处
+ * alpha 最高，向上向下都按 [READER_FEATHER_PROFILE_WEIGHTS] 的高斯衰减。
+ *
+ * 回归背景：旧实现把 [READER_FEATHER_PROFILE_POSITIONS] 那份「中心→半径」的单调
+ * 剖面直接铺在描边带自上而下的方向上，结果是上缘 alpha 满浓生硬切断、线芯只有
+ * 半浓、下缘几乎透明 —— 正文里下划线/波浪「只有下方模糊、上缘一条实边、波浪
+ * 下半部糊成平带」正是它。这里把半剖面沿中心折叠成全剖面：两端最弱、中点最强、
+ * 上下对称；波浪的浓芯（半浓区）随之沿波形起伏，模糊后波形仍可辨认。
+ *
+ * 返回 (positions, alphas)，positions 相对描边带高度（0=上缘、0.5=线芯、1=下缘）。
+ */
+fun featherVerticalStops(): Pair<FloatArray, FloatArray> {
+    val n = READER_FEATHER_PROFILE_POSITIONS.size
+    val positions = FloatArray(n * 2 - 1)
+    val alphas = FloatArray(n * 2 - 1)
+    for (i in 0 until n) {
+        // 上升沿 0→0.5：权重从上缘最弱升到线芯最强
+        positions[i] = READER_FEATHER_PROFILE_POSITIONS[i] * 0.5f
+        alphas[i] = READER_FEATHER_PROFILE_WEIGHTS[n - 1 - i]
+    }
+    for (i in 1 until n) {
+        // 下降沿 0.5→1：权重从线芯最强降到下缘最弱（跳过 i=0，0.5 只留一个色标）
+        positions[n - 1 + i] = 0.5f + READER_FEATHER_PROFILE_POSITIONS[i] * 0.5f
+        alphas[n - 1 + i] = READER_FEATHER_PROFILE_WEIGHTS[i]
     }
     return positions to alphas
 }
