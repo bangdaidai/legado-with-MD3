@@ -629,7 +629,11 @@ fun HighlightRuleEditSheet(
                             TinySliderSettingItem(
                                 title = stringResource(R.string.underline_feather),
                                 value = underlineFeather,
-                                valueRange = 0f..5f,
+       // 上限与 HighlightRuleRepository.sanitizeRule 的 coerceIn(0f, 10f) 一致：
+                                // 滑块放到 20 会让用户拖到 10dp 以上，保存时被静默压回且无提示。
+                                // 5dp 太小——线宽往往只有 1~2dp，5dp 羽化糊出来也就 11dp 高，
+                                // 相对正文仍是「一条粗带」而不是「化开的边」。
+                                valueRange = 0f..10f,
                                 description = String.format("%.1f dp", underlineFeather),
                                 onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
                             )

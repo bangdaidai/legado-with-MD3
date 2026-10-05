@@ -157,6 +157,15 @@ internal class ReaderUnderlineDrawCommand(
     private val fixedCapInset = underline.fixedCapInsetPx(cornerRadiusPx)
 
     /**
+     * 端部柔边宽度（px）= 羽化半径，与上下方向的扩散量同量。
+     *
+     * 另按段宽封顶（[READER_EDGE_FADE_SEG_RATIO]）：1~3 个字的短段撑不住，两端柔边
+     * 会重叠成纺锤形。
+     */
+    private val edgeSoft =
+        featherPx.coerceAtMost((bounds.right - bounds.left) * READER_EDGE_FADE_SEG_RATIO)
+
+    /**
      * 羽化按线型适用性取，不直接读 [ReaderUnderline.featherPx]。
      *
      * 双实线的两条线各自成段、删除线固定在行高比例处、自定义 SVG 的两端由用户
@@ -193,10 +202,6 @@ internal class ReaderUnderlineDrawCommand(
         // ReaderHalfHighlightDrawCommand 走的是同一套几何。
         // 每趟颜色走 featherPassArgb —— 预览侧共用，保证两边逐位一致。
         val passes = featherPassCount(featherPx / 1f.dpToPx())
-        // 端部柔边宽度 = 羽化半径，与上下方向的扩散量同量（各向同性即各方向等量）。
-        // 再按段宽封顶：短高亮段（1~3 字）撑不住，两端柔边会重叠成纺锤形。
-        val edgeSoft =
-            featherPx.coerceAtMost((bounds.right - bounds.left) * READER_EDGE_FADE_SEG_RATIO)
         for (i in passes downTo 0) {
             val d = i.toFloat() / passes
             val centerColor = featherPassArgb(underline.colorArgb, d)
@@ -248,19 +253,35 @@ internal class ReaderUnderlineDrawCommand(
             else -> underline.capInsetPx(paint.strokeWidth, cornerRadiusPx)
         }
         val y = underline.referenceCenterY(bounds)
+        val start = bounds.left + capInset + edgeInset
+        val end = bounds.right - capInset - edgeInset
+        // 端部渐变：这一趟的 alpha 从线段起点 0 渐入到自身 alpha。
+        //
+        // 只靠「逐趟内缩」并不各向同性——每趟内部 alpha 是均匀的，角落那个点只有
+        // 最外那一趟够宽能覆盖，于是角上的 alpha 恒等于最外趟的值（而边缘中部已被
+        // 7 趟叠到接近饱和），看着就是一块「实尖角」。让 alpha 在水平方向也连续
+        // 衰减，角上就在两个方向一起淡下去。
+        paint.shader = if (edgeInset > 0f) {
+            LinearGradient(
+                start, 0f, start + edgeSoft, 0f,
+                intArrayOf(0, colorArgb, colorArgb),
+                floatArrayOf(0f, 1f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+        } else {
+            null
+        }
         when (underline.mode) {
             DASH_MODE -> drawDashed(
                 canvas,
-                bounds.left + capInset + edgeInset,
-                bounds.right - capInset - edgeInset,
+                start,
+                end,
                 y,
                 bounds.left + fixedCapInset,
                 bounds.right - fixedCapInset,
             )
             WAVE_MODE -> wavePath(bounds, capInset, edgeInset)?.let { canvas.drawPath(it, paint) }
             else -> {
-                val start = bounds.left + capInset + edgeInset
-                val end = bounds.right - capInset - edgeInset
                 if (start >= end) {
                     // 线太短，退化为一个点/圆
                     canvas.drawPoint((bounds.left + bounds.right) / 2f, y, paint)
@@ -284,6 +305,7 @@ internal class ReaderUnderlineDrawCommand(
                 }
             }
         }
+        paint.shader = null
     }
 
     /**

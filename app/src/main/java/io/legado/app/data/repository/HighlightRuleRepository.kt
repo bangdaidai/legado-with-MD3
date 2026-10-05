@@ -217,7 +217,7 @@ class HighlightRuleRepository(
                 HighlightRule.DEFAULT_WAVE_LENGTH_DP
             ).coerceIn(4f, 60f),
             underlineRoundCap = runCatching { rule.underlineRoundCap }.getOrDefault(false),
-            underlineFeather = runCatching { rule.underlineFeather }.getOrDefault(0f).coerceIn(0f, 5f),
+            underlineFeather = runCatching { rule.underlineFeather }.getOrDefault(0f).coerceIn(0f, 10f),
             bgImage = runCatching { rule.bgImage }.getOrNull()?.takeIf { it.isNotBlank() },
             bgImageFit = runCatching { rule.bgImageFit }.getOrDefault(0).coerceIn(0, 3),
             bgImageScale = runCatching { rule.bgImageScale }.getOrDefault(1f).coerceIn(0.1f, 5f),

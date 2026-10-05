@@ -150,8 +150,36 @@ class ReaderPageDecorationDrawCacheTest {
         assertTrue("上下柔边应覆盖到 ±5px", alpha(bitmap, 40, BASELINE_Y + 4) > 0)
     }
 
-    // 短高亮段（1~3 个字）撑不住羽化半径时，两端柔边按段宽的 1/4 封顶，
-    // 中段保得住实心，不会被吃成两端尖的纺锤形。
+    /**
+     * 四个角不能是「实尖角」。
+     *
+     * 每趟内部 alpha 是均匀的，只靠逐趟内缩的话角落那个点只有最外那一趟够宽能覆盖，
+     * 角上的 alpha 就恒等于最外趟的值，而同一高度的边缘中部已被 7 趟叠到接近饱和 ——
+     * 对比之下角上那块就是实的。alpha 必须在水平方向也连续衰减。
+     */
+    @Test(timeout = 1_000)
+    fun `feathered corners fade in both directions`() {
+        val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
+
+        ReaderUnderlineDrawCommand(
+            ReaderRect(20f, 0f, 60f, 16f),
+            ReaderUnderline(1, 0xff000000.toInt(), 1f, 0f, featherPx = 5f),
+        ).draw(Canvas(bitmap))
+
+        // 上边缘距中心 4px 处：中部（x=40）被多趟覆盖，靠近端点（x=21）只有外圈几趟
+        val edgeMiddle = alpha(bitmap, 40, BASELINE_Y - 4)
+        val edgeNearEnd = alpha(bitmap, 21, BASELINE_Y - 4)
+        assertTrue("上边缘中部应可见：$edgeMiddle", edgeMiddle > 0)
+        assertTrue(
+            "同一高度上越靠端点越淡：$edgeNearEnd vs $edgeMiddle",
+            edgeNearEnd < edgeMiddle,
+        )
+    }
+
+    /**
+     * 短高亮段（1~3 个字）撑不住羽化半径时，两端柔边按段宽的 1/4 封顶，
+     * 中段保得住实心，不会被吃成两端尖的纺锤形。
+     */
     @Test
     fun `short segment keeps a solid core`() {
         val bitmap = Bitmap.createBitmap(80, 24, Bitmap.Config.ARGB_8888)
