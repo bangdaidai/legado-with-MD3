@@ -103,8 +103,35 @@ const val READER_FEATHER_MIN_PASSES = 6
 /** 羽化趟数上限：半径很大时封顶，避免每帧几十趟描边。 */
 const val READER_FEATHER_MAX_PASSES = 24
 
-/** 羽化权重的高斯 sigma。 */
+/**
+ * 荧光色带（填充块）逐趟叠加用的高斯 sigma。
+ *
+ * **与描边的 [READER_FEATHER_PROFILE_SIGMA] 是两回事**，别统一：色带是多趟叠加，
+ * 每趟内部 alpha 均匀、需要更陡的权重才压得住台阶；描边已经换成
+ * `ComposeShader` 一次插值的连续剖面，sigma 直接决定边缘的圆润度。
+ */
 const val READER_FEATHER_SIGMA = 0.55f
+
+/**
+ * 描边羽化剖面的高斯 sigma（相对羽化半径）。
+ *
+ * 与 [READER_FEATHER_SIGMA] 分开的原因同上——两者服务不同的合成方式。
+ */
+const val READER_FEATHER_PROFILE_SIGMA = 0.35f
+
+/**
+ * 高斯剖面的采样点：归一化距离（0 = 中心，1 = 半径处）与该处的权重。
+ *
+ * **为什么要多色标拟合而不是多趟叠加。** 「N 趟同心矩形、每趟 alpha 按高斯递减」
+ * 看着像高斯，其实是 N 级阶梯：每趟内部 alpha 是常数，合成后从边缘到中心逐级跳变。
+ * 密度 3、羽化 5dp 时一趟宽度差约 2px，15 趟就是 15 条可见横线 —— 正是
+ * 「一层透明的」加「分界线明显」的来源，边缘区的 alpha 还会被叠加累加到接近 1。
+ *
+ * 改成**一趟 + 连续剖面**：`LinearGradient` 按这些点分段插值，7 级看不出折线。
+ * 权重为 `exp(-t² / (2σ²))`，σ = [READER_FEATHER_PROFILE_SIGMA]，从中心到边缘递减。
+ */
+val READER_FEATHER_PROFILE_POSITIONS = floatArrayOf(0f, 0.12f, 0.28f, 0.5f, 0.72f, 0.88f, 1f)
+val READER_FEATHER_PROFILE_WEIGHTS = floatArrayOf(1f, 0.94f, 0.76f, 0.52f, 0.28f, 0.11f, 0.04f)
 
 /**
  * 端部柔边宽度占**段宽**的上限。
@@ -121,6 +148,25 @@ const val READER_EDGE_FADE_SEG_RATIO = 0.25f
 fun featherPassCount(featherDp: Float): Int =
     (featherDp * READER_FEATHER_PASSES_PER_DP).toInt()
         .coerceIn(READER_FEATHER_MIN_PASSES, READER_FEATHER_MAX_PASSES)
+
+/**
+ * 羽化后的单侧扩散量（px）：线芯半宽 + 羽化半径。
+ *
+ * 垂直方向的模糊范围，也是 `LinearGradient` 垂直渐变的半轴长度。
+ */
+fun featherSpreadPx(strokeWidthPx: Float, featherPx: Float): Float =
+    finalStrokeWidthPx(strokeWidthPx) / 2f + featherPx.coerceAtLeast(0f)
+
+/**
+ * 水平方向端部渐隐占**段宽**的比例。
+ *
+ * 端部柔和宽度与垂直方向同量（羽化半径），各向同性；但 1~3 个字的短段撑不住，
+ * 两端会重叠成纺锤形，所以按段宽封顶。
+ */
+fun edgeFadeRatio(featherPx: Float, segWidthPx: Float): Float {
+    if (featherPx <= 0f || segWidthPx <= 0f) return 0f
+    return (featherPx / segWidthPx).coerceAtMost(READER_EDGE_FADE_SEG_RATIO)
+}
 
 /** 羽化的单趟高斯权重：[d] 为该趟离中心的归一化距离，0 最实、1 最虚。 */
 fun featherGaussian(d: Float, sigma: Float = READER_FEATHER_SIGMA): Float =

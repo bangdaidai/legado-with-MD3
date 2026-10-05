@@ -108,20 +108,12 @@ data class ReaderUnderline(
      *
      * [cornerRadiusPx] 是 [underlineCornerRadiusPx] 里那个统一圆角的 px 值，由绘制层
      * 换算后传进来——本模块不碰 dp→px，好让纯 JVM 单测能覆盖。
+     *
+     * 传入的应是**描边后的**宽度：羽化一趟画完时 strokeWidth 已经是
+     * `线芯 + 2 × 羽化半径`，按线芯算会让圆弧压在模糊边缘上。
      */
     fun capInsetPx(strokeWidthPx: Float, cornerRadiusPx: Float): Float =
         underlineCornerRadiusPx(strokeWidthPx, cornerRadiusPx)
-
-    /**
-     * 周期笔形（虚线、波浪）专用的内缩量：**全程固定**，不随羽化的趟变化。
-     *
-     * 这两类线型的形状由段宽决定——`waveHalfWaves` 按段宽均摊波长、
-     * `scaledDashSegments` 按段宽缩放虚线周期。逐趟改内缩量就等于每趟重新
-     * 均摊一次，多趟叠起来是一团波长/周期各不相同、多边形线交错的重影。
-     * 实线没这个问题：各趟都在同一条 y 上，只是长短不同。
-     */
-    fun fixedCapInsetPx(cornerRadiusPx: Float): Float =
-        capInsetPx(widthPx, cornerRadiusPx)
 
     /**
      * 这条下划线在**行盒**里的竖直中心（px）。

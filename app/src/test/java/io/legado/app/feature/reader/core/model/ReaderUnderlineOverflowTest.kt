@@ -20,19 +20,11 @@ class ReaderUnderlineOverflowTest {
 
     @Test
     fun `stored round cap no longer changes anything`() {
-        // 端点圆角开关已移除：开与不开必须完全一致，否则旧数据会画出不同观感
+        // 端点圆角开关已移除：开与关必须完全一致，否则旧数据会画出不同观感
         val on = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = true, featherPx = 3f)
-        val off = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = false, featherPx = 3f)
+        val off = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, featherPx = 3f)
         assertEquals(on.overflowPadPx, off.overflowPadPx, 0f)
-        assertEquals(on.fixedCapInsetPx(3f), off.fixedCapInsetPx(3f), 0f)
-    }
-
-    @Test
-    fun `periodic strokes share one fixed corner inset across all passes`() {
-        val wave = ReaderUnderline(3, 0, widthPx = 4f, offsetPx = 0f, featherPx = 5f)
-        // 逐趟变内缩量 = 每趟按新段宽重新均摊波长，多趟叠起来是一团交错重影。
-        // 固定按线芯宽度取：线芯就是这段笔形最大的内缩量，总长不超过段宽。
-        assertEquals(2f, wave.fixedCapInsetPx(3f), 0f)
+        assertEquals(on.capInsetPx(4f, 3f), off.capInsetPx(4f, 3f), 0f)
     }
 
     @Test
