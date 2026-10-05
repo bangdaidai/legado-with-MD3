@@ -24,10 +24,9 @@ import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
 import io.legado.app.feature.reader.core.style.READER_UNDERLINE_CORNER_DP
-import io.legado.app.feature.reader.core.style.bandFeatherMaxInsetPx
 import io.legado.app.feature.reader.core.style.edgeFadeRatio
-import io.legado.app.feature.reader.core.style.featherBandPasses
-import io.legado.app.feature.reader.core.style.featherPassArgb
+import io.legado.app.feature.reader.core.style.featherEdgeColors
+import io.legado.app.feature.reader.core.style.featherEdgeStops
 import io.legado.app.feature.reader.core.style.featherSpreadPx
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
@@ -81,10 +80,12 @@ internal data class ReaderPageDecorationDrawCache(
  *
  * 只有颜色和羽化有意义——线宽/偏移对色带没有意义（见 `underlineControlSupport`）。
  * 两端**统一收 [READER_UNDERLINE_CORNER_DP] 的小圆角**，没有开关：方角边生硬，
- * 半圆又太圆，而同一份样式有两套形态更难预期。圆角切在矩形内部、绝不外扩。
+ * 半圆又太圆。圆角切在矩形内部、绝不外扩。
  *
- * 羽化用向内收缩的多趟叠加让**四边**一起化开，权重与描边羽化共用
- * [featherBandPasses]——描边侧（`ReaderUnderlineDrawCommand`）也是同一套几何。
+ * 羽化把**四边**化开，与描边（`ReaderUnderlineDrawCommand`）共用 `ComposeShader`
+ * 的做法，但剖面形状不同：色带是「一块填充」，羽化只该软化边缘、中间仍是实心
+ * 色块，所以用 `featherEdgeStops` 的上升沿 + 平台 + 下降沿，而不是中心对称的高斯。
+ *
  * 透明度完全由所选颜色的 alpha 决定，不额外压暗（对照 `MarkingEffect.toStyle`）。
  */
 internal class ReaderHalfHighlightDrawCommand(
@@ -97,30 +98,46 @@ internal class ReaderHalfHighlightDrawCommand(
     fun draw(canvas: Canvas) {
         val bandTop = bounds.top + bounds.height * READER_HALF_HIGHLIGHT_TOP_RATIO
         val bandHeight = (bounds.bottom - bandTop).coerceAtLeast(0f)
-        val cornerRadius = READER_UNDERLINE_CORNER_DP.dpToPx().coerceAtMost(bandHeight / 2f)
-        val featherDp = if (underline.featherEffective) featherPx / 1f.dpToPx() else 0f
-        // 边缘柔化：同一矩形从最虚画到最实（顺序与描边羽化一致），靠 alpha 叠加化开边界。
-        // 内缩量按羽化半径取，并受色带短边与段宽约束，避免半行高的色带被吃掉一大半、
-        // 以及窄命中段被内缩成「两端内陷」。
-        val maxInset = bandFeatherMaxInsetPx(featherDp.dpToPx(), bandHeight, bounds.width)
-        featherBandPasses(featherDp).forEach { pass ->
-            val passArgb = pass.argb(underline.colorArgb)
-            if (Color.alpha(passArgb) <= 0) return@forEach
-            val inset = pass.insetFactor * maxInset
-            paint.color = passArgb
-            canvas.drawRoundRect(
-                bounds.left + inset,
-                bandTop + inset,
-                bounds.right - inset,
-                bounds.bottom - inset,
-                // 内缩会吃掉圆角：两者同步收缩，否则内缩过头后圆角互相重叠
-                (cornerRadius - inset).coerceAtLeast(0f),
-                (cornerRadius - inset).coerceAtLeast(0f),
-                paint,
-            )
-        }
+        if (bandHeight <= 0f || bounds.right <= bounds.left) return
+        val cornerRadius = READER_UNDERLINE_CORNER_DP.dpToPx()
+        .coerceAtMost(bandHeight / 2f)
+        val color = underline.colorArgb
+
+        val feather = if (underline.featherEffective) featherPx else 0f
+        // 垂直：上下两边缘化开，中间保持实心
+        val (vPos, vAlpha) = featherEdgeStops(feather, bandHeight)
+        val vertical = LinearGradient(
+            0f, bandTop, 0f, bounds.bottom,
+            featherEdgeColors(vAlpha, color),
+            vPos,
+            Shader.TileMode.CLAMP,
+        )
+
+        // 水平：两端化开，宽度与垂直同量（各向同性）；`featherEdgeStops` 内部已把
+        // 上升沿封顶到该维度长度的一半，短段因此保得住中间实心段
+        val (hPos, hAlpha) = featherEdgeStops(feather, bounds.width)
+        val horizontal = LinearGradient(
+            bounds.left, 0f, bounds.right, 0f,
+            featherEdgeColors(hAlpha, color),
+            hPos,
+            Shader.TileMode.CLAMP,
+        )
+
+        // DST_IN 让两个方向的 alpha 相乘、颜色取 dst（两者都用同一线色）
+        paint.shader = ComposeShader(horizontal, vertical, PorterDuff.Mode.DST_IN)
+        canvas.drawRoundRect(
+            bounds.left,
+            bandTop,
+            bounds.right,
+            bounds.bottom,
+            cornerRadius,
+            cornerRadius,
+            paint,
+        )
+        paint.shader = null
     }
 }
+
 
 internal class ReaderRuleDrawCommand(private val rule: ReaderElement.Rule) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

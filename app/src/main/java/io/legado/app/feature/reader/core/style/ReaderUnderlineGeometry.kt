@@ -94,28 +94,8 @@ fun underlineCornerRadiusPx(strokeWidthPx: Float, cornerRadiusPx: Float): Float 
     if (cornerRadiusPx <= 0f) 0f
     else cornerRadiusPx.coerceAtMost(strokeWidthPx.coerceAtLeast(1f) / 2f)
 
-/** 每 1dp 羽化半径对应的叠加趟数。 */
-const val READER_FEATHER_PASSES_PER_DP = 3f
-
-/** 羽化趟数下限：半径很小时也至少这么多趟，否则看不出柔边。 */
-const val READER_FEATHER_MIN_PASSES = 6
-
-/** 羽化趟数上限：半径很大时封顶，避免每帧几十趟描边。 */
-const val READER_FEATHER_MAX_PASSES = 24
-
 /**
- * 荧光色带（填充块）逐趟叠加用的高斯 sigma。
- *
- * **与描边的 [READER_FEATHER_PROFILE_SIGMA] 是两回事**，别统一：色带是多趟叠加，
- * 每趟内部 alpha 均匀、需要更陡的权重才压得住台阶；描边已经换成
- * `ComposeShader` 一次插值的连续剖面，sigma 直接决定边缘的圆润度。
- */
-const val READER_FEATHER_SIGMA = 0.55f
-
-/**
- * 描边羽化剖面的高斯 sigma（相对羽化半径）。
- *
- * 与 [READER_FEATHER_SIGMA] 分开的原因同上——两者服务不同的合成方式。
+ * 描边羽化剖面的高斯 sigma（相对羽化半径）。7 级插值用，级数固定所以不再有「趟数」概念。
  */
 const val READER_FEATHER_PROFILE_SIGMA = 0.35f
 
@@ -144,11 +124,6 @@ val READER_FEATHER_PROFILE_WEIGHTS = floatArrayOf(1f, 0.94f, 0.76f, 0.52f, 0.28f
  */
 const val READER_EDGE_FADE_SEG_RATIO = 0.25f
 
-/** 羽化叠加趟数。 */
-fun featherPassCount(featherDp: Float): Int =
-    (featherDp * READER_FEATHER_PASSES_PER_DP).toInt()
-        .coerceIn(READER_FEATHER_MIN_PASSES, READER_FEATHER_MAX_PASSES)
-
 /**
  * 羽化后的单侧扩散量（px）：线芯半宽 + 羽化半径。
  *
@@ -168,80 +143,47 @@ fun edgeFadeRatio(featherPx: Float, segWidthPx: Float): Float {
     return (featherPx / segWidthPx).coerceAtMost(READER_EDGE_FADE_SEG_RATIO)
 }
 
-/** 羽化的单趟高斯权重：[d] 为该趟离中心的归一化距离，0 最实、1 最虚。 */
-fun featherGaussian(d: Float, sigma: Float = READER_FEATHER_SIGMA): Float =
-    kotlin.math.exp(-(d * d) / (2f * sigma * sigma)).toFloat()
-
 /**
- * 一趟羽化叠加后的 ARGB。
+ * 荧光色带（填充块）的边缘柔化色标：`上升沿 + 平台 + 下降沿`。
  *
- * 正文与预览必须算得一模一样，否则同一条规则在两处颜色不同。羽化是**层层叠加**的
- * （从最虚画到最实），哪怕每趟只差一个 alpha 分量，累积到 7~24 趟后也是肉眼可辨的
- * 深浅差。这里统一做 8bit 量化——Android 的 [android.graphics.LinearGradient] 只吃
- * int 色标，预览即便用 Compose 的 float alpha，中间 stop 交给 shader 时也要量化
- * 一次；与其两边各量化一次（方式还可能不同），不如在这里定死。
- */
-fun featherPassArgb(colorArgb: Int, d: Float, sigma: Float = READER_FEATHER_SIGMA): Int {
-    val baseAlpha = (colorArgb ushr 24) and 0xFF
-    val alpha = (baseAlpha * featherGaussian(d, sigma)).toInt().coerceIn(0, 255)
-    return (colorArgb and 0x00FFFFFF) or (alpha shl 24)
-}
-
-/**
- * 荧光色带的边缘柔化趟次：向内收缩 + alpha 递减的多趟叠加，硬边化成渐变。
+ * 与描边的**中心对称**剖面形状不同 —— 这是两种东西：
+ * - 描边是「一条线」，模糊后中心最浓、上下左右对称衰减
+ * - 色带是「一块填充」，羽化只该软化边缘、中间仍是实心色块
  *
- * 描边羽化是「向外加粗 + 端点渐隐」，色带柔化是「向内收缩」，两者共用同一份
- * 高斯权重与 8bit alpha 量化，所以同半径下手感一致。
+ * 上升沿宽度 = 羽化半径，按 [extentPx] 归一化后封顶到 0.5：再宽中间平台就没了，
+ * 色带退化成「中间一点、两边全虚」，模糊调大反而看不出差别（旧的多趟内缩实现正是
+ * 这么塌的，所以「模糊 1」和「模糊 10」看起来一样）。
+ *
+ * 返回 (positions, alphas)，都相对该维度的长度，交给 `LinearGradient` 一次插值。
  */
-fun featherBandPasses(featherDp: Float): List<FeatherPass> {
-    if (featherDp <= 0f) return listOf(FeatherPass(0f))
-    val passes = featherPassCount(featherDp)
-    // **从最外画到最实**（distance 由 1 递减到 0），与描边羽化的 `for (i in passes downTo 0)`
-    // 同一个叠加顺序。反过来（先画最实的实心矩形、再叠更淡更大的矩形）会让外圈半透明
-    // 盖在实心核上，边界糊不掉，看上去就是一层层平铺的颜色而没有柔化。
-    return List(passes + 1) { index ->
-        FeatherPass(distance = (passes - index).toFloat() / passes)
+fun featherEdgeStops(featherPx: Float, extentPx: Float): Pair<FloatArray, FloatArray> {
+    val n = READER_FEATHER_PROFILE_POSITIONS.size
+    val rise = if (extentPx > 0f && featherPx > 0f) {
+        (featherPx / extentPx).coerceIn(0f, 0.5f)
+    } else {
+        0f
     }
+    val positions = FloatArray(n * 2)
+    val alphas = FloatArray(n * 2)
+    for (i in 0 until n) {
+        // 上升沿：位置 0 → rise，alpha 由最弱升到最强（权重表是中心最强，倒着取）
+        positions[i] = READER_FEATHER_PROFILE_POSITIONS[i] * rise
+        alphas[i] = READER_FEATHER_PROFILE_WEIGHTS[n - 1 - i]
+        // 下降沿：位置 1-rise → 1，alpha 由最强降到最弱；中间自然连成平台
+        positions[n + i] = (1f - rise) + READER_FEATHER_PROFILE_POSITIONS[i] * rise
+        alphas[n + i] = READER_FEATHER_PROFILE_WEIGHTS[i]
+    }
+    return positions to alphas
 }
 
-/**
- * 色带柔化的最大内缩量（px）。
- *
- * 内缩量按羽化半径取，但要受色带自身尺寸约束：荧光色带只有半行高（约 12dp），
- * 5dp 羽化直接全额内缩会吃掉 40% 高度，看起来像「色带变窄」而不是「边界化开」。
- * 这里再按短边封一次顶。
- *
- * **还要按段宽封顶。** 短边约束只看垂直方向，可内缩是四边一起收的：1 个字的高亮
- * 段宽约 15dp，两端各内缩 5dp 就是实心区只剩 5dp，整条色带看着像「两端内陷了
- * 一截」。`bandWidth / 4` 保证内缩合计不超过段宽一半，实心区始终留得住。
- */
-fun bandFeatherMaxInsetPx(featherPx: Float, bandHeightPx: Float, bandWidthPx: Float): Float {
-    if (featherPx <= 0f) return 0f
-    val shortSide = minOf(bandHeightPx, bandWidthPx)
-    return minOf(featherPx, shortSide / 2f, bandWidthPx / 4f)
-}
-
-/**
- * 边缘柔化的一趟。
- *
- * 用 [distance]（0 最实、1 最虚）作为唯一状态，内缩比例与 alpha 都由它派生，
- * 保证「收缩多少」和「淡多少」不会各走一套。
- */
-data class FeatherPass(
-    val distance: Float,
-) {
-    /**
-     * 相对柔化半径的内缩比例，**与 [distance] 反向**。
-     *
-     * 叠加顺序是从最虚画到最实（distance 由 1 递减到 0），所以内缩必须同步反向：
-     * 最虚那一趟不内缩（铺满整个色带），最实那一趟内缩到最深（收成核心）。
-     * 两者同向会自我抵消——最后画的那趟既满不透明又铺满整个色带，把前面全盖住，
-     * 结果是一块没有柔边的实心矩形。
-     */
-    val insetFactor: Float get() = 1f - distance
-
-    /** 该趟叠加后的 ARGB，与描边羽化共用同一个 8bit 量化口径。 */
-    fun argb(colorArgb: Int): Int = featherPassArgb(colorArgb, distance)
+/** 把 [featherEdgeStops] 的 alpha 乘上基色 alpha，量化成 8bit 色标。 */
+fun featherEdgeColors(alphas: FloatArray, colorArgb: Int): IntArray {
+    val rgb = colorArgb and 0x00FFFFFF
+    val alpha = (colorArgb ushr 24) and 0xFF
+    return IntArray(alphas.size) { i ->
+        val a = (alpha * alphas[i]).toInt().coerceIn(0, 255)
+        rgb or (a shl 24)
+    }
 }
 
 /** 把 [widthPx] 均摊成整数个半波后的半波数。 */

@@ -121,120 +121,65 @@ class ReaderUnderlineGeometryTest {
         }
     }
 
+
     @Test
-    fun `feather pass count scales with radius and stays bounded`() {
-        assertEquals(READER_FEATHER_MIN_PASSES, featherPassCount(0.1f))
-        assertEquals(READER_FEATHER_MAX_PASSES, featherPassCount(100f))
-        assertTrue(featherPassCount(2f) in READER_FEATHER_MIN_PASSES..READER_FEATHER_MAX_PASSES)
+    fun `feather spread is the core half width plus the radius`() {
+        assertEquals(2f + 5f, featherSpreadPx(4f, 5f), 1e-4f)
+        // 亚像素线宽抬到 1px 后再折半
+        assertEquals(0.5f, featherSpreadPx(0.2f, 0f), 1e-4f)
     }
 
     @Test
-    fun `feather gaussian falls off from centre`() {
-        assertEquals(1f, featherGaussian(0f), 1e-6f)
-        val outer = featherGaussian(1f)
-        val middle = featherGaussian(0.5f)
-        assertTrue("越靠外越透明", outer < middle)
+    fun `feather profile is monotonically decreasing from the centre`() {
+        val weights = READER_FEATHER_PROFILE_WEIGHTS
+        assertEquals(1f, weights.first(), 1e-6f)
+        weights.zipWithNext().forEach { (a, b) -> assertTrue("应递减", a > b) }
+        // 边缘保留一点 alpha，不能掉到 0：端点全透明会让边界看着被切掉
+        assertTrue(weights.last() > 0f)
     }
 
     @Test
-    fun `feather pass colour is quantised to eight bits`() {
-        // 预览此前用 float alpha、正文用 8bit 截断，羽化是层层叠加的，
-        // 每趟差一个分量累积 7~24 趟后就是肉眼可辨的深浅差
-        val opaque = 0xFF3366CC.toInt()
-        assertEquals(opaque, featherPassArgb(opaque, 0f))
-        assertEquals(0xFF3366CC.toInt(), featherPassArgb(opaque, 0f))
-
-        // d=1 远离中心，alpha 应被压到很低
-        val faint = featherPassArgb(opaque, 1f)
-        assertTrue("外圈应明显变淡", (faint ushr 24) and 0xFF < 80)
-
-        // 结果必须落在 8bit 范围内，不能出现负数或溢出
-        (0..10).forEach { i ->
-            val d = i / 10f
-            listOf(0x00FFFFFF, 0xFFFFFFFF.toInt(), 0x01020304).forEach { c ->
-                val argb = featherPassArgb(c, d)
-                assertTrue("alpha 越界: ${argb ushr 24}", (argb ushr 24) in 0..255)
-                assertEquals("rgb 不该被改动", c and 0x00FFFFFF, argb and 0x00FFFFFF)
-            }
-        }
+    fun `edge fade ratio is capped so short segments keep a solid core`() {
+        assertEquals(0f, edgeFadeRatio(0f, 200f), 0f)
+        // 长段：名义值就是羽化半径占比
+        assertEquals(0.05f, edgeFadeRatio(5f, 100f), 1e-4f)
+        // 短段：封顶 0.25，两端淡出合计不超过段宽一半
+        assertEquals(0.25f, edgeFadeRatio(30f, 45f), 1e-4f)
     }
 
     @Test
-    fun `feather pass colour keeps the source alpha`() {
-        // 半透明源色：羽化只是衰减 alpha，不会把它抬回不透明
-        val translucent = 0x803366CC
-        val core = featherPassArgb(translucent, 0f)
-
-        assertEquals(0x80, (core ushr 24) and 0xFF)
-        assertEquals(0x003366CC, core and 0x00FFFFFF)
+    fun `band edge stops keep a solid plateau in the middle`() {
+        val (positions, alphas) = featherEdgeStops(30f, 40f)
+        assertEquals(positions.size, alphas.size)
+        // 上升沿封顶到 0.5：再宽中间平台就没了，模糊调大反而看不出差别
+        assertEquals(0f, positions.first(), 1e-6f)
+        assertEquals(1f, positions.last(), 1e-6f)
+        assertEquals(0.5f, (positions.indices).map { positions[it] }.sorted()[positions.size / 2], 1e-4f)
+        // 两端最弱、中间最强（权重表倒着取）
+        assertTrue(alphas.first() < alphas.max())
+        assertEquals(1f, alphas.max(), 1e-6f)
     }
 
     @Test
-    fun `band feather collapses to a single opaque pass without radius`() {
-        val passes = featherBandPasses(0f)
-
-        assertEquals(1, passes.size)
-        assertEquals(0f, passes.single().distance, 0f)
-        // 无羽化时不内缩，色带保持原尺寸
-        assertEquals(0f, passes.single().insetFactor, 0f)
-        assertEquals(0xFFFFFFFF.toInt(), passes.single().argb(0xFFFFFFFF.toInt()))
+    fun `band edge stops follow the radius instead of collapsing`() {
+        // 旧实现按 bandHeight/2 封顶内缩量，模糊大到一定程度色带中间被吃空，
+        // 于是「模糊 1」和「模糊 10」画出来一样。现在上升沿随半径单调变宽。
+        val small = featherEdgeStops(3f, 40f).first[READER_FEATHER_PROFILE_POSITIONS.size - 1]
+        val large = featherEdgeStops(15f, 40f).first[READER_FEATHER_PROFILE_POSITIONS.size - 1]
+        assertTrue("上升沿应随半径变宽：$small vs $large", large > small)
     }
 
     @Test
-    fun `band feather insets opposite to the draw order`() {
-        val passes = featherBandPasses(2f)
-        val color = 0xFF3366CC.toInt()
-
-        assertEquals(featherPassCount(2f) + 1, passes.size)
-        // 与描边羽化的 `for (i in passes downTo 0)` 同一顺序：先最虚，最后最实
-        assertEquals(1f, passes.first().distance, 1e-6f)
-        assertEquals(0f, passes.last().distance, 0f)
-        // 内缩必须与叠加顺序反向：最虚那趟铺满色带，最实那趟收成核心。
-        // 同向会自我抵消——最后画的那趟满不透明又铺满整个色带，把前面全盖住。
-        assertEquals(0f, passes.first().insetFactor, 1e-6f)
-        assertEquals(1f, passes.last().insetFactor, 1e-6f)
-        // alpha 仍是最虚 → 最实
-        assertTrue(passes.first().argb(color) < passes.last().argb(color))
+    fun `band edge colours keep the source alpha`() {
+        val alphas = floatArrayOf(0f, 0.5f, 1f)
+        val colors = featherEdgeColors(alphas, 0x80FF0000.toInt())
+        assertEquals(0x00, colors[0] ushr 24 and 0xFF)
+        assertEquals(0x40, colors[1] ushr 24 and 0xFF)
+        assertEquals(0x80, colors[2] ushr 24 and 0xFF)
+        // RGB 全程保持基色
+        assertTrue(colors.all { (it and 0x00FFFFFF) == 0x00FF0000 })
     }
 
-    @Test
-    fun `band feather inset and alpha move in opposite directions`() {
-        val passes = featherBandPasses(2f)
-
-        passes.zipWithNext().forEach { (outer, inner) ->
-            assertTrue(
-                "越靠内应该内缩越多",
-                outer.insetFactor < inner.insetFactor,
-            )
-            assertTrue(
-                "越靠内应该越不透明",
-                outer.argb(0xFF3366CC.toInt()) < inner.argb(0xFF3366CC.toInt()),
-            )
-        }
-    }
-
-    @Test
-    fun `band feather inset is capped by the band short side`() {
-        // 半行高的色带配大羽化：内缩不能吃掉整条色带，否则是「变窄」而非柔化
-        assertEquals(0f, bandFeatherMaxInsetPx(0f, 36f, 200f), 0f)
-        assertEquals(9f, bandFeatherMaxInsetPx(9f, 36f, 200f), 1e-4f)
-        // 超过短边一半时封顶
-        assertEquals(18f, bandFeatherMaxInsetPx(40f, 36f, 200f), 1e-4f)
-    }
-
-    @Test
-    fun `band feather inset never eats more than half the band width`() {
-        // 内缩是四边一起收的，短边约束只看垂直方向。1 个字的高亮段宽约 45px、
-        // 羽化 15px，不按段宽封顶的话两端各内缩 15px、实心区只剩 15px，
-        // 整条色带看着像「两端内陷了一截」。
-        assertEquals(11.25f, bandFeatherMaxInsetPx(15f, 36f, 45f), 1e-4f)
-        // 超大羽化同样被段宽卡住（20 / 4 = 5）
-        assertEquals(5f, bandFeatherMaxInsetPx(40f, 36f, 20f), 1e-4f)
-        // 窄命中段：原先按短边取 6px，两端合计 12px 会把 12px 宽的段吃光
-        assertEquals(3f, bandFeatherMaxInsetPx(40f, 36f, 12f), 1e-4f)
-    }
-
-    @Test
     fun `strike ignores vertical offset because it sits at a fixed height ratio`() {
         val support = underlineControlSupport(6)
 

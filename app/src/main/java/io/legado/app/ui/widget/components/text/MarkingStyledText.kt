@@ -1,6 +1,9 @@
 package io.legado.app.ui.widget.components.text
 
+import android.graphics.ComposeShader
 import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.PorterDuff
 import android.graphics.Shader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -39,9 +42,9 @@ import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
 import io.legado.app.feature.reader.core.style.READER_WAVE_CONTROL_OFFSET_DP
 import io.legado.app.feature.reader.core.style.READER_WAVE_HALF_WAVE_DP
-import io.legado.app.feature.reader.core.style.bandFeatherMaxInsetPx
-import io.legado.app.feature.reader.core.style.featherBandPasses
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
+import io.legado.app.feature.reader.core.style.featherEdgeColors
+import io.legado.app.feature.reader.core.style.featherEdgeStops
 import io.legado.app.feature.reader.core.style.scaledDashSegments
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.feature.reader.platform.ReaderSvgPathCache
@@ -291,29 +294,36 @@ internal fun DrawScope.drawFluorescentBand(
 ) {
     val bandTop = top + (bottom - top) * READER_HALF_HIGHLIGHT_TOP_RATIO
     val bandHeight = (bottom - bandTop).coerceAtLeast(0f)
+    if (bandHeight <= 0f || right <= left) return
     // 两端统一收小圆角，与正文 ReaderHalfHighlightDrawCommand 同一口径；没有开关
     val radius = READER_UNDERLINE_CORNER_DP.dp.toPx().coerceAtMost(bandHeight / 2f)
-    val baseArgb = color.toArgb()
-    // 边缘柔化：同一矩形从最虚画到最实（顺序与描边羽化一致），靠 alpha 叠加化开边界。
-    // 内缩量按羽化半径取，并受色带短边与段宽约束，避免半行高的色带被吃掉一大半、
-    // 以及窄命中段被内缩成「两端内陷」。
-    val maxInset = bandFeatherMaxInsetPx(feather.dp.toPx(), bandHeight, right - left)
-    featherBandPasses(feather).forEach { pass ->
-        // 每趟颜色走 pass.argb —— 与正文共用同一个 8bit 量化口径
-        val passColor = Color(pass.argb(baseArgb))
-        if (passColor.alpha <= 0f) return@forEach
-        val inset = pass.insetFactor * maxInset
-        // 圆头开着时半径 = 色带高度一半，内缩会吃掉半径：两者同步收缩才保持端部半圆形状
-        val passRadius = (radius - inset).coerceAtLeast(0f)
-        drawRoundRect(
-            color = passColor,
-            topLeft = Offset(left + inset, bandTop + inset),
-            size = Size(
-                (right - left) - inset * 2f,
-                bandHeight - inset * 2f,
-            ),
-            cornerRadius = CornerRadius(passRadius, passRadius),
+    val featherPx = feather.dp.toPx()
+
+    // 边缘柔化与正文同一套剖面（featherEdgeStops）：上下两边缘与两端化开，中间保持
+    // 实心色块。不用多趟叠加 —— 叠加是 N 级阶梯，且大模糊半径会把色带中间吃空，
+    // 于是「模糊 1」和「模糊 10」看起来一样。
+    val (vPos, vAlpha) = featherEdgeStops(featherPx, bandHeight)
+    val (hPos, hAlpha) = featherEdgeStops(featherPx, right - left)
+    val argb = color.toArgb()
+
+    // DST_IN 让两个方向的 alpha 相乘、颜色取 dst（两者都用同一线色）
+    drawIntoCanvas { canvas ->
+        val vertical = LinearGradient(
+            0f, bandTop, 0f, bottom,
+            featherEdgeColors(vAlpha, argb),
+            vPos,
+            Shader.TileMode.CLAMP,
         )
+        val horizontal = LinearGradient(
+            left, 0f, right, 0f,
+            featherEdgeColors(hAlpha, argb),
+            hPos,
+            Shader.TileMode.CLAMP,
+        )
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = ComposeShader(horizontal, vertical, PorterDuff.Mode.DST_IN)
+        }
+        canvas.drawRoundRect(left, bandTop, right, bottom, radius, radius, paint)
     }
 }
 
