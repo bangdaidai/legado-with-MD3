@@ -126,7 +126,7 @@ fun ColorPickerSheet(
                     icon = Icons.Default.Restore,
                     contentDescription = stringResource(R.string.reset),
                 )
-                // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色，确认后直接定稿
+                // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色，松手回填到面板
                 MediumTonalButton(
                     onClick = {
                         val window = context.findActivity()?.window ?: return@MediumTonalButton
@@ -255,12 +255,11 @@ fun ColorPickerSheet(
     eyedropperBitmap?.let { bitmap ->
         EyedropperOverlay(
             snapshot = bitmap,
-            // 取色即定稿：胶囊上确认后直接回填并关闭弹层，
-            // 不再要求用户回到色板面板点第二次保存
-            onConfirm = { argb ->
+            // 覆盖层松手即回填：颜色只写进面板的预览与十六进制输入框，
+            // 由用户继续用色板/色块调整或点保存，覆盖层自己不做确认
+            onPicked = { argb ->
+                applyColor(Color(argb))
                 eyedropperBitmap = null
-                onColorSelected(argb)
-                onDismissRequest()
             },
             onDismiss = { eyedropperBitmap = null },
         )

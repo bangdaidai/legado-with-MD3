@@ -4,26 +4,14 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,8 +53,10 @@ private const val LoupeZoom = 3f
 
 /**
  * 全屏取色覆盖层：展示一张预先抓好的窗口冻结快照，用户在快照上拖动取色，
- * 确认后把颜色交回调色弹层定稿——胶囊上的确认即最终确认，
- * 调用方无需再让用户手动保存一次。
+ * **松手即把颜色带回取色弹层面板**，由用户继续用面板调整或点保存——覆盖层内不再有确认按钮。
+ *
+ * 覆盖层上没有任何可点控件，取消只走系统返回键（`onDismissRequest`），
+ * 面板那一侧的状态完全不受影响。
  *
  * 快照由调用方用 PixelCopy 从 Activity 窗口抓取——取色弹层自身跑在独立窗口，
  * 不会出现在快照里，因此这里展示的就是弹层背后未被遮挡的真实页面，
@@ -75,7 +65,7 @@ private const val LoupeZoom = 3f
 @Composable
 fun EyedropperOverlay(
     snapshot: Bitmap,
-    onConfirm: (Int) -> Unit,
+    onPicked: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val imageBitmap = remember { snapshot.asImageBitmap() }
@@ -119,6 +109,8 @@ fun EyedropperOverlay(
                             change.consume()
                             sampleAt(change.position)
                         },
+                        // 松手才交颜色：拖动过程中只更新放大镜与取样点
+                        onDragEnd = { pickedColor?.let { onPicked(it.toArgb()) } },
                     )
                 }
         ) {
@@ -129,69 +121,20 @@ fun EyedropperOverlay(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            val color = pickedColor
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 24.dp),
-            ) {
-                if (color == null) {
-                    Text(
-                        text = stringResource(R.string.color_eyedropper_hint),
-                        fontSize = 14.sp,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(LegadoTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+            // 还没碰到屏幕时给一句操作提示；一旦开始拖动就只剩放大镜，其余全部让位给取色
+            if (pickedColor == null) {
+                Text(
+                    text = stringResource(R.string.color_eyedropper_hint),
+                    fontSize = 14.sp,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 24.dp)
                         .clip(RoundedCornerShape(50))
                         .background(LegadoTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f))
-                        .padding(horizontal = 4.dp),
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = stringResource(R.string.cancel),
-                            tint = LegadoTheme.colorScheme.onSurface,
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(color ?: Color.Transparent)
-                            .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = color?.toArgb()
-                            ?.let { "#${Integer.toHexString(it).uppercase().padStart(8, '0')}" }
-                            ?: "——",
-                        fontSize = 14.sp,
-                        color = LegadoTheme.colorScheme.onSurface,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = { color?.let { onConfirm(it.toArgb()) } },
-                        enabled = color != null,
-                    ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = stringResource(R.string.confirm),
-                            tint = LegadoTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
 
             val touch = touchPoint
@@ -206,6 +149,7 @@ fun EyedropperOverlay(
                 centerY = centerY.coerceIn(loupeSizePx / 2, rootSize.height - loupeSizePx / 2)
 
                 val focusColor = LegadoTheme.colorScheme.primary
+                val sampleColor = pickedColor ?: Color.White
                 Canvas(
                     modifier = Modifier
                         .size(LoupeSize)
@@ -221,6 +165,7 @@ fun EyedropperOverlay(
                         center = snapshotPoint ?: IntOffset.Zero,
                         scale = snapshot.width.toFloat() / rootSize.width,
                         focusColor = focusColor,
+                        sampleColor = sampleColor,
                     )
                 }
             }
@@ -228,12 +173,18 @@ fun EyedropperOverlay(
     }
 }
 
-/** 从快照中取放大镜中心附近 1/zoom 区域放大绘制，叠加白圈描边与主题色取色十字线 */
+/**
+ * 从快照中取放大镜中心附近 1/zoom 区域放大绘制。
+ *
+ * 外圈描边用**当前取样色**，跟着取样点实时变；圈内侧保留一道半透明黑细线，
+ * 让浅色取样在放大的图像内容上也能分出边界。中心十字线走主题色。
+ */
 private fun DrawScope.drawLoupe(
     imageBitmap: ImageBitmap,
     center: IntOffset,
     scale: Float,
     focusColor: Color,
+    sampleColor: Color,
 ) {
     val radius = size.minDimension / 2f
     val srcHalf = (radius / LoupeZoom * scale).roundToInt().coerceAtLeast(1)
@@ -255,9 +206,10 @@ private fun DrawScope.drawLoupe(
             filterQuality = FilterQuality.High,
         )
     }
-    val ringWidth = 3.dp.toPx()
+    // 外圈只往内长：描边中心线固定在 radius − ringWidth/2，外沿始终贴着 96dp 镜子边缘
+    val ringWidth = 6.dp.toPx()
     drawCircle(
-        color = Color.White,
+        color = sampleColor,
         radius = radius - ringWidth / 2,
         style = Stroke(width = ringWidth),
     )
