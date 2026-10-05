@@ -886,7 +886,6 @@
     <string name="more_config_section_gesture">Gestures &amp; keys</string>
     <string name="more_config_section_source">Book source &amp; TOC</string>
     <string name="more_config_section_display">Display &amp; others</string>
-    <string name="more_config_section_typography">Text layout</string>
     <string name="header">Header</string>
     <string name="main_body">Content</string>
     <string name="footer">Footer</string>

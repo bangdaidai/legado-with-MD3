@@ -774,7 +774,6 @@
     <string name="more_config_section_gesture">手勢與按鍵</string>
     <string name="more_config_section_source">書源與目錄</string>
     <string name="more_config_section_display">顯示與其它</string>
-    <string name="more_config_section_typography">正文排版</string>
     <string name="header">頁眉</string>
     <string name="main_body">正文</string>
     <string name="footer">頁腳</string>

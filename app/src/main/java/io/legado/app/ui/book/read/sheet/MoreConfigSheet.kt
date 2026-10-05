@@ -117,18 +117,6 @@ fun MoreConfigSheet(
                 },
             )
 
-            // 正文排版
-            SectionTitle(stringResource(R.string.more_config_section_typography))
-            TypographySettings(
-                preferences = preferences,
-                onAdaptSpecialStyleChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AdaptSpecialStyle(it)))
-                },
-                onUseZhLayoutChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.UseZhLayout(it)))
-                },
-            )
-
             // 划词与朗读
             SectionTitle(stringResource(R.string.more_config_section_selection))
             SelectionSettings(
@@ -195,6 +183,12 @@ fun MoreConfigSheet(
                 onShowMenuIconChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowMenuIcon(it)))
                 },
+                onAdaptSpecialStyleChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AdaptSpecialStyle(it)))
+                },
+                onUseZhLayoutChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.UseZhLayout(it)))
+                },
                 onAutoSuggestDayNightChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AutoSuggestDayNight(it)))
                 },
@@ -259,25 +253,6 @@ private fun ScreenSettings(
     TinyClickableSettingItem(
         title = stringResource(R.string.eye_protection),
         onClick = onOpenEyeProtectionConfig,
-    )
-}
-
-/** 正文排版：都是书源 HTML 怎么排的开关，跟屏幕本身无关，故与 [ScreenSettings] 分开。 */
-@Composable
-private fun TypographySettings(
-    preferences: ReadPreferences,
-    onAdaptSpecialStyleChange: (Boolean) -> Unit,
-    onUseZhLayoutChange: (Boolean) -> Unit,
-) {
-    TinySwitchSettingItem(
-        title = stringResource(R.string.adapt_special_style),
-        checked = preferences.adaptSpecialStyle,
-        onCheckedChange = onAdaptSpecialStyleChange,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.use_zh_layout),
-        checked = preferences.useZhLayout,
-        onCheckedChange = onUseZhLayoutChange,
     )
 }
 
@@ -497,12 +472,18 @@ private fun SourceSettings(
     )
 }
 
+/**
+ * 显示、排版与零散开关的合组：正文排版（书源 HTML 怎么排）单开一组只有两项，与显示类
+ * 放一起更省一次滚动，故合并在此。
+ */
 @Composable
 private fun DisplaySettings(
     preferences: ReadPreferences,
     onOptimizeRenderChange: (Boolean) -> Unit,
     onShowReadTitleAdditionChange: (Boolean) -> Unit,
     onShowMenuIconChange: (Boolean) -> Unit,
+    onAdaptSpecialStyleChange: (Boolean) -> Unit,
+    onUseZhLayoutChange: (Boolean) -> Unit,
     onAutoSuggestDayNightChange: (Boolean) -> Unit,
     onReadingAnchorEnabledChange: (Boolean) -> Unit,
 ) {
@@ -510,6 +491,18 @@ private fun DisplaySettings(
         title = stringResource(R.string.enable_optimize_render),
         checked = preferences.optimizeRender,
         onCheckedChange = onOptimizeRenderChange,
+    )
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.adapt_special_style),
+        checked = preferences.adaptSpecialStyle,
+        onCheckedChange = onAdaptSpecialStyleChange,
+    )
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.use_zh_layout),
+        checked = preferences.useZhLayout,
+        onCheckedChange = onUseZhLayoutChange,
     )
 
     TinySwitchSettingItem(
