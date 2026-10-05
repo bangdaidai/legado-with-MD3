@@ -74,6 +74,7 @@ import io.legado.app.feature.reader.ReaderBackgroundSurface
 import io.legado.app.feature.reader.ReaderCanvasSurface
 import io.legado.app.feature.reader.core.gesture.ReaderTapActionGrid
 import io.legado.app.feature.reader.core.model.readerBackgroundAlpha
+import io.legado.app.feature.reader.core.selection.ReaderSelectionUnit
 import io.legado.app.feature.reader.core.transition.ReaderPageTurnSpeed
 import io.legado.app.feature.reader.core.transition.ReaderTransitionMode
 import io.legado.app.feature.reader.core.transition.ReaderViewportLayerPolicy
@@ -752,6 +753,7 @@ fun ReadBookRouteScreen(
                 onElementClick = controller::onComposeReaderElementClick,
                 onElementLongPress = controller::onComposeReaderElementLongPress,
                 selectionEnabled = readPreferences.selectText,
+                selectionUnit = ReaderSelectionUnit.fromPreference(readPreferences.selectTextUnit),
                 selectionHapticsEnabled = readPreferences.selectVibrator,
                 tapActionGrid = ReaderTapActionGrid.fromLegacyValues(
                     readPreferences.clickActionTL,

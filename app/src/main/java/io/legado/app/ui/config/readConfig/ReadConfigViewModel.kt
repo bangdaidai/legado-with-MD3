@@ -139,6 +139,7 @@ private fun ReadConfigIntent.toSettingsTransform(): (ReadSettings) -> ReadSettin
     is ReadConfigIntent.ReadingAnchorChanged -> { settings -> settings.copy(readingAnchorEnabled = value) }
     is ReadConfigIntent.ReadAloudDetachReminderChanged -> { settings -> settings.copy(readAloudDetachReminderEnabled = value) }
     is ReadConfigIntent.SelectTextChanged -> { settings -> settings.copy(selectText = value) }
+    is ReadConfigIntent.SelectTextUnitChanged -> { settings -> settings.copy(selectTextUnit = value) }
     is ReadConfigIntent.NoAnimScrollPageChanged -> { settings -> settings.copy(noAnimScrollPage = value) }
     is ReadConfigIntent.ClickImgWayChanged -> { settings -> settings.copy(clickImgWay = value) }
     is ReadConfigIntent.OptimizeRenderChanged -> { settings -> settings.copy(optimizeRender = value) }
@@ -210,6 +211,7 @@ private fun ReadSettings.toUiState(
         readingAnchorEnabled = readingAnchorEnabled,
         readAloudDetachReminderEnabled = readAloudDetachReminderEnabled,
         selectText = selectText,
+        selectTextUnit = selectTextUnit,
         noAnimScrollPage = noAnimScrollPage,
         clickImgWay = clickImgWay,
         optimizeRender = optimizeRender,

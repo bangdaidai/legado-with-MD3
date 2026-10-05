@@ -8,6 +8,14 @@
         <item>雙擊</item>
     </string-array>
 
+    <string-array name="select_text_unit_title">
+        <item>按字</item>
+        <item>按詞</item>
+        <item>按句</item>
+        <item>按行</item>
+        <item>按段</item>
+    </string-array>
+
     <string-array name="book_type">
         <item>文本</item>
         <item>音頻</item>

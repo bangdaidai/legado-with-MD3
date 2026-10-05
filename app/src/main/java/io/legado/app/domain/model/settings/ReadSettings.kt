@@ -42,6 +42,8 @@ data class ReadSettings(
     val readingAnchorEnabled: Boolean = true,
     val readAloudDetachReminderEnabled: Boolean = false,
     val selectText: Boolean = true,
+    /** 长按选区自动扩展的粒度：`0` 按字 / `1` 按词 / `2` 按句 / `3` 按行 / `4` 按段。 */
+    val selectTextUnit: String = "1",
     val noAnimScrollPage: Boolean = false,
     val clickImgWay: String = "2",
     val optimizeRender: Boolean = false,

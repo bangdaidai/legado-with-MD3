@@ -119,12 +119,51 @@ fun MoreConfigSheet(
                 },
             )
 
-            // Other
-            SectionTitle(stringResource(R.string.other))
-            OtherSettings(
+            // 划词与朗读
+            SectionTitle(stringResource(R.string.more_config_section_selection))
+            SelectionSettings(
                 preferences = preferences,
+                onSelectTextChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectText(it)))
+                },
+                onSelectTextUnitChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectionUnit(it)))
+                },
+                onOpenTextSelectMenuConfig = onOpenTextSelectMenuConfig,
+                onReadAloudDetachReminderEnabledChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadAloudDetachReminderEnabled(it)))
+                },
+            )
+
+            // 手势与按键
+            SectionTitle(stringResource(R.string.more_config_section_gesture))
+            GestureSettings(
+                preferences = preferences,
+                onOpenClickRegionalConfig = onOpenClickRegionalConfig,
+                onClickImgWayChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ClickImgWay(it)))
+                },
                 onSliderVibratorChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SliderVibrator(it)))
+                },
+                onSelectVibratorChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectVibrator(it)))
+                },
+                onOpenPageKeyConfig = onOpenPageKeyConfig,
+                onDisableReturnKeyChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.DisableReturnKey(it)))
+                },
+            )
+
+            // 书源与目录
+            SectionTitle(stringResource(R.string.more_config_section_source))
+            SourceSettings(
+                preferences = preferences,
+                onAutoChangeSourceChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AutoChangeSource(it)))
+                },
+                onDefaultSourceChangeAllChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.DefaultSourceChangeAll(it)))
                 },
                 onUseNewTocSheetChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.UseNewTocSheet(it)))
@@ -132,47 +171,29 @@ fun MoreConfigSheet(
                 onMaxLengthWithNoTocChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.MaxLengthWithNoToc(it)))
                 },
-                onSelectVibratorChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectVibrator(it)))
-                },
-                onAutoChangeSourceChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AutoChangeSource(it)))
-                },
-                onDefaultSourceChangeAllChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.DefaultSourceChangeAll(it)))
-                },
-                onAutoSuggestDayNightChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AutoSuggestDayNight(it)))
-                },
-                onReadingAnchorEnabledChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadingAnchorEnabled(it)))
-                },
-                onReadAloudDetachReminderEnabledChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadAloudDetachReminderEnabled(it)))
-                },
-                onSelectTextChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SelectText(it)))
-                },
-                onNoAnimScrollPageChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.NoAnimScrollPage(it)))
-                },
+            )
+
+            // 显示与其它
+            SectionTitle(stringResource(R.string.more_config_section_display))
+            DisplaySettings(
+                preferences = preferences,
                 onOptimizeRenderChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.OptimizeRender(it)))
                 },
-                onClickImgWayChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ClickImgWay(it)))
-                },
-                onOpenClickRegionalConfig = onOpenClickRegionalConfig,
-                onOpenPageKeyConfig = onOpenPageKeyConfig,
-                onOpenTextSelectMenuConfig = onOpenTextSelectMenuConfig,
-                onDisableReturnKeyChange = {
-                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.DisableReturnKey(it)))
+                onNoAnimScrollPageChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.NoAnimScrollPage(it)))
                 },
                 onShowReadTitleAdditionChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowReadTitleAddition(it)))
                 },
                 onShowMenuIconChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ShowMenuIcon(it)))
+                },
+                onAutoSuggestDayNightChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.AutoSuggestDayNight(it)))
+                },
+                onReadingAnchorEnabledChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadingAnchorEnabled(it)))
                 },
             )
         }
@@ -330,35 +351,112 @@ private fun PageControlSettings(
 }
 
 @Composable
-private fun OtherSettings(
+private fun SelectionSettings(
     preferences: ReadPreferences,
-    onSliderVibratorChange: (Boolean) -> Unit,
-    onUseNewTocSheetChange: (Boolean) -> Unit,
-    onMaxLengthWithNoTocChange: (Int) -> Unit,
-    onSelectVibratorChange: (Boolean) -> Unit,
-    onAutoChangeSourceChange: (Boolean) -> Unit,
-    onDefaultSourceChangeAllChange: (Boolean) -> Unit,
-    onAutoSuggestDayNightChange: (Boolean) -> Unit,
-    onReadingAnchorEnabledChange: (Boolean) -> Unit,
-    onReadAloudDetachReminderEnabledChange: (Boolean) -> Unit,
     onSelectTextChange: (Boolean) -> Unit,
-    onNoAnimScrollPageChange: (Boolean) -> Unit,
-    onOptimizeRenderChange: (Boolean) -> Unit,
-    onClickImgWayChange: (String) -> Unit,
-    onOpenClickRegionalConfig: () -> Unit,
-    onDisableReturnKeyChange: (Boolean) -> Unit,
-    onOpenPageKeyConfig: () -> Unit,
+    onSelectTextUnitChange: (String) -> Unit,
     onOpenTextSelectMenuConfig: () -> Unit,
-    onShowReadTitleAdditionChange: (Boolean) -> Unit,
-    onShowMenuIconChange: (Boolean) -> Unit,
+    onReadAloudDetachReminderEnabledChange: (Boolean) -> Unit,
+) {
+    val selectionUnitEntries = stringArrayResource(R.array.select_text_unit_title)
+    val selectionUnitValues = stringArrayResource(R.array.select_text_unit_value)
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.selectText),
+        checked = preferences.selectText,
+        onCheckedChange = onSelectTextChange,
+    )
+
+    TinyDropdownSettingItem(
+        title = stringResource(R.string.select_text_unit),
+        selectedValue = preferences.selectTextUnit,
+        displayEntries = selectionUnitEntries,
+        entryValues = selectionUnitValues,
+        onValueChange = onSelectTextUnitChange,
+    )
+
+    TinyClickableSettingItem(
+        title = stringResource(R.string.edit_select_menu),
+        onClick = onOpenTextSelectMenuConfig,
+    )
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.read_aloud_detach_reminder),
+        description = stringResource(R.string.read_aloud_detach_reminder_summary),
+        checked = preferences.readAloudDetachReminderEnabled,
+        onCheckedChange = onReadAloudDetachReminderEnabledChange,
+    )
+}
+
+@Composable
+private fun GestureSettings(
+    preferences: ReadPreferences,
+    onOpenClickRegionalConfig: () -> Unit,
+    onClickImgWayChange: (String) -> Unit,
+    onSliderVibratorChange: (Boolean) -> Unit,
+    onSelectVibratorChange: (Boolean) -> Unit,
+    onOpenPageKeyConfig: () -> Unit,
+    onDisableReturnKeyChange: (Boolean) -> Unit,
 ) {
     val clickImageWayEntries = stringArrayResource(R.array.click_image_way_title)
     val clickImageWayValues = stringArrayResource(R.array.click_image_way_value)
+
+    TinyClickableSettingItem(
+        title = stringResource(R.string.click_regional_config),
+        onClick = onOpenClickRegionalConfig,
+    )
+
+    TinyDropdownSettingItem(
+        title = stringResource(R.string.click_image_way),
+        selectedValue = preferences.clickImgWay,
+        displayEntries = clickImageWayEntries,
+        entryValues = clickImageWayValues,
+        onValueChange = onClickImgWayChange,
+    )
 
     TinySwitchSettingItem(
         title = stringResource(R.string.enable_slider_vibrator),
         checked = preferences.sliderVibrator,
         onCheckedChange = onSliderVibratorChange,
+    )
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.enable_select_vibrator),
+        checked = preferences.selectVibrator,
+        onCheckedChange = onSelectVibratorChange,
+    )
+
+    TinyClickableSettingItem(
+        title = stringResource(R.string.custom_page_key),
+        onClick = onOpenPageKeyConfig,
+    )
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.disable_return_key),
+        checked = preferences.disableReturnKey,
+        onCheckedChange = onDisableReturnKeyChange,
+    )
+}
+
+@Composable
+private fun SourceSettings(
+    preferences: ReadPreferences,
+    onAutoChangeSourceChange: (Boolean) -> Unit,
+    onDefaultSourceChangeAllChange: (Boolean) -> Unit,
+    onUseNewTocSheetChange: (Boolean) -> Unit,
+    onMaxLengthWithNoTocChange: (Int) -> Unit,
+) {
+    TinySwitchSettingItem(
+        title = stringResource(R.string.auto_change_source),
+        checked = preferences.autoChangeSource,
+        onCheckedChange = onAutoChangeSourceChange,
+    )
+
+    TinySwitchSettingItem(
+        title = stringResource(R.string.read_change_all),
+        description = stringResource(R.string.read_change_all_s),
+        checked = preferences.defaultSourceChangeAll,
+        onCheckedChange = onDefaultSourceChangeAllChange,
     )
 
     TinySwitchSettingItem(
@@ -379,88 +477,53 @@ private fun OtherSettings(
         valueFormat = { it.roundToInt().toString() },
         onValueChange = { onMaxLengthWithNoTocChange(it.roundToInt()) },
     )
+}
+
+@Composable
+private fun DisplaySettings(
+    preferences: ReadPreferences,
+    onOptimizeRenderChange: (Boolean) -> Unit,
+    onNoAnimScrollPageChange: (Boolean) -> Unit,
+    onShowReadTitleAdditionChange: (Boolean) -> Unit,
+    onShowMenuIconChange: (Boolean) -> Unit,
+    onAutoSuggestDayNightChange: (Boolean) -> Unit,
+    onReadingAnchorEnabledChange: (Boolean) -> Unit,
+) {
+    TinySwitchSettingItem(
+        title = stringResource(R.string.enable_optimize_render),
+        checked = preferences.optimizeRender,
+        onCheckedChange = onOptimizeRenderChange,
+    )
 
     TinySwitchSettingItem(
-        title = stringResource(R.string.enable_select_vibrator),
-        checked = preferences.selectVibrator,
-        onCheckedChange = onSelectVibratorChange,
+        title = stringResource(R.string.no_anim_scroll_page),
+        checked = preferences.noAnimScrollPage,
+        onCheckedChange = onNoAnimScrollPageChange,
     )
+
     TinySwitchSettingItem(
-        title = stringResource(R.string.auto_change_source),
-        checked = preferences.autoChangeSource,
-        onCheckedChange = onAutoChangeSourceChange,
+        title = stringResource(R.string.show_read_title_addition),
+        checked = preferences.showReadTitleAddition,
+        onCheckedChange = onShowReadTitleAdditionChange,
     )
+
     TinySwitchSettingItem(
-        title = stringResource(R.string.read_change_all),
-        description = stringResource(R.string.read_change_all_s),
-        checked = preferences.defaultSourceChangeAll,
-        onCheckedChange = onDefaultSourceChangeAllChange,
+        title = stringResource(R.string.show_menu_icon),
+        checked = preferences.showMenuIcon,
+        onCheckedChange = onShowMenuIconChange,
     )
+
     TinySwitchSettingItem(
         title = stringResource(R.string.auto_switch_theme_reminder_title),
         description = stringResource(R.string.auto_switch_theme_reminder_desc),
         checked = preferences.autoSuggestDayNight,
         onCheckedChange = onAutoSuggestDayNightChange,
     )
+
     TinySwitchSettingItem(
         title = stringResource(R.string.reading_anchor),
         description = stringResource(R.string.reading_anchor_summary),
         checked = preferences.readingAnchorEnabled,
         onCheckedChange = onReadingAnchorEnabledChange,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.read_aloud_detach_reminder),
-        description = stringResource(R.string.read_aloud_detach_reminder_summary),
-        checked = preferences.readAloudDetachReminderEnabled,
-        onCheckedChange = onReadAloudDetachReminderEnabledChange,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.selectText),
-        checked = preferences.selectText,
-        onCheckedChange = onSelectTextChange,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.no_anim_scroll_page),
-        checked = preferences.noAnimScrollPage,
-        onCheckedChange = onNoAnimScrollPageChange,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.enable_optimize_render),
-        checked = preferences.optimizeRender,
-        onCheckedChange = onOptimizeRenderChange,
-    )
-    TinyDropdownSettingItem(
-        title = stringResource(R.string.click_image_way),
-        selectedValue = preferences.clickImgWay,
-        displayEntries = clickImageWayEntries,
-        entryValues = clickImageWayValues,
-        onValueChange = onClickImgWayChange,
-    )
-    TinyClickableSettingItem(
-        title = stringResource(R.string.click_regional_config),
-        onClick = onOpenClickRegionalConfig,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.disable_return_key),
-        checked = preferences.disableReturnKey,
-        onCheckedChange = onDisableReturnKeyChange,
-    )
-    TinyClickableSettingItem(
-        title = stringResource(R.string.custom_page_key),
-        onClick = onOpenPageKeyConfig,
-    )
-    TinyClickableSettingItem(
-        title = stringResource(R.string.edit_select_menu),
-        onClick = onOpenTextSelectMenuConfig,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.show_read_title_addition),
-        checked = preferences.showReadTitleAddition,
-        onCheckedChange = onShowReadTitleAdditionChange,
-    )
-    TinySwitchSettingItem(
-        title = stringResource(R.string.show_menu_icon),
-        checked = preferences.showMenuIcon,
-        onCheckedChange = onShowMenuIconChange,
     )
 }

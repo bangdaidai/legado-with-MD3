@@ -1736,6 +1736,10 @@ sealed interface ConfigUpdate {
     data class SelectText(val value: Boolean) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }
+    /** 长按选区粒度：只写 DataStore，下次长按现读，不驱动任何渲染副作用。 */
+    data class SelectionUnit(val value: String) : ConfigUpdate {
+        override val actions = emptySet<ConfigUpdateAction>()
+    }
     data class NoAnimScrollPage(val value: Boolean) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }

@@ -198,37 +198,72 @@ object ReaderSelectionPolicy {
             }
     }
 
+    /**
+     * 长按落点吸附到元素后，按 [unit] 向两侧扩到自然边界。默认 [ReaderSelectionUnit.WORD]
+     * 即旧 View 的长按选词行为。
+     *
+     * 所有粒度都只在本页元素里解析（对照旧的选词实现）：选区端点是章内偏移，跨页的那部分
+     * 要等用户拖把手才能选到，粒度本身不替用户决定"要选几页"。
+     */
+    fun startUnit(
+        page: ReaderPage,
+        x: Float,
+        y: Float,
+        unit: ReaderSelectionUnit = ReaderSelectionUnit.WORD,
+        locale: Locale = Locale.getDefault(),
+    ): ReaderSelection? {
+        // Glyph bounds intentionally omit letter- and justification-spacing. Long presses in
+        // those visual gaps should start selection just like handle drags do.
+        val hit = snapToText(page, x, y) ?: return null
+        return when (unit) {
+            ReaderSelectionUnit.CHARACTER -> hit.selection(page)
+            ReaderSelectionUnit.WORD -> page.breakIteratorSelection(
+                hit,
+                BreakIterator.getWordInstance(locale),
+            )
+
+            ReaderSelectionUnit.SENTENCE -> page.breakIteratorSelection(
+                hit,
+                BreakIterator.getSentenceInstance(locale),
+            )
+
+            ReaderSelectionUnit.LINE -> page.lineSelection(hit)
+            ReaderSelectionUnit.PARAGRAPH -> page.paragraphSelection(hit)
+        }
+    }
+
     /** Matches the View reader's long-press behavior: select one word in the hit paragraph. */
     fun startWord(
         page: ReaderPage,
         x: Float,
         y: Float,
         locale: Locale = Locale.getDefault(),
-    ): ReaderSelection? {
-        // Glyph bounds intentionally omit letter- and justification-spacing. Long presses in
-        // those visual gaps should start selection just like handle drags do.
-        val hit = snapToText(page, x, y) ?: return null
-        val paragraph = page.elements.filterIsInstance<ReaderElement.Text>()
-            .filter {
-                it.emphasized == hit.emphasized &&
-                    (hit.paragraphIndex < 0 || it.paragraphIndex == hit.paragraphIndex)
-            }
-            .sortedBy(ReaderElement.Text::chapterPosition)
+    ): ReaderSelection? = startUnit(page, x, y, ReaderSelectionUnit.WORD, locale)
+
+    /**
+     * 把命中元素所在的 BreakIterator 区间（词或句）映射回元素区间。BreakIterator 走的是
+     * 段落拼接后的字符偏移，因此一个边界可以落在元素中间，此时两端各取整元素。
+     */
+    private fun ReaderPage.breakIteratorSelection(
+        hit: ReaderElement.Text,
+        boundary: BreakIterator,
+    ): ReaderSelection {
+        val paragraph = hit.paragraphElements(this)
         val hitIndex = paragraph.indexOf(hit)
-        if (hitIndex < 0) return null
+        if (hitIndex < 0) return hit.selection(this)
 
         val text = paragraph.joinToString(separator = "", transform = ReaderElement.Text::value)
         val hitOffset = paragraph.take(hitIndex).sumOf { it.value.length }
-        val boundary = BreakIterator.getWordInstance(locale).apply { setText(text) }
+        boundary.setText(text)
         var start = boundary.first()
         var end = boundary.next()
         while (end != BreakIterator.DONE && hitOffset !in start until end) {
             start = end
             end = boundary.next()
         }
-        if (end == BreakIterator.DONE) {
-            return ReaderSelection(page.id.chapterIndex, hit.chapterPosition, hit.chapterPosition, hit.emphasized)
-        }
+        // 落点在末界之后（正常不会发生，尾随空白等异常文本会）：退化成单字，
+        // 与旧实现同口径。
+        if (end == BreakIterator.DONE) return hit.selection(this)
 
         var offset = 0
         var first: ReaderElement.Text? = null
@@ -242,12 +277,94 @@ object ReaderSelectionPolicy {
             offset = elementEnd
         }
         return ReaderSelection(
-            chapterIndex = page.id.chapterIndex,
+            chapterIndex = id.chapterIndex,
             anchor = first?.chapterPosition ?: hit.chapterPosition,
             focus = last?.chapterPosition ?: hit.chapterPosition,
             anchorIsTitle = hit.emphasized,
         )
     }
+
+    /**
+     * 当前视觉行：先按竖向重叠圈出同一行的元素，再在其中按横向连续性切成若干段，取命中
+     * 元素所在的那段。分段是为了双栏页面——同一视觉行的左栏与右栏被装订沟隔开，应各算一行。
+     * 字形 bounds 不含字距与两端对齐拉伸（见 [startUnit]），行内相邻字形的间隙接近 0，
+     * 装订沟则明显大于半行高，因此这个阈值足以把两者分开。
+     */
+    private fun ReaderPage.lineSelection(hit: ReaderElement.Text): ReaderSelection {
+        val band = elements.filterIsInstance<ReaderElement.Text>()
+            .filter { it.sharesVisualLineWith(hit) }
+            .sortedBy { it.bounds.left }
+        val hitIndex = band.indexOf(hit)
+        if (hitIndex < 0) return hit.selection(this)
+        var start = hitIndex
+        while (start > 0 && band.isJoined(start - 1, start)) start--
+        var end = hitIndex
+        while (end < band.lastIndex && band.isJoined(end, end + 1)) end++
+        return band.subList(start, end + 1).toSelection(this, hit)
+    }
+
+    /** 命中元素所在的自然段：同一 emphasized、同一 [ReaderElement.Text.paragraphIndex]。 */
+    private fun ReaderPage.paragraphSelection(hit: ReaderElement.Text): ReaderSelection {
+        val paragraph = hit.paragraphElements(this)
+        if (paragraph.size <= 1) return hit.selection(this)
+        return ReaderSelection(
+            chapterIndex = id.chapterIndex,
+            anchor = paragraph.first().chapterPosition,
+            focus = paragraph.last().chapterPosition,
+            anchorIsTitle = hit.emphasized,
+        )
+    }
+
+    private fun ReaderElement.Text.selection(page: ReaderPage): ReaderSelection =
+        ReaderSelection(
+            chapterIndex = page.id.chapterIndex,
+            anchor = chapterPosition,
+            focus = chapterPosition,
+            anchorIsTitle = emphasized,
+        )
+
+    /** 与接收者同一段域（同一 emphasized）的元素，按文档序；`paragraphIndex < 0` 时退回整页同域。 */
+    private fun ReaderElement.Text.paragraphElements(
+        page: ReaderPage,
+    ): List<ReaderElement.Text> = page.elements
+        .filterIsInstance<ReaderElement.Text>()
+        .filter {
+            it.emphasized == emphasized &&
+                (paragraphIndex < 0 || it.paragraphIndex == paragraphIndex)
+        }
+        .sortedBy(ReaderElement.Text::chapterPosition)
+
+    /**
+     * 是否落在同一条视觉行上。标题与正文偏移各自独立、双栏页面里两侧可能同高，因此还要
+     * 同一个 [emphasized] 域，否则会把另一栏或标题的字并进来。
+     */
+    private fun ReaderElement.Text.sharesVisualLineWith(other: ReaderElement.Text): Boolean {
+        if (emphasized != other.emphasized) return false
+        val overlap =
+            (minOf(bounds.bottom, other.bounds.bottom) - maxOf(bounds.top, other.bounds.top))
+                .coerceAtLeast(0f)
+        return overlap >= minOf(bounds.height, other.bounds.height) * 0.5f
+    }
+
+    private fun lineJoinGap(left: ReaderElement.Text, right: ReaderElement.Text): Float =
+        minOf(left.bounds.height, right.bounds.height) * 0.5f
+
+    /** 同一视觉行里 [left] 与 [right] 是否横向连续（未跨过装订沟）。 */
+    private fun List<ReaderElement.Text>.isJoined(left: Int, right: Int): Boolean {
+        val previous = this[left]
+        val next = this[right]
+        return next.bounds.left <= previous.bounds.right + lineJoinGap(previous, next)
+    }
+
+    private fun List<ReaderElement.Text>.toSelection(
+        page: ReaderPage,
+        hit: ReaderElement.Text,
+    ): ReaderSelection = ReaderSelection(
+        chapterIndex = page.id.chapterIndex,
+        anchor = minOf(ReaderElement.Text::chapterPosition),
+        focus = maxOf(ReaderElement.Text::chapterPosition),
+        anchorIsTitle = hit.emphasized,
+    )
 
     /**
      * [allowChapterCrossing] 只在滚动模式传 true：视口里堆叠的就是当前页与下一章首页

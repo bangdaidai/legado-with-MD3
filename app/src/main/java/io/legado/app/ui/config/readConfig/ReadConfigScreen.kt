@@ -371,6 +371,16 @@ fun ReadConfigScreen(
                     }
                 )
 
+                DropdownListSettingItem(
+                    title = stringResource(R.string.select_text_unit),
+                    selectedValue = settings.selectTextUnit,
+                    displayEntries = stringArrayResource(R.array.select_text_unit_title),
+                    entryValues = stringArrayResource(R.array.select_text_unit_value),
+                    onValueChange = {
+                        onIntent(ReadConfigIntent.SelectTextUnitChanged(it))
+                    }
+                )
+
                 SwitchSettingItem(
                     title = stringResource(R.string.no_anim_scroll_page),
                     checked = settings.noAnimScrollPage,

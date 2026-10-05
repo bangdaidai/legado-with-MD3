@@ -881,6 +881,11 @@
     <string name="aloud_config">Speech settings</string>
     <string name="main_activity">Start page</string>
     <string name="selectText">Long Tap to Select Text</string>
+    <string name="select_text_unit">Select unit on long tap</string>
+    <string name="more_config_section_selection">Selection &amp; speech</string>
+    <string name="more_config_section_gesture">Gestures &amp; keys</string>
+    <string name="more_config_section_source">Book source &amp; TOC</string>
+    <string name="more_config_section_display">Display &amp; others</string>
     <string name="header">Header</string>
     <string name="main_body">Content</string>
     <string name="footer">Footer</string>

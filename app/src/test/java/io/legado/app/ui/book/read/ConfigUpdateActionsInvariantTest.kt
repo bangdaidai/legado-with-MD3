@@ -147,6 +147,8 @@ class ConfigUpdateActionsInvariantTest {
             "NoAnimScrollPage",
             // 文本选择菜单
             "SelectText",
+            // 长按选区粒度：只写 DataStore，长按时现读，不驱动任何渲染副作用
+            "SelectionUnit",
             "ExpandTextMenu",
             "ShowSelectMenuIcon",
             // 其它纯业务/纯菜单项

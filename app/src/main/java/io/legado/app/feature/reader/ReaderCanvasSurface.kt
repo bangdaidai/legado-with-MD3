@@ -121,6 +121,7 @@ import io.legado.app.feature.reader.core.selection.ReaderSelectionEndpoint
 import io.legado.app.feature.reader.core.selection.ReaderSelectionLifecyclePolicy
 import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.feature.reader.core.selection.ReaderSelectionPolicy
+import io.legado.app.feature.reader.core.selection.ReaderSelectionUnit
 import io.legado.app.feature.reader.core.selection.mergeSelectionBounds
 import io.legado.app.feature.reader.core.selection.selectionPages
 import io.legado.app.feature.reader.core.selection.stylePreviewBounds
@@ -234,6 +235,8 @@ fun ReaderCanvasSurface(
     onElementClick: (ReaderElement) -> Boolean,
     onElementLongPress: (ReaderElement, Float, Float) -> Boolean,
     selectionEnabled: Boolean,
+    /** 长按落点自动扩展到的粒度；扩完之后两个把手照旧可拖。 */
+    selectionUnit: ReaderSelectionUnit = ReaderSelectionUnit.WORD,
     selectionHapticsEnabled: Boolean,
     tapActionGrid: ReaderTapActionGrid,
     onTapAction: (ReaderTapAction) -> Unit,
@@ -306,6 +309,7 @@ fun ReaderCanvasSurface(
     val latestMarkingNoteClick by rememberUpdatedState(onMarkingNoteClick)
     val latestSelectionHapticsEnabled by rememberUpdatedState(selectionHapticsEnabled)
     val latestSelectionEnabled by rememberUpdatedState(selectionEnabled)
+    val latestSelectionUnit by rememberUpdatedState(selectionUnit)
     val latestTapActionGrid by rememberUpdatedState(tapActionGrid)
     val latestTapAction by rememberUpdatedState(onTapAction)
     val latestReaderInteraction by rememberUpdatedState(onReaderInteraction)
@@ -1041,7 +1045,12 @@ fun ReaderCanvasSurface(
                         return@launch
                     }
                     if (!latestSelectionEnabled || latestAutoPageActive) return@launch
-                    ReaderSelectionPolicy.startWord(page, down.position.x, downPageY)?.let {
+                    ReaderSelectionPolicy.startUnit(
+                        page,
+                        down.position.x,
+                        downPageY,
+                        latestSelectionUnit,
+                    )?.let {
                         textSelection = it
                         selectionMagnifierSource = selectionCursorCenter(
                             it,
@@ -1074,7 +1083,7 @@ fun ReaderCanvasSurface(
                         if (longPressed || grabbingStart || grabbingEnd) {
                             val selection = textSelection
                             val movingEndpoint = grabbedEndpoint ?: ReaderSelectionEndpoint.FOCUS
-                            // 长按刚成立时的手抖不该破坏整词选区：越过拖选阈值前保持初始
+                            // 长按刚成立时的手抖不该破坏自动选出的区间：越过拖选阈值前保持初始
                             // selection，只更新放大镜位置。把手拖动不受阈值限制（见
                             // ReaderSelectionDragState.handleGrabbed）。
                             selectionDragState = selectionDragState.update(

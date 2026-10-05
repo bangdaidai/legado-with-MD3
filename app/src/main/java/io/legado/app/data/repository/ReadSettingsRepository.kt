@@ -146,6 +146,9 @@ class ReadSettingsRepository(
     suspend fun setSelectText(value: Boolean) =
         settingsRepository.putBoolean(PreferKey.selectText, value)
 
+    suspend fun setSelectTextUnit(value: String) =
+        settingsRepository.putString(PreferKey.selectTextUnit, value)
+
     suspend fun setNoAnimScrollPage(value: Boolean) =
         settingsRepository.putBoolean(PreferKey.noAnimScrollPage, value)
 
@@ -384,6 +387,7 @@ class ReadSettingsRepository(
             readingAnchorEnabled = compatDsValue(Keys.ReadingAnchorEnabled, true),
             readAloudDetachReminderEnabled = compatDsValue(Keys.ReadAloudDetachReminderEnabled, false),
             selectText = compatDsValue(Keys.SelectText, true),
+            selectTextUnit = compatDsValue(Keys.SelectTextUnit, "1"),
             noAnimScrollPage = compatDsValue(Keys.NoAnimScrollPage, false),
             clickImgWay = compatDsValue(Keys.ClickImgWay, "2"),
             optimizeRender = compatDsValue(Keys.OptimizeRender, false),
@@ -506,6 +510,7 @@ class ReadSettingsRepository(
         val ReadingAnchorEnabled = booleanPreferencesKey(PreferKey.readingAnchorEnabled)
         val ReadAloudDetachReminderEnabled = booleanPreferencesKey(PreferKey.readAloudDetachReminderEnabled)
         val SelectText = booleanPreferencesKey(PreferKey.selectText)
+        val SelectTextUnit = stringPreferencesKey(PreferKey.selectTextUnit)
         val NoAnimScrollPage = booleanPreferencesKey(PreferKey.noAnimScrollPage)
         val ClickImgWay = stringPreferencesKey(PreferKey.clickImgWay)
         val OptimizeRender = booleanPreferencesKey(PreferKey.optimizeRender)
@@ -638,6 +643,7 @@ internal fun ReadSettings.toGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.readingAnchorEnabled to readingAnchorEnabled,
     PreferKey.readAloudDetachReminderEnabled to readAloudDetachReminderEnabled,
     PreferKey.selectText to selectText,
+    PreferKey.selectTextUnit to selectTextUnit,
     PreferKey.noAnimScrollPage to noAnimScrollPage,
     PreferKey.clickImgWay to clickImgWay,
     PreferKey.optimizeRender to optimizeRender,

@@ -707,6 +707,11 @@ class ReadConfigUpdateDelegate(
                 }
                 host.emitEffect(ReadBookEffect.UpTextSelectAble(update.value))
             }
+            is ConfigUpdate.SelectionUnit -> {
+                scope.launch {
+                    readSettingsRepository.setSelectTextUnit(update.value)
+                }
+            }
             is ConfigUpdate.NoAnimScrollPage -> {
                 scope.launch {
                     readSettingsRepository.setNoAnimScrollPage(update.value)

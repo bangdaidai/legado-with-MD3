@@ -40,6 +40,7 @@ data class ReadConfigUiState(
     val readingAnchorEnabled: Boolean = true,
     val readAloudDetachReminderEnabled: Boolean = false,
     val selectText: Boolean = true,
+    val selectTextUnit: String = "1",
     val noAnimScrollPage: Boolean = false,
     val clickImgWay: String = "2",
     val optimizeRender: Boolean = false,
@@ -101,6 +102,7 @@ sealed interface ReadConfigIntent {
     data class SelectVibratorChanged(val value: Boolean) : ReadConfigIntent
     data class AutoChangeSourceChanged(val value: Boolean) : ReadConfigIntent
     data class SelectTextChanged(val value: Boolean) : ReadConfigIntent
+    data class SelectTextUnitChanged(val value: String) : ReadConfigIntent
     data class NoAnimScrollPageChanged(val value: Boolean) : ReadConfigIntent
     data class ClickImgWayChanged(val value: String) : ReadConfigIntent
     data class OptimizeRenderChanged(val value: Boolean) : ReadConfigIntent

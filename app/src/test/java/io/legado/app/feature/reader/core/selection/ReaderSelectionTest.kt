@@ -6,7 +6,9 @@ import io.legado.app.feature.reader.core.model.ReaderPageId
 import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
 
@@ -352,5 +354,151 @@ class ReaderSelectionTest {
 
         assertEquals(started, ReaderSelectionPolicy.extend(started, nextChapter, 5f, 10f))
         assertEquals(0, started.endChapterIndex)
+    }
+
+    /** 每个元素一个字符、10px 宽、20px 高；按 [row] 排行、按 [offset] 排行内起点。 */
+    private fun gridPage(
+        text: String,
+        row: (Int) -> Int,
+        offset: (Int) -> Float,
+        paragraph: (Int) -> Int = { 0 },
+        widthPx: Int = 100,
+    ): ReaderPage {
+        val elements = text.mapIndexed { index, value ->
+            val line = row(index)
+            ReaderElement.Text(
+                ReaderRect(
+                    offset(index),
+                    line * 20f,
+                    offset(index) + 10f,
+                    line * 20f + 20f,
+                ),
+                line * 20f + 15f,
+                value.toString(),
+                style,
+                selected = false,
+                emphasized = false,
+                chapterPosition = index,
+                paragraphIndex = paragraph(index),
+            )
+        }
+        return page.copy(widthPx = widthPx, text = text, elements = elements)
+    }
+
+    /** 长按按字只取落点那一个元素；按句取到句末标点，两句各选各的。 */
+    @Test
+    fun longPressSelectsByCharacterOrSentence() {
+        val sentences = gridPage("甲乙。丙丁。", row = { 0 }, offset = { it * 10f })
+
+        val byCharacter = ReaderSelectionPolicy.startUnit(
+            sentences, 15f, 10f, ReaderSelectionUnit.CHARACTER,
+        )!!
+        val bySentence = ReaderSelectionPolicy.startUnit(
+            sentences, 5f, 10f, ReaderSelectionUnit.SENTENCE, Locale.CHINESE,
+        )!!
+        val nextSentence = ReaderSelectionPolicy.startUnit(
+            sentences, 35f, 10f, ReaderSelectionUnit.SENTENCE, Locale.CHINESE,
+        )!!
+
+        assertEquals("乙", byCharacter.selectedText(sentences))
+        assertEquals("甲乙。", bySentence.selectedText(sentences))
+        assertEquals("丙丁。", nextSentence.selectedText(sentences))
+    }
+
+    /**
+     * 按句在拉丁文上同样生效。**不断言精确边界**：JDK CLDR 与 Android ICU 对"句末标点
+     * 之后的空格归上一句还是下一句"的处理不同，这里只锁定"不吞掉相邻句"。
+     */
+    @Test
+    fun longPressBySentenceStopsAtLatinTerminators() {
+        val latin = gridPage("one. two. three!", row = { 0 }, offset = { it * 10f })
+
+        val selection = ReaderSelectionPolicy.startUnit(
+            latin, 45f, 10f, ReaderSelectionUnit.SENTENCE, Locale.ENGLISH,
+        )!!
+        val text = selection.selectedText(latin)
+
+        assertTrue(text.contains("two."))
+        assertFalse(text.contains("one."))
+        assertFalse(text.contains("three"))
+    }
+
+    /** 按行：竖向同带 + 横向连续的那一段，跨行不带。 */
+    @Test
+    fun longPressSelectsTheWholeVisualLine() {
+        val rows = gridPage("甲乙丙丁戊己", row = { it / 3 }, offset = { (it % 3) * 10f })
+
+        val firstRow = ReaderSelectionPolicy.startUnit(rows, 25f, 10f, ReaderSelectionUnit.LINE)!!
+        val secondRow = ReaderSelectionPolicy.startUnit(rows, 5f, 30f, ReaderSelectionUnit.LINE)!!
+
+        assertEquals("甲乙丙", firstRow.selectedText(rows))
+        assertEquals("丁戊己", secondRow.selectedText(rows))
+    }
+
+    /**
+     * 双栏页面：同一视觉行的左右两栏被装订沟隔开，各算一行。长按左栏不应把右栏的字并进来
+     * （否则"按行"会一次选中两栏）。
+     */
+    @Test
+    fun longPressByLineStopsAtTheColumnGutter() {
+        val columns = gridPage(
+            text = "甲乙丙丁戊己庚辛",
+            row = { 0 },
+            offset = { index -> if (index < 4) index * 10f else 100f + (index - 4) * 10f },
+            paragraph = { index -> if (index < 4) 0 else 1 },
+            widthPx = 200,
+        )
+
+        val left = ReaderSelectionPolicy.startUnit(columns, 5f, 10f, ReaderSelectionUnit.LINE)!!
+        val right = ReaderSelectionPolicy.startUnit(columns, 105f, 10f, ReaderSelectionUnit.LINE)!!
+
+        assertEquals("甲乙丙丁", left.selectedText(columns))
+        assertEquals("戊己庚辛", right.selectedText(columns))
+    }
+
+    /** 按段：命中元素所在的自然段整段选中，不越到相邻段。 */
+    @Test
+    fun longPressSelectsTheWholeParagraph() {
+        val paragraphs = gridPage(
+            text = "甲乙丙丁戊",
+            row = { it / 3 },
+            offset = { (it % 3) * 10f },
+            paragraph = { index -> if (index < 3) 0 else 1 },
+        )
+
+        val first = ReaderSelectionPolicy.startUnit(
+            paragraphs, 5f, 10f, ReaderSelectionUnit.PARAGRAPH,
+        )!!
+        val second = ReaderSelectionPolicy.startUnit(
+            paragraphs, 5f, 30f, ReaderSelectionUnit.PARAGRAPH,
+        )!!
+
+        assertEquals("甲乙丙", first.selectedText(paragraphs))
+        assertEquals("丁戊", second.selectedText(paragraphs))
+    }
+
+    /** 粒度只决定初始选区：扩完之后两端把手仍可任意拖动。 */
+    @Test
+    fun autoSelectedRangeStaysFullyDraggable() {
+        val oneLine = gridPage("甲乙丙", row = { 0 }, offset = { it * 10f })
+        val auto = ReaderSelectionPolicy.startUnit(oneLine, 5f, 10f, ReaderSelectionUnit.LINE)!!
+        val start = auto.visualStartEndpoint()
+        val end = auto.visualEndEndpoint()
+
+        assertEquals("甲乙丙", auto.selectedText(oneLine))
+        assertEquals("乙丙", auto.moveEndpoint(start, 1).selectedText(oneLine))
+        assertEquals("丙", auto.moveEndpoint(start, 2).selectedText(oneLine))
+        assertEquals("甲乙", auto.moveEndpoint(end, 1).selectedText(oneLine))
+    }
+
+    @Test
+    fun preferenceFallsBackToWordForUnknownValues() {
+        assertEquals(ReaderSelectionUnit.CHARACTER, ReaderSelectionUnit.fromPreference("0"))
+        assertEquals(ReaderSelectionUnit.WORD, ReaderSelectionUnit.fromPreference("1"))
+        assertEquals(ReaderSelectionUnit.SENTENCE, ReaderSelectionUnit.fromPreference("2"))
+        assertEquals(ReaderSelectionUnit.LINE, ReaderSelectionUnit.fromPreference("3"))
+        assertEquals(ReaderSelectionUnit.PARAGRAPH, ReaderSelectionUnit.fromPreference("4"))
+        assertEquals(ReaderSelectionUnit.WORD, ReaderSelectionUnit.fromPreference(""))
+        assertEquals(ReaderSelectionUnit.WORD, ReaderSelectionUnit.fromPreference("9"))
     }
 }

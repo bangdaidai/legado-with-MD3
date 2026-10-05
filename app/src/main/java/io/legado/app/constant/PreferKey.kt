@@ -445,6 +445,8 @@ object PreferKey {
     const val moreActionsConfig = "moreActionsConfig"
     const val disableReturnKey = "disableReturnKey"
     const val selectText = "selectText"
+    /** 长按选区自动扩展的粒度，取值见 `ReaderSelectionUnit.fromPreference`（缺省按词）。 */
+    const val selectTextUnit = "selectTextUnit"
     //我在干什么
 
     const val disableMangaScrollAnimation = "disableMangaScrollAnimation"
