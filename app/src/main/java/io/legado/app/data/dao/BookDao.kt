@@ -866,7 +866,7 @@ FROM books
     fun getCacheableBooks(bookUrls: Set<String>): List<CacheableBook>
 
     /**
-     * 书架作品的轻量快照，供加入书架查重使用。
+     * 书架作品的轻量快照，供加入书架查重与书架重名扫描使用。
      *
      * 这是一次全表行扫描（未下架的作品），省掉的只是 `intro` / `variable` 等重字段，不是扫描行数。
      * 规范化后的重名判定（全角半角、空白折叠）必须在 Kotlin 侧做，因此无法再用 `name` 等值条件
@@ -875,7 +875,7 @@ FROM books
     @Query(
         """
         SELECT bookUrl, name, author, coverUrl, customCoverUrl, origin, originName,
-               totalChapterNum, latestChapterTitle, durChapterTime
+               totalChapterNum, latestChapterTitle, durChapterTime, type, durChapterIndex
         FROM books
         WHERE type & ${BookType.notShelf} = 0
         """

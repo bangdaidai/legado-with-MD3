@@ -630,8 +630,15 @@ fun Book.isSameNameAuthor(other: Any?): Boolean {
  * 用于「同名同作者同形态」判重，因此本地 txt 与网络文本书算同形态；未设置形态位的老数据按文本处理。
  */
 val Book.formTypeMask: Int
+    get() = type.formTypeMask
+
+/**
+ * [Book.formTypeMask] 的 Int 版本，供拿不到完整 [Book] 实体的地方（例如只查了投影行的重名扫描）复用同一口径。
+ * 判重的各处都走这里，避免一处按形态位相等、一处按别的方式判断而给出矛盾结论。
+ */
+val Int.formTypeMask: Int
     get() {
-        val mask = type and
+        val mask = this and
             (BookType.text or BookType.audio or BookType.image or BookType.video)
         return if (mask == 0) BookType.text else mask
     }

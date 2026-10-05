@@ -6,6 +6,7 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookTag
 import io.legado.app.domain.model.PrivateAccessState
 import io.legado.app.domain.model.PrivateUnlockTarget
+import io.legado.app.domain.model.ShelfDuplicateScanResult
 import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.PrivateAccessSettings
 import io.legado.app.ui.config.themeConfig.TagColorPair
@@ -39,6 +40,9 @@ sealed interface BookshelfOverlay {
     data object GroupSelectSheet : BookshelfOverlay
     data class GroupEditSheet(val groupId: Long) : BookshelfOverlay
     data object BatchDownloadConfirmDialog : BookshelfOverlay
+
+    /** 书架同名书籍检测（只读报告，不修改任何数据） */
+    data object DuplicateScanSheet : BookshelfOverlay
 }
 
 sealed interface BookshelfIntent {
@@ -100,6 +104,9 @@ sealed interface BookshelfIntent {
 
     /** 待打开的私密书已经处理完，清空挂起目标 */
     data object ConsumePendingOpenBook : BookshelfIntent
+
+    /** 扫描整个书架里同名同作者同形态的重复副本；由打开检测面板时触发 */
+    data object ScanShelfDuplicates : BookshelfIntent
 }
 
 sealed interface BookshelfEffect {
@@ -115,6 +122,13 @@ sealed interface BookshelfEffect {
     /** 私密功能需要本地密码，引导去设置页 */
     data object NavigateToLocalPasswordSettings : BookshelfEffect
 }
+
+@Stable
+data class ShelfDuplicateScanUiState(
+    val isScanning: Boolean = false,
+    val result: ShelfDuplicateScanResult = ShelfDuplicateScanResult(),
+    val failed: Boolean = false,
+)
 
 @Stable
 data class BookshelfUiState(
@@ -168,6 +182,9 @@ data class BookshelfUiState(
      * 一次性 Effect——否则列表尚未重新过滤出这本书时事件就丢了。
      */
     val pendingOpenBookUrl: String? = null,
+
+    /** 书架同名书籍检测的当前进度与结果；面板关闭时复位 */
+    val duplicateScan: ShelfDuplicateScanUiState = ShelfDuplicateScanUiState(),
 ) : ListUiState<BookUiItem> {
 
     fun isBookLocked(bookUi: BookUiItem): Boolean =

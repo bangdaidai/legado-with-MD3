@@ -29,6 +29,7 @@ import io.legado.app.domain.model.settings.PrivateAccessSettings
 import io.legado.app.domain.usecase.AddBookUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
+import io.legado.app.domain.usecase.FindShelfDuplicatesUseCase
 import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
 import io.legado.app.domain.usecase.UpdateBooksGroupUseCase
@@ -97,6 +98,7 @@ class BookshelfViewModel(
     private val addBookUseCase: AddBookUseCase,
     private val importBookshelfUseCase: ImportBookshelfUseCase,
     private val exportBookshelfUseCase: ExportBookshelfUseCase,
+    private val findShelfDuplicatesUseCase: FindShelfDuplicatesUseCase,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val bookshelfTagGateway: BookshelfTagGateway,
     private val appShellSettingsGateway: AppShellSettingsGateway,
@@ -123,6 +125,14 @@ class BookshelfViewModel(
     private val isInitialLoadingFlow = MutableStateFlow(true)
     private val pendingUploadUrlFlow = MutableStateFlow<String?>(null)
     private val selectedTagIdsFlow = MutableStateFlow<Set<Long>>(emptySet())
+
+    /**
+     * 同名检测的进度与结果。
+     *
+     * 单独挂在 ViewModel 上而不进 [contentUiState] 的数据源管道：这是一次性的用户触发动作，
+     * 不该让书架重新扫库的整条 combine 链为它多转一圈；每次打开面板重扫一次，关闭时复位。
+     */
+    private val duplicateScanFlow = MutableStateFlow(ShelfDuplicateScanUiState())
 
     /** 选中标签对应的书籍 URL 集合（AND 语义），用于书架筛选 */
     private val filteredTagBookUrlsFlow: Flow<Set<String>> =
@@ -813,6 +823,9 @@ class BookshelfViewModel(
             themeColor = themeSettings.themeColor,
             pendingUploadUrl = pendingUploadUrl,
         )
+    }.combine(duplicateScanFlow) { state, duplicateScan ->
+        state.copy(duplicateScan = duplicateScan)
+    }
         // 常驻订阅：进入阅读页后 UI 停止收集，若让上游在超时后停掉，返回书架的前几帧
         // 读到的仍是「阅读前」那一版排序，等 Room 重新查询到达再跳一次，重排就发生在
         // 书架已经可见之后。管道挂在 viewModelScope（ViewModel 随返回栈条目存活），
@@ -943,6 +956,24 @@ class BookshelfViewModel(
 
             is BookshelfIntent.SetBooksPrivate ->
                 setBooksPrivate(intent.bookUrls, intent.isPrivate)
+
+            BookshelfIntent.ScanShelfDuplicates -> scanShelfDuplicates()
+        }
+    }
+
+    /**
+     * 扫描书架里的同名副本。纯只读：结果只进 [duplicateScanFlow]，不写库、不改分组。
+     */
+    private fun scanShelfDuplicates() {
+        if (duplicateScanFlow.value.isScanning) return
+        duplicateScanFlow.value = ShelfDuplicateScanUiState(isScanning = true)
+        viewModelScope.launch {
+            runCatching { findShelfDuplicatesUseCase.execute() }
+                .onSuccess { duplicateScanFlow.value = ShelfDuplicateScanUiState(result = it) }
+                .onFailure { error ->
+                    AppLog.put("书架同名检测失败", error)
+                    duplicateScanFlow.value = ShelfDuplicateScanUiState(failed = true)
+                }
         }
     }
 
@@ -1089,6 +1120,8 @@ class BookshelfViewModel(
         if (activeOverlayFlow.value is BookshelfOverlay.PrivatePassword) {
             pendingOpenBookUrlFlow.value = null
         }
+        // 检测结果不复用：每次打开都重新扫，避免把上次的结论当这次的
+        duplicateScanFlow.value = ShelfDuplicateScanUiState()
         activeOverlayFlow.value = null
     }
 

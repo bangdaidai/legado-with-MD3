@@ -68,6 +68,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Wifi
@@ -698,6 +699,18 @@ fun BookshelfScreen(
                                         dismiss()
                                     },
                                     leadingIcon = { Icon(Icons.Default.Link, null) }
+                                )
+                                RoundDropdownMenuItem(
+                                    text = stringResource(R.string.bookshelf_duplicate_scan),
+                                    onClick = {
+                                        onIntent(
+                                            BookshelfIntent.ShowOverlay(
+                                                BookshelfOverlay.DuplicateScanSheet
+                                            )
+                                        )
+                                        dismiss()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Search, null) }
                                 )
                                 RoundDropdownMenuItem(
                                     text = stringResource(R.string.selection_mode),
@@ -1458,6 +1471,13 @@ private fun BookshelfOverlays(
 
     GroupManageSheet(
         show = activeOverlay == BookshelfOverlay.GroupManageSheet,
+        onDismissRequest = { onIntent(BookshelfIntent.DismissOverlay) }
+    )
+
+    ShelfDuplicateScanSheet(
+        show = activeOverlay == BookshelfOverlay.DuplicateScanSheet,
+        state = uiState.duplicateScan,
+        onScan = { onIntent(BookshelfIntent.ScanShelfDuplicates) },
         onDismissRequest = { onIntent(BookshelfIntent.DismissOverlay) }
     )
 

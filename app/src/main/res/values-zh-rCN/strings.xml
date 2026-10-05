@@ -88,6 +88,14 @@
     <string name="layout_grid5">网格五列</string>
     <string name="layout_grid6">网格六列</string>
     <string name="bookshelf_layout">书架布局</string>
+    <string name="bookshelf_duplicate_scan">检测同名书籍</string>
+    <string name="bookshelf_duplicate_scan_failed">扫描失败，请重试</string>
+    <string name="bookshelf_duplicate_scan_none">%1$d 本书里没有发现重复</string>
+    <string name="bookshelf_duplicate_scan_result">已扫描 %1$d 本书 · %2$d 组同名 · %3$d 个副本</string>
+    <string name="bookshelf_duplicate_scan_hint">如需合并副本，请在书籍详情页使用「换源」，阅读进度会一并保留。</string>
+    <string name="bookshelf_duplicate_scan_copies">%1$d 个副本</string>
+    <string name="bookshelf_duplicate_scan_unknown_source">未知书源</string>
+    <string name="bookshelf_duplicate_scan_progress">已读 %1$s</string>
     <string name="view">视图</string>
     <string name="book_library">书城</string>
     <string name="book_local">添加本地</string>

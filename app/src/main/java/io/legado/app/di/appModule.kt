@@ -202,6 +202,7 @@ import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
+import io.legado.app.domain.usecase.FindShelfDuplicatesUseCase
 import io.legado.app.domain.usecase.GenerateAuthorBioUseCase
 import io.legado.app.domain.usecase.GenerateTocRuleUseCase
 import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
@@ -505,6 +506,7 @@ val appModule = module {
     singleOf(::RefreshTocUseCase)
     singleOf(::AddBookUseCase)
     singleOf(::AddToBookshelfUseCase)
+    singleOf(::FindShelfDuplicatesUseCase)
     singleOf(::ImportBookshelfUseCase)
     singleOf(::ExportBookshelfUseCase)
     factory { GetReadRecordOverviewUseCase() }

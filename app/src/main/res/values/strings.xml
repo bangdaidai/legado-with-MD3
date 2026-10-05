@@ -89,6 +89,14 @@
     <string name="layout_grid5">Grid-5</string>
     <string name="layout_grid6">Grid-6</string>
     <string name="bookshelf_layout">Layout</string>
+    <string name="bookshelf_duplicate_scan">Find Duplicate Books</string>
+    <string name="bookshelf_duplicate_scan_failed">Scan failed. Try again.</string>
+    <string name="bookshelf_duplicate_scan_none">No duplicates among %1$d books</string>
+    <string name="bookshelf_duplicate_scan_result">Scanned %1$d books · %2$d duplicate titles · %3$d copies</string>
+    <string name="bookshelf_duplicate_scan_hint">To merge copies, use Change Source on the book\'s detail page so reading progress is kept.</string>
+    <string name="bookshelf_duplicate_scan_copies">%1$d copies</string>
+    <string name="bookshelf_duplicate_scan_unknown_source">Unknown source</string>
+    <string name="bookshelf_duplicate_scan_progress">Read %1$s</string>
     <string name="view">View</string>
     <string name="book_library">Library</string>
     <string name="book_local">Import Books</string>
