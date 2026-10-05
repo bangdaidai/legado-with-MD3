@@ -51,8 +51,9 @@ internal fun groupShelfDuplicates(summaries: List<ShelfBookSummary>): ShelfDupli
         .values
         .flatMap { sameNameCopies ->
             val byAuthor = sameNameCopies.groupBy { BookMatchKey.of(it.author) }
-            val blankAuthor = byAuthor.remove("").orEmpty()
-            val namedAuthors = byAuthor.values
+            // 规范化后的空作者（含纯空白）统一落在 "" 这个桶里
+            val blankAuthor = byAuthor[""].orEmpty()
+            val namedAuthors = byAuthor.filterKeys { it.isNotEmpty() }.values
             // 作者为空且存在多个候选作者时不归属：宁可漏报也不误报
             val mergeBlank = namedAuthors.size <= 1
             namedAuthors.map { copies ->

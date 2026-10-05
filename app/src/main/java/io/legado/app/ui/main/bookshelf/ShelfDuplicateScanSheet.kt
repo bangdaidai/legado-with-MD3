@@ -183,6 +183,23 @@ private fun DuplicateGroupCard(group: ShelfDuplicateGroup) {
 
 @Composable
 private fun DuplicateCopyRow(copy: ShelfDuplicateCopy) {
+    // stringResource 先取出来再拼：放进 buildString / ifBlank 的 lambda 里虽然编译器允许
+    // （inline lambda 继承 composable 上下文），但读起来像在调用非 composable 函数
+    val progressLabel = stringResource(
+        R.string.bookshelf_duplicate_scan_progress,
+        copy.progressText(),
+    )
+    val unknownSource = stringResource(R.string.bookshelf_duplicate_scan_unknown_source)
+    val localLabel = stringResource(R.string.local)
+    val subtitle = buildString {
+        append(progressLabel)
+        append(" · ")
+        append(copy.durChapterTime.toTimeAgo())
+        if (copy.isLocal) {
+            append(" · ")
+            append(localLabel)
+        }
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -197,23 +214,13 @@ private fun DuplicateCopyRow(copy: ShelfDuplicateCopy) {
         Spacer(Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             AppText(
-                text = copy.originName.ifBlank {
-                    stringResource(R.string.bookshelf_duplicate_scan_unknown_source)
-                },
+                text = copy.originName.ifBlank { unknownSource },
                 style = LegadoTheme.typography.labelMediumEmphasized,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             AppText(
-                text = buildString {
-                    append(stringResource(R.string.bookshelf_duplicate_scan_progress, copy.progressText()))
-                    append(" · ")
-                    append(copy.durChapterTime.toTimeAgo())
-                    if (copy.isLocal) {
-                        append(" · ")
-                        append(stringResource(R.string.local))
-                    }
-                },
+                text = subtitle,
                 style = LegadoTheme.typography.labelSmall,
                 color = LegadoTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
