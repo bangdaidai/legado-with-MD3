@@ -68,38 +68,48 @@ class ReaderUnderlineGeometryTest {
     }
 
     @Test
-    fun `fluorescent band exposes colour plus round cap and feather only`() {
+    fun `fluorescent band exposes colour and feather only`() {
         val support = underlineControlSupport(7)
 
-        // 色带是填充矩形：线宽/偏移/层级对它没有意义
+        // 色带是填充矩形，不是描边：线宽/偏移/层级对它都没有意义
         assertFalse(support.width)
         assertFalse(support.offset)
         assertFalse(support.layer)
         assertFalse(support.dashPattern)
         assertFalse(support.waveShape)
-        // 但色带有边缘，圆头和羽化成立
-        assertTrue(support.roundCap)
         assertTrue(support.feather)
     }
 
     @Test
-    fun `custom svg exposes neither round cap nor feather`() {
-        val support = underlineControlSupport(5)
+    fun `every line type shares one fixed corner radius`() {
+        // 端点圆角不再是开关：所有线型统一收 READER_UNDERLINE_CORNER_DP 的小圆角。
+        assertTrue(READER_UNDERLINE_CORNER_DP > 0f)
 
-        assertTrue(support.width)
-        assertFalse("SVG 两端由用户路径决定，不开放圆头", support.roundCap)
-        assertFalse("SVG 羽化语义不成立", support.feather)
+        // 半径不超过半个线宽：线芯就那么粗，再大只是把端点变成半圆
+        assertEquals(1f, underlineCornerRadiusPx(8f, 3f), 1e-6f)
+        assertEquals(2f, underlineCornerRadiusPx(4f, 3f), 1e-6f)
+        // 亚像素线宽抬到 1px 后取半宽
+        assertEquals(0.5f, underlineCornerRadiusPx(0.2f, 3f), 1e-6f)
+        // 半径为 0 表示不收边
+        assertEquals(0f, underlineCornerRadiusPx(8f, 0f), 0f)
     }
 
     @Test
-    fun `double line and strike expose neither round cap nor feather`() {
-        // 双线两条独立成段，圆头会吃掉两线间距；删除线固定在行高比例处，
-        // 圆头与羽化都只会让它看起来像渲染错误
+    fun `custom svg exposes no feather`() {
+        val support = underlineControlSupport(5)
+
+        assertTrue(support.width)
+        assertFalse("SVG 的形状由用户路径决定，羽化不适用", support.feather)
+    }
+
+    @Test
+    fun `double line and strike expose no feather`() {
+        // 双实线两条线各自成段、删除线固定在行高比例处，羽化都只会把两线之间的
+        // 间隙或删除线糊到字上
         listOf(4, 6).forEach { mode ->
             val support = underlineControlSupport(mode)
-            assertTrue("mode $mode 应保留线宽", support.width)
-            assertFalse("mode $mode 不该开放圆头", support.roundCap)
-            assertFalse("mode $mode 不该开放羽化", support.feather)
+            assertTrue("mode $mode 应该有线宽", support.width)
+            assertFalse("mode $mode 不该有羽化", support.feather)
         }
     }
 
@@ -239,7 +249,7 @@ class ReaderUnderlineGeometryTest {
             val support = underlineControlSupport(mode)
             assertFalse(
                 "mode $mode 不该暴露任何参数",
-                support.width || support.offset || support.roundCap || support.feather ||
+                support.width || support.offset || support.feather ||
                         support.dashPattern || support.waveShape,
             )
         }

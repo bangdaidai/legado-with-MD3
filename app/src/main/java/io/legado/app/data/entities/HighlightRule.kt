@@ -79,7 +79,9 @@ data class HighlightRule(
     // 波浪波长（dp，一个完整「上-下」周期）
     @ColumnInfo(defaultValue = "24")
     var underlineWaveLength: Float = DEFAULT_WAVE_LENGTH_DP,
-    // 下划线端点圆角
+    // 遗留字段：端点圆角已取消，所有线型统一收 1dp 小圆角（READER_UNDERLINE_CORNER_DP），
+    // 渲染层不再读这一列。数据库列不能删——改已有表结构会让覆盖安装的库在 Room
+    // 打开时 identity hash 校验失败直接崩溃，故保留待上游提版本时清理。
     @ColumnInfo(defaultValue = "0")
     var underlineRoundCap: Boolean = false,
     // 下划线羽化半径（dp），0=不羽化

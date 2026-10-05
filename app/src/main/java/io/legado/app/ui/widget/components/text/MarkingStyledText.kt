@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
+import io.legado.app.feature.reader.core.style.underlineCornerRadiusPx
+import io.legado.app.feature.reader.core.style.READER_UNDERLINE_CORNER_DP
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.READER_SVG_BASE_WIDTH
 import io.legado.app.feature.reader.core.style.READER_SVG_BASELINE_Y
@@ -67,7 +69,6 @@ data class MarkingTextDecoration(
     val underlineWidth: Float = 1f,
     val underlineOffset: Float = 2f,
     val underlineSvgPath: String = "",
-    val underlineRoundCap: Boolean = false,
     val underlineFeather: Float = 0f,
 ) {
     /** 没有任何可画的效果时按纯文本渲染，跳过排版结果回调与绘制。 */
@@ -87,7 +88,6 @@ fun TextProcessStyle.toMarkingTextDecoration(): MarkingTextDecoration = MarkingT
     underlineColor = underlineColor?.let { Color(it) },
     underlineWidth = underlineWidth,
     underlineOffset = underlineOffset,
-    underlineRoundCap = false,
     underlineFeather = 0f,
     underlineSvgPath = underlineSvgPath.orEmpty(),
 )
@@ -179,7 +179,6 @@ fun MarkingStyledText(
                         result = result,
                         textLength = text.length,
                         color = lineColor,
-                        roundCap = decoration?.underlineRoundCap == true,
                         feather = decoration?.underlineFeather ?: 0f,
                     )
                 }
@@ -223,7 +222,6 @@ private fun DrawScope.drawFluorescentMarks(
     result: TextLayoutResult,
     textLength: Int,
     color: Color,
-    roundCap: Boolean,
     feather: Float,
 ) {
     result.forEachLineSegment(0, textLength) { left, right, top, bottom, _ ->
@@ -233,7 +231,6 @@ private fun DrawScope.drawFluorescentMarks(
             top = top,
             bottom = bottom,
             color = color,
-            roundCap = roundCap,
             feather = feather,
         )
     }
@@ -290,15 +287,16 @@ internal fun DrawScope.drawFluorescentBand(
     top: Float,
     bottom: Float,
     color: Color,
-    roundCap: Boolean,
     feather: Float,
 ) {
     val bandTop = top + (bottom - top) * READER_HALF_HIGHLIGHT_TOP_RATIO
     val bandHeight = (bottom - bandTop).coerceAtLeast(0f)
-    val radius = if (roundCap) bandHeight / 2f else 0f
+    // 两端统一收小圆角，与正文 ReaderHalfHighlightDrawCommand 同一口径；没有开关
+    val radius = READER_UNDERLINE_CORNER_DP.dp.toPx().coerceAtMost(bandHeight / 2f)
     val baseArgb = color.toArgb()
     // 边缘柔化：同一矩形从最虚画到最实（顺序与描边羽化一致），靠 alpha 叠加化开边界。
-    // 内缩量按羽化半径取并受色带短边约束，避免半行高的色带被吃掉一大半。
+    // 内缩量按羽化半径取，并受色带短边与段宽约束，避免半行高的色带被吃掉一大半、
+    // 以及窄命中段被内缩成「两端内陷」。
     val maxInset = bandFeatherMaxInsetPx(feather.dp.toPx(), bandHeight, right - left)
     featherBandPasses(feather).forEach { pass ->
         // 每趟颜色走 pass.argb —— 与正文共用同一个 8bit 量化口径
@@ -387,7 +385,6 @@ private fun DrawScope.drawWithReaderUnderlineCommand(
     startX: Float,
     endX: Float,
     y: Float,
-    roundCap: Boolean,
     featherPx: Float,
     dashOnPx: Float,
     dashOffPx: Float,
@@ -402,7 +399,6 @@ private fun DrawScope.drawWithReaderUnderlineCommand(
         startX = startX,
         endX = endX,
         y = y,
-        roundCap = roundCap,
         featherPx = featherPx,
         dashOnPx = dashOnPx,
         dashOffPx = dashOffPx,
@@ -420,7 +416,6 @@ internal fun DrawScope.drawUnderlineSegment(
     startX: Float,
     endX: Float,
     y: Float,
-    roundCap: Boolean = false,
     feather: Float = 0f,
     dashLen: Float = 8f,
     dashGap: Float = 5f,
@@ -428,18 +423,17 @@ internal fun DrawScope.drawUnderlineSegment(
     wavePeakDp: Float = READER_WAVE_CONTROL_OFFSET_DP / 2f,
     waveLengthDp: Float = READER_WAVE_HALF_WAVE_DP * 2f,
 ) {
-    // 羽化不再强制圆头：端点形状只看端点圆角开关，否则圆角关闭时也会用圆弧收头。
-    // 羽化分支整体委托给 ReaderUnderlineDrawCommand，由那边按同一口径判定。
-    val cap = if (roundCap) StrokeCap.Round else StrokeCap.Butt
+    // 所有线型统一收 1dp 小圆角（READER_UNDERLINE_CORNER_DP），没有开关。
+    // 羽化的外圈趟用平齐切口：round cap 半径恒等于 strokeWidth/2，外圈加粗到
+    // widthPx + 2×featherPx 时圆角会涨到半个羽化半径那么远，端头像多接一段。
+    val cap = StrokeCap.Round
     // 线宽在这里换算。刻意不做下限抬升：羽化 pass 的基准宽度一旦被抬高，向两侧
     // 扩散的量随之错位，柔边会比原始实现更糊。亚像素宽度的抬升只发生在最终描边
     // 那一趟（drawUnderlineShape 内的 finalStrokeWidthPx），不参与扩散量的计算；
     // 正文走同一个函数，两侧粗细一致。
     val coreWidth = widthDp.dp.toPx()
-    // 与正文 ReaderUnderline.capInsetPx 同一公式（finalStrokeWidthPx(宽度) / 2）：
-    // 圆弧向内收缩半宽，直线端点变半圆，总长仍等于段宽。本分支不羽化，没有
-    // 加粗的趟，半径固定；羽化分支不走这里，由 ReaderUnderlineDrawCommand 自己算。
-    val capInset = if (roundCap) finalStrokeWidthPx(coreWidth) / 2f else 0f
+    // 收边量与正文 ReaderUnderline.capInsetPx 同一公式（半径不超过半个线宽）。
+    val capInset = underlineCornerRadiusPx(coreWidth, READER_UNDERLINE_CORNER_DP.dp.toPx())
     if (feather > 0f) {
         // 羽化**直接复用正文的绘制命令**：预览自己那套多趟叠加曾多次与正文分叉
         // （插值空间、8bit 量化、趟宽、端部渐隐长度），改成同一处绘制后物理上
@@ -451,7 +445,6 @@ internal fun DrawScope.drawUnderlineSegment(
             startX = startX,
             endX = endX,
             y = y,
-            roundCap = roundCap,
             featherPx = feather.dp.toPx(),
             dashOnPx = dashLen.dp.toPx(),
             dashOffPx = dashGap.dp.toPx(),

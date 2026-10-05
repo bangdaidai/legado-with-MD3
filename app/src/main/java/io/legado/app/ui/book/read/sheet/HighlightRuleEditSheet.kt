@@ -173,7 +173,6 @@ fun HighlightRuleEditSheet(
         rule
     ) { mutableStateOf(initial.underlineSvgPath.orEmpty()) }
     var underlineBelowText by remember(show, rule) { mutableStateOf(initial.underlineBelowText) }
-    var underlineRoundCap by remember(show, rule) { mutableStateOf(initial.underlineRoundCap) }
     var underlineFeather by remember(show, rule) { mutableFloatStateOf(initial.underlineFeather) }
     var underlineDashLen by remember(show, rule) { mutableFloatStateOf(initial.underlineDashLen) }
     var underlineDashGap by remember(show, rule) { mutableFloatStateOf(initial.underlineDashGap) }
@@ -346,7 +345,6 @@ fun HighlightRuleEditSheet(
                             underlineWidth = underlineWidth,
                             underlineOffset = underlineOffset,
                             underlineSvgPath = underlineSvgPath.ifBlank { null },
-                            underlineRoundCap = underlineRoundCap,
                             underlineFeather = underlineFeather,
                             underlineBelowText = underlineBelowText,
                             underlineDashLen = underlineDashLen,
@@ -624,14 +622,6 @@ fun HighlightRuleEditSheet(
                                 title = stringResource(R.string.underline_below_text),
                                 checked = underlineBelowText,
                                 onCheckedChange = { underlineBelowText = it },
-                            )
-                        }
-
-                        AnimatedVisibility(visible = support.roundCap) {
-                            TinySwitchSettingItem(
-                                title = stringResource(R.string.underline_round_cap),
-                                checked = underlineRoundCap,
-                                onCheckedChange = { underlineRoundCap = it },
                             )
                         }
 
@@ -1044,7 +1034,6 @@ fun HighlightRuleEditSheet(
                             fontWeight = fontWeight,
                             isItalic = isItalic,
                             underlineBelowText = underlineBelowText,
-                            underlineRoundCap = underlineRoundCap,
                             underlineFeather = underlineFeather,
                             underlineDashLen = underlineDashLen,
                             underlineDashGap = underlineDashGap,
@@ -1091,7 +1080,6 @@ fun HighlightRuleEditSheet(
                             fontWeight = fontWeight,
                             isItalic = isItalic,
                             underlineBelowText = underlineBelowText,
-                            underlineRoundCap = underlineRoundCap,
                             underlineFeather = underlineFeather,
                             underlineDashLen = underlineDashLen,
                             underlineDashGap = underlineDashGap,
@@ -1321,7 +1309,6 @@ internal fun HighlightRulePreview(
     fontWeight: Int = 400,
     isItalic: Boolean = false,
     underlineBelowText: Boolean = false,
-    underlineRoundCap: Boolean = false,
     underlineFeather: Float = 0f,
     underlineDashLen: Float = 8f,
     underlineDashGap: Float = 5f,
@@ -1680,7 +1667,6 @@ internal fun HighlightRulePreview(
                                             top = top,
                                             bottom = bottom,
                                             color = resolvedUnderlineColor,
-                                            roundCap = underlineRoundCap,
                                             feather = if (underlineControlSupport(7).feather) underlineFeather else 0f,
                                         )
 
@@ -1703,11 +1689,7 @@ internal fun HighlightRulePreview(
                                             startX = left,
                                             endX = right,
                                             y = bottom + underlineOffset.dp.toPx(),
-                                            // 圆头与羽化都按线型适用性取：双实线/删除线/自定义 SVG 不开放这两项，
-                                            // 旧数据里存的值也不该在这里画出来。正文侧走 ReaderUnderline 的
-                                            // roundCapEffective / featherEffective，两边读同一份 underlineControlSupport
-                                            roundCap = underlineControlSupport(underlineMode).roundCap &&
-                                                    underlineRoundCap,
+                                            // 羽化按线型适用性取：双实线/删除线/自定义 SVG 不开放，旧数据里存的值                                             // 不该在这里画出来。正文侧走 ReaderUnderline 的 featherEffective，                                             // 两边读同一份 underlineControlSupport。
                                             feather = if (underlineControlSupport(underlineMode).feather) {
                                                 underlineFeather
                                             } else {

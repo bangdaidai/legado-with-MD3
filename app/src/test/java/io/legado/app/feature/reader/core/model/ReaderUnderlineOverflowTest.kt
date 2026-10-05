@@ -8,64 +8,51 @@ import org.junit.Test
 class ReaderUnderlineOverflowTest {
 
     @Test
-    fun `round cap inset follows the stroke width of each pass`() {
-        val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 5f)
-        // 线芯那一趟：半径 = 4 / 2 = 2，圆弧尖端落在段边界上
-        assertEquals(2f, underline.capInsetPx(4f), 0f)
-        // 羽化最外那一趟描到 4 + 2×5 = 14 宽：半径跟着变成 7，圆弧仍在段内。
-        // 按线芯宽度统一收缩会让这一趟的半圆探出段外 5px，端头像多接了一段。
-        assertEquals(7f, underline.capInsetPx(14f), 0f)
+    fun `corner inset is the shared radius capped at half the line width`() {
+        val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, featherPx = 5f)
+        // 统一圆角 3px：线宽 4px 时取半宽 2px
+        assertEquals(2f, underline.capInsetPx(4f, 3f), 0f)
+        // 加粗趟（羽化外圈 14px）最多取自己的半宽 7px
+        assertEquals(3f, underline.capInsetPx(14f, 3f), 0f)
+        // 亚像素线宽抬到 1px 后取半宽
+        assertEquals(0.5f, underline.capInsetPx(0.2f, 3f), 0f)
     }
 
     @Test
-    fun `periodic strokes use one fixed cap inset across all passes`() {
-        val wave = ReaderUnderline(3, 0, widthPx = 4f, offsetPx = 0f, roundCap = true, featherPx = 5f)
-        // 逐趟变内缩量 = 每趟按新段宽重新均摊波长，羽化多趟叠起来是一团交错重影。
-        // 固定取线芯半宽：圆头只在羽化的线芯那一趟生效（外圈趟是平齐切口），
-        // 所以线芯半宽就是这段笔形最大的内缩量，总长不超过段宽。
-        assertEquals(2f, wave.fixedCapInsetPx(), 0f)
-        // 不开放圆角时没有内缩
-        assertEquals(0f, ReaderUnderline(3, 0, widthPx = 4f, roundCap = false).fixedCapInsetPx(), 0f)
+    fun `stored round cap no longer changes anything`() {
+        // 端点圆角开关已移除：开与不开必须完全一致，否则旧数据会画出不同观感
+        val on = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = true, featherPx = 3f)
+        val off = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = false, featherPx = 3f)
+        assertEquals(on.overflowPadPx, off.overflowPadPx, 0f)
+        assertEquals(on.fixedCapInsetPx(3f), off.fixedCapInsetPx(3f), 0f)
     }
 
     @Test
-    fun `round cap inset applies the minimum visible stroke width`() {
-        val underline = ReaderUnderline(1, 0, widthPx = 0.2f, offsetPx = 0f, roundCap = true)
-        // 亚像素线宽描边时抬到 1px，半径也得按抬升后的 1px 算，否则圆头探出
-        assertEquals(0.5f, underline.capInsetPx(0.2f), 0f)
+    fun `periodic strokes share one fixed corner inset across all passes`() {
+        val wave = ReaderUnderline(3, 0, widthPx = 4f, offsetPx = 0f, featherPx = 5f)
+        // 逐趟变内缩量 = 每趟按新段宽重新均摊波长，多趟叠起来是一团交错重影。
+        // 固定按线芯宽度取：线芯就是这段笔形最大的内缩量，总长不超过段宽。
+        assertEquals(2f, wave.fixedCapInsetPx(3f), 0f)
     }
 
     @Test
-    fun `feather alone does not force a round cap`() {
-        val underline = ReaderUnderline(1, 0, widthPx = 3f, offsetPx = 0f, roundCap = false, featherPx = 2f)
+    fun `feather alone does not change the corner inset`() {
+        val underline = ReaderUnderline(1, 0, widthPx = 3f, offsetPx = 0f, featherPx = 2f)
         assertTrue(underline.featherEffective)
-        // 端点圆角关闭 + 羽化：平切口齐边，端头只做水平渐隐，不收成尖锥
-        assertFalse(underline.roundCapEffective)
-        assertEquals(0f, underline.capInsetPx(3f), 0f)
-        assertEquals(0f, underline.capInsetPx(7f), 0f)
+        // 羽化不参与收边判定：圆角半径只由统一常量和线宽决定
+        assertEquals(1.5f, underline.capInsetPx(3f, 3f), 0f)
     }
 
     @Test
-    fun `plain stroke reserves no horizontal room`() {
+    fun `plain stroke reserves no room beyond half its width`() {
         val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f)
-        // 平切口齐边，且线宽已含在纵向半宽里，横向不额外留白
         assertEquals(2f, underline.overflowPadPx, 0f)
     }
 
     @Test
-    fun `round cap overhang stays within the feather spread`() {
-        // 圆弧探出量 = 当趟描边宽度的一半，羽化最外那趟 = half + feather。
-        // 这与纵向的「半宽 + 羽化」同量，所以开启圆角不会比不开更收窄内容区。
-        val roundCap = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = true, featherPx = 5f)
-        val butt = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 0f, roundCap = false, featherPx = 5f)
-        assertEquals(2f + 5f, roundCap.overflowPadPx, 0f)
-        assertEquals(roundCap.overflowPadPx, butt.overflowPadPx, 0f)
-    }
-
-    @Test
     fun `overflow pad covers offset plus half width plus feather`() {
-        val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 5f)
-        // 下方 = offset 2 + 半宽 2 + 羽化 5 = 9；横向 = 半宽 2 + 羽化 5 = 7
+        val underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, featherPx = 5f)
+        // 下方 = offset 2 + 半宽 2 + 羽化 5 = 9；横向同样是半宽 + 羽化 = 7
         assertEquals(9f, underline.overflowPadPx, 0f)
     }
 
@@ -86,45 +73,32 @@ class ReaderUnderlineOverflowTest {
     }
 
     @Test
-    fun `double line and strike ignore stored round cap and feather`() {
-        // 这两个线型在编辑弹层不开放圆头/羽化，旧数据里存的值不该继续生效，
+    fun `double line strike and svg ignore stored feather`() {
+        // 这三个线型在编辑弹层不开放羽化，旧数据里存的值不该继续生效，
         // 否则正文会画出 UI 无法复现的效果，且与预览走偏
-        listOf(4, 6).forEach { mode ->
+        listOf(4, 5, 6).forEach { mode ->
             val underline = ReaderUnderline(
                 mode, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 3f,
             )
-            assertFalse("mode $mode 不该应用圆头", underline.roundCapEffective)
             assertFalse("mode $mode 不该应用羽化", underline.featherEffective)
-            // 收不到预留，也就不会多留白
-            assertEquals(0f, underline.capInsetPx(4f), 0f)
             assertEquals(2f + 2f, underline.overflowPadPx, 0f)
         }
     }
 
     @Test
-    fun `custom svg ignores stored round cap and feather`() {
-        val underline = ReaderUnderline(
-            5, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 3f,
-        )
+    fun `fluorescent band still honours feather but never pads horizontally`() {
+        val underline = ReaderUnderline(7, 0, widthPx = 4f, offsetPx = 2f, featherPx = 3f)
 
-        assertFalse(underline.roundCapEffective)
-        assertFalse(underline.featherEffective)
-        assertEquals(0f, underline.capInsetPx(4f), 0f)
-    }
-
-    @Test
-    fun `fluorescent band still honours round cap and feather`() {
-        val underline = ReaderUnderline(7, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 3f)
-
-        assertTrue(underline.roundCapEffective)
         assertTrue(underline.featherEffective)
+        // drawRoundRect 的圆角切在矩形内部、绝不外扩，所以横向不留白
+        assertEquals(2f + 3f, underline.overflowPadPx, 0f)
     }
 
     @Test
     fun `content clip pad absorbs the underline overflow`() {
         val style = ReaderTextStyle(
             0xFF000000.toInt(), 20f,
-            underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, roundCap = true, featherPx = 5f),
+            underline = ReaderUnderline(1, 0, widthPx = 4f, offsetPx = 2f, featherPx = 5f),
         )
         val page = ReaderPage(
             id = ReaderPageId(0, 0),

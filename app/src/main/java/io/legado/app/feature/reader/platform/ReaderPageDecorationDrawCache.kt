@@ -374,7 +374,6 @@ internal class ReaderUnderlineDrawCommand(
             startX: Float,
             endX: Float,
             y: Float,
-            roundCap: Boolean,
             featherPx: Float,
             dashOnPx: Float = 8f,
             dashOffPx: Float = 5f,
@@ -395,7 +394,6 @@ internal class ReaderUnderlineDrawCommand(
                 waveControlOffsetPx = waveControlOffsetPx,
                 waveHalfWavePx = waveHalfWavePx,
                 doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
-                roundCap = roundCap,
                 featherPx = featherPx,
             )
             return ReaderUnderlineDrawCommand(
