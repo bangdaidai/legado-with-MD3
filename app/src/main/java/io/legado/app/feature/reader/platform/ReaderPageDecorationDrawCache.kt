@@ -310,7 +310,7 @@ internal class ReaderUnderlineDrawCommand(
             val segStart = refStart + i * (on + off)
             if (segStart >= end) break
             val from = segStart.coerceAtLeast(start)
-            val to = (segStart + on).coerceAtMost(refEnd, end)
+            val to = minOf(segStart + on, refEnd, end)
             if (to <= from) continue
             canvas.drawLine(from, y, to, y, paint)
         }

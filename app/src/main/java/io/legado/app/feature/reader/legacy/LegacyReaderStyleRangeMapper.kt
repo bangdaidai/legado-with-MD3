@@ -150,7 +150,11 @@ object LegacyReaderStyleRangeMapper {
                 waveControlOffsetPx = (underlineWavePeak * 2f).dpToPx(),
                 waveHalfWavePx = (underlineWaveLength / 2f).dpToPx(),
                 doubleLineGapPx = READER_DOUBLE_LINE_GAP_DP.dpToPx(),
-                // 端点圆角已不再是参数：所有线型统一收 READER_UNDERLINE_CORNER_DP 的小圆角，                 // 由渲染层自己算，映射层不用传。                 // 羽化仍按线型适用性取：双实线/删除线/自定义 SVG 都不开放，                 // 这里把旧数据里存的值滤掉，与 ReaderUnderline.featherEffective、                 // 编辑弹层读的是同一份 underlineControlSupport。
+                // 端点圆角已不再是参数：所有线型统一收 READER_UNDERLINE_CORNER_DP 的小圆角，
+                // 由渲染层自己算，映射层不用传。
+                // 羽化仍按线型适用性取：双实线/删除线/自定义 SVG 都不开放，
+                // 这里把旧数据里存的值滤掉，与 ReaderUnderline.featherEffective、
+                // 编辑弹层读的是同一份 underlineControlSupport。
                 featherPx = if (underlineControlSupport(it).feather) {
                     underlineFeather.dpToPx()
                 } else {

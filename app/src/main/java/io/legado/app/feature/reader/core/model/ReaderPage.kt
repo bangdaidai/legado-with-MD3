@@ -4,6 +4,7 @@ import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.underlineControlSupport
+import io.legado.app.feature.reader.core.style.underlineCornerRadiusPx
 
 data class ReaderPageId(val chapterIndex: Int, val pageIndex: Int)
 
