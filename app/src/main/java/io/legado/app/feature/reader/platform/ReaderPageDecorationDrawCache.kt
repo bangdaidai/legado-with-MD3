@@ -181,28 +181,31 @@ internal class ReaderUnderlineDrawCommand(
          * 剖面采样点见 [READER_FEATHER_PROFILE_POSITIONS]，由 [ComposeShader] 一次
          * 插值完成，不需要逐趟。
          */
-        private fun featherShader(y: Float, halfSpread: Float): Shader {
-            val rgb = underline.colorArgb and 0x00FFFFFF
+    private fun featherShader(y: Float, halfSpread: Float): Shader {
             val alpha = (underline.colorArgb ushr 24) and 0xFF
 
-            // 垂直剖面：中心最浓、边缘最淡，归一化距离 0..1 映射到 ±halfSpread
+            // 水平剖面（dst）：**两端 alpha 0、中间满线色**。
+            // DST_IN 的公式是 `α = α_dst × α_src`，dst 的 alpha 是 0 的话乘什么都还是 0 ——
+            // 整条线全透明。这里若只给「剥掉 alpha 的线色」，正好就是那个 0。
+            val edgePos = edgeFadeRatio(featherPx, bounds.width)
+            val horizontal = LinearGradient(
+                bounds.left, 0f, bounds.right, 0f,
+                intArrayOf(0, underline.colorArgb, underline.colorArgb, 0),
+                floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
+                Shader.TileMode.CLAMP,
+            )
+
+            // 垂直剖面：中心最浓、边缘最淡，归一化距离 0..1 映射到 ±halfSpread。
+            // 同样用线色而非剥 alpha 的颜色：ComposeShader 两个构造的参数顺序相反
+            //（谁当 dst 会调换），两种顺序都正确才不依赖调用形式。
             val verticalColors = IntArray(READER_FEATHER_PROFILE_POSITIONS.size) { i ->
                 val a = (alpha * READER_FEATHER_PROFILE_WEIGHTS[i]).toInt().coerceIn(0, 255)
-                rgb or (a shl 24)
+                (underline.colorArgb and 0x00FFFFFF) or (a shl 24)
             }
             val vertical = LinearGradient(
                 0f, y - halfSpread, 0f, y + halfSpread,
                 verticalColors,
                 READER_FEATHER_PROFILE_POSITIONS,
-                Shader.TileMode.CLAMP,
-            )
-
-            // 水平剖面：中段满 alpha，两端在羽化半径内淡出（与垂直同量 = 各向同性）
-            val edgePos = edgeFadeRatio(featherPx, bounds.width)
-            val horizontal = LinearGradient(
-                bounds.left, 0f, bounds.right, 0f,
-                intArrayOf(rgb, rgb, rgb, rgb),
-                floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
                 Shader.TileMode.CLAMP,
             )
 
