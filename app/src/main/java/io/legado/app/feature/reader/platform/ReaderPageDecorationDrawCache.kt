@@ -1,5 +1,6 @@
 package io.legado.app.feature.reader.platform
 
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ComposeShader
@@ -9,6 +10,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.Shader
+import android.os.Build
 import android.util.LruCache
 import androidx.core.graphics.PathParser
 import io.legado.app.feature.reader.core.model.ReaderElement
@@ -30,6 +32,7 @@ import io.legado.app.feature.reader.core.style.featherSpreadPx
 import io.legado.app.feature.reader.core.style.featherVerticalStops
 import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
 import io.legado.app.feature.reader.core.style.scaledDashSegments
+import io.legado.app.feature.reader.core.style.waveBlurRadiusPx
 import io.legado.app.feature.reader.core.style.waveHalfWaves
 import io.legado.app.utils.dpToPx
 
@@ -176,6 +179,27 @@ internal class ReaderUnderlineDrawCommand(
         private val feathered = underline.featherEffective
         /** 自定义 SVG 的两端是用户画的路径，收边会改形状，保持原样。 */
         private val rounded = underline.mode != SVG_MODE
+
+        /**
+         * 波浪羽化的真模糊滤镜；null 表示走垂直渐变（非波浪 / 未羽化 / API < 28）。
+         *
+         * `BlurMaskFilter` 是各向同性卷积：描边带缘的波浪轮廓在模糊后保留
+         * `exp(-2π²σ²/λ²)` 的对比，波谷到波峰的空隙按到带缘的距离自然衰减。
+         * 垂直渐变在数学上做不到——它对同一 y 只能给一个浓度，而波峰调大后
+         * 同一 y 既可能是路径点也可能是空隙；上一版的满浓平台把波形包络整个
+         * 涂满，峰高一大带子就实心、模糊感消失。
+         *
+         * 官方「不支持的操作」表格仍把 `setMaskFilter` 标为不支持，但那是 GLES
+         * 时代的遗留；API 28+ 的 hwui 已切到 Skia 管线，`BlurMaskFilter` 实际
+         * 可用。仍按 28 设门槛：更老设备走垂直渐变降级（峰高大时偏实，可接受
+         * 的退化）。
+         */
+        private val waveBlurMaskFilter =
+            if (feathered && underline.mode == WAVE_MODE && Build.VERSION.SDK_INT >= 28) {
+                BlurMaskFilter(waveBlurRadiusPx(featherPx), BlurMaskFilter.Blur.NORMAL)
+            } else {
+                null
+            }
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = underline.colorArgb
             style = Paint.Style.STROKE
@@ -183,6 +207,24 @@ internal class ReaderUnderlineDrawCommand(
         private val svgPath =
             if (underline.mode == SVG_MODE) ReaderSvgPathCache.parse(underline.svgPath) else null
         private val wavePath = if (underline.mode == WAVE_MODE) createWavePath() else null
+
+        /**
+         * 水平剖面：**两端 alpha 0、中间满线色**（端部渐隐）。
+         *
+         * 羽化时它作为 `ComposeShader` 的 dst 参与 `DST_IN` 相乘；波浪的
+         * `BlurMaskFilter` 分支里单独用它（模糊接管垂直剖面，端部渐隐保留）。
+         * 若只给「剥掉 alpha 的线色」，两端 alpha 是 0，`DST_IN` 相乘后整条线
+         * 全透明——必须用带 alpha 的完整线色。
+         */
+        private fun horizontalFadeShader(): Shader {
+            val edgePos = edgeFadeRatio(featherPx, bounds.width)
+            return LinearGradient(
+                bounds.left, 0f, bounds.right, 0f,
+                intArrayOf(0, underline.colorArgb, underline.colorArgb, 0),
+                floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
+                Shader.TileMode.CLAMP,
+            )
+        }
 
         /**
          * 羽化的 shader：两个一维高斯剖面相乘，**一趟画完**。
@@ -196,24 +238,13 @@ internal class ReaderUnderlineDrawCommand(
          * 所以两者用同一个线色、只有 alpha 剖面不同。四个角因此在两个方向一起淡下去，
          * 是真正的各向同性；端点处两个方向的 alpha 都接近 0，既不生硬也不尖。
          *
-         * 垂直剖面的采样点由 [featherVerticalStops] 生成（路径处最浓、上下对称）。
-         * 波浪额外给一段满浓平台盖住波形起伏（± 峰高）：渐变的浓度中心若锁死在
-         * 基线，波峰波谷处的路径点会落到低权重区，波形对比被抹平。水平剖面两端
-         * 渐隐、中段满浓。由 [ComposeShader] 一次插值完成，不需要逐趟。
+         * 垂直剖面的采样点由 [featherVerticalStops] 生成（路径处最浓、上下对称），
+         * [plateauHalfPx] 给降级路径的波浪用：见 [draw] 里 `useWaveBlur` 的说明。
+         * 实线/虚线的路径恒在基线上，平台为 0，这就是精确的中心对称高斯。
          */
-    private fun featherShader(y: Float, halfSpread: Float, plateauHalfPx: Float): Shader {
+        private fun featherShader(y: Float, halfSpread: Float, plateauHalfPx: Float): Shader {
             val alpha = (underline.colorArgb ushr 24) and 0xFF
-
-            // 水平剖面（dst）：**两端 alpha 0、中间满线色**。
-            // DST_IN 的公式是 `α = α_dst × α_src`，dst 的 alpha 是 0 的话乘什么都还是 0 ——
-            // 整条线全透明。这里若只给「剥掉 alpha 的线色」，正好就是那个 0。
-            val edgePos = edgeFadeRatio(featherPx, bounds.width)
-            val horizontal = LinearGradient(
-                bounds.left, 0f, bounds.right, 0f,
-                intArrayOf(0, underline.colorArgb, underline.colorArgb, 0),
-                floatArrayOf(0f, edgePos, 1f - edgePos, 1f),
-                Shader.TileMode.CLAMP,
-            )
+            val horizontal = horizontalFadeShader()
 
             // 垂直剖面：路径处最浓、向上向下对称衰减到描边带两缘。渐变范围是
             // ±(平台 + 半扩散)：平台盖住波形起伏区（非波浪为 0，退化为中心峰），
@@ -247,10 +278,11 @@ internal class ReaderUnderlineDrawCommand(
                 finalStrokeWidthPx(underline.widthPx)
             }
             paint.strokeWidth = strokeWidth
-            // 波浪的满浓平台 = 实际峰高（quad 控制点的一半）：平台盖住波形起伏区，
-            // 路径各点的浓度与基线处一致，波形对比不被锁在基线的渐变压暗。
+            val useWaveBlur = waveBlurMaskFilter != null
+            paint.maskFilter = waveBlurMaskFilter
+            // 满浓平台只服务垂直渐变降级路径；模糊接管垂直剖面时无需平台。
             val plateauHalfPx =
-                if (feathered && underline.mode == WAVE_MODE) {
+                if (feathered && underline.mode == WAVE_MODE && !useWaveBlur) {
                     underline.waveControlOffsetPx.coerceAtLeast(0f) / 2f
                 } else {
                     0f
@@ -260,12 +292,12 @@ internal class ReaderUnderlineDrawCommand(
             val left = bounds.left + capInset
             val right = bounds.right - capInset
             paint.strokeCap = if (rounded) Paint.Cap.ROUND else Paint.Cap.BUTT
-            paint.shader =
-                if (feathered && bounds.right > bounds.left) {
-                    featherShader(y, strokeWidth / 2f, plateauHalfPx)
-                } else {
-                    null
-                }
+            paint.shader = when {
+                !feathered || bounds.right <= bounds.left -> null
+                // 模糊分支只留水平端部渐隐；垂直浓度全部交给 BlurMaskFilter
+                useWaveBlur -> horizontalFadeShader()
+                else -> featherShader(y, strokeWidth / 2f, plateauHalfPx)
+            }
             if (left < right) {
                 when (underline.mode) {
                     DASH_MODE -> drawDashed(canvas, left, right, y)

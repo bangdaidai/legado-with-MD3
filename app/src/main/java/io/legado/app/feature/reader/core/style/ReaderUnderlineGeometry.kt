@@ -235,6 +235,30 @@ fun featherVerticalStops(plateauHalfRatio: Float = 0f): Pair<FloatArray, FloatAr
     return positions to alphas
 }
 
+/**
+ * 波浪羽化的 `BlurMaskFilter` 半径（**px**）。
+ *
+ * 波峰调大后，「垂直渐变 + 满浓平台」模型在数学上无法同时做到浓芯跟随波形、
+ * 波谷到波峰的空隙变淡（同一 y 高度既可能是路径点也可能是空隙，垂直渐变对同一
+ * y 只能给一个浓度），平台被迫扩到整个波形包络，带子实心、模糊感消失。API 28+
+ * 的 hwui 已切到 Skia 管线，`BlurMaskFilter` 的各向同性卷积才是物理正确的做法：
+ * 描边带缘的波浪轮廓在模糊后保留 `exp(-2π²σ²/λ²)` 的对比（默认波长 24dp、羽化
+ * 5dp 时约 88%），空隙按到带缘的距离自然衰减。
+ *
+ * Skia 的 `BlurMaskFilter` 半径换算 `σ = 0.57735 × radius + 0.5`；取 0.6 倍羽化
+ * 半径时，视觉柔化带（alpha 0.9→0.1，约 2.6σ）≈ 0.9 倍羽化半径，与实线垂直
+ * 渐变的羽化口径一致。柔化尾部向带外扩约 1.3σ ≈ 0.45 倍羽化，在 `overflowPadPx`
+ * 的「半宽 + 羽化」预算内，无需额外留白。
+ *
+ * 下限 1px：半径过小时 Skia 画不出可感知的柔边，与其画出半生不熟的窄边，不如
+ * 保底一个最小模糊量。
+ */
+fun waveBlurRadiusPx(featherPx: Float): Float =
+    (featherPx * READER_WAVE_BLUR_RADIUS_RATIO).coerceAtLeast(1f)
+
+/** 波浪 `BlurMaskFilter` 半径相对羽化半径的比例，换算依据见 [waveBlurRadiusPx]。 */
+const val READER_WAVE_BLUR_RADIUS_RATIO = 0.6f
+
 /** 把 [featherEdgeStops] 的 alpha 乘上基色 alpha，量化成 8bit 色标。 */
 fun featherEdgeColors(alphas: FloatArray, colorArgb: Int): IntArray {
     val rgb = colorArgb and 0x00FFFFFF

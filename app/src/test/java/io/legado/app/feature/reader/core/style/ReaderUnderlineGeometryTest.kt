@@ -206,6 +206,15 @@ class ReaderUnderlineGeometryTest {
     }
 
     @Test
+    fun `wave blur radius tracks the feather with a floor`() {
+        // 0.6 倍羽化：Skia 的 σ≈0.577r+0.5，视觉柔化带≈2.6σ≈0.9 倍羽化，
+        // 与实线垂直渐变的羽化口径一致；柔化尾部外扩≈1.3σ，仍在溢出预算内
+        assertEquals(9f, waveBlurRadiusPx(15f), 1e-4f)
+        // 下限 1px：半径过小画不出可感知的柔边
+        assertEquals(1f, waveBlurRadiusPx(0.5f), 0f)
+    }
+
+    @Test
     fun `edge fade ratio is capped so short segments keep a solid core`() {
         assertEquals(0f, edgeFadeRatio(0f, 200f), 0f)
         // 长段：名义值就是羽化半径占比
