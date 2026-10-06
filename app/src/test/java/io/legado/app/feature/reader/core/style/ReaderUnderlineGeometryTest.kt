@@ -177,6 +177,35 @@ class ReaderUnderlineGeometryTest {
     }
 
     @Test
+    fun `vertical stops grow a plateau so the wave keeps its contrast`() {
+        // 波浪路径在基线上下 ±峰高之间起伏：无平台时浓度中心锁死在基线，波峰
+        // 波谷处的路径点落到低权重区，波形对比被渐变抹平（「模糊吞掉波浪」）。
+        // 平台半宽 = 峰高/(峰高+半扩散)，覆盖 [0.5-p, 0.5+p]，路径各点满浓。
+        val n = READER_FEATHER_PROFILE_POSITIONS.size
+        val (positions, alphas) = featherVerticalStops(0.25f)
+
+        // 上升沿压缩到 [0, 0.25]，平台右端色标 0.75，下降沿 [0.75, 1]
+        assertEquals(n * 2, positions.size)
+        assertEquals(positions.size, alphas.size)
+        assertEquals(0f, positions.first(), 1e-6f)
+        assertEquals(0.25f, positions[n - 1], 1e-5f)
+        assertEquals(1f, alphas[n - 1], 1e-6f)
+        // 平台两端同浓：两色标间线性插值恒为 1，波形起伏区内不再被压暗
+        assertEquals(0.75f, positions[n], 1e-5f)
+        assertEquals(1f, alphas[n], 1e-6f)
+        assertEquals(1f, positions.last(), 1e-6f)
+        assertEquals(READER_FEATHER_PROFILE_WEIGHTS.last(), alphas.last(), 1e-6f)
+        // 上升沿仍从最弱起、下降沿对称衰减到最弱
+        assertEquals(READER_FEATHER_PROFILE_WEIGHTS.first(), alphas.first(), 1e-6f)
+        assertEquals(READER_FEATHER_PROFILE_WEIGHTS[1], alphas[n + 1], 1e-6f)
+
+        // 无平台（默认）保持中心峰剖面：实线/虚线行为完全不变
+        val (plainPositions, _) = featherVerticalStops()
+        assertEquals(n * 2 - 1, plainPositions.size)
+        assertEquals(0.5f, plainPositions[n - 1], 1e-6f)
+    }
+
+    @Test
     fun `edge fade ratio is capped so short segments keep a solid core`() {
         assertEquals(0f, edgeFadeRatio(0f, 200f), 0f)
         // 长段：名义值就是羽化半径占比

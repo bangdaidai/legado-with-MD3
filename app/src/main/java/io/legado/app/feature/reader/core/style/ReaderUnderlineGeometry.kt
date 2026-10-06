@@ -188,33 +188,49 @@ fun featherEdgeStops(featherPx: Float, extentPx: Float): Pair<FloatArray, FloatA
 }
 
 /**
- * 描边羽化的**垂直**剖面色标：线芯处最浓、上下两缘对称衰减。
+ * 描边羽化的**垂直**剖面色标：路径处最浓、向上下两缘对称衰减。
  *
  * 与 [featherEdgeStops] 的「边缘型」剖面（软化填充块的边、中间保持实心）不同，
- * 描边是「一条线」：垂直渐变铺满整条描边带（线芯 ± [featherSpreadPx]），线芯处
- * alpha 最高，向上向下都按 [READER_FEATHER_PROFILE_WEIGHTS] 的高斯衰减。
+ * 描边是「一条线」：垂直渐变铺满整条描边带，路径处 alpha 最高，向上向下都按
+ * [READER_FEATHER_PROFILE_WEIGHTS] 的高斯衰减。
+ *
+ * [plateauHalfRatio] 是满浓平台的**半宽占比**（相对渐变半跨距），供波浪使用：
+ * 波浪路径在基线上下 ± 峰高之间起伏，若浓度中心锁死在基线（平台为 0），波峰波谷
+ * 处的路径点会落到渐变的低权重区，波形对比被人为抹平——「模糊把波浪整没了」
+ * 正是它。平台盖住 [±峰高] 后路径各点都保持线色浓度，羽化只柔化边缘，波形不变。
+ * 默认 0（无平台）时退化为中心峰剖面，实线/虚线照旧。
  *
  * 回归背景：旧实现把 [READER_FEATHER_PROFILE_POSITIONS] 那份「中心→半径」的单调
  * 剖面直接铺在描边带自上而下的方向上，结果是上缘 alpha 满浓生硬切断、线芯只有
  * 半浓、下缘几乎透明 —— 正文里下划线/波浪「只有下方模糊、上缘一条实边、波浪
- * 下半部糊成平带」正是它。这里把半剖面沿中心折叠成全剖面：两端最弱、中点最强、
- * 上下对称；波浪的浓芯（半浓区）随之沿波形起伏，模糊后波形仍可辨认。
+ * 下半部糊成平带」正是它。这里把半剖面沿中心折叠成全剖面：两端最弱、中段最强、
+ * 上下对称。
  *
- * 返回 (positions, alphas)，positions 相对描边带高度（0=上缘、0.5=线芯、1=下缘）。
+ * 返回 (positions, alphas)，positions 相对渐变半跨距（0=上缘、1=下缘）。
  */
-fun featherVerticalStops(): Pair<FloatArray, FloatArray> {
+fun featherVerticalStops(plateauHalfRatio: Float = 0f): Pair<FloatArray, FloatArray> {
     val n = READER_FEATHER_PROFILE_POSITIONS.size
-    val positions = FloatArray(n * 2 - 1)
-    val alphas = FloatArray(n * 2 - 1)
+    val p = plateauHalfRatio.coerceIn(0f, 0.5f)
+    val rise = 0.5f - p
+    val positions = FloatArray(n * 2 - 1 + if (p > 0f) 1 else 0)
+    val alphas = FloatArray(positions.size)
     for (i in 0 until n) {
-        // 上升沿 0→0.5：权重从上缘最弱升到线芯最强
-        positions[i] = READER_FEATHER_PROFILE_POSITIONS[i] * 0.5f
+        // 上升沿 0→0.5-p：权重从上缘最弱升到路径平台最强
+        positions[i] = READER_FEATHER_PROFILE_POSITIONS[i] * rise
         alphas[i] = READER_FEATHER_PROFILE_WEIGHTS[n - 1 - i]
     }
+    var cursor = n
+    if (p > 0f) {
+        // 平台右端：0.5-p（上升沿末点）到 0.5+p 之间由这两个同浓色标连成常量 1.0
+        positions[cursor] = 0.5f + p
+        alphas[cursor] = 1f
+        cursor++
+    }
     for (i in 1 until n) {
-        // 下降沿 0.5→1：权重从线芯最强降到下缘最弱（跳过 i=0，0.5 只留一个色标）
-        positions[n - 1 + i] = 0.5f + READER_FEATHER_PROFILE_POSITIONS[i] * 0.5f
-        alphas[n - 1 + i] = READER_FEATHER_PROFILE_WEIGHTS[i]
+        // 下降沿 0.5+p→1：权重从路径平台最强降到下缘最弱（跳过 i=0，平台右端已有色标）
+        positions[cursor] = (0.5f + p) + READER_FEATHER_PROFILE_POSITIONS[i] * rise
+        alphas[cursor] = READER_FEATHER_PROFILE_WEIGHTS[i]
+        cursor++
     }
     return positions to alphas
 }

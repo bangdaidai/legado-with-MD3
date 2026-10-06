@@ -196,10 +196,12 @@ internal class ReaderUnderlineDrawCommand(
          * 所以两者用同一个线色、只有 alpha 剖面不同。四个角因此在两个方向一起淡下去，
          * 是真正的各向同性；端点处两个方向的 alpha 都接近 0，既不生硬也不尖。
          *
-         * 垂直剖面的采样点由 [featherVerticalStops] 生成（线芯最浓、上下对称），
-         * 水平剖面两端渐隐、中段满浓。由 [ComposeShader] 一次插值完成，不需要逐趟。
+         * 垂直剖面的采样点由 [featherVerticalStops] 生成（路径处最浓、上下对称）。
+         * 波浪额外给一段满浓平台盖住波形起伏（± 峰高）：渐变的浓度中心若锁死在
+         * 基线，波峰波谷处的路径点会落到低权重区，波形对比被抹平。水平剖面两端
+         * 渐隐、中段满浓。由 [ComposeShader] 一次插值完成，不需要逐趟。
          */
-    private fun featherShader(y: Float, halfSpread: Float): Shader {
+    private fun featherShader(y: Float, halfSpread: Float, plateauHalfPx: Float): Shader {
             val alpha = (underline.colorArgb ushr 24) and 0xFF
 
             // 水平剖面（dst）：**两端 alpha 0、中间满线色**。
@@ -213,19 +215,21 @@ internal class ReaderUnderlineDrawCommand(
                 Shader.TileMode.CLAMP,
             )
 
-            // 垂直剖面：线芯处最浓、向上向下对称衰减到描边带两缘。归一化位置 0..1
-            // 对应 y±halfSpread 的整条描边带。旧实现把单调剖面直接铺满整带，上缘
+            // 垂直剖面：路径处最浓、向上向下对称衰减到描边带两缘。渐变范围是
+            // ±(平台 + 半扩散)：平台盖住波形起伏区（非波浪为 0，退化为中心峰），
+            // 两侧各留一个羽化半径做衰减。旧实现把单调剖面直接铺满整带，上缘
             // 满浓生硬、下缘几乎透明（「只有下方模糊」）；必须用中心对称的
             // [featherVerticalStops]。同样用线色而非剥 alpha 的颜色：ComposeShader
             // 两个构造的参数顺序相反（谁当 dst 会调换），两种顺序都正确才不依赖
             // 调用形式。
-            val (vPositions, vWeights) = featherVerticalStops()
+            val halfSpan = halfSpread + plateauHalfPx
+            val (vPositions, vWeights) = featherVerticalStops(plateauHalfPx / halfSpan)
             val verticalColors = IntArray(vWeights.size) { i ->
                 val a = (alpha * vWeights[i]).toInt().coerceIn(0, 255)
                 (underline.colorArgb and 0x00FFFFFF) or (a shl 24)
             }
             val vertical = LinearGradient(
-                0f, y - halfSpread, 0f, y + halfSpread,
+                0f, y - halfSpan, 0f, y + halfSpan,
                 verticalColors,
                 vPositions,
                 Shader.TileMode.CLAMP,
@@ -243,6 +247,14 @@ internal class ReaderUnderlineDrawCommand(
                 finalStrokeWidthPx(underline.widthPx)
             }
             paint.strokeWidth = strokeWidth
+            // 波浪的满浓平台 = 实际峰高（quad 控制点的一半）：平台盖住波形起伏区，
+            // 路径各点的浓度与基线处一致，波形对比不被锁在基线的渐变压暗。
+            val plateauHalfPx =
+                if (feathered && underline.mode == WAVE_MODE) {
+                    underline.waveControlOffsetPx.coerceAtLeast(0f) / 2f
+                } else {
+                    0f
+                }
             val capInset =
                 if (rounded) underline.capInsetPx(strokeWidth, cornerRadiusPx) else 0f
             val left = bounds.left + capInset
@@ -250,7 +262,7 @@ internal class ReaderUnderlineDrawCommand(
             paint.strokeCap = if (rounded) Paint.Cap.ROUND else Paint.Cap.BUTT
             paint.shader =
                 if (feathered && bounds.right > bounds.left) {
-                    featherShader(y, strokeWidth / 2f)
+                    featherShader(y, strokeWidth / 2f, plateauHalfPx)
                 } else {
                     null
                 }

@@ -65,6 +65,15 @@ class ReaderUnderlineOverflowTest {
     }
 
     @Test
+    fun `wave troughs reaching above the baseline reserve the wave height`() {
+        // 波谷向上探出实际峰高（控制点的一半）：描边带围绕路径 ±羽化，
+        // 包络上缘 = -(峰高 + 半宽 + 羽化)，与下方对称，裁剪才不会切平波谷。
+        val wave = ReaderUnderline(3, 0, widthPx = 2f, offsetPx = -2f, waveControlOffsetPx = 3f)
+        // 上方 = |offset| 2 + 半宽 1 + 峰高 1.5 = 4.5；下方 = 半宽 1 + 峰高 1.5 = 2.5
+        assertEquals(2f + 1f + 1.5f, wave.overflowPadPx, 0f)
+    }
+
+    @Test
     fun `double line strike and svg ignore stored feather`() {
         // 这三个线型在编辑弹层不开放羽化，旧数据里存的值不该继续生效，
         // 否则正文会画出 UI 无法复现的效果，且与预览走偏

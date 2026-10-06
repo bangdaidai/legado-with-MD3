@@ -159,7 +159,12 @@ data class ReaderUnderline(
                 4 -> doubleLineGapPx.coerceAtLeast(0f) + finalStrokeWidthPx(widthPx)
                 else -> 0f
             }
-            val above = half + feather + (-offsetPx).coerceAtLeast(0f)
+            val above = half + feather + (-offsetPx).coerceAtLeast(0f) + when (mode) {
+                // 波谷向基线上方探出实际峰高（描边带围绕路径 ±羽化，包络上缘 =
+                // -(峰高 + 半宽 + 羽化)），与下方对称。
+                3 -> waveControlOffsetPx.coerceAtLeast(0f) / 2f
+                else -> 0f
+            }
             return maxOf(horizontal, below, above)
         }
 }
