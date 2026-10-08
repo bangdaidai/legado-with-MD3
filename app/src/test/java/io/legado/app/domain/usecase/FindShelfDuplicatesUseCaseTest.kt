@@ -169,6 +169,51 @@ class FindShelfDuplicatesUseCaseTest {
         assertEquals("c2", copy.coverUrl)
     }
 
+    @Test
+    fun `deleting a copy updates groups and stats locally`() {
+        val result = groupShelfDuplicates(
+            listOf(
+                book("u1", "三体", "刘慈欣"),
+                book("u2", "三体", "刘慈欣"),
+                book("u3", "三体", "刘慈欣"),
+            )
+        )
+
+        val after = result.withoutCopy("u1")
+        assertEquals(listOf("u2", "u3"), after.groups.single().copies.map { it.bookUrl })
+        assertEquals(2, after.duplicateGroupCount)
+        assertEquals(2, after.duplicateCopyCount)
+    }
+
+    @Test
+    fun `group dissolves when fewer than two copies remain`() {
+        val result = groupShelfDuplicates(
+            listOf(
+                book("u1", "三体", "刘慈欣"),
+                book("u2", "三体", "刘慈欣"),
+            )
+        )
+
+        val after = result.withoutCopy("u1")
+        assertTrue(after.groups.isEmpty())
+        assertEquals(0, after.duplicateGroupCount)
+        assertEquals(0, after.duplicateCopyCount)
+    }
+
+    @Test
+    fun `deleting an unknown copy keeps the result untouched`() {
+        val result = groupShelfDuplicates(
+            listOf(
+                book("u1", "三体", "刘慈欣"),
+                book("u2", "三体", "刘慈欣"),
+            )
+        )
+
+        val after = result.withoutCopy("missing")
+        assertEquals(1, after.duplicateGroupCount)
+        assertEquals(2, after.groups.single().copyCount)
+    }
+
     private fun book(
         bookUrl: String,
         name: String,

@@ -93,10 +93,13 @@
     <string name="bookshelf_duplicate_scan_failed">Scan failed. Try again.</string>
     <string name="bookshelf_duplicate_scan_none">No duplicates among %1$d books</string>
     <string name="bookshelf_duplicate_scan_result">Scanned %1$d books, found %2$d duplicated (%3$d copies in total)</string>
-    <string name="bookshelf_duplicate_scan_hint">The same book was added more than once (usually from different sources or a local import). Keep one copy: just delete the outdated ones from the shelf; to keep both reading progress, first use Change Source on the kept copy to switch to the other copy\'s source, then delete it.</string>
+    <string name="bookshelf_duplicate_scan_hint">The same book was added more than once (usually from different sources or a local import). Tap the delete button next to a copy to remove it right here; locally imported files are kept. To merge progress, first use Change Source on the kept copy to switch to the other copy\'s source, then come back and delete the extra one.</string>
     <string name="bookshelf_duplicate_scan_copies">%1$d copies</string>
     <string name="bookshelf_duplicate_scan_unknown_source">Unknown source</string>
     <string name="bookshelf_duplicate_scan_progress">Read %1$s</string>
+    <string name="bookshelf_duplicate_delete_title">Delete Duplicate Copy</string>
+    <string name="bookshelf_duplicate_delete_text">Remove the copy from "%1$s" of "%2$s" (%3$s) from the shelf? Progress won\'t be migrated to the kept copy; locally imported files are kept.</string>
+    <string name="bookshelf_duplicate_delete_failed">Delete failed. Try again.</string>
     <string name="view">View</string>
     <string name="book_library">Library</string>
     <string name="book_local">Import Books</string>

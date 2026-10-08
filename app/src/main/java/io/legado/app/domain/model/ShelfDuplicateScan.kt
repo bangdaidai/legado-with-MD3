@@ -3,6 +3,7 @@ package io.legado.app.domain.model
 import androidx.compose.runtime.Stable
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 
 /**
  * 书架重名扫描里的一个副本。
@@ -53,4 +54,20 @@ data class ShelfDuplicateScanResult(
 
     /** 落在重复组里的副本总数（不是"多余"的本数，每组保留一本的话才等于副本数 - 组数）。 */
     val duplicateCopyCount: Int get() = groups.sumOf { it.copyCount }
+
+    /**
+     * 面板内删除一个副本后的新结果：组内剩不到两本时整组不再是重复，一并移除。
+     * 纯函数，删除落库后本地同步用，避免为此再扫一遍全库。
+     */
+    fun withoutCopy(bookUrl: String): ShelfDuplicateScanResult {
+        val newGroups = groups.mapNotNull { group ->
+            val copies = group.copies.filter { it.bookUrl != bookUrl }
+            when {
+                copies.size == group.copyCount -> group
+                copies.size >= 2 -> group.copy(copies = copies.toImmutableList())
+                else -> null
+            }
+        }.toImmutableList()
+        return copy(groups = newGroups)
+    }
 }

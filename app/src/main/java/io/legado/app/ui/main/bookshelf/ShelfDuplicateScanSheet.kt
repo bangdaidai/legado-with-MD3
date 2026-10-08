@@ -13,9 +13,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -26,7 +31,9 @@ import io.legado.app.domain.model.ShelfDuplicateCopy
 import io.legado.app.domain.model.ShelfDuplicateGroup
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.divider.PillDivider
@@ -35,23 +42,62 @@ import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toTimeAgo
+import kotlinx.collections.immutable.ImmutableSet
 
 /**
- * 书架同名书籍检测（只读）。
+ * 书架同名书籍检测。
  *
- * 面板不做任何删除/合并，只把「哪部作品有几个副本」摆出来并给出去留判断所需的对比信息
- * （书源、进度、最近阅读）。真要合并走书籍详情页的换源流程，那条路径才会把阅读进度、
- * 标签和阅读记忆一起迁到新 bookUrl。
+ * 面板把「哪部作品有几个副本」摆出来并给出去留判断所需的对比信息（书源、进度、最近阅读），
+ * 每个副本可以直接删除（带确认，本地导入的原文件保留）；跨副本合并进度仍走书籍详情页的
+ * 换源流程，那条路径才会把阅读进度、标签和阅读记忆一起迁到新 bookUrl。
  */
 @Composable
 fun ShelfDuplicateScanSheet(
     show: Boolean,
     state: ShelfDuplicateScanUiState,
     onScan: () -> Unit,
+    onDelete: (String) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
+    // 待确认删除的副本 bookUrl：面板私有 UI 状态，关面板（不组合）即丢弃
+    var pendingDeleteUrl by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(show) {
         if (show) onScan()
+    }
+
+    val pendingDelete = pendingDeleteUrl?.let { url ->
+        state.result.groups.firstNotNullOfOrNull { group ->
+            group.copies.firstOrNull { it.bookUrl == url }?.let { group to it }
+        }
+    }
+
+    if (pendingDelete != null) {
+        val (group, copy) = pendingDelete
+        val progressLabel = stringResource(
+            R.string.bookshelf_duplicate_scan_progress,
+            copy.progressText(),
+        )
+        AppAlertDialog(
+            show = true,
+            onDismissRequest = { pendingDeleteUrl = null },
+            title = stringResource(R.string.bookshelf_duplicate_delete_title),
+            text = stringResource(
+                R.string.bookshelf_duplicate_delete_text,
+                copy.originName.ifBlank {
+                    stringResource(R.string.bookshelf_duplicate_scan_unknown_source)
+                },
+                group.name,
+                progressLabel,
+            ),
+            confirmText = stringResource(R.string.delete),
+            onConfirm = {
+                pendingDeleteUrl = null
+                onDelete(copy.bookUrl)
+            },
+            dismissText = stringResource(R.string.cancel),
+            onDismiss = { pendingDeleteUrl = null },
+        )
     }
 
     AppModalBottomSheet(
@@ -126,7 +172,11 @@ fun ShelfDuplicateScanSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(state.result.groups, key = { "${it.name}|${it.author}" }) { group ->
-                        DuplicateGroupCard(group = group)
+                        DuplicateGroupCard(
+                            group = group,
+                            deletingBookUrls = state.deletingBookUrls,
+                            onDelete = { pendingDeleteUrl = it },
+                        )
                     }
                 }
             }
@@ -135,7 +185,11 @@ fun ShelfDuplicateScanSheet(
 }
 
 @Composable
-private fun DuplicateGroupCard(group: ShelfDuplicateGroup) {
+private fun DuplicateGroupCard(
+    group: ShelfDuplicateGroup,
+    deletingBookUrls: ImmutableSet<String>,
+    onDelete: (String) -> Unit,
+) {
     GlassCard(containerColor = LegadoTheme.colorScheme.onSheetContent) {
         Column(
             modifier = Modifier
@@ -173,14 +227,22 @@ private fun DuplicateGroupCard(group: ShelfDuplicateGroup) {
             }
             PillDivider()
             group.copies.forEach { copy ->
-                DuplicateCopyRow(copy = copy)
+                DuplicateCopyRow(
+                    copy = copy,
+                    deleting = copy.bookUrl in deletingBookUrls,
+                    onDelete = onDelete,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun DuplicateCopyRow(copy: ShelfDuplicateCopy) {
+private fun DuplicateCopyRow(
+    copy: ShelfDuplicateCopy,
+    deleting: Boolean,
+    onDelete: (String) -> Unit,
+) {
     // stringResource 先取出来再拼：放进 buildString / ifBlank 的 lambda 里虽然编译器允许
     // （inline lambda 继承 composable 上下文），但读起来像在调用非 composable 函数
     val progressLabel = stringResource(
@@ -225,5 +287,11 @@ private fun DuplicateCopyRow(copy: ShelfDuplicateCopy) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        SmallPlainButton(
+            onClick = { onDelete(copy.bookUrl) },
+            icon = Icons.Default.Delete,
+            contentDescription = stringResource(R.string.delete),
+            enabled = !deleting,
+        )
     }
 }

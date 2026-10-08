@@ -41,7 +41,7 @@ sealed interface BookshelfOverlay {
     data class GroupEditSheet(val groupId: Long) : BookshelfOverlay
     data object BatchDownloadConfirmDialog : BookshelfOverlay
 
-    /** 书架同名书籍检测（只读报告，不修改任何数据） */
+    /** 书架同名书籍检测报告；副本行支持直接删除（带确认），合并进度仍走详情页换源 */
     data object DuplicateScanSheet : BookshelfOverlay
 }
 
@@ -107,6 +107,9 @@ sealed interface BookshelfIntent {
 
     /** 扫描整个书架里同名同作者同形态的重复副本；由打开检测面板时触发 */
     data object ScanShelfDuplicates : BookshelfIntent
+
+    /** 同名检测面板内直接删除一个重复副本；已带确认，删除后书架与检测结果同步刷新 */
+    data class DeleteShelfDuplicate(val bookUrl: String) : BookshelfIntent
 }
 
 sealed interface BookshelfEffect {
@@ -128,6 +131,8 @@ data class ShelfDuplicateScanUiState(
     val isScanning: Boolean = false,
     val result: ShelfDuplicateScanResult = ShelfDuplicateScanResult(),
     val failed: Boolean = false,
+    /** 正在面板内删除的副本 bookUrl；删除期间对应行禁用，防重复点击 */
+    val deletingBookUrls: ImmutableSet<String> = persistentSetOf(),
 )
 
 @Stable

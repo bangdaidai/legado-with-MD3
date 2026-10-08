@@ -92,10 +92,13 @@
     <string name="bookshelf_duplicate_scan_failed">扫描失败，请重试</string>
     <string name="bookshelf_duplicate_scan_none">%1$d 本书里没有发现重复</string>
     <string name="bookshelf_duplicate_scan_result">已扫描 %1$d 本书，发现 %2$d 本重复（共 %3$d 个副本）</string>
-    <string name="bookshelf_duplicate_scan_hint">这些是同一本书被重复添加（通常来自不同书源或本地导入）。只需保留一本：在书架删掉进度旧的那本即可；想保住两边的进度，先在留下那本的详情页用「换源」切到另一本的来源，进度会一并迁过去，然后再删。</string>
+    <string name="bookshelf_duplicate_scan_hint">这些是同一本书被重复添加（通常来自不同书源或本地导入）。点副本右侧的删除按钮即可直接清理，本地导入的文件会保留；想合并两边的进度，先在留下那本的详情页用「换源」切到另一本的来源，进度会一并迁过去，再回来删掉多余的那本。</string>
     <string name="bookshelf_duplicate_scan_copies">%1$d 个副本</string>
     <string name="bookshelf_duplicate_scan_unknown_source">未知书源</string>
     <string name="bookshelf_duplicate_scan_progress">已读 %1$s</string>
+    <string name="bookshelf_duplicate_delete_title">删除重复副本</string>
+    <string name="bookshelf_duplicate_delete_text">将从书架移除来自「%1$s」的《%2$s》（%3$s）。进度不会迁移到保留的那本；本地导入的文件会保留。</string>
+    <string name="bookshelf_duplicate_delete_failed">删除失败，请重试</string>
     <string name="view">视图</string>
     <string name="book_library">书城</string>
     <string name="book_local">添加本地</string>

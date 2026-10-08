@@ -1478,6 +1478,7 @@ private fun BookshelfOverlays(
         show = activeOverlay == BookshelfOverlay.DuplicateScanSheet,
         state = uiState.duplicateScan,
         onScan = { onIntent(BookshelfIntent.ScanShelfDuplicates) },
+        onDelete = { onIntent(BookshelfIntent.DeleteShelfDuplicate(it)) },
         onDismissRequest = { onIntent(BookshelfIntent.DismissOverlay) }
     )
 

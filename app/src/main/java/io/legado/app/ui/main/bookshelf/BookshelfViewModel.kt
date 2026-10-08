@@ -29,6 +29,7 @@ import io.legado.app.domain.model.settings.PrivateAccessSettings
 import io.legado.app.domain.usecase.AddBookUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
+import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.FindShelfDuplicatesUseCase
 import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
@@ -99,6 +100,7 @@ class BookshelfViewModel(
     private val importBookshelfUseCase: ImportBookshelfUseCase,
     private val exportBookshelfUseCase: ExportBookshelfUseCase,
     private val findShelfDuplicatesUseCase: FindShelfDuplicatesUseCase,
+    private val deleteBooksUseCase: DeleteBooksUseCase,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val bookshelfTagGateway: BookshelfTagGateway,
     private val appShellSettingsGateway: AppShellSettingsGateway,
@@ -957,6 +959,7 @@ class BookshelfViewModel(
                 setBooksPrivate(intent.bookUrls, intent.isPrivate)
 
             BookshelfIntent.ScanShelfDuplicates -> scanShelfDuplicates()
+            is BookshelfIntent.DeleteShelfDuplicate -> deleteShelfDuplicate(intent.bookUrl)
         }
     }
 
@@ -972,6 +975,38 @@ class BookshelfViewModel(
                 .onFailure { error ->
                     AppLog.put("书架同名检测失败", error)
                     duplicateScanFlow.value = ShelfDuplicateScanUiState(failed = true)
+                }
+        }
+    }
+
+    /**
+     * 在同名检测面板内直接删除一个重复副本。
+     *
+     * - `deleteOriginal = false`：本地导入的书只从书架移除，Download 里的原文件保留，
+     *   与"清理重复副本"的意图一致，误删文件不可逆；
+     * - 删除落库后书架列表随 Room Flow 自动刷新，检测结果用 [ShelfDuplicateScanResult.withoutCopy]
+     *   本地同步移除（组内剩不到两本时整组消失），省一次全库重扫；
+     * - 面板中途关掉也没关系：删除协程照常完成，重开面板会重扫到真实书架。
+     */
+    private fun deleteShelfDuplicate(bookUrl: String) {
+        val scan = duplicateScanFlow.value
+        if (bookUrl in scan.deletingBookUrls) return
+        duplicateScanFlow.value = scan.copy(deletingBookUrls = scan.deletingBookUrls + bookUrl)
+        viewModelScope.launch {
+            runCatching { deleteBooksUseCase.execute(setOf(bookUrl), deleteOriginal = false) }
+                .onSuccess {
+                    val current = duplicateScanFlow.value
+                    duplicateScanFlow.value = current.copy(
+                        result = current.result.withoutCopy(bookUrl),
+                        deletingBookUrls = current.deletingBookUrls - bookUrl,
+                    )
+                }
+                .onFailure { error ->
+                    AppLog.put("删除重复副本失败", error)
+                    val current = duplicateScanFlow.value
+                    duplicateScanFlow.value =
+                        current.copy(deletingBookUrls = current.deletingBookUrls - bookUrl)
+                    showMessage(R.string.bookshelf_duplicate_delete_failed)
                 }
         }
     }
