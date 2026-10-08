@@ -2654,14 +2654,19 @@ class ReadBookController(
                     publishReaderPageWindow()
                 } else {
                     // 定位只对本次跳章有效；openChapter 成功仍未消费时放弃，
-                    // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置
+                    // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置。
+                    // 注意：不能在此回调里清除 pendingSearchNavigation——openChapter 的
+                    // success 回调在 layoutLoadedChapter 完成后、readerChapterInputChanged
+                    // 触发之前执行，提前清除会导致 resolveSearchNavigation 永远不被调用，
+                    // 阅读器停留在 openChapter 传入的初始位置（章首）。
                     ReadBook.openChapter(
                         result.chapterIndex,
                         // Search offsets may include a title prefix. The body offset is resolved
                         // after the cached chapter input has been published.
                         0,
                     ) {
-                        pendingSearchNavigation = null
+                        // 如果 pendingSearchNavigation 已被 readerChapterInputChanged 消费，
+                        // 这里什么都不做；否则保留它，让后续 input changed 回调处理。
                     }
                 }
             }
