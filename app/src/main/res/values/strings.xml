@@ -92,8 +92,8 @@
     <string name="bookshelf_duplicate_scan">Find Duplicate Books</string>
     <string name="bookshelf_duplicate_scan_failed">Scan failed. Try again.</string>
     <string name="bookshelf_duplicate_scan_none">No duplicates among %1$d books</string>
-    <string name="bookshelf_duplicate_scan_result">Scanned %1$d books · %2$d duplicate titles · %3$d copies</string>
-    <string name="bookshelf_duplicate_scan_hint">To merge copies, use Change Source on the book\'s detail page so reading progress is kept.</string>
+    <string name="bookshelf_duplicate_scan_result">Scanned %1$d books, found %2$d duplicated (%3$d copies in total)</string>
+    <string name="bookshelf_duplicate_scan_hint">The same book was added more than once (usually from different sources or a local import). Keep one copy: just delete the outdated ones from the shelf; to keep both reading progress, first use Change Source on the kept copy to switch to the other copy\'s source, then delete it.</string>
     <string name="bookshelf_duplicate_scan_copies">%1$d copies</string>
     <string name="bookshelf_duplicate_scan_unknown_source">Unknown source</string>
     <string name="bookshelf_duplicate_scan_progress">Read %1$s</string>

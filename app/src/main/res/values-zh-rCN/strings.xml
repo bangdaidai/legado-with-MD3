@@ -91,8 +91,8 @@
     <string name="bookshelf_duplicate_scan">检测同名书籍</string>
     <string name="bookshelf_duplicate_scan_failed">扫描失败，请重试</string>
     <string name="bookshelf_duplicate_scan_none">%1$d 本书里没有发现重复</string>
-    <string name="bookshelf_duplicate_scan_result">已扫描 %1$d 本书 · %2$d 组同名 · %3$d 个副本</string>
-    <string name="bookshelf_duplicate_scan_hint">如需合并副本，请在书籍详情页使用「换源」，阅读进度会一并保留。</string>
+    <string name="bookshelf_duplicate_scan_result">已扫描 %1$d 本书，发现 %2$d 本重复（共 %3$d 个副本）</string>
+    <string name="bookshelf_duplicate_scan_hint">这些是同一本书被重复添加（通常来自不同书源或本地导入）。只需保留一本：在书架删掉进度旧的那本即可；想保住两边的进度，先在留下那本的详情页用「换源」切到另一本的来源，进度会一并迁过去，然后再删。</string>
     <string name="bookshelf_duplicate_scan_copies">%1$d 个副本</string>
     <string name="bookshelf_duplicate_scan_unknown_source">未知书源</string>
     <string name="bookshelf_duplicate_scan_progress">已读 %1$s</string>

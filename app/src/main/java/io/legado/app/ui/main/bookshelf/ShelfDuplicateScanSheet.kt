@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,7 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -59,6 +58,14 @@ fun ShelfDuplicateScanSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.bookshelf_duplicate_scan),
+        endAction = {
+            MediumTonalButton(
+                onClick = onScan,
+                icon = Icons.Default.Refresh,
+                contentDescription = stringResource(R.string.retry),
+                enabled = !state.isScanning,
+            )
+        },
     ) {
         when {
             // 失败不是"没有结果"，用纯文案而不是 EmptyMessage —— 后者的随机颜文字
@@ -74,12 +81,6 @@ fun ShelfDuplicateScanSheet(
                     text = stringResource(R.string.bookshelf_duplicate_scan_failed),
                     style = LegadoTheme.typography.bodyMedium,
                     color = LegadoTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(8.dp))
-                MediumTonalButton(
-                    onClick = onScan,
-                    icon = Icons.Default.Search,
-                    text = stringResource(R.string.retry),
                 )
             }
 
@@ -97,9 +98,6 @@ fun ShelfDuplicateScanSheet(
                     R.string.bookshelf_duplicate_scan_none,
                     state.result.scannedBookCount,
                 ),
-                buttonText = stringResource(R.string.retry),
-                buttonImageVector = Icons.Default.Search,
-                onButtonClick = onScan,
             )
 
             else -> Column(
