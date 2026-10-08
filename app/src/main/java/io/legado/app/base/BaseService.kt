@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.annotation.CallSuper
+import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
@@ -89,6 +90,9 @@ abstract class BaseService : LifecycleService() {
     override fun onTimeout(startId: Int, fgsType: Int) {
         super.onTimeout(startId, fgsType)
         LogUtils.d(simpleName, "onTimeout startId:$startId fgsType:$fgsType")
+        // dataSync 等类型超时后系统只给几秒宽限：先摘掉前台状态再停服务，
+        // 防止主线程忙碌导致 stopSelf 生效过晚，触发 ForegroundServiceDidNotStopInTimeException
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 

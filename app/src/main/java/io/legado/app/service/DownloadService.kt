@@ -35,7 +35,9 @@ import splitties.systemservices.notificationManager
 class DownloadService : BaseService() {
     private val groupKey = "${appCtx.packageName}.download"
     private val downloads = hashMapOf<Long, DownloadInfo>()
-    private val completeDownloads = hashSetOf<Long>()
+
+    // 已完成的下载 id -> 文件名：条目从 downloads 移出后，点通知仍能凭它打开文件
+    private val completeDownloads = hashMapOf<Long, String>()
     private var upStateJob: Job? = null
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -68,8 +70,12 @@ class DownloadService : BaseService() {
 
             IntentAction.play -> {
                 val id = intent.getLongExtra("downloadId", 0)
-                if (completeDownloads.contains(id)) {
-                    openDownload(id, downloads[id]?.fileName)
+                // 文件名随通知 extra 走：服务可能已因全部下载终态而停止重启，内存表不可靠
+                val fileName = intent.getStringExtra("fileName")
+                    ?: completeDownloads[id]
+                    ?: downloads[id]?.fileName
+                if (fileName != null) {
+                    openDownload(id, fileName)
                 } else {
                     toastOnUi("未完成,下载的文件夹Download")
                 }
@@ -129,23 +135,26 @@ class DownloadService : BaseService() {
      */
     @Synchronized
     private fun removeDownload(downloadId: Long) {
-        if (!completeDownloads.contains(downloadId)) {
+        if (completeDownloads.containsKey(downloadId)) {
+            completeDownloads.remove(downloadId)
+        } else {
             downloadManager.remove(downloadId)
         }
         downloads.remove(downloadId)
-        completeDownloads.remove(downloadId)
         notificationManager.cancel(downloadId.toInt())
     }
 
     /**
-     * 下载成功
+     * 下载进入终态（成功/失败）：移出下载表。
+     * 服务只为还在进行的下载保留前台，避免长时间空转撞上 dataSync 前台服务
+     * 的 6 小时上限（Android 15+ 超时未停会抛 ForegroundServiceDidNotStopInTimeException）。
      */
     @Synchronized
-    private fun successDownload(downloadId: Long) {
-        if (!completeDownloads.contains(downloadId)) {
-            completeDownloads.add(downloadId)
-            val fileName = downloads[downloadId]?.fileName
-            openDownload(downloadId, fileName)
+    private fun finishDownload(downloadId: Long, success: Boolean) {
+        val info = downloads.remove(downloadId) ?: return
+        if (success) {
+            completeDownloads[downloadId] = info.fileName
+            openDownload(downloadId, info.fileName)
         }
     }
 
@@ -171,41 +180,57 @@ class DownloadService : BaseService() {
         val ids = downloads.keys
         val query = DownloadManager.Query()
         query.setFilterById(*ids.toLongArray())
+        // 终态先收集、循环外统一收尾，避免遍历时改动 downloads
+        val finished = hashMapOf<Long, Boolean>()
         downloadManager.query(query).use { cursor ->
-            if (cursor.moveToFirst()) {
-                val idIndex = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
-                val progressIndex =
-                    cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                val fileSizeIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                do {
-                    val id = cursor.getLong(idIndex)
-                    val progress = cursor.getInt(progressIndex)
-                    val max = cursor.getInt(fileSizeIndex)
-                    val status = when (cursor.getInt(statusIndex)) {
-                        DownloadManager.STATUS_PAUSED -> getString(R.string.pause)
-                        DownloadManager.STATUS_PENDING -> getString(R.string.wait_download)
-                        DownloadManager.STATUS_RUNNING -> getString(R.string.downloading)
-                        DownloadManager.STATUS_SUCCESSFUL -> {
-                            successDownload(id)
-                            getString(R.string.download_success)
-                        }
-
-                        DownloadManager.STATUS_FAILED -> getString(R.string.download_error)
-                        else -> getString(R.string.unknown_state)
-                    }
-                    downloads[id]?.let { downloadInfo ->
-                        upDownloadNotification(
-                            id,
-                            downloadInfo.notificationId,
-                            "${downloadInfo.fileName} $status",
-                            max,
-                            progress,
-                            downloadInfo.startTime
-                        )
-                    }
-                } while (cursor.moveToNext())
+            if (!cursor.moveToFirst()) {
+                // DownloadManager 里已查不到任何任务（记录被系统清理）：全部按失败收尾
+                ids.toList().forEach { finishDownload(it, success = false) }
+                stopSelf()
+                return
             }
+            val idIndex = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
+            val progressIndex =
+                cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+            val fileSizeIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+            val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+            do {
+                val id = cursor.getLong(idIndex)
+                val progress = cursor.getInt(progressIndex)
+                val max = cursor.getInt(fileSizeIndex)
+                val status = when (cursor.getInt(statusIndex)) {
+                    DownloadManager.STATUS_PAUSED -> getString(R.string.pause)
+                    DownloadManager.STATUS_PENDING -> getString(R.string.wait_download)
+                    DownloadManager.STATUS_RUNNING -> getString(R.string.downloading)
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        finished[id] = true
+                        getString(R.string.download_success)
+                    }
+
+                    DownloadManager.STATUS_FAILED -> {
+                        finished[id] = false
+                        getString(R.string.download_error)
+                    }
+
+                    else -> getString(R.string.unknown_state)
+                }
+                downloads[id]?.let { downloadInfo ->
+                    upDownloadNotification(
+                        id,
+                        downloadInfo.notificationId,
+                        "${downloadInfo.fileName} $status",
+                        max,
+                        progress,
+                        downloadInfo.startTime,
+                        downloadInfo.fileName,
+                    )
+                }
+            } while (cursor.moveToNext())
+        }
+        finished.forEach { (id, success) -> finishDownload(id, success) }
+        // 全部下载已终态：停掉前台服务，DownloadManager 自己会把剩余下载做完
+        if (downloads.isEmpty()) {
+            stopSelf()
         }
     }
 
@@ -243,7 +268,8 @@ class DownloadService : BaseService() {
         content: String,
         max: Int,
         progress: Int,
-        startTime: Long
+        startTime: Long,
+        fileName: String,
     ) {
         val notificationBuilder = NotificationCompat.Builder(this, AppConst.channelIdDownload)
             .setSmallIcon(R.drawable.ic_download)
@@ -253,6 +279,7 @@ class DownloadService : BaseService() {
             .setContentIntent(
                 servicePendingIntent<DownloadService>(IntentAction.play, downloadId.toInt()) {
                     putExtra("downloadId", downloadId)
+                    putExtra("fileName", fileName)
                 }
             )
             .setDeleteIntent(
