@@ -991,21 +991,21 @@ class BookshelfViewModel(
     private fun deleteShelfDuplicate(bookUrl: String) {
         val scan = duplicateScanFlow.value
         if (bookUrl in scan.deletingBookUrls) return
-        duplicateScanFlow.value = scan.copy(deletingBookUrls = scan.deletingBookUrls + bookUrl)
+        duplicateScanFlow.value = scan.copy(deletingBookUrls = scan.deletingBookUrls.add(bookUrl))
         viewModelScope.launch {
             runCatching { deleteBooksUseCase.execute(setOf(bookUrl), deleteOriginal = false) }
                 .onSuccess {
                     val current = duplicateScanFlow.value
                     duplicateScanFlow.value = current.copy(
                         result = current.result.withoutCopy(bookUrl),
-                        deletingBookUrls = current.deletingBookUrls - bookUrl,
+                        deletingBookUrls = current.deletingBookUrls.remove(bookUrl),
                     )
                 }
                 .onFailure { error ->
                     AppLog.put("删除重复副本失败", error)
                     val current = duplicateScanFlow.value
                     duplicateScanFlow.value =
-                        current.copy(deletingBookUrls = current.deletingBookUrls - bookUrl)
+                        current.copy(deletingBookUrls = current.deletingBookUrls.remove(bookUrl))
                     showMessage(R.string.bookshelf_duplicate_delete_failed)
                 }
         }
