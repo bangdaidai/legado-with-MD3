@@ -1057,6 +1057,7 @@ sealed interface ReadBookIntent {
     /** 朗读设置卡片停在哪个 tab（滑页和点 tab 都走这里）。 */
     data class SetReadAloudConfigTab(val tab: Int) : ReadBookIntent
     data object OpenReadAloudPlayer : ReadBookIntent
+    data object OpenClassicReadAloudControls : ReadBookIntent
     data class SelectFont(val path: String) : ReadBookIntent
     data class SelectTitleFont(val path: String) : ReadBookIntent
     data class SelectTitleSystemTypeface(val index: Int) : ReadBookIntent
@@ -1204,6 +1205,7 @@ sealed interface ReadBookEffect {
     data object OpenTtsCache : ReadBookEffect
     data class OpenBookVoiceCasting(val bookUrl: String) : ReadBookEffect
     data class OpenReadAloudSubPage(val page: ReadAloudSubPage) : ReadBookEffect
+    data class TtsCacheCleared(val message: String) : ReadBookEffect
     data object OpenHighlightRuleImportPicker : ReadBookEffect
     data object OpenHighlightRuleExportPicker : ReadBookEffect
 

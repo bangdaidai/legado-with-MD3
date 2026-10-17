@@ -134,6 +134,8 @@ abstract class BaseReadAloudService : BaseService(),
         @Volatile
         private var stopRequested = false
 
+        private var activeInstance: BaseReadAloudService? = null
+
         /** 让停止意图在服务异步销毁前即可被阅读器观察到，避免重排正文时重新启动朗读。 */
         @JvmStatic
         @Synchronized
@@ -663,15 +665,16 @@ abstract class BaseReadAloudService : BaseService(),
                 if (play) play() else pageChanged = true
             }
         }.onError {
-            AppLog.put("启动朗读出错\n${it.localizedMessage}", it, true)
+            AppLog.put("加载听书内容失败\n${it.localizedMessage}", it, true)
             launch(Main) { if (generation == prepareReadAloudGeneration) pauseReadAloud() }
-        }        }.onFinally {
-            // 当前任务准备取消时抢注，状态已结束后（【播放】调用在执行）: 改在这里面回「准备中」；
-            // 交接完成时撤掉，cancel 后保留。
+        }.onFinally {
+            // 当前次预载在取消时的注册状态已解绑后（播放是否下降）还会执行：这里解除里的加载、准备状态
+            // 取消在取消时也调用 cancel 后值设计
             if (generation == prepareReadAloudGeneration) {
                 preparingChapterIndex = -1
                 if (!handoffAwaitSwap) upPreparingState(false)
             }
+        }
     }
 
     /**

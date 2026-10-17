@@ -63,6 +63,17 @@ class ReadAloudDelegate(
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
 ) {
 
+    /**
+     * 听书会话与"本页阅读器是否归属该播报"的组合流：
+     * VM 汇总 isReadAloudRunning/Paused/Follow 等状态写回 UiState。
+     */
+    val readerSessions = combine(
+        readAloudSessionStore.state, ReadBook.snapshot,
+        ReadAloud.bookSession.state.map { it.book?.bookUrl }.distinctUntilChanged(),
+    ) { session, reader, playingBookUrl ->
+        session to (reader.bookUrl != null && reader.bookUrl == playingBookUrl)
+    }
+
     interface Host {
         val uiState: ReadBookUiState
 

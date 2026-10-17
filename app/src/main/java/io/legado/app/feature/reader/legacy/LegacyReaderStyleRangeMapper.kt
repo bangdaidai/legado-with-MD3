@@ -83,10 +83,6 @@ object LegacyReaderStyleRangeMapper {
                 }
             }
         }
-                    }
-                }
-            }
-        }
         processes.asSequence()
             .filter { it.enabled && it.status == BookContentProcess.STATUS_ACTIVE && it.isUserMarking() }
             .forEachIndexed { index, process ->

@@ -2,6 +2,7 @@ package io.legado.app.help.readaloud.cast
 
 import android.content.Context
 import io.legado.app.R
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
@@ -31,7 +32,10 @@ object VoiceAudition {
         val success = runCatching {
             when (voice.engineType) {
                 ReadAloudVoice.ENGINE_CLOUD ->
-                    CloudTtsAudioSynthesizer(koin.get<CloudTtsEngineGateway>())
+                    CloudTtsAudioSynthesizer(
+                        koin.get<CloudTtsEngineGateway>(),
+                        koin.get<AiLogRepository>(),
+                    )
                         .synthesize(voice, text, output)
 
                 ReadAloudVoice.ENGINE_SYSTEM -> {

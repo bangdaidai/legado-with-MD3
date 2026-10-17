@@ -11,11 +11,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import io.legado.app.R
 import io.legado.app.help.IntentHelp
+import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.ui.book.read.ReadBookUiState
 import io.legado.app.ui.book.read.sheet.ReadAloudConfigContent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerEffect
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerUiState
+import io.legado.app.ui.book.readaloud.player.toReadBookIntent
+import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
@@ -46,6 +49,7 @@ fun ReadAloudConfigScreen(
     onOpenTtsCache: () -> Unit,
     onOpenBookVoiceCasting: (bookUrl: String) -> Unit,
     onOpenSpeechStoryboard: (bookUrl: String) -> Unit,
+    onReadBookIntent: (ReadBookIntent) -> Unit,
 ) {
     val context = LocalContext.current
     LaunchedEffect(effects) {
@@ -88,7 +92,7 @@ fun ReadAloudConfigScreen(
             ReadAloudConfigContent(
                 state = state,
                 playerState = playerState,
-                onIntent = onIntent,
+                onIntent = { intent -> intent.toReadBookIntent()?.let(onReadBookIntent) },
                 onPlayerIntent = onPlayerIntent,
             )
         }

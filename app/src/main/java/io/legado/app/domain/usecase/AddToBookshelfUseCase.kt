@@ -6,19 +6,36 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.ReadingMemoryRepository
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.model.BookshelfConflict
 import io.legado.app.help.book.formTypeMask
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.TagManager
+
+sealed interface AddToBookshelfResult {
+    /** 可以直接加入书架。 */
+    data object Added : AddToBookshelfResult
+
+    /** 命中和当前同一作品的重复书，需要用户选择共存还是迁移。 */
+    data class Conflict(val conflict: BookshelfConflict) : AddToBookshelfResult
+}
 
 class AddToBookshelfUseCase(
     private val bookRepository: BookRepository,
     private val readingMemoryRepository: ReadingMemoryRepository,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val changeBookSourceUseCase: ChangeBookSourceUseCase,
+    private val findBookshelfConflictUseCase: FindBookshelfConflictUseCase,
 ) {
 
-    suspend fun execute(book: SearchBook) {
-        addToShelf(book.toBook())
+    suspend fun execute(book: SearchBook): AddToBookshelfResult {
+        // 同名同作者命中时让上层弹冲突 Sheet，由用户选择共存或迁移
+        val b = book.toBook()
+        val conflict = findBookshelfConflictUseCase.execute(b)
+        if (conflict != null) {
+            return AddToBookshelfResult.Conflict(conflict)
+        }
+        addToShelf(b)
+        return AddToBookshelfResult.Added
     }
 
     /**

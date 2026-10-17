@@ -767,14 +767,6 @@ fun BookshelfConfigSheet(
 
         }
 
-        LabelColorManageSheet(
-            show = showLabelColorManage,
-            themeColor = themeColor,
-            colors = customTagColors,
-            onColorsChange = onCustomTagColorsChange,
-            onDismissRequest = { showLabelColorManage = false }
-        )
-
         ColorPickerSheet(
             show = showColorPicker,
             initialColor = if (settings.bookshelfCardColor != 0) settings.bookshelfCardColor else LegadoTheme.colorScheme.surfaceVariant.toArgb(),

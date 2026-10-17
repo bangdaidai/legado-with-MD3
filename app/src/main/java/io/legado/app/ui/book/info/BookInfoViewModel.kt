@@ -47,6 +47,9 @@ import io.legado.app.domain.model.settings.CoverSettings
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.PrivateAccessSettings
 import io.legado.app.domain.model.BookSearchScope
+import io.legado.app.domain.model.BookMatchKey
+import io.legado.app.domain.model.BookshelfConflict
+import io.legado.app.domain.model.ConflictBookSummary
 import io.legado.app.domain.model.MatchMode
 import io.legado.app.domain.model.PrivateAccessState
 import io.legado.app.domain.model.PrivateUnlockTarget
@@ -61,6 +64,8 @@ import io.legado.app.domain.usecase.BookReplacedEvent
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.domain.usecase.ClearBookCacheUseCase
+import io.legado.app.domain.usecase.FindBookshelfConflictUseCase
+import io.legado.app.domain.usecase.ResolveBookshelfConflictUseCase
 import io.legado.app.exception.NoBooksDirException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
@@ -137,6 +142,8 @@ class BookInfoViewModel(
     private val clearBookCacheUseCase: ClearBookCacheUseCase,
     private val bookGroupRepository: BookGroupRepository,
     private val bookRepository: BookRepository,
+    private val findBookshelfConflictUseCase: FindBookshelfConflictUseCase,
+    private val resolveBookshelfConflictUseCase: ResolveBookshelfConflictUseCase,
     private val bookSourceRepository: BookSourceRepository,
     private val searchRepository: SearchRepository,
     private val highlightTagRuleRepository: HighlightTagRuleRepository,
@@ -383,6 +390,11 @@ class BookInfoViewModel(
     private var chapterChanged = false
 
     /** 命中重复、等待用户在冲突 Sheet 上选择共存还是迁移的那本书。 */
+    private var pendingShelfBook: Book? = null
+
+    /** 与当前书籍在同一书架且判定重复的其他书籍（名称、作者、封面展示用），见 [refreshShelfDuplicates]。 */
+    private var shelfDuplicates: List<ConflictBookSummary> = emptyList()
+    private var shelfDuplicateIdentity: Pair<String, String>? = null
 
     var inBookshelf = false
         private set
@@ -743,6 +755,18 @@ class BookInfoViewModel(
                     )
                 )
             }
+
+            is BookInfoIntent.CoexistWithShelfConflict -> resolveShelfConflict(
+                existingBookUrl = intent.existingBookUrl,
+                options = intent.options,
+                coexist = true,
+            )
+
+            is BookInfoIntent.MigrateShelfConflict -> resolveShelfConflict(
+                existingBookUrl = intent.existingBookUrl,
+                options = intent.options,
+                coexist = false,
+            )
 
             is BookInfoIntent.ReplaceConflictingBook -> {
                 dismissSheet()
@@ -1171,13 +1195,12 @@ class BookInfoViewModel(
     fun addToBookshelf(success: (() -> Unit)? = null) {
         val book = currentBook ?: return
         execute {
-            book.removeType(BookType.notShelf)
             // 不允许同名同作者同形态时，加入书架就是替换在架那本，不弹窗、不额外确认
             if (!bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType) {
-                val conflict = bookRepository
+                val replace = bookRepository
                     .getShelfBookConflict(book.name, book.author, book.formTypeMask)
-                if (conflict != null && conflict.bookUrl != book.bookUrl) {
-                    changeBookSourceUseCase.replaceShelfBookWithoutToc(conflict, book)
+                if (replace != null && replace.bookUrl != book.bookUrl) {
+                    changeBookSourceUseCase.replaceShelfBookWithoutToc(replace, book)
                     bookRepository.insertChapters(*currentChapterList.toTypedArray())
                     // 阅读会话已由替换本身改绑，听书会话只在内存里，这里补一次
                     if (AudioPlay.book?.isSameNameAuthor(book) == true) {
@@ -1192,32 +1215,91 @@ class BookInfoViewModel(
                     return@execute book
                 }
             }
-            if (book.order == 0) {
-                book.order = bookRepository.getMinOrder() - 1
+            // 同名同作者命中时把冲突交给用户选择：共存保留两份，或把阅读进度迁到本书。
+            // 不冲突时走默认流程：继承进度并上架。
+            val conflict = findBookshelfConflictUseCase.execute(book)
+            if (conflict != null) {
+                conflict
+            } else {
+                prepareBookForShelf(book)
+                bookRepository.getBook(book.name, book.author)?.let {
+                    book.durChapterIndex = it.durChapterIndex
+                    book.durChapterPos = it.durChapterPos
+                    book.durChapterTitle = it.durChapterTitle
+                }
+                book.save()
+                SourceCallBack.callBackBook(SourceCallBack.ADD_BOOK_SHELF, bookSource, book)
+                bookRepository.insertChapters(*currentChapterList.toTypedArray())
+                book
             }
-            bookRepository.getBook(book.name, book.author)?.let {
-                book.durChapterIndex = it.durChapterIndex
-                book.durChapterPos = it.durChapterPos
-                book.durChapterTitle = it.durChapterTitle
+        }.onSuccess { result ->
+            when (result) {
+                is BookshelfConflict -> {
+                    pendingShelfBook = book
+                    _screenState.update { state ->
+                        state.copy(shelfConflict = result, isResolvingShelfConflict = false)
+                    }
+                }
+
+                else -> {
+                    (result as? Book)?.let { added ->
+                        applyBookOnShelf(added)
+                        success?.invoke()
+                    }
+                }
             }
-            if (ReadBook.isCurrentBook(book)) {
-                ReadBook.replaceCurrentBook(book)
-            } else if (AudioPlay.book?.isSameNameAuthor(book) == true) {
-                AudioPlay.book = book
-            }
-            book.save()
-            SourceCallBack.callBackBook(SourceCallBack.ADD_BOOK_SHELF, bookSource, book)
-            bookRepository.insertChapters(*currentChapterList.toTypedArray())
-            // 换源重新添加导致 bookUrl 变化时，先认领旧的孤立记忆，再汇总刷新
-            readingMemoryRepository.adoptOrphanMemory(book)
-            readingMemoryRepository.ensureMemory(book.bookUrl)
-            book
-        }.onSuccess {
-            currentBook = it
-            inBookshelf = true
-            syncUiState()
-            success?.invoke()
         }
+    }
+
+    /** 上架前的通用准备：去掉未上架标记并分配最小排序号。 */
+    private suspend fun prepareBookForShelf(book: Book) {
+        book.removeType(BookType.notShelf)
+        if (book.order == 0) {
+            book.order = bookRepository.getMinOrder() - 1
+        }
+    }
+
+    /** 书籍成功上架后，本页需要同步的一切状态。 */
+    private fun applyBookOnShelf(book: Book) {
+        if (ReadBook.isCurrentBook(book)) {
+            ReadBook.replaceCurrentBook(book)
+        } else if (AudioPlay.book?.isSameNameAuthor(book) == true) {
+            AudioPlay.book = book
+        }
+        currentBook = book
+        inBookshelf = true
+        // 书架冲突状态已随上架消解，重复列表需要重新统计
+        invalidateShelfDuplicates()
+        syncUiState()
+        viewModelScope.launch { refreshShelfDuplicates(book) }
+    }
+
+    /**
+     * 统计与本书同名的其他在架书目（名称、作者、展示封面），供书架按钮与详情页重复列表展示。
+     *
+     * 判定逻辑与冲突 Sheet 相同（同 bookUrl 除外），由 [FindBookshelfConflictUseCase] 给出候选。
+     */
+    private suspend fun refreshShelfDuplicates(book: Book) {
+        val identity = BookMatchKey.of(book.name) to BookMatchKey.of(book.author)
+        // 主题/其它信息变更（非图书本身变化）时不上报（用 [shelfDuplicateIdentity] 缓存）。
+        if (identity == shelfDuplicateIdentity) return
+        shelfDuplicateIdentity = identity
+        val copies = findBookshelfConflictUseCase.execute(book)?.candidates.orEmpty()
+        // 若在半载数据库已经更新不超过一次（先取后）覆盖，以便观察是否进行了追踪。
+        if (shelfDuplicateIdentity == identity) {
+            setShelfDuplicates(copies)
+        }
+    }
+
+    private fun setShelfDuplicates(value: List<ConflictBookSummary>) {
+        if (shelfDuplicates == value) return
+        shelfDuplicates = value
+        syncUiState()
+    }
+
+    /** 在本数据图书页查重其他元素之前，先清掉统计缓存。 */
+    private fun invalidateShelfDuplicates() {
+        shelfDuplicateIdentity = null
     }
 
     /**
@@ -1587,8 +1669,8 @@ class BookInfoViewModel(
     }
 
     private fun openShelfDuplicate(summary: ConflictBookSummary) {
-        // 先收起 Sheet 再导航：详情页之间跳转会复用同一份 Sheet 状态，
-        // 不收起来的话新页面一进来就显示 Sheet，并把第一次返回键吃掉。
+        // 从重复 Sheet 跳转到书籍详情页之后会恢复同一份 Sheet 状态：
+        // 若目标当前已在屏（同栈同页），一经返回重复（用户上次挂钩重复时间）即消除
         dismissSheet()
         emitEffect(
             BookInfoEffect.NavigateToBookInfo(
@@ -1599,6 +1681,61 @@ class BookInfoViewModel(
                 coverPath = summary.displayCover,
             )
         )
+    }
+
+    /** 共存 / 迁移到重复任务式执行。
+     *（先选出一本与当前冲突的同书库书，走 [ResolveBookshelfConflictUseCase]，完成后清掉本页冲突状态并把结果书放入书架）
+     */
+    private fun resolveShelfConflict(
+        existingBookUrl: String,
+        options: ChangeSourceMigrationOptions,
+        coexist: Boolean,
+    ) {
+        val book = pendingShelfBook ?: return
+        val chapters = currentChapterList.takeIf { it.isNotEmpty() }
+        _screenState.update { it.copy(isResolvingShelfConflict = true) }
+        execute {
+            if (coexist) {
+                resolveBookshelfConflictUseCase.coexist(
+                    existingBookUrl = existingBookUrl,
+                    newBook = book,
+                    options = options,
+                    chapters = chapters,
+                )
+            } else {
+                resolveBookshelfConflictUseCase.migrate(
+                    existingBookUrl = existingBookUrl,
+                    newBook = book,
+                    options = options,
+                    chapters = chapters,
+                )
+            }
+            book
+        }.onSuccess { resolved ->
+            // 迁移后书架上的旧书已被删除，这里重新回到书源端（可能包含修改后的章节）。
+            SourceCallBack.callBackBook(SourceCallBack.ADD_BOOK_SHELF, bookSource, resolved)
+            if (chapters != null) {
+                currentChapterList = chapters
+            }
+            pendingShelfBook = null
+            _screenState.update { it.copy(shelfConflict = null, isResolvingShelfConflict = false) }
+            applyBookOnShelf(resolved)
+            showMessage(
+                if (coexist) R.string.bookshelf_conflict_coexist_done
+                else R.string.bookshelf_conflict_migrate_done
+            )
+        }.onError {
+            AppLog.put("解决书架冲突失败", it)
+            pendingShelfBook = null
+            _screenState.update { it.copy(shelfConflict = null, isResolvingShelfConflict = false) }
+            showMessage(
+                if (it is BookTocUnavailableException) {
+                    R.string.bookshelf_conflict_toc_failed
+                } else {
+                    R.string.bookshelf_conflict_resolve_failed
+                }
+            )
+        }
     }
 
     private fun onTocClick() {
@@ -2000,6 +2137,7 @@ class BookInfoViewModel(
                 readRecordTotalTime = currentReadRecordTotalTime,
                 readRecordTimelineDays = currentReadRecordTimelineDays,
                 inBookshelf = inBookshelf,
+                shelfDuplicates = shelfDuplicates.toImmutableList(),
                 bookSource = bookSource,
                 bookSourceUi = bookSource?.toBookInfoSourceUi(),
                 isTocLoading = isTocLoading,

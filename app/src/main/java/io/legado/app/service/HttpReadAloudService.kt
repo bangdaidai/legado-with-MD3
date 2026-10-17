@@ -42,6 +42,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.VoiceEffectPreset
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
@@ -370,7 +371,10 @@ class HttpReadAloudService : BaseReadAloudService(),
     private val downloadTaskActiveLock = Mutex()
     private val systemTtsFileSynthesizer by lazy { SystemTtsFileSynthesizer(this) }
     private val cloudTtsAudioSynthesizer by lazy {
-        CloudTtsAudioSynthesizer(get(CloudTtsEngineGateway::class.java))
+        CloudTtsAudioSynthesizer(
+            get(CloudTtsEngineGateway::class.java),
+            get(AiLogRepository::class.java),
+        )
     }
 
     override fun onCreate() {

@@ -1,4 +1,4 @@
-package io.legado.app.ui.main
+ackage io.legado.app.ui.main
 
 import android.Manifest
 import android.content.Context
@@ -798,7 +798,9 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                             showMangaUi = mangaSettings.showMangaUi,
                             useRail = useRail,
                             sharedTransitionScope = navSharedTransitionScope,
-                            onNavigateToRoute = { route ->
+                            panesEnabled = listDetailEnabled,
+                            onNavigationRailWidthChanged = { navigationRailWidth = it },
+                            navigateToRoute = { route ->
                                 if (route is MainRouteAudioPlay) {
                                     pageShellCapsuleScope.launch {
                                         openPlayer(
@@ -992,55 +994,35 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 )
                             }
                         },
-                        // 浮层设置弹窗里的跳页/提示意图：与朗读设置整页同一批目的地。
-                        // 跳 nav3 页面记下来源栈顶，返回时重新展开浮层（见 playerReopenOnBack）。
-                        onSettingsEffect = { effect ->
-                            when (effect) {
-                                is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
-                                    val target = MainRouteCloudTtsEngines(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-                                is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
-                                    val target = MainRouteBookVoiceCasting(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-                                is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
-                                    val target = MainRouteSpeechStoryboard(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-                                ReadAloudPlayerEffect.OpenTtsCache -> {
-                                    playerReopenOnBack =
-                                        MainRouteTtsCache.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteTtsCache,
-                                        navRouteTracker,
-                                    )
-                                }
-                                ReadAloudPlayerEffect.OpenSystemTtsSettings ->
-                                    IntentHelp.openTTSSetting()
-                                ReadAloudPlayerEffect.TtsCacheCleared ->
-                                    toastOnUi(getString(R.string.clear_cache_success))
-                                ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired ->
-                                    toastOnUi(getString(R.string.speech_analysis_ai_model_required))
-                                else -> Unit
+                        onOpenTtsEnginesAndVoices = { bookUrl ->
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                MainRouteCloudTtsEngines(bookUrl.takeIf(String::isNotBlank)),
+                                navRouteTracker,
+                            )
+                        },
+                        onOpenTtsCache = {
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                MainRouteTtsCache,
+                                navRouteTracker,
+                            )
+                        },
+                        onOpenBookVoiceCasting = { bookUrl ->
+                            if (bookUrl.isNotBlank()) {
+                                MainNavigator.navigateToRoute(
+                                    backStack,
+                                    MainRouteBookVoiceCasting(bookUrl),
+                                    navRouteTracker,
+                                )
                             }
+                        },
+                        onOpenReadAloudSubPage = { page ->
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                page.toMainRoute(),
+                                navRouteTracker,
+                            )
                         },
                     )
                     if (playerSource == PlaybackCapsuleSource.AudioBook &&

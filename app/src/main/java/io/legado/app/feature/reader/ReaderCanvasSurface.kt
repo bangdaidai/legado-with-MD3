@@ -3195,10 +3195,6 @@ private fun drawNineSliceBackground(
             bitmap,
             android.graphics.Rect(cell.source.left, cell.source.top, cell.source.right, cell.source.bottom),
             android.graphics.RectF(
-                cell.destination.left,
-                cell.destination.top,
-                cell.destination.right,
-                cell.destination.bottom,
                 cell.painted.left,
                 cell.painted.top,
                 cell.painted.right,
@@ -3579,6 +3575,31 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTipRow(
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.visualTipWidthPx(
     tip: ReaderPageTip,
     paint: Paint,
+): Float {
+    val unit = density
+    val gap = 4f * unit
+    val batteryWidth = 28f * unit
+    val numberWidth = paint.measureText(tip.batteryPercent.coerceIn(0, 100).toString())
+    val textWidth = paint.measureText(tip.text)
+    return when (tip.visual) {
+        ReaderTipVisual.BATTERY_OUTER -> batteryWidth + 2f * unit + numberWidth
+        ReaderTipVisual.BATTERY_INNER -> (if (tip.text.isEmpty()) 0f else textWidth + gap) + batteryWidth
+        ReaderTipVisual.BATTERY_ICON -> batteryWidth
+        ReaderTipVisual.BATTERY_CLASSIC -> (if (tip.text.isEmpty()) 0f else textWidth + gap) + numberWidth + 10f * unit
+        ReaderTipVisual.ARROW -> 12f * unit + 8f * unit + textWidth
+        ReaderTipVisual.TEXT -> textWidth
+    }
+}
+
+/** 正 tip 绘制宽度（文字按排版文本宽度/箭头等视觉圈宽）。供 `drawTipRow` 与页眉"可用宽度"预算共享同一份计算。 */
+internal fun measureTipWidthPx(tip: ReaderPageTip, paint: android.graphics.Paint, density: Float): Float =
+    if (tip.visual == ReaderTipVisual.TEXT) paint.measureText(tip.text)
+    else visualTipWidthPxOf(tip, paint, density)
+
+private fun visualTipWidthPxOf(
+    tip: ReaderPageTip,
+    paint: android.graphics.Paint,
+    density: Float,
 ): Float {
     val unit = density
     val gap = 4f * unit

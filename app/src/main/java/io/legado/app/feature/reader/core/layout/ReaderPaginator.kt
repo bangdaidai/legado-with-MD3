@@ -220,6 +220,10 @@ sealed interface ReaderMeasuredInlineItem {
         val baselineOffsetPx: Float? = null,
         /** Positive values move this glyph below the line baseline; negative values move it above. */
         val baselineShiftPx: Float = 0f,
+        /** 对应 [ReaderElement.Text.colorFromStyleRange]。 */
+        val colorFromStyleRange: Boolean = false,
+        /** 排版判定为纯白空隙（样式设置无背景）时，不用进入绘制层，实时预览走同一次快照排版。 */
+        val decorationExempt: Boolean = false,
     ) : ReaderMeasuredInlineItem
 
     data class Image(

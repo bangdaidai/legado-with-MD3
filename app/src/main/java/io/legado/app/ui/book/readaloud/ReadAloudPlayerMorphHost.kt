@@ -182,13 +182,16 @@ fun ReadAloudPlayerMorphHost(
     LaunchedEffect(playerViewModel) {
         playerViewModel.effects.collect { effect ->
             when (effect) {
-                ReadAloudPlayerEffect.ReturnToClassic -> {
+                is ReadAloudPlayerEffect.ReturnToClassic -> {
                     collapsePlayer()
                     currentSwitch(playerViewModel.uiState.value.bookUrl)
                 }
 
                 ReadAloudPlayerEffect.TtsCacheCleared ->
                     context.toastOnUi(R.string.clear_cache_success)
+
+                // 其余 effect（打开全局页面等）由宿主 onOpen* 回调链处理，宿主不在这里兜底。
+                else -> Unit
             }
         }
     }

@@ -141,6 +141,7 @@ import io.legado.app.ui.book.readaloud.config.ReadAloudConfigScreen
 import io.legado.app.ui.book.readaloud.morph.ReadAloudMorphState
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.book.readaloud.player.applyReadAloudConfigIntent
+import io.legado.app.ui.book.readaloud.player.applyReadBookConfigIntent
 import io.legado.app.ui.book.readaloud.player.rememberPlayerThemeOverride
 import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardScreen
 import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardViewModel
@@ -403,14 +404,6 @@ fun MainActivity.mainEntryProvider(
                 onNavigateToRoute(editor?.let { MainRouteReplaceEdit(it) } ?: MainRouteReplaceRules(
                     route.bookUrl
                 ))
-            },
-            onPickLocalTocRule = { regex ->
-                onNavigateToRoute(
-                    MainRouteTxtTocRule(
-                        initialRule = regex,
-                        pickForBookUrl = route.bookUrl,
-                    )
-                )
             },
         )
     }
@@ -1816,6 +1809,9 @@ fun MainActivity.mainEntryProvider(
             },
             onOpenSpeechStoryboard = { bookUrl ->
                 onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            },
+            onReadBookIntent = { intent ->
+                playerViewModel.applyReadBookConfigIntent(intent) { }
             },
         )
     }

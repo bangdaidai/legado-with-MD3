@@ -7,6 +7,8 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
+import io.legado.app.domain.model.BookshelfConflict
+import io.legado.app.domain.model.ConflictBookSummary
 import io.legado.app.domain.model.PrivateAccessState
 
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
@@ -185,6 +187,7 @@ sealed interface BookInfoSheet {
 sealed interface BookInfoDialog {
     data class EditRemark(val remark: String?) : BookInfoDialog
     data class PhotoPreview(val path: String) : BookInfoDialog
+    data class DeleteBook(val isLocal: Boolean) : BookInfoDialog
     data class UnsupportedWebFile(
         val webFile: BookInfoWebFile,
         val openAfterImport: Boolean,

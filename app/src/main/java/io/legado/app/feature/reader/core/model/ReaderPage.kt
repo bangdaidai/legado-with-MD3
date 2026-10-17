@@ -1,4 +1,11 @@
-package io.legado.app.feature.reader.core.model
+ackage io.legado.app.feature.reader.core.model
+
+import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
+import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
+import io.legado.app.feature.reader.core.style.finalStrokeWidthPx
+import io.legado.app.feature.reader.core.style.underlineControlSupport
+import io.legado.app.feature.reader.core.style.underlineCornerRadiusPx
+import kotlin.math.roundToInt
 
 /**
  * 把四条切线换算成**整像素**的源切片厚度，再乘 [scale] 得到自然厚度与中间带高度。
@@ -137,52 +144,6 @@ data class ReaderTextBackgroundImage(
  *
  * 四条切线写回的也是**夹过并取整之后**的那一份（[ninePatchLeft] / [ninePatchRight] /
  * [ninePatchTop] / [ninePatchBottom]），绘制期切片位置读的是同一个数（见 [ReaderNineSliceLayout]）。
- * 这一步是「整张图等比、绝不形变」的前提：只要倍率与切线两处各算各的（尤其一边取整、一边不取整），
- * 那一格的 目标/源 就跟别的格差一点点，而这一点点就足以让拉伸重新可见。
- */
-fun ReaderTextBackgroundImage.withBitmapSize(widthPx: Int, heightPx: Int): ReaderTextBackgroundImage {
-    if (fit != 3 || widthPx <= 0) return this
-    val borderPx = if (hasNinePatchBorder) 1 else 0
-    val contentWidthPx = (widthPx - borderPx * 2).coerceAtLeast(0)
-    val contentHeightPx = (heightPx - borderPx * 2).coerceAtLeast(0)
-    var leftPx = (contentWidthPx * ninePatchLeft.coerceIn(0f, 1f)).roundToInt()
-    var rightPx = (contentWidthPx * ninePatchRight.coerceIn(0f, 1f)).roundToInt()
-    var topPx = (contentHeightPx * ninePatchTop.coerceIn(0f, 1f)).roundToInt()
-    var bottomPx = (contentHeightPx * ninePatchBottom.coerceIn(0f, 1f)).roundToInt()
-    val maxEdgePx = contentHeightPx - minContentBandPx(contentHeightPx)
-    val edgeSum = topPx + bottomPx
-    if (edgeSum > maxEdgePx && edgeSum > 0) {
-        topPx = (topPx * maxEdgePx.toFloat() / edgeSum).roundToInt()
-        // 余量全给下边：两条边的和正好落在上限上，倍率才不会因取整再多出一格。
-        bottomPx = maxEdgePx - topPx
-    }
-    // 横向同理，只是中间那一列只要还剩一个像素可拉就够（两条线交叉时图案不被切断，
-    // 见 [ReaderNineSliceLayout]）。夹在这里而不是夹在绘制期，是因为外框读的是下面这四个
-    // 厚度：绘制期另夹一次，左右边条就会与它自己的源切片差那一像素，等比倍率就对不上。
-    val maxColumnPx = (contentWidthPx - 1).coerceAtLeast(0)
-    val columnSum = leftPx + rightPx
-    if (columnSum > maxColumnPx && columnSum > 0) {
-        leftPx = (leftPx * maxColumnPx.toFloat() / columnSum).roundToInt()
-        rightPx = maxColumnPx - leftPx
-    }
-    return copy(
-        ninePatchLeft = naturalFraction(leftPx, contentWidthPx),
-        ninePatchRight = naturalFraction(rightPx, contentWidthPx),
-        ninePatchTop = naturalFraction(topPx, contentHeightPx),
-        ninePatchBottom = naturalFraction(bottomPx, contentHeightPx),
-        // 这四个都是**源图自己**的厚度，一个像素都不乘 [scale]：图片大小是整张图的倍率，
-        // 只在 [verticalScalePx] 里乘一次。乘在这里就会被那个倍率再除回去，「图片大小」调了没反应
-        // （非九宫格那三种适配在绘制侧自己乘，见 ReaderCanvasSurface 的 fit 分支）。
-        contentInsetLeftPx = leftPx.toFloat(),
-        contentInsetRightPx = rightPx.toFloat(),
-        contentInsetTopPx = topPx.toFloat(),
-        contentInsetBottomPx = bottomPx.toFloat(),
-        contentBandHeightPx = (contentHeightPx - topPx - bottomPx).coerceAtLeast(0).toFloat(),
-        // fork：剥掉 .9.png 引导边后的源图尺寸（与上游字段并存，供避让/裁剪按源图量）
-        sourceWidthPx = contentWidthPx,
-        sourceHeightPx = contentHeightPx,
-    )
-}
 
 /** 整像素切片厚度换回切线分数（[ReaderNineSliceLayout] 再乘回整图高，取整结果必然一致）。 */
 private fun naturalFraction(px: Int, contentHeightPx: Int): Float =

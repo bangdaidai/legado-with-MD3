@@ -192,6 +192,8 @@ import io.legado.app.domain.usecase.AutoAssignVoiceBindingsUseCase
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
+import io.legado.app.domain.usecase.FindBookshelfConflictUseCase
+import io.legado.app.domain.usecase.ResolveBookshelfConflictUseCase
 import io.legado.app.domain.usecase.CacheBookChaptersUseCase
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.domain.usecase.ChangeSourceSearchUseCase
@@ -516,6 +518,8 @@ val appModule = module {
     singleOf(::RefreshTocUseCase)
     singleOf(::AddBookUseCase)
     singleOf(::AddToBookshelfUseCase)
+    singleOf(::FindBookshelfConflictUseCase)
+    singleOf(::ResolveBookshelfConflictUseCase)
     singleOf(::FindShelfDuplicatesUseCase)
     singleOf(::ImportBookshelfUseCase)
     singleOf(::ExportBookshelfUseCase)
@@ -891,6 +895,7 @@ val appModule = module {
             uploadReadingProgressUseCase = get(),
             translateChapterUseCase = get(),
             readSettingsRepository = get(),
+            aiProfileGateway = get(),
             readBookStyleConfigRepository = get(),
             readAloudSettingsRepository = get(),
             aiCastAssignUseCase = get(),

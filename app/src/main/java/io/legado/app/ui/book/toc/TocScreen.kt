@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.toc
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler

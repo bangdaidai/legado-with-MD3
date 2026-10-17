@@ -7,6 +7,7 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import io.legado.app.ui.theme.hazeStyle.HazeLegado
 import io.legado.app.ui.widget.components.GlassDefaults
@@ -94,7 +95,6 @@ fun Modifier.responsiveHazeEffectFixedStyle(
  * 全局模糊开启时状态栏区域由顶栏自身的模糊负责，这里不再叠加，保持与上游一致的观感。
  * 与全局「控件模糊」的顶栏风格保持一致（零色膜 ultraThinPlus），只做渐变模糊、不叠白膜。
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun Modifier.responsiveHazeEffectStatusBar(state: HazeState): Modifier {
     val themeSettings = LocalAppUiConfiguration.current.theme

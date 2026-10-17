@@ -158,6 +158,7 @@ private fun CharacterDetailContent(
     var dialogVoiceGender by remember(state.voiceGender) { mutableStateOf(state.voiceGender) }
     var dialogVoiceAgeBand by remember(state.voiceAgeBand) { mutableStateOf(state.voiceAgeBand) }
     var dialogIsProtagonist by remember(state.isProtagonist) { mutableStateOf(state.isProtagonist) }
+    var dialogPool by remember(state.voicePool) { mutableStateOf(state.voicePool) }
 
     Column(
         modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -170,6 +171,7 @@ private fun CharacterDetailContent(
             roleDisplayName = state.role,
             voiceGender = state.voiceGender,
             voicePool = state.voicePool,
+            voiceAgeBand = state.voiceAgeBand,
             tags = state.tags,
             onPickAvatar = onPickAvatar,
             onInfoClick = {
@@ -179,6 +181,7 @@ private fun CharacterDetailContent(
                 dialogVoiceGender = state.voiceGender
                 dialogVoiceAgeBand = state.voiceAgeBand
                 dialogIsProtagonist = state.isProtagonist
+                dialogPool = state.voicePool
                 showProfileDialog = true
             },
         )
@@ -474,6 +477,16 @@ private fun voiceGenderDisplayName(value: String): String = when (value) {
     else -> stringResource(R.string.voice_gender_unknown)
 }
 
+@Composable
+private fun voiceAgeBandDisplayName(value: String): String = when (value) {
+    BookCharacterProfile.VOICE_AGE_CHILD -> stringResource(R.string.voice_age_child)
+    BookCharacterProfile.VOICE_AGE_TEEN -> stringResource(R.string.voice_age_teen)
+    BookCharacterProfile.VOICE_AGE_YOUNG_ADULT -> stringResource(R.string.voice_age_young_adult)
+    BookCharacterProfile.VOICE_AGE_ADULT -> stringResource(R.string.voice_age_adult)
+    BookCharacterProfile.VOICE_AGE_ELDERLY -> stringResource(R.string.voice_age_elderly)
+    else -> stringResource(R.string.voice_age_unknown)
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ProfileRoleDropdown(
@@ -507,6 +520,7 @@ private fun CharacterHeader(
     avatarUri: String,
     roleDisplayName: String,
     voiceGender: String,
+    voiceAgeBand: String,
     voicePool: String,
     tags: ImmutableList<String>,
     onPickAvatar: () -> Unit,

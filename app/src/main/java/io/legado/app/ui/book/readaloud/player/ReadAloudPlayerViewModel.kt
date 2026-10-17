@@ -78,7 +78,8 @@ class ReadAloudPlayerViewModel(
             ReadAloudPlayerIntent.NextParagraph -> coordinator.nextParagraph()
             ReadAloudPlayerIntent.PreviousChapter -> coordinator.previousChapter()
             ReadAloudPlayerIntent.NextChapter -> coordinator.nextChapter()
-            ReadAloudPlayerIntent.SwitchToClassic -> effect(ReadAloudPlayerEffect.ReturnToClassic)
+            ReadAloudPlayerIntent.SwitchToClassic ->
+                effect(ReadAloudPlayerEffect.ReturnToClassic(uiState.value.bookUrl))
             ReadAloudPlayerIntent.CycleBgMode -> cycleBgMode()
             is ReadAloudPlayerIntent.SelectChapter -> coordinator.selectChapter(intent.index)
             is ReadAloudPlayerIntent.SetBgMode -> AppConfigStore.putInt(
@@ -104,6 +105,7 @@ class ReadAloudPlayerViewModel(
                 }
             is ReadAloudPlayerIntent.OpenSheet -> activeSheet.value = intent.sheet
             ReadAloudPlayerIntent.DismissSheet -> activeSheet.value = null
+            ReadAloudPlayerIntent.LeavingToReader -> coordinator.notifyReaderToFollowVoice()
             is ReadAloudPlayerIntent.SeekTo -> coordinator.seekTo(
                 chapterPosition = intent.chapterPosition,
                 chapterLength = uiState.value.chapterLength,
@@ -194,9 +196,13 @@ class ReadAloudPlayerViewModel(
                     it.copy(ttsParagraphInterval = intValue)
                 }
 
-                ReadAloudConfigOption.AudioCacheCleanTime -> readAloudSettingsGateway.update {
-                    it.copy(audioCacheCleanTime = intValue)
-                }
+                ReadAloudConfigOption.AudioCacheCleanTime ->
+                    readAloudSettingsGateway.update { it.copy(audioCacheCleanTime = intValue) }
+
+                ReadAloudConfigOption.ResetCapsulePosition ->
+                    readAloudSettingsGateway.update {
+                        it.copy(capsuleOffsetX = 0f, capsuleOffsetY = 0f)
+                    }
             }
         }
     }

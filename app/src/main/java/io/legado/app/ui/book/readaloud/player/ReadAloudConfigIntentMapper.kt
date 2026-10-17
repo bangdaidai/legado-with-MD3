@@ -151,6 +151,31 @@ internal fun ReadAloudPlayerViewModel.applyReadBookConfigIntent(
  * 配置全页与弹层共享同一个媒体设置，设置写入统一落到 [ReadAloudPlayerViewModel.onConfigIntent]；
  * 页面级 Effect 交由路由层收集后交给 MainNavGraph 执行导航。
  */
+
+/**
+ * fork 配置契约与 upstream 配置内容（ReadBookIntent 契约）的桥接：
+ * 配置页内容组件已被替换为上游版本，需要把 fork 的 [ReadAloudConfigIntent]
+ * 翻译到对应的 [ReadBookIntent]；没有对应项时返回 null（该设置项在全页视图暂不可达）。
+ */
+internal fun ReadAloudConfigIntent.toReadBookIntent(): ReadBookIntent? = when (this) {
+    is ReadAloudConfigIntent.SetDefaultInterface -> ReadBookIntent.SetDefaultReadAloudInterface(value)
+    is ReadAloudConfigIntent.ShowCapsule -> ReadBookIntent.SetShowReadAloudCapsule(value)
+    is ReadAloudConfigIntent.IgnoreAudioFocus -> ReadBookIntent.SetReadAloudIgnoreAudioFocus(value)
+    is ReadAloudConfigIntent.PauseOnPhoneCall -> ReadBookIntent.SetReadAloudPauseOnPhoneCall(value)
+    is ReadAloudConfigIntent.WakeLock -> ReadBookIntent.SetReadAloudWakeLock(value)
+    is ReadAloudConfigIntent.KeepOnExit -> ReadBookIntent.SetReadAloudKeepOnExit(value)
+    is ReadAloudConfigIntent.MediaButtonPerNext -> ReadBookIntent.SetReadAloudMediaButtonPerNext(value)
+    is ReadAloudConfigIntent.AndroidMediaControl -> ReadBookIntent.SetReadAloudAndroidMediaControl(value)
+    is ReadAloudConfigIntent.SystemMediaCompat -> ReadBookIntent.SetReadAloudSystemMediaCompat(value)
+    is ReadAloudConfigIntent.StreamAudio -> ReadBookIntent.SetReadAloudStreamAudio(value)
+    is ReadAloudConfigIntent.SetContentSplitMode -> ReadBookIntent.SetReadAloudContentSplitMode(value)
+    ReadAloudConfigIntent.OpenEnginesAndVoices -> ReadBookIntent.OpenTtsEnginesAndVoices
+    ReadAloudConfigIntent.OpenTtsCache -> ReadBookIntent.OpenTtsCache
+    ReadAloudConfigIntent.OpenBookVoiceCasting -> ReadBookIntent.OpenBookVoiceCasting
+    ReadAloudConfigIntent.OpenSystemTtsSettings -> ReadBookIntent.OpenSystemTtsSettings
+    else -> null
+}
+
 internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAloudConfigIntent) {
     when (intent) {
         is ReadAloudConfigIntent.SetDefaultInterface ->

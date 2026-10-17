@@ -29,6 +29,7 @@ import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.domain.gateway.AiArtifactGateway
+import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiPromptPresetGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.AppUiConfigurationGateway
@@ -128,6 +129,7 @@ class ReadBookViewModel(
     private val uploadReadingProgressUseCase: UploadReadingProgressUseCase,
     val translateChapterUseCase: io.legado.app.domain.usecase.TranslateChapterUseCase,
     private val readSettingsRepository: ReadSettingsRepository,
+    private val aiProfileGateway: AiProfileGateway,
     private val readBookStyleConfigRepository: ReadStyleGateway,
     private val readAloudSettingsRepository: ReadAloudSettingsRepository,
     private val localPreferencesRepository: SettingsRepository,
@@ -688,6 +690,8 @@ class ReadBookViewModel(
             }
         },
         readAloudSettingsRepository = readAloudSettingsRepository,
+        readSettingsRepository = readSettingsRepository,
+        aiProfileGateway = aiProfileGateway,
         readAloudSessionStore = readAloudSessionStore,
         httpTtsRepository = httpTtsRepository,
         syncReadAloudVoicesUseCase = syncReadAloudVoicesUseCase,

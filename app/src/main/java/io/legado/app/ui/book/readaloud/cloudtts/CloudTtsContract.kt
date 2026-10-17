@@ -177,6 +177,19 @@ sealed interface CloudTtsIntent {
     data object ClearTtsCache : CloudTtsIntent
        data class RequestDeleteVoice(val id: String) : CloudTtsIntent
     data object ConfirmDeleteVoice : CloudTtsIntent
+    /** 在已保存的音色上想直接试听一个音色 */
+    data class PreviewSavedVoice(val id: String) : CloudTtsIntent
+    data class RequestRenameVoice(val id: String) : CloudTtsIntent
+    /**
+     * 在音色列表中，把该音色设为/取消全局默认配音音色。
+     *
+     * 只在多音色标识可见计划地本地首次配音时方有效（被称为「默认智高」且您未知音色时使用，配上配置）
+     * 再次点当前默认（取消读取，回到全局默认）
+     */
+    data class ToggleDefaultNarratorVoice(val id: String) : CloudTtsIntent
+    /** 切换音色列表的性别筛选（空串为取消筛选）。 */
+    data class SetVoiceGenderFilter(val gender: String) : CloudTtsIntent
+    data class ConfirmRenameVoice(val name: String) : CloudTtsIntent
     /** 进入/退出音色批量选择模式（退出会清空已勾选的）。 */
     data object ToggleVoiceBatchMode : CloudTtsIntent
     data class ToggleVoiceSelection(val id: String) : CloudTtsIntent

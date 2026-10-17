@@ -505,6 +505,7 @@ private fun BookInfoScreenContent(
                             ) {
                                 BookInfoActions(
                                     inBookshelf = state.inBookshelf,
+                                    hasShelfDuplicates = state.shelfDuplicates.isNotEmpty(),
                                     onShelfClick = { onIntent(BookInfoIntent.ShelfClick) },
                                     onTocClick = { onIntent(BookInfoIntent.TocClick) },
                                     onGroupClick = { onIntent(BookInfoIntent.GroupClick) },
@@ -1422,6 +1423,7 @@ private fun BookInfoHeader(
 @Composable
 private fun BookInfoActions(
     inBookshelf: Boolean,
+    hasShelfDuplicates: Boolean,
     onShelfClick: () -> Unit,
     onTocClick: () -> Unit,
     onGroupClick: () -> Unit,
@@ -2123,7 +2125,7 @@ private fun BookInfoDialogs(
     BookDeleteConfirmDialog(
         show = dialog is BookInfoDialog.DeleteBook,
         isLocal = (dialog as? BookInfoDialog.DeleteBook)?.isLocal == true,
-        initialDeleteOriginal = deleteOriginal,
+        initialDeleteOriginal = state.deleteOriginal,
         onDismissRequest = { onIntent(BookInfoIntent.DismissDialog) },
         onDelete = { deleteOriginal ->
             onIntent(BookInfoIntent.ConfirmDelete(deleteOriginal))
