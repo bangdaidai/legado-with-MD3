@@ -16,7 +16,6 @@ import io.legado.app.domain.usecase.BookShelfKey
 import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ResolveBookShelfStateUseCase
 import io.legado.app.domain.usecase.SaveSearchBooksUseCase
-import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.stackTraceStr
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
@@ -25,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import splitties.init.appCtx
@@ -44,9 +44,7 @@ private data class ExploreShowKindState(
 )
 
 /**
- * 书源规则里没有显式的分组字段，约定：占满整行、既没有 url 也没有 action 的 kind 是大分类标题，
- * 它后面的分类都归属于它，直到遇到下一个大分类标题。
- */
+ * 涔︽簮瑙勫垯閲屾病鏈夋樉寮忕殑鍒嗙粍瀛楁锛岀害瀹氾細鍗犳弧鏁磋銆佹棦娌℃湁 url 涔熸病鏈?action 鐨?kind 鏄ぇ鍒嗙被鏍囬锛? * 瀹冨悗闈㈢殑鍒嗙被閮藉綊灞炰簬瀹冿紝鐩村埌閬囧埌涓嬩竴涓ぇ鍒嗙被鏍囬銆? */
 private fun isExploreGroupHeader(kind: ExploreKind): Boolean {
     if (!kind.url.isNullOrBlank()) return false
     if (!kind.action.isNullOrBlank()) return false
@@ -55,7 +53,7 @@ private fun isExploreGroupHeader(kind: ExploreKind): Boolean {
         (style.layout_flexGrow >= 1f && style.layout_flexBasisPercent < 0f)
 }
 
-/** 去掉分类标题两侧的装饰符号，例如「◆ 排行 ◆」→「排行」 */
+/** 鍘绘帀鍒嗙被鏍囬涓や晶鐨勮楗扮鍙凤紝渚嬪銆屸梿 鎺掕 鈼嗐€嶁啋銆屾帓琛屻€?*/
 private fun resolveExploreGroupTitle(kind: ExploreKind): String {
     val raw = kind.title.trim()
     return raw.replace(Regex("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$"), "").ifBlank { raw }
@@ -69,7 +67,7 @@ private fun groupExploreKinds(kinds: List<ExploreKind>, ungroupedLabel: String):
             currentGroup = resolveExploreGroupTitle(kind).ifBlank { ungroupedLabel }
             return@forEach
         }
-        // 只有 url 类型的分类能直接切换，其余类型仍走 ExploreKindSelectSheet
+        // 鍙湁 url 绫诲瀷鐨勫垎绫昏兘鐩存帴鍒囨崲锛屽叾浣欑被鍨嬩粛璧?ExploreKindSelectSheet
         if (kind.type != ExploreKind.Type.url || kind.url.isNullOrBlank()) return@forEach
         grouped.getOrPut(currentGroup ?: ungroupedLabel) { mutableListOf() }.add(kind)
     }
@@ -97,7 +95,6 @@ class ExploreShowViewModel(
     private val _bookshelf = MutableStateFlow<Set<BookShelfKey>>(emptySet())
     private val _loadState = MutableStateFlow(ExploreShowLoadState())
     private val _kindState = MutableStateFlow(ExploreShowKindState())
-    private val _pageState = MutableStateFlow(ExplorePageState())
     private val _displayState = MutableStateFlow(
         ExploreShowDisplayState(
             layoutState = 0,
@@ -109,8 +106,6 @@ class ExploreShowViewModel(
     private var exploreUrl: String? = null
     private var initialExploreUrl: String? = null
     private var initialized = false
-    private var loadJob: kotlinx.coroutines.Job? = null
-    private var loadGeneration = 0L
     private var page = 1
     private var autoPageCount = 0
     private var groupedKinds: Map<String, List<ExploreKind>> = emptyMap()
@@ -142,7 +137,6 @@ class ExploreShowViewModel(
         when (intent) {
             is ExploreShowIntent.InitData -> initData(intent.sourceUrl, intent.exploreUrl)
             ExploreShowIntent.LoadMore -> loadMore()
-            is ExploreShowIntent.JumpToPage -> jumpToPage(intent.page)
             ExploreShowIntent.ForceLoadNext -> loadMore(forceLoad = true)
             ExploreShowIntent.Refresh -> loadMore(isRefresh = true)
             is ExploreShowIntent.SwitchKind -> switchKind(intent.kind)
@@ -179,9 +173,7 @@ class ExploreShowViewModel(
     }
 
     /**
-     * 预览 sheet 用：直接按当前书架快照实时计算。
-     * 不要从展示列表反查——筛选把该书隐藏后就查不到，会误判成不在书架。
-     */
+     * 棰勮 sheet 鐢細鐩存帴鎸夊綋鍓嶄功鏋跺揩鐓у疄鏃惰绠椼€?     * 涓嶈浠庡睍绀哄垪琛ㄥ弽鏌モ€斺€旂瓫閫夋妸璇ヤ功闅愯棌鍚庡氨鏌ヤ笉鍒帮紝浼氳鍒ゆ垚涓嶅湪涔︽灦銆?     */
     fun getCurrentBookShelfState(book: SearchBook): BookShelfState =
         resolveBookShelfStateUseCase.execute(
             name = book.name,
@@ -192,13 +184,19 @@ class ExploreShowViewModel(
 
     private fun combineUiState() {
         viewModelScope.launch {
-            // 书籍列表只依赖书籍与书架状态：布局、列数、封面筛选这些展示设置变化时不重算，
-            // 否则每个分类 ViewModel 都会在切换布局时把全部书籍重新映射一遍。
-            val books = combine(
+            val displayAndCoverSettings = combine(
+                _displayState,
+                coverSettingsGateway.settings,
+            ) { displayState, coverSettings -> displayState to coverSettings }
+            combine(
                 _rawBooks,
                 _bookshelf,
-            ) { rawBooks, bookshelf ->
-                rawBooks.map { item ->
+                _loadState,
+                _kindState,
+                displayAndCoverSettings,
+            ) { rawBooks, bookshelf, loadState, kindState, displayAndCover ->
+                val (displayState, coverSettings) = displayAndCover
+                val books = rawBooks.map { item ->
                     ExploreBookItemUi(
                         book = item,
                         shelfState = resolveBookShelfStateUseCase.execute(
@@ -208,30 +206,11 @@ class ExploreShowViewModel(
                             shelf = bookshelf,
                         )
                     )
-                }.toImmutableList()
-            }
-            val displayAndCoverSettings = combine(
-                _displayState,
-                coverSettingsGateway.settings,
-                _pageState,
-            ) { displayState, coverSettings, pageState ->
-                Triple(displayState, coverSettings, pageState)
-            }
-            val loadAndKind = combine(
-                _loadState,
-                _kindState,
-            ) { loadState, kindState -> loadState to kindState }
-            combine(
-                books,
-                loadAndKind,
-                displayAndCoverSettings,
-            ) { books, loadAndKindState, displayAndCover ->
-                val (loadState, kindState) = loadAndKindState
-                val (displayState, coverSettings, pageState) = displayAndCover
+                }
 
                 ExploreShowUiState(
                     sourceUrl = displayState.sourceUrl,
-                    books = books,
+                    books = books.toImmutableList(),
                     kinds = kindState.kinds.toImmutableList(),
                     kindGroups = kindState.groups.toImmutableList(),
                     selectedGroup = kindState.selectedGroup,
@@ -244,8 +223,6 @@ class ExploreShowViewModel(
                     errorMsg = loadState.errorMsg,
                     sheet = displayState.sheet,
                     filterStateId = coverSettings.exploreFilterState,
-                    currentPage = pageState.currentPage,
-                    canJumpPage = pageState.canJumpPage,
                 )
             }.collect { newState ->
                 _uiState.value = newState
@@ -258,15 +235,9 @@ class ExploreShowViewModel(
             return
         }
         initialized = true
-        loadGeneration++
-        loadJob?.cancel()
         sourceUrl = incomingSourceUrl
         initialExploreUrl = incomingExploreUrl
         exploreUrl = incomingExploreUrl
-        _pageState.value = ExplorePageState(
-            currentPage = 1,
-            canJumpPage = AnalyzeUrl.supportsPageSelection(incomingExploreUrl),
-        )
         page = 1
         autoPageCount = 0
         _rawBooks.value = emptyList()
@@ -294,9 +265,8 @@ class ExploreShowViewModel(
                         )
                     }
                 } else {
-                    // 通过 java.open("explore", ...) 传入的自定义 URL(例如 data:page 书单/评论列表),
-                    // 不属于书源分类体系, 隐藏顶部分类标签栏, 只显示书单本身
-                    groupedKinds = emptyMap()
+                    // 閫氳繃 java.open("explore", ...) 浼犲叆鐨勮嚜瀹氫箟 URL(渚嬪 data:page 涔﹀崟/璇勮鍒楄〃),
+                    // 涓嶅睘浜庝功婧愬垎绫讳綋绯? 闅愯棌椤堕儴鍒嗙被鏍囩鏍? 鍙樉绀轰功鍗曟湰韬?                    groupedKinds = emptyMap()
                     _kindState.value = ExploreShowKindState()
                 }
             }
@@ -309,8 +279,7 @@ class ExploreShowViewModel(
         val raw = repository.getSourceExploreKinds(sourceUrl)
         val grouped = groupExploreKinds(raw, appCtx.getString(R.string.all))
         groupedKinds = grouped
-        // 只有存在多个大分类时才显示分组行，否则退化为单行标签条
-        val groups = if (grouped.size > 1) grouped.keys.toList() else emptyList()
+        // 鍙湁瀛樺湪澶氫釜澶у垎绫绘椂鎵嶆樉绀哄垎缁勮锛屽惁鍒欓€€鍖栦负鍗曡鏍囩鏉?        val groups = if (grouped.size > 1) grouped.keys.toList() else emptyList()
         val defaultGroup = grouped.keys.firstOrNull()
         _kindState.update {
             it.copy(
@@ -328,36 +297,27 @@ class ExploreShowViewModel(
     }
 
     private fun switchKind(kind: ExploreKind) {
-        loadGeneration++
-        loadJob?.cancel()
         _kindState.update { it.copy(selectedKindTitle = kind.title) }
         exploreUrl = kind.url
-        _pageState.value = ExplorePageState(
-            currentPage = 1,
-            canJumpPage = AnalyzeUrl.supportsPageSelection(kind.url),
-        )
-        _loadState.value = ExploreShowLoadState()
+        _loadState.update { it.copy(isEnd = false) }
         autoPageCount = 0
         loadMore(isRefresh = true)
     }
 
     private fun toggleLayout() {
-        val layoutState = if (_displayState.value.layoutState == 0) 1 else 0
-        _displayState.update { it.copy(layoutState = layoutState) }
-        viewModelScope.launch {
-            localPreferencesRepository.updatePreference(
-                LocalPreferencesKeys.EXPLORE_LAYOUT_MODE,
-                layoutState
-            )
+        _displayState.update {
+            val layoutState = if (it.layoutState == 0) 1 else 0
+            viewModelScope.launch {
+                localPreferencesRepository.updatePreference(LocalPreferencesKeys.EXPLORE_LAYOUT_MODE, layoutState)
+            }
+            it.copy(layoutState = layoutState)
         }
     }
 
     private fun loadLayoutMode() {
         viewModelScope.launch {
-            localPreferencesRepository.getPreference(LocalPreferencesKeys.EXPLORE_LAYOUT_MODE, 0)
-                .collect { mode ->
-                    _displayState.update { it.copy(layoutState = mode) }
-                }
+            val mode = localPreferencesRepository.getPreference(LocalPreferencesKeys.EXPLORE_LAYOUT_MODE, 0).first()
+            _displayState.update { it.copy(layoutState = mode) }
         }
     }
 
@@ -370,9 +330,8 @@ class ExploreShowViewModel(
                 LocalPreferencesKeys.EXPLORE_LAYOUT_GRID_PORTRAIT
             }
             val default = if (isLandscape) 7 else 3
-            localPreferencesRepository.getPreference(key, default).collect { count ->
-                _displayState.update { it.copy(gridCount = count) }
-            }
+            val count = localPreferencesRepository.getPreference(key, default).first()
+            _displayState.update { it.copy(gridCount = count) }
         }
     }
 
@@ -389,27 +348,11 @@ class ExploreShowViewModel(
         _displayState.update { it.copy(gridCount = count) }
     }
 
-    private fun jumpToPage(targetPage: Int) {
-        val source = sourceUrl ?: return
-        val url = exploreUrl
-        if (!_pageState.value.canJumpPage) return
-        loadJob?.cancel()
-        val generation = ++loadGeneration
-        autoPageCount = 0
-        page = targetPage.coerceAtLeast(1)
-        _rawBooks.value = emptyList()
-        _loadState.update {
-            it.copy(isLoading = true, isRefreshing = false, isEnd = false, errorMsg = null)
-        }
-        loadJob = viewModelScope.launch { fetchPage(source, url, generation) }
-    }
-
     private fun loadMore(isRefresh: Boolean = false, forceLoad: Boolean = false) {
         val source = sourceUrl
         val url = exploreUrl
         val loadState = _loadState.value
         if (source == null || loadState.isLoading || (loadState.isEnd && !isRefresh && !forceLoad)) return
-        val generation = ++loadGeneration
 
         _loadState.update {
             it.copy(
@@ -420,7 +363,7 @@ class ExploreShowViewModel(
             )
         }
 
-        loadJob = viewModelScope.launch {
+        viewModelScope.launch {
             if (isRefresh) {
                 page = 1
                 autoPageCount = 0
@@ -431,15 +374,14 @@ class ExploreShowViewModel(
                 autoPageCount = 0
             }
 
-            fetchPage(source, url, generation)
+            fetchPage(source, url)
         }
     }
 
-    private suspend fun fetchPage(sourceUrl: String, url: String?, generation: Long) {
+    private suspend fun fetchPage(sourceUrl: String, url: String?) {
         kotlin.runCatching {
             exploreBooksUseCase.execute(sourceUrl, url, args = null, page)
         }.onSuccess { result ->
-            if (generation != loadGeneration) return@onSuccess
             val currentList = _rawBooks.value
             val existingUrls = currentList.map { it.bookUrl }.toSet()
             val uniqueNewBooks = result.books
@@ -451,27 +393,21 @@ class ExploreShowViewModel(
             }
 
             if (uniqueNewBooks.isEmpty()) {
-                fetchNextAutoPageOrFinish(sourceUrl, url, generation)
+                fetchNextAutoPageOrFinish(sourceUrl, url)
             } else {
                 _rawBooks.value = currentList + uniqueNewBooks
-                _pageState.update { it.copy(currentPage = page) }
                 page++
                 autoPageCount = 0
                 _loadState.update { it.copy(isEnd = false) }
                 finishLoading()
             }
         }.onFailure { throwable ->
-            if (generation != loadGeneration) return@onFailure
             _loadState.update { it.copy(errorMsg = throwable.stackTraceStr) }
             finishLoading()
         }
     }
 
-    private suspend fun fetchNextAutoPageOrFinish(
-        sourceUrl: String,
-        url: String?,
-        generation: Long
-    ) {
+    private suspend fun fetchNextAutoPageOrFinish(sourceUrl: String, url: String?) {
         page++
         autoPageCount++
         if (autoPageCount >= MAX_AUTO_PAGES) {
@@ -479,7 +415,7 @@ class ExploreShowViewModel(
             finishLoading()
         } else {
             delay(AUTO_PAGE_DELAY_MS)
-            if (generation == loadGeneration) fetchPage(sourceUrl, url, generation)
+            fetchPage(sourceUrl, url)
         }
     }
 
@@ -496,9 +432,3 @@ class ExploreShowViewModel(
         _effects.tryEmit(effect)
     }
 }
-
-/** 发现页分页状态：[canJumpPage] 表示当前书源的分页地址支持直接指定页码。 */
-data class ExplorePageState(
-    val currentPage: Int = 1,
-    val canJumpPage: Boolean = false,
-)
