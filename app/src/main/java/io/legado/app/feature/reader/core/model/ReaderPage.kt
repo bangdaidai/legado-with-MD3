@@ -1,4 +1,4 @@
-ackage io.legado.app.feature.reader.core.model
+package io.legado.app.feature.reader.core.model
 
 import io.legado.app.feature.reader.core.style.READER_HALF_HIGHLIGHT_TOP_RATIO
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO

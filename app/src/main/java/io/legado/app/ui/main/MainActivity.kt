@@ -1,4 +1,4 @@
-ackage io.legado.app.ui.main
+package io.legado.app.ui.main
 
 import android.Manifest
 import android.content.Context
