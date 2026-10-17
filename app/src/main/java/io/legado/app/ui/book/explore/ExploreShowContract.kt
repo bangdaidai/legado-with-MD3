@@ -23,6 +23,8 @@ data class ExploreShowUiState(
     val errorMsg: String? = null,
     val sheet: ExploreShowSheet = ExploreShowSheet.None,
     val filterStateId: Int = 0,
+    val currentPage: Int = 1,
+    val canJumpPage: Boolean = false,
 )
 
 @Stable
@@ -44,6 +46,7 @@ sealed interface ExploreShowIntent {
     ) : ExploreShowIntent
 
     data object LoadMore : ExploreShowIntent
+    data class JumpToPage(val page: Int) : ExploreShowIntent
     data object ForceLoadNext : ExploreShowIntent
     data object Refresh : ExploreShowIntent
     data class SwitchKind(val kind: ExploreKind) : ExploreShowIntent

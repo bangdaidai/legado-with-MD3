@@ -1,39 +1,37 @@
 package io.legado.app.ui.book.read.sheet
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Paint
+import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,94 +41,95 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-// Dp.isFinite 是这个包里的扩展属性，不是 kotlin.math 那个 Float 版本，必须显式导入
-import androidx.compose.ui.unit.isFinite
-import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.rememberAsyncImagePainter
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.HighlightRule
-import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
-import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
-import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
-import io.legado.app.feature.reader.core.style.underlineControlSupport
+import io.legado.app.feature.reader.core.layout.ReaderChapterBlockMeasurer
+import io.legado.app.feature.reader.core.layout.ReaderChapterMeasureResult
+import io.legado.app.feature.reader.core.layout.ReaderChapterMeasureStyle
+import io.legado.app.feature.reader.core.layout.ReaderImageDimensionsResolver
+import io.legado.app.feature.reader.core.layout.ReaderPaginationConfig
+import io.legado.app.feature.reader.core.layout.ReaderPaginator
+import io.legado.app.feature.reader.core.layout.ReaderTextAlignment
+import io.legado.app.feature.reader.core.layout.ReaderTextShaperFactory
+import io.legado.app.feature.reader.core.model.ReaderElement
+import io.legado.app.feature.reader.core.model.ReaderPage
+import io.legado.app.feature.reader.core.model.ReaderTextBackgroundRun
+import io.legado.app.feature.reader.core.model.ReaderTextStyle
+import io.legado.app.feature.reader.core.model.contentClipRect
+import io.legado.app.feature.reader.core.model.textBackgroundRuns
+import io.legado.app.feature.reader.core.source.ReaderChapterSource
+import io.legado.app.feature.reader.core.source.ReaderChapterSourceBlock
+import io.legado.app.feature.reader.core.style.ReaderStyleTarget
+import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
+import io.legado.app.feature.reader.drawTextBackground
+import io.legado.app.feature.reader.legacy.LegacyReaderPaginationStyleFactory
+import io.legado.app.feature.reader.legacy.LegacyReaderStyleRangeMapper
+import io.legado.app.feature.reader.platform.AndroidReaderTextShaper
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
+import io.legado.app.feature.reader.platform.ReaderPageDecorationDrawCache
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
-import io.legado.app.help.config.ReadBookConfig
-import io.legado.app.help.config.ReadStyleResolver
+import io.legado.app.ui.book.read.ReadSheetConfigUiState
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FontFolderState
 import io.legado.app.ui.widget.components.FontSelectSheet
-import io.legado.app.ui.widget.components.NinePatchEditorDialog
 import io.legado.app.ui.widget.components.SectionTitle
-import io.legado.app.ui.widget.components.ValueStepper
-import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
-import io.legado.app.ui.widget.components.settingItem.TinyClearColorModeSettingItem
+import io.legado.app.ui.widget.components.settingItem.TinyColorSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
-import io.legado.app.utils.ColorUtils
-import io.legado.app.utils.SelectImageContract
-import io.legado.app.utils.launch
-import io.legado.app.utils.textHeight
 import io.legado.app.ui.widget.components.text.AppText
-import io.legado.app.ui.widget.components.text.drawFluorescentBand
-import io.legado.app.ui.widget.components.text.drawUnderlineSegment
-import io.legado.app.ui.widget.components.text.forEachLineSegment
+import io.legado.app.utils.dpToPx
+import io.legado.app.utils.spToPx
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun HighlightRuleEditSheet(
     show: Boolean,
     rule: HighlightRule?,
     allConfigNames: List<String>,
+    /** 正文那一份排版快照：预览的字号/字距/行距/缩进/颜色/页边距全部沿用它的，见 [HighlightRulePreview]。 */
+    config: ReadSheetConfigUiState,
     onDismissRequest: () -> Unit,
     onSave: (HighlightRule) -> Unit,
+    /** false = 角色气泡那一份：样式/命中排版/应用排版/字体替换全都在，只去掉「规则信息」。 */
+    showRuleInfo: Boolean = true,
+    title: String? = null,
 ) {
     val isNew = rule == null
     val initial = remember(show, rule) { rule ?: HighlightRule() }
@@ -142,44 +141,34 @@ fun HighlightRuleEditSheet(
     var name by remember(show, rule) { mutableStateOf(initial.name) }
     var targetScope by remember(show, rule) { mutableIntStateOf(initial.targetScope) }
     var enabled by remember(show, rule) { mutableStateOf(initial.enabled) }
-    var sampleText by remember(show, rule) {
-        mutableStateOf(initial.sampleText.ifBlank { "她轻声说：今晚就出发。" })
-    }
+    var sampleText by remember(show, rule) { mutableStateOf(initial.sampleText) }
 
     // Style state
-    // 日间色：null 表示自动派生（从夜间色反向派生）
-    var textColor by remember(show, rule) { mutableStateOf(initial.textColor) }
-    // 夜间色：null 表示自动派生（从日间色正向派生）
-    var textColorNight by remember(show, rule) { mutableStateOf(initial.textColorNight) }
-    var bgColor by remember(show, rule) { mutableStateOf(initial.bgColor) }
-    var bgColorNight by remember(show, rule) { mutableStateOf(initial.bgColorNight) }
-    // 0 = 无下划线（原「下划线开关」的关），>0 = 具体线型；开关与样式合并为单一来源
+    var textColor by remember(show, rule) {
+        mutableIntStateOf(
+            initial.textColor ?: 0xFF63C37D.toInt()
+        )
+    }
+    var hasTextColor by remember(show, rule) { mutableStateOf(initial.textColor != null) }
+    var bgColor by remember(show, rule) { mutableIntStateOf(initial.bgColor ?: 0x20FFEB3B) }
+    var hasBgColor by remember(show, rule) { mutableStateOf(initial.bgColor != null) }
+    var hasUnderline by remember(show, rule) { mutableStateOf(initial.underlineMode > 0) }
     var underlineMode by remember(
         show,
         rule
-    ) { mutableIntStateOf(initial.underlineMode) }
-    var underlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor) }
-    var underlineColorNight by remember(show, rule) { mutableStateOf(initial.underlineColorNight) }
-    // 初值钳到滑块范围：sanitizeRule 只在保存/整表加载时跑，备份导入或直接改库的
-    // 越界值会一路带到滑块上，越界状态下组件行为不可预期
-    var underlineWidth by remember(show, rule) {
-        mutableFloatStateOf(initial.underlineWidth.coerceIn(0.1f, 10f))
+    ) { mutableIntStateOf(if (initial.underlineMode > 0) initial.underlineMode else 1) }
+    var underlineColor by remember(show, rule) {
+        mutableIntStateOf(
+            initial.underlineColor ?: 0xFF63C37D.toInt()
+        )
     }
-    var underlineOffset by remember(show, rule) {
-        mutableFloatStateOf(initial.underlineOffset.coerceIn(-10f, 20f))
-    }
+    var hasUnderlineColor by remember(show, rule) { mutableStateOf(initial.underlineColor != null) }
+    var underlineWidth by remember(show, rule) { mutableFloatStateOf(initial.underlineWidth) }
+    var underlineOffset by remember(show, rule) { mutableFloatStateOf(initial.underlineOffset) }
     var underlineSvgPath by remember(
         show,
         rule
     ) { mutableStateOf(initial.underlineSvgPath.orEmpty()) }
-    var underlineBelowText by remember(show, rule) { mutableStateOf(initial.underlineBelowText) }
-    var underlineFeather by remember(show, rule) { mutableFloatStateOf(initial.underlineFeather) }
-    var underlineDashLen by remember(show, rule) { mutableFloatStateOf(initial.underlineDashLen) }
-    var underlineDashGap by remember(show, rule) { mutableFloatStateOf(initial.underlineDashGap) }
-    var underlineWavePeak by remember(show, rule) { mutableFloatStateOf(initial.underlineWavePeak) }
-    var underlineWaveLength by remember(show, rule) { mutableFloatStateOf(initial.underlineWaveLength) }
-    var useProtagonist by remember(show, rule) { mutableStateOf(initial.useProtagonist) }
-    var characterRole by remember(show, rule) { mutableStateOf(initial.characterRole.orEmpty()) }
     var bgImage by remember(show, rule) { mutableStateOf(initial.bgImage.orEmpty()) }
     var bgImageFit by remember(show, rule) { mutableIntStateOf(initial.bgImageFit) }
     var bgImageScale by remember(show, rule) { mutableFloatStateOf(initial.bgImageScale) }
@@ -195,31 +184,23 @@ fun HighlightRuleEditSheet(
     var npRight by remember(show, rule) { mutableFloatStateOf(initial.npRight) }
     var npTop by remember(show, rule) { mutableFloatStateOf(initial.npTop) }
     var npBottom by remember(show, rule) { mutableFloatStateOf(initial.npBottom) }
-    var bgPaddingStart by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingStart) }
-    var bgPaddingEnd by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingEnd) }
-    var bgPaddingTop by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingTop) }
-    var bgPaddingBottom by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingBottom) }
-    var bgMarginStart by remember(show, rule) { mutableFloatStateOf(initial.bgMarginStart) }
-    var bgMarginEnd by remember(show, rule) { mutableFloatStateOf(initial.bgMarginEnd) }
-    var bgMarginTop by remember(show, rule) { mutableFloatStateOf(initial.bgMarginTop) }
-    var bgMarginBottom by remember(show, rule) { mutableFloatStateOf(initial.bgMarginBottom) }
     var showNinePatchEditor by remember(show, rule) { mutableStateOf(false) }
-    var showInsetEditor by remember { mutableStateOf(false) }
-    var showMarginEditor by remember { mutableStateOf(false) }
     var manualNineSlice by remember(show, rule) { mutableStateOf(initial.manualNineSlice) }
 
-    // 预览必须与正文渲染取同一份切分线来源：非手动且图片带 .9.png 引导线时正文吃自动值，
-    // 这里同步换算，避免"预览调好了、正文没生效"。
-    val effectiveNineSlice = remember(bgImage, manualNineSlice, npLeft, npRight, npTop, npBottom) {
-        val automatic = if (bgImage.isNotBlank() && !manualNineSlice) {
-            ReaderTextBackgroundLoader.nineSliceFractions(bgImage)
-        } else null
-        NineSliceValues(
-            left = automatic?.left ?: npLeft,
-            right = automatic?.right ?: npRight,
-            top = automatic?.top ?: npTop,
-            bottom = automatic?.bottom ?: npBottom,
-        )
+    // 命中排版 state：只作用在正则命中的那一段上，没设（0）就一个浮点差异都不引入。
+    var matchSpacingBefore by remember(show, rule) {
+        mutableFloatStateOf(initial.letterSpacingBefore)
+    }
+    var matchSpacingAfter by remember(show, rule) { mutableFloatStateOf(initial.letterSpacingAfter) }
+    var hitLineSpacingTop by remember(show, rule) { mutableFloatStateOf(initial.lineSpacingTop) }
+    var hitLineSpacingBottom by remember(show, rule) {
+        mutableFloatStateOf(initial.lineSpacingBottom)
+    }
+    var bgLengthOffsetLeft by remember(show, rule) {
+        mutableFloatStateOf(initial.bgLengthOffsetLeft)
+    }
+    var bgLengthOffsetRight by remember(show, rule) {
+        mutableFloatStateOf(initial.bgLengthOffsetRight)
     }
 
     // Config binding state — empty set = global (applies to all configs)
@@ -233,24 +214,17 @@ fun HighlightRuleEditSheet(
 
     // Color picker state
     var showTextColorPicker by remember(show, rule) { mutableStateOf(false) }
-    var showTextColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showBgColorPicker by remember(show, rule) { mutableStateOf(false) }
-    var showBgColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showUnderlineColorPicker by remember(show, rule) { mutableStateOf(false) }
-    var showUnderlineColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showFontSelect by remember(show, rule) { mutableStateOf(false) }
 
     // Validation
     var patternError by remember(show, rule) { mutableStateOf<String?>(null) }
 
-    // 停靠预览区是否展开：默认展开，调参时随时能看到效果；折叠后只留标题行把高度让给表单
-    var previewDockExpanded by remember(show, rule) { mutableStateOf(true) }
-
-    // File picker for background images (uses SelectImageContract for visual photo picker)
+    // File picker for background images (uses OpenDocument to avoid MediaStore transcoding)
     val imagePicker = rememberLauncherForActivityResult(
-        SelectImageContract()
-    ) { result ->
-        val uri = result.uri
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
         if (uri != null) {
             coroutineScope.launch {
                 runCatching {
@@ -295,30 +269,56 @@ fun HighlightRuleEditSheet(
         }
     }
 
+    /**
+     * 预览与保存共用这一份数据：预览看到的就是按下保存会写进库的那条规则，
+     * 不存在「预览一套、正文一套」的第二套口径。
+     */
+    val previewRule = HighlightRule(
+        id = initial.id,
+        name = name,
+        pattern = pattern,
+        sampleText = sampleText,
+        targetScope = targetScope,
+        enabled = enabled,
+        position = initial.position,
+        textColor = if (hasTextColor) textColor else null,
+        bgColor = if (hasBgColor) bgColor else null,
+        underlineMode = if (hasUnderline) underlineMode else 0,
+        underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
+        underlineWidth = underlineWidth,
+        underlineOffset = underlineOffset,
+        underlineSvgPath = underlineSvgPath.ifBlank { null },
+        bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
+        bgImageFit = bgImageFit,
+        bgImageScale = bgImageScale,
+        configName = if (configNames.isEmpty()) null else configNames.toList().toJsonArray(),
+        fontPath = if (hasFont) fontPath.ifBlank { null } else null,
+        fontWeight = fontWeight,
+        isItalic = isItalic,
+        fontSizeOffset = fontSizeOffset,
+        npLeft = npLeft,
+        npRight = npRight,
+        npTop = npTop,
+        npBottom = npBottom,
+        manualNineSlice = manualNineSlice,
+        letterSpacingBefore = matchSpacingBefore,
+        letterSpacingAfter = matchSpacingAfter,
+        lineSpacingTop = hitLineSpacingTop,
+        lineSpacingBottom = hitLineSpacingBottom,
+        bgLengthOffsetLeft = bgLengthOffsetLeft,
+        bgLengthOffsetRight = bgLengthOffsetRight,
+    )
+
     val titleRes = if (isNew) R.string.new_rule else R.string.edit_rule
 
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
-        title = stringResource(titleRes),
-        startAction = {
-            // 预览折叠开关与右侧「保存」对称，都走标题栏图标按钮
-            MediumTonalButton(
-                icon = if (previewDockExpanded) {
-                    Icons.Default.KeyboardArrowDown
-                } else {
-                    Icons.Default.KeyboardArrowUp
-                },
-                contentDescription = stringResource(
-                    if (previewDockExpanded) R.string.collapse else R.string.expand
-                ),
-                onClick = { previewDockExpanded = !previewDockExpanded },
-            )
-        },
+        title = title ?: stringResource(titleRes),
         endAction = {
             MediumTonalButton(
                 onClick = {
-                    if (pattern.isNotBlank()) {
+                    if (showRuleInfo && pattern.isNotBlank()) {
                         val result = runCatching { Regex(pattern) }
                         if (result.isFailure) {
                             patternError = result.exceptionOrNull()?.message
@@ -326,188 +326,101 @@ fun HighlightRuleEditSheet(
                         }
                     }
                     patternError = null
-                    onSave(
-                        HighlightRule(
-                            id = initial.id,
-                            name = name,
-                            pattern = pattern,
-                            sampleText = sampleText,
-                            targetScope = targetScope,
-                            enabled = enabled,
-                            position = initial.position,
-                            textColor = textColor,
-                            textColorNight = textColorNight,
-                            bgColor = bgColor,
-                            bgColorNight = bgColorNight,
-                            underlineMode = underlineMode,
-                            underlineColor = if (underlineMode > 0) underlineColor else null,
-                            underlineColorNight = if (underlineMode > 0) underlineColorNight else null,
-                            underlineWidth = underlineWidth,
-                            underlineOffset = underlineOffset,
-                            underlineSvgPath = underlineSvgPath.ifBlank { null },
-                            underlineFeather = underlineFeather,
-                            underlineBelowText = underlineBelowText,
-                            underlineDashLen = underlineDashLen,
-                            underlineDashGap = underlineDashGap,
-                            underlineWavePeak = underlineWavePeak,
-                            underlineWaveLength = underlineWaveLength,
-                            bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
-                            bgImageFit = if (hasBgImage && bgImage.isNotBlank()) bgImageFit else 0,
-                            bgImageScale = bgImageScale,
-                            configName = if (configNames.isEmpty()) null else configNames.toList().toJsonArray(),
-                            fontPath = if (hasFont) fontPath.ifBlank { null } else null,
-                            fontWeight = fontWeight,
-                            isItalic = isItalic,
-                            fontSizeOffset = fontSizeOffset,
-                            npLeft = npLeft,
-                            npRight = npRight,
-                            npTop = npTop,
-                            npBottom = npBottom,
-                            bgPaddingStart = bgPaddingStart,
-                            bgPaddingEnd = bgPaddingEnd,
-                            bgPaddingTop = bgPaddingTop,
-                            bgPaddingBottom = bgPaddingBottom,
-                            bgMarginStart = bgMarginStart,
-                            bgMarginEnd = bgMarginEnd,
-                            bgMarginTop = bgMarginTop,
-                            bgMarginBottom = bgMarginBottom,
-                            useProtagonist = useProtagonist,
-                            characterRole = characterRole.ifBlank { null },
-                            manualNineSlice = manualNineSlice,
-                        )
-                    )
+                    onSave(previewRule)
                 },
                 icon = Icons.Default.Done,
                 contentDescription = stringResource(R.string.save),
             )
         },
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // 设置项滚动区：预览停到底部后，表单只能分到「弹层高度 - 预览高度」，
-            // 用 weight 吃满剩余高度；fill = false 保证表单内容不足时弹层不被撑到最大高度。
+        val scrollState = rememberScrollState()
+        // 键盘顶着屏幕时不浮出预览：悬浮卡钉在弹层底边，输入框一拿到焦点就收回。
+        var typingFocused by remember(show) { mutableStateOf(false) }
+        Box(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(bottom = 16.dp)
+                    .verticalScroll(scrollState),
             ) {
                 // === Section 1: Rule Info ===
-                SectionTitle(stringResource(R.string.rule_info))
+                // 角色气泡复用这一整套编辑器，只是没有「规则信息」：哪一句归哪个角色由分配表
+                // 给定，不需要正则、作用域与停用开关（见 CastBubbleSheet）。
+                if (showRuleInfo) {
+                    SectionTitle(stringResource(R.string.rule_info))
 
-                AppTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = stringResource(R.string.rule_name),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                    AppTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = stringResource(R.string.rule_name),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
-                Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                AppTextField(
-                    value = pattern,
-                    onValueChange = {
-                        pattern = it
-                        patternError = null
-                    },
-                    label = stringResource(R.string.rule_pattern),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = patternError != null,
-                    enabled = !useProtagonist,
-                    supportingText = patternError?.let {
-                        { AppText(it, color = MaterialTheme.colorScheme.error) }
-                    },
-                )
+                    AppTextField(
+                        value = pattern,
+                        onValueChange = {
+                            pattern = it
+                            patternError = null
+                        },
+                        label = stringResource(R.string.rule_pattern),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusEvent { typingFocused = it.hasFocus },
+                        isError = patternError != null,
+                        supportingText = patternError?.let {
+                            { AppText(it, color = LegadoTheme.colorScheme.error) }
+                        },
+                    )
 
-                Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                // 跟随主角：用知识图谱中的人物名代替正则
-                TinySwitchSettingItem(
-                    title = stringResource(R.string.use_protagonist),
-                    checked = useProtagonist,
-                    onCheckedChange = { useProtagonist = it },
-                )
-                AnimatedVisibility(visible = useProtagonist) {
+                    val scopeEntries = arrayOf(
+                        stringResource(R.string.target_all),
+                        stringResource(R.string.target_title),
+                        stringResource(R.string.target_body),
+                    )
+                    val scopeValues = arrayOf(
+                        HighlightRule.TARGET_ALL.toString(),
+                        HighlightRule.TARGET_TITLE.toString(),
+                        HighlightRule.TARGET_BODY.toString(),
+                    )
                     TinyDropdownSettingItem(
-                        title = stringResource(R.string.character_role_filter),
-                        selectedValue = characterRole,
-                        displayEntries = arrayOf(
-                            stringResource(R.string.character_role_all),
-                            stringResource(R.string.character_role_male_lead),
-                            stringResource(R.string.character_role_female_lead),
-                            stringResource(R.string.character_role_male_supporting),
-                            stringResource(R.string.character_role_female_supporting),
-                        ),
-                        entryValues = arrayOf(
-                            "",
-                            BookCharacterProfile.ROLE_MALE_LEAD,
-                            BookCharacterProfile.ROLE_FEMALE_LEAD,
-                            BookCharacterProfile.ROLE_MALE_SUPPORTING,
-                            BookCharacterProfile.ROLE_FEMALE_SUPPORTING,
-                        ),
-                        onValueChange = { characterRole = it },
+                        title = stringResource(R.string.target_scope),
+                        selectedValue = targetScope.toString(),
+                        displayEntries = scopeEntries,
+                        entryValues = scopeValues,
+                        onValueChange = {
+                            targetScope = it.toIntOrNull() ?: HighlightRule.TARGET_ALL
+                        },
+                    )
+
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.enable_rule),
+                        checked = enabled,
+                        onCheckedChange = { enabled = it },
                     )
                 }
-
-                Spacer(Modifier.height(8.dp))
-
-                val scopeEntries = arrayOf(
-                    stringResource(R.string.target_all),
-                    stringResource(R.string.target_title),
-                    stringResource(R.string.target_body),
-                )
-                val scopeValues = arrayOf(
-                    HighlightRule.TARGET_ALL.toString(),
-                    HighlightRule.TARGET_TITLE.toString(),
-                    HighlightRule.TARGET_BODY.toString(),
-                )
-                TinyDropdownSettingItem(
-                    title = stringResource(R.string.target_scope),
-                    selectedValue = targetScope.toString(),
-                    displayEntries = scopeEntries,
-                    entryValues = scopeValues,
-                    onValueChange = { targetScope = it.toIntOrNull() ?: HighlightRule.TARGET_ALL },
-                )
-
-                TinySwitchSettingItem(
-                    title = stringResource(R.string.enable_rule),
-                    checked = enabled,
-                    onCheckedChange = { enabled = it },
-                )
 
                 // === Section 2: Style Settings ===
                 SectionTitle(stringResource(R.string.style_settings))
 
-                // 自定义字体
+                // Text color
                 TinySwitchSettingItem(
-                    title = "自定义字体",
-                    checked = hasFont,
-                    onCheckedChange = { hasFont = it },
+                    title = stringResource(R.string.text_color),
+                    checked = hasTextColor,
+                    onCheckedChange = { hasTextColor = it },
                 )
-                AnimatedVisibility(visible = hasFont) {
-                    TinyClickableSettingItem(
-                        title = stringResource(R.string.select_font),
-                        description = fontPath.ifBlank { null }?.let { File(it).name },
-                        onClick = { showFontSelect = true },
+                AnimatedVisibility(visible = hasTextColor) {
+                    TinyColorSettingItem(
+                        title = stringResource(R.string.select_color),
+                        colorValue = textColor,
+                        onClick = { showTextColorPicker = true },
                     )
                 }
-
-                // Text color
-                TinyClearColorModeSettingItem(
-                    title = stringResource(R.string.text_color),
-                    dayColor = textColor,
-                    nightColor = textColorNight,
-                    onClickColor = { isNight ->
-                        if (isNight) showTextColorNightPicker = true
-                        else showTextColorPicker = true
-                    },
-                    onClearColor = { _ ->
-                        // 刷新：同时清除日间色和夜间色
-                        textColor = null
-                        textColorNight = null
-                    },
-                )
 
                 // Font weight — three options: Regular(400), Bold(700), Light(300)
                 val weightEntries = stringArrayResource(R.array.text_font_weight)
@@ -540,33 +453,61 @@ fun HighlightRuleEditSheet(
                     onValueChange = { fontSizeOffset = it.toInt() },
                 )
 
-                // Underline — 「无」即原来的关闭，选中具体线型即原来的开启；下拉常驻，细节项按选中态展开
-                // 排列按使用频率：基础线型在前，自定义 SVG 挪到最后（少数场景、选项里最长）
-                val underlineEntries = arrayOf(
-                    stringResource(R.string.underline_none),
-                    stringResource(R.string.underline_solid),
-                    stringResource(R.string.underline_dashed),
-                    stringResource(R.string.bookmark_mark_effect_highlight),
-                    stringResource(R.string.underline_wave),
-                    stringResource(R.string.underline_title_bar),
-                    stringResource(R.string.bookmark_mark_effect_strike),
-                    stringResource(R.string.underline_svg),
-                )
-                // 与 displayEntries 一一对应：值是实际的 underlineMode，不能随排序变
-                val underlineValues = arrayOf("0", "1", "2", "7", "3", "4", "6", "5")
-                TinyDropdownSettingItem(
+                // Underline
+                TinySwitchSettingItem(
                     title = stringResource(R.string.underline_style),
-                    selectedValue = underlineMode.toString(),
-                    displayEntries = underlineEntries,
-                    entryValues = underlineValues,
-                    onValueChange = { underlineMode = it.toIntOrNull() ?: 0 },
+                    checked = hasUnderline,
+                    onCheckedChange = { hasUnderline = it },
                 )
-                AnimatedVisibility(visible = underlineMode > 0) {
+                AnimatedVisibility(visible = hasUnderline) {
                     Column {
-                        // 哪些参数对当前线型真的有效果，由共享几何判定，和正文渲染同一口径。
-                        // 荧光(7) 是铺下半行的填充色带、删除线(6) 固定在行高 52%，
-                        // 宽度/偏移/圆头/羽化对它们都是死参数，露出来只会让人白调。
-                        val support = underlineControlSupport(underlineMode)
+                        val underlineEntries = arrayOf(
+                            stringResource(R.string.underline_solid),
+                            stringResource(R.string.underline_dashed),
+                            stringResource(R.string.underline_wave),
+                            stringResource(R.string.underline_title_bar),
+                            stringResource(R.string.underline_svg),
+                            stringResource(R.string.bookmark_mark_effect_strike),
+                            stringResource(R.string.bookmark_mark_effect_highlight),
+                        )
+                        val underlineValues = arrayOf("1", "2", "3", "4", "5", "6", "7")
+                        TinyDropdownSettingItem(
+                            title = stringResource(R.string.underline_style),
+                            selectedValue = underlineMode.toString(),
+                            displayEntries = underlineEntries,
+                            entryValues = underlineValues,
+                            onValueChange = { underlineMode = it.toIntOrNull() ?: 1 },
+                        )
+
+                        TinySwitchSettingItem(
+                            title = stringResource(R.string.underline_color),
+                            checked = hasUnderlineColor,
+                            onCheckedChange = { hasUnderlineColor = it },
+                        )
+                        AnimatedVisibility(visible = hasUnderlineColor) {
+                            TinyColorSettingItem(
+                                title = stringResource(R.string.select_color),
+                                colorValue = underlineColor,
+                                onClick = { showUnderlineColorPicker = true },
+                            )
+                        }
+
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.underline_width),
+                            value = underlineWidth,
+                            valueRange = 0.1f..10f,
+                            description = String.format("%.1f dp", underlineWidth),
+                            onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
+                        )
+
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.underline_offset),
+                            value = underlineOffset,
+                            valueRange = 0f..20f,
+                            description = String.format("%.1f dp", underlineOffset),
+                            onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
+                        )
+
                         AnimatedVisibility(visible = underlineMode == 5) {
                             AppTextField(
                                 value = underlineSvgPath,
@@ -575,131 +516,22 @@ fun HighlightRuleEditSheet(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
-
-                        TinyClearColorModeSettingItem(
-                            title = stringResource(R.string.underline_color),
-                            dayColor = underlineColor,
-                            nightColor = underlineColorNight,
-                            onClickColor = { isNight ->
-                                if (isNight) showUnderlineColorNightPicker = true
-                                else showUnderlineColorPicker = true
-                            },
-                            onClearColor = { _ ->
-                                // 刷新：同时清除日间色和夜间色
-                                underlineColor = null
-                                underlineColorNight = null
-                            },
-                        )
-
-                        AnimatedVisibility(visible = support.width) {
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_width),
-                                value = underlineWidth,
-                                // 上限与 HighlightRuleRepository.sanitizeRule 的
-                                // coerceIn(0.1f, 10f) 一致：滑块放到 20 会让用户拖到
-                                // 10dp 以上，保存时被静默压回 10dp 且无任何提示
-                                valueRange = 0.1f..10f,
-                                description = String.format("%.1f dp", underlineWidth),
-                                onValueChange = { underlineWidth = (it * 10).toInt() / 10f },
-                                onReset = { underlineWidth = 1f },
-                            )
-                        }
-
-                        AnimatedVisibility(visible = support.offset) {
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_offset),
-                                value = underlineOffset,
-                                // 同上，与 sanitizeRule 的 coerceIn(-10f, 20f) 对齐
-                                valueRange = -10f..20f,
-                                description = String.format("%+.1f dp", underlineOffset),
-                                onValueChange = { underlineOffset = (it * 10).toInt() / 10f },
-                                onReset = { underlineOffset = 2f },
-                            )
-                        }
-
-                        AnimatedVisibility(visible = support.layer) {
-                            TinySwitchSettingItem(
-                                title = stringResource(R.string.underline_below_text),
-                                checked = underlineBelowText,
-                                onCheckedChange = { underlineBelowText = it },
-                            )
-                        }
-
-                        AnimatedVisibility(visible = support.feather) {
-                            TinySliderSettingItem(
-                                title = stringResource(R.string.underline_feather),
-                                value = underlineFeather,
-       // 上限与 HighlightRuleRepository.sanitizeRule 的 coerceIn(0f, 10f) 一致：
-                                // 滑块放到 20 会让用户拖到 10dp 以上，保存时被静默压回且无提示。
-                                // 5dp 太小——线宽往往只有 1~2dp，5dp 羽化糊出来也就 11dp 高，
-                                // 相对正文仍是「一条粗带」而不是「化开的边」。
-                                valueRange = 0f..10f,
-                                description = String.format("%.1f dp", underlineFeather),
-                                onValueChange = { underlineFeather = (it * 10).toInt() / 10f },
-                            )
-                        }
-
-                        AnimatedVisibility(visible = support.dashPattern) {
-                            Column {
-                                TinySliderSettingItem(
-                                    title = stringResource(R.string.underline_dash_len),
-                                    value = underlineDashLen,
-                                    valueRange = 0f..20f,
-                                    description = String.format("%.1f dp", underlineDashLen),
-                                    onValueChange = { underlineDashLen = (it * 10).toInt() / 10f },
-                                    onReset = { underlineDashLen = 8f },
-                                )
-                                TinySliderSettingItem(
-                                    title = stringResource(R.string.underline_dash_gap),
-                                    value = underlineDashGap,
-                                    valueRange = 0f..20f,
-                                    description = String.format("%.1f dp", underlineDashGap),
-                                    onValueChange = { underlineDashGap = (it * 10).toInt() / 10f },
-                                    onReset = { underlineDashGap = 5f },
-                                )
-                            }
-                        }
-
-                        // 波浪形状：峰高是实际画出来的高度（渲染时控制点取 2 倍），
-                        // 波长是一个完整「上-下」周期。默认值与迁移前一致。
-                        AnimatedVisibility(visible = support.waveShape) {
-                            Column {
-                                TinySliderSettingItem(
-                                    title = stringResource(R.string.underline_wave_peak),
-                                    value = underlineWavePeak,
-                                    valueRange = 0.5f..12f,
-                                    description = String.format("%.1f dp", underlineWavePeak),
-                                    onValueChange = { underlineWavePeak = (it * 10).toInt() / 10f },
-                                    onReset = { underlineWavePeak = HighlightRule.DEFAULT_WAVE_PEAK_DP },
-                                )
-                                TinySliderSettingItem(
-                                    title = stringResource(R.string.underline_wave_length),
-                                    value = underlineWaveLength,
-                                    valueRange = 4f..60f,
-                                    description = String.format("%.1f dp", underlineWaveLength),
-                                    onValueChange = { underlineWaveLength = (it * 2).toInt() / 2f },
-                                    onReset = { underlineWaveLength = HighlightRule.DEFAULT_WAVE_LENGTH_DP },
-                                )
-                            }
-                        }
                     }
                 }
 
                 // Background color
-                TinyClearColorModeSettingItem(
+                TinySwitchSettingItem(
                     title = stringResource(R.string.bg_color),
-                    dayColor = bgColor,
-                    nightColor = bgColorNight,
-                    onClickColor = { isNight ->
-                        if (isNight) showBgColorNightPicker = true
-                        else showBgColorPicker = true
-                    },
-                    onClearColor = { _ ->
-                        // 刷新：同时清除日间色和夜间色
-                        bgColor = null
-                        bgColorNight = null
-                    },
+                    checked = hasBgColor,
+                    onCheckedChange = { hasBgColor = it },
                 )
+                AnimatedVisibility(visible = hasBgColor) {
+                    TinyColorSettingItem(
+                        title = stringResource(R.string.select_color),
+                        colorValue = bgColor,
+                        onClick = { showBgColorPicker = true },
+                    )
+                }
 
                 // Background image
                 TinySwitchSettingItem(
@@ -712,7 +544,7 @@ fun HighlightRuleEditSheet(
                         title = stringResource(R.string.highlight_bg_image),
                         description = bgImage.ifBlank { null }?.let { File(it).name },
                         onClick = {
-                            imagePicker.launch()
+                            imagePicker.launch(arrayOf("image/*"))
                         },
                     )
                 }
@@ -739,147 +571,116 @@ fun HighlightRuleEditSheet(
                             },
                         )
 
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.highlight_bg_image_scale),
+                            value = bgImageScale,
+                            valueRange = 0.1f..5f,
+                            steps = 48,
+                            stepSize = 0.1f,
+                            showDecimal = true,
+                            valueFormat = { String.format("%.1f", it) },
+                            description = String.format("%.1fx", bgImageScale),
+                            onValueChange = { bgImageScale = (it * 10).roundToInt() / 10f },
+                        )
+                        // 只有九宫格才吃这两个偏移（其它 fit 的绘制根本不读它们），
+                        // 挂在 fit 外面就是两个拨了没反应的死滑杆。
                         AnimatedVisibility(visible = bgImageFit == 3) {
                             Column {
-                                TinyClickableSettingItem(
-                                    title = "内边距",
-                                    description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom),
-                                    onClick = { showInsetEditor = !showInsetEditor },
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.highlight_bg_length_offset_left),
+                                    value = bgLengthOffsetLeft,
+                                    valueRange = -40f..40f,
+                                    steps = 159,
+                                    stepSize = 0.5f,
+                                    showDecimal = true,
+                                    valueFormat = { String.format("%.1f", it) },
+                                    description = String.format("%.1f dp", bgLengthOffsetLeft),
+                                    onValueChange = { bgLengthOffsetLeft = (it * 2).roundToInt() / 2f },
                                 )
-                                AnimatedVisibility(visible = showInsetEditor) {
-                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                        // 一行四个按钮，点击切换哪个方向的滑块
-                                        var activeInset by remember { mutableIntStateOf(-1) }
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
-                                                val selected = activeInset == idx
-                                                val values = listOf(bgPaddingStart, bgPaddingEnd, bgPaddingTop, bgPaddingBottom)
-                                                NormalCard(
-                                                    onClick = { activeInset = if (selected) -1 else idx },
-                                                    containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                                                        else LegadoTheme.colorScheme.surfaceContainerLow,
-                                                    cornerRadius = 8.dp,
-                                                    modifier = Modifier.weight(1f),
-                                                ) {
-                                                    AppText(
-                                                        "$label ${values[idx].toInt()}",
-                                                        style = LegadoTheme.typography.labelSmall,
-                                                        color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                                                            else LegadoTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
-                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        // 选中方向的滑块
-                                        AnimatedVisibility(visible = activeInset >= 0) {
-                                            val range = -32f..64f
-                                            val currentVal = when (activeInset) {
-                                                0 -> bgPaddingStart; 1 -> bgPaddingEnd
-                                                2 -> bgPaddingTop; else -> bgPaddingBottom
-                                            }
-                                            val updateInset: (Float) -> Unit = { v ->
-                                                val rounded = v.toInt().toFloat()
-                                                when (activeInset) {
-                                                    0 -> bgPaddingStart = rounded
-                                                    1 -> bgPaddingEnd = rounded
-                                                    2 -> bgPaddingTop = rounded
-                                                    else -> bgPaddingBottom = rounded
-                                                }
-                                            }
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Slider(
-                                                    value = currentVal,
-                                                    onValueChange = updateInset,
-                                                    valueRange = range,
-                                                    modifier = Modifier.weight(1f),
-                                                )
-                                                // 步进按钮：1dp 精调，滑块粗调
-                                                ValueStepper(
-                                                    value = currentVal,
-                                                    displayValue = currentVal,
-                                                    valueRange = range,
-                                                    onValueChange = updateInset,
-                                                    stepSize = 1f,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                TinyClickableSettingItem(
-                                    title = "外边距",
-                                    description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom),
-                                    onClick = { showMarginEditor = !showMarginEditor },
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.highlight_bg_length_offset_right),
+                                    value = bgLengthOffsetRight,
+                                    valueRange = -40f..40f,
+                                    steps = 159,
+                                    stepSize = 0.5f,
+                                    showDecimal = true,
+                                    valueFormat = { String.format("%.1f", it) },
+                                    description = String.format("%.1f dp", bgLengthOffsetRight),
+                                    onValueChange = { bgLengthOffsetRight = (it * 2).roundToInt() / 2f },
                                 )
-                                AnimatedVisibility(visible = showMarginEditor) {
-                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                        var activeMargin by remember { mutableIntStateOf(-1) }
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
-                                                val selected = activeMargin == idx
-                                                val values = listOf(bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom)
-                                                NormalCard(
-                                                    onClick = { activeMargin = if (selected) -1 else idx },
-                                                    containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                                                        else LegadoTheme.colorScheme.surfaceContainerLow,
-                                                    cornerRadius = 8.dp,
-                                                    modifier = Modifier.weight(1f),
-                                                ) {
-                                                    AppText(
-                                                        "$label ${values[idx].toInt()}",
-                                                        style = LegadoTheme.typography.labelSmall,
-                                                        color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                                                            else LegadoTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
-                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        AnimatedVisibility(visible = activeMargin >= 0) {
-                                            val currentVal = when (activeMargin) {
-                                                0 -> bgMarginStart; 1 -> bgMarginEnd
-                                                2 -> bgMarginTop; else -> bgMarginBottom
-                                            }
-                                            val updateMargin: (Float) -> Unit = { v ->
-                                                val rounded = v.toInt().toFloat()
-                                                when (activeMargin) {
-                                                    0 -> bgMarginStart = rounded
-                                                    1 -> bgMarginEnd = rounded
-                                                    2 -> bgMarginTop = rounded
-                                                    else -> bgMarginBottom = rounded
-                                                }
-                                            }
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Slider(
-                                                    value = currentVal,
-                                                    onValueChange = updateMargin,
-                                                    valueRange = -16f..64f,
-                                                    modifier = Modifier.weight(1f),
-                                                )
-                                                // 步进按钮：1dp 精调，滑块粗调
-                                                ValueStepper(
-                                                    value = currentVal,
-                                                    displayValue = currentVal,
-                                                    valueRange = -16f..64f,
-                                                    onValueChange = updateMargin,
-                                                    stepSize = 1f,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                            }
+                        }
+                        if (bgImageFit == 3) {
+                            TinySwitchSettingItem(
+                                title = stringResource(R.string.manual_nine_slice),
+                                checked = manualNineSlice,
+                                onCheckedChange = {
+                                    manualNineSlice = it
+                                    if (it) showNinePatchEditor = true
+                                },
+                            )
+                            if (manualNineSlice) {
+                                TinyClickableSettingItem(
+                                    title = stringResource(R.string.edit_nine_slice),
+                                    onClick = { showNinePatchEditor = true },
+                                )
                             }
                         }
                     }
                 }
+
+                // === Section 2b: Match typography ===
+                SectionTitle(stringResource(R.string.highlight_match_typography))
+                AppText(
+                    stringResource(R.string.highlight_match_typography_hint),
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_spacing_before),
+                    value = matchSpacingBefore,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", matchSpacingBefore),
+                    onValueChange = { matchSpacingBefore = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_spacing_after),
+                    value = matchSpacingAfter,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", matchSpacingAfter),
+                    onValueChange = { matchSpacingAfter = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_line_spacing_above),
+                    value = hitLineSpacingTop,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", hitLineSpacingTop),
+                    onValueChange = { hitLineSpacingTop = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_line_spacing_below),
+                    value = hitLineSpacingBottom,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", hitLineSpacingBottom),
+                    onValueChange = { hitLineSpacingBottom = (it * 2).roundToInt() / 2f },
+                )
 
                 // === Section 3: Config Binding ===
                 if (allConfigNames.isNotEmpty()) {
@@ -933,175 +734,57 @@ fun HighlightRuleEditSheet(
                     }
                 }
 
-            }
-
-            // === 停靠预览区（原 Section 5）===
-            // 预览常驻弹层底部：调上面的正则、颜色、下划线、九宫格时不用滚到末尾也能看到效果。
-            // 折叠开关在标题栏左侧（与「保存」对称），这里只在展开时占高度。
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 16.dp),
-            ) {
-                // 折叠时留一条分隔线，让「底部有个可展开的面板」这件事仍然看得出来
-                HorizontalDivider(color = LegadoTheme.colorScheme.outlineVariant)
-                if (previewDockExpanded) {
-                    Spacer(Modifier.height(8.dp))
-                    // 停靠区高度有限：示例文本按 4 行封顶，再长就在框里滚动，不能把上方的表单挤没。
-                    // 不给 label——标题栏已有「预览效果」说明这里是什么，浮动标签白占一行高度；
-                    // 改用 placeholder，只在空内容时出现，输入后不占位。
-                    // 字号跟卡片里的预览一致（同为 previewBaseFontSize = 正文字号）：
-                    // 输入框与它下面那张卡片本来就是同一段文字的两种呈现，字号不一致
-                    // 看起来像两个不相干的东西。字距也对齐，否则汉字间距会差一截。
-                    val sampleTextStyle = remember(previewBaseFontSize, ReadBookConfig.letterSpacing) {
-                        TextStyle(
-                            fontSize = previewBaseFontSize.sp,
-                            letterSpacing = ReadBookConfig.letterSpacing.em,
-                        )
-                    }
-                    AppTextField(
-                        value = sampleText,
-                        onValueChange = { sampleText = it },
-                        placeholder = {
-                            AppText(
-                                text = stringResource(R.string.sample_text),
-                                style = sampleTextStyle,
-                            )
-                        },
-                        maxLines = 4,
-                        textStyle = sampleTextStyle,
-                        modifier = Modifier.fillMaxWidth(),
+                // === Section 4: Font ===
+                SectionTitle("字体替换")
+                TinySwitchSettingItem(
+                    title = "自定义字体",
+                    checked = hasFont,
+                    onCheckedChange = { hasFont = it },
+                )
+                AnimatedVisibility(visible = hasFont) {
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.select_font),
+                        description = fontPath.ifBlank { null }?.let { File(it).name },
+                        onClick = { showFontSelect = true },
                     )
-                    Spacer(Modifier.height(8.dp))
-                    // 预览页面底色跟随「应用排版」绑定的排版；「全局」没绑定具体排版，用当前正在用的那份
-                    val previewConfig = remember(configNames) {
-                        configNames.firstNotNullOfOrNull { ReadBookConfig.configByName(it) }
-                            ?: ReadBookConfig.durConfig
-                    }
-                    val previewDayBgImage = pageBgImagePathOf(previewConfig.bgType, previewConfig.bgStr)
-                    val previewDayBgColor = if (previewDayBgImage == null) {
-                        previewConfig.bgStr.toPreviewColor(0xFFEEEEEE.toInt())
-                    } else {
-                        0xFFEEEEEE.toInt()
-                    }
-                    // 夜间预览：夜间色优先，否则从日间色派生
-                    val nightTextColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) }
-                    val nightBgColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) }
-                    val nightUnderlineColor = if (underlineMode > 0) {
-                        underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) }
-                    } else null
-                    val previewNightBgImage = pageBgImagePathOf(
-                        previewConfig.bgTypeNight, previewConfig.bgStrNight
-                    )
-                    val previewNightBgColor = if (previewNightBgImage == null) {
-                        previewConfig.bgStrNight.toPreviewColor(0xFF000000.toInt())
-                    } else {
-                        0xFF000000.toInt()
-                    }
-
-                    // 日、夜两块共用同一批样式参数，只有排版底色与色板不同，抽成本地 composable
-                    // 免得把这三十来个参数抄两遍。卡片内不画标题（label 传 null），
-                    // 靠底色深浅区分日夜，省下的高度留给表单。
-                    @Composable
-                    fun DayPreview() {
-                        HighlightRulePreview(
-                            // 不画「日间」标题：日夜上下相邻，靠底色深浅就能分辨
-                            label = null,
-                            sampleText = sampleText,
-                            pattern = pattern,
-                            textColor = textColor,
-                            bgColor = bgColor,
-                            bgImage = if (hasBgImage) bgImage else "",
-                            bgImageFit = bgImageFit,
-                            bgImageScale = bgImageScale,
-                            underlineMode = underlineMode,
-                            underlineColor = if (underlineMode > 0) underlineColor else null,
-                            underlineWidth = underlineWidth,
-                            underlineOffset = underlineOffset,
-                            underlineSvgPath = underlineSvgPath,
-                            pageBgColor = previewDayBgColor,
-                            pageTextColor = previewConfig.getTextColor().toPreviewColor(0xFF3E3D3B.toInt()),
-                            pageBgImagePath = previewDayBgImage,
-                            npLeft = effectiveNineSlice.left,
-                            npRight = effectiveNineSlice.right,
-                            npTop = effectiveNineSlice.top,
-                            npBottom = effectiveNineSlice.bottom,
-                            bgPadStart = bgPaddingStart,
-                            bgPadEnd = bgPaddingEnd,
-                            bgPadTop = bgPaddingTop,
-                            bgPadBottom = bgPaddingBottom,
-                            bgMarginStart = bgMarginStart,
-                            bgMarginEnd = bgMarginEnd,
-                            bgMarginTop = bgMarginTop,
-                            bgMarginBottom = bgMarginBottom,
-                            fontSizeOffset = fontSizeOffset,
-                            fontWeight = fontWeight,
-                            isItalic = isItalic,
-                            underlineBelowText = underlineBelowText,
-                            underlineFeather = underlineFeather,
-                            underlineDashLen = underlineDashLen,
-                            underlineDashGap = underlineDashGap,
-                            underlineWavePeak = underlineWavePeak,
-                            underlineWaveLength = underlineWaveLength,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    @Composable
-                    fun NightPreview() {
-                        HighlightRulePreview(
-                            // 同上，不画「夜间」标题
-                            label = null,
-                            sampleText = sampleText,
-                            pattern = pattern,
-                            textColor = nightTextColor,
-                            bgColor = nightBgColor,
-                            bgImage = "",
-                            bgImageFit = bgImageFit,
-                            bgImageScale = bgImageScale,
-                            underlineMode = underlineMode,
-                            underlineColor = nightUnderlineColor,
-                            underlineWidth = underlineWidth,
-                            underlineOffset = underlineOffset,
-                            underlineSvgPath = underlineSvgPath,
-                            pageBgColor = previewNightBgColor,
-                            pageTextColor = previewConfig.getTextColorNight()
-                                .toPreviewColor(0xFFADADAD.toInt()),
-                            pageBgImagePath = previewNightBgImage,
-                            npLeft = npLeft,
-                            npRight = npRight,
-                            npTop = npTop,
-                            npBottom = npBottom,
-                            bgPadStart = bgPaddingStart,
-                            bgPadEnd = bgPaddingEnd,
-                            bgPadTop = bgPaddingTop,
-                            bgPadBottom = bgPaddingBottom,
-                            bgMarginStart = bgMarginStart,
-                            bgMarginEnd = bgMarginEnd,
-                            bgMarginTop = bgMarginTop,
-                            bgMarginBottom = bgMarginBottom,
-                            fontSizeOffset = fontSizeOffset,
-                            fontWeight = fontWeight,
-                            isItalic = isItalic,
-                            underlineBelowText = underlineBelowText,
-                            underlineFeather = underlineFeather,
-                            underlineDashLen = underlineDashLen,
-                            underlineDashGap = underlineDashGap,
-                            underlineWavePeak = underlineWavePeak,
-                            underlineWaveLength = underlineWaveLength,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    // 日夜上下堆叠、各占满宽：并排会把卡片压到半宽，
-                    // 下划线、九宫格这类以行高为锚的效果在半宽里看不出真实表现。
-                    // 配了高亮背景图时正文只用那张图，夜间色不参与渲染，这时只显示日间。
-                    DayPreview()
-                    if (!hasBgImage || bgImage.isBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        NightPreview()
-                    }
                 }
+
+                // === Section 5: Preview ===
+                SectionTitle(stringResource(R.string.preview_effect))
+
+                AppTextField(
+                    value = sampleText,
+                    onValueChange = { sampleText = it },
+                    label = stringResource(R.string.sample_text),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusEvent { typingFocused = it.hasFocus },
+                )
+
+                HighlightPreviewCard(
+                    rule = previewRule,
+                    config = config,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                )
+            }
+            // 预览悬浮窗：钉在弹层底边，不跟着内容滚走。还有内容在下面看不着、且焦点不在
+            // 输入框上（键盘顶着屏幕）的时候才浮出来。画的是正文同一份函数，不会两套口径。
+            androidx.compose.animation.AnimatedVisibility(
+                visible = scrollState.value < scrollState.maxValue && !typingFocused,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                HighlightPreviewCard(
+                    rule = previewRule,
+                    config = config,
+                    floating = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                )
             }
         }
     }
@@ -1109,81 +792,29 @@ fun HighlightRuleEditSheet(
     // Color pickers
     ColorPickerSheet(
         show = showTextColorPicker,
-        initialColor = textColor ?: 0,
+        initialColor = textColor,
         onDismissRequest = { showTextColorPicker = false },
         onColorSelected = { color ->
             textColor = color
-            // 自动派生夜间色（如果夜间色未被用户手动设置过）
-            if (textColorNight == null) {
-                textColorNight = ColorUtils.flipLightness(color)
-            }
             showTextColorPicker = false
         },
     )
     ColorPickerSheet(
         show = showBgColorPicker,
-        initialColor = bgColor ?: 0,
+        initialColor = bgColor,
         onDismissRequest = { showBgColorPicker = false },
         onColorSelected = { color ->
             bgColor = color
-            // 自动派生夜间色（如果夜间色未被用户手动设置过）
-            if (bgColorNight == null) {
-                bgColorNight = ColorUtils.flipLightness(color)
-            }
             showBgColorPicker = false
         },
     )
     ColorPickerSheet(
         show = showUnderlineColorPicker,
-        initialColor = underlineColor ?: 0,
+        initialColor = underlineColor,
         onDismissRequest = { showUnderlineColorPicker = false },
         onColorSelected = { color ->
             underlineColor = color
-            // 自动派生夜间色（如果夜间色未被用户手动设置过）
-            if (underlineColorNight == null) {
-                underlineColorNight = ColorUtils.flipLightness(color)
-            }
             showUnderlineColorPicker = false
-        },
-    )
-    // Night color pickers
-    ColorPickerSheet(
-        show = showTextColorNightPicker,
-        initialColor = textColorNight ?: textColor?.let { ColorUtils.flipLightness(it) } ?: 0,
-        onDismissRequest = { showTextColorNightPicker = false },
-        onColorSelected = { color ->
-            textColorNight = color
-            // 自动派生日间色（如果日间色未被用户手动设置过）
-            if (textColor == null) {
-                textColor = ColorUtils.flipLightness(color)
-            }
-            showTextColorNightPicker = false
-        },
-    )
-    ColorPickerSheet(
-        show = showBgColorNightPicker,
-        initialColor = bgColorNight ?: bgColor?.let { ColorUtils.flipLightness(it) } ?: 0,
-        onDismissRequest = { showBgColorNightPicker = false },
-        onColorSelected = { color ->
-            bgColorNight = color
-            // 自动派生日间色（如果日间色未被用户手动设置过）
-            if (bgColor == null) {
-                bgColor = ColorUtils.flipLightness(color)
-            }
-            showBgColorNightPicker = false
-        },
-    )
-    ColorPickerSheet(
-        show = showUnderlineColorNightPicker,
-        initialColor = underlineColorNight ?: underlineColor?.let { ColorUtils.flipLightness(it) } ?: 0,
-        onDismissRequest = { showUnderlineColorNightPicker = false },
-        onColorSelected = { color ->
-            underlineColorNight = color
-            // 自动派生日间色（如果日间色未被用户手动设置过）
-            if (underlineColor == null) {
-                underlineColor = ColorUtils.flipLightness(color)
-            }
-            showUnderlineColorNightPicker = false
         },
     )
 
@@ -1191,19 +822,18 @@ fun HighlightRuleEditSheet(
     NinePatchEditorDialog(
         show = showNinePatchEditor,
         imagePath = bgImage,
-        // np* 存的是「角块占比」，编辑器内部用「绝对线位置(0~1)」，此处做转换
-        initialLeft = effectiveNineSlice.left,
-        initialRight = 1f - effectiveNineSlice.right,
-        initialTop = effectiveNineSlice.top,
-        initialBottom = 1f - effectiveNineSlice.bottom,
+        initialLeft = npLeft,
+        initialRight = npRight,
+        initialTop = npTop,
+        initialBottom = npBottom,
+        previewRule = previewRule,
+        config = config,
         onDismissRequest = { showNinePatchEditor = false },
         onSave = { left, right, top, bottom ->
             npLeft = left
-            npRight = 1f - right
+            npRight = right
             npTop = top
-            npBottom = 1f - bottom
-            // 只有真的在编辑器里保存过切分线才转手动；选九宫格后直接关编辑器＝保持自动切
-            manualNineSlice = true
+            npBottom = bottom
             showNinePatchEditor = false
         },
     )
@@ -1248,481 +878,512 @@ fun HighlightRuleEditSheet(
     )
 }
 
-private val previewBaseFontSize: Int get() = ReadBookConfig.textSize
-
-/** 预览排版分段：文本（可能插入外边距占位空格）、偏移后的命中区间、占位描述。 */
-private data class MarginSegmentation(
-    val text: String,
-    val ranges: List<IntRange>,
-    val placeholders: List<AnnotatedString.Range<Placeholder>>,
-)
-
-/** 排版背景图的加载地址；bgType 0 是纯色，1 是 assets 内置图，2 是外部图片 */
-private fun pageBgImagePathOf(bgType: Int, bgStr: String): String? = when (bgType) {
-    1 -> "file:///android_asset/bg/$bgStr"
-    2 -> ReadStyleResolver.backgroundPath(bgType, bgStr)
-    else -> null
+/** 预览卡：正文卡与悬浮卡共用同一份内容，浮起来的那张多一行标题和阴影。 */
+/** 角色气泡弹层复用同一张预览卡：它跑的就是正文那条管线，不留第二套口径。 */
+@Composable
+internal fun HighlightPreviewCard(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    modifier: Modifier = Modifier,
+    floating: Boolean = false,
+) {
+    NormalCard(
+        modifier = modifier,
+        cornerRadius = 16.dp,
+        containerColor = if (floating) {
+            LegadoTheme.colorScheme.surfaceContainerHigh
+        } else {
+            LegadoTheme.colorScheme.surfaceContainerLow
+        },
+        elevation = if (floating) 6.dp else 0.dp,
+    ) {
+        if (floating) {
+            AppText(
+                stringResource(R.string.preview_effect),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, top = 8.dp),
+            )
+        }
+        HighlightRulePreview(
+            rule = rule,
+            config = config,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (floating) 128.dp else 168.dp)
+                .clipToBounds()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
 }
 
-/** 颜色字符串解析不出来（比如 bgStr 存的是图片文件名）时退回 fallback */
-private fun String?.toPreviewColor(fallback: Int): Int =
-    this?.let { runCatching { android.graphics.Color.parseColor(it) }.getOrNull() } ?: fallback
-
-/** 预览实际生效的九宫格切分线（自动探测优先时与正文渲染同一口径） */
-private data class NineSliceValues(
-    val left: Float,
-    val right: Float,
-    val top: Float,
-    val bottom: Float,
-)
-
+/**
+ * 规则预览：整块走正文那一条管线，示例句按**正文那一栏的宽度、字号与页边距**排版，再把整页等比缩进卡片。
+ *
+ * 规则→样式用 [LegacyReaderStyleRangeMapper]（命中字距、命中行行距、背景图切线都在那里换算），
+ * 测量用 [ReaderChapterBlockMeasurer]，分页用 [ReaderPaginator]，绘制用正文同一份
+ * [drawTextBackground] 与 [ReaderPageDecorationDrawCache]。正文怎么断行、气泡多大、字落在哪，
+ * 预览就是那个结果——包括「命中字距只在段外留白，不许把图拉长」这一条。
+ *
+ * 卡片只有屏宽大分之一，硬画装不下，所以缩放只放在最后一步：字号、字距、行距、段首缩进、页边距、
+ * 断行位置、气泡与字的比例全部是正文那一份，整页一起缩。改正文字号时预览跟着一起变。
+ */
 @Composable
-internal fun HighlightRulePreview(
-    /** 卡片内的标题行。传 null 不画——并排停靠时靠底色深浅就能分清日夜，省一行是一行。 */
-    label: String?,
-    sampleText: String,
-    pattern: String,
-    textColor: Int?,
-    bgColor: Int?,
-    bgImage: String,
-    bgImageFit: Int,
-    bgImageScale: Float,
-    underlineMode: Int,
-    underlineColor: Int?,
-    underlineWidth: Float,
-    underlineOffset: Float,
-    /** 自定义 SVG 下划线的 pathData，只有 underlineMode == 5 会用。 */
-    underlineSvgPath: String = "",
-    pageBgColor: Int,
-    pageTextColor: Int,
-    /** 排版背景是图片时的加载地址，为 null 表示纯色背景 */
-    pageBgImagePath: String? = null,
-    npLeft: Float = 0.5f,
-    npRight: Float = 0.5f,
-    npTop: Float = 0.5f,
-    npBottom: Float = 0.5f,
-    bgPadStart: Float = 0f,
-    bgPadEnd: Float = 0f,
-    bgPadTop: Float = 0f,
-    bgPadBottom: Float = 0f,
-    bgMarginStart: Float = 0f,
-    bgMarginEnd: Float = 0f,
-    bgMarginTop: Float = 0f,
-    bgMarginBottom: Float = 0f,
-    fontSizeOffset: Int = 0,
-    fontWeight: Int = 400,
-    isItalic: Boolean = false,
-    underlineBelowText: Boolean = false,
-    underlineFeather: Float = 0f,
-    underlineDashLen: Float = 8f,
-    underlineDashGap: Float = 5f,
-    /** 波浪实际峰高（dp）。渲染时控制点取 2 倍，见 drawUnderlineSegment。 */
-    underlineWavePeak: Float = 1.5f,
-    /** 波浪波长（dp，一个完整「上-下」周期）。 */
-    underlineWaveLength: Float = 24f,
+private fun HighlightRulePreview(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
     modifier: Modifier = Modifier,
 ) {
-    val textMeasurer = rememberTextMeasurer()
-    val defaultTextColor = Color(pageTextColor)
-    val resolvedTextColor = textColor?.let { Color(it) } ?: defaultTextColor
-    val resolvedUnderlineColor = underlineColor?.let { Color(it) } ?: resolvedTextColor
+    // 正文分页读的就是窗口宽：视口取同一份，断行才会与正文一致。
+    val bodyViewportWidthPx = LocalWindowInfo.current.containerSize.width
+    val baseTextSizePx = config.textSize.toFloat().spToPx()
+    val layout = rememberReaderPreviewLayout(
+        rule = rule,
+        config = config,
+        sample = rule.normalizedSampleText(),
+        viewportWidthPx = bodyViewportWidthPx,
+        // 视口给高：示例句必须全落在第一页，不然一拉「命中行行距」就把最后一行挤到丢掉的第二页，
+        // 预览里就看不到规则生效。超出的部分由外层 clipToBounds 裁掉，跟正文一样不许装饰跑进页边距。
+        viewportHeightPx = (baseTextSizePx * 60f).toInt(),
+    )
+    val decorations = remember(layout) { layout?.let { ReaderPageDecorationDrawCache.create(it.page) } }
+    val backgroundPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val stylePaints = remember { mutableMapOf<ReaderTextStyle, Paint>() }
+    Canvas(modifier) {
+        val page = layout?.page
+        if (page != null && decorations != null && bodyViewportWidthPx > 0) {
+            val runs = page.textBackgroundRuns()
+            // 正文那一刀：裁剪框跟着背景走，气泡不会被页边距切成两截，字也超不出去。
+            val clip = page.contentClipRect(runs)
+            val previewScale = size.width / bodyViewportWidthPx
+            // 整页原点缩放会把正文那一圈页边距一起缩进卡片里：示例句会落到卡片下方偏右，
+            // 视觉上字是歪的。这里只把**内容外接框的左上角**平移到卡片原点（排版一项不动，
+            // 段首缩进、命中字距、气泡与字的比例仍是正文那一份），卡片里就是干净的一页内容。
+            clipRect(
+                0f, 0f,
+                (clip.right - clip.left) * previewScale,
+                (clip.bottom - clip.top) * previewScale,
+            ) {
+                scale(previewScale) {
+                    translate(-clip.left, -clip.top) {
+                        drawReaderPreviewPage(layout, runs, decorations, backgroundPaint, stylePaints)
+                    }
+                }
+            }
+        }
+    }
+}
 
-    // 加载背景图 Bitmap，原始 Bitmap 供九宫格绘制使用
-    val bgRawBitmap = remember(bgImage) {
-        if (bgImage.isBlank()) null
-        else runCatching {
-            BitmapFactory.decodeFile(bgImage)
+/** 排版好的一页 + 背景图位图：几何全部已经在 [ReaderPage] 里按正文口径算完。 */
+private data class ReaderPreviewLayout(val page: ReaderPage, val background: Bitmap?)
+
+/**
+ * 算一页要读一次图片尺寸与字体度量，放后台线程；示例句最长三行，代价可以忽略。
+ * 重算期间沿用上一次的页，滑杆拖动时不会闪白。
+ */
+@Composable
+private fun rememberReaderPreviewLayout(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    sample: String,
+    viewportWidthPx: Int,
+    viewportHeightPx: Int,
+): ReaderPreviewLayout? {
+    var layout by remember { mutableStateOf<ReaderPreviewLayout?>(null) }
+    LaunchedEffect(rule, config, sample, viewportWidthPx, viewportHeightPx) {
+        if (viewportWidthPx <= 1 || viewportHeightPx <= 1) return@LaunchedEffect
+        layout = withContext(Dispatchers.Default) {
+            buildReaderPreviewLayout(
+                rule = rule,
+                config = config,
+                sample = sample,
+                viewportWidthPx = viewportWidthPx,
+                viewportHeightPx = viewportHeightPx,
+            )
+        }
+    }
+    return layout
+}
+
+private suspend fun buildReaderPreviewLayout(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    sample: String,
+    viewportWidthPx: Int,
+    viewportHeightPx: Int,
+): ReaderPreviewLayout? {
+    // 基础样式与页边距照抄正文那一份装配（见 LegacyReaderPaginationStyleFactory.create）：
+    // 字号、字重、斜体、字色、字距、行距、段首缩进、四边页距，一项都不另算。
+    val baseStyle = ReaderTextStyle(
+        colorArgb = config.textColor,
+        fontSizePx = config.textSize.toFloat().spToPx(),
+        fontWeight = LegacyReaderPaginationStyleFactory.resolveWeight(config.textBold),
+        italic = config.textItalic,
+    )
+    val lineSpacingMultiplier = config.lineSpacing / 10f
+    val baseShaper = AndroidReaderTextShaper(ReaderAndroidPaintFactory.createTextPaint(baseStyle))
+    val lineMetrics = baseShaper.fontLineMetrics
+    val source = ReaderChapterSource(
+        chapterIndex = 0,
+        title = "",
+        blocks = listOf(ReaderChapterSourceBlock.Text(value = sample, chapterPosition = 0)),
+        characterCount = sample.length,
+        semanticContent = sample,
+    )
+    val measured = ReaderChapterBlockMeasurer(
+        bodyShaper = baseShaper,
+        titleShaper = baseShaper,
+        imageDimensionsResolver = ReaderImageDimensionsResolver { null },
+        // 命中段可以改字号：宽度得用放大后的那支笔量，和正文一样按样式各建一支。
+        textShaperFactory = ReaderTextShaperFactory {
+            AndroidReaderTextShaper(ReaderAndroidPaintFactory.createTextPaint(it))
+        },
+    ).measure(
+        source = source,
+        style = ReaderChapterMeasureStyle(
+            bodyStyle = baseStyle,
+            titleStyle = baseStyle,
+            bodyIndentCharacters = config.paragraphIndentCount,
+            bodyAlignment = if (config.textFullJustify) {
+                ReaderTextAlignment.JUSTIFY
+            } else {
+                ReaderTextAlignment.START
+            },
+            titleAlignment = ReaderTextAlignment.START,
+            bodyLineHeightPx = lineMetrics.heightPx,
+            bodyBaselineOffsetPx = lineMetrics.baselineOffsetPx,
+            bodyLineSpacingMultiplier = lineSpacingMultiplier,
+            letterSpacingEm = config.letterSpacing,
+            // 每一项改动都必须落在「我是李四。」上：区间钉死，不看用户填的正则命没命中——
+            // 命不中时整块预览是死的，调字色/背景图/命中字距全都看不出差别。
+            // 只有用户把示例句改成不含那一段的内容时，才退回按正则命中。
+            // （停用或只作用于标题的规则照样看得见效果：字面区间这两样都不参与。）
+            styleRanges = rule.previewHitRange()?.let { (hitStart, hitEnd) ->
+                LegacyReaderStyleRangeMapper.rangesForLiteralRange(
+                    rule = rule,
+                    start = hitStart,
+                    endExclusive = hitEnd,
+                    target = ReaderStyleTarget.BODY,
+                    priority = 0,
+                )
+            } ?: LegacyReaderStyleRangeMapper.map(
+                source = source,
+                rules = listOf(rule.copy(enabled = true, targetScope = HighlightRule.TARGET_ALL)),
+                processes = emptyList(),
+            ),
+        ),
+    ) as? ReaderChapterMeasureResult.Success ?: return null
+    val page = ReaderPaginator.paginateBlocks(
+        measured.blocks,
+        ReaderPaginationConfig(
+            chapterIndex = 0,
+            chapterTitle = "",
+            viewportWidthPx = viewportWidthPx,
+            viewportHeightPx = viewportHeightPx,
+            paddingLeftPx = config.paddingLeft.toFloat().dpToPx(),
+            paddingTopPx = config.paddingTop.toFloat().dpToPx(),
+            paddingRightPx = config.paddingRight.toFloat().dpToPx(),
+            paddingBottomPx = config.paddingBottom.toFloat().dpToPx(),
+            lineHeightPx = lineMetrics.heightPx,
+            baselineOffsetPx = lineMetrics.baselineOffsetPx,
+            lineSpacingMultiplier = lineSpacingMultiplier,
+            letterSpacingPx = config.letterSpacing * baseStyle.fontSizePx,
+            paragraphSpacingPx = lineMetrics.heightPx * config.paragraphSpacing / 10f,
+        ),
+    ).firstOrNull() ?: return null
+    val background = rule.bgImage?.takeIf { it.isNotBlank() }
+        ?.let(ReaderTextBackgroundLoader::load)
+    return ReaderPreviewLayout(page, background)
+}
+
+/** 与 `ReaderCanvasSurface` 同一顺序：背景色条 → 背景图 → 半截高亮 → 字 → 线。 */
+private fun DrawScope.drawReaderPreviewPage(
+    layout: ReaderPreviewLayout,
+    backgroundRuns: List<ReaderTextBackgroundRun>,
+    decorations: ReaderPageDecorationDrawCache,
+    backgroundPaint: Paint,
+    stylePaints: MutableMap<ReaderTextStyle, Paint>,
+) {
+    val native = drawContext.canvas.nativeCanvas
+    val textElements = layout.page.elements.filterIsInstance<ReaderElement.Text>()
+    textElements.mergeBackgroundBounds().forEach { band ->
+        drawRect(
+            Color(band.colorArgb),
+            Offset(band.bounds.left, band.bounds.top),
+            Size(band.bounds.width, band.bounds.height),
+        )
+    }
+    layout.background?.let { bitmap ->
+        backgroundRuns.forEach { run ->
+            drawTextBackground(native, bitmap, run, backgroundPaint)
+        }
+    }
+    decorations.halfHighlights.forEach { it.draw(native) }
+    textElements.forEach { element ->
+        val paint = stylePaints.getOrPut(element.style) {
+            ReaderAndroidPaintFactory.create(element.style)
+        }
+        native.drawText(element.value, element.bounds.left, element.baselinePx, paint)
+    }
+    decorations.contentRules.forEach { it.draw(native) }
+    decorations.styledUnderlines.forEach { it.draw(native) }
+    decorations.overlayRules.forEach { it.draw(native) }
+}
+
+/**
+ * 九宫格切图：全程只有横向拉伸。左右两条线之间那一格是唯一会被拉长的地方，
+ * 上下两条线只决定「字落在图的哪一段里」——整张图的高度按缩放倍数锁死，纵向一条边都不拉。
+ */
+@Composable
+internal fun NinePatchEditorDialog(
+    show: Boolean,
+    imagePath: String,
+    initialLeft: Float,
+    initialRight: Float,
+    initialTop: Float,
+    initialBottom: Float,
+    previewRule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    onDismissRequest: () -> Unit,
+    onSave: (left: Float, right: Float, top: Float, bottom: Float) -> Unit,
+) {
+    var left by remember(show, imagePath) { mutableFloatStateOf(initialLeft) }
+    var right by remember(show, imagePath) { mutableFloatStateOf(initialRight) }
+    var top by remember(show, imagePath) { mutableFloatStateOf(initialTop) }
+    var bottom by remember(show, imagePath) { mutableFloatStateOf(initialBottom) }
+    var dragHandle by remember { mutableStateOf<NineSliceHandle?>(null) }
+
+    val bitmap = remember(imagePath) {
+        runCatching {
+            val file = File(imagePath)
+            if (file.exists()) {
+                BitmapFactory.decodeFile(imagePath)
+            } else null
         }.getOrNull()
     }
-    val bgBitmap = remember(bgRawBitmap) { bgRawBitmap?.asImageBitmap() }
 
-    // 九宫格绘制用的 Paint
-    val ninePatchPaint = remember {
-        android.graphics.Paint().apply {
-            isAntiAlias = true
-            isFilterBitmap = true
-        }
-    }
-
-    // 真正跑一遍正则，只有命中的片段才应用样式
-    val matchRanges = remember(pattern, sampleText) {
-        if (pattern.isBlank() || sampleText.isEmpty()) {
-            emptyList()
-        } else {
-            runCatching {
-                Regex(pattern).findAll(sampleText)
-                    .filter { !it.range.isEmpty() }
-                    .map { it.range }
-                    .toList()
-            }.getOrDefault(emptyList())
-        }
-    }
-
-    // 外边距预览：引擎只在九宫格（fit==3）背景下消费 bgMargin——背景 run 起点前 x 推进
-    // marginStart、终点后推进 marginEnd（负值钳为 0），把命中段前后的文字推开
-    // （ReaderPaginator.backgroundMarginBefore/After）。预览在命中段前后插入宽度=外边距的
-    // 占位空格复现同一排版：占位本身无字形，背景图/下划线仍画在命中文字矩形上，间隙留在图外。
-    // 引擎把相邻的同图文字视作一个 run（中间不产生间隙），先合并贴合的命中区间再插占位。
-    val density = LocalDensity.current
-    val marginStartWidth = with(density) { bgMarginStart.coerceAtLeast(0f).dp.toSp() }
-    val marginEndWidth = with(density) { bgMarginEnd.coerceAtLeast(0f).dp.toSp() }
-    val applyBgMargins = bgBitmap != null && bgImageFit == 3 &&
-            (marginStartWidth.value > 0f || marginEndWidth.value > 0f)
-    val marginSegmentation = remember(
-        sampleText, matchRanges, applyBgMargins, marginStartWidth, marginEndWidth
+    AppModalBottomSheet(
+        show = show,
+        onDismissRequest = onDismissRequest,
+        title = stringResource(R.string.nine_patch_editor),
+        endAction = {
+            MediumTonalButton(
+                onClick = { onSave(left, right, top, bottom) },
+                icon = Icons.Default.Done,
+                contentDescription = stringResource(R.string.save),
+            )
+        },
     ) {
-        if (!applyBgMargins) {
-            MarginSegmentation(sampleText, matchRanges, emptyList())
-        } else {
-            val runs = ArrayList<IntRange>(matchRanges.size)
-            matchRanges.forEach { range ->
-                val last = runs.lastOrNull()
-                if (last != null && range.first <= last.last + 1) {
-                    runs[runs.lastIndex] = last.first..maxOf(last.last, range.last)
-                } else {
-                    runs += range
-                }
-            }
-            val builder = StringBuilder(sampleText.length)
-            val shifted = ArrayList<IntRange>(runs.size)
-            val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>(runs.size * 2)
-            var cursor = 0
-            runs.forEach { range ->
-                builder.append(sampleText, cursor, range.first)
-                if (marginStartWidth.value > 0f) {
-                    val at = builder.length
-                    builder.append(' ')
-                    placeholders += AnnotatedString.Range(
-                        Placeholder(
-                            width = marginStartWidth,
-                            height = previewBaseFontSize.sp,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                        at,
-                        at + 1,
-                    )
-                }
-                val hitStart = builder.length
-                builder.append(sampleText, range.first, range.last + 1)
-                shifted += hitStart until builder.length
-                if (marginEndWidth.value > 0f) {
-                    val at = builder.length
-                    builder.append(' ')
-                    placeholders += AnnotatedString.Range(
-                        Placeholder(
-                            width = marginEndWidth,
-                            height = previewBaseFontSize.sp,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                        at,
-                        at + 1,
-                    )
-                }
-                cursor = range.last + 1
-            }
-            builder.append(sampleText, cursor, sampleText.length)
-            MarginSegmentation(builder.toString(), shifted, placeholders)
-        }
-    }
-
-    val annotated = remember(
-        marginSegmentation, bgBitmap, resolvedTextColor, bgColor, fontWeight, isItalic, fontSizeOffset
-    ) {
-        buildAnnotatedString {
-            append(marginSegmentation.text)
-            marginSegmentation.ranges.forEach { range ->
-                addStyle(
-                    SpanStyle(
-                        color = resolvedTextColor,
-                        background = if (bgColor != null && bgBitmap == null) Color(bgColor) else Color.Unspecified,
-                        fontWeight = when {
-                            fontWeight >= 700 -> androidx.compose.ui.text.font.FontWeight.Bold
-                            fontWeight <= 300 -> androidx.compose.ui.text.font.FontWeight.Light
-                            else -> null
-                        },
-                        fontStyle = if (isItalic) androidx.compose.ui.text.font.FontStyle.Italic else null,
-                        // 字号偏移只作用于命中文字，不影响整行
-                        fontSize = if (fontSizeOffset != 0) {
-                            (previewBaseFontSize + fontSizeOffset).sp
-                        } else {
-                            androidx.compose.ui.unit.TextUnit.Unspecified
-                        },
-                    ),
-                    range.first,
-                    (range.last + 1).coerceAtMost(marginSegmentation.text.length),
-                )
-            }
-        }
-    }
-
-    val labelColor = if (ColorUtils.isColorLight(pageBgColor)) {
-        Color(0x99000000)
-    } else {
-        Color(0x99FFFFFF)
-    }
-    // 排版背景是图片时铺在卡片上，纯色时该 painter 为 null
-    val pageBgPainter = if (pageBgImagePath != null) {
-        rememberAsyncImagePainter(pageBgImagePath)
-    } else {
-        null
-    }
-    // 卡片内容的水平内边距：既是 Column 的 padding，也是文本测量要从可用宽度里扣掉的量，
-    // 两者必须同源，否则测出来的折行位置和画出来的画布对不上
-    val cardContentPadding = 16.dp
-    // 文本按卡片真实宽度测量：预览并排停靠后卡片不再满宽，
-    // 继续按「屏宽 - 64dp」估算只会让文字按错误的宽度折行、超出画布被裁掉
-    BoxWithConstraints(modifier = modifier) {
-        val previewConstraintWidth = with(density) {
-            val contentWidth = if (maxWidth.isFinite) maxWidth - cardContentPadding * 2 else maxWidth
-            contentWidth.coerceAtLeast(0.dp).roundToPx()
-        }
-        NormalCard(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 12.dp,
-            containerColor = Color(pageBgColor),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+                .verticalScroll(rememberScrollState()),
         ) {
-            Column(
+            AppText(
+                stringResource(R.string.nine_slice_split_hint),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            // Image preview with split lines — use single Canvas to avoid coordinate mismatch
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (pageBgPainter != null) {
-                            // 不用 Modifier.paint：它在高度无界的滚动容器里会拿图片固有尺寸
-                            // 反算 minHeight，把卡片撑成整张图那么高（sizeToIntrinsics=false 也挡不住，
-                            // 那个分支还要求宽高都有界）。drawBehind 只画不测量，尺寸仍由文字决定。
-                            Modifier.drawBehind {
-                                val src = pageBgPainter.intrinsicSize
-                                if (!src.isSpecified || src.width <= 0f || src.height <= 0f) {
-                                    return@drawBehind
-                                }
-                                // 等比放大到铺满后居中裁切，等价于 ContentScale.Crop
-                                val factor = ContentScale.Crop.computeScaleFactor(src, size)
-                                val dst = Size(src.width * factor.scaleX, src.height * factor.scaleY)
-                                clipRect {
-                                    translate(
-                                        (size.width - dst.width) / 2f,
-                                        (size.height - dst.height) / 2f,
-                                    ) {
-                                        with(pageBgPainter) { draw(dst) }
-                                    }
-                                }
-                            }
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .padding(horizontal = cardContentPadding, vertical = 12.dp)
+                    .height(250.dp)
+                    .padding(8.dp)
+                    .background(LegadoTheme.colorScheme.surfaceContainerLow),
             ) {
-                if (!label.isNullOrEmpty()) {
-                    AppText(
-                        text = label,
-                        style = LegadoTheme.typography.labelSmall,
-                        color = labelColor,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                }
-                if (pattern.isNotBlank() && matchRanges.isEmpty()) {
-                    AppText(
-                        text = stringResource(R.string.highlight_preview_no_match),
-                        style = LegadoTheme.typography.labelSmall,
-                        color = labelColor,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                }
-                // 与正文 ChapterProvider.contentPaint 同口径计算行高（descent - ascent + leading）：
-                // Compose 默认行高会取 CJK 回退字体的高度量，比正文 Paint 的 fontMetrics 高，
-                // 九宫格这类以行高为锚的背景会因此预览偏大、正文偏小，必须强制对齐
-                val bodyLineHeight = remember(previewBaseFontSize) {
-                    val textBoldWeight = when (val bold = ReadBookConfig.textBold) {
-                        1 -> 900
-                        2 -> 300
-                        0 -> 400
-                        in 100..900 -> bold
-                        else -> 400
-                    }
-                    android.text.TextPaint().apply {
-                        textSize = with(density) { previewBaseFontSize.sp.toPx() }
-                        letterSpacing = ReadBookConfig.letterSpacing
-                        typeface = ReaderAndroidPaintFactory
-                            .loadTypeface(ReadBookConfig.textFont, textBoldWeight, false)
-                    }.textHeight
-                }
-                val previewTextResult = textMeasurer.measure(
-                    text = annotated,
-                    style = TextStyle(
-                        fontSize = previewBaseFontSize.sp,
-                        color = defaultTextColor,
-                        lineHeight = with(density) { bodyLineHeight.toSp() },
-                        letterSpacing = ReadBookConfig.letterSpacing.em,
-                    ),
-                    maxLines = 5,
-                    constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
-                    placeholders = marginSegmentation.placeholders,
-                )
-                // 九宫格背景会向外扩角块与 padding，超出行高的部分要给 Canvas 预留空间，否则预览被裁掉
-                var ninePatchTopOverhang = 0f
-                var ninePatchBottomOverhang = 0f
-                if (bgImageFit == 3 && bgRawBitmap != null) {
-                    val maxLineHeight = (0 until previewTextResult.lineCount)
-                        .maxOf { previewTextResult.getLineBottom(it) - previewTextResult.getLineTop(it) }
-                        .coerceAtLeast(1f)
-                    // 用足够宽的矩形探测：角块只在文字放不下时才缩小，宽矩形给出上下外扩的最大值
-                    val probeBox = io.legado.app.help.highlight.NinePatchDrawHelper.layout(
-                        0f, 0f, 10000f, maxLineHeight,
-                        bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
-                        npLeft, npRight, npTop, npBottom,
-                        bgPadStart * density.density, bgPadEnd * density.density,
-                        bgPadTop * density.density, bgPadBottom * density.density,
-                    )
-                    if (probeBox != null) {
-                        ninePatchTopOverhang = -probeBox.top
-                        ninePatchBottomOverhang = probeBox.bottom - maxLineHeight
-                    }
-                }
-                // 下划线画在行底 + offset 处，圆头/羽化/双线/波浪还要向下延伸，
-                // 画布按最大外扩预留，否则贴底时整条线连同柔边一起被裁掉。
-                // extra 与正文 overflowPadPx 同一口径：波浪按实际峰高（控制点的一半），
-                // 双线按净间隙 + 线宽。荧光(7) 是行盒内的填充色带，不需要额外外扩。
-                val underlineBottomOverhangPx = if (underlineMode in 1..5) {
-                    with(density) {
-                        val extra = when (underlineMode) {
-                            3 -> underlineWavePeak.dp.toPx()
-                            4 -> READER_DOUBLE_LINE_GAP_DP.dp.toPx() + underlineWidth.dp.toPx()
-                            else -> 0f
-                        }
-                        underlineOffset.dp.toPx().coerceAtLeast(0f) +
-                            underlineWidth.dp.toPx() / 2f +
-                            underlineFeather.dp.toPx() + extra
-                    }
-                } else {
-                    0f
-                }
-                val canvasHeightDp = with(density) {
-                    (previewTextResult.size.height + ninePatchTopOverhang +
-                        maxOf(ninePatchBottomOverhang, underlineBottomOverhangPx)).toDp()
-                }
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(canvasHeightDp)
-                ) {
-                    // 九宫格外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
-                    if (ninePatchTopOverhang != 0f) {
-                        drawContext.canvas.translate(0f, ninePatchTopOverhang)
-                    }
-
-                    // 在匹配区域画背景图（区间已按外边距占位偏移，指向占位后的命中文字）
-                    if (bgBitmap != null && marginSegmentation.ranges.isNotEmpty()) {
-                        val density = this.density
-                        marginSegmentation.ranges.forEach { range ->
-                            val start = range.first
-                            val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
-                            previewTextResult.forEachLineSegment(start, endExclusive) { rectL, rectR, rectT, rectB, _ ->
-                                if (bgImageFit == 3 && bgRawBitmap != null) {
-                                    // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
-                                    // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内；
-                                    // 渲染层矩形上下各内缩 1dp（TextLine.bgPaddingTop/Bottom），这里保持一致
-                                    val nineSliceInset = minOf(1.dp.toPx(), (rectB - rectT) / 4f)
-                                    io.legado.app.help.highlight.NinePatchDrawHelper.layout(
-                                        rectL, rectT + nineSliceInset, rectR, rectB - nineSliceInset,
-                                        bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
-                                        npLeft, npRight, npTop, npBottom,
-                                        bgPadStart * density, bgPadEnd * density,
-                                        bgPadTop * density, bgPadBottom * density,
-                                    )?.let { box ->
-                                        io.legado.app.help.highlight.NinePatchDrawHelper.draw(
-                                            drawContext.canvas.nativeCanvas,
-                                            bgRawBitmap,
-                                            box.left, box.top, box.right, box.bottom,
-                                            ninePatchPaint,
-                                            leftX = npLeft, rightX = 1f - npRight,
-                                            topY = npTop, bottomY = 1f - npBottom,
-                                            box.cornerL, box.cornerR, box.cornerT, box.cornerB,
+                if (bitmap != null) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(bitmap) {
+                                detectDragGestures(
+                                    onDragStart = { point ->
+                                        val rect = nineSlicePreviewRect(
+                                            size.width.toFloat(), size.height.toFloat(),
+                                            bitmap.width.toFloat(), bitmap.height.toFloat(),
                                         )
-                                    }
-                                } else {
-                                    drawImage(
-                                        image = bgBitmap,
-                                        dstOffset = androidx.compose.ui.unit.IntOffset(rectL.toInt(), rectT.toInt()),
-                                        dstSize = androidx.compose.ui.unit.IntSize(
-                                            (rectR - rectL).toInt().coerceAtLeast(1),
-                                            (rectB - rectT).toInt().coerceAtLeast(1)
-                                        ),
+                                        val candidates = listOf(
+                                            NineSliceHandle.LEFT to
+                                                    abs(point.x - (rect.left + rect.width * left)),
+                                            NineSliceHandle.RIGHT to
+                                                    abs(point.x - (rect.right - rect.width * right)),
+                                            NineSliceHandle.TOP to
+                                                    abs(point.y - (rect.top + rect.height * top)),
+                                            NineSliceHandle.BOTTOM to
+                                                    abs(point.y - (rect.bottom - rect.height * bottom)),
+                                        )
+                                        dragHandle = candidates.minByOrNull { it.second }
+                                            ?.takeIf { it.second <= 32.dp.toPx() }?.first
+                                    },
+                                    onDragEnd = { dragHandle = null },
+                                    onDragCancel = { dragHandle = null },
+                                ) { change, amount ->
+                                    val rect = nineSlicePreviewRect(
+                                        size.width.toFloat(), size.height.toFloat(),
+                                        bitmap.width.toFloat(), bitmap.height.toFloat(),
                                     )
-                                }
-                            }
-                        }
-                    }
+                                    when (dragHandle) {
+                                        // 四条线都不许越过 0..1，但**不许**再夹到一半：
+                                        // 图案不在正中间的图需要把拉伸带整个推到一侧
+                                        NineSliceHandle.LEFT -> left =
+                                            (left + amount.x / rect.width).coerceIn(0f, 1f)
 
-                    // 下划线绘制块（可在文字上层或下层）
-                    val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
-                        if (underlineMode > 0) {
-                            marginSegmentation.ranges.forEach { range ->
-                                val start = range.first
-                                val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
-                                previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
-                                    when (underlineMode) {
-                                        // 7 荧光：不是下划线，是铺下半行的填充色带（正文
-                                        // ReaderHalfHighlightDrawCommand 同口径）。宽度/偏移/圆头/
-                                        // 羽化对它无效，只有颜色生效，透明度用颜色自带的 alpha，
-                                        // 不额外压暗（对照 MarkingEffect.toStyle 的口径）。
-                                        7 -> drawFluorescentBand(
-                                            left = left,
-                                            right = right,
-                                            top = top,
-                                            bottom = bottom,
-                                            color = resolvedUnderlineColor,
-                                            feather = if (underlineControlSupport(7).feather) underlineFeather else 0f,
-                                        )
+                                        NineSliceHandle.RIGHT -> right =
+                                            (right - amount.x / rect.width).coerceIn(0f, 1f)
 
-                                        // 6 删除线：固定落在行高 READER_STRIKE_HEIGHT_RATIO 处，不吃偏移；
-                                        // 圆头与羽化对该线型不开放，这里显式不传，免得旧数据
-                                        // 里存的值画出与正文不同的效果
-                                        6 -> drawUnderlineSegment(
-                                            mode = 1,
-                                            color = resolvedUnderlineColor,
-                                            widthDp = underlineWidth,
-                                            startX = left,
-                                            endX = right,
-                                            y = top + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
-                                        )
+                                        NineSliceHandle.TOP -> top =
+                                            (top + amount.y / rect.height).coerceIn(0f, 1f)
 
-                                        else -> drawUnderlineSegment(
-                                            mode = underlineMode,
-                                            color = resolvedUnderlineColor,
-                                            widthDp = underlineWidth,
-                                            startX = left,
-                                            endX = right,
-                                            y = bottom + underlineOffset.dp.toPx(),
-                                            // 羽化按线型适用性取：双实线/删除线/自定义 SVG 不开放，旧数据里存的值                                             // 不该在这里画出来。正文侧走 ReaderUnderline 的 featherEffective，                                             // 两边读同一份 underlineControlSupport。
-                                            feather = if (underlineControlSupport(underlineMode).feather) {
-                                                underlineFeather
-                                            } else {
-                                                0f
-                                            },
-                                            dashLen = underlineDashLen,
-                                            dashGap = underlineDashGap,
-                                            svgPath = underlineSvgPath,
-                                            wavePeakDp = underlineWavePeak,
-                                            waveLengthDp = underlineWaveLength,
-                                        )
+                                        NineSliceHandle.BOTTOM -> bottom =
+                                            (bottom - amount.y / rect.height).coerceIn(0f, 1f)
+
+                                        null -> Unit
                                     }
+                                    if (dragHandle != null) change.consume()
                                 }
-                            }
-                        }
-                    }
+                            }) {
+                        val canvasWidth = size.width
+                        val canvasHeight = size.height
+                        val bw = bitmap.width.toFloat()
+                        val bh = bitmap.height.toFloat()
+                        val preview = nineSlicePreviewRect(canvasWidth, canvasHeight, bw, bh)
+                        val imageW = preview.width
+                        val imageH = preview.height
+                        val offsetX = preview.left
+                        val offsetY = preview.top
 
-                    // 荧光色带必须压在文字层之下，与正文渲染一致，不受「下层」开关影响
-                    val belowText = underlineBelowText || underlineMode == 7
-                    if (belowText) drawUnderlinesBlock()
-                    drawText(previewTextResult)
-                    if (!belowText) drawUnderlinesBlock()
+                        // Draw bitmap
+                        drawImage(
+                            image = bitmap.asImageBitmap(),
+                            dstOffset = androidx.compose.ui.unit.IntOffset(offsetX.toInt(), offsetY.toInt()),
+                            dstSize = androidx.compose.ui.unit.IntSize(imageW.toInt(), imageH.toInt()),
+                        )
 
-                    // 恢复画布，避免平移泄漏到后续绘制
-                    if (ninePatchTopOverhang != 0f) {
-                        drawContext.canvas.translate(0f, -ninePatchTopOverhang)
+                        val lineColor = Color(0xFF16C96A)
+                        val lineWidth = 2.dp.toPx()
+
+                        // Left line
+                        val lx = offsetX + imageW * left
+                        drawLine(lineColor, Offset(lx, offsetY), Offset(lx, offsetY + imageH), lineWidth)
+                        // Right line
+                        val rx = offsetX + imageW * (1f - right)
+                        drawLine(lineColor, Offset(rx, offsetY), Offset(rx, offsetY + imageH), lineWidth)
+                        // Top line
+                        val ty = offsetY + imageH * top
+                        drawLine(lineColor, Offset(offsetX, ty), Offset(offsetX + imageW, ty), lineWidth)
+                        // Bottom line
+                        val by = offsetY + imageH * (1f - bottom)
+                        drawLine(lineColor, Offset(offsetX, by), Offset(offsetX + imageW, by), lineWidth)
+                        // 绿框里那一块就是会被横向拉长的中段，也是字待的那一段。
+                        drawRect(
+                            lineColor.copy(alpha = 0.18f),
+                            topLeft = Offset(lx, ty),
+                            size = androidx.compose.ui.geometry.Size(rx - lx, by - ty),
+                        )
+                        val radius = 5.dp.toPx()
+                        listOf(
+                            Offset(lx, (ty + by) / 2f), Offset(rx, (ty + by) / 2f),
+                            Offset((lx + rx) / 2f, ty), Offset((lx + rx) / 2f, by),
+                        ).forEach { drawCircle(lineColor, radius, it) }
                     }
                 }
             }
+            // 拖完四条线马上看正文效果：背景图、缩放、长度偏移用的都是弹层里当前这份设置，
+            // 四条切分线则跟着拖动实时变。
+            HighlightPreviewCard(
+                rule = previewRule.copy(
+                    npLeft = left,
+                    npRight = right,
+                    npTop = top,
+                    npBottom = bottom,
+                ),
+                config = config,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+            )
+            AppText(
+                stringResource(R.string.nine_slice_horizontal_hint),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            NineSliceSlider(
+                title = stringResource(R.string.nine_patch_split_left),
+                value = left,
+                onValueChange = { left = it },
+            )
+            NineSliceSlider(
+                title = stringResource(R.string.nine_patch_split_right),
+                value = right,
+                onValueChange = { right = it },
+            )
+            AppText(
+                stringResource(R.string.nine_slice_vertical_hint),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            NineSliceSlider(
+                title = stringResource(R.string.nine_patch_split_top),
+                value = top,
+                onValueChange = { top = it },
+            )
+            NineSliceSlider(
+                title = stringResource(R.string.nine_patch_split_bottom),
+                value = bottom,
+                onValueChange = { bottom = it },
+            )
         }
+    }
+}
+
+@Composable
+private fun NineSliceSlider(
+    title: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+) {
+    TinySliderSettingItem(
+        title = title,
+        value = value,
+        // 四条线都能拉到 100%：图案不在正中间的图要把拉伸带整个推到一侧，
+        // 夹在 0.5 就会把图案从中间切断（交叉时的画法见 `ReaderNineSliceLayout.cells`）
+        valueRange = 0f..1f,
+        steps = 99,
+        stepSize = 0.01f,
+        showDecimal = true,
+        valueFormat = { String.format("%.2f", it) },
+        description = String.format("%.0f%%", value * 100f),
+        onValueChange = { onValueChange((it * 100).roundToInt() / 100f) },
+    )
+}
+
+private enum class NineSliceHandle { LEFT, RIGHT, TOP, BOTTOM }
+
+private data class NineSlicePreviewRect(
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float,
+) {
+    val right get() = left + width
+    val bottom get() = top + height
+}
+
+private fun nineSlicePreviewRect(
+    canvasWidth: Float,
+    canvasHeight: Float,
+    bitmapWidth: Float,
+    bitmapHeight: Float,
+): NineSlicePreviewRect {
+    val imageAspect = bitmapWidth / bitmapHeight
+    return if (imageAspect > canvasWidth / canvasHeight) {
+        val height = canvasWidth / imageAspect
+        NineSlicePreviewRect(0f, (canvasHeight - height) / 2f, canvasWidth, height)
+    } else {
+        val width = canvasHeight * imageAspect
+        NineSlicePreviewRect((canvasWidth - width) / 2f, 0f, width, canvasHeight)
     }
 }

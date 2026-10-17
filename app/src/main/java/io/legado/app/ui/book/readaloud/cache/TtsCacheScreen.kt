@@ -99,6 +99,7 @@ fun TtsCacheScreen(
             }
         },
     ) { paddingValues ->
+        val logKeys = remember(state.logs) { ttsLogKeys(state.logs) }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = adaptiveContentPadding(
@@ -157,9 +158,7 @@ fun TtsCacheScreen(
                         )
                     }
                 }
-                // AppLog 允许同一毫秒写入相同内容的日志，timestamp+message 哈希不保证唯一，
-                // 撞 key 会让 LazyColumn 直接崩溃；日志行无内部状态，用位置索引作 key。
-                itemsIndexed(state.logs, key = { index, _ -> index }) { _, entry ->
+                itemsIndexed(state.logs, key = { index, _ -> logKeys[index] }) { _, entry ->
                     val timeText = dateFormat.format(Date(entry.timestamp))
                     TinyClickableSettingItem(
                         title = timeText,
@@ -193,4 +192,23 @@ fun TtsCacheScreen(
         content = state.detailContent,
         onDismissRequest = { onIntent(TtsCacheIntent.DismissDetail) },
     )
+}
+
+/**
+ * 日志列表的 LazyColumn key。
+ *
+ * `AppLog` 按毫秒时间戳头插、满了只从尾部丢，所以同一毫秒内重复出现的同一条日志会让
+ * `timestamp + message` 撞成同一个 key —— LazyColumn 遇到重复 key 直接抛
+ * `IllegalArgumentException: Key … was already used`，日志页一打开就崩。
+ * 只有真撞车时才追加出现序号：正常条目保持同一身份，新日志进来不会让已有行重新创建。
+ */
+internal fun ttsLogKeys(logs: List<TtsLogEntryUi>): List<String> {
+    val occurrences = HashMap<String, Int>()
+    return logs.map { entry ->
+        val base = "${entry.timestamp}:${entry.message.hashCode()}"
+        when (val seen = occurrences.merge(base, 1) { old, _ -> old + 1 }) {
+            1 -> base
+            else -> "$base#$seen"
+        }
+    }
 }

@@ -163,6 +163,7 @@ import io.legado.app.domain.gateway.MangaReaderSessionFactory
 import io.legado.app.domain.gateway.MangaSettingsGateway
 import io.legado.app.domain.gateway.OtherConfigSystemGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
+import io.legado.app.domain.gateway.PlaybackCapsuleGateway
 import io.legado.app.domain.gateway.PrivateAccessGateway
 import io.legado.app.domain.gateway.PrivateContentGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
@@ -228,6 +229,7 @@ import io.legado.app.domain.usecase.SaveSearchBooksUseCase
 import io.legado.app.domain.usecase.SearchBooksUseCase
 import io.legado.app.domain.usecase.ShrinkDatabaseUseCase
 import io.legado.app.domain.usecase.StartBookSourceCheckUseCase
+import io.legado.app.domain.usecase.SyncHttpTtsCatalogUseCase
 import io.legado.app.domain.usecase.SyncReadAloudVoicesUseCase
 import io.legado.app.domain.usecase.TranslateChapterUseCase
 import io.legado.app.domain.usecase.UpdateBooksGroupUseCase
@@ -235,6 +237,7 @@ import io.legado.app.domain.usecase.UploadReadingProgressUseCase
 import io.legado.app.domain.usecase.VerifyBookmarkTargetUseCase
 import io.legado.app.domain.usecase.WebDavBackupUseCase
 import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
+import io.legado.app.feature.explore.ExploreMainViewModel
 import io.legado.app.feature.onboarding.OnboardingViewModel
 import io.legado.app.help.coil.CoverFetcher
 import io.legado.app.help.coil.CoverInterceptor
@@ -245,6 +248,7 @@ import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.model.LegacyReaderSession
 import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReaderSession
+import io.legado.app.service.playback.PlaybackCapsuleGatewayAdapter
 import io.legado.app.ui.about.AboutViewModel
 import io.legado.app.ui.ai.chat.AiChatViewModel
 import io.legado.app.ui.association.ImportDictRuleViewModel
@@ -331,6 +335,13 @@ import io.legado.app.ui.dict.DictViewModel
 import io.legado.app.ui.book.knowledge.CharacterQueryViewModel
 import io.legado.app.ui.ai.AiModelSwitchViewModel
 import io.legado.app.ui.dict.rule.DictRuleViewModel
+import io.legado.app.help.readaloud.cast.AiCastAssignUseCase
+import io.legado.app.help.readaloud.cast.AiSceneAssignUseCase
+import io.legado.app.ui.book.readaloud.cast.VoiceEffectViewModel
+import io.legado.app.ui.book.readaloud.cast.BgmPoolViewModel
+import io.legado.app.ui.book.readaloud.cast.RegexCastRuleViewModel
+import io.legado.app.ui.book.readaloud.cast.MultiRoleRuleViewModel
+import io.legado.app.ui.book.readaloud.cast.MultiRoleRecognitionViewModel
 import io.legado.app.ui.highlightTagRule.HighlightTagRuleViewModel
 import io.legado.app.ui.login.SourceLoginViewModel
 import io.legado.app.ui.main.MainNavRouteTracker
@@ -452,7 +463,7 @@ val appModule = module {
     singleOf(::ReadAloudSessionStore)
     single<PlaybackCapsuleGateway> { PlaybackCapsuleGatewayAdapter(get(), get()) }
     singleOf(::MainNavRouteTracker)
-    // R2.3：会话每个所有者一份。ReadBook.callBack 的身份是「阅读页已挂载」信号
+    // 会话每个所有者一份。ReadBook.callBack 的身份是「阅读页已挂载」信号
     // （prefetchForOpen / upData 判 callBack != null），register 还会给上一个持有者
     // 发 notifyBookChanged——单例会把两个 ReadBookViewModel 的注册身份混成一个。
     factory<ReaderSession> { LegacyReaderSession() }
@@ -491,6 +502,7 @@ val appModule = module {
     singleOf(::PrepareChapterSpeechPlanUseCase)
     singleOf(::RefineSpeechWithAiUseCase)
     singleOf(::SyncReadAloudVoicesUseCase)
+    singleOf(::SyncHttpTtsCatalogUseCase)
     singleOf(::CacheBookChaptersUseCase)
     singleOf(::ChangeBookSourceUseCase)
     singleOf(::ClearBookCacheUseCase)
@@ -629,6 +641,13 @@ val appModule = module {
     viewModelOf(::ImportTxtTocRuleViewModel)
     viewModelOf(::OpenUrlConfirmViewModel)
     viewModelOf(::HighlightTagRuleViewModel)
+    viewModelOf(::MultiRoleRuleViewModel)
+    viewModelOf(::BgmPoolViewModel)
+    viewModelOf(::RegexCastRuleViewModel)
+    viewModelOf(::VoiceEffectViewModel)
+    viewModelOf(::MultiRoleRecognitionViewModel)
+    singleOf(::AiCastAssignUseCase)
+    singleOf(::AiSceneAssignUseCase)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)
     singleOf(::AuthorBioBatchGenerator)
@@ -822,6 +841,7 @@ val appModule = module {
             voiceGateway = get(),
             previewSynthesizer = get(),
             readAloudSessionStore = get(),
+            styleGateway = get(),
         )
     }
     viewModelOf(::CloudTtsViewModel)
@@ -887,6 +907,8 @@ val appModule = module {
             readSettingsRepository = get(),
             readBookStyleConfigRepository = get(),
             readAloudSettingsRepository = get(),
+            aiCastAssignUseCase = get(),
+            aiSceneAssignUseCase = get(),
             localPreferencesRepository = get(),
             highlightRuleRepository = get(),
             uploadRepository = get(),
@@ -927,6 +949,7 @@ val appModule = module {
     viewModelOf(::ChangeBookSourceComposeViewModel)
     viewModelOf(::ChangeChapterSourceViewModel)
     viewModelOf(::ExploreViewModel)
+    viewModelOf(::ExploreMainViewModel)
     viewModelOf(::RssViewModel)
     viewModelOf(::SearchViewModel)
     viewModelOf(::BookCacheManageViewModel)

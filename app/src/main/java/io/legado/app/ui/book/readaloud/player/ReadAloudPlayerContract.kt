@@ -93,19 +93,19 @@ sealed interface ReadAloudPlayerIntent {
 }
 
 sealed interface ReadAloudPlayerEffect {
-    /** 跳回阅读界面并自动打开经典朗读控制面板；bookUrl 为空表示没有可打开的书。 */
+    /** 返回经典阅读界面并自动打开剧本识别（有声书）；bookUrl 为空表示没有可打开的书。 */
     data class ReturnToClassic(val bookUrl: String) : ReadAloudPlayerEffect
 
-    // 朗读设置整页跳独立整页的目的；与阅读器宿主同一批入口。
+    // 听书设置入口页，与设置页的目录目的不同但在同一入口内。
     data class OpenEnginesAndVoices(val bookUrl: String?) : ReadAloudPlayerEffect
     data object OpenTtsCache : ReadAloudPlayerEffect
     data class OpenBookVoiceCasting(val bookUrl: String) : ReadAloudPlayerEffect
     data class OpenSpeechStoryboard(val bookUrl: String) : ReadAloudPlayerEffect
     data object OpenSystemTtsSettings : ReadAloudPlayerEffect
 
-    /** 朗读音频缓存已清除；由设置页宿主提示成功文案。 */
+    /** 听书音频缓存清空完成（用于界面提示；成功后由宿主显示成功的文案） */
     data object TtsCacheCleared : ReadAloudPlayerEffect
 
-    /** 切换到非规则对话分析模式但没有可用 AI 模型，宿主提示后拒绝切换。 */
+    /** 切换角色管理对话（多角色模式）但没有可用 AI 模型，用于提示或拒绝切换。 */
     data object SpeechAnalysisAiModelRequired : ReadAloudPlayerEffect
 }

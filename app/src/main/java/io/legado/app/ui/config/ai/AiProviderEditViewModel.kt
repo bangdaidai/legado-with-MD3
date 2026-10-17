@@ -15,7 +15,11 @@ import io.legado.app.domain.model.AiProviderPresets
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.TranslationConstants
 import io.legado.app.domain.model.nativeWebSearchCapable
+import io.legado.app.help.LocalNetworkAccess
+import io.legado.app.help.targetsLocalNetwork
 import io.legado.app.utils.GSON
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +55,11 @@ class AiProviderEditViewModel(
         )
     )
     val uiState = _uiState.asStateFlow()
+
+    /**
+     * 权限被拦期间暂存被打断的动作。放在 ViewModel 而不是界面 state 里，配置变更/重建后仍能重试。
+     */
+    private var pendingLocalNetworkAction: AiProviderEditIntent? = null
 
     private val _effects = MutableSharedFlow<AiProviderEditEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
@@ -92,6 +101,7 @@ class AiProviderEditViewModel(
                             baseUrl = provider?.baseUrl.orEmpty(),
                             modelsUrl = provider?.modelsUrl.orEmpty(),
                             apiKey = provider?.apiKey.orEmpty(),
+                            customHeaders = parseHeaderList(provider?.customHeadersJson),
                             providerModels = providerModels,
                             initialized = true
                         ).let { loaded ->
@@ -123,6 +133,7 @@ class AiProviderEditViewModel(
             is AiProviderEditIntent.SetWebSearchEnabled -> _uiState.update {
                 it.copy(webSearchEnabled = intent.enabled)
             }
+            is AiProviderEditIntent.UpdateCustomHeaders -> _uiState.update { it.copy(customHeaders = intent.headers) }
             AiProviderEditIntent.AddModel -> _uiState.update {
                 it.copy(editingModel = AiProviderModelEditorUi(temperature = TranslationConstants.DEFAULT_TEMPERATURE.toString()))
             }
@@ -140,7 +151,14 @@ class AiProviderEditViewModel(
             AiProviderEditIntent.SyncModels -> syncModels()
             AiProviderEditIntent.DeleteProvider -> deleteProvider()
             is AiProviderEditIntent.DeleteModel -> deleteModel(intent.modelProfileId)
+            AiProviderEditIntent.RetryAfterLocalNetworkPermission -> retryAfterLocalNetworkPermission()
         }
+    }
+
+    private fun retryAfterLocalNetworkPermission() {
+        val action = pendingLocalNetworkAction ?: return
+        pendingLocalNetworkAction = null
+        onIntent(action)
     }
 
     private fun applyProviderPreset(id: String) {
@@ -246,10 +264,12 @@ class AiProviderEditViewModel(
 
     private fun testConnection() {
         if (_uiState.value.isTesting || _uiState.value.isSaving || _uiState.value.isFetchingModels) return
+        val providerConfig = _uiState.value.toProviderConfig()
+        if (requestLocalNetworkPermissionIfNeeded(providerConfig, AiProviderEditIntent.TestConnection)) return
         viewModelScope.launch {
             _uiState.update { it.copy(isTesting = true) }
             try {
-                val models = aiTextGateway.fetchModels(_uiState.value.toProviderConfig()).getOrThrow()
+                val models = aiTextGateway.fetchModels(providerConfig).getOrThrow()
                 val count = models.size
                 val message = if (count == 0) {
                     appCtx.getString(R.string.ai_test_success_no_models)
@@ -271,6 +291,8 @@ class AiProviderEditViewModel(
 
 
     private fun syncModels() {
+        val providerConfig = _uiState.value.toProviderConfig()
+        if (requestLocalNetworkPermissionIfNeeded(providerConfig, AiProviderEditIntent.SyncModels)) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, isFetchingModels = true) }
             runCatching {
@@ -354,8 +376,27 @@ class AiProviderEditViewModel(
             protocol = protocol,
             baseUrl = baseUrl,
             modelsUrl = modelsUrl,
-            apiKey = apiKey
+            apiKey = apiKey,
+            customHeaders = customHeaders.toCustomHeaderMap()
         )
+    }
+
+    /**
+     * 局域网里的 AI 服务（本地推理服务等）在 Android 17+ 需要本地网络权限：未授予时系统会
+     * 阻断出站流量，用户只看到 15 秒连接超时而不是权限错误。这里提前拦一次，让宿主申请
+     * 权限，授权后重试 [retryAction]；返回 true 表示已发出权限请求，本次流程应停止。
+     */
+    private fun requestLocalNetworkPermissionIfNeeded(
+        provider: AiProviderConfig,
+        retryAction: AiProviderEditIntent
+    ): Boolean {
+        if (LocalNetworkAccess.isGranted(appCtx)) return false
+        val reachesLocalNetwork = provider.baseUrl.targetsLocalNetwork() ||
+            provider.modelsUrl?.targetsLocalNetwork() == true
+        if (!reachesLocalNetwork) return false
+        pendingLocalNetworkAction = retryAction
+        _effects.tryEmit(AiProviderEditEffect.RequestLocalNetworkPermission)
+        return true
     }
 
     private fun AiProviderEditUiState.toProviderConfig(id: String = providerId ?: "test_connection_id"): AiProviderConfig {
@@ -365,8 +406,25 @@ class AiProviderEditViewModel(
             protocol = protocol,
             baseUrl = baseUrl,
             apiKey = apiKey,
-            modelsUrl = modelsUrl.ifBlank { null }
+            modelsUrl = modelsUrl.ifBlank { null },
+            customHeaders = customHeaders.toCustomHeaderMap()
         )
+    }
+
+    private fun List<AiProviderHeaderUi>.toCustomHeaderMap(): Map<String, String> =
+        filter { it.name.isNotBlank() }
+            .associate { it.name.trim() to it.value }
+
+    private fun parseHeaderList(json: String?): ImmutableList<AiProviderHeaderUi> {
+        if (json.isNullOrBlank()) return persistentListOf()
+        return runCatching {
+            @Suppress("UNCHECKED_CAST")
+            GSON.fromJson(json, Map::class.java)
+                .mapKeys { it.key.toString() }
+                .mapValues { it.value.toString() }
+                .map { (name, value) -> AiProviderHeaderUi(name = name, value = value) }
+                .toImmutableList()
+        }.getOrDefault(persistentListOf())
     }
 
     private fun parseParams(json: String?): AiGenerationParams {

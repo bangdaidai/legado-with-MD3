@@ -19,7 +19,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewModelScope
 import com.script.rhino.runScriptWithContext
 import io.legado.app.BuildConfig
 import io.legado.app.R
@@ -48,11 +47,11 @@ import io.legado.app.feature.reader.core.selection.ReaderSelection
 import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.feature.reader.core.transition.ReaderTurnDirection
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterLayoutIdentity
+import io.legado.app.feature.reader.legacy.LegacyReaderChapterPaginationResult
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterPaginator
 import io.legado.app.feature.reader.legacy.LegacyReaderPageDecorationFactory
 import io.legado.app.feature.reader.legacy.LegacyReaderPaginationBatch
 import io.legado.app.feature.reader.legacy.LegacyReaderPaginationStyleFactory
-import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.feature.reader.legacy.collectLegacyReaderPaginationBatch
 import io.legado.app.feature.reader.legacy.failureReasonFor
 import io.legado.app.feature.reader.legacy.paginateLegacyReaderChapterSafely
@@ -61,7 +60,7 @@ import io.legado.app.feature.reader.platform.ReaderPerfTrace
 import io.legado.app.help.TTS
 import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.config.ReadBookConfig
-import io.legado.app.help.config.ReadStyleResolver
+import io.legado.app.help.readaloud.cast.BgmSceneStore
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.model.CacheBook
@@ -69,7 +68,6 @@ import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadSessionState
-import io.legado.app.model.ReaderMarkingNoteState
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
@@ -97,7 +95,6 @@ import io.legado.app.utils.share
 import io.legado.app.utils.sysScreenOffTime
 import io.legado.app.utils.throttle
 import io.legado.app.utils.toastOnUi
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -121,14 +118,18 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 /**
- * Encapsulates all the reader logic that used to be in ReadBookActivity.
- * This allows ReadBookRouteScreen to be hosted in any Activity (ReadBookActivity or MainActivity).
+ * 阅读路由控制器：聚合原先分散在 ReadBookActivity 里的阅读页逻辑，
+ * 使 ReadBookRouteScreen 可以托管在任意 Activity（ReadBookActivity 或 MainActivity）。
  */
 class ReadBookController(
     val activity: AppCompatActivity,
     val viewModel: ReadBookViewModel,
     private val readerSessionViewModel: ReaderSessionViewModel,
-    routeBookUrl: String? = null,
+    /**
+     * 本路由要打开的书，在首次组合时随构造传入（见 MainNavGraph 阅读页入口）。
+     * 空表示「最后读过的那本」（朗读通知的进入方式），此时不设闸门。
+     */
+    private val routeBookUrl: String? = null,
 ) : ReadBookRouteHost,
     ReadBookInputHandler,
     ReadBook.ReaderRenderCallback {
@@ -141,19 +142,11 @@ class ReadBookController(
         relayoutContent = ReadBook::relayoutContent,
     )
 
-    // Fallback handler for effects not yet migrated to controller
+    // 本类未处理的 Effect 交给这个宿主注册的兜底回调
     var onUnhandledEffect: (ReadBookEffect) -> Unit = {}
     var onClose: (() -> Unit)? = null
 
-    /**
-     * 跨书入场闸：本路由要打开的书。全局 ReadBook 单例在退出上一本书时不清理,
-     * 入场发布读到的还是上一本书的正文窗口,会被直接分页上屏——即"点进新书先闪
-     * 旧书内容"。正文窗口的归属书与本值一致前只发加载占位,一致后自动摘闸;
-     * 路由初始化完成时兜底摘闸(书不存在等回退旧行为的场景不能永远卡在加载页)。
-     */
-    private var pendingEntranceBookUrl: String? = routeBookUrl?.takeIf { it.isNotBlank() }
-
-    // Page state — moved from Activity
+    // 页面状态
     var pageChanged: Boolean = false
         private set
 
@@ -228,8 +221,8 @@ class ReadBookController(
                     if (allLoaded) {
                         add(source)
                     } else {
-                        // The target generation has not been published, so retaining its error
-                        // placeholder would make a later refresh reuse it instead of retrying.
+                        // 目标 generation 还没发布：留着错误占位图，后续刷新会直接复用
+                        // 它而不再重试，所以整代撤掉
                         elements.forEach { element ->
                             readerImageCache.remove(readerImageCacheKey(element, generation))
                         }
@@ -358,6 +351,10 @@ class ReadBookController(
     private val _composeSelectionCancels = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     val composeSelectionCancels = _composeSelectionCancels.asSharedFlow()
 
+    /** 宿主要求画布建立选区（全文搜索命中），对照旧 View 的"搜索结果即真选区"。 */
+    private val _composeSelections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 4)
+    val composeSelections = _composeSelections.asSharedFlow()
+
     /** 触边界提示文案（由阅读页 SnackbarHost 呈现）。 */
     private val _composeBoundaryMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val composeBoundaryMessages = _composeBoundaryMessages.asSharedFlow()
@@ -378,17 +375,6 @@ class ReadBookController(
 
     /** 排版环境不含当前章身份；用它区分普通换章和主题/规则引起的整窗重排。 */
     private var directReaderPaginationEnvironmentKey: String? = null
-
-    /**
-     * 上一次「整窗作废页表」时生效的日夜模式（[ReadStyleResolver.isNightTheme]，含墨水屏下的
-     * 日夜分支，因为排版期解析规则色用的就是它）。
-     *
-     * 日夜切换有两条互不知情的通道：阅读页的日夜按钮走 `ReadConfigUpdateBus`（带
-     * `InvalidateTextPage`，最终到 [rebuildDirectReaderPages]），系统深色跟随和主题设置页
-     * 只到 [onAppThemeChanged]。两条都得让"排版期才按模式解析"的产物重排（高亮规则的
-     * `*Night` 色），但同一次切换只能作废一次——靠这里记录的模式去重。
-     */
-    private var directReaderPagesNightTheme: Boolean? = null
 
     /**
      * 章 → 正在跑的分页任务（连同它依据的章节身份）。
@@ -415,33 +401,7 @@ class ReadBookController(
         val identity: LegacyReaderChapterLayoutIdentity,
         val job: Job,
     )
-
-    /** 一章已成型页的出处，与 [ReaderChapterPaginationTask] 同一判据，但用于任务结束后的暖页。 */
-    private class ReaderChapterPagesSource(
-        val identity: LegacyReaderChapterLayoutIdentity,
-        val environmentKey: String?,
-    )
-
     private var directReaderPages = emptyList<io.legado.app.feature.reader.core.model.ReaderPage>()
-
-    /**
-     * 页表里各章暖页的出处：这一章自己的内容身份 + 排版它时所在的排版环境。
-     *
-     * 旧引擎用一个整窗 key 表达同一件事：key 一变就无条件重排当前章。新引擎按「章」调度任务，
-     * 任务排完就把自己从 [readerChapterPaginationJobs] 里摘掉，留在页表里的那些页因此不带任何
-     * 依据信息。若复用判断只看「这一章有没有页」，两类不动正文的改动就会被旧页一直挡住：
-     * 划线笔记只改章节身份里的 `contentProcessesHash`、高亮规则只改排版环境里的规则代次，
-     * 表现就是「改了要退出书籍重进才生效，连刷新都不行」。记下出处后：出处对得上才复用
-     * （换章接力照旧省掉重排），对不上就重排。
-     */
-    private val directReaderChapterPagesSource =
-        mutableMapOf<Int, ReaderChapterPagesSource>()
-
-    /**
-     * 页表当前所属书籍。换源原地替换书籍后新旧章节 index 对齐，暖页复用会把旧源内容
-     * 当成新书的页直接发回画面（闪回旧正文），bookUrl 一变必须整表作废。
-     */
-    private var directReaderPagesBookUrl: String? = null
 
     /**
      * 页上下文缓存：跨页热路径（书签检查×3 + 进度上报 + 进度提交）每次跨页要取
@@ -485,35 +445,14 @@ class ReadBookController(
 
     init {
         readerSessionViewModel.submitBackground(_readerBackground.value)
-        // Background decoding waits for the first measured reading viewport. Decoding once with
-        // display metrics here was commonly cancelled by the real content bounds a frame later.
+        // 背景图解码要等首个实测阅读视口：用 display metrics 抢先解一次，通常会被
+        // 一帧后的真实内容边界取消，白解码一遍
     }
 
     fun dismissTextActionMenu() {
         textMenuRequestVersion++
         _textMenuState.value = null
-    }
-
-    /**
-     * 画布点击正文已有划线后上报标记选区锚点：EditMarking 已在 onElementClick
-     * 中先行分发并清掉旧锚点，这里补上本次位置，笔记弹层据此悬浮。
-     */
-    fun onComposeReaderMarkingSheetAnchor(anchor: ReaderSelectionMenuAnchor) {
-        viewModel.onIntent(ReadBookIntent.SetMarkingSheetAnchor(anchor))
-    }
-
-    /**
-     * 画布点笔记角标：只弹备注浮窗，不开笔记弹层、不建选区。
-     * 角标锚点由画布按角标矩形上报（和点正文划线走的是两条独立入口）。
-     */
-    fun onComposeReaderMarkingNoteClick(markingId: String, anchor: ReaderSelectionMenuAnchor) {
-        viewModel.onIntent(ReadBookIntent.ShowMarkingNote(markingId, anchor))
-    }
-
-    /** 当前书的「划线 id → 备注」快照（渲染层画笔记角标用）；未开书时为空。 */
-    private fun currentMarkingNotes(): Map<String, String> {
-        val book = ReadBook.book ?: return emptyMap()
-        return ReaderMarkingNoteState.notesFor(book.name, book.author)
+        viewModel.onIntent(ReadBookIntent.DismissQuickMarking)
     }
     private val popupAction by lazy { PopupAction(activity) }
     private var screenTimeOut: Long = 0
@@ -564,23 +503,8 @@ class ReadBookController(
         viewModel.refreshSeekState()
     }
 
-    /**
-     * 入场时后到的「加载中」占位窗暂存，不直接上屏：冷重入场必然经过"正文输入未就绪"
-     * 的几十到几百毫秒，此时 ReaderSessionViewModel 里还挂着上一次离场的成型窗口，
-     * 直接发占位页会把它冲掉——这正是返回时先闪空白加载页再跳回正文的原因。
-     * 真实页提交或入场收尾时补发，保证语义不丢：新书真的没内容时仍会显示加载页。
-     */
-    private var entranceHoldPlaceholder: (() -> Unit)? = null
-
     fun onComposeRendererAttached() {
         ReaderPerfTrace.marker("surface.attached")
-        entranceHoldPlaceholder = null
-        activity.lifecycleScope.launch {
-            delay(2600)
-            // 入场仍未等到任何真实页：放行暂存的加载占位，"加载中"语义保持不变。
-            entranceHoldPlaceholder?.invoke()
-            entranceHoldPlaceholder = null
-        }
         ReadBook.registerRender(this)
         publishReaderPageWindow()
     }
@@ -605,17 +529,8 @@ class ReadBookController(
     private fun updateReaderPageWindow(value: ReaderPageWindow): ReaderPageWindow {
         val previous = _readerPageWindow.value.current
         val next = value.current
-        // 翻页后备注浮窗的锚点已失效：它按画布坐标定位在角标旁，继续留着就会悬在别的
-        // 段落上方。角标本身随新页重算，浮窗不能带着旧锚点跨页。
-        if (previous?.id != next?.id) {
-            viewModel.onIntent(ReadBookIntent.DismissMarkingNote)
-        }
         if (previous?.id != next?.id || previous?.layoutRevision != next?.layoutRevision) {
             cancelReaderImageLoadsExcept(activeReaderImageKeys(value))
-        }
-        if (next != null && !next.isPlaceholder) {
-            // 真实页到达，入场暂存的加载占位不再需要。
-            entranceHoldPlaceholder = null
         }
         _readerPageWindow.value = value
         readerSessionViewModel.submitPageWindow(value)
@@ -679,6 +594,18 @@ class ReadBookController(
             }
             else -> false
         }
+        is ReaderElement.RoleCast -> {
+            // 多角色分配：点击胶囊打开分配弹层（确认/取消后重排当前章）
+            viewModel.onIntent(
+                ReadBookIntent.ShowSheet(ReadBookSheet.RoleCast(element.quoteOrdinal)),
+            )
+            true
+        }
+
+        is ReaderElement.BgmScene -> {
+            viewModel.onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.BgmScene(element.paragraphIndex)))
+            true
+        }
         is ReaderElement.Image -> handleComposeImageClick(element)
         is ReaderElement.Review -> { activity.toastOnUi("Button Pressed!"); true }
         is ReaderElement.Action -> { activity.toastOnUi("Button Pressed!"); true }
@@ -696,7 +623,7 @@ class ReadBookController(
     fun showComposeActionMenu() {
         val state = viewModel.uiState.value
         when {
-            BaseReadAloudService.isRun -> viewModel.onIntent(ReadBookIntent.ReadAloudAction)
+            ReadBook.isCurrentBookReadAloud -> viewModel.onIntent(ReadBookIntent.ReadAloudAction)
             isAutoPage -> viewModel.onIntent(ReadBookIntent.OpenReadMenuRoute(ReadBookMenuRoute.AutoRead))
             state.isShowingSearchResult -> viewModel.onIntent(ReadBookIntent.ShowSearchMenu)
             else -> viewModel.onIntent(ReadBookIntent.ShowMenu)
@@ -804,6 +731,12 @@ class ReadBookController(
         ReaderPerfTrace.marker("viewport.published")
     }
 
+    /** 会话指向的不是本路由要开的书：画布只能出加载占位页，不能把上一本书的正文排上来。 */
+    private fun isReaderSessionStale(): Boolean {
+        val expected = routeBookUrl?.takeIf { it.isNotBlank() } ?: return false
+        return ReadBook.book?.bookUrl != expected
+    }
+
     private fun publishReaderPageWindow(
         paginationStyle: ReaderAndroidPaginationStyle? = null,
         paginationEnvironmentPublished: Boolean = false,
@@ -812,6 +745,12 @@ class ReadBookController(
         val width = viewport.widthPx
         val height = viewport.heightPx
         if (width <= 0 || height <= 0) return
+        // 开书路由的首帧早于会话切换：`ReadBook` 里可能还是上一本书的章节，照它分页会把
+        // 别人的正文画进这本书的面板。装载完成后由正常发布接替这张占位窗。
+        if (isReaderSessionStale()) {
+            publishLoadingReaderWindow()
+            return
+        }
         publishDirectReaderPageWindow(
             width = width,
             height = height,
@@ -829,78 +768,23 @@ class ReadBookController(
         // reader's `TextPageFactory.curPage` always yields a fallback page
         // (`currentChapter.getPage(pageIndex) ?: TextPage(title = it.title).format()`), so rapid
         // chapter turns should show a loading page rather than a blank surface.
-        if (!currentInputIsReady &&
-            _readerPageWindow.value.current?.id?.chapterIndex != ReadBook.durChapterIndex
+        // 判据还要认“文案变了”和“msg 优先”：占位页只按章节号判重时，ReadBook.msg 里的
+        // 失败原因（打开本地书籍出错 / LoadTocError）刷不出来；而旧 View 的 msg 是最高优先
+        // 级（见 ReaderPartialPagePolicy.shouldPublishLoadingPlaceholder），正文已排好时
+        // 也会整页换成消息页，“目录更新中”“换源中”因此不会被正文盖住。
+        val visiblePage = _readerPageWindow.value.current
+        if (ReaderPartialPagePolicy.shouldPublishLoadingPlaceholder(
+                targetChapterIndex = ReadBook.durChapterIndex,
+                currentInputReady = currentInputIsReady,
+                visibleChapterIndex = visiblePage?.id?.chapterIndex,
+                visibleIsPlaceholder = visiblePage?.isPlaceholder == true,
+                visibleText = visiblePage?.text,
+                messageText = ReadBook.msg,
+                placeholderText = activity.getString(R.string.data_loading),
+            )
         ) {
-            publishLoadingReaderWindowUnlessReal()
-        }
-    }
-
-    /**
-     * 装载期的占位发布，一律先问"画面上是不是已经有正文"：
-     * - 已有真实页 → 直接跳过。换章/追章过程中正文输入窗口会反复清空重建，
-     *   每清一次就发占位会把已经露脸的真实页再踩回空白（旧 View 装载新内容
-     *   时同样保留当前页，占位只补真空）。
-     * - 入场门控未过、ReaderSessionViewModel 还挂着上次离场的成型窗口 → 暂存，
-     *   真实页到达即作废、门控收尾仍未等到再补发。
-     * - 两者都没有（真的冷开白屏）→ 立即发"加载中"，语义不变。
-     */
-    private fun publishLoadingReaderWindowUnlessReal() {
-        _readerPageWindow.value.current?.takeIf { !it.isPlaceholder }?.let { return }
-        if (readerSessionViewModel.uiState.value.pageWindow.current != null) {
-            entranceHoldPlaceholder = { publishLoadingReaderWindow() }
-        } else {
             publishLoadingReaderWindow()
         }
-    }
-
-    /**
-     * 按位置重锚的钳位闸：该章分页任务还在飞（页表尾部仍在逐页流出）时，
-     * locate 只能落在已流出的最后一页——把这种临时落点发上屏，就是快进若干页
-     * 后返回阅读页"先闪一页、再跳到朗读页"的那一下（c4p1→c4p4 抓取实锤）。
-     * 真实落点不用等：批次落地前任务已自摘（见 ensureReaderChapterPagination
-     * 的 remove-再-发布顺序），"批次换页/批次落地"仍会把正确页锚出来。
-     */
-    private fun readerAnchorIsProvisional(
-        pages: List<ReaderPage>,
-        locatedIndex: Int,
-        chapterIndex: Int,
-    ): Boolean {
-        if (locatedIndex != pages.indexOfLast { it.id.chapterIndex == chapterIndex }) return false
-        if (!readerChapterPaginationJobs.containsKey(chapterIndex)) return false
-        val end = ReaderPageNavigator.pageContext(pages, locatedIndex)?.endPosition
-            ?: return false
-        return ReadBook.durChapterPos >= end
-    }
-
-    /**
-     * 书籍身份守卫：换源/替换书籍是原地进行的，页表里还留着旧源整章页时，
-     * 窗口发布路径（暖页复用、时间/电量重发）会按相同 chapterIndex 把旧正文
-     * 瞬间发回画面。bookUrl 一变就作废页表与在排任务，让画面停留在加载占位页
-     * 直到新书的批次提交。
-     */
-    private fun guardDirectReaderPagesBookIdentity() {
-        val currentBookUrl = ReadBook.readerChapterInputWindow.current?.book?.bookUrl
-            ?: ReadBook.book?.bookUrl
-        if (currentBookUrl == null || directReaderPagesBookUrl == currentBookUrl) return
-        if (directReaderPages.isNotEmpty()) {
-            // 新引擎按「章」登记在飞的分页任务，换书要作废的就是这一批：
-            // 它们排出的是旧源正文，提交回来会把旧页画到新书上。
-            readerChapterPaginationJobs.values.forEach { it.job.cancel() }
-            readerChapterPaginationJobs.clear()
-            directReaderLayoutKey = null
-            directReaderPaginationEnvironmentKey = null
-            directReaderStreamGeneration += 1
-            clearStreamedReaderChapters()
-            directReaderPages = emptyList()
-            directReaderChapterPagesSource.clear()
-            directReaderPageContexts.clear()
-            directReaderChapterPageCounts = emptyMap()
-            // 立刻用加载/消息页顶掉画布上的旧正文；不能发空窗，路由层
-            // lastReadablePageWindow 兜底会把换源前的内容再画回来。
-            publishLoadingReaderWindow()
-        }
-        directReaderPagesBookUrl = currentBookUrl
     }
 
     private fun rebuildDirectReaderPages() {
@@ -908,15 +792,14 @@ class ReadBookController(
         readerChapterPaginationJobs.clear()
         directReaderLayoutKey = null
         directReaderPaginationEnvironmentKey = null
-        // 记下重排依据的日夜模式：主题通道（onAppThemeChanged）靠它判断这一次切换是不是已经作废过。
-        directReaderPagesNightTheme = ReadStyleResolver.isNightTheme()
         directReaderStreamGeneration += 1
         clearStreamedReaderChapters()
-        // 页先留在表里当画面（重排期间靠它们避免闪"加载中"），但出处/身份登记一律作废：
-        // "重建"就是"当前页不可信"，包括排版失败后的手动重试入口。
-        directReaderChapterPagesSource.clear()
-        // 上游的 paginatedChapterIdentities 是同一失效意图的按章身份表，一并作废，
-        // 否则 ensureReaderChapterPagination 里"内容身份变了才摘该章旧页"的循环收不到失效信号。
+        // Clearing only the key leaves complete pages in the window. The next publish then
+        // sees hasShapedPages and skips pagination, so every config change appears on re-entry.
+        directReaderPages = emptyList()
+        directReaderPageIndex = null
+        directReaderChapterPageCounts = emptyMap()
+        directReaderPageContexts.clear()
         paginatedChapterIdentities.clear()
         ReadBook.clearReaderPagination()
         updateReaderPaginationError(null)
@@ -952,11 +835,22 @@ class ReadBookController(
             }
         }
         val window = ReaderPageNavigator.window(directReaderPages, index)
-        // 一次取页窗口共用同一份备注快照：角标按页算，但书只有一本，没必要逐页再查一次。
-        val markingNotes = currentMarkingNotes()
         // 当前章是否还在逐页流出：决定尾部要不要接"加载中"页。
-        val streamingChapter = window.current?.id?.chapterIndex
+        val currentChapterIndex = window.current?.id?.chapterIndex
+        val streamingChapter = currentChapterIndex
             ?.takeIf { it in directReaderStreamingChapters }
+
+        fun preview(page: ReaderPage?): ReaderPage? = page?.takeIf {
+            currentChapterIndex == null || ReaderPartialPagePolicy.canPreviewPage(
+                currentChapterIndex = currentChapterIndex,
+                candidateChapterIndex = it.id.chapterIndex,
+                currentChapterStreaming = streamingChapter != null,
+            )
+        }
+
+        val previousPage = preview(window.previous)
+        val nextPage = preview(window.next)
+        val nextPlusPage = preview(window.nextPlus)
         val selection = searchSelection
         val aloudPosition = readAloudPosition
         val aloudParagraphIndex = aloudPosition?.let { (chapterIndex, chapterPosition) ->
@@ -964,22 +858,21 @@ class ReadBookController(
         }
         fun highlight(page: io.legado.app.feature.reader.core.model.ReaderPage?, pageIndex: Int) = page?.let { source ->
             val chapterPageCount = directReaderChapterPageCounts[source.id.chapterIndex] ?: 0
-            val dynamicState = viewModel.uiState.value
             val contentPadding = layoutController.viewport.value?.contentPadding ?: ReaderPadding()
             val decorated = source.copy(
                 decoration = LegacyReaderPageDecorationFactory.create(
                     page = source,
                     chapterPageCount = chapterPageCount,
-                    time = dynamicState.time,
-                    batteryPercent = dynamicState.battery,
+                    time = viewModel.pageTime,
+                    batteryPercent = viewModel.pageBatteryPercent,
                     hasBookmark = hasBookmarkOnComposePage(pageIndex),
                     contentPaddingLeftPx = contentPadding.left,
                     contentPaddingTopPx = contentPadding.top,
                     contentPaddingRightPx = contentPadding.right,
                     contentPaddingBottomPx = contentPadding.bottom,
-                    markingNotes = markingNotes,
                 ),
-                revision = source.revision xor dynamicState.time.hashCode().toLong() xor dynamicState.battery.toLong(),
+                revision = source.revision xor viewModel.pageTime.hashCode().toLong()
+                    xor viewModel.pageBatteryPercent.toLong(),
             )
             val pageHasSearchSelection = selection?.chapterIndex == source.id.chapterIndex
             val pageHasAloudParagraph = aloudPosition?.first == source.id.chapterIndex &&
@@ -996,12 +889,12 @@ class ReadBookController(
                         (aloudPosition?.hashCode()?.toLong() ?: 0L),
             )
         }
-        val nextPlus = if (streamingChapter != null && window.nextPlus == null) {
+        val nextPlus = if (streamingChapter != null && nextPlusPage == null) {
             // 本章还有没成型的页：第三槽按旧 `TextPageFactory.nextPlusPage` 的 `!isCompleted`
             // 分支给"加载中"页，而不是"继续滑动以加载下一章…"（那是下一章内容之后才出现的提示）。
-            tailLoadingPage(streamingChapter)
+            tailLoadingPage(streamingChapter, if (nextPage == null) 1 else 0)
         } else {
-            highlight(window.nextPlus, index + 2)
+            highlight(nextPlusPage, index + 2)
                 ?: if (ReadBook.isScroll &&
                     ReaderPageNavigator.needsSwipeTipNextPlus(window, hasNextComposeChapter())
                 ) {
@@ -1016,10 +909,17 @@ class ReadBookController(
                 }
         }
         return ReaderPageWindow(
-            previous = highlight(window.previous, index - 1),
+            previous = highlight(previousPage, index - 1)
+                ?: if (streamingChapter != null && window.previous != null) {
+                    centeredReaderMessagePage(
+                        ReaderPageId(streamingChapter, -1),
+                        activity.getString(R.string.data_loading),
+                        readerChapterTitle(streamingChapter),
+                    )
+                } else null,
             current = highlight(window.current, index),
             // 本章还没排完时，最后一个成型页之后按旧 `nextPage` 给"加载中"页。
-            next = highlight(window.next, index + 1)
+            next = highlight(nextPage, index + 1)
                 ?: streamingChapter?.let { tailLoadingPage(it) },
             nextPlus = nextPlus,
         )
@@ -1029,8 +929,12 @@ class ReadBookController(
      * 部分排版章节的尾部承接页，对照旧 `TextPageFactory.nextPage/nextPlusPage` 在
      * `currentChapter.isCompleted == false` 时返回的 `R.string.data_loading` 页。
      */
-    private fun tailLoadingPage(chapterIndex: Int): ReaderPage? = centeredReaderMessagePage(
-        id = ReaderPageId(chapterIndex, directReaderStreamedPages[chapterIndex]?.size ?: 0),
+    private fun tailLoadingPage(chapterIndex: Int, offset: Int = 0): ReaderPage? =
+        centeredReaderMessagePage(
+            id = ReaderPageId(
+                chapterIndex,
+                (directReaderStreamedPages[chapterIndex]?.size ?: 0) + offset
+            ),
         text = activity.getString(R.string.data_loading),
         chapterTitle = readerChapterTitle(chapterIndex),
     )
@@ -1077,6 +981,7 @@ class ReadBookController(
     /** 主线程：接收一页刚成型的页，对照旧 `ReadBook.collectLayoutPages` 的按页消费。 */
     private fun onReaderPageStreamed(
         generation: Long,
+        paginationJob: Job,
         chapterIndex: Int,
         page: ReaderPage,
         traceFirstPage: Boolean = false,
@@ -1084,20 +989,17 @@ class ReadBookController(
         activity.lifecycleScope.launch(Main) {
             if (traceFirstPage) ReaderPerfTrace.marker("stream.first-page-main")
             if (generation != directReaderStreamGeneration) return@launch
+            if (readerChapterPaginationJobs[chapterIndex]?.job !== paginationJob) return@launch
             if (chapterIndex !in directReaderStreamingChapters) return@launch
             val streamed = directReaderStreamedPages.getOrPut(chapterIndex) { mutableListOf() }
             if (streamed.any { it.id == page.id }) return@launch
             streamed += page
-            val currentPage =
-                directReaderPageIndex?.let { index -> directReaderPages.getOrNull(index) }
-            directReaderPages = directReaderPages
+            replaceDirectReaderPages(
+                directReaderPages
                 .filterNot { it.id.chapterIndex == chapterIndex }
                 .plus(streamed)
                 .sortedWith(compareBy({ it.id.chapterIndex }, { it.id.pageIndex }))
-            currentPage?.let { keep ->
-                val index = directReaderPages.indexOfFirst { it === keep }
-                if (index >= 0) directReaderPageIndex = index
-            }
+            )
             if (shouldPublishStreamedReaderPage(chapterIndex, page)) {
                 // 归因用：标记第一次真正发生的发布（不一定是本章第一页——发布规则要求
                 // "含 durChapterPos 的页成型"，见 shouldPublishStreamedReaderPage）。
@@ -1113,22 +1015,19 @@ class ReadBookController(
     }
 
     /**
-     * 主线程：重发窗口。当前页还在别的章（邻章提前流出）时只换窗、不动阅读位置，
-     * 否则会把阅读位置提前推进到邻章。
+     * 主线程：按会话目标章重发窗口。目标页就绪后替换保留的旧章页面；邻章提前流出
+     * 只能刷新已经定位的窗口，不能在当前页尚未就绪时充当首屏。
      */
     private fun publishStreamedReaderWindow(chapterIndex: Int) {
         val currentIndex = directReaderPageIndex
-        val currentChapterIndex =
-            currentIndex?.let { directReaderPages.getOrNull(it)?.id?.chapterIndex }
-        val index = if (currentIndex != null && currentChapterIndex != chapterIndex) {
-            currentIndex
-        } else {
-            ReaderPageNavigator.locateOrNull(
+        val index = if (chapterIndex == ReadBook.durChapterIndex) {
+            ReaderPageNavigator.locateReadyPage(
                 directReaderPages,
                 chapterIndex,
                 ReadBook.durChapterPos,
-            ) ?: currentIndex ?: return
-        }
+                chapterStreaming = chapterIndex in directReaderStreamingChapters,
+            ) ?: return
+        } else currentIndex ?: return
         publishDirectReaderWindow(index)
     }
 
@@ -1139,12 +1038,7 @@ class ReadBookController(
     /** 该页是否覆盖当前阅读位置（`durChapterPos`）。 */
     private fun pageCoversReadingPosition(chapterIndex: Int, page: ReaderPage): Boolean {
         if (ReadBook.durChapterIndex != chapterIndex) return false
-        val pageStart = ReaderPageNavigator.pageStart(page)
-        val pageEnd = page.elements
-            .filterIsInstance<ReaderElement.Text>()
-            .maxOfOrNull { it.chapterPosition + it.value.length.coerceAtLeast(1) }
-            ?: pageStart
-        return ReadBook.durChapterPos in pageStart..pageEnd
+        return ReaderPageNavigator.containsChapterPosition(page, ReadBook.durChapterPos)
     }
 
     private fun shouldPublishStreamedReaderPage(chapterIndex: Int, page: ReaderPage): Boolean {
@@ -1174,7 +1068,7 @@ class ReadBookController(
         val dropping = directReaderStreamedPages.filterKeys { it != keepChapterIndex }
         if (dropping.isNotEmpty()) {
             val partialIds = dropping.values.flatten().mapTo(mutableSetOf()) { it.id }
-            directReaderPages = directReaderPages.filterNot { it.id in partialIds }
+            replaceDirectReaderPages(directReaderPages.filterNot { it.id in partialIds })
         }
         directReaderStreamedPages.keys.removeAll { it != keepChapterIndex }
         directReaderStreamingChapters.removeAll { it != keepChapterIndex }
@@ -1300,12 +1194,10 @@ class ReadBookController(
                 ReaderPageNavigator.locate(pages, result.chapterIndex, bodyPosition)
             )
         }
-        // 搜索命中只作为页面级高亮（`searchSelection` 已进页面对象的 searchStart/
-        // searchEndInclusive），不建画布选区：跳结果的人是想看这个词出现在哪，没有对选区做
-        // 下一步操作的意图，而真选区会画出两端手柄、吞掉跳转后的第一次点击
-        // （`ReaderCanvasSurface` 的 suppressTap）并禁掉拉书签。这里只清掉用户自己长按留下的
-        // 旧选区——它属于上一页，留着会按新窗口重锚出一个错位的菜单。
-        cancelComposeSelection()
+        // 旧 View 的全文搜索命中是一次**真选区**（`isSelectingSearchResult` + selectStart/End +
+        // `isTextSelected = true`）：有手柄、可拖动、弹出选区菜单。窗口发布之后再推给画布，
+        // 让它能按新窗口算锚点。
+        _composeSelections.tryEmit(selection)
     }
 
     private fun publishDirectReaderPageWindow(
@@ -1316,25 +1208,11 @@ class ReadBookController(
     ): Boolean {
         val contentPadding = layoutController.viewport.value?.contentPadding ?: ReaderPadding()
         val inputWindow = ReadBook.readerChapterInputWindow
-        val pendingEntrance = pendingEntranceBookUrl
-        if (pendingEntrance != null) {
-            val contentBookUrl = inputWindow.current?.book?.bookUrl ?: ReadBook.book?.bookUrl
-            if (contentBookUrl == pendingEntrance) {
-                pendingEntranceBookUrl = null
-            } else {
-                // 要分页的还是上一本书的正文:不发真实页、也不登记身份,只顶一个加载占位;
-                // 新书 resetData/首章落地后的下一次发布自然过闸。
-                publishLoadingReaderWindowUnlessReal()
-                return false
-            }
-        }
-        guardDirectReaderPagesBookIdentity()
         val chapter = inputWindow.current ?: run {
             // 内容未装载（进入书籍/目录跳转装载中）：发布"加载中"占位页窗口，让
             // 阅读画布保持组合、点击分区与菜单照常可用，装载完成后由分页批次
-            // 整窗替换（对照 shutiao 的加载占位页正文渲染）。画面上已有真实页时
-            // 不踩——追章窗口反复清空时曾把刚露脸的正文闪回空白（26→27 抓取实锤）。
-            publishLoadingReaderWindowUnlessReal()
+            // 整窗替换（对照 shutiao 的加载占位页正文渲染）。
+            publishLoadingReaderWindow()
             return false
         }
         val chapters = listOf(
@@ -1365,7 +1243,7 @@ class ReadBookController(
             val index = candidate.chapter.index
             val previous = paginatedChapterIdentities[index]
             if (previous != null && previous != candidate.layoutIdentity()) {
-                directReaderPages = directReaderPages.filterNot { it.id.chapterIndex == index }
+                replaceDirectReaderPages(directReaderPages.filterNot { it.id.chapterIndex == index })
                 directReaderPageContexts.clear()
                 paginatedChapterIdentities.remove(index)
                 readerChapterPaginationJobs.remove(index)?.job?.cancel()
@@ -1405,9 +1283,6 @@ class ReadBookController(
             append('|').append(resolvedPaginationStyle.titleBottomSpacingPx)
             append('|').append(resolvedPaginationStyle.paragraphSpacing)
             append('|').append(ReadBookConfig.durConfig.highlightRules.hashCode())
-            // 跟随主角的规则按人物表现场展开，规则哈希不变但展开结果会变，
-            // 并入代次才能让「设完主角后复用旧页表」的路径重排。
-            append('|').append(HighlightProtagonistPatterns.generation)
         }
         val key = "$chapterLayoutIdentity,$paginationEnvironmentKey"
         if (directReaderLayoutKey == key && directReaderPages.isNotEmpty()) {
@@ -1418,37 +1293,36 @@ class ReadBookController(
             // 阅读位置跳回书首；此时不发布窗口，交给相邻章预排与后续批次补页
             // （排版失败时 updateReaderPaginationError 会给出重试入口）。
             ReaderPageNavigator
-                .locateOrNull(directReaderPages, chapter.chapter.index, ReadBook.durChapterPos)
+                .locateReadyPage(
+                    directReaderPages, chapter.chapter.index, ReadBook.durChapterPos,
+                    chapterStreaming = chapter.chapter.index in directReaderStreamingChapters,
+                )
                 ?.let { index ->
-                    if (!readerAnchorIsProvisional(
-                            directReaderPages,
-                            index,
-                            chapter.chapter.index,
-                        )
-                    ) {
-                        directReaderPageIndex = index
-                        publishDirectReaderWindow(index)
-                    }
+                    directReaderPageIndex = index
+                    publishDirectReaderWindow(index)
                 }
+            // clearTextChapter（如朗读定位触发的同章 upContent）可能只清快照而 layout
+            // key 未变：快速路径同样要按现存页表补发窗口快照，否则朗读等待的快照永远缺失。
+            if (ReadBook.readerPagination(chapter.chapter.index) == null) {
+                publishWindowReaderPaginationSnapshots(ReadBook.readerPaginationGeneration)
+            }
             scheduleAdjacentReaderChapterPagination(
                 chapters, chapter, width, height, contentPadding, resolvedPaginationStyle
             )
             return true
         }
-        // A neighboring chapter may already have a complete page set from the preceding
-        // window. Publish it immediately while the new three-chapter batch is shaped; the
-        // View reader keeps that warm page visible instead of flashing a loading surface on a
-        // normal cached chapter turn. A later batch still replaces it if its identity changed.
+        // 邻章可能已经带着一整套页从上一个窗口过来：立刻发布它，不等本次三章批次成形。
+        // 旧 View 在命中的普通换章上保持暖页可见，而不是闪一次加载面；后续批次若发现
+        // 章节身份变了，仍会替换这一窗。
         directReaderPages
             .takeIf { pages -> pages.any { it.id.chapterIndex == chapter.chapter.index && !it.isPlaceholder } }
             ?.let { pages ->
-                publishDirectReaderWindow(
-                    ReaderPageNavigator.locate(
-                        pages,
-                        chapter.chapter.index,
-                        ReadBook.durChapterPos,
-                    )
-                )
+                ReaderPageNavigator.locateReadyPage(
+                    pages,
+                    chapter.chapter.index,
+                    ReadBook.durChapterPos,
+                    chapterStreaming = chapter.chapter.index in directReaderStreamingChapters,
+                )?.let(::publishDirectReaderWindow)
             }
         if (directReaderLayoutKey != key) {
             val environmentChanged = directReaderPaginationEnvironmentKey != null &&
@@ -1468,11 +1342,10 @@ class ReadBookController(
                 // 而不再重排，页面会一直停在旧字号/旧主题的几何上。清空后窗口由加载占位页承接，
                 // 各章的新页随各自的批次填回（旧 View 重建 TextChapter 后同样是整章重排）。
                 directReaderPages = emptyList()
-                directReaderChapterPagesSource.clear()
                 directReaderPageContexts.clear()
                 paginatedChapterIdentities.clear()
             }
-            // 换章接力：新当前章若在旧 key 下已经排出过部分页（上一轮邻章预排的产物），保留它们。
+            // 换章接力：新当前章若已经排出过部分页（此前作为邻章预排的产物），保留它们。
             // 切章后画布继续显示"已排好的几页 + 尾部加载中"，而不是先把它们摘掉退化成占位页、
             // 再等新批次从头排完才重新出现。旧 View 就是增量语义：`TextChapterLayout
             // .onPageCompleted` 把成型的页 `textPages.add(...)`，`TextChapter.isLayoutRunning`
@@ -1484,7 +1357,7 @@ class ReadBookController(
                     streamedChapters = directReaderStreamedPages.keys,
                 )
             )
-            // 换章不重启窗口内的章：新当前章往往正是上一轮作为邻章启动的那个任务，
+            // 换章不重启窗口内的章：新当前章往往正是此前作为邻章启动的那个任务，
             // 旧 View 的 `ReadBook.loadContent` 同样不会因为当前章切换而取消它。
             ensureReaderChapterPagination(
                 paginationGeneration = paginationGeneration,
@@ -1503,11 +1376,11 @@ class ReadBookController(
      * 保证窗口（`durChapterIndex ± 1`）里的章各自有一个分页任务。
      *
      * 与旧 View 对齐：`ReadBook.loadContent` 只对窗口外的章 `cancelLayout()`，同一章的任务不会
-     * 因为"当前章换成了别人"而重启。于是从章 N 翻到 N+1 时，N+1 上一轮作为邻章排好的页直接
+     * 因为"当前章换成了别人"而重启。于是从章 N 翻到 N+1 时，N+1 作为邻章时排好的页直接
      * 接上；往回翻时 N 的任务也还在，不必重排。
      *
      * 当前章优先：当前章还没有页时就先跑它，等它落地再由 [publishReaderPageWindow] 补邻章
-     * （沿用原来的两阶段策略，避免三章同时开跑把首屏排版挤慢）。
+     * （两阶段策略，避免三章同时开跑把首屏排版挤慢）。
      */
     private fun ensureReaderChapterPagination(
         paginationGeneration: Long,
@@ -1520,22 +1393,26 @@ class ReadBookController(
     ) {
         recycleReaderChapterPaginationJobs()
         val currentIndex = current.chapter.index
-        // 该章已经有任务在跑（很可能正是上一轮作为邻章启动的那个）：不打断，等它收尾。
-        // 内容换了一份时身份不同，会落到下面按新内容重排。
-        if (isReaderChapterPaginationRunning(current)) return
-        // 暖页只有在出处（本章内容身份 + 排版环境）没变时才算数：光看"有没有页"会把
-        // 划线笔记、高亮规则这类不改正文的改动一直挡在旧页后面。
-        val hasReusablePages = hasReusableReaderPages(current)
+        // 换章路径会先 clearReaderPagination() 清空快照表，而渲染层 directReaderPages
+        // 多半原样保留（普通翻页复用此前预排的整章页）。窗口内各章都有现成页时调度不再
+        // 启动任何分页任务，也就没有批次提交去重新发布快照，朗读服务按章号取快照会是
+        // null。所以调度前按现存页表补发一次窗口快照。
+        if (ReadBook.readerPagination(currentIndex) == null) {
+            publishWindowReaderPaginationSnapshots(paginationGeneration)
+        }
+        val hasShapedPages = directReaderPages.any {
+            it.id.chapterIndex == currentIndex && !it.isPlaceholder
+        }
         // 页表里还挂着"排了一半"的残留（任务已被取消、部分页却没清干净）时同样要重排，
         // 否则这一章会停在半成品上、尾部一直挂着"加载中"。
         val stalledPartialPages = currentIndex in directReaderStreamingChapters
-        if (!hasReusablePages || stalledPartialPages) {
+        // 当前章优先启动，已有同身份任务则继续运行。随后独立预排邻章，不能因为
+        // 当前章仍在逐页流出就延迟到整章完成；旧 View 也分别装载窗口里的各章。
+        if (!isReaderChapterPaginationRunning(current) && (!hasShapedPages || stalledPartialPages)) {
             startReaderChapterPagination(
                 paginationGeneration, current, width, height, padding, style,
             )
-            return
         }
-        // 当前章已经有整批页（例如刚翻回来）：直接补窗口里的邻章。
         scheduleAdjacentReaderChapterPagination(chapters, current, width, height, padding, style)
     }
 
@@ -1550,14 +1427,33 @@ class ReadBookController(
                 // （旧 View 对被顶出窗口的章同样先 `cancelLayout()`）。
                 clearStreamedReaderChapter(index)
             }
+        // Like the legacy three-chapter window, bound retained layouts as reading advances.
+        // Keep the displayed chapter during a loading handoff even if the session moved ahead.
+        val displayedChapter =
+            directReaderPageIndex?.let { directReaderPages.getOrNull(it)?.id?.chapterIndex }
+        replaceDirectReaderPages(
+            ReaderPageNavigator.retainChapterWindow(
+                directReaderPages, ReadBook.durChapterIndex, displayedChapter,
+            )
+        )
+        paginatedChapterIdentities.keys.retainAll(visible.toSet())
+        directReaderChapterPageCounts =
+            directReaderPages.groupingBy { it.id.chapterIndex }.eachCount()
+        directReaderPageContexts.clear()
     }
 
     /** 撤掉某一章"已流出但整章还没提交"的部分页与流出标记。 */
     private fun clearStreamedReaderChapter(chapterIndex: Int) {
+        directReaderStreamingChapters.remove(chapterIndex)
         val dropping = directReaderStreamedPages.remove(chapterIndex) ?: return
         val partialIds = dropping.mapTo(mutableSetOf()) { it.id }
-        directReaderPages = directReaderPages.filterNot { it.id in partialIds }
-        directReaderStreamingChapters.remove(chapterIndex)
+        replaceDirectReaderPages(directReaderPages.filterNot { it.id in partialIds })
+    }
+
+    private fun replaceDirectReaderPages(pages: List<ReaderPage>) {
+        val currentId = directReaderPageIndex?.let { directReaderPages.getOrNull(it)?.id }
+        directReaderPages = pages
+        directReaderPageIndex = ReaderPageNavigator.rebasePageIndex(pages, currentId)
     }
 
     /**
@@ -1583,31 +1479,14 @@ class ReadBookController(
         bookUrl = book.bookUrl,
         bookOrigin = book.origin,
         bookSourceHash = bookSourceHash,
+        castRenderHash = castRenderHash,
     )
-
-    /**
-     * 该章是否已经有一份"出处对得上"的整章页。
-     *
-     * 出处 = 本章内容身份 + 排版它时所在的排版环境。二者任一变化（重新加载正文、增删划线
-     * 笔记、字号/主题/高亮规则变化）都视为没有可用页，需要重排；都没变时暖页照旧直接接上，
-     * 换章接力不必重排。
-     */
-    private fun hasReusableReaderPages(candidate: ReaderChapterInput): Boolean {
-        val chapterIndex = candidate.chapter.index
-        val source = directReaderChapterPagesSource[chapterIndex] ?: return false
-        if (source.identity != candidate.layoutIdentity()) return false
-        if (source.environmentKey != directReaderPaginationEnvironmentKey) return false
-        return directReaderPages.any {
-            it.id.chapterIndex == chapterIndex && !it.isPlaceholder
-        }
-    }
 
     /**
      * 预热窗口里还没有页的邻章。
      *
      * 只负责把缺失的章补上：已经有页、已经有任务在跑、或已经不在窗口里的章都跳过，
      * 所以它既可以在当前章落地后被调用，也可以在给出暖页后立刻调用，不会重复排版。
-     * "已经有页"同样按出处判断，理由见 [hasReusableReaderPages]。
      */
     private fun scheduleAdjacentReaderChapterPagination(
         chapters: List<ReaderChapterInput>,
@@ -1622,7 +1501,8 @@ class ReadBookController(
             val index = candidate.chapter.index
             index != current.chapter.index &&
                     index in visible &&
-                    !hasReusableReaderPages(candidate) &&
+                    (directReaderPages.none { it.id.chapterIndex == index && !it.isPlaceholder } ||
+                            index in directReaderStreamingChapters) &&
                     !isReaderChapterPaginationRunning(candidate)
         }
         if (missing.isEmpty()) return
@@ -1651,8 +1531,6 @@ class ReadBookController(
         val streamGeneration = directReaderStreamGeneration
         val identity = candidate.layoutIdentity()
         readerChapterPaginationJobs.remove(chapterIndex)?.job?.cancel()
-        // 这一章正在按新依据重排：旧页还挂在表上撑画面，但不再算"可用暖页"。
-        directReaderChapterPagesSource.remove(chapterIndex)
         // 旧任务作废：它流出一半的页可能是按旧正文/旧几何排的，必须先撤掉，否则新任务排出的
         // 同 id 页会被"已经存在"挡掉，页表里反而留下旧内容的那几页。
         clearStreamedReaderChapter(chapterIndex)
@@ -1662,6 +1540,7 @@ class ReadBookController(
         // 先登记、后启动：任务收尾要判断"表里的还是不是自己"，若先启动，快速跑完的任务会在
         // 主线程登记之前就把自己摘掉，随后又被登记回去，留下一个永不清理的残留条目。
         val job = activity.lifecycleScope.launch(IO, start = CoroutineStart.LAZY) {
+            val paginationJob = coroutineContext[Job]!!
             ReaderPerfTrace.marker("pagination.job-start")
             val highlightRules = ReaderPerfTrace.suspendSection("pagination.highlight-rules") {
                 HighlightRuleRepository().loadEnabled(ReadBookConfig.durConfig.name)
@@ -1687,6 +1566,10 @@ class ReadBookController(
                         contentPaddingBottomPx = padding.bottom,
                         paginationStyle = style,
                         highlightRules = highlightRules,
+                        castOptions = io.legado.app.help.readaloud.cast.CastRenderOptions.load(
+                            candidate.book.bookUrl,
+                            chapterIndex,
+                        ),
                         onPage = { page ->
                             // 归因用：只标记本章第一页。三个 marker 把"第一页成形 → 主线程接管
                             // → 发布到窗口"切开，用于分析端到端可读页时间的构成。
@@ -1706,7 +1589,7 @@ class ReadBookController(
                                 ReaderPerfTrace.marker("pagination.target-page")
                             }
                             onReaderPageStreamed(
-                                streamGeneration, chapterIndex, page, firstPage,
+                                streamGeneration, paginationJob, chapterIndex, page, firstPage,
                             )
                         },
                     )
@@ -1718,20 +1601,26 @@ class ReadBookController(
                 withTimeoutOrNull(900L) { readerEntranceSettled.first { it } }
             }
             withContext(Main) {
+                // Stream callbacks are queued independently on Main. A same-chapter restart
+                // must reject both queued pages and the old batch, even with unchanged geometry.
+                if (readerChapterPaginationJobs[chapterIndex]?.job !== paginationJob) return@withContext
                 applyDirectReaderPaginationBatch(
                     environmentKey = environmentKey,
                     chapter = candidate,
-                    layoutIdentity = identity,
                     batch = collectLegacyReaderPaginationBatch(
                         chapterIndex,
                         listOf(chapterIndex to result),
                     ),
                     paginationGeneration = paginationGeneration,
                 )
-                if (readerChapterPaginationJobs[chapterIndex]?.job === coroutineContext[Job]) {
+                if (readerChapterPaginationJobs[chapterIndex]?.job === paginationJob) {
                     readerChapterPaginationJobs.remove(chapterIndex)
                 }
-                publishReaderPageWindow()
+                // Only a completed layout can advance the prefetch pipeline. Republishing
+                // a failed/empty batch here would immediately schedule the same missing chapter.
+                if (result is LegacyReaderChapterPaginationResult.Success && result.pages.isNotEmpty()) {
+                    publishReaderPageWindow()
+                }
             }
         }
         readerChapterPaginationJobs[chapterIndex] = ReaderChapterPaginationTask(identity, job)
@@ -1739,10 +1628,43 @@ class ReadBookController(
         job.start()
     }
 
+    /**
+     * 按现存页表发布窗口（durChapterIndex±1）的分页快照。
+     *
+     * 快照表被 clearReaderPagination() 清空后，若窗口内各章都已有整批页，渲染层不会再启动
+     * 任何分页任务，也没有批次提交来重新发布快照，朗读服务按章号取快照会是 null。
+     * 本方法与批次提交时的发布规则完全一致，可安全重复调用
+     * （publishReaderPagination 按章合并覆盖）。
+     */
+    private fun publishWindowReaderPaginationSnapshots(paginationGeneration: Long) {
+        val snapshotRange = ReadBook.durChapterIndex.let { it - 1..it + 1 }
+        ReadBook.publishReaderPagination(
+            directReaderPages.groupBy { it.id.chapterIndex }.mapNotNull { (index, pages) ->
+                // 与旧 `chapters` 窗口等价：只有窗口内的章才值得发快照。
+                if (index !in snapshotRange) return@mapNotNull null
+                // 排了一半的流出章不能当整章快照发布：pageStarts/contentEnd 是半成品，
+                // 朗读会提前截断，等各自的提交批次覆盖。
+                if (index in directReaderStreamingChapters) return@mapNotNull null
+                // 占位页不是分页结果：把它当成该章的分页快照会以 pageCount=1 污染整书页数
+                // 估算（wholeBookPageCoordinator.correctChapter 拿 realPageCount 校正）。
+                if (pages.all { it.isPlaceholder }) return@mapNotNull null
+                val contentEnd = ReaderPageNavigator.pageContext(
+                    pages,
+                    pages.lastIndex,
+                )?.endPosition ?: return@mapNotNull null
+                ReaderChapterPaginationSnapshot(
+                    chapterIndex = index,
+                    pageStarts = pages.map(ReaderPageNavigator::pageStart),
+                    contentEnd = contentEnd,
+                    generation = paginationGeneration,
+                )
+            }
+        )
+    }
+
     private fun applyDirectReaderPaginationBatch(
         environmentKey: String?,
         chapter: ReaderChapterInput,
-        layoutIdentity: LegacyReaderChapterLayoutIdentity,
         batch: LegacyReaderPaginationBatch,
         paginationGeneration: Long,
     ) {
@@ -1758,17 +1680,16 @@ class ReadBookController(
             batch.unsupportedChapters.forEach { (index, reason) ->
                 AppLog.putDebug("Compose reader pagination unsupported: chapter=$index reason=$reason")
             }
-            updateReaderPaginationError(batch.failureReasonFor(chapterIndex))
+            // 邻章只是后台预排：它的失败不能盖住仍可阅读的当前章。
+            // 真正切到该章后会按当前章重新调度，届时再显示重试入口。
+            if (chapterIndex == ReadBook.durChapterIndex) {
+                updateReaderPaginationError(batch.failureReasonFor(chapterIndex))
+            }
             val previousPageId = directReaderPageIndex
                 ?.let { directReaderPages.getOrNull(it)?.id }
             val previousPages = directReaderPages.associateBy { it.id }
-            // 页表替换前抓牢当前可见页：它所属的章不参与本批时（邻章提前排版落地），
-            // 提交后必须按对象身份原地锚定。曾经的事故：邻章批次用 locate(邻章, durChapterPos)
-            // 重锚当前下标，把已经稳定的画面整页拽进邻章（返程日志 "+189ms c3p5·批次换页"）。
-            val visiblePageBefore =
-                directReaderPageIndex?.let { index -> directReaderPages.getOrNull(index) }
             // 每个任务只负责自己那一章：其它章的页原样保留。旧 View 各章的 `TextChapter.textPages`
-            // 也是各自独立累积的，一章重排不会牵动别章的页，因此这里不再需要"整窗重建"分支。
+            // 也是各自独立累积的，一章重排不会牵动别章的页，因此这里不需要"整窗重建"分支。
             val replacementChapterIndexes = batch.pages.mapTo(mutableSetOf()) { it.id.chapterIndex }
             val retainedPages =
                 directReaderPages.filterNot { it.id.chapterIndex in replacementChapterIndexes }
@@ -1779,16 +1700,6 @@ class ReadBookController(
             }
             directReaderPages = (retainedPages + replacementPages)
                 .sortedWith(compareBy({ it.id.chapterIndex }, { it.id.pageIndex }))
-            // 记下这一批页的出处（本章内容身份 + 排版环境），暖页复用靠它判断依据有没有变。
-            // 身份用任务启动时那一份：这些页就是按它排出来的，此刻重算可能已经拿到重新加载后的
-            // 新正文，记成新的会把旧内容的页判成"出处对得上"直接复用。
-            // 排不出页（Unsupported / 排版异常）也记下：否则"没有出处"会让这一章在每次发布时
-            // 重排→失败→再发布，转成死循环；失败提示与手动重试仍由 updateReaderPaginationError
-            // 和 retryComposeReaderPagination 负责（重建会连出处一起作废）。
-            directReaderChapterPagesSource[chapterIndex] =
-                ReaderChapterPagesSource(layoutIdentity, environmentKey)
-            // 上游的按章内容身份表：真正排出页了才登记，供 ensureReaderChapterPagination
-            // 的"内容身份变化则摘该章旧页"循环比对。与上面的出处表各管各的失效维度。
             if (replacementChapterIndexes.isNotEmpty()) {
                 paginatedChapterIdentities[chapterIndex] = chapter.layoutIdentity()
             }
@@ -1799,54 +1710,16 @@ class ReadBookController(
             directReaderPageContexts.clear()
             directReaderChapterPageCounts =
                 directReaderPages.groupingBy { it.id.chapterIndex }.eachCount()
-            directReaderPageIndex = directReaderPages.takeIf { it.isNotEmpty() }?.let { pages ->
-                if (visiblePageBefore != null &&
-                    visiblePageBefore.id.chapterIndex != chapterIndex
-                ) {
-                    // 邻章批次：当前页原样保留在新页表里，按身份锚回原位，画面不许动。
-                    pages.indexOfFirst { it === visiblePageBefore }
-                        .takeIf { it >= 0 }
-                        ?: directReaderPageIndex?.coerceIn(pages.indices)
-                        ?: 0
-                } else {
-                    // 当前章在批次结果中缺失时 locate 会折叠成 0（全书首页）：保留原下标，
-                    // 由下面的 publishDirectReaderWindow 重新收敛到合法范围，避免跳回书首。
-                    ReaderPageNavigator.locateOrNull(
-                        pages,
-                        chapterIndex,
-                        ReadBook.durChapterPos
-                    )
-                        ?: directReaderPageIndex?.coerceIn(pages.indices)
-                        ?: 0
-                }
-            }
-            val snapshotRange = ReadBook.durChapterIndex.let { it - 1..it + 1 }
-            ReadBook.publishReaderPagination(
-                directReaderPages.groupBy { it.id.chapterIndex }.mapNotNull { (index, pages) ->
-                    // 与旧 `chapters` 窗口等价：只有窗口内的章才值得发快照。
-                    if (index !in snapshotRange) return@mapNotNull null
-                    // 占位页不是分页结果：把它当成该章的分页快照会以 pageCount=1 污染整书页数
-                    // 估算（wholeBookPageCoordinator.correctChapter 拿 realPageCount 校正）。
-                    // 邻章正文已缓存但还没排版时也会预置占位页，必须显式排除。
-                    if (pages.all { it.isPlaceholder }) return@mapNotNull null
-                    val contentEnd = ReaderPageNavigator.pageContext(
-                        pages,
-                        pages.lastIndex,
-                    )?.endPosition ?: return@mapNotNull null
-                    ReaderChapterPaginationSnapshot(
-                        chapterIndex = index,
-                        pageStarts = pages.map(ReaderPageNavigator::pageStart),
-                        contentEnd = contentEnd,
-                        generation = paginationGeneration,
-                    )
-                }
+            // 邻章或已经读过的章节可能晚于当前章完成排版，不能用任务的 chapterIndex
+            // 回拉可见页。当前章尚未排好时按页 ID 保留旧页，前章页数变化会使旧下标失效。
+            directReaderPageIndex = ReaderPageNavigator.locateAfterPagination(
+                pages = directReaderPages,
+                chapterIndex = ReadBook.durChapterIndex,
+                chapterPosition = ReadBook.durChapterPos,
+                previousPageId = previousPageId,
             )
+            publishWindowReaderPaginationSnapshots(paginationGeneration)
             directReaderPageIndex?.let(::publishDirectReaderWindow)
-            // 当前章页面被这批新页替换 = 新样式已烘进画面，通知标记域撤掉粘性预览。
-            // 邻章批次不通知：它们的提交与当前章可见内容无关。
-            if (chapterIndex in replacementChapterIndexes) {
-                viewModel.onComposeReaderPagesCommitted(chapterIndex)
-            }
         }
     }
 
@@ -1902,18 +1775,7 @@ class ReadBookController(
         // java.getThemeConfig() 产出与主题相关的图片），而不是因为清了解码缓存。
         // Compose 不重建 Activity，这里走与样式方案切换相同的路径：
         // 重下当前窗口图片 → 替换位图 → loadContent(false) 重新处理正文并重排。
-        if (modeChanged) {
-            // 正文/标题/文字阴影/页底下划线四类色已经在上面原地改过，页面背景和九宫格底图是绘制期
-            // 取的，都不必重排。剩下的是**排版期才按日夜解析一次、烧进页里**的那些：高亮规则的
-            // `*Night` 字色/底色/下划线（`LegacyReaderStyleRangeMapper.resolveModeColor`）和替换
-            // 规则定色的文本区间。排版环境 key 不含颜色，所以只重发窗口会原样复用暖页 ——
-            // 表现就是「切了日夜，规则色要退出书籍重进才变」。系统深色跟随与主题设置页只走到这里
-            // （不经 ReadConfigUpdateBus），所以这里按日夜按钮相同的语义作废一次：暖页出处清空后
-            // 当前章与邻章都会按新模式重排，旧页仍留在表上撑画面，不会闪加载页。
-            val nightTheme = ReadStyleResolver.isNightTheme()
-            if (directReaderPagesNightTheme != nightTheme) rebuildDirectReaderPages()
-            refreshInlineImagesThenReload()
-        }
+        if (modeChanged) refreshInlineImagesThenReload()
         upSystemUiVisibility()
         LogUtils.d(
             "ReadBookTheme",
@@ -1928,9 +1790,6 @@ class ReadBookController(
     }
 
     fun onRouteInitialized() {
-        // 初始化已走完:若正文归属仍与路由请求不符(书不存在、回退到 ReadBook.book 等),
-        // 不能再把画面永远拦在加载页,摘闸回到原有行为。
-        pendingEntranceBookUrl = null
         applyReadBrightness()
         upScreenTimeOut()
     }
@@ -1944,6 +1803,7 @@ class ReadBookController(
         registerTimeBatteryReceiver()
         networkChangedListener.onNetworkChanged = viewModel::onNetworkChanged
         networkChangedListener.register()
+        readerSessionViewModel.requestRedraw()
     }
 
     /** Release listeners even if the route's effect collector has already stopped. */
@@ -2045,7 +1905,7 @@ class ReadBookController(
     }
 
     fun onMarkingClick(markingId: String) {
-        viewModel.onIntent(ReadBookIntent.EditMarking(markingId))
+        viewModel.onIntent(ReadBookIntent.OpenQuickMarkingEdit(markingId))
     }
 
     fun oldClickImg(src: String): Boolean {
@@ -2139,6 +1999,16 @@ class ReadBookController(
             }
         }
 
+    fun openQuickMarking(): Boolean {
+        val selection = composeSelectionBookmark(bodyOnly = true)
+        if (selection == null) {
+            activity.toastOnUi(R.string.create_bookmark_error)
+            return false
+        }
+        viewModel.onIntent(ReadBookIntent.OpenQuickMarking(selection))
+        return true
+    }
+
     fun onMenuItemSelected(itemId: Int): Boolean {
         when (itemId) {
             R.id.menu_aloud -> {
@@ -2161,29 +2031,6 @@ class ReadBookController(
             R.id.menu_mark -> {
                 composeSelectionBookmark(bodyOnly = true)?.let {
                     viewModel.onIntent(ReadBookIntent.OpenMarking(it))
-                    // 菜单位置即选区位置：在菜单被 finally 清掉前派生锚点，
-                    // 让笔记弹层悬浮在选中的文段旁而不是挡住正文。
-                    _textMenuState.value?.let { menu ->
-                        viewModel.onIntent(
-                            ReadBookIntent.SetMarkingSheetAnchor(
-                                ReaderSelectionMenuAnchor(
-                                    startX = menu.startX.toFloat(),
-                                    startTopY = menu.startTopY.toFloat(),
-                                    startBottomY = menu.startBottomY.toFloat(),
-                                    endX = menu.endX.toFloat(),
-                                    endBottomY = menu.endBottomY.toFloat(),
-                                )
-                            )
-                        )
-                    }
-                } ?: activity.toastOnUi(R.string.create_bookmark_error)
-                return true
-            }
-
-            R.id.menu_share_card -> {
-                // 直接用选区造的临时 Bookmark（不落库）出分享卡片，跳过"先存笔记"这一步
-                composeSelectionBookmark()?.let {
-                    viewModel.onIntent(ReadBookIntent.GenerateShareCardFromSelection(it))
                 } ?: activity.toastOnUi(R.string.create_bookmark_error)
                 return true
             }
@@ -2234,58 +2081,47 @@ class ReadBookController(
                 return true
             }
 
-            R.id.menu_ai_character -> {
-                viewModel.onIntent(ReadBookIntent.OpenCharacterQuery(selectedText.trim()))
-                return true
-            }
+            R.id.menu_insert_bgm_before -> return openBgmSceneAtSelection(before = true)
 
-            R.id.menu_set_protagonist -> {
-                setProtagonistBySelection(selectedText)
-                return true
-            }
+            R.id.menu_insert_bgm_after -> return openBgmSceneAtSelection(before = false)
         }
         return false
     }
 
-    private fun setProtagonistBySelection(name: String) {
-        val book = ReadBook.book ?: return
-        viewModel.viewModelScope.launch(Dispatchers.IO) {
-            val dao = appDb.bookKnowledgeDao
-            val existing = dao.getCharacterProfile(book.bookUrl, name)
-                ?: dao.getCharacterByNameIncludeDeleted(book.bookUrl, name)
-            if (existing != null) {
-                dao.upsertCharacterProfile(
-                    existing.copy(
-                        status = io.legado.app.data.entities.BookCharacterProfile.STATUS_ACTIVE,
-                        isProtagonist = true,
-                    )
-                )
-            } else {
-                val newProfile = io.legado.app.data.entities.BookCharacterProfile(
-                    id = java.util.UUID.randomUUID().toString(),
-                    bookUrl = book.bookUrl,
-                    name = name,
-                    isProtagonist = true,
-                )
-                dao.upsertCharacterProfile(newProfile)
-            }
-            withContext(Dispatchers.Main) {
-                // 主角名单变了，跟随主角的高亮正则展开缓存必须失效后重排
-                HighlightProtagonistPatterns.invalidate()
-                if (viewModel.isInitFinish) {
-                    ReadBook.loadContent(resetPageOffset = false)
-                }
-                activity.toastOnUi("已将「$name」设为主角")
+    /**
+     * 手动分配背景音乐场景：以选区所在的段落为锚，打开与点击 ♪ 胶囊**同一个**场景弹层
+     * （[ReadBookSheet.BgmScene]）——挑池、写库、重载本章都由那条路做，这里只负责定位。
+     *
+     * 「前」= 胶囊插在这一段上面，场景从这一段起生效；「后」= 插到下一段上面，
+     * 也就是这一场景到下一段才切换。起点含义与朗读侧一致：
+     * 见 [io.legado.app.help.readaloud.playback.ReadAloudBgmPlayer] 的 `ordinalAt` 匹配。
+     *
+     * 段序号来自 [io.legado.app.help.readaloud.cast.BgmSceneStore.positionsToOrdinals]，
+     * 与胶囊渲染、AI 分配同一套计数（空白段不编号、标题不算段）。
+     */
+    private fun openBgmSceneAtSelection(before: Boolean): Boolean {
+        val selection = composeSelection
+        // 选区含标题时 bodyStart 会被压成 0，落不到正确的段上，直接判不可用
+        val bodyStart = selection?.bodyStart?.takeIf { !selection.includesTitle }
+        val positions = ReadBook.readerChapterInputWindow.current?.source
+            ?.let { BgmSceneStore.positionsToOrdinals(it.semanticContent) }
+            .orEmpty()
+        var ordinal = -1
+        if (bodyStart != null) {
+            positions.forEach { (position, value) ->
+                if (position <= bodyStart) ordinal = value
             }
         }
+        val target = ordinal + if (before) 0 else 1
+        if (target !in 0..(positions.lastOrNull()?.second ?: -1)) {
+            activity.toastOnUi(R.string.bgm_scene_insert_error)
+            return false
+        }
+        viewModel.onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.BgmScene(target)))
+        return true
     }
 
     fun onMenuActionFinally() {
-        cancelComposeSelection()
-    }
-
-    /** 清掉画布上的用户选区及其菜单。 */
-    private fun cancelComposeSelection() {
         dismissTextActionMenu()
         composeSelection = null
         composeSelectedText = null
@@ -2299,19 +2135,28 @@ class ReadBookController(
             val items = mutableListOf<ActionMenuItem>()
             items.add(ActionMenuItem(R.id.menu_copy, activity.getString(android.R.string.copy)))
             items.add(ActionMenuItem(R.id.menu_share_str, activity.getString(R.string.share)))
-            items.add(ActionMenuItem(R.id.menu_share_card, activity.getString(R.string.share_card)))
             items.add(ActionMenuItem(R.id.menu_browser, activity.getString(R.string.browser)))
             items.add(ActionMenuItem(R.id.menu_aloud, activity.getString(R.string.read_aloud)))
             items.add(ActionMenuItem(R.id.menu_bookmark, activity.getString(R.string.bookmark)))
             items.add(ActionMenuItem(R.id.menu_mark, activity.getString(R.string.menu_mark)))
             items.add(ActionMenuItem(R.id.menu_dict, activity.getString(R.string.dict)))
-            items.add(ActionMenuItem(R.id.menu_ai_character, activity.getString(R.string.character_query)))
             items.add(ActionMenuItem(R.id.menu_replace, activity.getString(R.string.replace)))
             items.add(ActionMenuItem(R.id.menu_edit, activity.getString(R.string.edit)))
             items.add(ActionMenuItem(R.id.menu_ai_clean, activity.getString(R.string.ai_text_clean)))
             items.add(ActionMenuItem(R.id.menu_ai_rewrite, activity.getString(R.string.ai_text_rewrite)))
             items.add(ActionMenuItem(R.id.menu_search_content, activity.getString(R.string.search_content)))
-            items.add(ActionMenuItem(R.id.menu_set_protagonist, "主角"))
+            items.add(
+                ActionMenuItem(
+                    R.id.menu_insert_bgm_before,
+                    activity.getString(R.string.insert_bgm_before),
+                )
+            )
+            items.add(
+                ActionMenuItem(
+                    R.id.menu_insert_bgm_after,
+                    activity.getString(R.string.insert_bgm_after),
+                )
+            )
 
             val thirdPartyItems = mutableListOf<ActionMenuItem>()
             runCatching {
@@ -2425,7 +2270,7 @@ class ReadBookController(
         onMenuActionFinally()
     }
 
-    // ── ReadBook.ReaderRenderCallback（渲染子集，Track B2 从 ViewModel 下沉）──
+    // ── ReadBook.ReaderRenderCallback（渲染子集）──
     //
     // ReadBook 可在 IO 协程调用这些回调；统一经主线程 handler 发布 Compose 页面状态。
 
@@ -2454,11 +2299,11 @@ class ReadBookController(
         }
     }
 
-    // R2.3：pageChanged / contentLoadFinish / onLayoutPageCompleted 的 Effect 只有本类
+    // pageChanged / contentLoadFinish / onLayoutPageCompleted 的 Effect 只有本类
     // 自产自销（postRender → 本类 handleEffect），从不经过 ViewModel 的 _effects。
-    // 它们不属于 VM 的对外协议，故内联到渲染方法里，三个 Effect 类型随之从
-    // ReadBookEffect 删除。仍在 postRender 上的 UpContent/UpPageAnim/CancelSelect
-    // 有 VM/delegate 侧的生产者，必须留在 Effect 里。
+    // 它们不属于 VM 的对外协议，所以内联在渲染方法里、不在 ReadBookEffect 中。
+    // 仍在 postRender 上的 UpContent/UpPageAnim/CancelSelect 有 VM/delegate 侧的
+    // 生产者，必须留在 Effect 里。
 
     override fun pageChanged() {
         handler.post {
@@ -2522,7 +2367,7 @@ class ReadBookController(
                         ConfigUpdateAction.UpdatePageSlopSquare,
                         ConfigUpdateAction.RefreshInlineImages -> Unit
 
-                        // 旧事件 5。带 RefreshInlineImages 的路径（样式方案/预设切换）由
+                        // 带 RefreshInlineImages 的路径（样式方案/预设切换）由
                         // refreshInlineImagesThenReload() 在图片替换完成后统一重载，避免两次重排。
                         ConfigUpdateAction.ReloadContent -> if (
                             !refreshInlineImages && viewModel.isInitFinish
@@ -2565,7 +2410,6 @@ class ReadBookController(
             is ReadBookEffect.UpTime, is ReadBookEffect.UpBattery -> {
                 // 时间/电量是烘进页眉页脚 decoration 的动态信息（`directReaderWindow` 里现建），
                 // 必须重发窗口才会刷新；页表还没落地（装载期整窗占位）时也要强制重建。
-                guardDirectReaderPagesBookIdentity()
                 val index = directReaderPageIndex
                 if (index != null && directReaderPages.isNotEmpty()) {
                     publishDirectReaderWindow(index)
@@ -2578,7 +2422,12 @@ class ReadBookController(
                 ReadBook.loadContent(false)
             }
 
-            is ReadBookEffect.CancelSelect -> cancelComposeSelection()
+            is ReadBookEffect.CancelSelect -> {
+                dismissTextActionMenu()
+                composeSelection = null
+                composeSelectedText = null
+                _composeSelectionCancels.tryEmit(Unit)
+            }
             is ReadBookEffect.MenuImageStyleChanged -> rebuildDirectReaderPages()
             is ReadBookEffect.InvalidateReaderImage -> {
                 activity.lifecycleScope.launch { replaceReaderImages(setOf(effect.source)) }
@@ -2597,9 +2446,9 @@ class ReadBookController(
                 activity.window.attributes = lp
             }
 
-            // ── Launcher-dependent effects — now handled by route layer ──
+            // ── 依赖 Launcher 的 Effect：由路由层处理，不在本类 ──
 
-            // ── DB query + bookmark effects — now handled by ViewModel ──
+            // ── 查库 + 书签的 Effect：由 ViewModel 处理，不在本类 ──
 
             // ── Phase 2: ViewRefs-only effects ──
             is ReadBookEffect.UpSeekBar -> { /* no-op: Compose menu reads from state */
@@ -2654,19 +2503,14 @@ class ReadBookController(
                     publishReaderPageWindow()
                 } else {
                     // 定位只对本次跳章有效；openChapter 成功仍未消费时放弃，
-                    // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置。
-                    // 注意：不能在此回调里清除 pendingSearchNavigation——openChapter 的
-                    // success 回调在 layoutLoadedChapter 完成后、readerChapterInputChanged
-                    // 触发之前执行，提前清除会导致 resolveSearchNavigation 永远不被调用，
-                    // 阅读器停留在 openChapter 传入的初始位置（章首）。
+                    // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置
                     ReadBook.openChapter(
                         result.chapterIndex,
                         // Search offsets may include a title prefix. The body offset is resolved
                         // after the cached chapter input has been published.
                         0,
                     ) {
-                        // 如果 pendingSearchNavigation 已被 readerChapterInputChanged 消费，
-                        // 这里什么都不做；否则保留它，让后续 input changed 回调处理。
+                        pendingSearchNavigation = null
                     }
                 }
             }
@@ -2725,10 +2569,14 @@ class ReadBookController(
             is ReadBookEffect.OpenReadStyleExport,
             is ReadBookEffect.OpenMenuCustomIconPicker,
             is ReadBookEffect.OpenTitleBarCustomIconPicker,
-                // 朗读设置是 Navigation 3 目的地，由路由层导航，这里不处理；播放浮层走 OverlayBus
-            is ReadBookEffect.OpenReadAloudConfig,
+            is ReadBookEffect.OpenSystemTtsSettings,
+            ReadBookEffect.OpenTtsEnginesAndVoices,
+            ReadBookEffect.OpenTtsCache,
+            is ReadBookEffect.OpenBookVoiceCasting,
+            is ReadBookEffect.OpenReadAloudSubPage,
             is ReadBookEffect.OpenHighlightRuleImportPicker,
             is ReadBookEffect.OpenHighlightRuleExportPicker,
+            is ReadBookEffect.TtsCacheCleared,
             is ReadBookEffect.ExportJson,
             // DB query + bookmark effects — handled by ViewModel, ignored here
             is ReadBookEffect.MenuChangeSource,
@@ -2738,17 +2586,12 @@ class ReadBookController(
                 // Handled by route/ViewModel — no-op here
             }
 
-            is ReadBookEffect.UpBookmarkBadge ->
-                directReaderPageIndex?.let(::publishDirectReaderWindow)
-
-            // 备注快照变了（保存/删除备注、目录 Sheet 改备注）：重发窗口让角标重算。
-            is ReadBookEffect.UpMarkingNoteBadges ->
-                directReaderPageIndex?.let(::publishDirectReaderWindow)
+            is ReadBookEffect.UpBookmarkBadge -> directReaderPageIndex?.let(::publishDirectReaderWindow)
         }
     }
 
     fun updateReadAloudProgress(chapterStart: Int) {
-        if (!BaseReadAloudService.isPlay()) return
+        if (!ReadBook.isCurrentBookReadAloud || !BaseReadAloudService.isPlay()) return
         // 只更新朗读高亮锚点。可见页的移动由朗读服务驱动（moveToReadAloudPage →
         // moveToNextPage → upContent）与用户导航负责；这里若再按朗读位置 locate
         // 回迁可见页，进入阅读器时会把页面先拉回朗读所在的上一段（跨页段落的
@@ -2783,10 +2626,7 @@ class ReadBookController(
     private fun toggleReadAloud() {
         viewModel.onIntent(ReadBookIntent.StopAutoPage)
         when {
-            // 还在生成朗读计划（AI 分析）时点按钮就是取消准备，走 pause 会被随后的 play() 吞掉
-            BaseReadAloudService.isPreparing -> ReadAloud.stop(activity)
-            !BaseReadAloudService.isRun -> {
-                ReadAloud.upReadAloudClass()
+            !ReadBook.isCurrentBookReadAloud -> {
                 if (!readAloudFromComposeVisibleStart()) ReadBook.readAloud()
             }
 
@@ -2801,7 +2641,7 @@ class ReadBookController(
     }
 
     private fun toggleAutoPage() {
-        ReadAloud.stop(activity)
+        if (ReadBook.isCurrentBookReadAloud) ReadAloud.stop(activity)
         if (isAutoPage) {
             stopAutoPage()
         } else {
@@ -3009,8 +2849,8 @@ class ReadBookController(
      * 翻页放行业务条件，对照旧 View `ReadView.hasNextChapter()` / `hasPrevChapter()`：
      * 只看书里业务上还有没有邻章，与邻章是否已完成 Canvas 排版无关。邻章未排版时
      * [completeComposePageTurn] 会走 [crossComposeChapterBoundary] 预置加载占位页
-     * 或直接启动该章排版；早期实现用 window.next != null 放行，导致这一窗口期
-     * 只能弹出"没有下一页"并且不会触发装载（表现为读完本章无法进入下一章）。
+     * 或直接启动该章排版。放行条件不能用 window.next != null：未落页的窗口期里它为 null，
+     * 会把装载挡掉，只剩"没有下一页"提示。
      */
     fun hasNextComposeChapter(): Boolean =
         ReadBook.durChapterIndex < ReadBook.simulatedChapterSize - 1
@@ -3090,10 +2930,9 @@ class ReadBookController(
                 viewModel.startBackupJob()
                 return window
             }
-        // ReadBook has promoted a cached adjacent chapter input, but its Canvas pages may still
-        // be shaping in the background. Start that pagination; the turn itself is carried by the
-        // “加载数据中…” placeholder page below, exactly like the View reader's page factory
-        // fallback（`TextPageFactory.nextPage/prevPage` 在邻章还没有页时给出兜底页）。
+        // ReadBook 已把缓存过的邻章输入提为当前，但它的 Canvas 页可能还在后台成形：启动该章
+        // 排版，本次翻页由下面的"加载数据中…"占位页承接（对照旧 View
+        // `TextPageFactory.nextPage/prevPage` 在邻章还没有页时给出兜底页）。
         if (ReadBook.readerChapterInputWindow.current?.chapter?.index == targetChapterIndex) {
             publishReaderPageWindow()
         }
@@ -3239,13 +3078,12 @@ class ReadBookController(
         // 旧 View 里消息页/占位页就是普通 TextPage（`TextPageFactory` 直接返回），
         // `PageView.setContent` 照常 `setProgress` → 页眉页脚、页码都在。这里同样给它们
         // 生成 decoration，否则画布只画 `page.decoration`（空）→ 这些页的 chrome 整体消失。
-        val dynamicState = viewModel.uiState.value
         return page.copy(
             decoration = LegacyReaderPageDecorationFactory.create(
                 page = page,
                 chapterPageCount = directReaderChapterPageCounts[page.id.chapterIndex] ?: 0,
-                time = dynamicState.time,
-                batteryPercent = dynamicState.battery,
+                time = viewModel.pageTime,
+                batteryPercent = viewModel.pageBatteryPercent,
                 hasBookmark = false,
                 contentPaddingLeftPx = viewport.contentPadding.left,
                 contentPaddingTopPx = viewport.contentPadding.top,
@@ -3443,7 +3281,6 @@ data class ActionMenuItem(
             when (id) {
                 R.id.menu_copy -> "menu_copy"
                 R.id.menu_share_str -> "menu_share_str"
-                R.id.menu_share_card -> "menu_share_card"
                 R.id.menu_browser -> "menu_browser"
                 R.id.menu_aloud -> "menu_aloud"
                 R.id.menu_bookmark -> "menu_bookmark"
@@ -3454,7 +3291,8 @@ data class ActionMenuItem(
                 R.id.menu_ai_clean -> "menu_ai_clean"
                 R.id.menu_ai_rewrite -> "menu_ai_rewrite"
                 R.id.menu_search_content -> "menu_search_content"
-                R.id.menu_set_protagonist -> "menu_set_protagonist"
+                R.id.menu_insert_bgm_before -> "menu_insert_bgm_before"
+                R.id.menu_insert_bgm_after -> "menu_insert_bgm_after"
                 else -> id.toString()
             }
         }

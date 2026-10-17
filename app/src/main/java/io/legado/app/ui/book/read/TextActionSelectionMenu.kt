@@ -42,12 +42,13 @@ import androidx.compose.material.icons.outlined.FindReplace
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PersonSearch
+import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,6 +81,7 @@ import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ProvideAppDensity
 import io.legado.app.ui.widget.components.card.NormalCard
+import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.text.AppText
 import kotlin.math.roundToInt
 
@@ -333,7 +335,7 @@ private fun MultiLineMenuView(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
+            AppIcon(
                 imageVector = Icons.Default.Settings,
                 contentDescription = stringResource(R.string.edit_menu_items),
                 tint = LegadoTheme.colorScheme.onSurface,
@@ -404,7 +406,7 @@ private fun QuickMenuView(
                 .padding(start = 12.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
+            AppIcon(
                 imageVector = if (hasMore) Icons.Default.MoreVert else Icons.Default.Settings,
                 contentDescription = stringResource(if (hasMore) R.string.more_menu else R.string.setting),
                 tint = LegadoTheme.colorScheme.onSurface,
@@ -437,7 +439,7 @@ private fun QuickMenuItem(
     ) {
         val builtInIcon = if (showIcon) item.builtInIcon() else null
         if (builtInIcon != null) {
-            Icon(
+            AppIcon(
                 imageVector = builtInIcon,
                 contentDescription = item.title,
                 tint = LegadoTheme.colorScheme.onSurface,
@@ -483,7 +485,7 @@ private fun MoreMenuView(
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            Icon(
+            AppIcon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.back),
                 tint = LegadoTheme.colorScheme.onSurface,
@@ -525,7 +527,7 @@ private fun MoreMenuView(
                 .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
+            AppIcon(
                 imageVector = Icons.Default.Settings,
                 contentDescription = stringResource(R.string.edit_menu_items),
                 tint = LegadoTheme.colorScheme.onSurface,
@@ -556,7 +558,7 @@ private fun MoreMenuItem(
     ) {
         val builtInIcon = if (showIcon) item.builtInIcon() else null
         if (builtInIcon != null) {
-            Icon(
+            AppIcon(
                 imageVector = builtInIcon,
                 contentDescription = item.title,
                 tint = LegadoTheme.colorScheme.onSurface,
@@ -594,6 +596,9 @@ private fun ActionMenuItem.builtInIcon(): ImageVector? = when (id) {
     R.id.menu_ai_character -> Icons.Outlined.PersonSearch
     R.id.menu_search_content -> Icons.Outlined.Search
     R.id.menu_set_protagonist -> Icons.Outlined.Star
+    // 手动分配背景音乐场景：两个都是音乐图标，前/后靠文案区分
+    R.id.menu_insert_bgm_before -> Icons.Outlined.QueueMusic
+    R.id.menu_insert_bgm_after -> Icons.Outlined.PlaylistAdd
     else -> null
 }
 

@@ -2,6 +2,20 @@ package io.legado.app.ui.book.readaloud.player
 
 import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 
+internal enum class ReadAloudPlayerConfigHostAction {
+    OpenTtsEnginesAndVoices,
+    OpenTtsCache,
+    OpenBookVoiceCasting,
+    OpenVoicePool,
+    OpenBgmPool,
+    OpenCapsuleStyle,
+    OpenSystemTtsSettings,
+    OpenPreDownloadNumPicker,
+    OpenPreSynthesisConcurrencyPicker,
+    OpenParagraphIntervalPicker,
+    OpenCacheCleanTimePicker,
+}
+
 /**
  * 把朗读设置页的 [ReadAloudConfigIntent] 翻译成全局设置写入或跳页 Effect。
  *

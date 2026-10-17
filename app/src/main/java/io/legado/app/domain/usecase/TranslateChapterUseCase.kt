@@ -12,6 +12,7 @@ import io.legado.app.domain.gateway.TranslationCacheGateway
 import io.legado.app.domain.gateway.TranslationSettingsGateway
 import io.legado.app.domain.model.AiFailureKind
 import io.legado.app.domain.model.AiGenerateRequest
+import io.legado.app.domain.model.AiHttpException
 import io.legado.app.domain.model.AiMessage
 import io.legado.app.domain.model.AiMessageRole
 import io.legado.app.domain.model.AiTaskPresetConfig

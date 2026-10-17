@@ -120,6 +120,16 @@ internal fun aiModelsEndpointCandidates(provider: AiProviderConfig): List<String
     return candidates.toList()
 }
 
+private fun isRetryable(e: Exception, retryableStatusCodes: Set<Int>): Boolean {
+    // Prefer the structured status code: messages may embed the raw response body, so scanning
+    // the text for a retryable status would misclassify permanent errors.
+    if (e is AiHttpException) return e.statusCode in retryableStatusCodes
+    val message = e.message ?: return false
+    return retryableStatusCodes.any { code ->
+        message.contains("HTTP $code") || message.contains("$code:")
+    }
+}
+
 /**
  * 按候选端点依次拉取模型列表：404/405 表示该候选不存在，换下一个；401/403 鉴权失败
  * 直接抛出（换端点结果相同）；其余错误记录后换下一个，全部失败抛最后一个。

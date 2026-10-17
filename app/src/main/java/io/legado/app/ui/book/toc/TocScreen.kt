@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.toc
 
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -36,6 +35,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.BookmarkAdd
@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
@@ -53,8 +54,6 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,21 +87,16 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.Book
-import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.help.book.isLocal
-import io.legado.app.help.book.isLocalTxt
-import io.legado.app.ui.book.read.MarkingUiState
-import io.legado.app.ui.book.read.sheet.MarkingSheet
-import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.replace.ReplaceEditRoute
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveContentPaddingOnlyVertical
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.ActionItem
 import io.legado.app.ui.widget.components.AppFloatingActionButtonMenu
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.ChapterStatusIcons
 import io.legado.app.ui.widget.components.CollapsibleHeader
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.FabMenuItem
@@ -115,6 +109,7 @@ import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.divider.PillDivider
 import io.legado.app.ui.widget.components.divider.PillHeaderDivider
+import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
@@ -125,8 +120,6 @@ import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.DynamicTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
-import io.legado.app.ui.widget.components.topbar.TopBarActionButton
-import io.legado.app.ui.widget.components.icon.AppIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -145,6 +138,11 @@ fun TocRouteScreen(
     onChapterClick: (Int) -> Unit,
     onOpenReplaceRule: (ReplaceEditRoute?) -> Unit,
     onBookmarkClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
+    /**
+     * 「本地目录规则」入口：宿主导航到规则列表的选择模式，选好后由宿主的
+     * `ConsumeBookPageResult` 回灌 `TocIntent.SaveTocRegex`。
+     */
+    onPickLocalTocRule: (String?) -> Unit,
 ) {
     val state by viewModel.screenState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -154,18 +152,6 @@ fun TocRouteScreen(
     ) { uri: Uri? ->
         uri?.let { viewModel.onIntent(TocIntent.ExportBookmarks(it, pendingExportMarkdown)) }
     }
-    val tocRegexLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            viewModel.onIntent(
-                TocIntent.SaveTocRegex(result.data?.getStringExtra("tocRegex").orEmpty())
-            )
-        }
-    }
-    val tocRulePreviewLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { /* 规则变化由 ViewModel 直接盯规则表处理，这里不需要回传结果 */ }
     LaunchedEffect(bookUrl) {
         bookUrl?.let { viewModel.onIntent(TocIntent.LoadBook(it)) }
     }
@@ -184,21 +170,7 @@ fun TocRouteScreen(
         onChapterClick = onChapterClick,
         onOpenReplaceRule = onOpenReplaceRule,
         onBookmarkClick = onBookmarkClick,
-        onEditLocalTocRule = { regex ->
-            tocRegexLauncher.launch(
-                Intent(context, TxtTocRuleActivity::class.java).putExtra("tocRegex", regex)
-            )
-        },
-        onOpenTocRulePreview = { isLocal, bookUrl, tocRegex ->
-            val intent = Intent(
-                context,
-                io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewActivity::class.java
-            ).apply {
-                putExtra("bookUrl", bookUrl)
-                tocRegex?.let { putExtra("tocRegex", it) }
-            }
-            if (isLocal) tocRegexLauncher.launch(intent) else tocRulePreviewLauncher.launch(intent)
-        },
+        onEditLocalTocRule = onPickLocalTocRule,
         onExportBookmarks = { isMarkdown, fileName ->
             pendingExportMarkdown = isMarkdown
             exportLauncher.launch(fileName)
@@ -217,7 +189,6 @@ fun TocScreen(
     onOpenReplaceRule: (ReplaceEditRoute?) -> Unit,
     onBookmarkClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
     onEditLocalTocRule: (String?) -> Unit,
-    onOpenTocRulePreview: (isLocal: Boolean, bookUrl: String, tocRegex: String?) -> Unit,
     onExportBookmarks: (isMarkdown: Boolean, fileName: String) -> Unit,
     initialPage: Int = 0,
 ) {
@@ -244,7 +215,6 @@ fun TocScreen(
     val focusRequester = remember { FocusRequester() }
 
     var editingBookmark by remember { mutableStateOf<Bookmark?>(null) }
-    var editingMarking by remember { mutableStateOf<BookMarking?>(null) }
 
     val useReplace = state.useReplace
     val showWordCount = state.showWordCount
@@ -256,6 +226,8 @@ fun TocScreen(
     val invertSelectionText = stringResource(R.string.invert_selection)
     val selectFollowingText = stringResource(R.string.select_following)
     val addBookmarkText = stringResource(R.string.bookmark_add)
+    val deleteAssignmentText = stringResource(R.string.cast_assignment_delete)
+    val deleteAudioText = stringResource(R.string.read_aloud_audio_download_delete)
     val bookmarkDefaultFileName = stringResource(R.string.bookmark)
 
     val topBarTitle = remember(
@@ -354,7 +326,9 @@ fun TocScreen(
         state.selectedIds,
         invertSelectionText,
         selectFollowingText,
-        addBookmarkText
+        addBookmarkText,
+        deleteAssignmentText,
+        deleteAudioText
     ) {
         listOf(
             ActionItem(
@@ -371,6 +345,16 @@ fun TocScreen(
                 text = addBookmarkText,
                 icon = Icons.Default.BookmarkAdd,
                 onClick = { onIntent(TocIntent.AddBookmarksForSelected) }
+            ),
+            ActionItem(
+                text = deleteAssignmentText,
+                icon = Icons.Default.Groups,
+                onClick = { onIntent(TocIntent.DeleteAssignmentsForSelected) }
+            ),
+            ActionItem(
+                text = deleteAudioText,
+                icon = Icons.Default.Download,
+                onClick = { onIntent(TocIntent.DeleteAudioDownloadsForSelected) }
             )
         )
     }
@@ -440,21 +424,6 @@ fun TocScreen(
                 onSearchQueryChange = { onIntent(TocIntent.SetSearchQuery(it)) },
                 searchPlaceholder = stringResource(R.string.search_chapters),
                 onClearSelection = { onIntent(TocIntent.ClearSelection) },
-                topBarActions = {
-                    if (pagerState.currentPage == 0 && book != null) {
-                        TopBarActionButton(
-                            onClick = {
-                                onOpenTocRulePreview(
-                                    book.isLocal,
-                                    book.bookUrl,
-                                    if (book.isLocalTxt) book.tocUrl else null,
-                                )
-                            },
-                            imageVector = AppIcons.Filter,
-                            contentDescription = stringResource(R.string.toc_rule_preview),
-                        )
-                    }
-                },
                 dropDownMenuContent = { dismiss ->
                     when (pagerState.currentPage) {
                         0 -> {
@@ -697,8 +666,8 @@ fun TocScreen(
                     1 -> BookmarkListContent(
                         bookmarks = uiState.bookmarks,
                         book = book,
-                        onBookmarkClick = onBookmarkClick,
-                        onBookmarkLongClick = { bookmark ->
+                        onBookmarkLongClick = onBookmarkClick,
+                        onBookmarkClick = { bookmark ->
                             editingBookmark = bookmark
                         },
                         contentPadding = adaptiveContentPaddingOnlyVertical(
@@ -711,12 +680,7 @@ fun TocScreen(
                         markings = uiState.markings,
                         book = book,
                         onMarkingClick = onBookmarkClick,
-                        onMarkingLongClick = { marking ->
-                            editingMarking = marking
-                        },
-                        // 笔记是卡片（NormalCard），需要标准横向内容边距让卡片浮起、不贴屏幕边；
-                        // 章节/书签是整行无边框列表，保持 onlyVertical 全出血。
-                        contentPadding = adaptiveContentPadding(
+                        contentPadding = adaptiveContentPaddingOnlyVertical(
                             top = padding.calculateTopPadding(),
                             bottom = 120.dp
                         )
@@ -782,23 +746,6 @@ fun TocScreen(
                 editingBookmark = null
             }
         )
-
-        editingMarking?.let { marking ->
-            MarkingSheet(
-                show = true,
-                state = MarkingUiState(editing = marking),
-                onDismissRequest = { editingMarking = null },
-                onSave = { _, note ->
-                    onIntent(TocIntent.SaveMarkingNote(marking.id, note))
-                    editingMarking = null
-                },
-                onDelete = {
-                    onIntent(TocIntent.DeleteMarking(marking.id))
-                    editingMarking = null
-                },
-                showStyleConfig = false,
-            )
-        }
     }
 }
 
@@ -917,6 +864,9 @@ fun ChapterItem(
     val downloadingDescription = stringResource(R.string.a11y_downloading)
     val downloadFailedDescription = stringResource(R.string.a11y_download_failed)
     val notDownloadedDescription = stringResource(R.string.a11y_not_downloaded)
+    val assignmentStateDescription = stringResource(R.string.cast_assignment_state)
+    val audioDownloadStateDescription =
+        stringResource(R.string.read_aloud_audio_download_state)
     val wordCountDescription = item.wordCount?.let {
         stringResource(R.string.a11y_word_count, it)
     }
@@ -934,6 +884,8 @@ fun ChapterItem(
         if (item.isVip && !item.isPay) add(lockedDescription)
         if (showWordCount) wordCountDescription?.let(::add)
         downloadStateDescription?.let(::add)
+        if (item.hasCastAssignment) add(assignmentStateDescription)
+        if (item.hasAudioDownload) add(audioDownloadStateDescription)
     }.joinToString(", ")
     val canDownload = item.downloadState == DownloadState.NONE ||
             item.downloadState == DownloadState.ERROR
@@ -968,7 +920,7 @@ fun ChapterItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (item.isVip && !item.isPay) {
-                        Icon(
+                        AppIcon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
                             tint = LegadoTheme.colorScheme.error,
@@ -1007,12 +959,19 @@ fun ChapterItem(
                     }
                 }
 
+            ChapterStatusIcons(
+                item = item,
+                iconSize = 16.dp,
+                spacing = 4.dp,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+
             if (showStatusIcon) {
                 Box(
                     modifier = Modifier
                         .padding(start = 8.dp)
                         .wrapContentSize()
-                        .clip(MaterialTheme.shapes.medium)
+                        .clip(RoundedCornerShape(12.dp))
                         .then(
                             if (canDownload) {
                                 Modifier
@@ -1046,8 +1005,8 @@ fun ChapterItem(
 fun BookmarkListContent(
     bookmarks: List<TocBookmarkItemUi>,
     book: Book?,
-    onBookmarkClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
-    onBookmarkLongClick: (Bookmark) -> Unit,
+    onBookmarkLongClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
+    onBookmarkClick: (Bookmark) -> Unit,
     contentPadding: PaddingValues
 ) {
     val listState = rememberLazyListState()
@@ -1095,10 +1054,10 @@ fun BookmarkListContent(
                         .fillMaxWidth(),
                     isDur = book?.durChapterIndex == bookmark.chapterIndex,
                     onClick = {
-                        onBookmarkClick(bookmark.chapterIndex, bookmark.chapterPos)
+                        onBookmarkClick(bookmark.raw)
                     },
                     onLongClick = {
-                        onBookmarkLongClick(bookmark.raw)
+                        onBookmarkLongClick(bookmark.chapterIndex, bookmark.chapterPos)
                     }
                 )
             }
@@ -1112,7 +1071,6 @@ private fun MarkingListContent(
     markings: List<TocMarkingItemUi>,
     book: Book?,
     onMarkingClick: (chapterIndex: Int, chapterPos: Int) -> Unit,
-    onMarkingLongClick: (BookMarking) -> Unit,
     contentPadding: PaddingValues,
 ) {
     if (markings.isEmpty()) {
@@ -1143,18 +1101,16 @@ private fun MarkingListContent(
             }
             NormalCard(
                 onClick = { onMarkingClick(marking.chapterIndex, marking.chapterPos) },
-                onLongClick = { onMarkingLongClick(marking.raw) },
                 containerColor = if (marking.isDur) {
                     LegadoTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
                 } else {
                     LegadoTheme.colorScheme.surface
                 },
                 contentColor = contentColor,
-                cornerRadius = 12.dp,
+                cornerRadius = 0.dp,
                 modifier = Modifier
                     .animateItem()
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier
@@ -1194,8 +1150,10 @@ private fun MarkingListContent(
                     if (marking.note.isNotBlank()) {
                         AppText(
                             text = marking.note,
-                            style = LegadoTheme.typography.bodyMedium,
+                            style = LegadoTheme.typography.labelMedium,
                             color = LegadoTheme.colorScheme.primary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
@@ -1239,7 +1197,7 @@ private fun StatusIcon(
             }
 
             "DUR" -> {
-                Icon(
+                AppIcon(
                     imageVector = Icons.Rounded.LocationOn,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
@@ -1271,7 +1229,7 @@ private fun StatusIcon(
             }
 
             "SUCCESS_ICON" -> {
-                Icon(
+                AppIcon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
@@ -1280,7 +1238,7 @@ private fun StatusIcon(
             }
 
             "ERROR" -> {
-                Icon(
+                AppIcon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
@@ -1289,7 +1247,7 @@ private fun StatusIcon(
             }
 
             else -> {
-                Icon(
+                AppIcon(
                     imageVector = Icons.Outlined.DownloadForOffline,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),

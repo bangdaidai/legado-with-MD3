@@ -108,19 +108,27 @@ fun WebViewRouteScreen(
         viewModel.saveVerificationResult(currentWebView, ::finishScreen)
     }
 
-    // 书源验证页点「已确认」后通常调用 window.close()，需要在关闭前保存验证结果
+    // 书源验证页点「确认」会通过 window.close()，需要在关闭前跑完验证结果
     val closeRequest = remember { mutableStateOf<() -> Unit>({}) }
     SideEffect {
         closeRequest.value = { if (!cloudflareChallenge) finishWithVerification() }
     }
     val basicJsInterface = remember { WebViewBasicJsInterface { closeRequest.value.invoke() } }
 
+    fun handleBack() {
+        if (viewModel.sourceVerificationEnable) {
+            finishWithVerification()
+        } else {
+            finishScreen()
+        }
+    }
+
     BackHandler {
         when {
             webView?.canGoBack() == true && (webView?.copyBackForwardList()?.size
                 ?: 0) > 1 -> webView?.goBack()
 
-            else -> finishScreen()
+            else -> handleBack()
         }
     }
 
@@ -134,7 +142,7 @@ fun WebViewRouteScreen(
                 title = pageTitle ?: viewModel.sourceName.ifBlank {
                     intent.getStringExtra("title") ?: loadingText
                 },
-                navigationIcon = { TopBarNavigationButton(onClick = ::finishScreen) },
+                navigationIcon = { TopBarNavigationButton(onClick = ::handleBack) },
                 actions = {
                     TopBarActionButton(
                         onClick = { webView?.reload() },

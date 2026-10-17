@@ -10,6 +10,8 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.repository.HttpTtsRepository
+import io.legado.app.domain.model.readaloud.HttpTtsCatalogDraft
+import io.legado.app.domain.usecase.SyncHttpTtsCatalogUseCase
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
@@ -18,6 +20,7 @@ import io.legado.app.help.http.text
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
 import io.legado.app.ui.widget.components.importComponents.ImportStatus
+import io.legado.app.help.readaloud.speech.HttpTtsCatalogParser
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isDataUrl
 import io.legado.app.utils.isJsonArray
@@ -34,6 +37,7 @@ import splitties.init.appCtx
 class ImportHttpTtsViewModel(
     app: Application,
     private val repository: HttpTtsRepository,
+    private val syncHttpTtsCatalog: SyncHttpTtsCatalogUseCase,
 ) : BaseViewModel(app) {
 
     private val _uiState = MutableStateFlow<BaseImportUiState<HttpTTS>>(BaseImportUiState.Idle)
@@ -41,6 +45,8 @@ class ImportHttpTtsViewModel(
 
     private val _effects = MutableSharedFlow<ImportHttpTtsEffect>()
     val effects = _effects.asSharedFlow()
+    /** 与 [allSources] 同下标：源自带的发言人/情绪目录，没有就是空草稿。 */
+    private val catalogDrafts = arrayListOf<HttpTtsCatalogDraft>()
 
     private val allSources = arrayListOf<HttpTTS>()
     private val checkSources = arrayListOf<HttpTTS?>()
@@ -88,6 +94,15 @@ class ImportHttpTtsViewModel(
     private fun importSelect(items: List<HttpTTS>) {
         execute {
             repository.insert(*items.toTypedArray())
+            // 目录落 read_aloud_voices，不写回源行；没带目录的源由 UseCase 自己跳过
+            items.forEach { source ->
+                val index = allSources.indexOf(source)
+                syncHttpTtsCatalog(
+                    engineId = source.id.toString(),
+                    draft = catalogDrafts.getOrElse(index) { HttpTtsCatalogDraft() },
+                    sourceRevision = source.lastUpdateTime,
+                )
+            }
         }.onSuccess {
             _uiState.value = BaseImportUiState.Idle
             _effects.emit(ImportHttpTtsEffect.ImportFinished)
@@ -109,12 +124,20 @@ class ImportHttpTtsViewModel(
     private suspend fun importSourceAwait(text: String) {
         when {
             text.isJsonObject() -> {
+                val draft = HttpTtsCatalogParser.parse(text)
                 HttpTTS.fromJson(text).getOrThrow().let {
                     allSources.add(it)
+                    catalogDrafts.add(draft)
                 }
             }
-            text.isJsonArray() -> HttpTTS.fromJsonArray(text).getOrThrow().let { items ->
-                allSources.addAll(items)
+            text.isJsonArray() -> {
+                val drafts = HttpTtsCatalogParser.parseList(text)
+                HttpTTS.fromJsonArray(text).getOrThrow().let { items ->
+                    items.forEachIndexed { index, source ->
+                        allSources.add(source)
+                        catalogDrafts.add(drafts.getOrElse(index) { HttpTtsCatalogDraft() })
+                    }
+                }
             }
             text.isDataUrl() -> {
                 val data = AppPattern.dataUriRegex.find(text)?.groupValues?.getOrNull(1)

@@ -15,6 +15,7 @@ import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.AiToolContext
 import io.legado.app.domain.model.nativeWebSearchSupport
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonArray
@@ -87,8 +88,7 @@ class IdentifyBookCharactersUseCase(
         val preset = identifyPreset
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: error("还没有配置可用的 AI 模型，请先到 AI 设置里为人物识别任务选择模型")
-        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank)
-            ?: aiProfileGateway.defaultPrompt(AiTaskType.IDENTIFY_CHARACTERS)
+        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: defaultPrompt(VoicePoolStore.enabledPoolNames())
         val now = System.currentTimeMillis()
         val contentHash = MD5Utils.md5Encode(bookUrl)
         val promptHash =
@@ -135,8 +135,7 @@ class IdentifyBookCharactersUseCase(
         val preset = identifyPreset
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: error("还没有配置可用的 AI 模型，请先到 AI 设置里为人物识别任务选择模型")
-        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank)
-            ?: aiProfileGateway.defaultPrompt(AiTaskType.IDENTIFY_CHARACTERS)
+        val prompt = identifyPreset?.promptTemplate?.takeIf(String::isNotBlank) ?: defaultPrompt(VoicePoolStore.enabledPoolNames())
         val response = StringBuilder()
         // 内置联网开关 = 供应商能力检测 × 供应商设置（用户可在供应商编辑页关闭）
         val nativeWebSearch = preset.model.provider.nativeWebSearchSupport().isSupported &&
@@ -247,7 +246,7 @@ class IdentifyBookCharactersUseCase(
                 name = item.get("name")?.asString?.trim().orEmpty(),
                 aliases = item.getAsJsonArray("aliases")?.map { it.asString.trim() }.orEmpty(),
                 voiceGender = item.get("voiceGender")?.asString ?: "unknown",
-                voiceAgeBand = item.get("voiceAgeBand")?.asString ?: "unknown",
+                voiceAgeBand = VoicePoolStore.poolNameOrEmpty(item.get("voiceAgeBand")?.asString),
                 role = item.get("role")?.asString.orEmpty(),
                 personality = item.get("personality")?.asString.orEmpty(),
                 summary = item.get("summary")?.asString.orEmpty(),
@@ -408,6 +407,16 @@ class IdentifyBookCharactersUseCase(
             else ->
                 "Web search: not available in this request; work from local tools and your own " +
                     "knowledge, and move on without mentioning search."
+        }
+
+        /**
+         * 内置默认提示词。`voiceAgeBand` 一栏列的是用户的声音池名，
+         * 人物档案里那一列存的就是池名，模型只能从这里选。
+         */
+        fun defaultPrompt(poolNames: List<String>): String {
+            val pools = poolNames.filter(String::isNotBlank).distinct().joinToString("|")
+                .ifEmpty { "unknown" }
+            return "You identify stable fictional characters from downloaded local chapters. Use read-only tools to list and read cached chapters and inspect existing characters. Return JSON only: {\"characters\":[{\"name\":string,\"aliases\":[string],\"voiceGender\":\"male|female|unknown\",\"voiceAgeBand\":\"$pools\",\"role\":\"male_lead|female_lead|male_supporting|female_supporting|\",\"personality\":string,\"summary\":string,\"evidence\":string,\"confidence\":number}]}. voiceAgeBand is the character's voice pool: copy one of the listed names exactly. Do not include pronouns, generic titles, or one-off passers-by. Use unknown instead of guessing gender. Do not create duplicates of existing names or aliases."
         }
     }
 }

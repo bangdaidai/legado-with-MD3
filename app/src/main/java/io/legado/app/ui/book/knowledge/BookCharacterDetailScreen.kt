@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -156,7 +155,7 @@ private fun CharacterDetailContent(
     var dialogAliases by remember(state.aliasesText) { mutableStateOf(state.aliasesText) }
     var dialogRole by remember(state.role) { mutableStateOf(state.role) }
     var dialogVoiceGender by remember(state.voiceGender) { mutableStateOf(state.voiceGender) }
-    var dialogVoiceAgeBand by remember(state.voiceAgeBand) { mutableStateOf(state.voiceAgeBand) }
+    var dialogPool by remember(state.voicePool) { mutableStateOf(state.voicePool) }
     var dialogIsProtagonist by remember(state.isProtagonist) { mutableStateOf(state.isProtagonist) }
 
     Column(
@@ -169,7 +168,7 @@ private fun CharacterDetailContent(
             avatarUri = state.avatarUri,
             roleDisplayName = state.role,
             voiceGender = state.voiceGender,
-            voiceAgeBand = state.voiceAgeBand,
+            voicePool = state.voicePool,
             tags = state.tags,
             onPickAvatar = onPickAvatar,
             onInfoClick = {
@@ -177,7 +176,7 @@ private fun CharacterDetailContent(
                 dialogAliases = state.aliasesText
                 dialogRole = state.role
                 dialogVoiceGender = state.voiceGender
-                dialogVoiceAgeBand = state.voiceAgeBand
+                dialogPool = state.voicePool
                 dialogIsProtagonist = state.isProtagonist
                 showProfileDialog = true
             },
@@ -239,7 +238,7 @@ private fun CharacterDetailContent(
             onIntent(CharacterDetailIntent.SetAliasesText(dialogAliases))
             onIntent(CharacterDetailIntent.SetRole(dialogRole))
             onIntent(CharacterDetailIntent.SetVoiceGender(dialogVoiceGender))
-            onIntent(CharacterDetailIntent.SetVoiceAgeBand(dialogVoiceAgeBand))
+            onIntent(CharacterDetailIntent.SetVoicePool(dialogPool))
             onIntent(CharacterDetailIntent.SetIsProtagonist(dialogIsProtagonist))
             showProfileDialog = false
         },
@@ -261,7 +260,7 @@ private fun CharacterDetailContent(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                // 一行两个选项卡片：角色+主角、声音性别+年龄段
+                // 一行两个选项卡片：角色+主角、声音性别+声音池
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProfileRoleDropdown(
                         selectedRole = dialogRole,
@@ -326,10 +325,14 @@ private fun CharacterDetailContent(
                     )
                     ProfileVoiceTraitDropdown(
                         label = stringResource(R.string.character_voice_age_band),
-                        text = voiceAgeBandDisplayName(dialogVoiceAgeBand),
-                        options = BookCharacterProfile.ALL_VOICE_AGE_BANDS,
-                        displayName = { voiceAgeBandDisplayName(it) },
-                        onSelected = { dialogVoiceAgeBand = it },
+                        text = dialogPool.ifEmpty { stringResource(R.string.cast_unassigned) },
+                        options = buildList {
+                            add("")
+                            addAll(state.poolNames)
+                            if (dialogPool.isNotEmpty() && dialogPool !in state.poolNames) add(dialogPool)
+                        },
+                        displayName = { pool -> pool.ifEmpty { stringResource(R.string.cast_unassigned) } },
+                        onSelected = { dialogPool = it },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -459,16 +462,6 @@ private fun voiceGenderDisplayName(value: String): String = when (value) {
     else -> stringResource(R.string.voice_gender_unknown)
 }
 
-@Composable
-private fun voiceAgeBandDisplayName(value: String): String = when (value) {
-    BookCharacterProfile.VOICE_AGE_CHILD -> stringResource(R.string.voice_age_child)
-    BookCharacterProfile.VOICE_AGE_TEEN -> stringResource(R.string.voice_age_teen)
-    BookCharacterProfile.VOICE_AGE_YOUNG_ADULT -> stringResource(R.string.voice_age_young_adult)
-    BookCharacterProfile.VOICE_AGE_ADULT -> stringResource(R.string.voice_age_adult)
-    BookCharacterProfile.VOICE_AGE_ELDERLY -> stringResource(R.string.voice_age_elderly)
-    else -> stringResource(R.string.voice_age_unknown)
-}
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ProfileRoleDropdown(
@@ -502,7 +495,7 @@ private fun CharacterHeader(
     avatarUri: String,
     roleDisplayName: String,
     voiceGender: String,
-    voiceAgeBand: String,
+    voicePool: String,
     tags: ImmutableList<String>,
     onPickAvatar: () -> Unit,
     onInfoClick: () -> Unit,
@@ -560,28 +553,23 @@ private fun CharacterHeader(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            AnimatedTextLine(
-                text = name.ifBlank { "—" },
-                style = LegadoTheme.typography.titleMedium,
-                maxLines = 2,
-            )
-            val hasAnyTrait = resolvedRole.isNotBlank() ||
-                voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN ||
-                voiceAgeBand != BookCharacterProfile.VOICE_AGE_UNKNOWN
-            if (hasAnyTrait) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (resolvedRole.isNotBlank()) {
-                        TextCard(text = resolvedRole)
-                    }
-                    if (voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN) {
-                        TextCard(text = voiceGenderDisplayName(voiceGender))
-                    }
-                    if (voiceAgeBand != BookCharacterProfile.VOICE_AGE_UNKNOWN) {
-                        TextCard(text = voiceAgeBandDisplayName(voiceAgeBand))
-                    }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AnimatedTextLine(
+                    text = name.ifBlank { "—" },
+                    style = LegadoTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (resolvedRole.isNotBlank()) {
+                    TextCard(text = resolvedRole)
+                }
+                if (voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN) {
+                    TextCard(text = voiceGenderDisplayName(voiceGender))
+                }
+                if (voicePool.isNotBlank()) {
+                    TextCard(text = voicePool)
                 }
             }
             if (aliasesText.isNotBlank()) {

@@ -65,7 +65,6 @@ import io.legado.app.exception.NoBooksDirException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.addType
-import io.legado.app.help.book.getDisplayTagList
 import io.legado.app.help.book.getExportFileName
 import io.legado.app.help.book.formTypeMask
 import io.legado.app.help.book.isLocal
@@ -882,6 +881,26 @@ class BookInfoViewModel(
                 saveBook(book)
             }
             syncUiState()
+        }
+    }
+
+    private fun toggleReadRecordDisabled() {
+        val book = currentBook?.takeIf { inBookshelf } ?: return
+        val disabled = !book.disableReadRecord
+        execute {
+            bookRepository.setReadRecordDisabled(book.bookUrl, disabled)
+        }.onSuccess { updated ->
+            if (updated != null) {
+                ReadBook.setReadRecordDisabled(updated.bookUrl, updated.disableReadRecord)
+                AudioPlay.book?.takeIf { it.bookUrl == updated.bookUrl }
+                    ?.disableReadRecord = updated.disableReadRecord
+                currentBook?.takeIf { it.bookUrl == updated.bookUrl }?.let {
+                    it.disableReadRecord = updated.disableReadRecord
+                    syncUiState()
+                }
+            }
+        }.onError {
+            showMessage(it.localizedMessage ?: context.getString(R.string.error))
         }
     }
 
@@ -1711,6 +1730,7 @@ class BookInfoViewModel(
             )
 
             BookInfoMenuAction.ToggleCanUpdate -> toggleCanUpdate()
+            BookInfoMenuAction.ToggleReadRecordDisabled -> toggleReadRecordDisabled()
             BookInfoMenuAction.ToggleSplitLongChapter -> toggleSplitLongChapter()
             BookInfoMenuAction.ToggleDeleteAlert -> toggleDeleteAlert()
             BookInfoMenuAction.ClearCache -> emitEffect(
@@ -2248,6 +2268,7 @@ class BookInfoViewModel(
             isLocal = isLocal,
             type = type,
             canUpdate = canUpdate,
+            disableReadRecord = disableReadRecord,
             splitLongChapter = getSplitLongChapter(),
             durChapterTitle = durChapterTitle,
             latestChapterTitle = latestChapterTitle,

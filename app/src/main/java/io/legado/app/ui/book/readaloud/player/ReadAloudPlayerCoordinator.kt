@@ -22,6 +22,7 @@ import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /** Compatibility boundary between the Compose player and the legacy reader/service state. */
@@ -160,8 +162,9 @@ class ReadAloudPlayerCoordinator(
     private var chapterSnapshotCache: ChapterSnapshot? = null
 
     private fun snapshotBook(): BookState {
-        val book = ReadBook.book
-        val input = ReadBook.readerChapterInputWindow.current
+        val book = ReadAloud.bookSession.book ?: ReadBook.book
+        val input = if (ReadAloud.bookSession.book != null) ReadAloud.bookSession.input
+            else ReadBook.readerChapterInputWindow.current
         val chapter = input?.let(::chapterSnapshot)
         return BookState(
             bookUrl = book?.bookUrl.orEmpty(),
@@ -189,9 +192,12 @@ class ReadAloudPlayerCoordinator(
             chapterIndex = input.chapter.index,
             title = input.displayTitle,
             semanticContent = input.source.semanticContent,
-            pageStarts = ReadBook.readerPagination(input.chapter.index)?.pageStarts.orEmpty(),
+            pageStarts = if (ReadAloud.bookSession.owns(input.book.bookUrl)) {
+                ReadAloud.bookSession.pagination?.pageStarts.orEmpty()
+            } else ReadBook.readerPagination(input.chapter.index)?.pageStarts.orEmpty(),
             // 与朗读服务同口径：「默认」在多角色关闭时落到整段，否则听书页展示的
-            // 文本行会与服务实际播放的单元粒度不一致。
+            // 文本行会与服务实际播放的单元粒度不一致。划分只认「多角色朗读」这一个开关，
+            // 「多角色分配」是正文胶囊的显示开关，不改朗读单元粒度。
             contentSplitMode = ContentSplitPolicies.resolve(
                 mode = ReadAloudContentSplitMode.fromStorage(settings.contentSplitMode),
                 useMultiSpeaker = settings.useMultiSpeaker,
@@ -326,7 +332,7 @@ class ReadAloudPlayerCoordinator(
 
     fun seekTo(chapterPosition: Int, chapterLength: Int) {
         val position = chapterPosition.coerceIn(0, chapterLength)
-        ReadAloud.play(application, play = true, chapterPosition = position)
+        ReadAloud.play(application, play = true, chapterPosition = position, fromReader = false)
     }
 
     private companion object {

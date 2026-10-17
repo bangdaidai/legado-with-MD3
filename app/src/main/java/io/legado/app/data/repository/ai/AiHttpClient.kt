@@ -10,7 +10,9 @@ import java.util.concurrent.TimeUnit
  * analysis uploads a whole chapter as the request body, and the shared client's 15s
  * write timeout aborts slow uploads before the server ever starts thinking. Connect
  * keeps a generous cap instead of infinity so a dead host fails fast enough to fall
- * back; coroutine cancellation still cancels the underlying OkHttp call.
+ * back; coroutine cancellation still cancels the underlying OkHttp call. A blocking body
+ * read ignores coroutine cancellation, so ending a stream is done by closing the
+ * response — see `readSseData` in AiSseUtils.kt.
  */
 internal val aiOkHttpClient: OkHttpClient by lazy {
     okHttpClient.newBuilder()

@@ -3,7 +3,6 @@ package io.legado.app.ui.main
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.InputDevice
@@ -12,6 +11,8 @@ import android.view.MotionEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -22,7 +23,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -33,24 +37,32 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.SinglePaneSceneStrategy
 import androidx.navigation3.ui.NavDisplay
+import androidx.window.core.layout.WindowSizeClass
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.BaseComposeActivity
 import io.legado.app.constant.AppConst.appInfo
+import io.legado.app.constant.EventBus
 import io.legado.app.core.ui.player.playerUnderlaySemantics
 import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.gateway.BackupSettingsGateway
@@ -59,28 +71,24 @@ import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.PlaybackCapsuleGateway
 import io.legado.app.domain.model.PlaybackCapsuleSource
 import io.legado.app.domain.model.PlaybackCapsuleState
-import io.legado.app.help.IntentHelp
+import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.http.LocalNetworkBlockedNotifier
 import io.legado.app.help.storage.Backup
-import io.legado.app.help.update.AppUpdate
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
-import io.legado.app.model.Download
 import io.legado.app.service.WebService
 import io.legado.app.ui.about.MarkdownSheet
-import io.legado.app.ui.about.UpdateMode
-import io.legado.app.ui.about.UpdateSheet
-import io.legado.app.ui.widget.components.log.CrashLogSheet
+import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.read.ReadAloudControlsRequestBus
 import io.legado.app.ui.book.read.ReadBookInputHandler
 import io.legado.app.ui.book.read.ReadBookRouteHost
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.readaloud.ReadAloudPlayerMorphHost
-import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerEffect
 import io.legado.app.ui.book.readaloud.ReadAloudPlayerOverlayBus
 import io.legado.app.ui.book.readaloud.ReadAloudShellHost
 import io.legado.app.ui.book.readaloud.morph.CapsuleAnchorKind
@@ -90,16 +98,13 @@ import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
 import io.legado.app.ui.main.bookshelf.BookshelfCoverPreloader
 import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.welcome.WelcomeActivity
+import io.legado.app.ui.widget.components.navigation.shouldUseRail
 import io.legado.app.ui.widget.components.privacy.PrivateAppStartGate
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.eventBus.FlowEventBus
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.FileDoc
-import io.legado.app.utils.FileUtils
-import io.legado.app.utils.getFile
-import io.legado.app.utils.find
-import io.legado.app.utils.list
-import io.legado.app.utils.delete
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -128,18 +133,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
 
     /** 当前激活的有声书播放器 ViewModel（由有声书路由在生命周期内设置/清理） */
     internal var activeAudioPlayViewModel: AudioPlayViewModel? = null
-
-    /** 启动时的更新/更新日志弹窗状态，复用 About 的 Compose UpdateSheet */
-    private data class StartupUpdateSheet(
-        val updateInfo: AppUpdate.UpdateInfo,
-        val mode: UpdateMode,
-        val onDismiss: (() -> Unit)? = null,
-    )
-
-    private val startupUpdateSheet = MutableStateFlow<StartupUpdateSheet?>(null)
-
-    /** 崩溃日志弹窗状态 */
-    private val crashLogSheet = MutableStateFlow<List<FileDoc>>(emptyList())
 
     /** 全局 Compose 文本弹层状态，供遗留命令式路径展示 Markdown/文本内容 */
     private val textSheetFlow = MutableStateFlow<TextSheetData?>(null)
@@ -241,16 +234,12 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             readAloud: Boolean = false,
             inBookshelf: Boolean = true,
             chapterChanged: Boolean = false,
-            chapterIndex: Int = -1,
-            chapterPos: Int = -1,
         ): Intent = MainIntent.createReadBookIntent(
             context = context,
             bookUrl = bookUrl,
             readAloud = readAloud,
             inBookshelf = inBookshelf,
             chapterChanged = chapterChanged,
-            chapterIndex = chapterIndex,
-            chapterPos = chapterPos,
         )
 
         fun createReadBookMediaControlIntent(context: Context): Intent =
@@ -338,16 +327,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             sourceUrl: String,
             exploreUrl: String? = null,
         ): Intent = MainIntent.createExploreShowIntent(context, exploreName, sourceUrl, exploreUrl)
-
-        fun createReadingMemoryDetailIntent(
-            context: Context,
-            bookUrl: String,
-        ): Intent = MainIntent.createReadingMemoryDetailIntent(context, bookUrl)
-
-        fun createAuthorDetailIntent(
-            context: Context,
-            author: String,
-        ): Intent = MainIntent.createAuthorDetailIntent(context, author)
     }
 
     private val viewModel by viewModel<MainViewModel>()
@@ -356,15 +335,28 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
     private val mangaSettingsGateway by inject<MangaSettingsGateway>()
     private val backupSettingsGateway by inject<BackupSettingsGateway>()
     private val readAloudSettingsRepository by inject<ReadAloudSettingsRepository>()
-    private val navRouteTracker by inject<MainNavRouteTracker>()
+    internal val navRouteTracker by inject<MainNavRouteTracker>()
     private val routeEvents = MutableSharedFlow<RouteEvent>(extraBufferCapacity = 1)
-    private val localNetworkPermissionLauncher = registerForActivityResult(
+    /**
+     * Web 服务与「局域网请求」各自持有独立的 launcher：授权结果互不影响，也不需要用一个可变字段
+     * 记录「本次申请的目的」——那种写法在配置变更/进程重建后会丢失，导致结果被误判为 Web 服务申请。
+     */
+    private val webServiceLocalNetworkPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
             WebService.startForeground(this)
         } else {
             toastOnUi(R.string.web_service_local_network_permission_denied)
+        }
+    }
+
+    private val localNetworkRequestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // 授权后由用户重试原操作；未授权时提示授予方式。
+        if (!granted) {
+            toastOnUi(R.string.local_network_permission_required)
         }
     }
     private var shouldApplyDefaultToRead = true
@@ -377,6 +369,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         installSplashScreen()
         shouldApplyDefaultToRead = savedInstanceState == null
         restoredReadBookRoute = savedInstanceState?.restoreReadBookRoute()
+            ?: navRouteTracker.lastReadBookRoute()
         super.onCreate(savedInstanceState)
 
         if (checkStartupRoute()) return
@@ -390,6 +383,15 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                 intent?.getBooleanExtra(MainIntent.EXTRA_WEB_SERVICE_LOCAL_NETWORK, false) == true
         if (requestWebService) {
             startWebServiceWithLocalNetworkPermission()
+        }
+
+        // 局域网请求（书源 / 图源 / WebDAV）被系统拦下时，前台立即补一次本地网络权限申请。
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                FlowEventBus.with<Unit>(EventBus.LOCAL_NETWORK_PERMISSION_REQUIRED).collect {
+                    requestLocalNetworkPermissionIfBlocked()
+                }
+            }
         }
 
         lifecycleScope.launch {
@@ -421,11 +423,26 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
      * 已授予直接启动；未授予先申请，授予后由 launcher 回调补启。
      */
     private fun startWebServiceWithLocalNetworkPermission() {
-        if (WebService.hasLocalNetworkPermission(this)) {
+        if (LocalNetworkAccess.isGranted(this)) {
             WebService.startForeground(this)
         } else {
-            localNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+            webServiceLocalNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        requestLocalNetworkPermissionIfBlocked()
+    }
+
+    /**
+     * 书源 / 图源 / WebDAV 等局域网请求被系统拦掉后，网络层会留下标记（见
+     * [LocalNetworkBlockedNotifier]）；回到前台时补一次权限申请，用户重试原操作即可。
+     */
+    private fun requestLocalNetworkPermissionIfBlocked() {
+        if (!LocalNetworkBlockedNotifier.consumePermissionRequest()) return
+        if (LocalNetworkAccess.isGranted(this)) return
+        localNetworkRequestPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -451,9 +468,8 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
     @OptIn(ExperimentalSharedTransitionApi::class)
     @Composable
     override fun Content() {
-        val orientation = resources.configuration.orientation
-        val smallestWidthDp = resources.configuration.smallestScreenWidthDp
         val configuration = LocalAppUiConfiguration.current
+        val predictiveBackEnabled by rememberUpdatedState(configuration.appShell.predictiveBackEnabled)
         val tabletInterface = configuration.appShell.tabletInterface
         val defaultToReadFlow = remember(otherSettingsGateway) {
             otherSettingsGateway.settings
@@ -467,13 +483,31 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             mangaSettingsGateway.currentSettings,
         )
 
-        val useRail = when (tabletInterface) {
-            "always" -> true
-            "landscape" -> orientation == Configuration.ORIENTATION_LANDSCAPE
-            "off" -> false
-            "auto" -> smallestWidthDp >= 600
-            else -> false
+        // 判据来自当前窗口，旋转 / 折叠展开 / 自由窗口改尺寸都会重组，见 AppAdaptiveNavigation。
+        val baseAdaptiveEnvironment = currentMainAdaptiveLayoutEnvironment(
+            configuration.appShell.multiPaneMode, 0.dp,
+        )
+        val navigationRegion = baseAdaptiveEnvironment.singlePaneBounds()
+        val requestedUseRail = shouldUseRail(
+            tabletInterface,
+            WindowSizeClass(navigationRegion.width, navigationRegion.height),
+            IntSize(
+                baseAdaptiveEnvironment.windowSize.width.value.toInt(),
+                baseAdaptiveEnvironment.windowSize.height.value.toInt()
+            ),
+        )
+        var navigationRailWidth by remember(
+            requestedUseRail,
+            configuration.appShell.composeEngine,
+            configuration.appShell.navExtended,
+        ) {
+            mutableStateOf(if (!requestedUseRail) 0.dp else if (configuration.appShell.navExtended) 220.dp else 96.dp)
         }
+        val useRail =
+            requestedUseRail && navigationRegion.width >= MainPaneMinWidth + navigationRailWidth.value
+        val adaptiveEnvironment =
+            baseAdaptiveEnvironment.copy(navigationRailWidth = if (useRail) navigationRailWidth else 0.dp)
+        val currentAdaptiveEnvironment by rememberUpdatedState(adaptiveEnvironment)
 
         val startRoutes = remember(defaultToRead) {
             val resolved = MainNavigator.resolveStartRoute(intent)
@@ -504,7 +538,37 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             }
         }
         val backStack = rememberNavBackStack(*startRoutes)
+        val paneStack = backStack.dropLastWhile {
+            it is MainRouteSourceLogin || it is MainRouteSearchContent ||
+                    it is MainRouteAudioPlay || it == MainRouteReadAloudPlayer
+        }
+        val paneParentIsHome = paneStack.getOrNull(paneStack.lastIndex - 1) == MainRouteHome ||
+                paneStack.size == 1 && paneStack.firstOrNull() == MainRouteHome
+        val listDetailEnabled = adaptiveEnvironment.paneLayout(paneParentIsHome) != null
+        val hasAdaptivePair = listDetailEnabled && paneStack.size >= 2 &&
+                paneStack.takeLast(2).all { supportsMainPanes(it::class) }
+        val currentHasAdaptivePair by rememberUpdatedState(hasAdaptivePair)
+        val activeRoute = backStack.lastOrNull()
+        val fullScreenContent =
+            activeRoute is MainRouteReadBook || activeRoute is MainRouteReadManga ||
+                    activeRoute is MainRouteWebView || activeRoute is io.legado.app.ui.rss.read.MainRouteRssRead ||
+                    activeRoute is MainRouteAudioPlay || activeRoute == MainRouteReadAloudPlayer
+        val singleRegion = if (!hasAdaptivePair && !fullScreenContent &&
+            adaptiveEnvironment.safeRegions().size > 1
+        ) adaptiveEnvironment.singlePaneBounds() else null
+        val adaptiveDisplayModifier = singleRegion?.let { bounds ->
+            Modifier
+                .absoluteOffset(bounds.left.dp, bounds.top.dp)
+                .requiredSize(bounds.width.dp, bounds.height.dp)
+                .clipToBounds()
+                .consumeWindowInsets(mainAdaptiveInsets)
+        } ?: Modifier.fillMaxSize()
         SideEffect { navRouteTracker.onBackStackChanged(backStack) }
+        // Nav3 的默认 contentKey 还带路由类型，所以按同一规则重建一个 NavEntry 来比对栈顶。
+        // 覆盖层场景用它决定「是不是最上面那层」，双栏场景用它决定左栏是展开还是收拢。
+        val isTopEntry: (Any) -> Boolean = { contentKey ->
+            backStack.lastOrNull()?.let { top -> NavEntry(top) {}.contentKey == contentKey } == true
+        }
 
         // 悬浮胶囊是全局叠层：数据来自全局朗读会话与设置，不依赖阅读器是否在栈上。
         val pageShellPlayerViewModel: ReadAloudPlayerViewModel =
@@ -540,17 +604,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         val playbackCapsuleState by playbackGateway.state.collectAsStateWithLifecycle()
         val playerOpenMutex = remember { Mutex() }
         val morphPresent by remember { derivedStateOf { readAloudMorph.progress.value > 0f } }
-        // 「从哪里来，就回到哪里去」：浮层设置弹窗跳 nav3 页面时记下
-        // (跳转目标, 跳页时的来源栈顶)；返回栈顶回到来源页时重新展开浮层。
-        // 上面几个 player 状态都用 rememberSaveable，这里也必须一致：
-        // manifest 里 MainActivity 的 configChanges 不含 orientation|screenSize，
-        // 旋转会重建 Activity，remember 的标记会被丢掉，返回时浮层不再自动展开
-        // rememberSaveable 只能存 Bundle 支持的类型，NavKey 不在其中。
-        // 这里存 toString()：MainRoute 全是 data object / data class，
-        // 字符串形式与实例一一对应，比较效果和原来的 == 一致。
-        var playerReopenOnBack by rememberSaveable {
-            mutableStateOf<Pair<String, String>?>(null)
-        }
 
         suspend fun openPlayer(request: PlaybackCapsuleState) = playerOpenMutex.withLock {
             val source = request.source ?: PlaybackCapsuleSource.ReadAloud
@@ -649,19 +702,6 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                     // 兜底同步：预测性返回、系统返回手势等不经过 navigateToRoute/navigateBack 的路径
                     navRouteTracker.onBackStackChanged(it)
                     MainNavigator.onBackStackChanged()
-                    // 「从哪里来，就回到哪里去」：听书浮层设置跳的页面，返回到
-                    // 跳页时的来源栈顶（阅读页/主页）时自动重新展开浮层。
-                    // 朗读已被停止（胶囊状态没有活跃源）时不重开，只清标记。
-                    val reopen = playerReopenOnBack
-                    // 存的是 toString（rememberSaveable 只能存 Bundle 支持的类型），
-                    // 用字符串比较；注意 null 栈顶也会映成 "null"，与 MainRouteHome 不冲突
-                    if (reopen != null && it.lastOrNull().toString() == reopen.second) {
-                        playerReopenOnBack = null
-                        val capsule = playbackGateway.state.value
-                        if (capsule.source == PlaybackCapsuleSource.ReadAloud) {
-                            openPlayer(capsule)
-                        }
-                    }
                 }
         }
         SharedTransitionLayout {
@@ -669,125 +709,110 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
             PrivateAppStartGate {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    val navSharedTransitionScope = this@SharedTransitionLayout
-                    // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
-                    // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
-                    // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
-                    // provider 重建条目，与被摘栈手势开始时捕获的场景必然不相等，
-                    // NavDisplay 松手校验 targetState == scene 失败就把预测手势判为
-                    // "取消"——先退回当前页再重放一次摘栈（两拍闪），已组合的露出页
-                    // 也随销毁重建冷启动。用 remember 锁住 provider 代次，跨重组不换代；
-                    // 胶囊锚点预览与主页底栏开关参与换代键：播放器开合时机不存在
-                    // 进行中的摘栈手势，换代安全。
-                    val navEntryProvider = remember(
-                        backStack,
-                        configuration,
-                        mangaSettings.showMangaUi,
-                        useRail,
-                        navRouteTracker,
-                        navSharedTransitionScope,
-                        useHomeCapsule,
-                        capsuleAnchorPreview,
-                    ) {
-                        mainEntryProvider(
-                            backStack = backStack,
-                            configuration = configuration,
-                            showMangaUi = mangaSettings.showMangaUi,
-                            useRail = useRail,
-                            sharedTransitionScope = navSharedTransitionScope,
-                            onNavigateToRoute = { route ->
-                                if (route is MainRouteAudioPlay) {
-                                    pageShellCapsuleScope.launch {
-                                        openPlayer(
-                                            PlaybackCapsuleState(
-                                                source = PlaybackCapsuleSource.AudioBook,
-                                                bookUrl = route.bookUrl.orEmpty(),
-                                                inBookshelf = route.inBookshelf,
-                                            )
-                                        )
-                                    }
-                                } else {
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        route,
-                                        navRouteTracker,
-                                    )
-                                }
-                            },
-                            onNavigateBack = {
-                                MainNavigator.navigateBack(
-                                    this@MainActivity,
-                                    backStack,
-                                    navRouteTracker
-                                )
-                            },
-                            readAloudMorph = readAloudMorph.takeIf { useHomeCapsule },
-                            homePlaybackCapsuleEnabled = useHomeCapsule,
-                            capsuleAnchorPreview = capsuleAnchorPreview,
-                        )
-                    }
                     Box(
                         Modifier
                             .fillMaxSize()
                             .playerUnderlaySemantics(playerVisible || morphPresent)
                     ) {
                         NavDisplay(
+                            modifier = adaptiveDisplayModifier,
                             backStack = backStack,
+                            // 交给 nav3 装上 SharedEntryInSceneNavEntryDecorator：这是跨 scene 保持
+                            // 共享元素登记的官方机制。少了它，书架 scene 一被销毁封面的登记就没了——
+                            // 打开书后「马上返回」还有封面转场、'待一会儿再返回'会退化成
+                            // 普通淡入淡出。
+                            sharedTransitionScope = this@SharedTransitionLayout,
                             entryDecorators = listOf(
                                 rememberSaveableStateHolderNavEntryDecorator(),
                                 rememberViewModelStoreNavEntryDecorator(),
                             ),
                             sceneStrategies = listOf(
-                                ModalOverlaySceneStrategy(),
+                                remember {
+                                    ModalOverlaySceneStrategy(
+                                        isTopEntry = isTopEntry,
+                                        predictiveBackEnabled = { predictiveBackEnabled },
+                                    )
+                                },
+                                // 必须在 SinglePane 之前：宽窗口下把「列表/首页 → 详情」
+                                // 合成一个双栏场景，窄窗口自己 return null 退回单栏。
+                                remember(listDetailEnabled) {
+                                    ListDetailSceneStrategy(
+                                        isEnabled = { listDetailEnabled },
+                                        isEntryRetained = { contentKey ->
+                                            backStack.any { NavEntry(it) {}.contentKey == contentKey }
+                                        },
+                                        stackSize = { backStack.size },
+                                        environment = { currentAdaptiveEnvironment },
+                                        canCollapse = { !currentHasAdaptivePair },
+                                    )
+                                },
                                 SinglePaneSceneStrategy(),
                             ),
                             transitionSpec = {
-                                (slideIntoContainer(
-                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                    animationSpec = tween(
-                                        durationMillis = 480,
-                                        easing = FastOutSlowInEasing
-                                    ),
-                                    initialOffset = { fullWidth -> fullWidth }
-                                ) + fadeIn(
-                                    animationSpec = tween(
-                                        durationMillis = 360,
-                                        easing = LinearOutSlowInEasing
-                                    )
-                                )) togetherWith (slideOutOfContainer(
-                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                    animationSpec = tween(
-                                        durationMillis = 480,
-                                        easing = FastOutSlowInEasing
-                                    ),
-                                    targetOffset = { fullWidth -> fullWidth / 4 }
-                                ) + fadeOut(
-                                    animationSpec = tween(
-                                        durationMillis = 360,
-                                        easing = LinearOutSlowInEasing
-                                    )
-                                ))
+                                if (targetState is ListDetailScene) {
+                                    // 双栏自己演形变：左栏从占满窗口收到窗格宽度、右栏从右侧滑进来。
+                                    // 场景级再滑一次会让左栏里的首页跟着从头滑入，看起来像换了页面。
+                                    EnterTransition.None togetherWith ExitTransition.None
+                                } else {
+                                    (slideIntoContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                        animationSpec = tween(
+                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        initialOffset = { fullWidth -> fullWidth }
+                                    ) + fadeIn(
+                                        animationSpec = tween(
+                                            durationMillis = NAV_FADE_DURATION_MILLIS,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    )) togetherWith (slideOutOfContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                        animationSpec = tween(
+                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        targetOffset = { fullWidth -> fullWidth / 4 }
+                                    ) + fadeOut(
+                                        animationSpec = tween(
+                                            durationMillis = NAV_FADE_DURATION_MILLIS,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    ))
+                                }
                             },
                             popTransitionSpec = {
-                                (slideIntoContainer(
-                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                    animationSpec = tween(
-                                        durationMillis = 480,
-                                        easing = FastOutSlowInEasing
-                                    ),
-                                    initialOffset = { fullWidth -> -fullWidth / 4 }
-                                ) + fadeIn(
-                                    animationSpec = tween(
-                                        durationMillis = 360,
-                                        easing = LinearOutSlowInEasing
-                                    )
-                                )) togetherWith (scaleOut(
-                                    targetScale = 0.8f,
-                                    animationSpec = tween(
-                                        durationMillis = 480,
-                                        easing = FastOutSlowInEasing
-                                    )
-                                ) + fadeOut(animationSpec = tween(durationMillis = 360)))
+                                if (initialState is ListDetailScene) {
+                                    // 返回时双栏要做「右栏滑出、左栏回满」的收拢动画，所以离场场景
+                                    // 必须活到动画结束；淡出叠加在收拢之上，下方已经恢复成单栏的同一页面。
+                                    EnterTransition.None togetherWith
+                                            fadeOut(
+                                                animationSpec = tween(
+                                                    durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                                    easing = LinearOutSlowInEasing
+                                                )
+                                            )
+                                } else {
+                                    (slideIntoContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                        animationSpec = tween(
+                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        initialOffset = { fullWidth -> -fullWidth / 4 }
+                                    ) + fadeIn(
+                                        animationSpec = tween(
+                                            durationMillis = NAV_FADE_DURATION_MILLIS,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    )) togetherWith (scaleOut(
+                                        targetScale = 0.8f,
+                                        animationSpec = tween(
+                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                            easing = FastOutSlowInEasing
+                                        )
+                                    ) + fadeOut(animationSpec = tween(durationMillis = NAV_FADE_DURATION_MILLIS)))
+                                }
                             },
                             predictivePopTransitionSpec = { _ ->
                                 (slideIntoContainer(
@@ -800,27 +825,67 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 ) + fadeOut(animationSpec = tween()))
                             },
                             onBack = { MainNavigator.navigateBack(this@MainActivity, backStack) },
-                            entryProvider = navEntryProvider
-                        )
-                        // 主页开启悬浮底栏时使用圆形胶囊，其余页面使用全局可拖拽胶囊。
-                        // 隐藏的胶囊不再上报形变锚点。
-                        CompositionLocalProvider(
-                            LocalReadAloudMorph provides readAloudMorph.takeIf { !useHomeCapsule }
-                        ) {
-                            ReadAloudShellHost(
-                                showCapsule = pageShellShowCapsule,
-                                hidden = useHomeCapsule,
-                                anchorPreview = capsuleAnchorPreview,
-                                onCapsulePositionChanged = { x, y ->
-                                    pageShellCapsuleScope.launch {
-                                        readAloudSettingsRepository.putCapsulePosition(x, y)
+                            entryProvider = mainEntryProvider(
+                                backStack = backStack,
+                                configuration = configuration,
+                                showMangaUi = mangaSettings.showMangaUi,
+                                useRail = useRail,
+                                sharedTransitionScope = this@SharedTransitionLayout,
+                                panesEnabled = listDetailEnabled,
+                                onNavigationRailWidthChanged = { navigationRailWidth = it },
+                                navigateToRoute = { route ->
+                                    if (route is MainRouteAudioPlay) {
+                                        pageShellCapsuleScope.launch {
+                                            openPlayer(
+                                                PlaybackCapsuleState(
+                                                    source = PlaybackCapsuleSource.AudioBook,
+                                                    bookUrl = route.bookUrl.orEmpty(),
+                                                    inBookshelf = route.inBookshelf,
+                                                )
+                                            )
+                                        }
+                                    } else {
+                                        MainNavigator.navigateToRoute(
+                                            backStack,
+                                            route,
+                                            navRouteTracker
+                                        )
                                     }
                                 },
-                                onOpenPlayer = { ReadAloudPlayerOverlayBus.request(it) },
+                                onNavigateBack = {
+                                    MainNavigator.navigateBack(
+                                        this@MainActivity,
+                                        backStack,
+                                        navRouteTracker
+                                    )
+                                },
+                                readAloudMorph = readAloudMorph.takeIf { useHomeCapsule },
+                                homePlaybackCapsuleEnabled = useHomeCapsule,
+                                capsuleAnchorPreview = capsuleAnchorPreview,
                             )
-                        }
+                        )
                     }
-                    // 听书播放浮层：同窗口 morph 面板，从胶囊位置长出来。
+                    // 全局胶囊与导航容器并列，始终画在阅读等 Nav3 叠层之上。
+                    // 主页开启悬浮底栏时仍使用主页自己的圆形胶囊。
+                    CompositionLocalProvider(
+                        // 收起完成后不再用残留进度给可点击胶囊加透明层。
+                        LocalReadAloudMorph provides readAloudMorph.takeIf {
+                            !useHomeCapsule && (playerVisible || readAloudMorph.progress.isRunning)
+                        }
+                    ) {
+                        ReadAloudShellHost(
+                            showCapsule = pageShellShowCapsule,
+                            hidden = useHomeCapsule,
+                            anchorPreview = capsuleAnchorPreview,
+                            onCapsulePositionChanged = { x, y ->
+                                pageShellCapsuleScope.launch {
+                                    readAloudSettingsRepository.putCapsulePosition(x, y)
+                                }
+                            },
+                            onOpenPlayer = { ReadAloudPlayerOverlayBus.request(it) },
+                        )
+                    }
+                    // 听书播放页：同窗口 morph 面板，从胶囊位置长出来。
                     if (playerSource == PlaybackCapsuleSource.ReadAloud) ReadAloudPlayerMorphHost(
                         playerViewModel = pageShellPlayerViewModel,
                         playerState = pageShellPlayerState,
@@ -832,7 +897,9 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                         onSwitchToClassic = { bookUrl ->
                             // 栈顶是阅读界面：让它直接落在经典朗读控制页；
                             // 否则没有可用的阅读界面，打开一个新的。
-                            if (isReaderOnTop(backStack)) {
+                            if (isReaderOnTop(backStack) &&
+                                io.legado.app.model.ReadBook.book?.bookUrl == bookUrl
+                            ) {
                                 ReadAloudControlsRequestBus.request()
                             } else {
                                 MainNavigator.navigateToRoute(
@@ -842,55 +909,35 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 )
                             }
                         },
-                        // 浮层设置弹窗里的跳页/提示意图：与朗读设置整页同一批目的地。
-                        // 跳 nav3 页面记下来源栈顶，返回时重新展开浮层（见 playerReopenOnBack）。
-                        onSettingsEffect = { effect ->
-                            when (effect) {
-                                is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
-                                    val target = MainRouteCloudTtsEngines(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-                                is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
-                                    val target = MainRouteBookVoiceCasting(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-                                is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
-                                    val target = MainRouteSpeechStoryboard(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-                                ReadAloudPlayerEffect.OpenTtsCache -> {
-                                    playerReopenOnBack =
-                                        MainRouteTtsCache.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteTtsCache,
-                                        navRouteTracker,
-                                    )
-                                }
-                                ReadAloudPlayerEffect.OpenSystemTtsSettings ->
-                                    IntentHelp.openTTSSetting()
-                                ReadAloudPlayerEffect.TtsCacheCleared ->
-                                    toastOnUi(getString(R.string.clear_cache_success))
-                                ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired ->
-                                    toastOnUi(getString(R.string.speech_analysis_ai_model_required))
-                                else -> Unit
+                        onOpenTtsEnginesAndVoices = { bookUrl ->
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                MainRouteCloudTtsEngines(bookUrl.takeIf(String::isNotBlank)),
+                                navRouteTracker,
+                            )
+                        },
+                        onOpenTtsCache = {
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                MainRouteTtsCache,
+                                navRouteTracker,
+                            )
+                        },
+                        onOpenBookVoiceCasting = { bookUrl ->
+                            if (bookUrl.isNotBlank()) {
+                                MainNavigator.navigateToRoute(
+                                    backStack,
+                                    MainRouteBookVoiceCasting(bookUrl),
+                                    navRouteTracker,
+                                )
                             }
+                        },
+                        onOpenReadAloudSubPage = { page ->
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                page.toMainRoute(),
+                                navRouteTracker,
+                            )
                         },
                     )
                     if (playerSource == PlaybackCapsuleSource.AudioBook &&
@@ -909,68 +956,18 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                         }
                     }
                 }
+                // 关闭预见性返回时由宿主在导航层之前接管返回：手势不跟手预览，
+                // 松手后走普通出栈，popTransitionSpec 的返回动画照常播放。
                 BackHandler(
                     enabled = shouldHandleActivityBack(
-                        configuration.appShell.predictiveBackEnabled, playerVisible || morphPresent,
+                        predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
+                        playerPresent = playerVisible || morphPresent,
                     )
                 ) {
                     MainNavigator.navigateBack(this@MainActivity, backStack)
                 }
             }
         }
-        val localContext = LocalContext.current
-        val startupUpdate by startupUpdateSheet.collectAsStateWithLifecycle()
-        startupUpdate?.let { sheet ->
-            UpdateSheet(
-                show = true,
-                updateInfo = sheet.updateInfo,
-                mode = sheet.mode,
-                onDismissRequest = {
-                    startupUpdateSheet.value = null
-                    sheet.onDismiss?.invoke()
-                },
-                onStartDownload = {
-                    val url = sheet.updateInfo.downloadUrl
-                    val fileName = sheet.updateInfo.fileName
-                    if (url.isBlank() || fileName.isBlank()) {
-                        localContext.toastOnUi(getString(R.string.about_download_info_incomplete))
-                    } else {
-                        Download.start(localContext, url, fileName)
-                        localContext.toastOnUi(getString(R.string.about_start_download, fileName))
-                    }
-                },
-            )
-        }
-
-        val crashLogFiles by crashLogSheet.collectAsStateWithLifecycle()
-        CrashLogSheet(
-            show = crashLogFiles.isNotEmpty(),
-            logFiles = crashLogFiles,
-            onDismissRequest = { crashLogSheet.value = emptyList() },
-            onReadFile = { fileDoc ->
-                lifecycleScope.launch {
-                    val content = withContext(IO) {
-                        String(fileDoc.readBytes())
-                    }
-                    showTextSheet(fileDoc.name, content)
-                }
-            },
-            onClear = {
-                lifecycleScope.launch {
-                    externalCacheDir?.let { root ->
-                        FileUtils.delete(root.getFile("crash"), false)
-                    }
-                    val backupPath = backupSettingsGateway.currentSettings.backupPath
-                    if (!backupPath.isNullOrEmpty()) {
-                        val uri = android.net.Uri.parse(backupPath)
-                        FileDoc.fromUri(uri, true)
-                            ?.let { it.find("crash") }
-                            ?.let { it.delete() }
-                    }
-                    crashLogSheet.value = emptyList()
-                }
-            },
-        )
         TextSheetHost()
     }
 
@@ -1004,7 +1001,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
     private fun checkUpdateOnStart() {
         AppUpdateGitHub.check(lifecycleScope)
             .onSuccess { updateInfo ->
-                startupUpdateSheet.value = StartupUpdateSheet(updateInfo, UpdateMode.UPDATE)
+                showDialogFragment(UpdateDialog(updateInfo))
             }
     }
 
@@ -1022,70 +1019,20 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                 try {
                     val info = AppUpdateGitHub.getReleaseByTag(BuildConfig.VERSION_NAME)
                     if (info != null) {
-                        startupUpdateSheet.value =
-                            StartupUpdateSheet(info, UpdateMode.VIEW_LOG) { block.resume(null) }
+                        val dialog = UpdateDialog(info, UpdateDialog.Mode.VIEW_LOG)
+                        dialog.setOnDismissListener { block.resume(null) }
+                        showDialogFragment(dialog)
                     } else {
-                        showFallbackUpdateLog { block.resume(null) }
+                        block.resume(null)
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    showFallbackUpdateLog { block.resume(null) }
+                    block.resume(null)
                 }
             }
         } else {
             block.resume(null)
         }
-    }
-
-    /**
-     * 网络获取失败时回退展示本地 updateLog.md
-     */
-    private fun showFallbackUpdateLog(onDismiss: () -> Unit) {
-        val fallback = String(assets.open("updateLog.md").readBytes())
-        startupUpdateSheet.value = StartupUpdateSheet(
-            updateInfo = AppUpdate.UpdateInfo(
-                tagName = BuildConfig.VERSION_NAME,
-                updateLog = fallback,
-                downloadUrl = "",
-                fileName = ""
-            ),
-            mode = UpdateMode.VIEW_LOG,
-            onDismiss = onDismiss
-        )
-    }
-
-    private fun notifyAppCrash() {
-        if (!LocalConfig.appCrash || BuildConfig.DEBUG) {
-            return
-        }
-        LocalConfig.appCrash = false
-        alert(getString(R.string.draw), "检测到阅读发生了崩溃，是否打开崩溃日志以便报告问题？") {
-            yesButton {
-                lifecycleScope.launch {
-                    val files = loadCrashLogFiles()
-                    crashLogSheet.value = files
-                }
-            }
-            noButton()
-        }
-    }
-
-    private fun loadCrashLogFiles(): List<FileDoc> {
-        val list = arrayListOf<FileDoc>()
-        externalCacheDir
-            ?.let { it.getFile("crash") }
-            ?.listFiles(java.io.FileFilter { it.isFile })
-            ?.forEach { list.add(FileDoc.fromFile(it)) }
-        val backupPath = backupSettingsGateway.currentSettings.backupPath
-        if (!backupPath.isNullOrEmpty()) {
-            val uri = android.net.Uri.parse(backupPath)
-            FileDoc.fromUri(uri, true)
-                ?.let { it.find("crash") }
-                ?.let { crashDir ->
-                    crashDir.list { !it.isDir }
-                }?.let { list.addAll(it) }
-        }
-        return list.sortedByDescending { it.name }.distinctBy { it.name }
     }
 
     /**

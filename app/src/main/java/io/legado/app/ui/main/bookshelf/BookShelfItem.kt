@@ -4,7 +4,6 @@ import androidx.compose.runtime.Stable
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.domain.model.PrivateAccessState
-import io.legado.app.utils.splitNotBlank
 import io.legado.app.help.book.TagManager
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList

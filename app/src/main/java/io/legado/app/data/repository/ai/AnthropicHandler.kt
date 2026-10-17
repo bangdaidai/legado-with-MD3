@@ -103,10 +103,13 @@ class AnthropicHandler : AiProtocolHandler {
                 url(provider.baseUrl + provider.messagesPath)
                 postJson(GSON.toJson(body))
                 addHeaders(
-                    provider.headers + provider.customHeaders + mapOf(
-                        "x-api-key" to keyRotator.currentKey,
-                        "anthropic-version" to "2023-06-01",
-                        "Content-Type" to "application/json"
+                    provider.aiRequestHeaders(
+                        sessionId = request.sessionId,
+                        protocolHeaders = mapOf(
+                            "x-api-key" to keyRotator.currentKey,
+                            "anthropic-version" to "2023-06-01",
+                            "Content-Type" to "application/json"
+                        )
                     )
                 )
             }
@@ -181,10 +184,13 @@ class AnthropicHandler : AiProtocolHandler {
                 url(provider.baseUrl + provider.messagesPath)
                 postJson(GSON.toJson(body))
                 addHeaders(
-                    provider.headers + provider.customHeaders + mapOf(
-                        "x-api-key" to keyRotator.currentKey,
-                        "anthropic-version" to "2023-06-01",
-                        "Content-Type" to "application/json"
+                    provider.aiRequestHeaders(
+                        sessionId = request.sessionId,
+                        protocolHeaders = mapOf(
+                            "x-api-key" to keyRotator.currentKey,
+                            "anthropic-version" to "2023-06-01",
+                            "Content-Type" to "application/json"
+                        )
                     )
                 )
             }.also {

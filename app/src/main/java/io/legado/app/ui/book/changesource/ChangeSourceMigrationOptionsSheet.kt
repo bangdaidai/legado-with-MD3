@@ -45,6 +45,9 @@ fun ChangeSourceMigrationOptionsSheet(
     var migrateRemark by rememberSaveable(show) {
         mutableStateOf(initialOptions.migrateRemark)
     }
+    var migrateAuthor by rememberSaveable(show) {
+        mutableStateOf(initialOptions.migrateAuthor)
+    }
     var migrateReadConfig by rememberSaveable(show) {
         mutableStateOf(initialOptions.migrateReadConfig)
     }
@@ -86,6 +89,7 @@ fun ChangeSourceMigrationOptionsSheet(
             CheckboxItem("分组和排序", checked = migrateGroup) { migrateGroup = it }
             CheckboxItem("自定义封面", checked = migrateCover) { migrateCover = it }
             CheckboxItem("备注和自定义简介", checked = migrateRemark) { migrateRemark = it }
+            CheckboxItem("作者", checked = migrateAuthor) { migrateAuthor = it }
             CheckboxItem("阅读设置", checked = migrateReadConfig) { migrateReadConfig = it }
             CheckboxItem(
                 title = "保持正版基础信息",
@@ -108,6 +112,7 @@ fun ChangeSourceMigrationOptionsSheet(
                             migrateCover = migrateCover,
                             migrateCategory = keepOfficialMeta,
                             migrateRemark = migrateRemark,
+                            migrateAuthor = migrateAuthor,
                             migrateReadConfig = migrateReadConfig,
                             deleteDownloadedChapters = deleteDownloadedChapters,
                             keepOfficialMeta = keepOfficialMeta,

@@ -88,9 +88,12 @@ class OpenAiChatHandler : AiProtocolHandler {
                     url(provider.baseUrl + provider.chatPath)
                     postJson(GSON.toJson(body))
                     addHeaders(
-                        provider.headers + provider.customHeaders + mapOf(
-                            "Authorization" to "Bearer ${keyRotator.currentKey}",
-                            "Content-Type" to "application/json"
+                        provider.aiRequestHeaders(
+                            sessionId = request.sessionId,
+                            protocolHeaders = mapOf(
+                                "Authorization" to "Bearer ${keyRotator.currentKey}",
+                                "Content-Type" to "application/json"
+                            )
                         )
                     )
                 }
@@ -176,9 +179,12 @@ class OpenAiChatHandler : AiProtocolHandler {
                 url(provider.baseUrl + provider.chatPath)
                 postJson(GSON.toJson(body))
                 addHeaders(
-                    provider.headers + provider.customHeaders + mapOf(
-                        "Authorization" to "Bearer ${keyRotator.currentKey}",
-                        "Content-Type" to "application/json"
+                    provider.aiRequestHeaders(
+                        sessionId = request.sessionId,
+                        protocolHeaders = mapOf(
+                            "Authorization" to "Bearer ${keyRotator.currentKey}",
+                            "Content-Type" to "application/json"
+                        )
                     )
                 )
             }.also {

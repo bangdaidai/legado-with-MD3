@@ -37,8 +37,8 @@ import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.uuid.Uuid
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.uuid.Uuid
 
 class ThemeConfigViewModel(
     private val appShellSettingsGateway: AppShellSettingsGateway,
@@ -130,6 +130,9 @@ class ThemeConfigViewModel(
             }
             is ThemeConfigIntent.SetTabletInterface -> updateAppShell {
                 it.copy(tabletInterface = intent.value)
+            }
+            is ThemeConfigIntent.SetMultiPaneMode -> updateAppShell {
+                it.copy(multiPaneMode = intent.value)
             }
             is ThemeConfigIntent.SetLabelVisibilityMode -> updateAppShell {
                 it.copy(labelVisibilityMode = intent.value)

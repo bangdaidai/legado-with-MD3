@@ -19,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.legado.app.core.ui.morph.BookCoverMorphAnchors
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
@@ -95,6 +97,9 @@ fun BookshelfCover(
             sharedCoverKey = sharedCoverKey,
             contentBlur = contentBlur,
             overlayContent = overlayContent,
+            badgeText = badgeText,
+            showBadgeDot = showBadgeDot,
+            leftBottomText = leftBottomText,
         )
 
         // 使用 animatedVisibilityScope 的 animateEnterExit 为叠加层添加同步动画
@@ -117,7 +122,11 @@ fun BookshelfCover(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(2.dp)
-                    .then(overlayModifier),
+                    .then(overlayModifier)
+                    .graphicsLayer {
+                        alpha =
+                            if (BookCoverMorphAnchors.isOriginCoverHidden(sharedCoverKey)) 0f else 1f
+                    },
                 cornerRadius = 4.dp,
                 horizontalPadding = 4.dp,
                 verticalPadding = 2.dp
@@ -132,7 +141,11 @@ fun BookshelfCover(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(2.dp)
-                    .then(overlayModifier),
+                    .then(overlayModifier)
+                    .graphicsLayer {
+                        alpha =
+                            if (BookCoverMorphAnchors.isOriginCoverHidden(sharedCoverKey)) 0f else 1f
+                    },
                 cornerRadius = 4.dp,
                 horizontalPadding = 4.dp,
                 verticalPadding = 2.dp
@@ -147,6 +160,10 @@ fun BookshelfCover(
                     .padding(horizontal = 4.dp, vertical = 6.dp)
                     .height(3.dp)
                     .then(overlayModifier)
+                    .graphicsLayer {
+                        alpha =
+                            if (BookCoverMorphAnchors.isOriginCoverHidden(sharedCoverKey)) 0f else 1f
+                    }
             )
         } else if (progress != null) {
             BookshelfProgressBar(
