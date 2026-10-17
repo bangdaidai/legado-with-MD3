@@ -257,8 +257,6 @@ import io.legado.app.ui.association.ImportReplaceRuleViewModel
 import io.legado.app.ui.association.ImportRssSourceViewModel
 import io.legado.app.ui.association.ImportTxtTocRuleViewModel
 import io.legado.app.ui.association.OpenUrlConfirmViewModel
-import io.legado.app.domain.gateway.PlaybackCapsuleGateway
-import io.legado.app.service.playback.PlaybackCapsuleGatewayAdapter
 import io.legado.app.ui.book.audio.AudioPlayCoordinator
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.bookmark.AllBookmarkViewModel

@@ -244,7 +244,6 @@ object MainNavigator {
                     currentRoute is MainRouteReadingMemoryDetail ||
                     currentRoute is MainRouteReadManga ||
                     currentRoute is MainRouteAuthorDetail ||
-                    currentRoute is MainRouteCache
                     currentRoute is MainRouteCache ||
                     currentRoute is MainRouteReadBook ||
                     currentRoute is MainRouteReadManga
