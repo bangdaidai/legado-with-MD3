@@ -1,7 +1,7 @@
 name: Build APK
 on:
   push:
-    branches: [main, 'sync/**']
+    branches: [main, 'merge/**', 'sync/**']
   workflow_dispatch:
 
 jobs:
