@@ -257,8 +257,6 @@ import io.legado.app.ui.association.ImportReplaceRuleViewModel
 import io.legado.app.ui.association.ImportRssSourceViewModel
 import io.legado.app.ui.association.ImportTxtTocRuleViewModel
 import io.legado.app.ui.association.OpenUrlConfirmViewModel
-import io.legado.app.domain.gateway.PlaybackCapsuleGateway
-import io.legado.app.service.playback.PlaybackCapsuleGatewayAdapter
 import io.legado.app.ui.book.audio.AudioPlayCoordinator
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.bookmark.AllBookmarkViewModel
@@ -863,17 +861,7 @@ val appModule = module {
      * 若各自持有实例，`activeSheet` 之类的瞬态状态与设置快照就会各改各的。
      * 播放状态本身在 `ReadAloudSessionStore`/服务里，这里只是界面投影。
      */
-    single {
-        ReadAloudPlayerViewModel(
-            coordinator = get(),
-            readAloudSettingsGateway = get(),
-            readSettingsGateway = get(),
-            readStyleGateway = get(),
-            application = get(),
-            readAloudSessionStore = get(),
-            aiProfileGateway = get(),
-        )
-    }
+    single { ReadAloudPlayerViewModel(get(), get(), get()) }
     viewModel { (bookUrl: String, entryId: String?) ->
         BookKnowledgeDetailViewModel(
             bookUrl = bookUrl,

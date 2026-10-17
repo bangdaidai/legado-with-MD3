@@ -18,11 +18,8 @@ import androidx.compose.material.icons.filled.Update
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-<<<<<<< HEAD
 import androidx.compose.ui.draw.clip
-=======
 import androidx.compose.ui.graphics.graphicsLayer
->>>>>>> upstream/main
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.core.ui.morph.BookCoverMorphAnchors

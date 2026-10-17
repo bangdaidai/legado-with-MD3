@@ -54,9 +54,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import io.legado.app.ui.book.read.ReadSheetConfigUiState
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -130,8 +132,13 @@ fun HighlightRuleEditSheet(
     show: Boolean,
     rule: HighlightRule?,
     allConfigNames: List<String>,
+    /** 正文那一份排版快照：预览的字色/字距/行距/缩进/颜色/页边距全部沿用它的。 */
+    config: ReadSheetConfigUiState,
     onDismissRequest: () -> Unit,
     onSave: (HighlightRule) -> Unit,
+    /** false = 角色气泡那一份：样式/命中排版/应用排版/字体替换全都在，只去掉「规则信息」。 */
+    showRuleInfo: Boolean = true,
+    title: String? = null,
 ) {
     val isNew = rule == null
     val initial = remember(show, rule) { rule ?: HighlightRule() }
@@ -1021,7 +1028,8 @@ fun HighlightRuleEditSheet(
                     onValueChange = { hitLineSpacingBottom = (it * 2).roundToInt() / 2f },
                 )
 
-                // === Section 3: Config Binding ===                if (allConfigNames.isNotEmpty()) {
+                // === Section 3: Config Binding ===
+                if (allConfigNames.isNotEmpty()) {
                     SectionTitle("应用排版")
                     LazyRow(
                         modifier = Modifier.padding(vertical = 4.dp),

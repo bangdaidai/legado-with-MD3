@@ -51,6 +51,8 @@ fun ReaderTextBackgroundImage.withBitmapSize(widthPx: Int, heightPx: Int): Reade
         // fork：剥掉 .9.png 引导边后的源图尺寸（与上游字段并存，供避让/裁剪按源图量）
         sourceWidthPx = contentWidthPx,
         sourceHeightPx = contentHeightPx,
+    )
+}
 
 data class ReaderPageId(val chapterIndex: Int, val pageIndex: Int)
 

@@ -333,27 +333,28 @@ class TocViewModel(
             }
         }
         .flowOn(Dispatchers.IO)
-^
-    /** 替换规则在编辑过程中可能持续变化，这个信号会让阅读目录的标题空缺重新恢复（以流的信号替换源）。
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptySet()
+        )
+
+    /**
+     * 替换规则在编辑过程中可能持续变化，这个信号会让阅读目录的标题空缺重新恢复（以流的信号替换源）。
      * 只保护本页面；值本身没有语义，每次规则变化 +1。
      */
     private val replaceRulesRevision = MutableStateFlow(0)
 
     init {
-        // 标签数据可能被书页标签编辑页、规则间同步在线页、等多处写入，可能在页面离开后台时发生错过初始化
-        // 页面在前台时的修改（如 DAO/SharedFlow 收听）也可能因为协程退出而被丢弃，重试一次记账
-        // 单次订阅在后台收件时也会自动触发一次刷新，防止出现重复标题
+        // 签名数据可能被书页标签编辑页、规则间同步在线页、等多处写入，可能在页面离开后台时发生错过初始化。
+        // 页面在前台时的修改（见 DAO/SharedFlow 收听）也可能因为协程退出而被丢弃，重试一次记录。
+        // 单次订阅在后台收件时也会自动触发一次刷新，防止出现重复标题。
         viewModelScope.launch {
             replaceRuleRepository.flowContentSignature()
                 .drop(1)
                 .collect { refreshTitleReplace() }
         }
     }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = emptySet()
-        )
 
     val bookmarkUiList: StateFlow<List<TocBookmarkItemUi>> =
         combine(

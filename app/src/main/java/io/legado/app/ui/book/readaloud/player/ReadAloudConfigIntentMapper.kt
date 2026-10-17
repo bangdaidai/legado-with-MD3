@@ -2,6 +2,7 @@ package io.legado.app.ui.book.readaloud.player
 
 import io.legado.app.ui.book.read.ReadAloudSubPage
 import io.legado.app.ui.book.read.ReadBookIntent
+import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 
 internal enum class ReadAloudPlayerConfigHostAction {
     OpenTtsEnginesAndVoices,
@@ -141,5 +142,97 @@ internal fun ReadAloudPlayerViewModel.applyReadBookConfigIntent(
         ReadBookIntent.ResetReadAloudCapsulePosition -> resetCapsulePosition()
         ReadBookIntent.ClearTtsCache -> clearTtsCache()
         else -> Unit
+    }
+}
+
+/**
+ * 「听书配置」全页（Navigation 3 目的地）的 [ReadAloudConfigIntent] 分发到全局设置写入与页面 Effect。
+ *
+ * 配置全页与弹层共享同一个媒体设置，设置写入统一落到 [ReadAloudPlayerViewModel.onConfigIntent]；
+ * 页面级 Effect 交由路由层收集后交给 MainNavGraph 执行导航。
+ */
+internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAloudConfigIntent) {
+    when (intent) {
+        is ReadAloudConfigIntent.SetDefaultInterface ->
+            onConfigIntent(ReadAloudConfigOption.DefaultInterface, value = intent.value)
+
+        is ReadAloudConfigIntent.ShowCapsule ->
+            onConfigIntent(ReadAloudConfigOption.ShowCapsule, selected = intent.value)
+
+        is ReadAloudConfigIntent.CapsuleAutoCollapse ->
+            onConfigIntent(ReadAloudConfigOption.CapsuleAutoCollapse, selected = intent.value)
+
+        is ReadAloudConfigIntent.IgnoreAudioFocus ->
+            onConfigIntent(ReadAloudConfigOption.IgnoreAudioFocus, selected = intent.value)
+
+        is ReadAloudConfigIntent.PauseOnPhoneCall ->
+            onConfigIntent(ReadAloudConfigOption.PauseOnPhoneCall, selected = intent.value)
+
+        is ReadAloudConfigIntent.WakeLock ->
+            onConfigIntent(ReadAloudConfigOption.WakeLock, selected = intent.value)
+
+        is ReadAloudConfigIntent.KeepOnExit ->
+            onConfigIntent(ReadAloudConfigOption.KeepOnExit, selected = intent.value)
+
+        is ReadAloudConfigIntent.MediaButtonPerNext ->
+            onConfigIntent(ReadAloudConfigOption.MediaButtonPerNext, selected = intent.value)
+
+        is ReadAloudConfigIntent.AndroidMediaControl ->
+            onConfigIntent(ReadAloudConfigOption.AndroidMediaControl, selected = intent.value)
+
+        is ReadAloudConfigIntent.SystemMediaCompat ->
+            onConfigIntent(ReadAloudConfigOption.SystemMediaCompat, selected = intent.value)
+
+        is ReadAloudConfigIntent.StreamAudio ->
+            onConfigIntent(ReadAloudConfigOption.StreamAudio, selected = intent.value)
+
+        is ReadAloudConfigIntent.SetSpeechAnalysisMode ->
+            onConfigIntent(ReadAloudConfigOption.SpeechAnalysisMode, value = intent.value)
+
+        is ReadAloudConfigIntent.SetSpeechAnalysisReasoningLevel ->
+            onConfigIntent(ReadAloudConfigOption.SpeechAnalysisReasoningLevel, value = intent.value)
+
+        is ReadAloudConfigIntent.SetUseMultiSpeaker ->
+            onConfigIntent(ReadAloudConfigOption.UseMultiSpeaker, selected = intent.value)
+
+        is ReadAloudConfigIntent.SetContentSplitMode ->
+            onConfigIntent(ReadAloudConfigOption.ContentSplit, value = intent.value)
+
+        is ReadAloudConfigIntent.SetPreDownloadNum ->
+            onConfigIntent(ReadAloudConfigOption.PreDownloadNum, intValue = intent.value)
+
+        is ReadAloudConfigIntent.SetPreSynthesisConcurrency ->
+            onConfigIntent(ReadAloudConfigOption.PreSynthesisConcurrency, intValue = intent.value)
+
+        is ReadAloudConfigIntent.SetParagraphInterval ->
+            onConfigIntent(ReadAloudConfigOption.ParagraphInterval, intValue = intent.value)
+
+        is ReadAloudConfigIntent.SetAudioCacheCleanTime ->
+            onConfigIntent(ReadAloudConfigOption.AudioCacheCleanTime, intValue = intent.value)
+
+        ReadAloudConfigIntent.ResetCapsulePosition ->
+            onConfigIntent(ReadAloudConfigOption.ResetCapsulePosition)
+
+        // 以下为全页面 Effect，由路由层收集后交给 MainNavGraph 执行导航。
+        ReadAloudConfigIntent.OpenEnginesAndVoices ->
+            effect(ReadAloudPlayerEffect.OpenEnginesAndVoices(uiState.value.bookUrl.ifBlank { null }))
+
+        ReadAloudConfigIntent.OpenTtsCache ->
+            effect(ReadAloudPlayerEffect.OpenTtsCache)
+
+        ReadAloudConfigIntent.OpenBookVoiceCasting -> {
+            val bookUrl = uiState.value.bookUrl
+            if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenBookVoiceCasting(bookUrl))
+        }
+
+        ReadAloudConfigIntent.OpenSpeechStoryboard -> {
+            val bookUrl = uiState.value.bookUrl
+            if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenSpeechStoryboard(bookUrl))
+        }
+
+        ReadAloudConfigIntent.OpenSystemTtsSettings ->
+            effect(ReadAloudPlayerEffect.OpenSystemTtsSettings)
+
+        ReadAloudConfigIntent.ClearTtsCache -> clearTtsCache()
     }
 }

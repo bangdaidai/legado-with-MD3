@@ -310,6 +310,9 @@ object LocalBook {
             }
             throw e
         }
+    }
+
+    /**
      * 找出"同名、但文件已经读不到"的旧记录，用于把重新导入的同名文件接回这条记录。
      * 判据见 [planLocalBookImportReuse]。
      */

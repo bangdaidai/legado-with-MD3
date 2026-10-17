@@ -1384,6 +1384,8 @@ data class TextSheetData(
     val title: String,
     val content: String,
     val onDismiss: (() -> Unit)? = null,
+)
+
 class LauncherW : MainActivity()
 class Launcher1 : MainActivity()
 class Launcher2 : MainActivity()

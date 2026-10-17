@@ -599,7 +599,6 @@ fun CloudTtsScreen(
             },
         )
     }
-    )
     val deleteVoices = state.activeDialog as? CloudTtsDialog.DeleteVoices
     AppAlertDialog(
         show = deleteVoices != null,
