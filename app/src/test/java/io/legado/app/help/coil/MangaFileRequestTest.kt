@@ -13,8 +13,17 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.request.crossfade
 import coil3.request.crossfadeMillis
+import coil3.request.maxBitmapSize
+import coil3.size.Dimension
+import coil3.size.Scale
+import coil3.size.Size
 import io.legado.app.data.entities.Book
 import io.legado.app.help.book.BookHelp
+import io.legado.app.ui.book.manga.MangaPageLoadState
+import io.legado.app.ui.book.manga.MangaReaderItemUi
+import io.legado.app.ui.book.manga.MangaReaderSettings
+import io.legado.app.ui.book.manga.config.MangaScrollMode
+import io.legado.app.ui.book.manga.imageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -43,6 +52,119 @@ class MangaFileRequestTest {
     fun setUp() {
         RuntimeEnvironment.getApplication().injectAsAppCtx()
     }
+
+    @Test
+    fun `returning to a displayed page after memory eviction does not fade again`() = runBlocking {
+        val src = "https://invalid.example/return-to-displayed-page.png"
+        val bitmap = Bitmap.createBitmap(40, 60, Bitmap.Config.ARGB_8888)
+        try {
+            ByteArrayOutputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                BookHelp.writeImage(book, src, it.toByteArray())
+            }
+        } finally {
+            bitmap.recycle()
+        }
+        val loader = ImageLoader.Builder(RuntimeEnvironment.getApplication()).components {
+            add(BitmapFactoryDecoder.Factory())
+            add(CoverInterceptor { _, data -> BookHelp.acquireReadingImage(null, book, data) })
+        }.build()
+        val page = MangaReaderItemUi.Page(
+            key = "page:0:0:$src", imageUrl = src, bookUrl = book.bookUrl,
+            chapterIndex = 0, chapterCount = 1, pageIndex = 0, pageCount = 1,
+            chapterName = "chapter", chapterSubject = "chapter",
+        )
+        try {
+            for (webtoon in listOf(true, false)) {
+                val settings = MangaReaderSettings(
+                    scrollMode = if (webtoon) MangaScrollMode.WEBTOON else MangaScrollMode.PAGE_LEFT_TO_RIGHT,
+                )
+                for (displayed in listOf(false, true)) {
+                    loader.memoryCache!!.clear()
+                    val owner = MangaImageFileOwner()
+                    try {
+                        val request = page.copy(
+                            loadState = if (displayed) MangaPageLoadState.Ready else MangaPageLoadState.Queued,
+                        ).imageRequest(
+                            settings,
+                            RuntimeEnvironment.getApplication(),
+                            Size(20, 30),
+                            owner
+                        )
+                        val result = loader.execute(request)
+                        if (result is ErrorResult) throw result.throwable
+                        assertEquals(DataSource.DISK, (result as SuccessResult).dataSource)
+                        if (displayed) assertEquals(0, result.request.crossfadeMillis)
+                        else assertTrue(result.request.crossfadeMillis > 0)
+                    } finally {
+                        owner.close()
+                    }
+                }
+            }
+        } finally {
+            loader.shutdown()
+            BookHelp.clearCache(book)
+        }
+    }
+
+    @Test
+    fun `switching loaded long webtoon to paged keeps preview bounded and original leased`() =
+        runBlocking {
+            val src = "https://invalid.example/mode-switch-long.png"
+            val raw = BookHelp.getImage(book, src)
+            val bitmap = Bitmap.createBitmap(128, 12_000, Bitmap.Config.ARGB_8888)
+            try {
+                bitmap.eraseColor(android.graphics.Color.RED)
+                ByteArrayOutputStream().use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    BookHelp.writeImage(book, src, it.toByteArray())
+                }
+            } finally {
+                bitmap.recycle()
+            }
+            val loader = ImageLoader.Builder(RuntimeEnvironment.getApplication()).components {
+                add(BitmapFactoryDecoder.Factory())
+                add(CoverInterceptor { _, data -> BookHelp.acquireReadingImage(null, book, data) })
+            }.build()
+            try {
+                for (webtoon in listOf(true, false, true, false)) {
+                    val owner = MangaImageFileOwner()
+                    try {
+                        val request = ImageRequest.Builder(RuntimeEnvironment.getApplication())
+                            .data(src).size(Size(Dimension(128), Dimension.Undefined))
+                            .scale(Scale.FILL).allowHardware(false)
+                            .memoryCacheKey("mode-switch-long")
+                            // Telephoto overrides this on every paged request.
+                            .maxBitmapSize(if (webtoon) Size(4096, 4096) else Size.ORIGINAL)
+                            .apply {
+                                extras[CoverExtras.MangaFileOwner] = owner
+                                extras[CoverExtras.MangaWebtoon] = webtoon
+                            }.build()
+                        val result = loader.execute(request)
+                        if (result is ErrorResult) throw result.throwable
+                        require(result is SuccessResult)
+                        assertTrue(
+                            "Preview height ${result.image.height} cannot be drawn safely",
+                            result.image.height <= 4096
+                        )
+                        if (!webtoon) assertEquals(raw, result.request.data)
+                        val borrowed = requireNotNull(owner.borrowForTiles())
+                        try {
+                            assertEquals(raw, borrowed.first)
+                            owner.close()
+                            BookHelp.clearCache(book)
+                            assertTrue(raw.isFile)
+                        } finally {
+                            borrowed.second.close()
+                        }
+                    } finally {
+                        owner.close()
+                    }
+                }
+            } finally {
+                loader.shutdown(); BookHelp.clearCache(book)
+            }
+        }
 
     @Test
     fun `webtoon reuses persisted preview after memory eviction and corrupt preview falls back to original`() =
@@ -110,6 +232,22 @@ class MangaFileRequestTest {
                         delay(10)
                     }
                 }
+                // 预览文件命中后，高清层仍借原图；请求退出后瓦片租约继续阻止清理。
+                val tiles = requireNotNull(
+                    mangaWebtoonTileSource(
+                        reused as SuccessResult, owner,
+                        RuntimeEnvironment.getApplication()
+                    )
+                )
+                try {
+                    owner.close()
+                    BookHelp.clearCache(book)
+                    assertTrue(raw.isFile)
+                } finally {
+                    tiles.close()
+                }
+                BookHelp.clearCache(book)
+                assertFalse(raw.exists())
             } finally {
                 owner.close(); loader.shutdown(); BookHelp.clearCache(book)
             }

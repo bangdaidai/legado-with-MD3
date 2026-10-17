@@ -59,6 +59,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.koin.core.context.GlobalContext
+import org.mozilla.javascript.CompilerEnvirons
+import org.mozilla.javascript.Context
+import org.mozilla.javascript.EvaluatorException
+import org.mozilla.javascript.Parser
+import org.mozilla.javascript.ast.Name
+import org.mozilla.javascript.ast.ObjectProperty
+import org.mozilla.javascript.ast.PropertyGet
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.URLEncoder
@@ -85,6 +92,13 @@ class AnalyzeUrl(
     private val speakSpeed: Int? = null,
     private val speakVoice: HttpTtsVoice? = null,
     private val speakEmotion: String? = null,
+    /**
+     * 当前片段使用的音色，供支持原生发言人目录的朗读源在 URL 里拼参数，
+     * 例如 `?v={{currentToneID}}`。默认空串，不带目录的源不受影响。
+     */
+    private val currentToneID: String = "",
+    private val currentSpeakerName: String = "",
+    private val currentEmotionTag: String = "",
     private var baseUrl: String = "",
     private val source: BaseSource? = null,
     private val ruleData: RuleDataInterface? = null,
@@ -375,6 +389,9 @@ class AnalyzeUrl(
             bindings["speakSpeed"] = speakSpeed
             bindings["voice"] = speakVoice
             bindings["emotion"] = speakEmotion
+            bindings["currentToneID"] = currentToneID
+            bindings["currentSpeakerName"] = currentSpeakerName
+            bindings["currentEmotionTag"] = currentEmotionTag
             bindings["book"] = ruleData as? Book
             bindings["source"] = source
             bindings["result"] = result
@@ -780,6 +797,47 @@ class AnalyzeUrl(
     companion object {
         val paramPattern: Regex = Regex("\\s*,\\s*(?=\\{)")
         private val pagePattern = Regex("<(.*?)>")
+
+        /** Inspect the supported URL rule syntax without executing source JavaScript. */
+        fun supportsPageSelection(rule: String?): Boolean {
+            if (rule.isNullOrBlank()) return false
+            var usesPage = false
+            val withoutScripts = AppPattern.JS_PATTERN.replace(rule) { match ->
+                val script = match.groupValues[2].ifEmpty { match.groupValues[1] }
+                usesPage = usesPage || referencesPage(script)
+                ""
+            }
+            val withoutExpressions = RuleAnalyzer(withoutScripts).innerRule("{{", "}}") {
+                usesPage = usesPage || referencesPage(it)
+                ""
+            }
+            return usesPage || pagePattern.findAll(withoutExpressions).any {
+                it.groupValues[1].contains(',')
+            }
+        }
+
+        private fun referencesPage(script: String): Boolean {
+            val environment = CompilerEnvirons().apply {
+                languageVersion = Context.VERSION_ES6
+            }
+            val root = try {
+                Parser(environment).parse(script, "page-selection", 1)
+            } catch (_: EvaluatorException) {
+                return false
+            }
+            var found = false
+            root.visit { node ->
+                if (node is Name && node.identifier == "page" && node.definingScope == null) {
+                    val parent = node.parent
+                    val isProperty = (parent is PropertyGet && parent.property === node) ||
+                        (parent is ObjectProperty && parent.left === node)
+                    if (!isProperty) found = true
+                }
+                !found
+            }
+            return found
+        }
+
         private const val QUERY_HEX_UPPER = "0123456789ABCDEF"
         private val queryEncoderSafeChars: BooleanArray = BooleanArray(128).apply {
             for (c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~!$%&()*+,/:;=?@[\\]^`{|}") {

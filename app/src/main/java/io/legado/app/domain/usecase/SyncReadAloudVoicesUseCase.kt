@@ -19,11 +19,17 @@ class SyncReadAloudVoicesUseCase(
 
     private val syncMutex = Mutex()
 
+    /**
+     * @param managedScope 回收阶段的额外范围限定。默认不限，即凡 [managedSources] 里
+     * 缺失的行都参与回收。按单个引擎同步目录时必须传：否则同步 A 引擎会把 B 引擎的
+     * 目录行判定为「本次没出现」而误删。
+     */
     suspend operator fun invoke(
         entries: List<VoiceCatalogEntry>,
         managedSources: Set<String>,
         removeMissingEngineTypes: Set<String> = emptySet(),
         scopeEngineTypes: Set<String> = emptySet(),
+        managedScope: (ReadAloudVoice) -> Boolean = { true },
         now: Long = System.currentTimeMillis(),
     ): SyncReadAloudVoicesResult = syncMutex.withLock {
         val existing = voiceGateway.getVoices()
@@ -65,6 +71,8 @@ class SyncReadAloudVoicesUseCase(
                 managedBy = managedBy,
                 enabled = old?.enabled ?: true,
                 available = true,
+                // 用户排除过的音色不能因为源重新导入而复活
+                excluded = old?.excluded ?: false,
                 revision = revision,
                 createdAt = old?.createdAt ?: now,
                 updatedAt = if (old == null || metadataChanged || !old.available || revision != old.revision) {
@@ -87,6 +95,7 @@ class SyncReadAloudVoicesUseCase(
             .filter { it.managedBy in managedSources }
             // 只传了部分引擎类型的条目时，别把没参与本次同步的类型判成失效
             .filter { scopeEngineTypes.isEmpty() || it.engineType in scopeEngineTypes }
+            .filter(managedScope)
             .filter { it.id !in incomingIds }
             .forEach { voice ->
                 if (voice.engineType in removeMissingEngineTypes) {

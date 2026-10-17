@@ -169,7 +169,7 @@ private fun CharacterDetailContent(
             avatarUri = state.avatarUri,
             roleDisplayName = state.role,
             voiceGender = state.voiceGender,
-            voiceAgeBand = state.voiceAgeBand,
+            voicePool = state.voicePool,
             tags = state.tags,
             onPickAvatar = onPickAvatar,
             onInfoClick = {
@@ -241,6 +241,7 @@ private fun CharacterDetailContent(
             onIntent(CharacterDetailIntent.SetVoiceGender(dialogVoiceGender))
             onIntent(CharacterDetailIntent.SetVoiceAgeBand(dialogVoiceAgeBand))
             onIntent(CharacterDetailIntent.SetIsProtagonist(dialogIsProtagonist))
+            onIntent(CharacterDetailIntent.SetVoicePool(dialogPool))
             showProfileDialog = false
         },
         dismissText = stringResource(R.string.cancel),
@@ -330,6 +331,20 @@ private fun CharacterDetailContent(
                         options = BookCharacterProfile.ALL_VOICE_AGE_BANDS,
                         displayName = { voiceAgeBandDisplayName(it) },
                         onSelected = { dialogVoiceAgeBand = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProfileVoiceTraitDropdown(
+                        label = stringResource(R.string.character_voice_pool),
+                        text = dialogPool.ifEmpty { stringResource(R.string.cast_unassigned) },
+                        options = buildList {
+                            add("")
+                            addAll(state.poolNames)
+                            if (dialogPool.isNotEmpty() && dialogPool !in state.poolNames) add(dialogPool)
+                        },
+                        displayName = { pool -> pool.ifEmpty { stringResource(R.string.cast_unassigned) } },
+                        onSelected = { dialogPool = it },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -459,16 +474,6 @@ private fun voiceGenderDisplayName(value: String): String = when (value) {
     else -> stringResource(R.string.voice_gender_unknown)
 }
 
-@Composable
-private fun voiceAgeBandDisplayName(value: String): String = when (value) {
-    BookCharacterProfile.VOICE_AGE_CHILD -> stringResource(R.string.voice_age_child)
-    BookCharacterProfile.VOICE_AGE_TEEN -> stringResource(R.string.voice_age_teen)
-    BookCharacterProfile.VOICE_AGE_YOUNG_ADULT -> stringResource(R.string.voice_age_young_adult)
-    BookCharacterProfile.VOICE_AGE_ADULT -> stringResource(R.string.voice_age_adult)
-    BookCharacterProfile.VOICE_AGE_ELDERLY -> stringResource(R.string.voice_age_elderly)
-    else -> stringResource(R.string.voice_age_unknown)
-}
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ProfileRoleDropdown(
@@ -502,7 +507,7 @@ private fun CharacterHeader(
     avatarUri: String,
     roleDisplayName: String,
     voiceGender: String,
-    voiceAgeBand: String,
+    voicePool: String,
     tags: ImmutableList<String>,
     onPickAvatar: () -> Unit,
     onInfoClick: () -> Unit,

@@ -122,6 +122,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
+import kotlin.math.roundToInt
 import java.io.File
 
 @Composable
@@ -136,6 +137,9 @@ fun HighlightRuleEditSheet(
     val initial = remember(show, rule) { rule ?: HighlightRule() }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    // 键盘顶着屏幕时不浮出预览：悬浮卡钉在弹层底边，输入框一拿到焦点就收回。
+    var typingFocused by remember(show) { mutableStateOf(false) }
 
     // Rule info state
     var pattern by remember(show, rule) { mutableStateOf(initial.pattern) }
@@ -222,6 +226,22 @@ fun HighlightRuleEditSheet(
         )
     }
 
+    // 命中排版 state：只作用在正则命中的那一段上，没设（0）就一个浮点差异都不引入。
+    var matchSpacingBefore by remember(show, rule) {
+        mutableFloatStateOf(initial.letterSpacingBefore)
+    }
+    var matchSpacingAfter by remember(show, rule) { mutableFloatStateOf(initial.letterSpacingAfter) }
+    var hitLineSpacingTop by remember(show, rule) { mutableFloatStateOf(initial.lineSpacingTop) }
+    var hitLineSpacingBottom by remember(show, rule) {
+        mutableFloatStateOf(initial.lineSpacingBottom)
+    }
+    var bgLengthOffsetLeft by remember(show, rule) {
+        mutableFloatStateOf(initial.bgLengthOffsetLeft)
+    }
+    var bgLengthOffsetRight by remember(show, rule) {
+        mutableFloatStateOf(initial.bgLengthOffsetRight)
+    }
+
     // Config binding state — empty set = global (applies to all configs)
     var configNames by remember(show, rule) {
         mutableStateOf(initial.configName.orEmpty().configNames().toSet())
@@ -300,7 +320,7 @@ fun HighlightRuleEditSheet(
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
-        title = stringResource(titleRes),
+        title = title ?: stringResource(titleRes),
         startAction = {
             // 预览折叠开关与右侧「保存」对称，都走标题栏图标按钮
             MediumTonalButton(
@@ -318,7 +338,7 @@ fun HighlightRuleEditSheet(
         endAction = {
             MediumTonalButton(
                 onClick = {
-                    if (pattern.isNotBlank()) {
+                    if (showRuleInfo && pattern.isNotBlank()) {
                         val result = runCatching { Regex(pattern) }
                         if (result.isFailure) {
                             patternError = result.exceptionOrNull()?.message
@@ -371,6 +391,12 @@ fun HighlightRuleEditSheet(
                             bgMarginEnd = bgMarginEnd,
                             bgMarginTop = bgMarginTop,
                             bgMarginBottom = bgMarginBottom,
+                            letterSpacingBefore = matchSpacingBefore,
+                            letterSpacingAfter = matchSpacingAfter,
+                            lineSpacingTop = hitLineSpacingTop,
+                            lineSpacingBottom = hitLineSpacingBottom,
+                            bgLengthOffsetLeft = bgLengthOffsetLeft,
+                            bgLengthOffsetRight = bgLengthOffsetRight,
                             useProtagonist = useProtagonist,
                             characterRole = characterRole.ifBlank { null },
                             manualNineSlice = manualNineSlice,
@@ -392,6 +418,9 @@ fun HighlightRuleEditSheet(
                     .verticalScroll(rememberScrollState()),
             ) {
                 // === Section 1: Rule Info ===
+                // 角色气泡复用这一整套编辑器，只是没有「规则信息」：哪一句归哪个角色由分配表
+                // 给定，不需要正则、作用域与停用开关（见 CastBubbleSheet）。
+                if (showRuleInfo) {
                 SectionTitle(stringResource(R.string.rule_info))
 
                 AppTextField(
@@ -412,7 +441,9 @@ fun HighlightRuleEditSheet(
                     },
                     label = stringResource(R.string.rule_pattern),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusEvent { typingFocused = it.hasFocus },
                     isError = patternError != null,
                     enabled = !useProtagonist,
                     supportingText = patternError?.let {
@@ -475,6 +506,7 @@ fun HighlightRuleEditSheet(
                     checked = enabled,
                     onCheckedChange = { enabled = it },
                 )
+                }
 
                 // === Section 2: Style Settings ===
                 SectionTitle(stringResource(R.string.style_settings))
@@ -877,12 +909,119 @@ fun HighlightRuleEditSheet(
                                     }
                                 }
                             }
+                            // 只有九宫格才吃这两个偏移（其它 fit 的绘制根本不读它们），
+                            // 挂在 fit 外面就是两个拨了没反应的死滑杆。
+                            AnimatedVisibility(visible = bgImageFit == 3) {
+                                Column {
+                                    TinySliderSettingItem(
+                                        title = stringResource(R.string.highlight_bg_length_offset_left),
+                                        value = bgLengthOffsetLeft,
+                                        valueRange = -40f..40f,
+                                        steps = 159,
+                                        stepSize = 0.5f,
+                                        showDecimal = true,
+                                        valueFormat = { String.format("%.1f", it) },
+                                        description = String.format("%.1f dp", bgLengthOffsetLeft),
+                                        onValueChange = { bgLengthOffsetLeft = (it * 2).roundToInt() / 2f },
+                                    )
+                                    TinySliderSettingItem(
+                                        title = stringResource(R.string.highlight_bg_length_offset_right),
+                                        value = bgLengthOffsetRight,
+                                        valueRange = -40f..40f,
+                                        steps = 159,
+                                        stepSize = 0.5f,
+                                        showDecimal = true,
+                                        valueFormat = { String.format("%.1f", it) },
+                                        description = String.format("%.1f dp", bgLengthOffsetRight),
+                                        onValueChange = { bgLengthOffsetRight = (it * 2).roundToInt() / 2f },
+                                    )
+                                }
+                            }
+                            if (bgImageFit == 3) {
+                                TinySwitchSettingItem(
+                                    title = stringResource(R.string.manual_nine_slice),
+                                    checked = manualNineSlice,
+                                    onCheckedChange = {
+                                        manualNineSlice = it
+                                        if (it) showNinePatchEditor = true
+                                    },
+                                )
+                                if (manualNineSlice) {
+                                    TinyClickableSettingItem(
+                                        title = stringResource(R.string.edit_nine_slice),
+                                        onClick = { showNinePatchEditor = true },
+                                    )
+                                }
+                            }
                         }
+
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.highlight_bg_image_scale),
+                            value = bgImageScale,
+                            valueRange = 0.1f..5f,
+                            steps = 48,
+                            stepSize = 0.1f,
+                            showDecimal = true,
+                            valueFormat = { String.format("%.1f", it) },
+                            description = String.format("%.1fx", bgImageScale),
+                            onValueChange = { bgImageScale = (it * 10).roundToInt() / 10f },
+                        )
                     }
                 }
+                // === Section 2b: Match typography ===
+                SectionTitle(stringResource(R.string.highlight_match_typography))
+                AppText(
+                    stringResource(R.string.highlight_match_typography_hint),
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_spacing_before),
+                    value = matchSpacingBefore,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", matchSpacingBefore),
+                    onValueChange = { matchSpacingBefore = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_spacing_after),
+                    value = matchSpacingAfter,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", matchSpacingAfter),
+                    onValueChange = { matchSpacingAfter = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_line_spacing_above),
+                    value = hitLineSpacingTop,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", hitLineSpacingTop),
+                    onValueChange = { hitLineSpacingTop = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_line_spacing_below),
+                    value = hitLineSpacingBottom,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", hitLineSpacingBottom),
+                    onValueChange = { hitLineSpacingBottom = (it * 2).roundToInt() / 2f },
+                )
 
-                // === Section 3: Config Binding ===
-                if (allConfigNames.isNotEmpty()) {
+                // === Section 3: Config Binding ===                if (allConfigNames.isNotEmpty()) {
                     SectionTitle("应用排版")
                     LazyRow(
                         modifier = Modifier.padding(vertical = 4.dp),

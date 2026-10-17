@@ -8,6 +8,8 @@ import io.legado.app.domain.model.PlaybackCapsuleSource
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.ReadAloudSessionStore
+import io.legado.app.model.ReadBook
+import io.legado.app.model.ReadAloud
 import io.legado.app.service.AudioPlayService
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.playback.PlaybackCapsuleGatewayAdapter
@@ -40,6 +42,7 @@ class PlaybackCapsuleGatewayAdapterTest {
     private var previousChapter: BookChapter? = null
     private var previousChapterIndex = 0
     private var previousStatus = Status.STOP
+    private var previousReadBook: Book? = null
 
     @Before
     fun setUp() {
@@ -49,6 +52,7 @@ class PlaybackCapsuleGatewayAdapterTest {
         previousChapterIndex = AudioPlay.durChapterIndex
         previousBook = AudioPlay.book
         previousStatus = AudioPlay.status
+        previousReadBook = ReadBook.book
         assertTrue(!AudioPlayService.isRun)
         assertTrue(!BaseReadAloudService.isRun)
         AudioPlay.book = Book(bookUrl = "audio-a", name = "有声书")
@@ -61,12 +65,55 @@ class PlaybackCapsuleGatewayAdapterTest {
         AudioPlay.durChapterIndex = previousChapterIndex
         AudioPlay.book = previousBook
         AudioPlay.status = previousStatus
+        setReadBook(previousReadBook)
+        BaseReadAloudService::class.java.getDeclaredField("isRun").apply {
+            isAccessible = true
+            setBoolean(null, false)
+        }
         Dispatchers.resetMain()
     }
 
     private fun gateway() = PlaybackCapsuleGatewayAdapter(
         RuntimeEnvironment.getApplication(), ReadAloudSessionStore(),
     )
+
+    private fun setReadBook(book: Book?) {
+        ReadBook::class.java.getDeclaredField("book").apply {
+            isAccessible = true
+            set(null, book)
+        }
+    }
+
+    @Test
+    fun runningReadAloudServiceKeepsCapsuleWhenAvailabilitySignalIsStale() = runTest(dispatcher) {
+        setReadBook(Book(bookUrl = "read-a", name = "正在朗读"))
+        ReadAloud.bookSession.adopt(ReadAloudBookSession.Snapshot(book = ReadBook.book, chapterIndex = 0))
+        BaseReadAloudService::class.java.getDeclaredField("isRun").apply {
+            isAccessible = true
+            setBoolean(null, true)
+        }
+        val gateway = gateway()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { gateway.state.collect { } }
+        gateway.setSessionAvailable(PlaybackCapsuleSource.ReadAloud, false)
+        runCurrent()
+        assertEquals(PlaybackCapsuleSource.ReadAloud, gateway.state.value.source)
+        assertEquals("read-a", gateway.state.value.bookUrl)
+    }
+
+    @Test
+    fun readingAnotherBookKeepsThePlayingBooksCapsule() = runTest(dispatcher) {
+        ReadAloud.bookSession.adopt(ReadAloudBookSession.Snapshot(
+            book = Book(bookUrl = "read-a", name = "正在听 A"), chapterIndex = 5,
+        ))
+        setReadBook(Book(bookUrl = "read-b", name = "正在看 B"))
+        BaseReadAloudService::class.java.getDeclaredField("isRun").apply {
+            isAccessible = true
+            setBoolean(null, true)
+        }
+        val gateway = gateway()
+        assertEquals("read-a", gateway.state.value.bookUrl)
+        assertEquals("正在听 A", gateway.state.value.bookName)
+    }
 
     @Test
     fun loadedBookWithoutServiceRemainsAResumablePausedCapsule() = runTest(dispatcher) {

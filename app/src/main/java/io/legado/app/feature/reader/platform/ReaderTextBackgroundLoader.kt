@@ -16,17 +16,33 @@ object ReaderTextBackgroundLoader {
         val top: Float,
         val bottom: Float,
     )
-    private val bitmaps = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+    /**
+     * 气泡图缓存的上限：堆的八分之一（Android 做图片缓存的常规口径），最少 16 MB。
+     *
+     * 下限必须容得下最大的一张气泡图：解出来的气泡图能到整屏大小（`sampleSizeFor` 就按
+     * 屏幕尺寸降采样），一张 1440×3200 的 ARGB_8888 接近 18 MB；上限小于一张图的尺寸时
+     * 条目一进缓存就被挤出去，每页每帧都是未命中，翻页首帧气泡是空的、下一帧才补上。
+     */
+    private val bitmaps = object : LruCache<String, Bitmap>(
+        maxOf(16 * 1024 * 1024, (Runtime.getRuntime().maxMemory() / 8).toInt()),
+    ) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
     }
 
-    /** .9.png 引导线探测结果条目：LruCache 不收 null，负结果用包装条目缓存 */
-    private class FractionsEntry(val fractions: NineSliceFractions?)
+    /**
+     * 这张图**真正解出来**有多大（与 [load] 给绘制侧的那张位图一致）。
+     *
+     * 九宫格的两条切分线、锁定高度都是按这个尺寸换算出来的，报成文件原尺寸就会和位图对不上：
+     * 大图降采样过一半时，四角按半尺寸画、中间那条带却按全尺寸留高，气泡接缝就错开了。
+     */
+    fun dimensions(source: String): Pair<Int, Int> {
+        val (width, height) = fileDimensions(source)
+        if (width <= 0 || height <= 0) return 0 to 0
+        val sample = sampleSizeFor(source, width, height)
+        return (width / sample) to (height / sample)
+    }
 
-    /** 按源条数计 64 张足够覆盖设备上的背景素材；键含文件长度/修改时间，换图自动失效 */
-    private val nineSlices = LruCache<String, FractionsEntry>(64)
-
-    fun dimensions(source: String): Pair<Int, Int> = runCatching {
+    private fun fileDimensions(source: String): Pair<Int, Int> = runCatching {
         open(source)?.use { input ->
             BitmapFactory.Options().run {
                 inJustDecodeBounds = true
@@ -40,14 +56,9 @@ object ReaderTextBackgroundLoader {
         if (source.isBlank()) return null
         val key = cacheKey(source)
         cached(source)?.let { return it }
-        val dimensions = dimensions(source)
-        if (dimensions.first <= 0 || dimensions.second <= 0) return null
-        val sampleSize = if (isRawNinePatch(source)) 1 else calculateInSampleSize(
-            width = dimensions.first,
-            height = dimensions.second,
-            requestedWidth = appCtx.resources.displayMetrics.widthPixels,
-            requestedHeight = appCtx.resources.displayMetrics.heightPixels,
-        )
+        val (width, height) = fileDimensions(source)
+        if (width <= 0 || height <= 0) return null
+        val sampleSize = sampleSizeFor(source, width, height)
         return runCatching {
             open(source)?.use { input ->
                 BitmapFactory.decodeStream(
@@ -64,11 +75,17 @@ object ReaderTextBackgroundLoader {
         ?.let(bitmaps::get)
         ?.takeUnless(Bitmap::isRecycled)
 
+    /** .9.png 切线探测缓存的条目：null 也缓存，避免反复扫描坏资源 */
+    private class FractionsEntry(val fractions: NineSliceFractions?)
+
+    /** 资源级缓存，64 项足够覆盖设备上的背景色片段；按文件路径/修改时间，旧图自动失效 */
+    private val nineSlices = LruCache<String, FractionsEntry>(64)
+
     /** Reads the first stretch run from a raw .9.png guide border. */
     fun nineSliceFractions(source: String): NineSliceFractions? {
         if (!isRawNinePatch(source)) return null
-        // 探测结果（含"没有引导线"的负结果）按源缓存：容器背景/书架卡片每帧重组
-        // 都会同步走这条路，回收行不能再反复 getPixel 扫整行整列
+        // 探测结果缓存「没有切线」的负结果关键：同一背景/闪光片每次全部
+        // 访问相同数组，则下次列检查不再扫描 getPixel。
         val key = cacheKey(source)
         nineSlices.get(key)?.let { return it.fractions }
         val fractions = detectNineSliceFractions(source)
@@ -128,6 +145,15 @@ object ReaderTextBackgroundLoader {
 
     private fun isRawNinePatch(source: String): Boolean =
         source.substringBefore('?').substringBefore('#').endsWith(".9.png", ignoreCase = true)
+
+    /** `.9.png` 的引导边只有一像素，降采样会把切线吃掉，所以它一律原尺寸解。 */
+    private fun sampleSizeFor(source: String, width: Int, height: Int): Int =
+        if (isRawNinePatch(source)) 1 else calculateInSampleSize(
+            width = width,
+            height = height,
+            requestedWidth = appCtx.resources.displayMetrics.widthPixels,
+            requestedHeight = appCtx.resources.displayMetrics.heightPixels,
+        )
 
     private fun calculateInSampleSize(
         width: Int,

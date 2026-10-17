@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.info
 
-import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,12 +32,9 @@ import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.security.BiometricUnlockLauncher
 import io.legado.app.model.SourceCallBack
-import io.legado.app.ui.book.info.edit.BookInfoEditActivity
-import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
 import io.legado.app.utils.RealPathUtil
-import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.openFileUri
@@ -60,11 +56,13 @@ fun BookInfoRouteScreen(
     origin: String? = null,
     coverPath: String? = null,
     viewModel: BookInfoViewModel,
-    onBack: () -> Unit,
-    onFinish: (resultCode: Int?, afterTransition: Boolean) -> Unit,
+    onBack: () -> Boolean = { true },
+    onFinish: (resultCode: Int?, afterTransition: Boolean) -> Boolean = { _, _ -> true },
     onOpenSearch: (String) -> Unit,
     onOpenBookSourceEdit: (String) -> Unit,
     onOpenSourceLogin: (String) -> Unit,
+    onOpenToc: (String) -> Unit,
+    onOpenInfoEdit: (String) -> Unit,
     onOpenReader: (bookUrl: String, inBookshelf: Boolean, chapterChanged: Boolean, chapterIndex: Int, chapterPos: Int) -> Unit = { _, _, _, _, _ -> },
     onOpenMangaReader: (bookUrl: String, inBookshelf: Boolean, chapterChanged: Boolean, chapterIndex: Int, chapterPos: Int) -> Unit = { _, _, _, _, _ -> },
     onOpenAudioPlay: (bookUrl: String, inBookshelf: Boolean) -> Unit = { _, _ -> },
@@ -95,9 +93,6 @@ fun BookInfoRouteScreen(
     val noPasswordHint = stringResource(R.string.private_content_no_password)
     var showSelectBooksDirSheet by remember { mutableStateOf(false) }
 
-    val tocActivityResult = rememberLauncherForActivityResult(TocActivityResult()) {
-        viewModel.onTocResult(it)
-    }
     val localBookTreeSelect =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
@@ -109,13 +104,6 @@ fun BookInfoRouteScreen(
             }
             viewModel.onIntent(BookInfoIntent.SetDefaultBookTreeUri(uri.toString()))
         }
-    val infoEditResult = rememberLauncherForActivityResult(
-        StartActivityContract(BookInfoEditActivity::class.java)
-    ) {
-        if (it.resultCode == Activity.RESULT_OK) {
-            viewModel.onInfoEdited()
-        }
-    }
 
     LaunchedEffect(bookUrl, name, author, origin, coverPath, viewModel) {
         viewModel.initData(
@@ -149,9 +137,7 @@ fun BookInfoRouteScreen(
                 }
 
                 is BookInfoEffect.OpenBookInfoEdit -> {
-                    infoEditResult.launch {
-                        putExtra("bookUrl", effect.bookUrl)
-                    }
+                    onOpenInfoEdit(effect.bookUrl)
                 }
 
                 is BookInfoEffect.OpenReader -> {
@@ -182,7 +168,9 @@ fun BookInfoRouteScreen(
                     }
                 }
 
-                is BookInfoEffect.OpenToc -> tocActivityResult.launch(effect.bookUrl)
+                is BookInfoEffect.OpenToc -> {
+                    onOpenToc(effect.bookUrl)
+                }
                 is BookInfoEffect.OpenBookSourceEdit -> {
                     viewModel.markPendingSourceRefresh()
                     onOpenBookSourceEdit(effect.sourceUrl)
@@ -290,6 +278,10 @@ fun BookInfoRouteScreen(
             localBookTreeSelect.launch(null)
         },
     )
+    // 详情页是普通 nav3 目的地（覆盖层 + 零转场）：封面飞行由形变舞台负责，
+    // 页面里的封面只上报终点位置，并在形变期间让位给飞行封面。
+    // 详情页是普通 nav3 目的地：封面飞行交给共享元素，两端 key 由路由统一携带
+    // （`route.sharedCoverKey` 就是源卡片登记的那一个），页面自身不再接管返回。
     BookInfoScreen(
         state = uiState,
         groups = viewModel.allGroups

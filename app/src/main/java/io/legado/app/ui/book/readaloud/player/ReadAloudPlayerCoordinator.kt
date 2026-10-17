@@ -18,10 +18,12 @@ import io.legado.app.model.ReadBook
 import io.legado.app.model.reader.ReaderChapterInput
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.ReadConfigUpdateBus
+import io.legado.app.utils.TTSCacheUtils
 import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /** Compatibility boundary between the Compose player and the legacy reader/service state. */
@@ -54,19 +57,12 @@ class ReadAloudPlayerCoordinator(
     private val configChanges = ReadConfigUpdateBus.events.map { }
 
     /**
-     * 会话状态一变就重拍书目快照。点「听书」切到另一本书时，
-     * 换源/开播/进度这些事件一个都不发，只有 Preparing 是立刻翻转的：
-     * 不接上它，播放页会一直挂着上一本书的封面和正文到真正出声为止。
-     */
-    private val sessionStatusChanges =
-        sessionStore.state.map { it.status }.distinctUntilChanged().map { }
-
-    /**
      * `TTS_PROGRESS` 会按词回调（见 `BaseReadAloudService.upTtsProgress`），但绝大多数事件并不会
      * 改变快照内容。这里去重，避免每次进度事件都让下游 `flatMapLatest` 重新订阅 Room 章节流、
      * 重建目录列表实例（对照 `AudioPlayCoordinator.chapters` 的同名处理）。
      */
-    private val bookState = merge(bookChanges, refreshRequests, configChanges, sessionStatusChanges)
+    private val bookState = merge(bookChanges, refreshRequests, configChanges,
+        ReadAloud.bookSession.state.map { })
         .map { snapshotBook() }
         .distinctUntilChanged()
 
@@ -112,7 +108,6 @@ class ReadAloudPlayerCoordinator(
             engineName = playback.engineName,
             speakerName = playback.characterName.ifBlank { playback.roleType.storageValue },
             isPaused = session.status != ReadAloudSessionStatus.Playing,
-            isPreparing = session.status == ReadAloudSessionStatus.Preparing,
             speed = readAloudSettingsGateway.currentSettings.ttsSpeechRate,
             timerMinutes = session.timerMinutes,
             timerMode = settings.timerMode,
@@ -142,7 +137,6 @@ class ReadAloudPlayerCoordinator(
             engineName = playback.engineName,
             speakerName = playback.characterName.ifBlank { playback.roleType.storageValue },
             isPaused = session.status != ReadAloudSessionStatus.Playing,
-            isPreparing = session.status == ReadAloudSessionStatus.Preparing,
             speed = readAloudSettingsGateway.currentSettings.ttsSpeechRate,
             timerMinutes = session.timerMinutes,
             timerMode = readAloudSettingsGateway.currentSettings.timerMode,
@@ -160,8 +154,9 @@ class ReadAloudPlayerCoordinator(
     private var chapterSnapshotCache: ChapterSnapshot? = null
 
     private fun snapshotBook(): BookState {
-        val book = ReadBook.book
-        val input = ReadBook.readerChapterInputWindow.current
+        val book = ReadAloud.bookSession.book ?: ReadBook.book
+        val input = if (ReadAloud.bookSession.book != null) ReadAloud.bookSession.input
+            else ReadBook.readerChapterInputWindow.current
         val chapter = input?.let(::chapterSnapshot)
         return BookState(
             bookUrl = book?.bookUrl.orEmpty(),
@@ -189,9 +184,12 @@ class ReadAloudPlayerCoordinator(
             chapterIndex = input.chapter.index,
             title = input.displayTitle,
             semanticContent = input.source.semanticContent,
-            pageStarts = ReadBook.readerPagination(input.chapter.index)?.pageStarts.orEmpty(),
+            pageStarts = if (ReadAloud.bookSession.owns(input.book.bookUrl)) {
+                ReadAloud.bookSession.pagination?.pageStarts.orEmpty()
+            } else ReadBook.readerPagination(input.chapter.index)?.pageStarts.orEmpty(),
             // 与朗读服务同口径：「默认」在多角色关闭时落到整段，否则听书页展示的
-            // 文本行会与服务实际播放的单元粒度不一致。
+            // 文本行会与服务实际播放的单元粒度不一致。划分只认「多角色朗读」这一个开关，
+            // 「多角色分配」是正文胶囊的显示开关，不改朗读单元粒度。
             contentSplitMode = ContentSplitPolicies.resolve(
                 mode = ReadAloudContentSplitMode.fromStorage(settings.contentSplitMode),
                 useMultiSpeaker = settings.useMultiSpeaker,
@@ -223,9 +221,18 @@ class ReadAloudPlayerCoordinator(
 
     fun togglePause() {
         when {
-            // 还在生成朗读计划（AI 分析）时点按钮就是取消准备，走 pause 会被随后的 play() 吞掉
-            BaseReadAloudService.isPreparing -> ReadAloud.stop(application)
-            !BaseReadAloudService.isRun -> ReadBook.readAloud()
+            !BaseReadAloudService.isRun -> {
+                when {
+                    // 棰勫悎鎴愬崰浣嶆湡鐐规挱涓嶆槸鍒囨崲閿紝閬垮厤 pause 璺緞琚悶鍏?play() 鍗′綇
+                    BaseReadAloudService.isPreparing -> ReadAloud.stop(application)
+                    ReadAloud.bookSession.book != null -> ReadAloud.play(
+                        application,
+                        chapterPosition = ReadAloud.bookSession.state.value.chapterPosition,
+                        fromReader = false,
+                    )
+                    else -> ReadBook.readAloud()
+                }
+            }
             BaseReadAloudService.pause -> ReadAloud.resume(application)
             else -> ReadAloud.pause(application)
         }
@@ -234,38 +241,19 @@ class ReadAloudPlayerCoordinator(
     /** 悬浮胶囊与播放界面的停止入口共用。 */
     fun stop() = ReadAloud.stop(application)
 
+    fun previousParagraph() = ReadAloud.prevParagraph(application)
+    fun nextParagraph() = ReadAloud.nextParagraph(application)
+    fun previousChapter() = ReadAloud.previousChapter(application)
+    fun nextChapter() = ReadAloud.nextChapter(application)
+    fun selectChapter(index: Int) = ReadAloud.selectChapter(application, index)
+
     /**
-     * 听书页退场时告知阅读页「页面该追声音了」：nav3 返回不一定重新触发阅读页生命周期，
-     * resumeReader 里的回拉未必会跑；显式发这一事件，由阅读页在跟随状态下立即对齐。
-     */
+     * 闃呰椤甸€€鍑烘椂涔熺煡鏅撶煡鑰椾笅绔狅紙nav3 杩斿洖涓嶄竴瀹氶噸寤洪槄璇婚〉锛?     * resumeReader 鐨勬鐨摝鎺夎褰曞姛鑳斤紱鏄惧紡鍙戜竴涓簨浠朵繚璇侀槄璇婚〉鍦ㄧ鐞嗙姸鎬佹椂鍒锋柊缃寒銆?     */
     fun notifyReaderToFollowVoice() {
         postEvent(EventBus.READ_ALOUD_SYNC_READER_TO_VOICE, true)
     }
-
-    fun previousParagraph() {
-        ReadAloud.prevParagraph(application)
-    }
-
-    fun nextParagraph() {
-        ReadAloud.nextParagraph(application)
-    }
-
-    /** 播放页跳章：声音不会由这里直接控制，全靠 ReadBook 换章后的补发判据把朗读拽到新章。 */
-    fun previousChapter(): Boolean {
-        val moved = ReadBook.moveToPrevChapter(true, false)
-        if (moved) refresh()
-        return moved
-    }
-
-    fun nextChapter(): Boolean {
-        val moved = ReadBook.moveToNextChapter(true)
-        if (moved) refresh()
-        return moved
-    }
-
-    fun selectChapter(index: Int) {
-        ReadBook.openChapter(index, durChapterPos = 0)
-        refresh()
+    suspend fun clearTtsCache() = withContext(Dispatchers.IO) {
+        TTSCacheUtils.clearTtsCache()
     }
 
     suspend fun setSpeed(value: Int) {
@@ -326,7 +314,7 @@ class ReadAloudPlayerCoordinator(
 
     fun seekTo(chapterPosition: Int, chapterLength: Int) {
         val position = chapterPosition.coerceIn(0, chapterLength)
-        ReadAloud.play(application, play = true, chapterPosition = position)
+        ReadAloud.play(application, play = true, chapterPosition = position, fromReader = false)
     }
 
     private companion object {
@@ -391,7 +379,6 @@ data class ReadAloudPlayerSourceState(
     val engineName: String,
     val speakerName: String,
     val isPaused: Boolean,
-    val isPreparing: Boolean,
     val speed: Int,
     val timerMinutes: Int,
     val timerMode: String,

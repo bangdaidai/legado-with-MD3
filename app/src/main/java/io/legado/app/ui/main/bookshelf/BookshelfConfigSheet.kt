@@ -717,6 +717,7 @@ fun BookshelfConfigSheet(
 
             CompactSwitchSettingItem(
                 title = stringResource(R.string.search_filter_first),
+                description = stringResource(R.string.bookshelf_search_button_hint),
                 checked = settings.bookshelfSearchActionDirectToSearch,
                 color = LegadoTheme.colorScheme.surface,
                 onCheckedChange = { value ->
@@ -765,6 +766,14 @@ fun BookshelfConfigSheet(
             Spacer(modifier = Modifier.height(32.dp))
 
         }
+
+        LabelColorManageSheet(
+            show = showLabelColorManage,
+            themeColor = themeColor,
+            colors = customTagColors,
+            onColorsChange = onCustomTagColorsChange,
+            onDismissRequest = { showLabelColorManage = false }
+        )
 
         ColorPickerSheet(
             show = showColorPicker,

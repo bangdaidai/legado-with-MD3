@@ -716,6 +716,34 @@ class BookInfoViewModel(
                 changeTo(null, intent.book, intent.toc, intent.options)
             }
 
+            BookInfoIntent.DismissShelfConflict -> {
+                pendingShelfBook = null
+                _screenState.update { it.copy(shelfConflict = null) }
+            }
+
+            is BookInfoIntent.OpenShelfDuplicate -> openShelfDuplicate(intent.summary)
+
+            is BookInfoIntent.ShelfDeleteConfirm -> {
+                dismissSheet()
+                deleteBook(intent.deleteOriginal)
+            }
+
+            is BookInfoIntent.OpenShelfConflictBook -> {
+                // 先收起冲突 Sheet 再导航：详情页之间跳转会复用同一份冲突状态，
+                // 不收起来的话新页面一进来就显示 Sheet，并把第一次返回键吃掉。
+                pendingShelfBook = null
+                _screenState.update { it.copy(shelfConflict = null) }
+                emitEffect(
+                    BookInfoEffect.NavigateToBookInfo(
+                        name = intent.summary.name,
+                        author = intent.summary.author,
+                        bookUrl = intent.summary.bookUrl,
+                        origin = intent.summary.origin,
+                        coverPath = intent.summary.displayCover,
+                    )
+                )
+            }
+
             is BookInfoIntent.ReplaceConflictingBook -> {
                 dismissSheet()
                 changeTo(
@@ -882,6 +910,26 @@ class BookInfoViewModel(
                 saveBook(book)
             }
             syncUiState()
+        }
+    }
+
+    private fun toggleReadRecordDisabled() {
+        val book = currentBook?.takeIf { inBookshelf } ?: return
+        val disabled = !book.disableReadRecord
+        execute {
+            bookRepository.setReadRecordDisabled(book.bookUrl, disabled)
+        }.onSuccess { updated ->
+            if (updated != null) {
+                ReadBook.setReadRecordDisabled(updated.bookUrl, updated.disableReadRecord)
+                AudioPlay.book?.takeIf { it.bookUrl == updated.bookUrl }
+                    ?.disableReadRecord = updated.disableReadRecord
+                currentBook?.takeIf { it.bookUrl == updated.bookUrl }?.let {
+                    it.disableReadRecord = updated.disableReadRecord
+                    syncUiState()
+                }
+            }
+        }.onError {
+            showMessage(it.localizedMessage ?: context.getString(R.string.error))
         }
     }
 
@@ -1389,13 +1437,18 @@ class BookInfoViewModel(
 
     private fun refreshMeta(book: Book) {
         execute {
+            val kindBefore = book.kind
             book.upKind()
             val userGroupIds = bookGroupRepository.getIdsSum()
             val groupAnd = userGroupIds and book.group
             val hasCustomGroup = book.group > 0L && groupAnd != 0L
             val groupNames = bookGroupRepository.getGroupNames(book.group).joinToString(",")
             val normalizedGroupNames = groupNames.ifBlank { null }
-            bookRepository.update(book)
+            // 只有 upKind 真改写出过差异才落库：全行写会失效书架查询，让正在播形变转场的
+            // 书架整屏重组（同一口径见 ReadBookLoadDelegate.initData）。
+            if (book.kind != kindBefore) {
+                bookRepository.update(book)
+            }
             // SSOT：书架/信息页/阅读记忆统一入口（排除规则 + 标签映射）
             val displayTagNames = TagManager.bookDisplayTags(book.kind, book.customTag)
             val enabledRules = highlightTagRuleRepository.getEnabled()
@@ -1519,8 +1572,10 @@ class BookInfoViewModel(
     private fun onShelfClick() {
         val book = currentBook ?: return
         if (inBookshelf) {
+            // 已入架：摊开删除 Sheet（其他副本 / 分组 / 删除确认）。
+            // 关掉「删除前提醒」时按设置直接删，不打断。
             if (LocalConfig.bookInfoDeleteAlert) {
-                showDialog(BookInfoDialog.DeleteBook(book.isLocal))
+                setSheet(BookInfoSheet.ShelfDelete)
             } else {
                 deleteBook(LocalConfig.deleteBookOriginal)
             }
@@ -1529,6 +1584,21 @@ class BookInfoViewModel(
         } else {
             addToBookshelf()
         }
+    }
+
+    private fun openShelfDuplicate(summary: ConflictBookSummary) {
+        // 先收起 Sheet 再导航：详情页之间跳转会复用同一份 Sheet 状态，
+        // 不收起来的话新页面一进来就显示 Sheet，并把第一次返回键吃掉。
+        dismissSheet()
+        emitEffect(
+            BookInfoEffect.NavigateToBookInfo(
+                name = summary.name,
+                author = summary.author,
+                bookUrl = summary.bookUrl,
+                origin = summary.origin,
+                coverPath = summary.displayCover,
+            )
+        )
     }
 
     private fun onTocClick() {
@@ -1711,6 +1781,7 @@ class BookInfoViewModel(
             )
 
             BookInfoMenuAction.ToggleCanUpdate -> toggleCanUpdate()
+            BookInfoMenuAction.ToggleReadRecordDisabled -> toggleReadRecordDisabled()
             BookInfoMenuAction.ToggleSplitLongChapter -> toggleSplitLongChapter()
             BookInfoMenuAction.ToggleDeleteAlert -> toggleDeleteAlert()
             BookInfoMenuAction.ClearCache -> emitEffect(
@@ -2248,6 +2319,7 @@ class BookInfoViewModel(
             isLocal = isLocal,
             type = type,
             canUpdate = canUpdate,
+            disableReadRecord = disableReadRecord,
             splitLongChapter = getSplitLongChapter(),
             durChapterTitle = durChapterTitle,
             latestChapterTitle = latestChapterTitle,

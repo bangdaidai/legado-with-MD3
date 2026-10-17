@@ -1,31 +1,20 @@
 package io.legado.app.ui.book.readaloud.player
 
-import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.ReadAloudBgMode
-import io.legado.app.data.repository.ReadAloudSettingsRepository
-import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
-import io.legado.app.domain.gateway.ReadStyleGateway
-import io.legado.app.domain.model.AiReasoningLevel
-import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.model.settings.ReadSettings
 import io.legado.app.help.config.AppConfigStore
-import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.compatDsInt
-import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.widget.components.player.PlayerChapterUi
-import io.legado.app.utils.TTSCacheUtils
-import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -41,10 +30,6 @@ class ReadAloudPlayerViewModel(
     private val coordinator: ReadAloudPlayerCoordinator,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val readSettingsGateway: ReadSettingsGateway,
-    private val readStyleGateway: ReadStyleGateway,
-    private val application: Application,
-    private val readAloudSessionStore: ReadAloudSessionStore,
-    private val aiProfileGateway: AiProfileGateway,
 ) : ViewModel() {
 
     private val activeSheet = MutableStateFlow<ReadAloudPlayerSheet?>(null)
@@ -73,10 +58,7 @@ class ReadAloudPlayerViewModel(
         coordinator.state,
         AppConfigStore.observeInt(PreferKey.readAloudPlayerBgMode),
         activeSheet,
-        // 排版变更（字号/行距等）唯一通知：revision 递增即重建快照，
-        // 正文行字号跟随阅读页当前排版样式（与 ReadBookViewModel.collectReadStyle 同源约定）。
-        readStyleGateway.state,
-    ) { source, bgMode, sheet, _ ->
+    ) { source, bgMode, sheet ->
         toUiState(source, bgMode ?: ReadAloudBgMode.Blur, sheet)
     }.stateIn(
         scope = viewModelScope,
@@ -96,8 +78,7 @@ class ReadAloudPlayerViewModel(
             ReadAloudPlayerIntent.NextParagraph -> coordinator.nextParagraph()
             ReadAloudPlayerIntent.PreviousChapter -> coordinator.previousChapter()
             ReadAloudPlayerIntent.NextChapter -> coordinator.nextChapter()
-            ReadAloudPlayerIntent.SwitchToClassic ->
-                effect(ReadAloudPlayerEffect.ReturnToClassic(uiState.value.bookUrl))
+            ReadAloudPlayerIntent.SwitchToClassic -> effect(ReadAloudPlayerEffect.ReturnToClassic)
             ReadAloudPlayerIntent.CycleBgMode -> cycleBgMode()
             is ReadAloudPlayerIntent.SelectChapter -> coordinator.selectChapter(intent.index)
             is ReadAloudPlayerIntent.SetBgMode -> AppConfigStore.putInt(
@@ -123,7 +104,6 @@ class ReadAloudPlayerViewModel(
                 }
             is ReadAloudPlayerIntent.OpenSheet -> activeSheet.value = intent.sheet
             ReadAloudPlayerIntent.DismissSheet -> activeSheet.value = null
-            ReadAloudPlayerIntent.LeavingToReader -> coordinator.notifyReaderToFollowVoice()
             is ReadAloudPlayerIntent.SeekTo -> coordinator.seekTo(
                 chapterPosition = intent.chapterPosition,
                 chapterLength = uiState.value.chapterLength,
@@ -140,13 +120,8 @@ class ReadAloudPlayerViewModel(
     ) {
         viewModelScope.launch {
             when (option) {
-                ReadAloudConfigOption.DefaultInterface -> readAloudSettingsGateway.update {
-                    it.copy(
-                        defaultInterface = value.takeIf { candidate ->
-                            candidate in ReadAloudSettingsRepository.AVAILABLE_INTERFACES
-                        } ?: ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC
-                    )
-                }
+                ReadAloudConfigOption.DefaultInterface ->
+                    readAloudSettingsGateway.update { it.copy(defaultInterface = value) }
 
                 ReadAloudConfigOption.ShowCapsule ->
                     readAloudSettingsGateway.update { it.copy(showReadAloudCapsule = selected) }
@@ -178,41 +153,25 @@ class ReadAloudPlayerViewModel(
                     it.copy(systemMediaControlCompatibilityChange = selected)
                 }
 
-                ReadAloudConfigOption.StreamAudio -> {
+                ReadAloudConfigOption.StreamAudio ->
                     readAloudSettingsGateway.update { it.copy(streamReadAloudAudio = selected) }
-                    // 流式输出与耳机媒体键播报互斥，打开流式即关掉媒体键转发
-                    if (selected) postEvent(EventBus.MEDIA_BUTTON, false)
-                }
 
-                ReadAloudConfigOption.SpeechAnalysisMode -> {
-                    // 非规则模式要求已配置 AI 模型，否则拒绝切换并提示
-                    if (value != "rule") {
-                        val configured = aiProfileGateway.getTaskPreset(AiTaskType.ANALYZE_SPEECH)
-                            ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
-                        if (configured == null) {
-                            effect(ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired)
-                            return@launch
-                        }
-                    }
+                ReadAloudConfigOption.SpeechAnalysisMode ->
                     readAloudSettingsGateway.update { it.copy(speechAnalysisMode = value) }
-                }
 
-                ReadAloudConfigOption.SpeechAnalysisReasoningLevel -> {
-                    // 关闭思考模式是 AI 朗读分析的默认值：默认思考的模型（智谱 GLM 等）
-                    // 只把内容放在 reasoning_content 里，分析会直接失败。
-                    val level = AiReasoningLevel.fromStorage(value, AiReasoningLevel.OFF)
+                ReadAloudConfigOption.SpeechAnalysisReasoningLevel ->
                     readAloudSettingsGateway.update {
-                        it.copy(speechAnalysisReasoningLevel = level.storageValue)
+                        it.copy(speechAnalysisReasoningLevel = value)
                     }
-                }
 
-
-                ReadAloudConfigOption.UseMultiSpeaker -> {
-                    // 正在朗读时必须重启朗读服务才能换掉合成管线；
-                    // 重启前记住页内位置，等服务真的回到 Idle 再重放，避免新旧管线叠音。
+                ReadAloudConfigOption.UseMultiSpeaker ->
                     readAloudSettingsGateway.update { it.copy(useMultiSpeaker = selected) }
-                    restartReadAloudPipeline(readAloudSessionStore, application)
-                }
+
+                ReadAloudConfigOption.MultiRoleCast ->
+                    readAloudSettingsGateway.update { it.copy(multiRoleCast = selected) }
+
+                ReadAloudConfigOption.BgmAssign ->
+                    readAloudSettingsGateway.update { it.copy(bgmAssign = selected) }
 
                 ReadAloudConfigOption.ContentSplit -> {
                     val (mode, symbols) = ReadAloudContentSplitSetting.decode(value)
@@ -238,18 +197,23 @@ class ReadAloudPlayerViewModel(
                 ReadAloudConfigOption.AudioCacheCleanTime -> readAloudSettingsGateway.update {
                     it.copy(audioCacheCleanTime = intValue)
                 }
-
-                ReadAloudConfigOption.ResetCapsulePosition -> readAloudSettingsGateway.update {
-                    it.copy(capsuleOffsetX = 0f, capsuleOffsetY = 0f)
-                }
             }
         }
     }
 
-    /** 清除朗读音频缓存；语义与阅读器宿主 ReadAloudDelegate.clearTtsCache 一致。 */
-    fun clearTtsCache() {
-        TTSCacheUtils.clearTtsCache()
-        effect(ReadAloudPlayerEffect.TtsCacheCleared)
+    internal fun resetCapsulePosition() {
+        viewModelScope.launch {
+            readAloudSettingsGateway.update {
+                it.copy(capsuleOffsetX = 0f, capsuleOffsetY = 0f)
+            }
+        }
+    }
+
+    internal fun clearTtsCache() {
+        viewModelScope.launch {
+            coordinator.clearTtsCache()
+            effect(ReadAloudPlayerEffect.TtsCacheCleared)
+        }
     }
 
     private fun cycleBgMode() {
@@ -293,13 +257,8 @@ class ReadAloudPlayerViewModel(
         bgMode: Int,
         sheet: ReadAloudPlayerSheet?,
     ): ReadAloudPlayerUiState {
-        // 服务没在跑（还没点过播放）时，会话里的进度和当前朗读句属于上一本书的残留，
-        // 不能拿来给本页正文定位：进度归零，当前句也不回退到旧会话的文本。
-        val readAloudRunning = BaseReadAloudService.isRun
-        val chapterPosition =
-            if (readAloudRunning) source.chapterPosition else 0
         val activeIndex = source.textLines.indexOfLast {
-            it.chapterPosition <= chapterPosition
+            it.chapterPosition <= source.chapterPosition
         }
         val chapters = chaptersOf(source.chapters)
         return ReadAloudPlayerUiState(
@@ -314,16 +273,14 @@ class ReadAloudPlayerViewModel(
             chapterText = source.chapterText,
             textLines = source.textLines,
             activeTextLine = activeIndex,
-            currentText = source.textLines.getOrNull(activeIndex)?.text
-                ?: source.playbackText.takeIf { readAloudRunning }.orEmpty(),
+            currentText = source.textLines.getOrNull(activeIndex)?.text ?: source.playbackText,
             nextText = source.textLines.getOrNull(activeIndex + 1)?.text.orEmpty(),
-            chapterPosition = chapterPosition,
+            chapterPosition = source.chapterPosition,
             chapterLength = source.chapterLength,
             engineName = source.engineName,
             speakerName = source.speakerName,
             isPaused = source.isPaused,
-            isPreparing = source.isPreparing,
-            readAloudRunning = readAloudRunning,
+            readAloudRunning = BaseReadAloudService.isRun,
             speed = source.speed,
             timerMinutes = source.timerMinutes,
             timerMode = source.timerMode,
@@ -331,12 +288,10 @@ class ReadAloudPlayerViewModel(
             finishCurrentChapterAfterTimer = source.finishCurrentChapterAfterTimer,
             bgMode = bgMode,
             activeSheet = sheet,
-            bodyTextSize = ReadBookConfig.textSize,
         )
     }
 
-    // internal：配置卡片意图映射（ReadAloudConfigIntentMapper）在类外发跳页 Effect。
-    internal fun effect(value: ReadAloudPlayerEffect) {
+    private fun effect(value: ReadAloudPlayerEffect) {
         _effects.tryEmit(value)
     }
 
@@ -365,6 +320,8 @@ private fun toReadAloudSettingsUiState(
     speechAnalysisMode = aloud.speechAnalysisMode,
     speechAnalysisReasoningLevel = aloud.speechAnalysisReasoningLevel,
     useMultiSpeaker = aloud.useMultiSpeaker,
+    multiRoleCast = aloud.multiRoleCast,
+    bgmAssign = aloud.bgmAssign,
     readAloudContentSplitMode = aloud.contentSplitMode,
     readAloudContentSplitSymbols = aloud.contentSplitSymbols,
     preDownloadNum = read.preDownloadNum,

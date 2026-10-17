@@ -17,8 +17,8 @@ import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
 import io.legado.app.data.repository.BookmarkRepository
-import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.ReplaceRuleRepository
+import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.domain.gateway.BookMarkingGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.model.TextProcessAnchor
@@ -29,7 +29,10 @@ import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isMobi
 import io.legado.app.help.bookmark.BookmarkExporter
+import io.legado.app.help.readaloud.cast.CastAssignmentStore
+import io.legado.app.help.readaloud.playback.ReadAloudAudioStore
 import io.legado.app.model.CacheBook
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.cache.CacheBookDownloadState
 import io.legado.app.model.localBook.EpubFile
@@ -60,7 +63,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -68,6 +70,7 @@ import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -85,7 +88,9 @@ data class TocItemUi(
     val isDur: Boolean,
     val isSelected: Boolean,
     val downloadState: DownloadState,
-    val wordCount: String?
+    val wordCount: String?,
+    val hasCastAssignment: Boolean,
+    val hasAudioDownload: Boolean
 ) : SelectableItem<Int>
 
 @Immutable
@@ -146,10 +151,10 @@ sealed interface TocIntent {
     data class ToggleSelection(val id: Int) : TocIntent
     data class SaveTocRegex(val regex: String) : TocIntent
     data class ExportBookmarks(val uri: Uri, val isMarkdown: Boolean) : TocIntent
-    data class UpdateBookmark(val bookmark: Bookmark) : TocIntent
-    data class DeleteBookmark(val bookmark: Bookmark) : TocIntent
     data class SaveMarkingNote(val id: String, val note: String) : TocIntent
     data class DeleteMarking(val id: String) : TocIntent
+    data class UpdateBookmark(val bookmark: Bookmark) : TocIntent
+    data class DeleteBookmark(val bookmark: Bookmark) : TocIntent
     data class DownloadChapter(val id: Int) : TocIntent
     data object DownloadAll : TocIntent
     data object DownloadSelected : TocIntent
@@ -158,6 +163,8 @@ sealed interface TocIntent {
     data object ClearSelection : TocIntent
     data object SelectFromLast : TocIntent
     data object AddBookmarksForSelected : TocIntent
+    data object DeleteAssignmentsForSelected : TocIntent
+    data object DeleteAudioDownloadsForSelected : TocIntent
     data object ToggleUseReplace : TocIntent
     data object ToggleShowWordCount : TocIntent
     data object ReverseToc : TocIntent
@@ -174,7 +181,9 @@ sealed interface TocEffect {
 data class TocDomainItem(
     val chapter: BookChapter,
     val displayTitle: String,
-    val downloadState: DownloadState
+    val downloadState: DownloadState,
+    val hasCastAssignment: Boolean = false,
+    val hasAudioDownload: Boolean = false
 )
 
 private data class DownloadContext(
@@ -187,6 +196,7 @@ private data class TocUiConfig(
     val useReplace: Boolean,
     val showWordCount: Boolean,
     val isReverse: Boolean,
+    val defaultReplaceEnabled: Boolean,
     val chineseConverterType: Int,
 )
 
@@ -276,34 +286,69 @@ class TocViewModel(
                 ""
             )
 
+    // 按需阅读写的图片/正文不经过 CacheBook，不会有 cacheSuccessFlow，只能在目录打开时重扫补齐。
+    private val cachedChapterRescan = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     private val _cachedChapterIndices: StateFlow<Set<Int>> = bookState.filterNotNull()
-        .flatMapLatest { book ->
+        .map { it.bookUrl to it.getFolderName() }
+        .distinctUntilChanged()
+        .flatMapLatest { (bookUrl, _) ->
             flow {
-                var cached: Set<Int> = bookRepository.getChapters(book.bookUrl)
-                    .filter { chapter ->
-                        chapter.isVolume || withContext(Dispatchers.IO) {
-                            BookHelp.isChapterCacheComplete(book, chapter)
-                        }
-                    }
-                    .mapTo(mutableSetOf()) { it.index }
-                emit(cached)
-                CacheBook.cacheSuccessFlow
-                    .filter { it.bookUrl == book.bookUrl }
-                    .collect { chapter ->
-                        cached = if (chapter.isVolume ||
-                            withContext(Dispatchers.IO) {
-                                BookHelp.isChapterCacheComplete(book, chapter)
+                suspend fun scanCached(): Set<Int> {
+                    val book = bookRepository.getBook(bookUrl) ?: return emptySet()
+                    return bookRepository.getChapters(bookUrl)
+                        .filter { chapter ->
+                            // 显示用宽松判定：有正文即算已缓存（缺图不再判为未缓存）；
+                            // 下载是否需要补图仍用严格的 isChapterCacheComplete。
+                            chapter.isVolume || withContext(Dispatchers.IO) {
+                                BookHelp.hasContent(book, chapter)
                             }
-                        ) {
-                            cached + chapter.index
-                        } else {
-                            cached - chapter.index
                         }
-                        emit(cached)
+                        .mapTo(mutableSetOf()) { it.index }
+                }
+
+                var cached = scanCached()
+                emit(cached)
+                merge(
+                    CacheBook.cacheSuccessFlow
+                        .filter { it.bookUrl == bookUrl }
+                        .map { chapter -> chapter },
+                    cachedChapterRescan.map { null },
+                ).collect { chapter ->
+                    cached = if (chapter == null) {
+                        scanCached()
+                    } else if (chapter.isVolume ||
+                        withContext(Dispatchers.IO) {
+                            bookRepository.getBook(bookUrl)?.let {
+                                BookHelp.hasContent(it, chapter)
+                            } == true
+                        }
+                    ) {
+                        cached + chapter.index
+                    } else {
+                        cached - chapter.index
                     }
+                    emit(cached)
+                }
             }
         }
         .flowOn(Dispatchers.IO)
+^
+    /** 替换规则在编辑过程中可能持续变化，这个信号会让阅读目录的标题空缺重新恢复（以流的信号替换源）。
+     * 只保护本页面；值本身没有语义，每次规则变化 +1。
+     */
+    private val replaceRulesRevision = MutableStateFlow(0)
+
+    init {
+        // 标签数据可能被书页标签编辑页、规则间同步在线页、等多处写入，可能在页面离开后台时发生错过初始化
+        // 页面在前台时的修改（如 DAO/SharedFlow 收听）也可能因为协程退出而被丢弃，重试一次记账
+        // 单次订阅在后台收件时也会自动触发一次刷新，防止出现重复标题
+        viewModelScope.launch {
+            replaceRuleRepository.flowContentSignature()
+                .drop(1)
+                .collect { refreshTitleReplace() }
+        }
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -420,19 +465,13 @@ class TocViewModel(
         bookState.map { it?.getReverseToc() ?: false }
             .distinctUntilChanged()
 
-    // 目录的替换净化按书记，本书没设置过时跟全局「默认启用替换净化」；
-    // 和阅读页那个「替换净化」（只管正文）互不影响
-    private val tocPreferences = combine(
-        readSettingsRepository.preferences,
-        bookState,
-        otherSettingsGateway.settings,
-    ) { preferences, book, otherSettings ->
-        TocPreferences(
-            useReplace = book?.getUseReplaceRuleToc(otherSettings.replaceEnableDefault)
-                ?: otherSettings.replaceEnableDefault,
-            showWordCount = preferences.tocCountWords
-        )
-    }
+    private val tocPreferences = readSettingsRepository.preferences
+        .map {
+            TocPreferences(
+                useReplace = it.tocUiUseReplace,
+                showWordCount = it.tocCountWords
+            )
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -451,13 +490,15 @@ class TocViewModel(
         _collapsedVolumes,
         tocPreferences,
         reverseFlow,
+        otherSettingsGateway.settings,
         readSettingsRepository.settings,
-    ) { collapsed, tocPreferences, isReverse, readSettings ->
+    ) { collapsed, tocPreferences, isReverse, otherSettings, readSettings ->
         TocUiConfig(
             collapsedVolumes = collapsed,
             useReplace = tocPreferences.useReplace,
             showWordCount = tocPreferences.showWordCount,
             isReverse = isReverse,
+            defaultReplaceEnabled = otherSettings.replaceEnableDefault,
             chineseConverterType = readSettings.chineseConverterType,
         )
     }
@@ -466,32 +507,32 @@ class TocViewModel(
     private var titleCacheJob: Job? = null
     private var lastTitleCacheKey: TitleCacheKey? = null
 
-    /**
-     * 替换净化规则表不是本页数据源，改动后需要一个显式的重算信号。
-     * 只做触发用，值本身没有含义。
-     */
-    private val replaceRulesRevision = MutableStateFlow(0)
+    /** 目录行右侧那两枚状态图标的数据源：本章分配过角色 / 本章下载过听书音频。 */
+    private data class TocStatusFlags(
+        val assigned: Set<Int> = emptySet(),
+        val downloaded: Set<Int> = emptySet(),
+    )
 
-    init {
-        // 规则会被管理页、编辑页、导入、AI 采用等多个入口写，只靠回到本页时 onResume 触发会漏掉
-        // 页面仍在前台时的改动。Room 的失效通知覆盖所有写入方，指纹去重让改名字/换分组不触发重算。
-        // 第一次发射是当前库内状态，页面初次加载已经读过一遍，跳过它避免多算一轮。
-        viewModelScope.launch {
-            replaceRuleRepository.flowContentSignature()
-                .drop(1)
-                .collect { refreshTitleReplace() }
+    private val statusFlagsFlow: Flow<TocStatusFlags> = bookUrlFlow
+        .filterNotNull()
+        .flatMapLatest { url ->
+            combine(
+                CastAssignmentStore.flowAssignedChapters(url),
+                ReadAloudAudioStore.flowDownloadedChapters(url),
+            ) { assigned, downloaded ->
+                TocStatusFlags(assigned.toSet(), downloaded)
+            }
         }
-    }
-
+        .flowOn(Dispatchers.IO)
 
     override val rawDataFlow: Flow<List<TocDomainItem>> = combine(
         bookState.filterNotNull().map { it.bookUrl }.distinctUntilChanged()
             .flatMapLatest { bookRepository.flowChapters(it) },
         downloadContextFlow,
         uiConfigFlow,
-        titleReplaceState,
-        replaceRulesRevision,
-    ) { originalChapters, downloadCtx, config, titleState, _ ->
+        titleReplaceState.combine(replaceRulesRevision) { state, _ -> state },
+        statusFlagsFlow
+    ) { originalChapters, downloadCtx, config, titleState, statusFlags ->
         val book = bookState.value ?: return@combine emptyList()
 
         val processedChapters = if (config.isReverse) {
@@ -500,7 +541,9 @@ class TocViewModel(
             originalChapters
         }
 
-        val replaceRules = if (config.useReplace) {
+        val replaceRules = if (
+            config.useReplace && book.getUseReplaceRule(config.defaultReplaceEnabled)
+        ) {
             ContentProcessor.get(book.name, book.origin).getTitleReplaceRules()
         } else emptyList()
 
@@ -509,6 +552,7 @@ class TocViewModel(
             chapters = processedChapters,
             replaceRules = replaceRules,
             useReplace = config.useReplace,
+            defaultReplaceEnabled = config.defaultReplaceEnabled,
             chineseConverterType = config.chineseConverterType,
         )
 
@@ -521,7 +565,9 @@ class TocViewModel(
                 TocDomainItem(
                     chapter = chapter,
                     displayTitle = titleState.titles[chapter.index] ?: baseTitle,
-                    downloadState = DownloadState.LOCAL
+                    downloadState = DownloadState.LOCAL,
+                    hasCastAssignment = chapter.index in statusFlags.assigned,
+                    hasAudioDownload = chapter.index in statusFlags.downloaded,
                 )
             }
         }
@@ -545,7 +591,9 @@ class TocViewModel(
             TocDomainItem(
                 chapter,
                 titleState.titles[chapter.index] ?: baseTitle,
-                downloadState
+                downloadState,
+                statusFlags.assigned.contains(chapter.index),
+                statusFlags.downloaded.contains(chapter.index),
             )
         }
 
@@ -615,7 +663,9 @@ class TocViewModel(
             isDur = false,
             isSelected = false,
             downloadState = downloadState,
-            wordCount = wordCountText
+            wordCount = wordCountText,
+            hasCastAssignment = hasCastAssignment,
+            hasAudioDownload = hasAudioDownload,
         )
     }
 
@@ -637,6 +687,7 @@ class TocViewModel(
                     _collapsedVolumes.value = emptySet()
                     bookUrlFlow.value = intent.bookUrl
                 }
+                cachedChapterRescan.tryEmit(Unit)
             }
             is TocIntent.SetSearchMode -> setSearchMode(intent.enabled)
             is TocIntent.SetSearchQuery -> setSearchKey(intent.query)
@@ -644,10 +695,10 @@ class TocViewModel(
             is TocIntent.ToggleSelection -> toggleSelection(intent.id)
             is TocIntent.SaveTocRegex -> saveTocRegex(intent.regex)
             is TocIntent.ExportBookmarks -> exportCurrentBookBookmarks(intent.uri, intent.isMarkdown)
-            is TocIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
-            is TocIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is TocIntent.SaveMarkingNote -> saveMarkingNote(intent.id, intent.note)
             is TocIntent.DeleteMarking -> deleteMarking(intent.id)
+            is TocIntent.UpdateBookmark -> updateBookmark(intent.bookmark)
+            is TocIntent.DeleteBookmark -> deleteBookmark(intent.bookmark)
             is TocIntent.DownloadChapter -> downloadChapter(intent.id)
             TocIntent.DownloadAll -> downloadAll()
             TocIntent.DownloadSelected -> downloadSelected()
@@ -656,6 +707,8 @@ class TocViewModel(
             TocIntent.ClearSelection -> clearSelection()
             TocIntent.SelectFromLast -> selectFromLast()
             TocIntent.AddBookmarksForSelected -> addBookmarksForSelected()
+            TocIntent.DeleteAssignmentsForSelected -> deleteAssignmentsForSelected()
+            TocIntent.DeleteAudioDownloadsForSelected -> deleteAudioDownloadsForSelected()
             TocIntent.ToggleUseReplace -> toggleUseReplace()
             TocIntent.ToggleShowWordCount -> toggleShowWordCount()
             TocIntent.ReverseToc -> reverseToc()
@@ -717,12 +770,10 @@ class TocViewModel(
         }
     }
 
-    /** 目录的替换净化按书记，和阅读页的「替换净化」（只管正文）互不影响 */
-    fun toggleUseReplace() = execute {
-        val currentBook = bookState.value ?: return@execute
-        val currentConfig = currentBook.readConfig ?: Book.ReadConfig()
-        val newConfig = currentConfig.copy(useReplaceRuleToc = !tocPreferences.value.useReplace)
-        bookRepository.update(currentBook.copy(readConfig = newConfig))
+    fun toggleUseReplace() {
+        viewModelScope.launch {
+            readSettingsRepository.setTocUiUseReplace(!tocPreferences.value.useReplace)
+        }
     }
 
     fun toggleShowWordCount() {
@@ -842,19 +893,6 @@ class TocViewModel(
     fun deleteBookmark(bookmark: Bookmark) =
         viewModelScope.launch(Dispatchers.IO) { bookmarkRepository.delete(bookmark) }
 
-    /** 只改备注：样式与锚点沿用原笔记；列表是 Room Flow，保存后自动刷新。 */
-    private fun saveMarkingNote(id: String, note: String) =
-        viewModelScope.launch(Dispatchers.IO) {
-            bookMarkingGateway.getById(id)?.let { marking ->
-                bookMarkingGateway.upsert(
-                    marking.copy(note = note, updatedAt = System.currentTimeMillis())
-                )
-            }
-        }
-
-    private fun deleteMarking(id: String) =
-        viewModelScope.launch(Dispatchers.IO) { bookMarkingGateway.delete(id) }
-
     fun addBookmarksForSelected() = viewModelScope.launch(Dispatchers.IO) {
         val book = bookState.value ?: return@launch
         val selectedItems = uiState.value.items
@@ -887,6 +925,46 @@ class TocViewModel(
         withContext(Dispatchers.Main) {
             clearSelection()
         }
+    }
+
+    /** 删除所选章节的角色分配（目录长按菜单「删除分配」）。 */
+    fun deleteAssignmentsForSelected() = deleteSelectedChapters(
+        { book, index -> CastAssignmentStore.deleteChapter(book.bookUrl, index) },
+        R.string.cast_assignment_deleted_chapters,
+    )
+
+    /** 删除所选章节的听书音频（目录长按菜单「删除听书」）。 */
+    fun deleteAudioDownloadsForSelected() = deleteSelectedChapters(
+        { book, index -> ReadAloudAudioStore.delete(book.bookUrl, index) },
+        R.string.read_aloud_audio_download_deleted_chapters,
+    )
+
+    /**
+     * 对所选章节逐章执行 [action]，完成后提示删了几章、清掉选择。
+     *
+     * 正在朗读这本书时让朗读侧重排队列，否则用户听完这句还在用刚删掉的分配。
+     */
+    private fun deleteSelectedChapters(
+        action: suspend (Book, Int) -> Unit,
+        doneMessageRes: Int,
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        val book = bookState.value ?: return@launch
+        val indices = uiState.value.items
+            .asSequence()
+            .filter { it.id in uiState.value.selectedIds }
+            .filterNot { it.isVolume }
+            .map { it.id }
+            .toList()
+        if (indices.isEmpty()) {
+            showMessage(R.string.select_chapters)
+            return@launch
+        }
+        indices.forEach { index -> action(book, index) }
+        if (ReadBook.book?.bookUrl == book.bookUrl) {
+            ReadAloud.refreshCastQueue(context)
+        }
+        showMessage(context.getString(doneMessageRes, indices.size))
+        withContext(Dispatchers.Main) { clearSelection() }
     }
 
     fun downloadSelected() {
@@ -934,27 +1012,17 @@ class TocViewModel(
         _effects.tryEmit(TocEffect.ShowMessage(message))
     }
 
-    /**
-     * 替换净化规则不是本页数据源：`rawDataFlow` 的 combine 只在章节、下载、设置或
-     * [titleReplaceState] 变化时重跑，`ContentProcessor` 也只在自己被通知时刷新缓存。
-     * 所以规则表变动时要显式发一次信号，由 init 里的规则指纹订阅调用。
-     *
-     * 真正要不要重算由 [updateTitleReplaceCacheIfNeeded] 比对规则指纹决定；
-     * 规则没变就原地返回，不会闪一下原标题。
-     */
-    private fun refreshTitleReplace() = execute {
-        ContentProcessor.upReplaceRules()
-        replaceRulesRevision.update { it + 1 }
-    }
-
     private fun updateTitleReplaceCacheIfNeeded(
         book: Book,
         chapters: List<BookChapter>,
         replaceRules: List<ReplaceRule>,
         useReplace: Boolean,
+        defaultReplaceEnabled: Boolean,
         chineseConverterType: Int,
     ) {
-        val shouldUseReplace = useReplace && replaceRules.isNotEmpty()
+        val shouldUseReplace = useReplace &&
+                book.getUseReplaceRule(defaultReplaceEnabled) &&
+                replaceRules.isNotEmpty()
         if (!shouldUseReplace) {
             titleCacheJob?.cancel()
             titleCacheJob = null
@@ -1086,6 +1154,23 @@ class TocViewModel(
             TocTitleCache.put(key, newCache)
         }
     }
+
+    private fun refreshTitleReplace() = execute {
+        ContentProcessor.upReplaceRules()
+        replaceRulesRevision.update { it + 1 }
+    }
+
+    private fun saveMarkingNote(id: String, note: String) =
+        viewModelScope.launch(Dispatchers.IO) {
+            bookMarkingGateway.getById(id)?.let { marking ->
+                bookMarkingGateway.upsert(
+                    marking.copy(note = note, updatedAt = System.currentTimeMillis())
+                )
+            }
+        }
+
+    private fun deleteMarking(id: String) =
+        viewModelScope.launch(Dispatchers.IO) { bookMarkingGateway.delete(id) }
 
     private companion object {
         const val TITLE_REPLACE_WORKER_COUNT = 4

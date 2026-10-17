@@ -61,7 +61,6 @@ import io.legado.app.ui.book.marking.AllMarkingActivity
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
-import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.PreloadContainerBackgrounds
@@ -182,27 +181,19 @@ fun MyScreen(
                     imageVector = Icons.Default.FindReplace,
                     onClick = {
                         onNavigate(
-                            PrefClickEvent.StartActivity(ReplaceRuleActivity::class.java)
+                            PrefClickEvent.OpenReplaceRules
                         )
                     }
                 )
                 ClickableSettingItem(
                     title = stringResource(R.string.txt_toc_rule),
                     imageVector = Icons.AutoMirrored.Filled.Rule,
-                    onClick = {
-                        onNavigate(
-                            PrefClickEvent.StartActivity(TxtTocRuleActivity::class.java)
-                        )
-                    }
+                    onClick = { onNavigate(PrefClickEvent.OpenTxtTocRule) }
                 )
                 ClickableSettingItem(
                     title = stringResource(R.string.dict_rule),
                     imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
-                    onClick = {
-                        onNavigate(
-                            PrefClickEvent.StartActivity(DictRuleActivity::class.java)
-                        )
-                    }
+                    onClick = { onNavigate(PrefClickEvent.OpenDictRule) }
                 )
                 ClickableSettingItem(
                     title = stringResource(R.string.highlight_tag_config),
@@ -239,9 +230,7 @@ fun MyScreen(
                 ClickableSettingItem(
                     title = stringResource(R.string.all_bookmark),
                     imageVector = Icons.Default.Bookmark,
-                    onClick = {
-                        onNavigate(PrefClickEvent.StartActivity(AllBookmarkActivity::class.java))
-                    }
+                    onClick = { onNavigate(PrefClickEvent.OpenAllBookmark) }
                 )
                 ClickableSettingItem(
                     title = stringResource(R.string.all_marking),

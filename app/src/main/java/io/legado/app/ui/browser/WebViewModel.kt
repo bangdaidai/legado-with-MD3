@@ -133,6 +133,9 @@ class WebViewModel(
                 SourceVerificationHelp.setResult(sourceOrigin, html ?: "", baseUrl)
             }.onSuccess {
                 success.invoke()
+            }.onError {
+                SourceVerificationHelp.checkResult(sourceOrigin)
+                success.invoke()
             }
         } else {
             webView.evaluateJavascript("document.documentElement.outerHTML") {
@@ -141,6 +144,9 @@ class WebViewModel(
                     html = StringEscapeUtils.unescapeJson(it).trim('"')
                     SourceVerificationHelp.setResult(sourceOrigin, html ?: "", pageUrl)
                 }.onSuccess {
+                    success.invoke()
+                }.onError {
+                    SourceVerificationHelp.checkResult(sourceOrigin)
                     success.invoke()
                 }
             }

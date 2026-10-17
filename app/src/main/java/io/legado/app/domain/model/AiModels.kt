@@ -31,6 +31,7 @@ object AiTaskType {
     const val BOOKSHELF_AUTO_GROUP = "bookshelf_auto_group"
     const val AUTHOR_BIO = "author_bio"
     const val TOC_RULE = "toc_rule"
+    const val CAST_ASSIGN = "cast_assign"
 }
 
 object AiPromptTemplate {
@@ -136,6 +137,15 @@ object AiProviderPresets {
             modelsUrl = "https://api.anthropic.com/v1/models",
             modelName = "Claude Sonnet",
             modelId = "claude-sonnet-4-20250514"
+        ),
+        AiProviderPreset(
+            id = "opencode_go",
+            name = "OpenCode Go",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://opencode.ai/zen/go/v1",
+            modelsUrl = "https://opencode.ai/zen/go/v1/models",
+            modelName = "DeepSeek V4.1 Flash",
+            modelId = "deepseek-v4-flash"
         )
     )
 }
@@ -216,7 +226,12 @@ data class AiProviderDraft(
     val protocol: String,
     val baseUrl: String,
     val modelsUrl: String? = null,
-    val apiKey: String
+    val apiKey: String,
+    /**
+     * User-defined request headers. Sent as-is on every chat/models request and override the
+     * protocol handler's built-in headers with the same name (e.g. `x-opencode-session`).
+     */
+    val customHeaders: Map<String, String> = emptyMap()
 )
 
 @Keep
@@ -411,6 +426,12 @@ data class AiGenerateRequest(
      * 避免模型多轮翻书浪费请求、触发免费模型限流。
      */
     val readOnlyTools: Boolean = true,
+    /**
+     * Stable identifier of the conversation this request belongs to. Providers that route/cache by
+     * a session header (e.g. OpenCode Go) send it as `x-opencode-session`; `null` for one-shot
+     * background tasks.
+     */
+    val sessionId: String? = null,
 )
 
 /**
@@ -432,6 +453,7 @@ fun aiTaskSceneLabel(taskType: String?): String? = when (taskType) {
     AiTaskType.BOOKSHELF_AUTO_GROUP -> "书架自动分组"
     AiTaskType.AUTHOR_BIO -> "作者简介生成"
     AiTaskType.TOC_RULE -> "目录规则生成"
+    AiTaskType.CAST_ASSIGN -> "角色分配"
     else -> null
 }
 

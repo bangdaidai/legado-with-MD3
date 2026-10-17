@@ -89,6 +89,7 @@ internal suspend fun <T> retryWithBackoff(
     throw lastException ?: Exception("Retry failed after $maxAttempts attempts")
 }
 
+<<<<<<< HEAD
 /**
  * 拉取模型列表的候选端点，按序尝试（参照 legado_NG 的 AiModelEndpointResolver）。
  * 用户显式配置了 modelsPath / modelsUrl 时只认用户配置；否则按 baseUrl 形态生成候选：

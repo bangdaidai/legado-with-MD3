@@ -6,6 +6,9 @@ import io.legado.app.R
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
+import io.legado.app.help.readaloud.cast.BookCastStore
+import io.legado.app.help.readaloud.cast.CastMemoryMirror
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import kotlinx.collections.immutable.ImmutableList
@@ -48,9 +51,14 @@ class BookCharacterDetailViewModel(
 
     fun onIntent(intent: CharacterDetailIntent) {
         when (intent) {
-            is CharacterDetailIntent.SetName -> updateAndSave { it.copy(name = intent.value) }
-            is CharacterDetailIntent.SetAliasesText -> updateAndSave { it.copy(aliasesText = intent.value) }
-            is CharacterDetailIntent.SetAvatarUri -> updateAndSave { it.copy(avatarUri = intent.value) }
+            is CharacterDetailIntent.SetName -> _uiState.update { it.copy(name = intent.value) }
+            is CharacterDetailIntent.SetAliasesText -> _uiState.update { it.copy(aliasesText = intent.value) }
+            is CharacterDetailIntent.SetAvatarUri -> {
+                // 头像不是打字：选完/填完就该定下来，当场落库；只改界面状态要等手点「保存」才生效，
+                // 退出重进即丢。
+                _uiState.update { it.copy(avatarUri = intent.value) }
+                save()
+            }
             is CharacterDetailIntent.SetTagInput -> _uiState.update { it.copy(tagInput = intent.value) }
             is CharacterDetailIntent.AddTag -> updateAndSave {
                 val tag = intent.tag.trim()
@@ -78,6 +86,7 @@ class BookCharacterDetailViewModel(
             is CharacterDetailIntent.SetIsProtagonist -> updateAndSave { it.copy(isProtagonist = intent.value) }
             is CharacterDetailIntent.SetPersonality -> updateAndSave { it.copy(personality = intent.value) }
             is CharacterDetailIntent.SetSummary -> updateAndSave { it.copy(summary = intent.value) }
+            is CharacterDetailIntent.SetVoicePool -> updateAndSave { it.copy(voicePool = intent.value) }
             is CharacterDetailIntent.Delete -> delete(intent)
         }
     }
@@ -113,6 +122,12 @@ class BookCharacterDetailViewModel(
                     bookKnowledgeGateway.getCharacterProfiles(state.bookUrl, 80)
                 }
                 val nameMap = profiles.associate { it.id to it.name }
+                val poolNames = withContext(Dispatchers.IO) { VoicePoolStore.enabledPoolNames() }
+                val castPoolLabel = profile?.let { prof ->
+                    withContext(Dispatchers.IO) {
+                        BookCastStore.characterPoolLabel(state.bookUrl, prof.id)
+                    }
+                }.orEmpty()
 
                 _uiState.update {
                     it.copy(
@@ -128,6 +143,8 @@ class BookCharacterDetailViewModel(
                         voiceAgeBand = profile?.voiceAgeBand
                             ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
                         isProtagonist = profile?.isProtagonist ?: false,
+                        voicePool = castPoolLabel,
+                        poolNames = poolNames.toImmutableList(),
                         personality = profile?.personality.orEmpty(),
                         summary = profile?.summary.orEmpty(),
                         events = events.map { event ->
@@ -200,8 +217,30 @@ class BookCharacterDetailViewModel(
                     createdAt = existing?.createdAt ?: now,
                     updatedAt = now,
                 )
+                val avatarChanged = currentProfile?.avatarUri.orEmpty() != profile.avatarUri.orEmpty()
                 withContext(Dispatchers.IO) {
                     bookKnowledgeGateway.upsertCharacterProfile(profile)
+                    // 档案与配音角色是同一份信息（档案 id 就是角色 id）：这里改了名字或池，
+                    // 分配表与朗读音色要立刻跟着改，否则朗读还在用旧池。
+                    val castChanged = BookCastStore.syncFromProfile(
+                        bookUrl = profile.bookUrl,
+                        profileId = profile.id,
+                        name = profile.name,
+                        poolLabel = VoicePoolStore.poolNameOrEmpty(state.voicePool),
+                    )
+                    // 本书角色记忆也认这一份：AI 下一趟读的就是它，不改这里人物页补的别名
+                    // 与简介对下一次分配等于不存在。
+                    CastMemoryMirror.applyProfileToMemory(profile.bookUrl, profile)
+                    // 一次保存只重排一遍：头像与名字/池同时改时，两条各自 reload 会把同一章排两遍
+                    if (castChanged || avatarChanged) {
+                        // 胶囊上那张图与那行字都是分页时定下来的，不换一次重排就还是旧的
+                        BookCastStore.reloadReaderChapter(profile.bookUrl)
+                    }
+                    if (avatarChanged) {
+                        // 换掉的本地头像到这一步才真没人引用了：若在选完新图就立刻删旧文件，
+                        // 用户不保存退出后，档案里留着的会是已被删掉的地址。
+                        currentProfile?.avatarUri?.let { deleteCharacterAvatar(appCtx, it) }
+                    }
                 }
                 // 主角标记/角色分类/别名可能变了，跟随主角的高亮正则展开缓存需失效
                 HighlightProtagonistPatterns.invalidate()
@@ -237,6 +276,8 @@ class BookCharacterDetailViewModel(
                         deleteRelations = intent.deleteRelations,
                         deleteEvents = intent.deleteEvents,
                     )
+                    // 档案没了，以它建档的配音角色、分配句与音色绑定也不能留在表里
+                    BookCastStore.deleteCharacter(profile.bookUrl, profile.id, profile.name)
                 }
                 // 删掉主角后，跟随主角高亮的展开缓存必须失效：否则正文仍命中已删人物
                 // （查询本身过滤 status!=DELETED，但缓存里的旧 pattern 还带着这个名字）。

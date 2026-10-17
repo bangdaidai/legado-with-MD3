@@ -68,12 +68,10 @@ import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -404,8 +402,8 @@ private fun BookInfoScreenContent(
                     onClick = { onIntent(BookInfoIntent.ReadClick) },
                     containerColor = LegadoTheme.colorScheme.primaryContainer,
                     contentColor = LegadoTheme.colorScheme.onPrimaryContainer,
-                    icon = { Icon(Icons.Default.Book, null) },
-                    text = { Text(stringResource(R.string.reading)) },
+                    icon = { AppIcon(Icons.Default.Book, null) },
+                    text = { AppText(stringResource(R.string.reading)) },
                 )
             }
         },
@@ -619,6 +617,16 @@ private fun BookInfoScreenContent(
                 onConfirm = { onIntent(BookInfoIntent.SelectGroup(it)) },
             )
         }
+        BookInfoSheet.ShelfDelete -> ShelfDeleteSheet(
+            show = currentSheet == BookInfoSheet.ShelfDelete,
+            book = state.book?.toConflictSummary(),
+            copies = state.shelfDuplicates,
+            isLocal = state.book?.isLocal == true,
+            initialDeleteOriginal = state.deleteOriginal,
+            onOpenCopy = { onIntent(BookInfoIntent.OpenShelfDuplicate(it)) },
+            onDelete = { onIntent(BookInfoIntent.ShelfDeleteConfirm(it)) },
+            onDismissRequest = { onIntent(BookInfoIntent.DismissSheet) },
+        )
         is BookInfoSheet.SourcePicker -> {
             ChangeSourceSheet(
                 show = currentSheet is BookInfoSheet.SourcePicker,
@@ -767,13 +775,17 @@ private fun BookInfoColorTheme(
         easing = FastOutSlowInEasing,
     )
     val targetSeedColor = theme?.seedColor ?: baseTheme.seedColor
+    // 「设备默认取色 → 封面取色」的渐变：整色板 400ms 插值。
+    //
+    // 代价是明确的：插值期间每帧都会产出新的 ColorScheme/LegadoColorScheme/LocalLegadoThemeColors
+    // 并重建 Miuix ThemeController，详情页会在转场期间反复重组 + 强制布局。这里仍然选它，
+    // 因为一次性切换会在过渡里闪出一帧平台底色（surface），观感上更差。
     val animatedColorScheme = targetColorScheme.animateColorSchemeAsState(animationSpec)
     val animatedSeedColor by animateColorAsState(
         targetValue = targetSeedColor,
         animationSpec = animationSpec,
         label = "book_info_theme_seed",
     )
-
     ProvideColorSchemeOverride(
         colorScheme = animatedColorScheme,
         seedColor = animatedSeedColor,
@@ -832,7 +844,7 @@ private fun BookInfoTransparentTopAppBar(
     } else {
         MediumFlexibleTopAppBar(
             modifier = hazeState?.let { Modifier.responsiveHazeEffectFixedStyle(it) } ?: Modifier,
-            title = { Text(text = "", maxLines = 1) },
+            title = { AppText(text = "", maxLines = 1) },
             navigationIcon = {
                 TopBarNavigationButton(onClick = onBackPressed)
             },
@@ -1104,6 +1116,33 @@ private fun BookInfoOverflowMenu(
 ) {
     val book = state.book
     RoundDropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest) {
+        if (state.bookSourceUi?.hasCustomButton == true) {
+            RoundDropdownMenuItem(
+                text = stringResource(R.string.custom_button),
+                onClick = { onMenuAction(BookInfoMenuAction.CustomButton) }
+            )
+        }
+        if (state.inBookshelf) {
+            RoundDropdownMenuItem(
+                text = stringResource(R.string.edit),
+                onClick = { onMenuAction(BookInfoMenuAction.Edit) }
+            )
+        }
+        RoundDropdownMenuItem(
+            text = stringResource(R.string.refresh),
+            onClick = { onMenuAction(BookInfoMenuAction.Refresh) }
+        )
+        RoundDropdownMenuItem(
+            text = stringResource(R.string.read_record),
+            onClick = { onMenuAction(BookInfoMenuAction.ReadRecord) }
+        )
+        if (state.inBookshelf && book != null) {
+            RoundDropdownMenuItem(
+                text = stringResource(R.string.book_disable_read_record),
+                onClick = { onMenuAction(BookInfoMenuAction.ToggleReadRecordDisabled) },
+                isSelected = book.disableReadRecord,
+            )
+        }
         if (book?.isLocal == true) {
             RoundDropdownMenuItem(
                 text = stringResource(R.string.re_sync_webdav),
@@ -1409,6 +1448,10 @@ private fun BookInfoActions(
         }
     }
 
+    // 未入架但书架里已有同作品副本时，把书架按钮标成冲突态：点击会弹冲突 Sheet，
+    // 提前告诉用户这一步要问「共存还是迁移」。
+    // 已入架时按钮不高亮：可做的事情（副本 / 分组 / 删除）改由点击后的删除 Sheet 给出。
+    val conflictHighlight = !inBookshelf && hasShelfDuplicates
     val shelfLabel = when {
         showShelfRemoveHint -> stringResource(R.string.click_to_remove)
         showLongPressGroupHint -> stringResource(R.string.long_press_group)
@@ -2075,7 +2118,6 @@ private fun BookInfoDialogs(
     onIntent: (BookInfoIntent) -> Unit,
 ) {
     val dialog = state.dialog
-    var deleteOriginal by remember(dialog, state.deleteOriginal) { mutableStateOf(state.deleteOriginal) }
     var remarkText by remember(dialog) { mutableStateOf((dialog as? BookInfoDialog.EditRemark)?.remark.orEmpty()) }
 
     BookDeleteConfirmDialog(

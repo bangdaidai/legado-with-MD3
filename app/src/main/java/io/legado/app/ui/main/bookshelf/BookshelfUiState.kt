@@ -43,6 +43,7 @@ sealed interface BookshelfOverlay {
 
     /** 书架同名书籍检测报告；副本行支持直接删除（带确认），合并进度仍走详情页换源 */
     data object DuplicateScanSheet : BookshelfOverlay
+    data object DeleteBooksConfirmDialog : BookshelfOverlay
 }
 
 sealed interface BookshelfIntent {
@@ -60,6 +61,9 @@ sealed interface BookshelfIntent {
     data class SetInFolderRoot(val value: Boolean) : BookshelfIntent
     data class MoveBooksToGroup(val bookUrls: Set<String>, val groupId: Long) : BookshelfIntent
     data class DownloadBooks(val bookUrls: Set<String>, val allChapters: Boolean = false) : BookshelfIntent
+
+    /** 编辑态批量从书架删除；[deleteOriginal] 只对本地书籍的源文件生效 */
+    data class DeleteBooks(val bookUrls: Set<String>, val deleteOriginal: Boolean) : BookshelfIntent
     data class RefreshBooks(val books: List<BookUiItem>) : BookshelfIntent
     data class StartDragging(val books: List<BookUiItem>) : BookshelfIntent
     data class MoveDragging(val from: Int, val to: Int, val books: List<BookUiItem>) : BookshelfIntent

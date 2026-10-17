@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
@@ -47,6 +48,7 @@ fun ToggleChip(
     cornerRadius: Dp? = null,
     compact: Boolean = false,
     light: Boolean = false,
+    enabled: Boolean = true,
     checkedContentDescription: String = "已选择",
     uncheckedContentDescription: String = "未选择",
     textStyle: TextStyle? = null,
@@ -55,6 +57,8 @@ fun ToggleChip(
     if (ThemeResolver.isMiuixEngine(composeEngine)) {
         val verticalPad = if (compact) 6.dp else 8.dp
         val horizontalPad = horizontalPadding ?: if (compact) 8.dp else 12.dp
+        val contentColor = MiuixTheme.colorScheme.onSurface
+            .copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
         NormalCard (
             modifier = modifier
                 .padding(vertical = if (compact) 0.dp else 2.dp)
@@ -69,9 +73,11 @@ fun ToggleChip(
                     } else {
                         uncheckedContentDescription
                     }
+                    if (!enabled) disabled()
                 },
             cornerRadius = cornerRadius ?: 12.dp,
-            onClick = onToggle,
+            // 不给 onClick 就是不可点：BaseCard 不再挂 combinedClickable，禁用态也不会有水波纹
+            onClick = if (enabled) onToggle else null,
             containerColor = if (selected) {
                 MiuixTheme.colorScheme.primaryContainer
             } else if (light) {
@@ -95,7 +101,9 @@ fun ToggleChip(
                         modifier = Modifier
                             .padding(end = if (compact) 4.dp else 8.dp)
                             .size(if (compact) 14.dp else 16.dp),
-                        tint = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                        tint = (if (selected) MiuixTheme.colorScheme.primary
+                        else MiuixTheme.colorScheme.onSurface)
+                            .copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
                     )
                 }
 
@@ -109,7 +117,7 @@ fun ToggleChip(
                     color = when {
                         selected -> MiuixTheme.colorScheme.onPrimaryContainer
                         light -> LegadoTheme.colorScheme.onSurfaceVariant
-                        else -> MiuixTheme.colorScheme.onSurface
+                        else -> contentColor
                     }
                 )
             }
@@ -147,11 +155,12 @@ fun ToggleChip(
                     }
                 )
                 .then(borderModifier)
-                .clickable(onClick = onToggle)
+                .clickable(enabled = enabled, onClick = onToggle)
                 .padding(horizontal = horizontalPadding ?: 6.dp, vertical = 4.dp)
                 .semantics {
                     toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
                     stateDescription = if (selected) checkedContentDescription else uncheckedContentDescription
+                    if (!enabled) disabled()
                 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -174,6 +183,7 @@ fun ToggleChip(
             onClick = onToggle,
             modifier = modifier,
             shape = cornerRadius?.let { RoundedCornerShape(it) } ?: FilterChipDefaults.shape,
+            enabled = enabled,
             label = { Text(label) },
             leadingIcon = if (selected) {
                 {
@@ -187,3 +197,6 @@ fun ToggleChip(
         )
     }
 }
+
+/** 禁用态内容透明度：与系列按钮（SeriesButton）的 disabledContentColor 同一口径。 */
+private const val DISABLED_ALPHA = 0.38f

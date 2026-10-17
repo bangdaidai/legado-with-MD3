@@ -115,12 +115,20 @@ fun WebViewRouteScreen(
     }
     val basicJsInterface = remember { WebViewBasicJsInterface { closeRequest.value.invoke() } }
 
+    fun handleBack() {
+        if (viewModel.sourceVerificationEnable) {
+            finishWithVerification()
+        } else {
+            finishScreen()
+        }
+    }
+
     BackHandler {
         when {
             webView?.canGoBack() == true && (webView?.copyBackForwardList()?.size
                 ?: 0) > 1 -> webView?.goBack()
 
-            else -> finishScreen()
+            else -> handleBack()
         }
     }
 
@@ -134,7 +142,7 @@ fun WebViewRouteScreen(
                 title = pageTitle ?: viewModel.sourceName.ifBlank {
                     intent.getStringExtra("title") ?: loadingText
                 },
-                navigationIcon = { TopBarNavigationButton(onClick = ::finishScreen) },
+                navigationIcon = { TopBarNavigationButton(onClick = ::handleBack) },
                 actions = {
                     TopBarActionButton(
                         onClick = { webView?.reload() },

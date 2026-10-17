@@ -44,6 +44,27 @@ data class HighlightRule(
     // 本 fork 不暴露开关 UI。
     @ColumnInfo(defaultValue = "1")
     var manualNineSlice: Boolean = false,
+    /** 命中字距（dp）：命中段与相邻字之间让出的空白，0 表示不让。只落在段首/段尾那一个字上。 */
+    @ColumnInfo(defaultValue = "0")
+    var letterSpacingBefore: Float = 0f,
+    /** 命中字距（dp）：见 [letterSpacingBefore]。 */
+    @ColumnInfo(defaultValue = "0")
+    var letterSpacingAfter: Float = 0f,
+    /** 命中行行距（dp）：把包含命中的那一行整行往下抬，行盒高度不变。 */
+    @ColumnInfo(defaultValue = "0")
+    var lineSpacingTop: Float = 0f,
+    /** 命中行行距（dp）：这一行之后多留的空白，九宫格上下两条边就有多大的地方画。 */
+    @ColumnInfo(defaultValue = "0")
+    var lineSpacingBottom: Float = 0f,
+    /**
+     * 九宫格左偏移（dp）：字数不变时把中间那一格往左多拉（负值往回收）这么多，
+     * 左边那两条边跟着平移。拆成左右两项是因为气泡两端要分别对齐，一个对称偏移调不动。
+     */
+    @ColumnInfo(defaultValue = "0")
+    var bgLengthOffsetLeft: Float = 0f,
+    /** 九宫格右偏移（dp）：见 [bgLengthOffsetLeft]，方向相反。 */
+    @ColumnInfo(defaultValue = "0")
+    var bgLengthOffsetRight: Float = 0f,
     @ColumnInfo(defaultValue = "0")
     var useProtagonist: Boolean = false,
     // 角色筛选：null=按主角标记取人；指定 "male_lead"/"female_lead"/"male_supporting"/"female_supporting"
@@ -134,6 +155,12 @@ data class HighlightRule(
                 }
             )
         }
+        if (letterSpacingBefore > 0f || letterSpacingAfter > 0f) {
+            parts.add("命中字距 ${letterSpacingBefore.toInt()} / ${letterSpacingAfter.toInt()}dp")
+        }
+        if (lineSpacingTop > 0f || lineSpacingBottom > 0f) {
+            parts.add("命中行行距 ${lineSpacingTop.toInt()} / ${lineSpacingBottom.toInt()}dp")
+        }
         if (!fontPath.isNullOrBlank()) {
             parts.add("自定义字体")
         }
@@ -172,9 +199,18 @@ data class HighlightRule(
     }
 
     fun normalizedSampleText(): String {
-        return sampleText.ifBlank {
-            "她轻声说：“今晚就出发。”\n最近在重读《百年孤独》（纪念版），节奏依然很稳。"
-        }
+        return sampleText.ifBlank { DEFAULT_SAMPLE_TEXT }
+    }
+
+    /**
+     * 预览里被上样的那一段在示例句中的 [start, endExclusive)。
+     *
+     * 用户把示例句改成不含 [SAMPLE_HIT_TEXT] 的内容时返回 null：这时没有「那一段」可钉，
+     * 预览退回按正则命中。
+     */
+    fun previewHitRange(): Pair<Int, Int>? {
+        val start = normalizedSampleText().indexOf(SAMPLE_HIT_TEXT)
+        return if (start < 0) null else start to start + SAMPLE_HIT_TEXT.length
     }
 
     fun copyWithNewId(): HighlightRule {
@@ -195,6 +231,19 @@ data class HighlightRule(
 
         /** 波浪波长（dp，一个完整「上-下」周期）。 */
         const val DEFAULT_WAVE_LENGTH_DP = 24f
+
+        /**
+         * 预览示例句：固定这一句，不再按正则换着迁就。引号外留着「张三：」和「他惊了！」，
+         * 命中字距、命中行行距、背景图四周一圈都有相邻的字可以参照，调一个参数就能看出它
+         * 到底只作用在中间那一段上。
+         */
+        const val DEFAULT_SAMPLE_TEXT = "张三：我是李四。他惊了！"
+
+        /**
+         * [DEFAULT_SAMPLE_TEXT] 里被上样的那一段。规则编辑的每一项改动都保证落在它上面，
+         * 与用户填的正则命没命中无关（见 `LegacyReaderStyleRangeMapper.rangesForLiteralRange`）。
+         */
+        const val SAMPLE_HIT_TEXT = "我是李四。"
 
         fun Int.toHexColor(): String = String.format("#%08X", this)
 

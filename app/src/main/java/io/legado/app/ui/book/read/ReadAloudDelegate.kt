@@ -25,6 +25,20 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.data.repository.ReadSettingsRepository
+import io.legado.app.domain.gateway.AiProfileGateway
+import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.domain.model.AiTaskType
+import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
+import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
+import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
+import io.legado.app.utils.TTSCacheUtils
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 朗读域（R2.2 续批）。
@@ -42,6 +56,8 @@ class ReadAloudDelegate(
     private val scope: CoroutineScope,
     private val host: Host,
     private val readAloudSettingsRepository: ReadAloudSettingsRepository,
+    private val readSettingsRepository: ReadSettingsRepository,
+    private val aiProfileGateway: AiProfileGateway,
     private val readAloudSessionStore: ReadAloudSessionStore,
     private val httpTtsRepository: HttpTtsRepository,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
@@ -264,9 +280,318 @@ class ReadAloudDelegate(
         host.emitEffect(ReadBookEffect.OpenReadAloudConfig(ReadBook.book?.bookUrl))
     }
 
-    // --- 开关类设置 ---
+    fun openClassicControls() {
+        host.updateState { it.copy(activeSheet = null) }
+        host.openReadMenuRoute(ReadBookMenuRoute.ReadAloud)
+    }
 
-    /** 按页朗读（经典面板）；开启时不再响应耳机媒体键逐句播报。 */
+    fun setConfigTab(tab: Int) {
+        host.updateState { it.copy(readAloudConfigTab = tab.coerceIn(0, 2)) }
+    }
+
+    /*
+     * 下面三个目的地是整屏 NavKey。`activeSheet` 与 `readAloudConfigTab` 分开管：
+     * 推送整屏页时不清空 `activeSheet`，返回时弹层自己摊回来、tab 由
+     * `readAloudConfigTab` 记住；朗读设置卡片被整屏页盖住时由 ReadBookScreen
+     * 按导航栈顶收起，避免窗口级浮层悬在新页面上面。
+     */
+    fun openTtsEnginesAndVoices() {
+        host.emitEffect(ReadBookEffect.OpenTtsEnginesAndVoices)
+    }
+
+    fun openTtsCache() {
+        host.emitEffect(ReadBookEffect.OpenTtsCache)
+    }
+
+    fun openBookVoiceCasting() {
+        ReadBook.book?.bookUrl?.let { bookUrl ->
+            host.emitEffect(ReadBookEffect.OpenBookVoiceCasting(bookUrl))
+        }
+    }
+
+    /** 朗读设置里的整屏子页（角色声音池 / 背景音乐池 / 朗读胶囊外观）：只负责把意图发出去。 */
+    fun openReadAloudSubPage(page: ReadAloudSubPage) {
+        host.emitEffect(ReadBookEffect.OpenReadAloudSubPage(page))
+    }
+
+    fun openSystemTtsSettings() {
+        host.emitEffect(ReadBookEffect.OpenSystemTtsSettings)
+    }
+
+    fun clearTtsCache() {
+        TTSCacheUtils.clearTtsCache()
+        host.emitEffect(
+            ReadBookEffect.TtsCacheCleared(context.getString(R.string.clear_cache_success))
+        )
+    }
+
+    // --- 四个数值选择弹层 ---
+
+    fun openPreDownloadNumPicker() {
+        host.updateState {
+            it.copy(
+                preDownloadNum = host.preDownloadNum,
+                activeSheet = ReadBookSheet.PreDownloadConfig,
+            )
+        }
+    }
+
+    fun openPreSynthesisConcurrencyPicker() {
+        host.updateState {
+            it.copy(
+                preSynthesisConcurrency =
+                    readAloudSettingsRepository.currentSettings.ttsPreSynthesisConcurrency,
+                activeSheet = ReadBookSheet.PreSynthesisConcurrencyConfig,
+            )
+        }
+    }
+
+    fun openParagraphIntervalPicker() {
+        host.updateState {
+            it.copy(
+                readAloudParagraphInterval =
+                    readAloudSettingsRepository.currentSettings.ttsParagraphInterval,
+                activeSheet = ReadBookSheet.ParagraphIntervalConfig,
+            )
+        }
+    }
+
+    fun openCacheCleanTimePicker() {
+        host.updateState {
+            it.copy(
+                audioCacheCleanTime = readAloudSettingsRepository.currentSettings.audioCacheCleanTime,
+                activeSheet = ReadBookSheet.AudioCacheCleanConfig,
+            )
+        }
+    }
+
+    fun applyPreDownloadNum(value: Int) {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            readSettingsRepository.setPreDownloadNum(value)
+        }
+        host.updateState {
+            it.copy(preDownloadNum = value, activeSheet = ReadBookSheet.ReadAloudConfig)
+        }
+    }
+
+    fun applyPreSynthesisConcurrency(value: Int) {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            readAloudSettingsRepository.update {
+                it.copy(ttsPreSynthesisConcurrency = value.coerceIn(1, 8))
+            }
+        }
+        host.updateState {
+            it.copy(preSynthesisConcurrency = value, activeSheet = ReadBookSheet.ReadAloudConfig)
+        }
+    }
+
+    fun applyAudioCacheCleanTime(value: Int) {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            readAloudSettingsRepository.update { it.copy(audioCacheCleanTime = value) }
+        }
+        host.updateState {
+            it.copy(audioCacheCleanTime = value, activeSheet = ReadBookSheet.ReadAloudConfig)
+        }
+    }
+
+    fun applyParagraphInterval(value: Int) {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            readAloudSettingsRepository.update { it.copy(ttsParagraphInterval = value) }
+        }
+        host.updateState { it.copy(readAloudParagraphInterval = value) }
+    }
+
+    fun setContentSplitMode(value: String) {
+        val (mode, symbols) = ReadAloudContentSplitSetting.decode(value)
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            readAloudSettingsRepository.setContentSplit(
+                mode = mode,
+                symbols = ReadAloudSplitSymbol.storageValues(symbols),
+            )
+        }
+        host.updateState {
+            it.copy(
+                readAloudContentSplitMode = mode.storageValue,
+                readAloudContentSplitSymbols = symbols.map(Char::toString).toImmutableSet(),
+            )
+        }
+    }
+
+    fun setStreamAudio(value: Boolean) {
+        updateSettings { it.copy(streamReadAloudAudio = value) }
+        if (value) postEvent(EventBus.MEDIA_BUTTON, false)
+    }
+
+    fun resetCapsulePosition() {
+        host.updateState { it.copy(readAloudCapsuleOffsetX = 0f, readAloudCapsuleOffsetY = 0f) }
+        updateSettings { it.copy(capsuleOffsetX = 0f, capsuleOffsetY = 0f) }
+    }
+
+    fun setIgnoreAudioFocus(value: Boolean) = updateSettings { it.copy(ignoreAudioFocus = value) }
+
+    fun setPauseOnPhoneCall(value: Boolean) =
+        updateSettings { it.copy(pauseReadAloudWhilePhoneCalls = value) }
+
+    fun setWakeLock(value: Boolean) = updateSettings { it.copy(readAloudWakeLock = value) }
+
+    fun setKeepOnExit(value: Boolean) = updateSettings { it.copy(keepReadAloudOnExit = value) }
+
+    fun setShowCapsule(value: Boolean) = updateSettings { it.copy(showReadAloudCapsule = value) }
+
+    fun setCapsuleAutoCollapse(value: Boolean) =
+        updateSettings { it.copy(capsuleAutoCollapse = value) }
+
+    fun setMediaButtonPerNext(value: Boolean) = updateSettings { it.copy(mediaButtonPerNext = value) }
+
+    fun setSystemMediaCompat(value: Boolean) =
+        updateSettings { it.copy(systemMediaControlCompatibilityChange = value) }
+
+    fun setAndroidMediaControl(value: Boolean) =
+        updateSettings { it.copy(androidMediaControlEnabled = value) }
+
+    fun setDefaultInterface(value: String) {
+        updateSettings {
+            it.copy(
+                defaultInterface = value.takeIf { candidate ->
+                    candidate in ReadAloudSettingsRepository.AVAILABLE_INTERFACES
+                } ?: ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC
+            )
+        }
+        host.updateState { it.copy(defaultReadAloudInterface = value) }
+    }
+
+    /** 非规则模式要求已配置 AI 模型，否则拒绝切换并提示。 */
+    fun setSpeechAnalysisMode(value: String) {
+        scope.launch {
+            if (value != "rule") {
+                val configured = aiProfileGateway.getTaskPreset(AiTaskType.ANALYZE_SPEECH)
+                    ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
+                if (configured == null) {
+                    host.emitEffectAwait(
+                        ReadBookEffect.ShowToast(
+                            context.getString(R.string.speech_analysis_ai_model_required)
+                        )
+                    )
+                    return@launch
+                }
+            }
+            readAloudSettingsRepository.update { it.copy(speechAnalysisMode = value) }
+            host.updateState { it.copy(speechAnalysisMode = value) }
+        }
+    }
+
+    /**
+     * 朗读分析的推理级别。关闭思考模式是 AI 朗读分析的默认值：默认思考的模型（智谱 GLM 等）
+     * 只把内容放在 reasoning_content 里，分析会直接失败。
+     */
+    fun setSpeechAnalysisReasoningLevel(value: String) {
+        val level = AiReasoningLevel.fromStorage(value, AiReasoningLevel.OFF)
+        updateSettings { it.copy(speechAnalysisReasoningLevel = level.storageValue) }
+        host.updateState { it.copy(speechAnalysisReasoningLevel = level.storageValue) }
+    }
+
+    /**
+     * 多角色朗读开关（底栏「多角色朗读」）。
+     *
+     * 它同时决定三件事：有没有音色计划（旁白/角色音全在那份计划里）、正文按哪种粒度切分、
+     * 正文里的角色标记要不要注入，所以正在朗读时必须换掉朗读服务——不重启就是开关只改了
+     * 胶囊：开着不换音色，关着又停在配音页选的旁白音上回不去默认引擎。
+     * 重排当前章让胶囊即时出现/消失，重启前记住页内位置，等旧服务真的 Idle 再重放，避免叠音。
+     */
+    fun setMultiRoleCast(value: Boolean) {
+        scope.launch {
+            val shouldRestart = ReadBook.isCurrentBookReadAloud
+            val resumePlaying = shouldRestart && !BaseReadAloudService.pause
+            val chapterPosition = readAloudSessionStore.state.value.playback.chapterPosition
+            readAloudSettingsRepository.update { it.copy(multiRoleCast = value) }
+            host.updateState { it.copy(multiRoleCast = value) }
+            // 设置落库后重排当前章：注入/摘掉角色标记，胶囊才会跟着变
+            ReadBook.clearTextChapter()
+            ReadBook.loadContent(
+                resetPageOffset = false,
+                preserveReadAloudPosition = readsDurChapterAloud(),
+            )
+            if (shouldRestart) {
+                restartReadAloudWithNewPipeline(resumePlaying, chapterPosition)
+            }
+        }
+    }
+
+    /**
+     * 背景音乐分配开关：只影响正文段首的配乐胶囊渲染与朗读时的配乐轨，
+     * 同样不需要重启朗读服务；切换后重排当前章让胶囊即时出现/消失。
+     */
+    fun setBgmAssign(value: Boolean) {
+        host.updateState { it.copy(bgmAssign = value) }
+        scope.launch {
+            readAloudSettingsRepository.update { it.copy(bgmAssign = value) }
+            ReadBook.clearTextChapter()
+            ReadBook.loadContent(
+                resetPageOffset = false,
+                preserveReadAloudPosition = readsDurChapterAloud(),
+            )
+        }
+    }
+
+    /**
+     * 朗读服务正在读的就是这一章 —— 重排时把朗读位置交给 `ReadAloud.syncLayout()` 同步，
+     * 而不是让它按当前页重新起播（不保位的重载会把读过半章的朗读拽回章首）。
+     */
+    private fun readsDurChapterAloud(): Boolean =
+        ReadBook.isCurrentBookReadAloud &&
+            BaseReadAloudService.currentChapterIndex == ReadBook.durChapterIndex
+
+    /**
+     * 背景音乐总音量：只写 prefs + 刷状态，不重排当前章（音量不在胶囊文字里）。
+     *
+     * 朗读中的配乐轨靠 BgmPoolStore.volumeVersion 发现改动，拖滑杆时即时跟着变。
+     */
+    fun setBgmVolume(value: Float) {
+        val volume = value.coerceIn(0f, 1f)
+        host.updateState { it.copy(bgmVolume = volume) }
+        io.legado.app.help.readaloud.cast.BgmPoolStore.setVolume(volume)
+    }
+
+    /**
+     * 原版「多说话人」开关。与上面的多角色朗读一样要换掉合成管线：
+     * 正在朗读时重启服务，重启前记住页内位置，等服务真的回到 Idle 再重放，避免新旧管线叠音。
+     */
+    fun setUseMultiSpeaker(value: Boolean) {
+        scope.launch {
+            val shouldRestart = ReadBook.isCurrentBookReadAloud
+            val resumePlaying = shouldRestart && !BaseReadAloudService.pause
+            val chapterPosition = readAloudSessionStore.state.value.playback.chapterPosition
+            readAloudSettingsRepository.update { it.copy(useMultiSpeaker = value) }
+            host.updateState { it.copy(useMultiSpeaker = value) }
+            if (shouldRestart) {
+                restartReadAloudWithNewPipeline(resumePlaying, chapterPosition)
+            }
+        }
+    }
+
+    /**
+     * 换掉朗读管线后重启朗读服务。
+     *
+     * 先 stop 并等旧服务真的回到 Idle 再重放，否则新旧两条管线会同时出声（叠音）。
+     * [chapterPosition] 是重启前记住的页内位置，让用户听回来刚才那句而不是章首。
+     */
+    private suspend fun restartReadAloudWithNewPipeline(resumePlaying: Boolean, chapterPosition: Int) {
+        if (ReadBook.readerChapterInputWindow.current == null) return
+        ReadAloud.stop(context)
+        val stopped = withTimeoutOrNull(2_000) {
+            readAloudSessionStore.state.first {
+                it.status == ReadAloudSessionStatus.Idle
+            }
+        }
+        if (stopped == null) return
+        ReadAloud.refreshReadAloudClass()
+        ReadAloud.play(
+            context = context,
+            play = resumePlaying,
+            chapterPosition = chapterPosition.coerceAtLeast(0),
+        )
+    }
+
     fun setByPage(value: Boolean) {
         updateSettings { it.copy(readAloudByPage = value) }
         if (value) postEvent(EventBus.MEDIA_BUTTON, false)
