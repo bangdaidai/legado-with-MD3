@@ -78,12 +78,15 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.http.LocalNetworkBlockedNotifier
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.update.AppUpdate
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
+import io.legado.app.model.Download
 import io.legado.app.service.WebService
 import io.legado.app.ui.about.MarkdownSheet
-import io.legado.app.ui.about.UpdateDialog
+import io.legado.app.ui.about.UpdateMode
+import io.legado.app.ui.about.UpdateSheet
 import io.legado.app.ui.book.audio.AudioPlayViewModel
 import io.legado.app.ui.book.read.ReadAloudControlsRequestBus
 import io.legado.app.ui.book.read.ReadBookInputHandler
@@ -104,7 +107,6 @@ import io.legado.app.ui.widget.components.navigation.shouldUseRail
 import io.legado.app.ui.widget.components.privacy.PrivateAppStartGate
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.eventBus.FlowEventBus
-import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
@@ -138,6 +140,9 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
 
     /** 全局 Compose 文本弹层状态，供遗留命令式路径展示 Markdown/文本内容 */
     private val textSheetFlow = MutableStateFlow<TextSheetData?>(null)
+
+    /** 全局 Compose 更新弹层状态，供启动检查与版本更新日志命令式路径展示 */
+    private val updateSheetFlow = MutableStateFlow<UpdateSheetData?>(null)
 
     fun showTextSheet(title: String, content: String, onDismiss: (() -> Unit)? = null) {
         textSheetFlow.value = TextSheetData(title, content, onDismiss)
@@ -989,6 +994,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             }
         }
         TextSheetHost()
+        UpdateSheetHost()
     }
 
     @Composable
@@ -1002,6 +1008,32 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                 onDismissRequest = {
                     textSheetFlow.value = null
                     data.onDismiss?.invoke()
+                },
+            )
+        }
+    }
+
+    @Composable
+    private fun UpdateSheetHost() {
+        val sheet by updateSheetFlow.collectAsStateWithLifecycle()
+        sheet?.let { data ->
+            UpdateSheet(
+                show = true,
+                updateInfo = data.updateInfo,
+                mode = data.mode,
+                onDismissRequest = {
+                    updateSheetFlow.value = null
+                    data.onDismiss?.invoke()
+                },
+                onStartDownload = {
+                    val url = data.updateInfo.downloadUrl
+                    val fileName = data.updateInfo.fileName
+                    if (url.isBlank() || fileName.isBlank()) {
+                        toastOnUi(R.string.about_download_info_incomplete)
+                    } else {
+                        Download.start(this, url, fileName)
+                        toastOnUi(getString(R.string.about_start_download, fileName))
+                    }
                 },
             )
         }
@@ -1021,8 +1053,24 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
     private fun checkUpdateOnStart() {
         AppUpdateGitHub.check(lifecycleScope)
             .onSuccess { updateInfo ->
-                showDialogFragment(UpdateDialog(updateInfo))
+                showUpdateSheet(updateInfo)
             }
+    }
+
+    /**
+     * 展示更新弹层。更新日志为空时保持旧行为：提示无数据并直接结束。
+     */
+    private fun showUpdateSheet(
+        updateInfo: AppUpdate.UpdateInfo,
+        mode: UpdateMode = UpdateMode.UPDATE,
+        onDismiss: (() -> Unit)? = null,
+    ) {
+        if (updateInfo.updateLog.isBlank()) {
+            toastOnUi(R.string.about_no_data)
+            onDismiss?.invoke()
+            return
+        }
+        updateSheetFlow.value = UpdateSheetData(updateInfo, mode, onDismiss)
     }
 
     /**
@@ -1039,9 +1087,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                 try {
                     val info = AppUpdateGitHub.getReleaseByTag(BuildConfig.VERSION_NAME)
                     if (info != null) {
-                        val dialog = UpdateDialog(info, UpdateDialog.Mode.VIEW_LOG)
-                        dialog.setOnDismissListener { block.resume(null) }
-                        showDialogFragment(dialog)
+                        showUpdateSheet(info, UpdateMode.VIEW_LOG) { block.resume(null) }
                     } else {
                         block.resume(null)
                     }
@@ -1197,6 +1243,12 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
 data class TextSheetData(
     val title: String,
     val content: String,
+    val onDismiss: (() -> Unit)? = null,
+)
+
+private data class UpdateSheetData(
+    val updateInfo: AppUpdate.UpdateInfo,
+    val mode: UpdateMode,
     val onDismiss: (() -> Unit)? = null,
 )
 
