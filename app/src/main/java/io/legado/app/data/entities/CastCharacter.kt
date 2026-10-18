@@ -28,7 +28,7 @@ data class CastCharacter(
     val id: String,
     val bookUrl: String,
     val name: String,
-    /** 声音池标签（女少女/女中年等，见 VoicePool.label）。 */
+    /** 声音池名（voice_pools.name，如「女青年」）；角色身份 = 书 + 名字 + 池名。 */
     val poolLabel: String,
     /** 音色 id（read_aloud_voices.id），空 = 未选。 */
     val voiceId: String = "",

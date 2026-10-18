@@ -234,6 +234,11 @@ fun CloudTtsScreen(
             // 批量操作放右下角折叠菜单：列表顶部那条横排按钮划到下面就够不着了
             if (state.selectedTab == CloudTtsTab.Voices && state.voiceBatchMode) {
                 val selectedCount = state.selectedVoiceIds.size
+                // 删除只作用于用户/外部目录音色，菜单项按这个子集决定显隐与计数；
+                // 「加入声音池」不限 managedBy，用全量 selectedCount。
+                val deletableSelectedCount = state.voices.count { voice ->
+                    voice.deletable && voice.id in state.selectedVoiceIds
+                }
                 AppFloatingActionButtonMenu(
                     // 组件内部自带 horizontal 16 / vertical 24 的内边距，不抵消的话这颗
                     // 会比平时那颗 FAB 往里缩，进出批量模式时位置一跳（用户说的「割裂」）。
@@ -242,32 +247,43 @@ fun CloudTtsScreen(
                     modifier = Modifier.offset(x = 16.dp, y = 16.dp),
                     expanded = voiceBatchMenuExpanded,
                     onExpandedChange = { voiceBatchMenuExpanded = it },
-                    items = listOf(
-                        FabMenuItem(
-                            icon = Icons.Default.SelectAll,
-                            label = stringResource(R.string.select_all),
-                            action = { onIntent(CloudTtsIntent.ToggleSelectAllVoices) },
-                        ),
-                        FabMenuItem(
-                            icon = Icons.Default.PlaylistAdd,
-                            label = stringResource(
-                                R.string.cloud_tts_add_selected_to_pool, selectedCount,
+                    items = buildList {
+                        add(
+                            FabMenuItem(
+                                icon = Icons.Default.SelectAll,
+                                label = stringResource(R.string.select_all),
+                                action = { onIntent(CloudTtsIntent.ToggleSelectAllVoices) },
                             ),
-                            action = { onIntent(CloudTtsIntent.RequestAddToPool(emptyList())) },
-                        ),
-                        FabMenuItem(
-                            icon = Icons.Default.Delete,
-                            label = stringResource(
-                                R.string.cloud_tts_delete_selected_count, selectedCount,
+                        )
+                        add(
+                            FabMenuItem(
+                                icon = Icons.Default.PlaylistAdd,
+                                label = stringResource(
+                                    R.string.cloud_tts_add_selected_to_pool, selectedCount,
+                                ),
+                                action = { onIntent(CloudTtsIntent.RequestAddToPool(emptyList())) },
                             ),
-                            action = { onIntent(CloudTtsIntent.RequestDeleteSelectedVoices) },
-                        ),
-                        FabMenuItem(
-                            icon = Icons.Default.Close,
-                            label = stringResource(R.string.cancel),
-                            action = { onIntent(CloudTtsIntent.ToggleVoiceBatchMode) },
-                        ),
-                    ),
+                        )
+                        if (deletableSelectedCount > 0) {
+                            add(
+                                FabMenuItem(
+                                    icon = Icons.Default.Delete,
+                                    label = stringResource(
+                                        R.string.cloud_tts_delete_selected_count,
+                                        deletableSelectedCount,
+                                    ),
+                                    action = { onIntent(CloudTtsIntent.RequestDeleteSelectedVoices) },
+                                ),
+                            )
+                        }
+                        add(
+                            FabMenuItem(
+                                icon = Icons.Default.Close,
+                                label = stringResource(R.string.cancel),
+                                action = { onIntent(CloudTtsIntent.ToggleVoiceBatchMode) },
+                            ),
+                        )
+                    },
                 )
             } else {
                 AppFloatingActionButton(
@@ -337,17 +353,16 @@ fun CloudTtsScreen(
                         trailingContent = {
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 if (state.voiceBatchMode) {
-                                    if (voice.deletable) {
-                                        MediumTonalButton(
-                                            onClick = {
-                                                onIntent(CloudTtsIntent.ToggleVoiceSelection(voice.id))
-                                            },
-                                            selected = voice.id in state.selectedVoiceIds,
-                                            icon = Icons.Default.Check,
-                                            contentDescription =
-                                                stringResource(R.string.cloud_tts_batch_mode),
-                                        )
-                                    }
+                                    // 任何音色都能勾选：入池不限 managedBy
+                                    MediumTonalButton(
+                                        onClick = {
+                                            onIntent(CloudTtsIntent.ToggleVoiceSelection(voice.id))
+                                        },
+                                        selected = voice.id in state.selectedVoiceIds,
+                                        icon = Icons.Default.Check,
+                                        contentDescription =
+                                            stringResource(R.string.cloud_tts_batch_mode),
+                                    )
                                 } else {
                                     MediumTonalButton(
                                         onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
@@ -361,15 +376,16 @@ fun CloudTtsScreen(
                                         icon = Icons.Default.Edit,
                                         contentDescription = stringResource(R.string.cloud_tts_rename_voice),
                                     )
+                                    // 「加入声音池」对所有音色开放：目录自动音色也能进池，只有删除仍限用户音色
+                                    MediumTonalButton(
+                                        onClick = {
+                                            onIntent(CloudTtsIntent.RequestAddToPool(listOf(voice.id)))
+                                        },
+                                        icon = Icons.Default.PlaylistAdd,
+                                        contentDescription =
+                                            stringResource(R.string.cloud_tts_add_to_pool),
+                                    )
                                     if (voice.deletable) {
-                                        MediumTonalButton(
-                                            onClick = {
-                                                onIntent(CloudTtsIntent.RequestAddToPool(listOf(voice.id)))
-                                            },
-                                            icon = Icons.Default.PlaylistAdd,
-                                            contentDescription =
-                                                stringResource(R.string.cloud_tts_add_to_pool),
-                                        )
                                         MediumTonalButton(
                                             onClick = { onIntent(CloudTtsIntent.RequestDeleteVoice(voice.id)) },
                                             icon = Icons.Default.Delete,
@@ -381,10 +397,10 @@ fun CloudTtsScreen(
                         },
                         onClick = {
                             when {
-                                state.voiceBatchMode && voice.deletable ->
+                                state.voiceBatchMode ->
                                     onIntent(CloudTtsIntent.ToggleVoiceSelection(voice.id))
 
-                                !state.voiceBatchMode && voice.editable ->
+                                voice.editable ->
                                     onIntent(CloudTtsIntent.EditVoice(voice.id))
                             }
                         },

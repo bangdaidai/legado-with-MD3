@@ -467,16 +467,6 @@ object VoicePoolStore {
         return added.size
     }
 
-    /** 旧 VoicePool 枚举标签 → 新默认池名（迁移映射，找不到同名时按此转换）。 */
-    fun legacyPoolLabel(label: String): String = when (label) {
-        "男老年" -> "男性老年"
-        "女老年" -> "女性老年"
-        "男声" -> "失配男"
-        "女声" -> "失配女"
-        "中性声" -> "卡通人物"
-        else -> label
-    }
-
     // ---- 多角色规则页专用出口（ViewModel 禁直连 DAO，全部经本 Store） ----
 
     /** 成员页候选：全部音色 (id → displayName)，用户排除的不在候选里。 */

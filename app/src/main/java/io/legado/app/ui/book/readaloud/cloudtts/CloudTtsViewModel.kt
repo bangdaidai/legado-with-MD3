@@ -178,8 +178,9 @@ class CloudTtsViewModel(
         val excludedCount = voiceGateway.countExcludedVoices()
         _uiState.update { state ->
             state.copy(
+                // 勾选语义按「可加入声音池」定义：任何音色都能入池，不再局限于用户音色。
                 selectedVoiceIds = state.selectedVoiceIds.intersect(
-                    voices.filter(::isRemovable).mapTo(mutableSetOf()) { it.id }
+                    voices.mapTo(mutableSetOf()) { it.id }
                 ).toPersistentSet(),
                 loading = false,
                 excludedVoiceCount = excludedCount,
@@ -269,18 +270,23 @@ class CloudTtsViewModel(
 
             is CloudTtsIntent.ToggleVoiceSelection -> _uiState.update {
                 val picked = it.selectedVoiceIds.toMutableSet()
-                if (voices.none { voice -> voice.id == intent.id && isRemovable(voice) }) return@update it
+                if (voices.none { voice -> voice.id == intent.id }) return@update it
                 if (!picked.remove(intent.id)) picked += intent.id
                 it.copy(selectedVoiceIds = picked.toPersistentSet())
             }
 
             CloudTtsIntent.ToggleSelectAllVoices -> _uiState.update {
-                val picked = toggleAllRemovableVoices(voices, it.selectedVoiceIds)
+                val candidates = voices.mapTo(mutableSetOf()) { it.id }
+                val picked =
+                    if (it.selectedVoiceIds.containsAll(candidates)) emptySet() else candidates
                 it.copy(selectedVoiceIds = picked.toPersistentSet())
             }
 
+            // 删除只对「可移走」的音色生效：目录自动音色能勾选入池，但不能被删。
             CloudTtsIntent.RequestDeleteSelectedVoices -> {
-                val ids = _uiState.value.selectedVoiceIds.toList()
+                val ids = _uiState.value.selectedVoiceIds.filter { id ->
+                    voices.any { it.id == id && isRemovable(it) }
+                }
                 if (ids.isNotEmpty()) {
                     _uiState.update {
                         it.copy(
@@ -1474,7 +1480,8 @@ class CloudTtsViewModel(
      * 顺带 ensureSeeded 一次，否则新设备上弹层里一个池都没有。
      */
     private fun openPoolPicker(ids: List<String>) = viewModelScope.launch {
-        val candidates = voices.filter(::isRemovable).mapTo(mutableSetOf()) { it.id }
+        // 候选是页面上全部音色：入池不限 managedBy，目录自动音色一样能进池。
+        val candidates = voices.mapTo(mutableSetOf()) { it.id }
         val picked = ids.ifEmpty { _uiState.value.selectedVoiceIds.toList() }.filter { it in candidates }
         if (picked.isEmpty()) return@launch
         val pools = withContext(Dispatchers.IO) {
@@ -1554,12 +1561,10 @@ private const val DEFAULT_ENGINE_VOICE_ID = "__engine_default__"
 
 /** HttpTTS 脚本里 speakSpeed 的正常语速基准值 */
 private const val HTTP_PREVIEW_SPEECH_RATE = 10
-/** 用户音色可删除，外部目录音色可排除；其他自动目录由同步维护。 */
+/**
+ * 可删除/可移走的音色：用户音色真删，外部目录音色标成「排除」；其他自动目录由同步维护。
+ * 只用于删除判定——入池不限 managedBy。
+ */
 internal fun isRemovable(voice: ReadAloudVoice): Boolean =
     voice.managedBy == ReadAloudVoice.MANAGED_BY_USER ||
         voice.managedBy == ReadAloudVoice.MANAGED_BY_HTTP_SOURCE_CATALOG
-
-internal fun toggleAllRemovableVoices(voices: List<ReadAloudVoice>, selected: Set<String>): Set<String> {
-    val candidates = voices.filter(::isRemovable).mapTo(mutableSetOf()) { it.id }
-    return if (selected.containsAll(candidates)) emptySet() else candidates
-}
