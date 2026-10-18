@@ -103,11 +103,16 @@ import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.ui.book.read.ReadBookRouteScreen
 import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.read.ReaderSessionViewModel
+import io.legado.app.ui.book.read.sheet.asReadBookUiState
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewRouteScreen
 import io.legado.app.ui.book.readRecord.ReadRecordRouteScreen
 import io.legado.app.ui.book.readingmemory.ReadingMemoryEffect
 import io.legado.app.ui.book.readingmemory.ReadingMemoryScreen
 import io.legado.app.ui.book.readingmemory.ReadingMemoryViewModel
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailEffect
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailIntent
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailScreen
+import io.legado.app.ui.book.readingmemory.detail.ReadingMemoryDetailViewModel
 import io.legado.app.ui.book.readaloud.ReadAloudPlayerOverlayBus
 import io.legado.app.ui.book.readaloud.cache.TtsCacheRouteScreen
 import io.legado.app.ui.book.readaloud.cast.BgmPoolRouteScreen
@@ -123,8 +128,13 @@ import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsEffect
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsIntent
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsScreen
 import io.legado.app.ui.book.readaloud.cloudtts.CloudTtsViewModel
+import io.legado.app.ui.book.readaloud.config.ReadAloudConfigScreen
 import io.legado.app.ui.book.readaloud.morph.ReadAloudMorphState
+import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerViewModel
+import io.legado.app.ui.book.readaloud.player.applyReadAloudConfigIntent
 import io.legado.app.ui.book.readaloud.player.rememberPlayerThemeOverride
+import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardScreen
+import io.legado.app.ui.book.readaloud.storyboard.SpeechStoryboardViewModel
 import io.legado.app.ui.book.search.SearchIntent
 import io.legado.app.ui.book.search.SearchRouteScreen
 import io.legado.app.ui.book.search.SearchViewModel
@@ -137,6 +147,8 @@ import io.legado.app.ui.book.source.debug.BookSourceDebugViewModel
 import io.legado.app.ui.book.source.edit.BookSourceEditRoute
 import io.legado.app.ui.book.source.edit.BookSourceEditViewModel
 import io.legado.app.ui.book.source.manage.BookSourceRouteScreen
+import io.legado.app.ui.book.tagdetail.TagDetailRouteScreen
+import io.legado.app.ui.book.tagmanage.ExcludedTagRouteScreen
 import io.legado.app.ui.book.tagmanage.TagManagementRouteScreen
 import io.legado.app.ui.book.toc.TocIntent
 import io.legado.app.ui.book.toc.TocRouteScreen
@@ -163,6 +175,7 @@ import io.legado.app.ui.config.downloadCacheConfig.DownloadCacheConfigRouteScree
 import io.legado.app.ui.config.labConfig.LabConfigRouteScreen
 import io.legado.app.ui.config.otherConfig.OtherConfigRouteScreen
 import io.legado.app.ui.config.privateConfig.PrivateConfigRouteScreen
+import io.legado.app.ui.config.protagonistExtractionConfig.ProtagonistExtractionConfigRouteScreen
 import io.legado.app.ui.config.readConfig.ReadConfigRouteScreen
 import io.legado.app.ui.config.themeConfig.ThemeConfigRouteScreen
 import io.legado.app.ui.config.themeManage.ThemeManageRouteScreen
@@ -173,6 +186,7 @@ import io.legado.app.ui.login.SourceLoginIntent
 import io.legado.app.ui.login.SourceLoginRoute
 import io.legado.app.ui.login.SourceLoginType
 import io.legado.app.ui.login.SourceLoginViewModel
+import io.legado.app.ui.main.my.authorManage.AuthorDetailRouteScreen
 import io.legado.app.ui.main.my.authorManage.AuthorManageRouteScreen
 import io.legado.app.ui.replace.ReplaceRuleRouteScreen
 import io.legado.app.ui.replace.edit.ReplaceEditRouteScreen
@@ -204,6 +218,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
 /**
@@ -750,7 +765,16 @@ fun MainActivity.mainEntryProvider(
     }
 
     entry<MainRouteSettingsRead> {
-        ReadConfigRouteScreen(onBackClick = { onNavigateBack() })
+        ReadConfigRouteScreen(
+            onBackClick = { onNavigateBack() },
+            onNavigateToProtagonistExtraction = {
+                pushRoute(MainRouteProtagonistExtractionConfig)
+            },
+        )
+    }
+
+    entry<MainRouteProtagonistExtractionConfig> {
+        ProtagonistExtractionConfigRouteScreen(onBackClick = { onNavigateBack() })
     }
 
     entry<MainRouteSettingsCover> {
@@ -1650,6 +1674,19 @@ fun MainActivity.mainEntryProvider(
         )
     }
 
+    entry<MainRouteSpeechStoryboard> { route ->
+        val viewModel = koinViewModel<SpeechStoryboardViewModel>(
+            key = "SpeechStoryboard:${route.bookUrl}",
+            parameters = { parametersOf(route.bookUrl) },
+        )
+        SpeechStoryboardScreen(
+            state = viewModel.uiState.collectAsStateWithLifecycle().value,
+            onIntent = viewModel::onIntent,
+            effects = viewModel.effects,
+            onBack = { onNavigateBack() },
+        )
+    }
+
     entry<MainRouteCloudTtsEngines> { route ->
         val viewModel = koinViewModel<CloudTtsViewModel>()
         LaunchedEffect(route.bookUrl) {
@@ -1686,6 +1723,31 @@ fun MainActivity.mainEntryProvider(
             onIntent = viewModel::onIntent,
             effects = viewModel.effects,
             onBack = { onNavigateBack() },
+        )
+    }
+
+    entry<MainRouteReadAloudConfig> { route ->
+        // 朗读设置整页：读写都走全局朗读设置宿主，阅读器/听书页两个入口进的是同一页。
+        val playerViewModel: ReadAloudPlayerViewModel = koinInject()
+        val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
+        val settingsState by playerViewModel.readAloudSettings.collectAsStateWithLifecycle()
+        ReadAloudConfigScreen(
+            state = settingsState.asReadBookUiState(),
+            playerState = playerState,
+            onIntent = playerViewModel::applyReadAloudConfigIntent,
+            onPlayerIntent = playerViewModel::onIntent,
+            effects = playerViewModel.effects,
+            onBack = { onNavigateBack() },
+            onOpenEnginesAndVoices = { bookUrl ->
+                onNavigateToRoute(MainRouteCloudTtsEngines(bookUrl ?: route.bookUrl))
+            },
+            onOpenTtsCache = { onNavigateToRoute(MainRouteTtsCache) },
+            onOpenBookVoiceCasting = { bookUrl ->
+                onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
+            },
+            onOpenSpeechStoryboard = { bookUrl ->
+                onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
+            },
         )
     }
 
@@ -1939,6 +2001,39 @@ fun MainActivity.mainEntryProvider(
         )
     }
 
+    entry<MainRouteAuthorDetail> { route ->
+        AuthorDetailRouteScreen(
+            name = route.name,
+            onBack = { onNavigateBack() },
+            onOpenBook = { bookUrl ->
+                onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl))
+            },
+            onOpenSearchBook = { book ->
+                onNavigateToRoute(
+                    MainRouteBookInfo(
+                        name = book.name,
+                        author = book.author,
+                        bookUrl = book.bookUrl,
+                        origin = book.origin,
+                        coverPath = book.coverUrl,
+                    )
+                )
+            },
+        )
+    }
+
+    entry<MainRouteTagDetail> { route ->
+        TagDetailRouteScreen(
+            tagId = route.tagId,
+            onBack = { onNavigateBack() },
+            onOpenBook = { onNavigateToRoute(MainRouteReadBook(bookUrl = it)) },
+        )
+    }
+
+    entry<MainRouteExcludedTag> {
+        ExcludedTagRouteScreen(onBack = { onNavigateBack() })
+    }
+
     entry<MainRouteReadingMemory> {
         val readingMemoryViewModel = koinViewModel<ReadingMemoryViewModel>()
         val readingMemoryUiState by readingMemoryViewModel.uiState.collectAsStateWithLifecycle()
@@ -1955,6 +2050,45 @@ fun MainActivity.mainEntryProvider(
             uiState = readingMemoryUiState,
             onBack = { onNavigateBack() },
             onIntent = readingMemoryViewModel::onIntent,
+        )
+    }
+
+    entry<MainRouteReadingMemoryDetail> { route ->
+        val viewModel = koinViewModel<ReadingMemoryDetailViewModel>(
+            key = "ReadingMemoryDetail:${route.bookUrl}",
+            parameters = { parametersOf(route.bookUrl) }
+        )
+        val context = LocalContext.current
+        val state by viewModel.detailState.collectAsStateWithLifecycle()
+
+        LaunchedEffect(viewModel) {
+            viewModel.onIntent(ReadingMemoryDetailIntent.Load(route.bookUrl))
+            viewModel.effect.collectLatest { effect ->
+                when (effect) {
+                    is ReadingMemoryDetailEffect.Back -> onNavigateBack()
+                    is ReadingMemoryDetailEffect.ShowToast -> context.toastOnUi(effect.message)
+                    is ReadingMemoryDetailEffect.NavigateToBookInfo -> onNavigateToRoute(
+                        MainRouteBookInfo(
+                            name = effect.name,
+                            author = effect.author,
+                            bookUrl = effect.bookUrl,
+                            origin = null,
+                        ),
+                    )
+                    is ReadingMemoryDetailEffect.OpenBookInfoEdit -> onNavigateToRoute(
+                        MainRouteBookInfoEdit(effect.bookUrl),
+                    )
+                    is ReadingMemoryDetailEffect.OpenReadBook -> onNavigateToRoute(
+                        MainRouteReadBook(bookUrl = effect.bookUrl),
+                    )
+                }
+            }
+        }
+
+        ReadingMemoryDetailScreen(
+            state = state,
+            onBack = { onNavigateBack() },
+            onIntent = viewModel::onIntent,
         )
     }
 
