@@ -123,7 +123,6 @@ object ReadAloud {
                 appDb.castCharacterDao.getByBook(bookUrl).forEach {
                     if (it.voiceId.isNotBlank()) voiceIds += it.voiceId
                 }
-                }
                 val voices = appDb.readAloudVoiceDao.getVoices().filter {
                     it.id in voiceIds && it.enabled && it.available
                 }

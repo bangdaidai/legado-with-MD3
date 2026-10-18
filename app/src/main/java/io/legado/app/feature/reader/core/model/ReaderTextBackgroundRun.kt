@@ -3,6 +3,7 @@ package io.legado.app.feature.reader.core.model
 import kotlin.math.abs
 
 data class ReaderTextBackgroundRun(
+    val bounds: ReaderRect,
     val contentBounds: ReaderRect,
     val image: ReaderTextBackgroundImage,
 )

@@ -478,17 +478,6 @@ data class AiGenerateResponse(
     val finishReason: String? = null
 )
 
-/**
- * HTTP failure returned by an AI provider endpoint.
- *
- * [statusCode] stays structured so retry and failure-classification logic never has to parse
- * [message], which carries the raw response body for diagnosability.
- */
-class AiHttpException(
-    val statusCode: Int,
-    message: String
-) : Exception(message)
-
 @Keep
 data class AiAvailableModel(
     val id: String,

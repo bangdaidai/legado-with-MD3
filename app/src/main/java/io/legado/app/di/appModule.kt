@@ -237,7 +237,6 @@ import io.legado.app.domain.usecase.UploadReadingProgressUseCase
 import io.legado.app.domain.usecase.VerifyBookmarkTargetUseCase
 import io.legado.app.domain.usecase.WebDavBackupUseCase
 import io.legado.app.domain.usecase.readRecord.GetReadRecordOverviewUseCase
-import io.legado.app.feature.explore.ExploreMainViewModel
 import io.legado.app.feature.onboarding.OnboardingViewModel
 import io.legado.app.help.coil.CoverFetcher
 import io.legado.app.help.coil.CoverInterceptor
@@ -947,7 +946,6 @@ val appModule = module {
     viewModelOf(::ChangeBookSourceComposeViewModel)
     viewModelOf(::ChangeChapterSourceViewModel)
     viewModelOf(::ExploreViewModel)
-    viewModelOf(::ExploreMainViewModel)
     viewModelOf(::RssViewModel)
     viewModelOf(::SearchViewModel)
     viewModelOf(::BookCacheManageViewModel)

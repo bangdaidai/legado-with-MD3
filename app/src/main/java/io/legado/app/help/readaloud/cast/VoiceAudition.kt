@@ -31,8 +31,10 @@ object VoiceAudition {
         val success = runCatching {
             when (voice.engineType) {
                 ReadAloudVoice.ENGINE_CLOUD ->
-                    CloudTtsAudioSynthesizer(koin.get<CloudTtsEngineGateway>())
-                        .synthesize(voice, text, output)
+                    CloudTtsAudioSynthesizer(
+                        koin.get<CloudTtsEngineGateway>(),
+                        koin.get<io.legado.app.data.repository.ai.AiLogRepository>(),
+                    ).synthesize(voice, text, output)
 
                 ReadAloudVoice.ENGINE_SYSTEM -> {
                     val config = runCatching {
