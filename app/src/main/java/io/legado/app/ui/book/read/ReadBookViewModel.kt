@@ -1521,6 +1521,7 @@ class ReadBookViewModel(
             is ReadBookIntent.OpenReadAloudSubPage ->
                 readAloudDelegate.openReadAloudSubPage(intent.page)
             ReadBookIntent.OpenReadAloudPlayer -> readAloudDelegate.openPlayer()
+            ReadBookIntent.OpenClassicReadAloudControls -> readAloudDelegate.openClassicControls()
 
             is ReadBookIntent.SelectFont -> styleDelegate.selectFont(intent.path)
             is ReadBookIntent.SelectTitleFont -> styleDelegate.selectTitleFont(intent.path)
@@ -1932,6 +1933,13 @@ class ReadBookViewModel(
                     )
                 }
                 emitEffectWhenSubscribed(ReadBookEffect.UpdateReaderConfig(actions))
+            }
+        }
+        viewModelScope.launch {
+            // 听书播放浮层的「切换到经典朗读」：浮层是 Activity 级宿主，拿不到阅读页句柄，
+            // 只能经这条一次性通道交给还活着的本 VM，回阅读页时直接落在经典朗读控制面板。
+            ReadAloudControlsRequestBus.events.collect {
+                onIntent(ReadBookIntent.OpenClassicReadAloudControls)
             }
         }
         viewModelScope.launch {

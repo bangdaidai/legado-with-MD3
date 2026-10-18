@@ -53,18 +53,53 @@ class ChapterSpeechRepository(
         dao.getChapterSegments(bookUrl, chapterIndex).map(ChapterSpeechSegmentEntity::toDomain)
     }
 
-    override suspend fun getChapterSummaries(bookUrl: String): List<ChapterSpeechSummary> =
-        withContext(Dispatchers.IO) {
-            dao.getChapterSummaries(bookUrl).map {
-                ChapterSpeechSummary(
-                    chapterIndex = it.chapterIndex,
-                    title = it.title,
-                    segmentCount = it.segmentCount,
-                    characterCount = it.characterCount,
-                    updatedAt = it.updatedAt,
-                )
-            }
+    /**
+     * 取当前设置会用的那一份，匹配不上才退回最近一次并标 [ChapterSpeechSegments.isCurrent] = false。
+     *
+     * 同���章可以同时存在多份 analysis（划分方式、分析模式或人物档案一变 resolverVersion 就变），
+     * 按 updatedAt 取最新拿到的不一定是正在播的那份——命中缓存时写入方不会更新 updatedAt，
+     * 于是"先用 AI 模式读过、后切回规则模式"的章节会一直返回旧划分。界面按那份分段显示的
+     * 角色与音色，跟实际播出的完全是两套。
+     */
+override suspend fun getChapterSegmentsFor(
+        bookUrl: String,
+        chapterIndex: Int,
+        resolverVersion: String,
+    ): ChapterSpeechSegments = withContext(Dispatchers.IO) {
+        val exact = dao.getAnalysisByResolverVersion(bookUrl, chapterIndex, resolverVersion)
+        if (exact != null) {
+            ChapterSpeechSegments(
+                segments = dao.getSegments(exact.id).map(ChapterSpeechSegmentEntity::toDomain),
+                isCurrent = true,
+            )
+        } else {
+            ChapterSpeechSegments(
+                segments = dao.getChapterSegments(bookUrl, chapterIndex)
+                    .map(ChapterSpeechSegmentEntity::toDomain),
+                isCurrent = false,
+            )
         }
+    }
+
+    override suspend fun getChapterSummaries(
+        bookUrl: String,
+        resolverVersion: String,
+    ): List<ChapterSpeechSummary> = withContext(Dispatchers.IO) {
+        // getBookAnalyses 已按 updatedAt 降序，每个 chapterIndex 的第一条就是统计查询选中的那份
+        val current = dao.getBookAnalyses(bookUrl)
+            .groupBy({ it.chapterIndex }, { it.resolverVersion })
+            .mapValues { (_, versions) -> versions.first() == resolverVersion }
+        dao.getChapterSummaries(bookUrl).map { row ->
+            ChapterSpeechSummary(
+                chapterIndex = row.chapterIndex,
+                title = row.title,
+                segmentCount = row.segmentCount,
+                characterCount = row.characterCount,
+                updatedAt = row.updatedAt,
+                isCurrent = current[row.chapterIndex] ?: false,
+            )
+        }
+    }
 
 
     override suspend fun replaceSegments(

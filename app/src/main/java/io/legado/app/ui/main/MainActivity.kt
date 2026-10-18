@@ -611,6 +611,17 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         val playbackCapsuleState by playbackGateway.state.collectAsStateWithLifecycle()
         val playerOpenMutex = remember { Mutex() }
         val morphPresent by remember { derivedStateOf { readAloudMorph.progress.value > 0f } }
+        // 「从哪里来，就回到哪里去」：浮层设置弹窗跳 nav3 页面时记下
+        // (跳转目标, 跳页时的来源栈顶)；返回栈顶回到来源页时重新展开浮层。
+        // 上面几个 player 状态都用 rememberSaveable，这里也必须一致：
+        // manifest 里 MainActivity 的 configChanges 不含 orientation|screenSize，
+        // 旋转会重建 Activity，remember 的标记会被丢掉，返回时浮层不再自动展开。
+        // rememberSaveable 只能存 Bundle 支持的类型，NavKey 不在其中。
+        // 这里存 toString()：MainRoute 全是 data object / data class，
+        // 字符串形式与实例一一对应，比较效果和原来的 == 一致。
+        var playerReopenOnBack by rememberSaveable {
+            mutableStateOf<Pair<String, String>?>(null)
+        }
 
         suspend fun openPlayer(request: PlaybackCapsuleState) = playerOpenMutex.withLock {
             val source = request.source ?: PlaybackCapsuleSource.ReadAloud
@@ -709,6 +720,19 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                     // 兜底同步：预测性返回、系统返回手势等不经过 navigateToRoute/navigateBack 的路径
                     navRouteTracker.onBackStackChanged(it)
                     MainNavigator.onBackStackChanged()
+                    // 「从哪里来，就回到哪里去」：听书浮层设置跳的页面，返回到
+                    // 跳页时的来源栈顶（阅读页/主页）时自动重新展开浮层。
+                    // 朗读已被停止（胶囊状态没有活跃源）时不重开，只清标记。
+                    val reopen = playerReopenOnBack
+                    // 存的是 toString（rememberSaveable 只能存 Bundle 支持的类型），
+                    // 用字符串比较；注意 null 栈顶也会映成 "null"，与 MainRouteHome 不冲突
+                    if (reopen != null && it.lastOrNull().toString() == reopen.second) {
+                        playerReopenOnBack = null
+                        val capsule = playbackGateway.state.value
+                        if (capsule.source == PlaybackCapsuleSource.ReadAloud) {
+                            openPlayer(capsule)
+                        }
+                    }
                 }
         }
         SharedTransitionLayout {
@@ -716,6 +740,68 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
             // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
             PrivateAppStartGate {
                 Box(modifier = Modifier.fillMaxSize()) {
+                    val navSharedTransitionScope = this@SharedTransitionLayout
+                    // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
+                    // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
+                    // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
+                    // provider 重建条目，与被摘栈手势开始时捕获的场景必然不相等，
+                    // NavDisplay 松手校验 targetState == scene 失败就把预测手势判为
+                    // "取消"——先退回当前页再重放一次摘栈（两拍闪），已组合的露出页
+                    // 也随销毁重建冷启动。用 remember 锁住 provider 代次，跨重组不换代。
+                    // 换代键只含会影响 mainEntryProvider 返回值的输入：相对 merge 前
+                    // fork 版，上游合并后新增了 panesEnabled 入参，把派生它的
+                    // listDetailEnabled 纳入键；useHomeCapsule 同时决定
+                    // readAloudMorph 是否透传与 homePlaybackCapsuleEnabled，照旧参与换代。
+                    val navEntryProvider = remember(
+                        backStack,
+                        configuration,
+                        mangaSettings.showMangaUi,
+                        useRail,
+                        navRouteTracker,
+                        navSharedTransitionScope,
+                        listDetailEnabled,
+                        useHomeCapsule,
+                        capsuleAnchorPreview,
+                    ) {
+                        mainEntryProvider(
+                            backStack = backStack,
+                            configuration = configuration,
+                            showMangaUi = mangaSettings.showMangaUi,
+                            useRail = useRail,
+                            sharedTransitionScope = navSharedTransitionScope,
+                            panesEnabled = listDetailEnabled,
+                            onNavigationRailWidthChanged = { navigationRailWidth = it },
+                            navigateToRoute = { route ->
+                                if (route is MainRouteAudioPlay) {
+                                    pageShellCapsuleScope.launch {
+                                        openPlayer(
+                                            PlaybackCapsuleState(
+                                                source = PlaybackCapsuleSource.AudioBook,
+                                                bookUrl = route.bookUrl.orEmpty(),
+                                                inBookshelf = route.inBookshelf,
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    MainNavigator.navigateToRoute(
+                                        backStack,
+                                        route,
+                                        navRouteTracker
+                                    )
+                                }
+                            },
+                            onNavigateBack = {
+                                MainNavigator.navigateBack(
+                                    this@MainActivity,
+                                    backStack,
+                                    navRouteTracker
+                                )
+                            },
+                            readAloudMorph = readAloudMorph.takeIf { useHomeCapsule },
+                            homePlaybackCapsuleEnabled = useHomeCapsule,
+                            capsuleAnchorPreview = capsuleAnchorPreview,
+                        )
+                    }
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -832,44 +918,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                                 ) + fadeOut(animationSpec = tween()))
                             },
                             onBack = { MainNavigator.navigateBack(this@MainActivity, backStack) },
-                            entryProvider = mainEntryProvider(
-                                backStack = backStack,
-                                configuration = configuration,
-                                showMangaUi = mangaSettings.showMangaUi,
-                                useRail = useRail,
-                                sharedTransitionScope = this@SharedTransitionLayout,
-                                panesEnabled = listDetailEnabled,
-                                onNavigationRailWidthChanged = { navigationRailWidth = it },
-                                navigateToRoute = { route ->
-                                    if (route is MainRouteAudioPlay) {
-                                        pageShellCapsuleScope.launch {
-                                            openPlayer(
-                                                PlaybackCapsuleState(
-                                                    source = PlaybackCapsuleSource.AudioBook,
-                                                    bookUrl = route.bookUrl.orEmpty(),
-                                                    inBookshelf = route.inBookshelf,
-                                                )
-                                            )
-                                        }
-                                    } else {
-                                        MainNavigator.navigateToRoute(
-                                            backStack,
-                                            route,
-                                            navRouteTracker
-                                        )
-                                    }
-                                },
-                                onNavigateBack = {
-                                    MainNavigator.navigateBack(
-                                        this@MainActivity,
-                                        backStack,
-                                        navRouteTracker
-                                    )
-                                },
-                                readAloudMorph = readAloudMorph.takeIf { useHomeCapsule },
-                                homePlaybackCapsuleEnabled = useHomeCapsule,
-                                capsuleAnchorPreview = capsuleAnchorPreview,
-                            )
+                            entryProvider = navEntryProvider,
                         )
                     }
                     // 全局胶囊与导航容器并列，始终画在阅读等 Nav3 叠层之上。
@@ -918,37 +967,76 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                         },
                         // 浮层设置弹窗里的跳页/提示意图：与朗读设置整页同一批目的地，
                         // 由宿主统一处理导航与 toast。
+                        // 跳 nav3 页面记下来源栈顶，返回时重新展开浮层（见 playerReopenOnBack）。
                         onSettingsEffect = { effect ->
                             when (effect) {
-                                is ReadAloudPlayerEffect.OpenEnginesAndVoices ->
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteCloudTtsEngines(
-                                            effect.bookUrl?.takeIf(String::isNotBlank)
-                                        ),
-                                        navRouteTracker,
+                                is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
+                                    val target = MainRouteCloudTtsEngines(
+                                        effect.bookUrl?.takeIf(String::isNotBlank)
                                     )
-
-                                is ReadAloudPlayerEffect.OpenBookVoiceCasting ->
+                                    playerReopenOnBack =
+                                        target.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteBookVoiceCasting(effect.bookUrl),
-                                        navRouteTracker,
+                                        backStack, target, navRouteTracker,
                                     )
+                                }
 
-                                is ReadAloudPlayerEffect.OpenSpeechStoryboard ->
+                                is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
+                                    val target = MainRouteBookVoiceCasting(effect.bookUrl)
+                                    playerReopenOnBack =
+                                        target.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteSpeechStoryboard(effect.bookUrl),
-                                        navRouteTracker,
+                                        backStack, target, navRouteTracker,
                                     )
+                                }
 
-                                ReadAloudPlayerEffect.OpenTtsCache ->
+                                is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
+                                    val target = MainRouteSpeechStoryboard(effect.bookUrl)
+                                    playerReopenOnBack =
+                                        target.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                    MainNavigator.navigateToRoute(
+                                        backStack, target, navRouteTracker,
+                                    )
+                                }
+
+                                ReadAloudPlayerEffect.OpenTtsCache -> {
+                                    playerReopenOnBack =
+                                        MainRouteTtsCache.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
                                     MainNavigator.navigateToRoute(
                                         backStack,
                                         MainRouteTtsCache,
                                         navRouteTracker,
                                     )
+                                }
+
+                                // 声音池 / 配乐池：与「设置 → 朗读设置 → 多角色朗读」hub
+                                // 是同一批目的地，这里把听书页的入口也接上。
+                                // 与上面几个跳页分支同理记下来源栈顶，返回时重开浮层。
+                                ReadAloudPlayerEffect.OpenVoicePool -> {
+                                    playerReopenOnBack =
+                                        MainRouteVoicePool.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                    MainNavigator.navigateToRoute(
+                                        backStack,
+                                        MainRouteVoicePool,
+                                        navRouteTracker,
+                                    )
+                                }
+
+                                ReadAloudPlayerEffect.OpenBgmPool -> {
+                                    playerReopenOnBack =
+                                        MainRouteBgmPool.toString() to
+                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                    MainNavigator.navigateToRoute(
+                                        backStack,
+                                        MainRouteBgmPool,
+                                        navRouteTracker,
+                                    )
+                                }
 
                                 ReadAloudPlayerEffect.OpenSystemTtsSettings ->
                                     IntentHelp.openTTSSetting()

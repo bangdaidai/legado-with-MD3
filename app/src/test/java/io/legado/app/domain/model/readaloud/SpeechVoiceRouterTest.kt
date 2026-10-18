@@ -15,8 +15,8 @@ class SpeechVoiceRouterTest {
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_HTTP, "default"),
         )
 
-        assertEquals(primary, routed.voice)
-        assertEquals(false, routed.usedFallback)
+        assertEquals(primary, routed.effectiveVoice)
+        assertEquals(SpeechVoiceStatus.Applied, routed.status)
     }
 
     @Test
@@ -30,8 +30,9 @@ class SpeechVoiceRouterTest {
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_HTTP, "default"),
         )
 
-        assertEquals(fallback, routed.voice)
-        assertTrue(routed.usedFallback)
+        assertEquals(fallback, routed.effectiveVoice)
+        assertEquals(SpeechVoiceStatus.FellBack, routed.status)
+        assertTrue(routed.reason.isNotBlank())
     }
 
     @Test
@@ -42,9 +43,37 @@ class SpeechVoiceRouterTest {
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_HTTP, "42"),
         )
 
-        assertEquals(ReadAloudVoice.ENGINE_HTTP, routed.voice?.engineType)
-        assertEquals("42", routed.voice?.engineId)
-        assertTrue(routed.usedFallback)
+        assertEquals(ReadAloudVoice.ENGINE_HTTP, routed.effectiveVoice?.engineType)
+        assertEquals("42", routed.effectiveVoice?.engineId)
+        // 没指定音色就用引擎默认声，属于预期结果，不该报成差异
+        assertEquals(SpeechVoiceStatus.Applied, routed.status)
+    }
+
+    @Test
+    fun `reports engine mismatch when planned voice belongs to another backend`() {
+        val cloud = voice("cloud", ReadAloudVoice.ENGINE_CLOUD)
+        val routed = SpeechVoiceRouter.route(
+            cue = cue(cloud),
+            supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_SYSTEM),
+            defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_SYSTEM, "default"),
+        )
+
+        assertEquals(SpeechVoiceStatus.EngineMismatch, routed.status)
+        assertTrue(routed.effectiveVoice?.speakerId.orEmpty().isEmpty())
+        assertTrue(routed.reason.isNotBlank())
+    }
+
+    @Test
+    fun `reports engine default when planned voice is excluded`() {
+        val excluded = voice("excluded", ReadAloudVoice.ENGINE_HTTP).copy(excluded = true)
+        val routed = SpeechVoiceRouter.route(
+            cue = cue(excluded),
+            supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
+            defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_HTTP, "default"),
+        )
+
+        assertEquals(SpeechVoiceStatus.EngineDefault, routed.status)
+        assertTrue(routed.reason.contains("已被排除"))
     }
 
     @Test
@@ -60,8 +89,9 @@ class SpeechVoiceRouterTest {
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_SYSTEM, "default"),
         )
 
-        assertEquals(ReadAloudVoice.ENGINE_CLOUD, routed.voice?.engineType)
-        assertEquals(cloud, routed.voice)
+        assertEquals(ReadAloudVoice.ENGINE_CLOUD, routed.effectiveVoice?.engineType)
+        assertEquals(cloud, routed.effectiveVoice)
+        assertEquals(SpeechVoiceStatus.Applied, routed.status)
     }
 
     private fun voice(id: String, type: String) = ReadAloudVoice(

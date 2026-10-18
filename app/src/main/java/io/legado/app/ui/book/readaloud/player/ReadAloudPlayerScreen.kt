@@ -34,6 +34,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Settings
@@ -41,7 +42,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -333,7 +334,7 @@ fun ReadAloudPlayerScreenContent(
                         SmallAnimatedButton(
                             containerColor = Color.Transparent,
                             checked = false,
-                            icon = Icons.Default.Tune,
+                            icon = Icons.AutoMirrored.Filled.ExitToApp,
                             text = stringResource(R.string.switch_to_classic_read_aloud),
                             contentDescription = stringResource(R.string.switch_to_classic_read_aloud),
                             onCheckedChange = { onIntent(ReadAloudPlayerIntent.SwitchToClassic) },
@@ -354,6 +355,16 @@ fun ReadAloudPlayerScreenContent(
                             contentDescription = stringResource(R.string.read_aloud_adjust_speed),
                             onCheckedChange = {
                                 onIntent(ReadAloudPlayerIntent.OpenSheet(ReadAloudPlayerSheet.Speed))
+                            },
+                        )
+                        SmallAnimatedButton(
+                            containerColor = Color.Transparent,
+                            checked = false,
+                            icon = Icons.Default.VolumeUp,
+                            text = stringResource(R.string.bgm_volume),
+                            contentDescription = stringResource(R.string.bgm_volume),
+                            onCheckedChange = {
+                                onIntent(ReadAloudPlayerIntent.OpenSheet(ReadAloudPlayerSheet.BgmVolume))
                             },
                         )
                         SmallAnimatedButton(
@@ -416,6 +427,12 @@ fun ReadAloudPlayerScreenContent(
 
     ReadAloudSpeedSheet(
         show = state.activeSheet == ReadAloudPlayerSheet.Speed,
+        state = state,
+        onDismissRequest = { onIntent(ReadAloudPlayerIntent.DismissSheet) },
+        onIntent = onIntent,
+    )
+    ReadAloudBgmVolumeSheet(
+        show = state.activeSheet == ReadAloudPlayerSheet.BgmVolume,
         state = state,
         onDismissRequest = { onIntent(ReadAloudPlayerIntent.DismissSheet) },
         onIntent = onIntent,
@@ -527,10 +544,30 @@ private fun CoverPage(
             text = stringResource(
                 R.string.read_aloud_speaker_engine,
                 state.speakerName.ifBlank { stringResource(R.string.voice_role_narrator) },
-                state.engineName.ifBlank { stringResource(R.string.read_aloud_default_tts) },
+                state.voiceLabel.ifBlank { stringResource(R.string.read_aloud_default_tts) },
             ),
-            modifier = Modifier.padding(top = 12.dp)
+            // 计划音色没被执行时这一行要能说清楚差在哪儿：只显示实际音色的话，
+            // 用户会以为是显示错了，而真正的原因（引擎换不了、目录里没这个音色）没人告诉他
+            contentColor = if (state.hasVoiceMismatch) {
+                LegadoTheme.colorScheme.error
+            } else {
+                null
+            },
+            onClick = { onIntent(ReadAloudPlayerIntent.OpenVoiceCasting) },
+            modifier = Modifier.padding(top = 12.dp),
         )
+        if (state.hasVoiceMismatch && state.voiceStatusReason.isNotBlank()) {
+            AppText(
+                text = state.voiceStatusReason,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                style = LegadoTheme.typography.labelSmall,
+                color = LegadoTheme.colorScheme.error,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -691,6 +728,35 @@ private fun ReadAloudSpeedSheet(
             },
             valueRange = READ_ALOUD_SPEED_MIN.toFloat()..READ_ALOUD_SPEED_MAX.toFloat(),
             steps = READ_ALOUD_SPEED_MAX - READ_ALOUD_SPEED_MIN - 1,
+        )
+    }
+}
+
+@Composable
+private fun ReadAloudBgmVolumeSheet(
+    show: Boolean,
+    state: ReadAloudPlayerUiState,
+    onDismissRequest: () -> Unit,
+    onIntent: (ReadAloudPlayerIntent) -> Unit,
+) {
+    var preview by remember(state.bgmVolume) { mutableFloatStateOf(state.bgmVolume) }
+    AppModalBottomSheet(
+        show = show,
+        onDismissRequest = onDismissRequest,
+        title = stringResource(R.string.bgm_volume),
+    ) {
+        PlayerAdjustmentSlider(
+            title = stringResource(R.string.bgm_volume),
+            value = preview.coerceIn(0f, 1f),
+            valueLabel = "${(preview * 100).roundToInt()}%",
+            startLabel = stringResource(R.string.bgm_volume_mute),
+            endLabel = stringResource(R.string.bgm_volume_max),
+            onValueChange = { preview = it },
+            onValueChangeFinished = {
+                onIntent(ReadAloudPlayerIntent.SetBgmVolume(preview))
+            },
+            valueRange = 0f..1f,
+            steps = 0,
         )
     }
 }

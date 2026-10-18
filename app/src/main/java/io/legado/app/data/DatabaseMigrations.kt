@@ -105,6 +105,72 @@ object DatabaseMigrations {
                     db.execSQL("ALTER TABLE highlightRules ADD COLUMN `$name` ${spec.substringAfter(' ')}")
                 }
             }
+
+            // fork 本地扩展列：声音池的结构化分类（性别 × 年龄段）。
+            // 音色本身没有年龄字段，年龄从「属于哪个池」派生，而池的年龄记在这里——
+            // 这是「角色年龄性别 → 音色」精确匹配链路的唯一桥梁。
+            // 守卫式：已存在就跳过，避免重复 ADD COLUMN 让迁移失败（同上 highlightRules 的写法）。
+            val voicePoolColumns = db.query("PRAGMA table_info(voice_pools)").use { cursor ->
+                val nameAt = cursor.getColumnIndexOrThrow("name")
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(nameAt)) }
+            }
+            listOf(
+                "gender TEXT NOT NULL DEFAULT 'unknown'",
+                "ageBand TEXT NOT NULL DEFAULT 'unknown'",
+            ).forEach { spec ->
+                val name = spec.substringBefore(' ')
+                if (name !in voicePoolColumns) {
+                    db.execSQL("ALTER TABLE voice_pools ADD COLUMN `$name` ${spec.substringAfter(' ')}")
+                }
+            }
+            // 按默认池名回填结构化分类（幂等：UPDATE 对已回填的行只是写回同样的值）。
+            // 用户自建池不在名单里，保持 unknown（走关键词兜底匹配）。
+            listOf(
+                "男童" to ("male" to "child"),
+                "男少年" to ("male" to "teen"),
+                "男青年" to ("male" to "young_adult"),
+                "男中年" to ("male" to "adult"),
+                "男性老年" to ("male" to "elderly"),
+                "失配男" to ("male" to "unknown"),
+                "女童" to ("female" to "child"),
+                "女少女" to ("female" to "teen"),
+                "女青年" to ("female" to "young_adult"),
+                "女中年" to ("female" to "adult"),
+                "女性老年" to ("female" to "elderly"),
+                "失配女" to ("female" to "unknown"),
+            ).forEach { (name, classification) ->
+                db.execSQL(
+                    "UPDATE voice_pools SET gender = '${classification.first}', ageBand = '${classification.second}' WHERE name = '$name'"
+                )
+            }
+
+            // fork 本地扩展列：人物档案的「声音池外键」。
+            // 该表的 voiceAgeBand 列曾被写入**池名**（如「女青年」）而非年龄段枚举，与列名背离；
+            // 现在 voiceAgeBand 回归枚举语义，池的归属改由 voicePoolId 承载。
+            // 守卫式：已存在就跳过。
+            val profileColumns = db.query("PRAGMA table_info(book_character_profiles)").use { cursor ->
+                val nameAt = cursor.getColumnIndexOrThrow("name")
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(nameAt)) }
+            }
+            if ("voicePoolId" !in profileColumns) {
+                db.execSQL("ALTER TABLE book_character_profiles ADD COLUMN voicePoolId TEXT NOT NULL DEFAULT ''")
+            }
+            // 两步数据迁移（顺序不能反）：
+            // 1) 把「voiceAgeBand 存的是池名」的行解析成 voicePoolId（按池名精确匹配）。
+            //    枚举值（child/teen/…）不是池名，跳过；池已被删除则留空串。
+            db.execSQL(
+                """UPDATE book_character_profiles SET voicePoolId = COALESCE(
+                    (SELECT id FROM voice_pools WHERE name = book_character_profiles.voiceAgeBand), ''
+                ) WHERE voiceAgeBand != '' AND voiceAgeBand NOT IN
+                    ('child','teen','young_adult','adult','elderly','unknown')"""
+            )
+            // 2) 用池的 ageBand 回填枚举（对所有有 poolId 的行统一做，幂等）。
+            //    池已删除时 COALESCE 归 unknown——语义正确（曾指向的池没了）。
+            db.execSQL(
+                """UPDATE book_character_profiles SET voiceAgeBand = COALESCE(
+                    (SELECT ageBand FROM voice_pools WHERE id = book_character_profiles.voicePoolId), 'unknown'
+                ) WHERE voicePoolId != ''"""
+            )
         }
     }
 

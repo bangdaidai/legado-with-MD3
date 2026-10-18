@@ -26,6 +26,10 @@ interface VoiceEffectDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(preset: VoiceEffectPreset)
 
+    /** 恢复备份用：按预设名幂等覆盖（预设按名被角色/分配行引用，同名即同一预设）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(presets: List<VoiceEffectPreset>)
+
     @Update
     suspend fun update(preset: VoiceEffectPreset)
 

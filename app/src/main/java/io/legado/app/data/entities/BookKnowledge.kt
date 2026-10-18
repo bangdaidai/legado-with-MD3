@@ -23,8 +23,23 @@ data class BookCharacterProfile(
     val role: String = "",
     @ColumnInfo(defaultValue = "unknown")
     val voiceGender: String = VOICE_GENDER_UNKNOWN,
+    /**
+     * 角色的声音年龄段（结构化枚举，见 [ALL_VOICE_AGE_BANDS]）。
+     *
+     * ⚠️ 历史债务已修复：该列曾被写入**声音池名**（如「女青年」），与列名背离。
+     * 现在回归枚举语义，池的归属改由 [voicePoolId] 承载；旧数据在迁移里按池名解析成
+     * poolId 再回填枚举。读取方不要再把这列当池名用。
+     */
     @ColumnInfo(defaultValue = "unknown")
     val voiceAgeBand: String = VOICE_AGE_UNKNOWN,
+    /**
+     * 关联的声音池 id（指向 [VoicePoolEntity.id]），空串 = 未指定池。
+     *
+     * 这是「角色 → 声音池」的真正外键：音色的结构化年龄从池成员关系派生，
+     * 角色选池后即可精确匹配。池被删除时留空串（不级联删角色），语义为「池没了」。
+     */
+    @ColumnInfo(defaultValue = "")
+    val voicePoolId: String = "",
     val personality: String = "",
     val summary: String = "",
     val status: Int = STATUS_ACTIVE,

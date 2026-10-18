@@ -14,7 +14,9 @@ import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.model.readaloud.ReadAloudPlaybackCursor
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechEngineRoute
+import io.legado.app.domain.model.readaloud.SpeechVoiceOutcome
 import io.legado.app.domain.model.readaloud.SpeechVoiceRouter
+import io.legado.app.domain.model.readaloud.SpeechVoiceStatus
 import io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.feature.reader.core.cast.CastMarkers
@@ -242,7 +244,7 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
                 val tts = textToSpeech ?: throw NoStackTraceException("tts is null")
                 nextRoute?.let {
                     awaitEngineIdle(tts, continuesCurrentSpeech)
-                    voiceChanged = applyVoice(it.speakerId)
+                    voiceChanged = applyVoice(nowSpeak, it)
                     applyPreset(it)
                 }
                 val storedStart = paragraphStartPos
@@ -406,13 +408,16 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         )
         val cue = playbackQueue.cues.getOrNull(nowSpeak) ?: return fallback
         reportUnplayableVoice(cue.voice)
-        val routed = SpeechVoiceRouter.route(
+        val outcome = SpeechVoiceRouter.route(
             cue = cue,
             supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_SYSTEM),
             defaultRoute = SpeechEngineRoute(ReadAloudVoice.ENGINE_SYSTEM, configured),
-        ).voice ?: fallback
+        )
         cue.voice?.takeIf { it.speakerId.isBlank() }?.let { reportBoundVoiceHasNoSpeaker(it) }
-        return routed
+        // 先按路由结果上报一次：真正 applyVoice 的结论要等引擎空闲后才出得来，
+        // 那之前的这一小段时间里界面至少已经知道"计划的那条不会被执行"
+        reportEffectiveVoice(nowSpeak, outcome)
+        return outcome.effectiveVoice ?: fallback
     }
 
     /**
@@ -448,36 +453,122 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         )
     }
 
-    /**
-     * 切换系统 TTS 音色，返回本句是否真的换了声音。
+/**
+     * 切换系统 TTS 音色，并如实报告这一句最后到底用哪个声音发的。
      *
      * 只按名字在 tts.voices 里找、找不到就返回是不行的：引擎报不出默认音色名
      * （`defaultVoice` 为 null 时名字是空串）或被分配的音色已被改名/删除时，切换会静默
      * 失败，上一个角色的音色一直挂着，之后的旁白也用角色的声音读。所以这些情况必须
      * 走 [restoreDefaultVoice] 退回引擎默认。
      *
+     * `setVoice` 返回非 SUCCESS 时同样退回默认：留着上一个角色的音色不报错，
+     * 表现是"三个角色共用一个声音"而且界面完全看不出来，比退回默认更难排查。
+     *
      * 音色表经 [voiceCatalog] 缓存：逐句各做一次全量枚举会在换音色处产生可感知的停顿。
+     *
+     * @param cueIndex 供 [reportEffectiveVoice] 定位这一句
      */
-    private fun applyVoice(voiceName: String): Boolean {
-        val tts = textToSpeech ?: return false
-        if (voiceName.isBlank()) {
-            return restoreDefaultVoice(tts)
-        }
-        if (!voiceIsDefault && voiceName == activeVoiceName) return false
-        val voice = voiceCatalog().firstOrNull { it.name == voiceName }
-        if (voice == null) {
+    private fun applyVoice(cueIndex: Int, planned: ReadAloudVoice): Boolean {
+        val tts = textToSpeech ?: return reportNotApplied(
+            cueIndex, planned, SpeechVoiceStatus.EngineDefault, "引擎未就绪",
+        )
+        val voiceName = planned.speakerId
+        val status: SpeechVoiceStatus
+        val switched: Boolean
+        when {
+            voiceName.isBlank() -> {
+                restoreDefaultVoice(tts)
+                switched = false
+                status = SpeechVoiceStatus.NoSpeaker
+            }
+
+            // 引擎上已经是这个音色了，别再发一次 setVoice
+            !voiceIsDefault && voiceName == activeVoiceName -> {
+                switched = false
+                status = SpeechVoiceStatus.Applied
+            }
+
             // 引擎报不出这个音色名（MultiTTS 那类 getVoices 回包超限的引擎会整表为空）时，
-            // 换音静默失败，之后的旁白都还是默认音色
-            AppLog.put("系统 TTS 找不到音色 $voiceName，改用默认音色")
-            return restoreDefaultVoice(tts)
+            // 换音会静默失败，之后的旁白都还是上一个角色的声音
+            voiceCatalog().firstOrNull { it.name == voiceName } == null -> {
+                reportVoiceUnavailable(voiceName)
+                restoreDefaultVoice(tts)
+                switched = false
+                status = SpeechVoiceStatus.NotFound
+            }
+
+            else -> {
+                val found = voiceCatalog().first { it.name == voiceName }
+                if (tts.setVoice(found) == TextToSpeech.SUCCESS) {
+                    voiceIsDefault = false
+                    activeVoiceName = voiceName
+                    switched = true
+                    status = SpeechVoiceStatus.Applied
+                } else {
+                    AppLog.put(
+                        "系统 TTS 切换音色失败：$voiceName（引擎 ${engineLabel()}），改用默认音色",
+                        toast = true,
+                    )
+                    restoreDefaultVoice(tts)
+                    switched = false
+                    status = SpeechVoiceStatus.ApplyFailed
+                }
+            }
         }
-        if (tts.setVoice(voice) == TextToSpeech.SUCCESS) {
-            voiceIsDefault = false
-            activeVoiceName = voiceName
-            return true
-        }
-        AppLog.putDebug("系统 TTS 音色切换失败: $voiceName")
+        reportEffectiveVoice(cueIndex, outcomeOf(planned, status))
+        return switched
+    }
+
+    /**
+     * 报告一个"根本没尝试切换"的结果：引擎实例都还没起来的时候。
+     *
+     * 不上报的话界面上会一直停在上一次的成功值，看起来像是这句还在用那个音色念。
+     */
+    private fun reportNotApplied(
+        cueIndex: Int,
+        planned: ReadAloudVoice,
+        status: SpeechVoiceStatus,
+        reason: String,
+    ): Boolean {
+        reportEffectiveVoice(
+            cueIndex,
+            SpeechVoiceOutcome(
+                plannedVoice = planned,
+                effectiveVoice = null,
+                status = status,
+                reason = reason,
+            ),
+        )
         return false
+    }
+
+    /** 按结算状态拼出这一句最终生效的音色：成功就是计划的那条，否则是引擎当前实际在用的。 */
+    private fun outcomeOf(planned: ReadAloudVoice, status: SpeechVoiceStatus) =
+        SpeechVoiceOutcome(
+            plannedVoice = planned,
+            effectiveVoice = if (status.isApplied) {
+                planned
+            } else {
+                ReadAloudVoice(
+                    id = "runtime-system:${activeEngine}:${activeVoiceName}",
+                    engineType = ReadAloudVoice.ENGINE_SYSTEM,
+                    engineId = activeEngine,
+                    speakerId = activeVoiceName,
+                    displayName = engineLabel(),
+                )
+            },
+            status = status,
+            reason = if (status.isApplied) "" else fallbackReasonOf(planned, status),
+        )
+
+    private fun fallbackReasonOf(planned: ReadAloudVoice, status: SpeechVoiceStatus): String {
+        val why = when (status) {
+            SpeechVoiceStatus.NoSpeaker -> "没有记录具体音色，只能用引擎默认声"
+            SpeechVoiceStatus.NotFound -> "在当前引擎的音色目录里找不到"
+            SpeechVoiceStatus.ApplyFailed -> "引擎拒绝了这次切换"
+            else -> "当前引擎执行不了"
+        }
+        return "「${planned.voiceLabel}」$why，已改用引擎默认声"
     }
 
     /** 退回引擎默认音色（setVoice(null) 就是「用引擎自己的默认」，不依赖它报不报得出名字）。 */
@@ -504,6 +595,24 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
 
     /** 空包名意味着 TextToSpeech 绑的是系统全局默认引擎，不是 App 里选的那个。 */
     private fun engineLabel(): String = activeEngine.ifBlank { "系统默认引擎(未指定包名)" }
+
+    /**
+     * 音色没生效只会表现成「用引擎出厂默认声」，播放本身不报错。原来只写普通日志，
+     * 而未开「记录日志」时整条丢弃，线上完全无线索可查——所以带上 toast 与完整诊断
+     * 上下文（引擎、出厂默认音色名、引擎报告的音色列表）。同名只报一次，避免每条 cue 重复弹。
+     */
+    private fun reportVoiceUnavailable(requestedName: String) {
+        if (requestedName == reportedVoiceName) return
+        reportedVoiceName = requestedName
+        val available = voiceCatalog().map { it.name }
+        AppLog.put(
+            "系统 TTS 音色不可用：「$requestedName」，改用默认音色\n" +
+                "引擎：${engineLabel()}｜出厂默认音色：${defaultVoiceName.ifBlank { "未知" }}\n" +
+                "该引擎报告了 ${available.size} 个音色：" +
+                available.take(30).joinToString().ifBlank { "（空）" },
+            toast = true,
+        )
+    }
 
     private fun applyPreset(voice: ReadAloudVoice) {
         val config = runCatching {

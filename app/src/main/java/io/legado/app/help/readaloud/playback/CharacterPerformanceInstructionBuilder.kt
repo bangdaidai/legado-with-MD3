@@ -2,7 +2,6 @@ package io.legado.app.help.readaloud.playback
 
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.CloudTtsProviderType
-import io.legado.app.help.readaloud.cast.VoicePoolStore
 
 object CharacterPerformanceInstructionBuilder {
     const val VERSION = "character-performance-v1"
@@ -20,7 +19,8 @@ object CharacterPerformanceInstructionBuilder {
     ): String {
         if (provider !in supportedProviders || profile == null) return ""
         val role = profile.role.toRoleLabel()
-        val voicePool = VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand).toSafeTraitText()
+        // 池显示名走独立字段（voiceAgeBand 现在是枚举，不再是池名）
+        val voicePool = profile.voicePoolLabel.toSafeTraitText()
         val personality = profile.personality.toSafeTraitText()
         if (role.isBlank() && voicePool.isBlank() && personality.isBlank()) return ""
         return buildString {

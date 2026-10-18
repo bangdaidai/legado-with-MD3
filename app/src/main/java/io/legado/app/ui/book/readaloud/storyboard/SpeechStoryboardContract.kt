@@ -27,6 +27,24 @@ data class SpeechStoryboardUiState(
     val summary: StoryboardSummaryUi? = null,
     /** 正在合成 / 试听中的片段 id */
     val previewingItemId: String? = null,
+    /**
+     * 细节页正在播报的章内位置，-1 表示没在播。
+     *
+     * 用来高亮"当前正在念的这一条"。播放位置由朗读服务上报，与分镜条目按
+     * [StoryboardItemUi.chapterPosition] 的区间命中——分配表覆盖会把一个分析段再切一刀，
+     * 所以一条分镜行可能对应多条实际播放单元，按区间而不是按等值判断。
+     */
+    val playingChapterPosition: Int = -1,
+    /**
+     * 当前正在念的那一句**实际发声音色**（运行时结算后），空 = 没在播或后端未上报。
+     *
+     * 分镜行平时显示的是覆盖后的**计划**音色；音色路由与引擎拒绝都发生在发声瞬间
+     * （见 [io.legado.app.domain.model.readaloud.SpeechVoiceOutcome]），只有正在播的那句
+     * 才知道结算值。所以它只在当前行覆盖 [StoryboardItemUi.voiceName]，其余行保持计划音色。
+     */
+    val playingVoiceLabel: String = "",
+    /** 细节页这一章的缓存是不是当前朗读设置生成的那一份；false 时列表要提示"历史划分" */
+    val usesCurrentConfig: Boolean = true,
 )
 
 @Stable
@@ -37,6 +55,13 @@ data class StoryboardChapterUi(
     val characterCount: Int,
     /** 正在读的那一章 */
     val isCurrent: Boolean = false,
+    /**
+     * 这一章的分段是否由当前划分方式 / 分析模式生成。
+     *
+     * false 表示它停在旧设置那一份上，朗读时根本不会用它——界面上得说清楚，
+     * 否则用户会以为看到的就是正在播的。
+     */
+    val usesCurrentConfig: Boolean = true,
 )
 
 @Stable
@@ -68,6 +93,8 @@ data class StoryboardItemUi(
     val emotion: String = "",
     /** 章内段落序号，从 0 开始 */
     val paragraphIndex: Int = 0,
+    /** 这条在正文里的起点；播放位置按 [chapterPosition, chapterPosition + text.length) 命中 */
+    val chapterPosition: Int = 0,
     val confidence: Float = 0f,
     val source: StoryboardSource = StoryboardSource.Rule,
     /** 用户手动改过、不再被 AI 覆盖 */
@@ -86,6 +113,15 @@ enum class StoryboardRole {
     Thought,
     Unknown,
 }
+
+/**
+ * 这一条在正文里覆盖的区间（半开区间，含 [chapterPosition] 不含右端）。
+ *
+ * 分配表覆盖会把一个分析段再切成几条实际播放单元，所以"正在念的是哪一条"只能按区间
+ * 命中，不能拿位置做等值比较。
+ */
+fun StoryboardItemUi.playRange(): IntRange =
+    chapterPosition until (chapterPosition + text.length.coerceAtLeast(1))
 
 /** 这段的判定来源，对应 domain 的 SpeechResolutionSource，UI 不 import 领域枚举 */
 enum class StoryboardSource {

@@ -39,3 +39,34 @@ internal suspend fun restartReadAloudPipeline(
     )
     return true
 }
+
+/**
+ * 「多角色分配」「背景音乐分配」这类**既改正文标记、又影响朗读计划**的开关的统一处理。
+ *
+ * 两件事缺一不可：
+ * 1. 重载正文——标记是「多角色分配」注入正文的那一份，胶囊与 ♪ 都从正文元素渲染，
+ *    不重排就看不到任何变化；
+ * 2. 重启朗读管线——正文变了，`contentHash` 变，按旧内容建的分析计划不再对得上。
+ *
+ * 听书页过去只写设置、什么都不做，界面上开关已经是新的、正在念的还是旧标记那一套。
+ */
+internal suspend fun applyReaderRenderedSwitch(
+    readAloudSessionStore: ReadAloudSessionStore,
+    context: Context,
+    /**
+     * 重载正文时是否把当前页交给朗读服务同步。
+     *
+     * 只有"朗读服务正在读的就是这一章"才该保位，否则会把读过半章的朗读拽回章首。
+     * 调用方（阅读页）有更严的判定（还要比对章序号），所以由它传进来。
+     */
+    preserveReadAloudPosition: Boolean = ReadBook.isCurrentBookReadAloud,
+): Boolean {
+    val shouldRestart = ReadBook.isCurrentBookReadAloud
+    ReadBook.clearTextChapter()
+    ReadBook.loadContent(
+        resetPageOffset = false,
+        preserveReadAloudPosition = preserveReadAloudPosition,
+    )
+    if (!shouldRestart) return false
+    return restartReadAloudPipeline(readAloudSessionStore, context)
+}

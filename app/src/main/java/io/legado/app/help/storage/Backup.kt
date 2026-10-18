@@ -18,6 +18,7 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfigStore
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.readaloud.cast.VoicePoolTransfer
 import io.legado.app.model.BookCover
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -103,6 +104,11 @@ object Backup {
             "bookContentProcesses.json",
             "readAloudVoices.json",
             "bookVoiceBindings.json",
+            "voicePools.json",
+            "castCharacters.json",
+            "chapterRoleAssignments.json",
+            "bookCastMemory.json",
+            "voiceEffectPresets.json",
             "aiChatConversations.json",
             "aiChatMessages.json",
             "aiMemory.json",
@@ -356,6 +362,18 @@ object Backup {
         // 朗读音色与按书绑定
         writeListToJson(appDb.readAloudVoiceDao.getVoices(), "readAloudVoices.json", backupPath)
         writeListToJson(appDb.readAloudVoiceDao.getAllBindings(), "bookVoiceBindings.json", backupPath)
+        // 多角色配音：声音池（分组/池/成员三张表）走 VoicePoolTransfer 的导出形状，
+        // 与声音池界面的手动导出互认；角色、章内分配、角色记忆、变声预设按整表导出。
+        // 变声预设按名字被角色/分配行引用，不导出就会在恢复后指向不存在的预设。
+        writeVoicePools(backupPath)
+        writeListToJson(appDb.castCharacterDao.getAllGlobal(), "castCharacters.json", backupPath)
+        writeListToJson(
+            appDb.chapterRoleAssignmentDao.getAll(),
+            "chapterRoleAssignments.json",
+            backupPath,
+        )
+        writeListToJson(appDb.bookCastMemoryDao.getAll(), "bookCastMemory.json", backupPath)
+        writeListToJson(appDb.voiceEffectDao.getAll(), "voiceEffectPresets.json", backupPath)
         // AI 对话记录、记忆、产物
         writeListToJson(appDb.aiChatDao.getAllConversations(), "aiChatConversations.json", backupPath)
         writeListToJson(appDb.aiChatDao.getAllMessages(), "aiChatMessages.json", backupPath)
@@ -569,6 +587,28 @@ object Backup {
             } else {
                 LogUtils.d(TAG, "阅读备份 $fileName 列表为空")
             }
+        }
+    }
+
+    /**
+     * 声音池三张表（分组/池/成员）+ 被成员引用的音色，导出成
+     * [io.legado.app.help.readaloud.cast.VoicePoolTransfer] 的形状。
+     *
+     * 复用它的导出而不是在这里裸拼：形状与声音池界面的手动导出互认，恢复时也能直接走
+     * `importJson` 的合并语义（同名并入 + id 重映射 + 成员 IGNORE），避免 REPLACE 同名池
+     * 留下悬空成员。无池可导时不写文件（与 writeListToJson 的空列表口径一致）。
+     */
+    private suspend fun writeVoicePools(path: String) {
+        currentCoroutineContext().ensureActive()
+        withContext(IO) {
+            val json = VoicePoolTransfer.exportJson()
+            if (json.isBlank()) {
+                LogUtils.d(TAG, "阅读备份 voicePools.json 无声音池")
+                return@withContext
+            }
+            val file = FileUtils.createFileIfNotExist(path + File.separator + "voicePools.json")
+            file.writeText(json)
+            LogUtils.d(TAG, "阅读备份 voicePools.json 写入大小 ${file.length()}")
         }
     }
 

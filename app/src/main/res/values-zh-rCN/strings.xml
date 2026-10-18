@@ -3194,6 +3194,7 @@
     <string name="speech_storyboard_chapter_row">分段 %1$d 段 · 角色 %2$d 个</string>
     <string name="speech_storyboard_chapter_pending">还没分析过</string>
     <string name="speech_storyboard_current_chapter">正在读</string>
+    <string name="speech_storyboard_stale_config">旧划分，朗读不会用这份</string>
     <string name="speech_storyboard_chapters_empty">还没有分析过任何章节，先朗读一章再回来看。</string>
     <string name="speech_storyboard_stat_scenes">场景</string>
     <string name="speech_storyboard_stat_segments">分段</string>
@@ -3291,6 +3292,9 @@
     <string name="cast_bgm_scene_row">第 %1$d 段</string>
     <string name="cast_bgm_scene_range">第 %1$d–%2$d 段</string>
     <string name="cast_bgm_master_volume">背景音乐总音量</string>
+    <string name="bgm_volume">配乐音量</string>
+    <string name="bgm_volume_mute">静音</string>
+    <string name="bgm_volume_max">最大</string>
     <string name="ai_cast_scene_only">AI 识别背景音乐</string>
     <string name="ai_cast_scene_only_hint">只识别配乐场景，不认角色、不改正文，朗读与多角色开关都不用开</string>
     <string name="ai_cast_scene_status">本章已分配 %1$d 段背景音乐</string>

@@ -54,6 +54,22 @@ interface ChapterSpeechDao {
         chapterIndex: Int,
     ): List<ChapterSpeechSegmentEntity>
 
+    /** 只认当前设置会用的那一份分析。 */
+    @Query(
+        "select * from chapter_speech_analysis where bookUrl = :bookUrl " +
+            "and chapterIndex = :chapterIndex and resolverVersion = :resolverVersion " +
+            "order by updatedAt desc limit 1"
+    )
+    suspend fun getAnalysisByResolverVersion(
+        bookUrl: String,
+        chapterIndex: Int,
+        resolverVersion: String,
+    ): ChapterSpeechAnalysisEntity?
+
+    /** 全书留过的分析版本，供章节列表标注哪些章是"历史划分"。 */
+    @Query("select * from chapter_speech_analysis where bookUrl = :bookUrl order by updatedAt desc")
+    suspend fun getBookAnalyses(bookUrl: String): List<ChapterSpeechAnalysisEntity>
+
     @Query(
         "select s.chapterIndex as chapterIndex, ifnull(c.title, '') as title, " +
             "count(*) as segmentCount, " +

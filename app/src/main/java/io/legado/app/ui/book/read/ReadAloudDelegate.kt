@@ -23,6 +23,7 @@ import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.readaloud.ReadAloudPlayerOverlayBus
+import io.legado.app.ui.book.readaloud.player.applyReaderRenderedSwitch
 import io.legado.app.utils.TTSCacheUtils
 import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableSet
@@ -478,36 +479,21 @@ class ReadAloudDelegate(
      */
     fun setMultiRoleCast(value: Boolean) {
         scope.launch {
-            val shouldRestart = ReadBook.isCurrentBookReadAloud
-            val resumePlaying = shouldRestart && !BaseReadAloudService.pause
-            val chapterPosition = readAloudSessionStore.state.value.playback.chapterPosition
             readAloudSettingsRepository.update { it.copy(multiRoleCast = value) }
             host.updateState { it.copy(multiRoleCast = value) }
-            // 设置落库后重排当前章：注入/摘掉角色标记，胶囊才会跟着变
-            ReadBook.clearTextChapter()
-            ReadBook.loadContent(
-                resetPageOffset = false,
-                preserveReadAloudPosition = readsDurChapterAloud(),
-            )
-            if (shouldRestart) {
-                restartReadAloudWithNewPipeline(resumePlaying, chapterPosition)
-            }
+            applyReaderRenderedSwitch(readAloudSessionStore, context, readsDurChapterAloud())
         }
     }
 
     /**
-     * 背景音乐分配开关：只影响正文段首的配乐胶囊渲染与朗读时的配乐轨，
-     * 同样不需要重启朗读服务；切换后重排当前章让胶囊即时出现/消失。
+     * 背景音乐分配开关：正文段首的 ♪ 胶囊与朗读时的配乐轨都由它门控，
+     * 同样要重载正文让胶囊即时出现/消失。
      */
     fun setBgmAssign(value: Boolean) {
         host.updateState { it.copy(bgmAssign = value) }
         scope.launch {
             readAloudSettingsRepository.update { it.copy(bgmAssign = value) }
-            ReadBook.clearTextChapter()
-            ReadBook.loadContent(
-                resetPageOffset = false,
-                preserveReadAloudPosition = readsDurChapterAloud(),
-            )
+            applyReaderRenderedSwitch(readAloudSessionStore, context, readsDurChapterAloud())
         }
     }
 

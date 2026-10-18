@@ -45,6 +45,7 @@ import io.legado.app.data.repository.BookshelfTagRepository
 import io.legado.app.data.repository.CacheBookDownloadRepository
 import io.legado.app.data.repository.ChangeSourceSettingsRepository
 import io.legado.app.data.repository.ChapterSpeechRepository
+import io.legado.app.data.repository.CastSpeechRepository
 import io.legado.app.data.repository.CheckSourceSettingsRepository
 import io.legado.app.data.repository.CloudTtsEngineRepository
 import io.legado.app.data.repository.CoverAlbumRepository
@@ -139,7 +140,7 @@ import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.BookshelfTagGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
-import io.legado.app.domain.gateway.ChapterSpeechGateway
+import io.legado.app.domain.gateway.CastSpeechGateway
 import io.legado.app.domain.gateway.CheckSourceSettingsGateway
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.CoverAlbumGateway
@@ -218,6 +219,7 @@ import io.legado.app.domain.usecase.IdentifyBookCharactersUseCase
 import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
 import io.legado.app.domain.usecase.RefineSpeechWithAiUseCase
+import io.legado.app.domain.usecase.ResolveEffectiveSpeechPlanUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
 import io.legado.app.domain.usecase.RelocateMarkingTargetUseCase
 import io.legado.app.domain.usecase.RemoveBookGroupAssignmentUseCase
@@ -497,6 +499,8 @@ val appModule = module {
     singleOf(::ResolveLocalSpeakersUseCase)
     singleOf(::AutoAssignVoiceBindingsUseCase)
     singleOf(::PrepareChapterSpeechPlanUseCase)
+        single<CastSpeechGateway> { CastSpeechRepository() }
+        singleOf(::ResolveEffectiveSpeechPlanUseCase)
     singleOf(::RefineSpeechWithAiUseCase)
     singleOf(::SyncReadAloudVoicesUseCase)
     singleOf(::SyncHttpTtsCatalogUseCase)
@@ -845,12 +849,12 @@ val appModule = module {
     viewModel { (bookUrl: String) ->
         SpeechStoryboardViewModel(
             bookUrl = bookUrl,
-            prepareChapterSpeechPlan = get(),
-            buildSpeechPlan = get(),
+            resolveEffectiveSpeechPlan = get(),
+            refineSpeechWithAi = get(),
             chapterSpeechGateway = get(),
             bookKnowledgeGateway = get(),
-            refineSpeechWithAi = get(),
             previewSynthesizer = get(),
+            sessionStore = get(),
         )
     }
     viewModelOf(::TtsCacheViewModel)

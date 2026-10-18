@@ -1037,6 +1037,9 @@ sealed interface ReadBookIntent {
     /** 朗读设置卡片停在哪个 tab（滑页和点 tab 都走这里）。 */
     data class SetReadAloudConfigTab(val tab: Int) : ReadBookIntent
     data object OpenReadAloudPlayer : ReadBookIntent
+
+    /** 听书播放浮层「切换到经典朗读」的一次性请求（经 ReadAloudControlsRequestBus 投递）。 */
+    data object OpenClassicReadAloudControls : ReadBookIntent
     data class SelectFont(val path: String) : ReadBookIntent
     data class SelectTitleFont(val path: String) : ReadBookIntent
     data class SelectTitleSystemTypeface(val index: Int) : ReadBookIntent

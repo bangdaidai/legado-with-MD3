@@ -164,12 +164,18 @@ object CastMemoryMirror {
                 ?: return@forEach
             val aliases = GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
             val merged = (aliases + line.aliases).map(String::trim).filter(String::isNotBlank).distinct()
+            // 池名来自记忆文本；解析成 poolId + ageBand（Phase 3 后 voiceAgeBand 回归枚举语义）。
+            // 档案已有池则不覆盖（与别名同样的"不覆盖用户已写下的"原则）。
+            val currentPoolLabel = VoicePoolStore.poolLabelOf(profile)
+            val targetPoolLabel = currentPoolLabel.ifBlank { line.pool }.trim()
+            val pool = VoicePoolStore.poolByName(targetPoolLabel)
             val next = profile.copy(
                 aliasesJson = GSON.toJson(merged),
                 summary = profile.summary.ifBlank { line.relation },
-                voiceAgeBand = VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand)
-                    .ifBlank { line.pool }
-                    .takeIf { it.isNotBlank() } ?: profile.voiceAgeBand,
+                voicePoolId = pool?.id.orEmpty().ifEmpty { profile.voicePoolId },
+                voiceAgeBand = pool?.ageBand
+                    ?.takeIf { it.isNotBlank() && it != BookCharacterProfile.VOICE_AGE_UNKNOWN }
+                    ?: profile.voiceAgeBand,
                 updatedAt = System.currentTimeMillis(),
             )
             if (next != profile) appDb.bookKnowledgeDao.upsertCharacterProfile(next)
@@ -251,13 +257,19 @@ object CastMemoryMirror {
         for ((name, pool) in edits.poolChanges) {
             val rows = castRowsNamed(bookUrl, name)
             if (rows.isEmpty()) {
-                // 只有档案、还没导成配音角色的人：池直接落在档案那一栏（voiceAgeBand 存的就是池名）
+                // 只有档案、还没导成配音角色的人：池直接落在档案那一栏（voicePoolId 存外键，
+                // voiceAgeBand 回归枚举语义，从池的 ageBand 派生）
                 val target = pool.trim().take(12)
+                val poolEntity = VoicePoolStore.poolByName(target)
                 profileNamed(bookUrl, name)?.takeIf {
-                    VoicePoolStore.poolNameOrEmpty(it.voiceAgeBand) != target
+                    VoicePoolStore.poolLabelOf(it) != target
                 }?.let {
                     appDb.bookKnowledgeDao.upsertCharacterProfile(
-                        it.copy(voiceAgeBand = target, updatedAt = System.currentTimeMillis()),
+                        it.copy(
+                            voicePoolId = poolEntity?.id.orEmpty(),
+                            voiceAgeBand = poolEntity?.ageBand ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
+                            updatedAt = System.currentTimeMillis(),
+                        ),
                     )
                 }
                 continue
@@ -286,7 +298,7 @@ object CastMemoryMirror {
         if (bookUrl.isBlank() || profile.name.isBlank()) return
         val row = appDb.bookCastMemoryDao.get(bookUrl) ?: return
         val aliases = GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
-        val pool = VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand)
+        val pool = VoicePoolStore.poolLabelOf(profile)
         val next = replaceLine(
             row.memory,
             Line(profile.name, aliases, profile.summary, pool),

@@ -352,6 +352,36 @@ fun ReadAloudConfigContent(
                             onIntent(ReadAloudConfigIntent.SetUseMultiSpeaker(it))
                         },
                     )
+                    // 「多角色分配」决定正文里有没有 <<角色（声音池）>> 标记与胶囊，
+                    // 「背景音乐分配」决定有没有 ♪ 配乐胶囊。两者过去既没有入口、
+                    // 又只在阅读页菜单里有（而默认菜单是空的），等于整套多角色/配乐能力
+                    // 默认不可用：正文标记不生成，分配表注不进去，♪ 胶囊永不渲染。
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.multi_role_cast),
+                        description = stringResource(R.string.multi_role_cast_summary),
+                        checked = state.multiRoleCast,
+                        onCheckedChange = {
+                            onIntent(ReadAloudConfigIntent.SetMultiRoleCast(it))
+                        },
+                    )
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.bgm_assign),
+                        description = stringResource(R.string.bgm_assign_summary),
+                        checked = state.bgmAssign,
+                        onCheckedChange = {
+                            onIntent(ReadAloudConfigIntent.SetBgmAssign(it))
+                        },
+                    )
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.cast_voice_pool),
+                        description = stringResource(R.string.cast_voice_pool_summary),
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenVoicePool) },
+                    )
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.cast_bgm_pool),
+                        description = stringResource(R.string.cast_bgm_pool_summary),
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenBgmPool) },
+                    )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.sys_tts_config),
                         onClick = { onIntent(ReadAloudConfigIntent.OpenSystemTtsSettings) },

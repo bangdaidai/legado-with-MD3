@@ -67,6 +67,9 @@ data class ReaderTextBackgroundImage(
      */
     val marginStartPx: Float = 0f,
     val marginEndPx: Float = 0f,
+    /** 剥离 .9.png 引导边后的源图尺寸（px），0=未知。九宫格按行高锚定四角时需要。 */
+    val sourceWidthPx: Int = 0,
+    val sourceHeightPx: Int = 0,
     /** 九宫格左偏移（px）：中间那一格向左多拉（负值少拉）这么多，左边那两条边跟着平移。 */
     val lengthOffsetLeftPx: Float = 0f,
     /** 九宫格右偏移（px）：见 [lengthOffsetLeftPx]，方向相反。 */
@@ -134,6 +137,8 @@ fun ReaderTextBackgroundImage.withBitmapSize(widthPx: Int, heightPx: Int): Reade
         contentInsetTopPx = topPx.toFloat(),
         contentInsetBottomPx = bottomPx.toFloat(),
         contentBandHeightPx = (contentHeightPx - topPx - bottomPx).coerceAtLeast(0).toFloat(),
+        sourceWidthPx = contentWidthPx,
+        sourceHeightPx = contentHeightPx,
     )
 }
 

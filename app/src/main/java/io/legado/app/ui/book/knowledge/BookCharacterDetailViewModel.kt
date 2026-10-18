@@ -129,7 +129,7 @@ class BookCharacterDetailViewModel(
                         role = profile?.role.orEmpty(),
                         voiceGender = profile?.voiceGender
                             ?: BookCharacterProfile.VOICE_GENDER_UNKNOWN,
-                        voicePool = VoicePoolStore.poolNameOrEmpty(profile?.voiceAgeBand),
+                        voicePool = profile?.let { VoicePoolStore.poolLabelOf(it) }.orEmpty(),
                         poolNames = poolNames.toImmutableList(),
                         isProtagonist = profile?.isProtagonist ?: false,
                         personality = profile?.personality.orEmpty(),
@@ -184,6 +184,8 @@ class BookCharacterDetailViewModel(
             try {
                 val now = System.currentTimeMillis()
                 val existing = currentProfile
+                // 池显示名 → 结构化外键：voicePoolId 存真正的池 id，voiceAgeBand 存枚举
+                val poolEntity = VoicePoolStore.poolByName(state.voicePool)
                 val profile = BookCharacterProfile(
                     id = existing?.id ?: state.characterId ?: Uuid.random().toString(),
                     bookUrl = state.bookUrl,
@@ -193,7 +195,8 @@ class BookCharacterDetailViewModel(
                     tagsJson = state.tags.toTagsJson(),
                     role = state.role,
                     voiceGender = state.voiceGender,
-                    voiceAgeBand = state.voicePool,
+                    voicePoolId = poolEntity?.id.orEmpty(),
+                    voiceAgeBand = poolEntity?.ageBand ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
                     isProtagonist = state.isProtagonist,
                     personality = state.personality.trim(),
                     summary = state.summary.trim(),
@@ -213,7 +216,7 @@ class BookCharacterDetailViewModel(
                         bookUrl = profile.bookUrl,
                         profileId = profile.id,
                         name = profile.name,
-                        poolLabel = VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand),
+                        poolLabel = state.voicePool,
                     )
                     // 本书角色记忆也认这一份：AI 下一趟读的就是它，不改这里人物页补的别名
                     // 与简介对下一次分配等于不存在。

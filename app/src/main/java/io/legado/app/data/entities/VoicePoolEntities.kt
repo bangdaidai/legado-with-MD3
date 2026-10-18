@@ -70,9 +70,35 @@ data class VoicePoolEntity(
     val enabled: Boolean = true,
     /** 种子默认池标记（仅信息用途，不影响删除）。 */
     val isDefault: Boolean = false,
+    /**
+     * 池的性别分类，取值与 [BookCharacterProfile.ALL_VOICE_GENDERS] 一致：
+     * `male` / `female` / `unknown`。默认池按池名固定映射；用户自建池默认 unknown。
+     */
+    @ColumnInfo(defaultValue = "unknown")
+    var gender: String = VOICE_POOL_GENDER_UNKNOWN,
+    /**
+     * 池的年龄段分类，取值与 [BookCharacterProfile.ALL_VOICE_AGE_BANDS] 一致：
+     * `child` / `teen` / `young_adult` / `adult` / `elderly` / `unknown`。
+     * 「失配男/失配女」这类兜底池与「卡通人物」这类特殊池为 unknown。
+     */
+    @ColumnInfo(defaultValue = "unknown")
+    var ageBand: String = VOICE_POOL_AGE_UNKNOWN,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
-)
+    var updatedAt: Long = System.currentTimeMillis(),
+) {
+    companion object {
+        const val VOICE_POOL_GENDER_MALE = "male"
+        const val VOICE_POOL_GENDER_FEMALE = "female"
+        const val VOICE_POOL_GENDER_UNKNOWN = "unknown"
+
+        const val VOICE_POOL_AGE_CHILD = "child"
+        const val VOICE_POOL_AGE_TEEN = "teen"
+        const val VOICE_POOL_AGE_YOUNG_ADULT = "young_adult"
+        const val VOICE_POOL_AGE_ADULT = "adult"
+        const val VOICE_POOL_AGE_ELDERLY = "elderly"
+        const val VOICE_POOL_AGE_UNKNOWN = "unknown"
+    }
+}
 
 /**
  * 音色 → 声音池归属（多对多）。

@@ -11,6 +11,7 @@ import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.resolve.LocalCharacterSpeakerResolver
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -57,6 +58,8 @@ class ResolveLocalSpeakersUseCase(
                 role = profile.role,
                 voiceGender = profile.voiceGender,
                 voiceAgeBand = profile.voiceAgeBand,
+                // 池显示名单独带一份：voiceAgeBand 是枚举供匹配，池名供 TTS 表演指令等展示场景
+                voicePoolLabel = VoicePoolStore.poolLabelOf(profile),
                 personality = profile.personality,
                 updatedAt = profile.updatedAt,
             )

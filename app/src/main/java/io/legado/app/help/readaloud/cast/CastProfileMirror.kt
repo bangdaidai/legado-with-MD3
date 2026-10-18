@@ -8,8 +8,8 @@ import io.legado.app.data.entities.CastCharacter
  * 配音角色并入官方人物档案：分配出去的人物在「人物」页要看得见，能配头像、别名、简介。
  *
  * 新建角色时档案 id 直接用角色 id，音色绑定（book_voice_bindings 以档案 id 为主体）、
- * 朗读覆盖层与人物页就指向同一条记录。池名写进 `voiceAgeBand` 那一列——
- * 该列存的就是声音池名（见 [VoicePoolStore.poolNameOrEmpty]）。
+ * 朗读覆盖层与人物页就指向同一条记录。池外键写进 `voicePoolId`，`voiceAgeBand`
+ * 回归结构化枚举语义（见 [VoicePoolStore.poolLabelOf]）。
  */
 object CastProfileMirror {
 
@@ -37,14 +37,20 @@ object CastProfileMirror {
                 it.bookUrl == bookUrl && it.name == character.name && it.id != character.id
             }
         val now = System.currentTimeMillis()
+        // 池名 → (poolId, ageBand)：voicePoolId 存真正的外键，voiceAgeBand 回归枚举语义。
+        // 池已被删除时两者留空/unknown，语义为「曾指向的池没了」。
+        val pool = VoicePoolStore.poolByName(character.poolLabel)
+        val poolId = pool?.id.orEmpty()
+        val ageBand = pool?.ageBand ?: BookCharacterProfile.VOICE_AGE_UNKNOWN
         if (target != null) {
             val sameIdentity = target.name == character.name &&
-                    VoicePoolStore.poolNameOrEmpty(target.voiceAgeBand) == character.poolLabel
+                    target.voicePoolId == poolId
             if (sameIdentity && target.status == BookCharacterProfile.STATUS_ACTIVE) return
             appDb.bookKnowledgeDao.upsertCharacterProfile(
                 target.copy(
                     name = character.name,
-                    voiceAgeBand = character.poolLabel,
+                    voicePoolId = poolId,
+                    voiceAgeBand = ageBand,
                     // 重新建同名角色就是把这条档案放回配音链路（删除时置过 DISABLED）
                     status = BookCharacterProfile.STATUS_ACTIVE,
                     updatedAt = now,
@@ -57,7 +63,8 @@ object CastProfileMirror {
                 id = character.id,
                 bookUrl = bookUrl,
                 name = character.name,
-                voiceAgeBand = character.poolLabel,
+                voicePoolId = poolId,
+                voiceAgeBand = ageBand,
                 source = BookCharacterProfile.SOURCE_USER,
                 createdAt = character.createdAt,
                 updatedAt = now,

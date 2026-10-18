@@ -11,6 +11,13 @@ data class ReadAloudPlaybackCue(
     val fallbackVoices: List<ReadAloudVoice>,
     val roleType: SpeechRoleType,
     val characterId: String?,
+    /**
+     * 说话人名字，由 [from] 从 `SpeechPlanItem.segment.characterName` 原样带下来。
+     *
+     * 不再让调用方拿 cue 下标回 speechPlan 反查：[mergeSilentCues] 会丢弃孤立静音碎段，
+     * 下标对不上的时候角色名会整体串到隔壁段，界面上表现为"这一句是另一个人在念"。
+     */
+    val characterName: String = "",
     val emotion: String = "",
     /** 这一段的变声器预设名（空 = 跟随角色全局），见 [ChapterSpeechSegment.voiceEffect]。 */
     val voiceEffect: String = "",
@@ -45,12 +52,39 @@ data class ReadAloudPlaybackInfo(
     val chapterPosition: Int = 0,
     val chapterLength: Int = 0,
     val text: String = "",
-    val engineName: String = "",
+    /**
+     * 实际发声音色的标签（只含音色名，不含引擎前缀）。
+     *
+     * 播放后端上报 [ReadAloudPlaybackCue.voice] 之外的"真正送进引擎的那一条"，
+     * 界面据此显示——过去这里直接显示计划值，路由和引擎拒绝都发生在显示之后，
+     * 于是界面写的和耳朵里的长期对不上。
+     */
+    val effectiveVoiceLabel: String = "",
+    /**
+     * 计划音色的标签。跟 [effectiveVoiceLabel] 不同就是出了问题，
+     * 具体差在哪儿看 [voiceStatus]。
+     */
+    val plannedVoiceLabel: String = "",
+    /** 实际发声与计划音色的差异原因，[SpeechVoiceStatus.Applied] 表示完全一致。 */
+    val voiceStatus: SpeechVoiceStatus = SpeechVoiceStatus.Applied,
+    /** 差异的人话说明，[voiceStatus] 非 [SpeechVoiceStatus.Applied] 时才有内容。 */
+    val voiceStatusReason: String = "",
     val characterName: String = "",
     val roleType: SpeechRoleType = SpeechRoleType.Narrator,
     val chapterTitle: String = "",
     val chapterIndex: Int = -1,
-)
+) {
+    /**
+     * 界面上该显示的音色名：有差异时显示实际发声的那一条。
+     *
+     * 拿不到实际值时（后端还没上报）退回计划值，宁可显示计划值也不要空白——
+     * 空白会让"没配音色"和"还没上报"看起来一样。
+     */
+    val displayVoiceLabel: String
+        get() = effectiveVoiceLabel.ifBlank { plannedVoiceLabel }
+
+    val hasVoiceMismatch: Boolean get() = voiceStatus.isApplied.not()
+}
 
 /** Position-based playback queue independent from reader pagination. */
 class ReadAloudPlaybackQueue private constructor(
@@ -128,6 +162,7 @@ class ReadAloudPlaybackQueue private constructor(
                     fallbackVoices = item.fallbackVoices,
                     roleType = segment.roleType,
                     characterId = segment.characterId,
+                    characterName = segment.characterName,
                     emotion = segment.emotion,
                     voiceEffect = segment.voiceEffect,
                     soundEffect = item.soundEffect,

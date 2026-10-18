@@ -986,6 +986,9 @@ fun MainActivity.mainEntryProvider(
                     bookUrl = route.bookUrl,
                     inBookshelf = route.inBookshelf,
                     chapterChanged = route.chapterChanged,
+                    // 书籍信息页目录/笔记跳转的一次性定位参数：>=0 时开书后直接跳到该章节位置
+                    chapterIndex = route.chapterIndex,
+                    chapterPos = route.chapterPos,
                 )
             }
             val effectsReady = remember(readBookViewModel) { CompletableDeferred<Unit>() }
@@ -1758,6 +1761,8 @@ fun MainActivity.mainEntryProvider(
             onOpenSpeechStoryboard = { bookUrl ->
                 onNavigateToRoute(MainRouteSpeechStoryboard(bookUrl))
             },
+            onOpenVoicePool = { onNavigateToRoute(MainRouteVoicePool) },
+            onOpenBgmPool = { onNavigateToRoute(MainRouteBgmPool) },
         )
     }
 

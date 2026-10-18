@@ -40,6 +40,7 @@ class IdentifyBookCharactersUseCase(
         val name: String,
         val aliases: List<String>,
         val voiceGender: String,
+        /** AI/导入给的是池显示名（如「女青年」）；save() 里规范化成 voicePoolId + 枚举 ageBand。 */
         val voiceAgeBand: String,
         val role: String,
         val personality: String,
@@ -291,7 +292,16 @@ class IdentifyBookCharactersUseCase(
             // 新条目留空的字段不覆盖已有档案：手动批量导入常只填部分字段
             val role = candidate.role.ifBlank { existing?.role.orEmpty() }
             val voiceGender = candidate.voiceGender.ifBlank { existing?.voiceGender ?: "unknown" }
-            val voiceAgeBand = candidate.voiceAgeBand.ifBlank { existing?.voiceAgeBand ?: "unknown" }
+            // AI / 导入给的是池显示名（如「女青年」）；规范化为 poolId + 枚举 ageBand。
+            // 留空或查无此池时回落到已有档案的池，避免新条目把老配置冲成 unknown。
+            val poolLabel = candidate.voiceAgeBand.trim().ifEmpty {
+                existing?.let { VoicePoolStore.poolLabelOf(it) }.orEmpty()
+            }
+            val pool = VoicePoolStore.poolByName(poolLabel)
+            val voicePoolId = pool?.id ?: existing?.voicePoolId.orEmpty()
+            val voiceAgeBand = pool?.ageBand
+                ?: existing?.voiceAgeBand?.takeIf { it.isNotBlank() }
+                ?: BookCharacterProfile.VOICE_AGE_UNKNOWN
             val personality = candidate.personality.ifBlank { existing?.personality.orEmpty() }
             val summary = candidate.summary.ifBlank { existing?.summary.orEmpty() }
             val confidence =
@@ -312,6 +322,7 @@ class IdentifyBookCharactersUseCase(
                     ),
                     role = role,
                     voiceGender = voiceGender,
+                    voicePoolId = voicePoolId,
                     voiceAgeBand = voiceAgeBand,
                     personality = personality,
                     summary = summary,
@@ -358,7 +369,7 @@ class IdentifyBookCharactersUseCase(
                         ?.filter(String::isNotBlank)
                         .orEmpty(),
                     voiceGender = item.get("voiceGender")?.asString ?: "unknown",
-                    voiceAgeBand = item.get("voiceAgeBand")?.asString ?: "unknown",
+                    voiceAgeBand = VoicePoolStore.poolNameOrEmpty(item.get("voiceAgeBand")?.asString),
                     role = item.get("role")?.asString.orEmpty(),
                     personality = item.get("personality")?.asString.orEmpty(),
                     summary = item.get("summary")?.asString.orEmpty(),

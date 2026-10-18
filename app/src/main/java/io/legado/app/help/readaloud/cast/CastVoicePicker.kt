@@ -59,11 +59,11 @@ object CastVoicePicker {
         val bookUrl = character.bookUrl
         val voiceId = character.voiceId
         if (bookUrl.isBlank() || character.id.isBlank()) return
+        // 主体 id 全集走 [CastSubjectResolver]：与 syncBinding 同一口径（角色行 id + 同名/别名档案 id），
+        // 且用精确名/别名比对而非 SQL LIKE，避免别名里恰好含该子串的别人被误写绑定。
         val subjectIds = (
             listOf(character.id) +
-                appDb.bookKnowledgeDao.getCharacterProfiles(bookUrl, 500)
-                    .filter { it.bookUrl == bookUrl && it.name == character.name }
-                    .map { it.id }
+                CastSubjectResolver.subjectIdsFor(bookUrl, character.name)
             ).distinct()
         val now = System.currentTimeMillis()
         subjectIds.forEach { subjectId ->
@@ -93,32 +93,44 @@ object CastVoicePicker {
     /**
      * 把角色音色镜像到 book_voice_bindings（发音链路的权威读取处）。
      *
-     * 只有本书角色档案里存在同名/同 id 档案时才写：绑定主体必须是发音分析产出的
-     * profileId，凭空插入的绑定永远读不到，只会污染配音页。用户手动锁定的绑定不覆盖
-     * （[force] 例外：那条音色已经被删掉了）。
+     * 主体 id 必须两套都写，理由与 [bindUserVoice] 相同：配音页按人物档案 id 读，
+     * [io.legado.app.help.readaloud.cast.CastSpeechOverlay] 按角色 id 读，只写档案 id 的后果是
+     * 分镜页显示档案的音色、实际发角色 id 那一侧的声音，两边对不上且没有任何提示。
+     *
+     * 档案 id 只在本书角色档案里存在同名/同 id 档案时才参与：凭空插入的绑定永远读不到，
+     * 只会污染配音页。角色 id 那一侧始终写。
+     * 用户手动锁定的绑定不覆盖（[force] 例外：那条音色已经被删掉了）。
      */
     private suspend fun syncBinding(character: CastCharacter, force: Boolean) {
-        val profile = appDb.bookKnowledgeDao
-            .getCharacterProfile(character.bookUrl, character.name) ?: return
-        val existing = appDb.readAloudVoiceDao.getBinding(
-            character.bookUrl,
-            BookVoiceBinding.SUBJECT_CHARACTER,
-            profile.id,
-        )
-        if (existing?.locked == true && !force) return
-        if (existing == null || existing.voiceId != character.voiceId) {
-            appDb.readAloudVoiceDao.upsertBinding(
-                existing?.copy(
-                    voiceId = character.voiceId,
-                    updatedAt = System.currentTimeMillis(),
-                )
-                    ?: BookVoiceBindingEntity(
-                        bookUrl = character.bookUrl,
-                        subjectType = BookVoiceBinding.SUBJECT_CHARACTER,
-                        subjectId = profile.id,
-                        voiceId = character.voiceId,
-                    ),
+        // 与 bindUserVoice 同一口径：全集走 [CastSubjectResolver]，不再各自推导
+        //（旧实现用 SQL LIKE 版单条查找，与 bindUserVoice 的精确名全量过滤不一致，
+        //  两条链可能把绑定写到不同的 profile.id 上）。
+        val subjectIds = (
+            listOf(character.id) +
+                CastSubjectResolver.subjectIdsFor(character.bookUrl, character.name)
+            ).distinct()
+        val now = System.currentTimeMillis()
+        subjectIds.forEach { subjectId ->
+            val existing = appDb.readAloudVoiceDao.getBinding(
+                character.bookUrl,
+                BookVoiceBinding.SUBJECT_CHARACTER,
+                subjectId,
             )
+            if (existing?.locked == true && !force) return@forEach
+            if (existing == null || existing.voiceId != character.voiceId) {
+                appDb.readAloudVoiceDao.upsertBinding(
+                    existing?.copy(
+                        voiceId = character.voiceId,
+                        updatedAt = now,
+                    )
+                        ?: BookVoiceBindingEntity(
+                            bookUrl = character.bookUrl,
+                            subjectType = BookVoiceBinding.SUBJECT_CHARACTER,
+                            subjectId = subjectId,
+                            voiceId = character.voiceId,
+                        ),
+                )
+            }
         }
     }
 }

@@ -60,6 +60,13 @@ interface ChapterRoleAssignmentDao {
     @Upsert
     suspend fun upsert(assignment: ChapterRoleAssignment)
 
+    /** 备份/恢复用：全表导出与批量回写（复合主键天然幂等，同句重复恢复不翻倍）。 */
+    @Query("SELECT * FROM chapter_role_assignments")
+    suspend fun getAll(): List<ChapterRoleAssignment>
+
+    @Upsert
+    suspend fun upsertAll(assignments: List<ChapterRoleAssignment>)
+
     /** 角色改名/换池后同步所有引用它的分配行冗余字段（胶囊与标记全局更新）。 */
     @Query(
         """

@@ -22,8 +22,23 @@ interface ChapterSpeechGateway {
     /** 某一章已存下来的分镜片段，不触发分析 */
     suspend fun getChapterSegments(bookUrl: String, chapterIndex: Int): List<ChapterSpeechSegment>
 
-    /** 一本书里所有已分析过的章节统计，按章节序号升序 */
-    suspend fun getChapterSummaries(bookUrl: String): List<ChapterSpeechSummary>
+    /**
+     * 某一章在**当前朗读设置**下生效的那份分镜片段。
+     *
+     * [resolverVersion] 匹配不上时退回最近一次分析并把 [ChapterSpeechSegments.isCurrent] 置 false，
+     * 界面据此标注"历史划分"——按 updatedAt 取最新拿到的不一定是正在播的那份。
+     */
+    suspend fun getChapterSegmentsFor(
+        bookUrl: String,
+        chapterIndex: Int,
+        resolverVersion: String,
+    ): ChapterSpeechSegments
+
+    /** 一本书里所有已分析过的章节统计，按章节序号升序。[resolverVersion] 用于标注历史划分。 */
+    suspend fun getChapterSummaries(
+        bookUrl: String,
+        resolverVersion: String,
+    ): List<ChapterSpeechSummary>
 
     suspend fun replaceSegments(analysisId: String, segments: List<ChapterSpeechSegment>)
     suspend fun deleteChapter(bookUrl: String, chapterIndex: Int)

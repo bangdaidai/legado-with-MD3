@@ -38,7 +38,6 @@ import io.legado.app.constant.NotificationId
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Status
 import io.legado.app.domain.gateway.PlaybackCapsuleGateway
-import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.PlaybackCapsuleSource
 import io.legado.app.domain.model.PlaybackTimer
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
@@ -48,12 +47,13 @@ import io.legado.app.domain.model.readaloud.ReadAloudPlaybackCursor
 import io.legado.app.domain.model.readaloud.ReadAloudPlaybackInfo
 import io.legado.app.domain.model.readaloud.ReadAloudPlaybackQueue
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
-import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
+import io.legado.app.domain.model.readaloud.SpeechVoiceOutcome
+import io.legado.app.domain.model.readaloud.SpeechVoiceStatus
 import io.legado.app.domain.model.readaloud.resolveReadAloudStartPosition
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
-import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
+import io.legado.app.domain.usecase.ResolveEffectiveSpeechPlanUseCase
 import io.legado.app.feature.reader.core.cast.CastMarkers
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
 import io.legado.app.help.MediaHelp
@@ -61,8 +61,6 @@ import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.coroutine.ActivelyCancelException
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.glide.ImageLoader
-import io.legado.app.help.readaloud.cast.CastSpeechOverlay
-import io.legado.app.help.readaloud.cast.RegexCastRuleStore
 import io.legado.app.help.readaloud.cast.RegexCastSplitter
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
@@ -79,7 +77,6 @@ import io.legado.app.utils.isNightMode
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
@@ -261,10 +258,16 @@ abstract class BaseReadAloudService : BaseService(),
     }
     internal var contentList = emptyList<String>()
     private var contentChapterPositions = emptyList<Int?>()
-    /** Canonical, character-aware plan for the current chapter. Playback adoption is incremental. */
-    internal var speechPlan = emptyList<SpeechPlanItem>()
     internal var playbackQueue = ReadAloudPlaybackQueue.Empty
     internal var playbackCursor: ReadAloudPlaybackCursor? = null
+    /**
+     * 当前播放单元**实际**送进引擎的音色结算结果。
+     *
+     * 由播放后端在真正发声前调 [reportEffectiveVoice] 回填。带着 cue 下标是为了甩掉
+     * 上一句的残留：发声是异步的，上报时游标可能已经走进下一句。
+     */
+    @Volatile
+    private var effectiveVoiceOutcome: Pair<Int, SpeechVoiceOutcome>? = null
     internal var nowSpeak: Int = 0
     internal var readAloudNumber: Int = 0
     internal var readerReadAloudChapter: ReaderReadAloudChapter? = null
@@ -678,9 +681,11 @@ abstract class BaseReadAloudService : BaseService(),
             )
             contentList = preparedContentList
             contentChapterPositions = preparedContentChapterPositions
-            speechPlan = preparedSpeechPlan
             playbackQueue = preparedPlaybackQueue
             playbackCursor = preparedPlaybackCursor
+            // 队列换了，cue 下标全部失效：上一章的音色结算必须清掉，否则新游标可能
+            // 撞上同一个下标把别人的结算显示出来
+            clearEffectiveVoiceOutcome()
             nowSpeak = preparedNowSpeak
             readAloudNumber = preparedReadAloudNumber
             paragraphStartPos = preparedParagraphStartPos
@@ -801,57 +806,29 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
-    protected suspend fun buildSpeechPlan(
+    /**
+ * 「这一章该怎么念」的唯一入口。
+ *
+ * 编排（分段 → 说话人 → 选音 → 分配表覆盖）搬到了 [ResolveEffectiveSpeechPlanUseCase]，
+ * 因为分镜页必须算出同一份计划：以前它只截取中间两步，显示的音色和实际发声的音色因此
+ * 长期对不上（分配表覆盖之后再切一刀更是连分段都不同）。
+ */
+protected suspend fun buildSpeechPlan(
         bookUrl: String,
         chapterIndex: Int,
         paragraphs: List<CanonicalSpeechParagraph>,
         splitPolicy: ContentSplitPolicy,
         source: String = "朗读",
     ): List<SpeechPlanItem> {
-        if (bookUrl.isEmpty()) return emptyList()
-        val multiSpeakerOn = ReadConfig.useMultiSpeaker
-        // 「多角色朗读」是唯一的发声开关：关掉就没有任何计划，整章回到用户在朗读设置里
-        // 选的默认引擎。「多角色分配」只管正文胶囊，不参与决定用谁的声音念。
-        //
-        // 正则角色不跟这个开关：它只被自己那条规则的启用状态管。正则必须落在播放计划上
-        // 才能只换命中那几个字的声音，所以这本书只要有生效的正则角色就照样生成计划
-        // （所有段用默认音色）。生效判定在 RegexCastRuleStore.hasRulesFor。
-        val regexOn = runCatching { RegexCastRuleStore.hasRulesFor(bookUrl) }.getOrDefault(false)
-        if (!multiSpeakerOn && !regexOn) return emptyList()
-        val prepareSpeechPlan: PrepareChapterSpeechPlanUseCase =
-            get(PrepareChapterSpeechPlanUseCase::class.java)
-        val plan = runCatching {
-            prepareSpeechPlan(
-                bookUrl = bookUrl,
-                chapterIndex = chapterIndex,
-                paragraphs = paragraphs,
-                analysisMode = if (multiSpeakerOn) {
-                    SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode)
-                } else {
-                    SpeechAnalysisMode.Rule
-                },
-                analysisReasoningLevel = AiReasoningLevel.fromStorage(
-                    ReadConfig.speechAnalysisReasoningLevel,
-                    AiReasoningLevel.OFF,
-                ),
-                useMultiSpeaker = multiSpeakerOn,
-                policy = splitPolicy,
-                source = source,
-            )
-        }.onFailure {
-            // 新一轮起播掐旧轮时也走到这里：取消不是失败，不得记"生成失败"再拿空计划继续——
-            // 那会让被取代的轮次以「原朗读方式」差一点就把旧章节内容错误上屏。
-            if (it is CancellationException) throw it
-            AppLog.put("生成多角色朗读计划失败，使用原朗读方式\n${it.localizedMessage}", it)
-        }.getOrDefault(emptyList())
-        // 覆盖层要读分配表、角色库、声音池，任何一次查询出错都不能把整章的朗读准备带走：
-        // 这里的调用方是 `newReadAloud`，它外层是 `execute{}.onError{ pauseReadAloud() }`，
-        // 抛出会停在章末（切下一章时最明显），所以降级成「这一章不做多角色覆盖」继续念。
-        return runCatching {
-            CastSpeechOverlay.apply(bookUrl, chapterIndex, paragraphs, plan)
-        }.onFailure {
-            AppLog.put("多角色分配覆盖失败，本章按原计划朗读\n${it.localizedMessage}", it)
-        }.getOrDefault(plan)
+        val resolvePlan: ResolveEffectiveSpeechPlanUseCase =
+            get(ResolveEffectiveSpeechPlanUseCase::class.java)
+        return resolvePlan(
+            bookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            paragraphs = paragraphs,
+            splitPolicy = splitPolicy,
+            source = source,
+        )
     }
 
     /**
@@ -1154,9 +1131,21 @@ abstract class BaseReadAloudService : BaseService(),
      * 不能直接改 exoPlayer 已有的媒体项：分配一变，朗读单元的切分和它们的下标就错位了。
      */
     private fun refreshCastInPlace() {
-        val chapter = readerReadAloudChapter ?: return
+        val chapter = readerReadAloudChapter
+        if (chapter == null) {
+            // 还没起播就改分配：本次改动没有要重排的对象，留给下次起播生效
+            AppLog.put("多角色分配已改动，当前没有正在准备的章节，将在下次起播时生效")
+            return
+        }
         bookSession.syncReaderInput()
-        if (chapter.chapterIndex != bookSession.chapterIndex) return
+        if (chapter.chapterIndex != bookSession.chapterIndex) {
+            // 阅读器已经翻到别的章：重排的是朗读正在读的那一章，两者不一致时静默丢掉
+            // 用户改完看不到任何反应，只能当成"改了没用"
+            AppLog.put(
+                "多角色分配已改动，但阅读页已经翻到别的章，本次改动将在朗读切章后生效"
+            )
+            return
+        }
         val input = bookSession.input
         val start = castAnchorPosition(input?.source?.semanticContent)
         newReadAloud(!pause, pageIndex, 0, start)
@@ -1331,8 +1320,25 @@ abstract class BaseReadAloudService : BaseService(),
         upMediaMetadata(showContent = true)
     }
 
+    /**
+     * 上报当前播放单元实际用到的音色。
+     *
+     * 计划音色只是意图：路由器会按引擎能力换掉它，引擎又可能拒绝执行它，两者过去都不
+     * 回到界面上，于是听书页写着一个音色名、耳朵里是另一个声音。播放后端是唯一知道
+     * 实际结果的地方，由它在这里补报；没上报时 [publishPlaybackInfo] 退回计划值。
+     */
+    protected fun reportEffectiveVoice(cueIndex: Int, outcome: SpeechVoiceOutcome) {
+        effectiveVoiceOutcome = cueIndex to outcome
+    }
+
+    /** 换章重建队列时清掉上一章的结算结果，避免被新游标读到。 */
+    protected fun clearEffectiveVoiceOutcome() {
+        effectiveVoiceOutcome = null
+    }
+
     private fun publishPlaybackInfo(cursor: ReadAloudPlaybackCursor) {
         val cue = playbackQueue.cues.getOrNull(cursor.cueIndex) ?: return
+        val outcome = effectiveVoiceOutcome?.takeIf { it.first == cursor.cueIndex }?.second
         sessionStore.updatePlayback(ReadAloudPlaybackInfo(
             chapterTitle = readerReadAloudChapter?.title.orEmpty(),
             chapterIndex = readerReadAloudChapter?.chapterIndex ?: -1,
@@ -1340,10 +1346,11 @@ abstract class BaseReadAloudService : BaseService(),
             chapterLength = playbackQueue.cues.lastOrNull()?.chapterEnd ?: cue.chapterEnd,
             // 这一份是给人看的，标记整段去掉（通知栏/悬浮窗里都不该出现 <<…>> 或一串空格）
             text = CastMarkers.strip(cue.text),
-            engineName = cue.voice?.displayName.orEmpty(),
-            characterName = speechPlan.getOrNull(
-                cursor.cueIndex - playbackQueue.leadingTitleCueCount
-            )?.segment?.characterName.orEmpty(),
+            effectiveVoiceLabel = outcome?.effectiveLabel.orEmpty(),
+            plannedVoiceLabel = (outcome?.plannedVoice ?: cue.voice)?.voiceLabel.orEmpty(),
+            voiceStatus = outcome?.status ?: SpeechVoiceStatus.Applied,
+            voiceStatusReason = outcome?.reason.orEmpty(),
+            characterName = cue.characterName,
             roleType = cue.roleType,
         ))
         refreshMediaSessionPlaybackState()

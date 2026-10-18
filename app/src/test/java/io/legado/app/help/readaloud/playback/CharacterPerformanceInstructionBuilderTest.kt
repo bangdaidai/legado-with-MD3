@@ -53,4 +53,33 @@ class CharacterPerformanceInstructionBuilderTest {
         assertTrue(instruction.contains("角色定位：男主角"))
         assertTrue(instruction.contains("性格特征：沉稳"))
     }
+
+    @Test
+    fun `uses pool label field instead of age band enum`() {
+        // Phase 3 后 voiceAgeBand 是枚举（young_adult 等），池显示名单独走 voicePoolLabel；
+        // 旧实现把 voiceAgeBand 当池名读，枚举值会被 poolNameOrEmpty 过滤成空串。
+        val instruction = CharacterPerformanceInstructionBuilder.build(
+            CloudTtsProviderType.Mimo,
+            CharacterPerformanceProfile(
+                characterId = "character-1",
+                voiceAgeBand = "young_adult",
+                voicePoolLabel = "女青年",
+            ),
+        )
+
+        assertTrue(instruction.contains("声音池：女青年"))
+    }
+
+    @Test
+    fun `omits pool label when blank`() {
+        val instruction = CharacterPerformanceInstructionBuilder.build(
+            CloudTtsProviderType.Mimo,
+            CharacterPerformanceProfile(
+                characterId = "character-1",
+                voiceAgeBand = "young_adult",
+            ),
+        )
+
+        assertFalse(instruction.contains("声音池"))
+    }
 }

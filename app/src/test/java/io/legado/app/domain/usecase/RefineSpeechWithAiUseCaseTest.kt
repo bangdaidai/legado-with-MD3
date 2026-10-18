@@ -28,6 +28,7 @@ import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ChapterSpeechSegments
 import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
@@ -433,7 +434,16 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         chapterIndex: Int,
     ): List<ChapterSpeechSegment> = emptyList()
 
-    override suspend fun getChapterSummaries(bookUrl: String): List<ChapterSpeechSummary> =
+    override suspend fun getChapterSegmentsFor(
+        bookUrl: String,
+        chapterIndex: Int,
+        resolverVersion: String,
+    ): ChapterSpeechSegments = ChapterSpeechSegments(emptyList(), isCurrent = true)
+
+    override suspend fun getChapterSummaries(
+        bookUrl: String,
+        resolverVersion: String,
+    ): List<ChapterSpeechSummary> =
         emptyList()
 
     override suspend fun replaceSegments(

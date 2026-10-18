@@ -18,13 +18,34 @@ import java.util.UUID
  */
 object VoicePoolStore {
 
-    /** 种子默认池（名字 → 管理分组），与参考软件 MultiTTS 的默认声音池一致。 */
-    private val DEFAULT_POOLS: List<Pair<String, String>> = listOf(
-        "男童" to "男", "男少年" to "男", "男青年" to "男", "男中年" to "男",
-        "男性老年" to "男", "失配男" to "男",
-        "女童" to "女", "女少女" to "女", "女青年" to "女", "女中年" to "女",
-        "女性老年" to "女", "失配女" to "女",
-        "卡通人物" to "特殊",
+    /**
+     * 种子默认池（名字 → 管理分组 → 性别 → 年龄段），与参考软件 MultiTTS 的默认声音池一致。
+     *
+     * [gender] / [ageBand] 是池的结构化分类，是「角色年龄性别 → 音色」精确匹配的唯一桥梁
+     * （音色本身没有年龄字段，年龄从池成员关系派生）。「失配男/失配女」与「卡通人物」
+     * 这类兜底/特殊池为 unknown——它们不代表某个年龄段。
+     */
+    private data class SeedPool(
+        val name: String,
+        val group: String,
+        val gender: String,
+        val ageBand: String,
+    )
+
+    private val DEFAULT_POOLS: List<SeedPool> = listOf(
+        SeedPool("男童", "男", VoicePoolEntity.VOICE_POOL_GENDER_MALE, VoicePoolEntity.VOICE_POOL_AGE_CHILD),
+        SeedPool("男少年", "男", VoicePoolEntity.VOICE_POOL_GENDER_MALE, VoicePoolEntity.VOICE_POOL_AGE_TEEN),
+        SeedPool("男青年", "男", VoicePoolEntity.VOICE_POOL_GENDER_MALE, VoicePoolEntity.VOICE_POOL_AGE_YOUNG_ADULT),
+        SeedPool("男中年", "男", VoicePoolEntity.VOICE_POOL_GENDER_MALE, VoicePoolEntity.VOICE_POOL_AGE_ADULT),
+        SeedPool("男性老年", "男", VoicePoolEntity.VOICE_POOL_GENDER_MALE, VoicePoolEntity.VOICE_POOL_AGE_ELDERLY),
+        SeedPool("失配男", "男", VoicePoolEntity.VOICE_POOL_GENDER_MALE, VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN),
+        SeedPool("女童", "女", VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, VoicePoolEntity.VOICE_POOL_AGE_CHILD),
+        SeedPool("女少女", "女", VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, VoicePoolEntity.VOICE_POOL_AGE_TEEN),
+        SeedPool("女青年", "女", VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, VoicePoolEntity.VOICE_POOL_AGE_YOUNG_ADULT),
+        SeedPool("女中年", "女", VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, VoicePoolEntity.VOICE_POOL_AGE_ADULT),
+        SeedPool("女性老年", "女", VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, VoicePoolEntity.VOICE_POOL_AGE_ELDERLY),
+        SeedPool("失配女", "女", VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN),
+        SeedPool("卡通人物", "特殊", VoicePoolEntity.VOICE_POOL_GENDER_UNKNOWN, VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN),
     )
 
     private const val PREFS = "cast_prefs"
@@ -45,14 +66,16 @@ object VoicePoolStore {
     /** 幂等种子化：只执行一次（prefs 标记），用户删光默认池后不会复活。 */
     suspend fun ensureSeeded() {
         if (prefs().getBoolean(KEY_SEEDED, false)) return
-        for ((name, group) in DEFAULT_POOLS) {
-            if (appDb.voicePoolDao.getByName(name) == null) {
+        for (seed in DEFAULT_POOLS) {
+            if (appDb.voicePoolDao.getByName(seed.name) == null) {
                 appDb.voicePoolDao.insertIgnore(
                     VoicePoolEntity(
                         id = UUID.randomUUID().toString(),
-                        name = name,
-                        groupName = group,
+                        name = seed.name,
+                        groupName = seed.group,
                         isDefault = true,
+                        gender = seed.gender,
+                        ageBand = seed.ageBand,
                     ),
                 )
             }
@@ -251,6 +274,73 @@ object VoicePoolStore {
             .mapNotNull { m -> pools[m.poolId]?.let { m.voiceId to it } }
             .groupBy({ it.first }, { it.second })
             .mapValues { it.value.toSet() }
+    }
+
+    /**
+     * 池的结构化分类（性别 + 年龄段）；池不存在或分类为 unknown 时返回 null。
+     *
+     * 这是「角色年龄性别 → 音色」精确匹配链路的读取端：调用方拿到后可以判断
+     * 「这个池代表女·青年」，而不必解析池名字符串。
+     */
+    suspend fun poolClassification(poolId: String): Pair<String, String>? {
+        ensureSeeded()
+        val pool = appDb.voicePoolDao.getAll().firstOrNull { it.id == poolId } ?: return null
+        return poolClassificationOf(pool)
+    }
+
+    /** 按名取池（含停用的）；写入点用来把池名解析成 id + ageBand。 */
+    suspend fun poolByName(name: String): VoicePoolEntity? {
+        ensureSeeded()
+        return appDb.voicePoolDao.getByName(name.trim())
+    }
+
+    /**
+     * 档案对应的声音池名（读取端统一入口）。
+     *
+     * 优先用 [BookCharacterProfile.voicePoolId] 精确查池（Phase 3 之后的写入都带外键）；
+     * 外键为空时回落到把 `voiceAgeBand` 当池名解析——兼容迁移前的历史行、以及
+     * 还没改完的写入点（如 AI 识别仍把池名写进 voiceAgeBand）。
+     */
+    suspend fun poolLabelOf(profile: BookCharacterProfile): String {
+        ensureSeeded()
+        profile.voicePoolId.trim().takeIf { it.isNotEmpty() }?.let { poolId ->
+            appDb.voicePoolDao.getAll().firstOrNull { it.id == poolId }?.let { return it.name }
+        }
+        return poolNameOrEmpty(profile.voiceAgeBand)
+    }
+
+    /**
+     * voiceId → (性别, 年龄段)，从**启用池的成员关系**派生。
+     *
+     * 音色本身没有年龄字段，年龄从「属于哪个池」推导：一个音色可能在多个池里，
+     * 取第一个有明确分类（gender/ageBand 都不是 unknown）的池；全在无分类池里则不出现在结果里
+     * （调用方按 unknown 兜底，走关键词匹配）。
+     */
+    suspend fun voiceClassificationMap(): Map<String, Pair<String, String>> {
+        ensureSeeded()
+        val classifiedPools = appDb.voicePoolDao.getAll()
+            .filter { it.enabled }
+            .mapNotNull { pool -> poolClassificationOf(pool)?.let { pool.id to it } }
+            .toMap()
+        if (classifiedPools.isEmpty()) return emptyMap()
+        val result = mutableMapOf<String, Pair<String, String>>()
+        appDb.voicePoolDao.getAllMembers()
+            .filter { it.enabled }
+            .forEach { member ->
+                val classification = classifiedPools[member.poolId] ?: return@forEach
+                // 已被更明确的池分类过就不覆盖（保持"第一个有分类的池"语义）
+                result.putIfAbsent(member.voiceId, classification)
+            }
+        return result
+    }
+
+    /** 池的结构化分类判定；internal 供单测。gender/ageBand 全 unknown（或空）返回 null。 */
+    internal fun poolClassificationOf(pool: VoicePoolEntity): Pair<String, String>? {
+        val gender = pool.gender.trim()
+        val ageBand = pool.ageBand.trim()
+        val hasGender = gender.isNotEmpty() && gender != VoicePoolEntity.VOICE_POOL_GENDER_UNKNOWN
+        val hasAgeBand = ageBand.isNotEmpty() && ageBand != VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN
+        return if (hasGender || hasAgeBand) gender to ageBand else null
     }
 
     /**

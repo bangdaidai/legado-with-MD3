@@ -3269,6 +3269,7 @@
     <string name="speech_storyboard_delete_confirm">Delete this chapter\'s storyboard? It regenerates on the next read-aloud.</string>
     <string name="speech_storyboard_delete_none">No chapter selected yet</string>
     <string name="speech_storyboard_current_chapter">Reading now</string>
+    <string name="speech_storyboard_stale_config">Stale split, not used for playback</string>
     <string name="speech_storyboard_chapters_empty">No chapter has been analyzed yet. Read one aloud and come back.</string>
     <string name="speech_role_dialogue">Dialogue</string>
     <string name="speech_role_thought">Thought</string>
@@ -3340,6 +3341,9 @@
     <string name="cast_bgm_scene_row">Paragraph %1$d</string>
     <string name="cast_bgm_scene_range">Paragraphs %1$d–%2$d</string>
     <string name="cast_bgm_master_volume">Master music volume</string>
+    <string name="bgm_volume">Music volume</string>
+    <string name="bgm_volume_mute">Mute</string>
+    <string name="bgm_volume_max">Max</string>
     <string name="ai_cast_scene_only">AI music scenes</string>
     <string name="ai_cast_scene_only_hint">Detects music scenes only. No role recognition, no body text changes, and neither reading switch has to be on.</string>
     <string name="ai_cast_scene_status">%1$d music segment(s) in this chapter</string>

@@ -67,6 +67,12 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
         is ReadAloudConfigIntent.SetUseMultiSpeaker ->
             onConfigIntent(ReadAloudConfigOption.UseMultiSpeaker, selected = intent.value)
 
+        is ReadAloudConfigIntent.SetMultiRoleCast ->
+            onConfigIntent(ReadAloudConfigOption.MultiRoleCast, selected = intent.value)
+
+        is ReadAloudConfigIntent.SetBgmAssign ->
+            onConfigIntent(ReadAloudConfigOption.BgmAssign, selected = intent.value)
+
         is ReadAloudConfigIntent.SetContentSplitMode ->
             onConfigIntent(ReadAloudConfigOption.ContentSplit, value = intent.value)
 
@@ -104,6 +110,12 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
 
         ReadAloudConfigIntent.OpenSystemTtsSettings ->
             effect(ReadAloudPlayerEffect.OpenSystemTtsSettings)
+
+        // 声音池 / 配乐池：这两页过去只有「设置 → 朗读设置 → 多角色朗读」hub 一条路，
+        // 听书页和阅读页都绕不到，这里把入口放回音色页签
+        ReadAloudConfigIntent.OpenVoicePool -> effect(ReadAloudPlayerEffect.OpenVoicePool)
+
+        ReadAloudConfigIntent.OpenBgmPool -> effect(ReadAloudPlayerEffect.OpenBgmPool)
 
         ReadAloudConfigIntent.ClearTtsCache -> clearTtsCache()
     }

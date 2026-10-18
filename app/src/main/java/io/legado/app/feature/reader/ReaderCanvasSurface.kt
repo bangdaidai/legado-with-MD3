@@ -2074,7 +2074,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrollPageConte
     }
     data.textBackgrounds.forEach { run ->
         ReaderTextBackgroundLoader.cached(run.image.source)?.let { bitmap ->
-            drawTextBackground(native, bitmap, run, data.textBackgroundPaint)
+            drawTextBackground(native, bitmap, run, data.textBackgroundPaint, 1.dp.toPx())
         }
     }
     drawSelectionStylePreview(selectionPreviewStyle, previewBounds, beforeText = true)
@@ -2820,7 +2820,7 @@ private fun ReaderPageCanvas(
         textBackgroundRevision
         textBackgrounds.forEach { run ->
             ReaderTextBackgroundLoader.cached(run.image.source)?.let { bitmap ->
-                drawTextBackground(native, bitmap, run, textBackgroundPaint)
+                drawTextBackground(native, bitmap, run, textBackgroundPaint, 1.dp.toPx())
             }
         }
         drawSelectionStylePreview(selectionPreviewStyle, previewBounds, beforeText = true)
@@ -3203,6 +3203,7 @@ internal fun drawTextBackground(
     bitmap: Bitmap,
     run: io.legado.app.feature.reader.core.model.ReaderTextBackgroundRun,
     paint: Paint,
+    nineSliceTextInsetPx: Float,
 ) {
     val bounds = run.contentBounds
     val image = run.image
@@ -3247,13 +3248,16 @@ internal fun drawTextBackground(
             // 九宫格：外框由分页期按同一个等比倍率算好（run.bounds = 文字矩形外扩
             // frame*Px），这里只把整张图按那份外框切成九格——中间那一格拉到文字宽、
             // 上下两条边与四角保持分页期算出的厚度，任何一格都不再单独拉伸。
-            // 逐格平铺复用本地 NinePatchDrawHelper，与规则编辑预览同一套绘制。
+            // 与 main 旧引擎 TextLine.drawBgImageSegment 同口径：外框顶边各内缩固定 1dp
+            // （对照规则编辑预览的 nineSliceInset），背景框不顶满行盒，行与行之间不粘连。
             val content = run.contentBounds
             val frame = run.bounds
+            val frameTop = frame.top + nineSliceTextInsetPx
+            val frameBottom = (frame.bottom - nineSliceTextInsetPx).coerceAtLeast(frameTop + 1f)
             io.legado.app.help.highlight.NinePatchDrawHelper.draw(
                 canvas,
                 bitmap,
-                frame.left, frame.top, frame.right, frame.bottom,
+                frame.left, frameTop, frame.right, frameBottom,
                 paint,
                 leftX = image.ninePatchLeft.coerceIn(0f, 1f),
                 rightX = 1f - image.ninePatchRight.coerceIn(0f, 1f),
@@ -3264,8 +3268,8 @@ internal fun drawTextBackground(
                 // 与规则编辑预览 NinePatchDrawHelper.layout 的 box/corner 同一套口径。
                 cornerL = (content.left - frame.left - image.paddingLeftPx).coerceAtLeast(0f),
                 cornerR = (frame.right - content.right - image.paddingRightPx).coerceAtLeast(0f),
-                cornerT = (content.top - frame.top - image.paddingTopPx).coerceAtLeast(0f),
-                cornerB = (frame.bottom - content.bottom - image.paddingBottomPx).coerceAtLeast(0f),
+                cornerT = (content.top - frameTop - image.paddingTopPx).coerceAtLeast(0f),
+                cornerB = (frameBottom - content.bottom - image.paddingBottomPx).coerceAtLeast(0f),
                 borderPx = if (image.hasNinePatchBorder) 1f else 0f,
             )
         }

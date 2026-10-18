@@ -46,6 +46,8 @@ fun ReadAloudConfigScreen(
     onOpenTtsCache: () -> Unit,
     onOpenBookVoiceCasting: (bookUrl: String) -> Unit,
     onOpenSpeechStoryboard: (bookUrl: String) -> Unit,
+    onOpenVoicePool: () -> Unit,
+    onOpenBgmPool: () -> Unit,
 ) {
     val context = LocalContext.current
     LaunchedEffect(effects) {
@@ -58,6 +60,9 @@ fun ReadAloudConfigScreen(
 
                 is ReadAloudPlayerEffect.OpenSpeechStoryboard ->
                     onOpenSpeechStoryboard(effect.bookUrl)
+
+                ReadAloudPlayerEffect.OpenVoicePool -> onOpenVoicePool()
+                ReadAloudPlayerEffect.OpenBgmPool -> onOpenBgmPool()
 
                 ReadAloudPlayerEffect.OpenSystemTtsSettings -> IntentHelp.openTTSSetting()
                 ReadAloudPlayerEffect.TtsCacheCleared ->

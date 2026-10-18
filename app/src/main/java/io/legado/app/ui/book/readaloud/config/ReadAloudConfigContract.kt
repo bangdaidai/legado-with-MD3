@@ -36,6 +36,10 @@ sealed interface ReadAloudConfigIntent {
     data object OpenSystemTtsSettings : ReadAloudConfigIntent
     data object ClearTtsCache : ReadAloudConfigIntent
 
+    /** 角色声音池；配乐池与声音池原本只能从设置三层深的朗读设置 hub 进去。 */
+    data object OpenVoicePool : ReadAloudConfigIntent
+    data object OpenBgmPool : ReadAloudConfigIntent
+
     /** 对话朗读分析模式；非规则模式需要已配置的 AI 模型。 */
     data class SetSpeechAnalysisMode(val value: String) : ReadAloudConfigIntent
     data class SetSpeechAnalysisReasoningLevel(val value: String) : ReadAloudConfigIntent
@@ -45,6 +49,20 @@ sealed interface ReadAloudConfigIntent {
 
     /** 多角色朗读；正在朗读时宿主需要重启朗读服务换合成管线。 */
     data class SetUseMultiSpeaker(val value: Boolean) : ReadAloudConfigIntent
+
+    /**
+     * 多角色分配：控制正文里有没有 `<<角色（声音池）>>` 标记与角色胶囊。
+     *
+     * 它决定标记注不注得进去，不开就整章只有旁白；切换还要重载正文才能看到胶囊。
+     */
+    data class SetMultiRoleCast(val value: Boolean) : ReadAloudConfigIntent
+
+    /**
+     * 背景音乐分配：控制正文段首的 ♪ 胶囊与按场景播放配乐。
+     *
+     * 不开就没有 ♪ 胶囊，点胶囊进配乐弹层的主入口也就跟着断了。
+     */
+    data class SetBgmAssign(val value: Boolean) : ReadAloudConfigIntent
 
     // --- 数值项（整页宿主就地铺滑块） ---
 

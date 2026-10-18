@@ -9,18 +9,20 @@ import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ContentSplitPolicies
+import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
-import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
-import io.legado.app.domain.usecase.PrepareChapterSpeechPlanUseCase
 import io.legado.app.domain.usecase.RefineSpeechWithAiUseCase
+import io.legado.app.domain.usecase.ResolveEffectiveSpeechPlanUseCase
+import io.legado.app.domain.usecase.ruleResolverVersion
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.config.readConfig.ReadConfig
 import kotlinx.collections.immutable.persistentListOf
@@ -46,6 +48,11 @@ import splitties.init.appCtx
 /**
  * 分镜结果页：先按章列出分析过的章节，点进去按场景分组看这一章的分段、说话人和音色。
  *
+ * 计划由 [ResolveEffectiveSpeechPlanUseCase] 单独算，与朗读服务走的是同一个用例——分镜页
+ * 过去只截取了「分段 + 选音」两步，跳过了分配表覆盖，于是显示的音色是覆盖**之前**的，
+ * 实际发声是覆盖**之后**的；整段/整页划分下覆盖层还会再切一刀，一行分镜根本不对应任何
+ * 一条实际发声的单元。
+ *
  * 正在读的那一章走完整分析链（可以重新分析），其它章只把库里存下来的分段读出来 ——
  * 分段按朗读服务的同一划分口径从新引擎章节输入重建，单独去数据库捞正文再切一次只会和朗读时对不上。
  *
@@ -56,12 +63,12 @@ import splitties.init.appCtx
  */
 class SpeechStoryboardViewModel(
     private val bookUrl: String,
-    private val prepareChapterSpeechPlan: PrepareChapterSpeechPlanUseCase,
-    private val buildSpeechPlan: BuildSpeechPlanUseCase,
+    private val resolveEffectiveSpeechPlan: ResolveEffectiveSpeechPlanUseCase,
+    private val refineSpeechWithAi: RefineSpeechWithAiUseCase,
     private val chapterSpeechGateway: ChapterSpeechGateway,
     private val bookKnowledgeGateway: BookKnowledgeGateway,
-    private val refineSpeechWithAi: RefineSpeechWithAiUseCase,
     private val previewSynthesizer: VoicePreviewSynthesizer,
+    private val sessionStore: ReadAloudSessionStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SpeechStoryboardUiState(bookUrl = bookUrl))
@@ -100,6 +107,35 @@ class SpeechStoryboardViewModel(
 
     init {
         loadChapters("进入分镜页")
+        observePlaybackPosition()
+    }
+
+    /**
+     * 跟着朗读服务的位置高亮"当前正在念的这一条"，并把它的**实际发声音色**（运行时结算值）
+     * 一并带进界面。
+     *
+     * 只有细节页需要：章内位置对不上正在看的那一章就没有意义。这里只发章内位置与当前句的
+     * 结算音色、不发其它状态，避免逐词进度把整棵分镜树带着一起重组。
+     */
+    private fun observePlaybackPosition() {
+        viewModelScope.launch {
+            sessionStore.state.collect { session ->
+                val playback = session.playback
+                _uiState.update {
+                    val sameChapter = playback.chapterIndex == it.selectedChapterIndex
+                    it.copy(
+                        playingChapterPosition = if (sameChapter) {
+                            playback.chapterPosition
+                        } else {
+                            -1
+                        },
+                        // 计划音色 → 结算音色：音色路由/引擎拒绝发生在发声瞬间，只有正在播
+                        // 的那句知道真实值（displayVoiceLabel = 结算值，无则回落计划值）。
+                        playingVoiceLabel = if (sameChapter) playback.displayVoiceLabel else "",
+                    )
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -181,13 +217,18 @@ class SpeechStoryboardViewModel(
             }
             try {
                 val current = currentChapterIndex()
-                val analyzed = chapterSpeechGateway.getChapterSummaries(bookUrl).map { summary ->
+                val policy = splitPolicy()
+                val analyzed = chapterSpeechGateway
+                    .getChapterSummaries(bookUrl, currentResolverVersion(policy))
+                    .map { summary ->
                     StoryboardChapterUi(
                         chapterIndex = summary.chapterIndex,
                         title = summary.title.ifBlank { fallbackTitle(summary.chapterIndex) },
                         segmentCount = summary.segmentCount,
                         characterCount = summary.characterCount,
                         isCurrent = summary.chapterIndex == current,
+                        // 由旧划分方式/旧分析模式生成的那份，朗读时不会用它
+                        usesCurrentConfig = summary.isCurrent,
                     )
                 }
                 // 正在读的那一章还没分析过也要能点进去, 进去才触发分析
@@ -199,6 +240,7 @@ class SpeechStoryboardViewModel(
                         segmentCount = 0,
                         characterCount = 0,
                         isCurrent = true,
+                        usesCurrentConfig = true,
                     )).sortedBy(StoryboardChapterUi::chapterIndex)
                 } else {
                     analyzed
@@ -241,23 +283,28 @@ class SpeechStoryboardViewModel(
             }
             try {
                 val isCurrent = chapterIndex == currentChapterIndex()
+                val policy = splitPolicy()
+                val stored = withContext(Dispatchers.IO) {
+                    chapterSpeechGateway.getChapterSegmentsFor(
+                        bookUrl,
+                        chapterIndex,
+                        currentResolverVersion(policy),
+                    )
+                }
                 val plan = when {
-                    reanalyze && isCurrent -> currentChapterPlan(chapterIndex, true)
+                    reanalyze -> analyzeChapter(chapterIndex, policy, resetCache = true)
                     isCurrent -> {
                         // 朗读期间这章的分析已经落在库里，直接读缓存即可，
                         // 避免和正在进行的朗读并发再发一次 AI（重复生成 / 一直转圈）。
                         // 只有库里还没有这章分析结果（比如还没起播就先进分镜页看）时才跑完整链路。
-                        val cached = withContext(Dispatchers.IO) {
-                            chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
-                        }
-                        if (cached.isNotEmpty()) {
-                            cachedChapterPlan(chapterIndex)
+                        if (stored.segments.isNotEmpty()) {
+                            overlayOnCached(chapterIndex, policy, stored.segments)
                         } else {
-                            currentChapterPlan(chapterIndex, false)
+                            analyzeChapter(chapterIndex, policy, resetCache = false)
                         }
                     }
 
-                    else -> cachedChapterPlan(chapterIndex)
+                    else -> cachedChapterPlan(chapterIndex, policy)
                 }
                 currentPlan = plan
                 val items = plan.map(::toItemUi)
@@ -268,6 +315,7 @@ class SpeechStoryboardViewModel(
                         analysisMode = ReadConfig.speechAnalysisMode,
                         chapterTitle = title,
                         isCurrentChapter = isCurrent,
+                        usesCurrentConfig = reanalyze || stored.isCurrent,
                         scenes = groupIntoScenes(items).toImmutableList(),
                         summary = buildSummary(items),
                     )
@@ -307,64 +355,132 @@ class SpeechStoryboardViewModel(
         }
     }
 
-    /** 正在读的那一章：走完整分析链，拿得到最新的说话人与音色 */
-    private suspend fun currentChapterPlan(
-        chapterIndex: Int,
-        reanalyze: Boolean,
-    ): List<SpeechPlanItem> {
-        val input = ReadBook.readerChapterInputWindow.current
-            ?.takeIf { it.chapter.index == chapterIndex } ?: return emptyList()
-        // 与朗读服务同口径重建段落：同一划分方式与符号策略下，段落文本和章内位置一致，
-        // 分镜展示才能和朗读时落库的分析结果对得上。
+    /** 与朗读服务同一份划分口径：读设置、定 policy，段落重建靠它对齐章内位置。 */
+private fun splitPolicy(): ContentSplitPolicy {
         val splitMode = ContentSplitPolicies.resolve(
             ReadAloudContentSplitMode.fromStorage(ReadConfig.contentSplitMode),
             ReadConfig.useMultiSpeaker,
         )
-        val splitPolicy = ContentSplitPolicies.forMode(splitMode, ReadConfig.contentSplitSymbols)
-        val paragraphs = withContext(Dispatchers.Default) {
+        return ContentSplitPolicies.forMode(splitMode, ReadConfig.contentSplitSymbols)
+    }
+
+    /**
+     * 当前设置会写出的分析版本号。
+     *
+     * 只依赖设置与人物档案、不需要正文段落，所以非当前章也能算出来——这是分镜页能判断
+     * "库里那份是不是当前设置生成的"的前提。AI 模式的版本号取不到（没配模型 / 请求失败）时
+     * 退回规则版本，与主链的降级口径一致。
+     */
+    private suspend fun currentResolverVersion(policy: ContentSplitPolicy): String {
+        val rule = ruleResolverVersion(policy)
+        val mode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode)
+        if (mode == SpeechAnalysisMode.Rule) return rule
+        return runCatching { refineSpeechWithAi.resolverVersion(bookUrl, mode, policy) }
+            .getOrDefault(rule)
+    }
+
+    /** 正在读的那一章：走完整分析链，拿得到最新的说话人与音色。 */
+    private suspend fun analyzeChapter(
+        chapterIndex: Int,
+        policy: ContentSplitPolicy,
+        resetCache: Boolean,
+    ): List<SpeechPlanItem> {
+        val paragraphs = currentChapterParagraphs(chapterIndex, policy) ?: return emptyList()
+        if (resetCache) {
+            withContext(Dispatchers.IO) {
+                chapterSpeechGateway.deleteChapter(bookUrl, chapterIndex)
+            }
+            resolveEffectiveSpeechPlan.clearAiCooldown(bookUrl)
+            sceneAttemptedChapters.remove(chapterIndex)
+            // 这一章的分析从头再来一遍：还在飞的场景拆分算作废，不许拿旧分段回写
+            sceneGeneration++
+        }
+        return resolveEffectiveSpeechPlan(
+            bookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            paragraphs = paragraphs,
+            splitPolicy = policy,
+            analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
+            // 分镜页触发的分析在 AI 日志里要能看出出处，不混进"朗读"
+            source = "分镜",
+        )
+    }
+
+    /**
+     * 与朗读服务同口径重建段落：同一划分方式与符号策略下，段落文本和章内位置一致，
+     * 分镜展示才能和朗读时落库的分析结果对得上。
+     */
+    private suspend fun currentChapterParagraphs(
+        chapterIndex: Int,
+        policy: ContentSplitPolicy,
+    ): List<io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph>? {
+        val input = ReadBook.readerChapterInputWindow.current
+            ?.takeIf { it.chapter.index == chapterIndex } ?: return null
+        return withContext(Dispatchers.Default) {
             ReaderReadAloudChapter.create(
                 chapterIndex = chapterIndex,
                 title = input.displayTitle,
                 semanticContent = input.source.semanticContent,
                 // 分镜只用整段视图，页边界不参与段落生成
                 pageStarts = listOf(0),
-                contentSplitMode = splitMode,
+                contentSplitMode = policy.mode,
             ).canonicalSpeechParagraphs(
                 splitByPage = false,
-                policy = splitPolicy,
+                policy = policy,
             )
         }
-        if (reanalyze) {
-            withContext(Dispatchers.IO) {
-                chapterSpeechGateway.deleteChapter(bookUrl, chapterIndex)
-            }
-            prepareChapterSpeechPlan.clearAiCooldown(bookUrl)
-            sceneAttemptedChapters.remove(chapterIndex)
-            // 这一章的分析从头再来一遍：还在飞的场景拆分算作废，不许拿旧分段回写
-            sceneGeneration++
-        }
-        return prepareChapterSpeechPlan(
-            bookUrl = bookUrl,
-            chapterIndex = chapterIndex,
-            paragraphs = paragraphs,
-            analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
-            useMultiSpeaker = ReadConfig.useMultiSpeaker,
-            policy = splitPolicy,
-            // 分镜页触发的分析在 AI 日志里要能看出出处，不混进"朗读"
-            source = "分镜",
-        )
     }
 
-    /** 其它章：只读库里存下来的分段，按当前音色绑定算一遍音色，不重新分析 */
-    private suspend fun cachedChapterPlan(chapterIndex: Int): List<SpeechPlanItem> {
-        val segments = chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
-        if (segments.isEmpty()) return emptyList()
-        return buildSpeechPlan(
-            bookUrl = bookUrl,
-            segments = segments,
-            characterPerformances = characterPerformances(),
-            useMultiSpeaker = ReadConfig.useMultiSpeaker,
-        )
+    /**
+     * 其它章：只读库里存下来的分段，不重新分析。
+     *
+     * 但**必须再套一层分配表覆盖**，否则显示的音色就是覆盖之前的那一份。正文段落从
+     * 当前输入窗口取；取不到（非当前章且阅读器已翻走）时跳过覆盖，并在界面上不宣称
+     * 与正在播出的声音一致。
+     */
+    private suspend fun cachedChapterPlan(
+        chapterIndex: Int,
+        policy: ContentSplitPolicy,
+    ): List<SpeechPlanItem> {
+        val stored = withContext(Dispatchers.IO) {
+            chapterSpeechGateway.getChapterSegmentsFor(
+                bookUrl,
+                chapterIndex,
+                currentResolverVersion(policy),
+            )
+        }
+        if (stored.segments.isEmpty()) return emptyList()
+        val paragraphs = if (chapterIndex == currentChapterIndex()) {
+            currentChapterParagraphs(chapterIndex, policy)
+        } else {
+            null
+        }
+        return overlayOnCached(chapterIndex, policy, stored.segments, paragraphs)
+    }
+
+    /** 落库分段 + 当前音色绑定 + 分配表覆盖：分镜页看到的必须与朗读同源。 */
+    private suspend fun overlayOnCached(
+        chapterIndex: Int,
+        policy: ContentSplitPolicy,
+        segments: List<io.legado.app.domain.model.readaloud.ChapterSpeechSegment>,
+        paragraphs: List<io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph>? =
+            null,
+    ): List<SpeechPlanItem> {
+        val base = withContext(Dispatchers.Default) {
+            buildCachedPlan(segments)
+        }
+        if (base.isEmpty()) return base
+        val spoken = paragraphs ?: return base
+        return runCatching {
+            resolveEffectiveSpeechPlan.overlayOnSegments(
+                bookUrl = bookUrl,
+                chapterIndex = chapterIndex,
+                paragraphs = spoken,
+                plan = base,
+            )
+        }.onFailure {
+            AppLog.put("分镜页套用分配表失败，本章按原计划显示\n${it.localizedMessage}", it)
+        }.getOrDefault(base)
     }
 
     /**
@@ -437,6 +553,15 @@ class SpeechStoryboardViewModel(
     private suspend fun analysisStillCurrent(chapterIndex: Int, analysisId: String): Boolean =
         chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
             .firstOrNull()?.analysisId == analysisId
+
+    /** 落库分段按当前音色绑定算成计划（见 [ResolveEffectiveSpeechPlanUseCase.planFromSegments]）。 */
+    private suspend fun buildCachedPlan(
+        segments: List<io.legado.app.domain.model.readaloud.ChapterSpeechSegment>,
+    ): List<SpeechPlanItem> = resolveEffectiveSpeechPlan.planFromSegments(
+        bookUrl = bookUrl,
+        segments = segments,
+        characterPerformances = characterPerformances(),
+    )
 
     /** 按「连续相同 sceneIndex」分组；没有任何场景时给一个 sceneNumber=0 的占位组按扁平渲染 */
     private fun groupIntoScenes(items: List<StoryboardItemUi>): List<StoryboardSceneUi> {
@@ -514,9 +639,11 @@ class SpeechStoryboardViewModel(
                 else -> StoryboardRole.Unknown
             },
             speakerName = segment.characterName,
-            voiceName = item.voice?.displayName.orEmpty(),
+            // 只显示音色名：displayName 对带多音色的源是 `引擎名 · 音色名`，行里放不下
+            voiceName = item.voice?.voiceLabel.orEmpty(),
             emotion = segment.emotion,
             paragraphIndex = segment.paragraphIndex,
+            chapterPosition = segment.chapterPosition,
             confidence = segment.confidence,
             source = when (segment.source) {
                 SpeechResolutionSource.Rule -> StoryboardSource.Rule

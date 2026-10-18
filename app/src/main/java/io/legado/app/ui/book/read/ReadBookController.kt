@@ -46,6 +46,7 @@ import io.legado.app.feature.reader.core.selection.ReaderSearchRequest
 import io.legado.app.feature.reader.core.selection.ReaderSelection
 import io.legado.app.feature.reader.core.selection.ReaderSelectionMenuAnchor
 import io.legado.app.feature.reader.core.transition.ReaderTurnDirection
+import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterLayoutIdentity
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterPaginationResult
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterPaginator
@@ -60,6 +61,7 @@ import io.legado.app.feature.reader.platform.ReaderPerfTrace
 import io.legado.app.help.TTS
 import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.help.readaloud.cast.BgmSceneStore
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.SelectItem
@@ -351,10 +353,6 @@ class ReadBookController(
     private val _composeSelectionCancels = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     val composeSelectionCancels = _composeSelectionCancels.asSharedFlow()
 
-    /** 宿主要求画布建立选区（全文搜索命中），对照旧 View 的"搜索结果即真选区"。 */
-    private val _composeSelections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 4)
-    val composeSelections = _composeSelections.asSharedFlow()
-
     /** 触边界提示文案（由阅读页 SnackbarHost 呈现）。 */
     private val _composeBoundaryMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val composeBoundaryMessages = _composeBoundaryMessages.asSharedFlow()
@@ -375,6 +373,23 @@ class ReadBookController(
 
     /** 排版环境不含当前章身份；用它区分普通换章和主题/规则引起的整窗重排。 */
     private var directReaderPaginationEnvironmentKey: String? = null
+
+    /**
+     * 上一次「整窗作废页表」时生效的日夜模式（[ReadStyleResolver.isNightTheme]，含墨水屏下的
+     * 日夜分支，因为排版期解析规则色用的就是它）。
+     *
+     * 日夜切换有两条互不知情的通道：阅读页的日夜按钮走 `ReadConfigUpdateBus`（带
+     * `InvalidateTextPage`，最终到 [rebuildDirectReaderPages]），系统深色跟随和主题设置页
+     * 只到 [onAppThemeChanged]。两条都得让"排版期才按模式解析"的产物重排（高亮规则的
+     * `*Night` 色），但同一次切换只能作废一次——靠这里记录的模式去重。
+     */
+    private var directReaderPagesNightTheme: Boolean? = null
+
+    /**
+     * 页表当前所属书籍。换源原地替换书籍后新旧章节 index 对齐，暖页复用会把旧源内容
+     * 当成新书的页直接发回画面（闪回旧正文），bookUrl 一变必须整表作废。
+     */
+    private var directReaderPagesBookUrl: String? = null
 
     /**
      * 章 → 正在跑的分页任务（连同它依据的章节身份）。
@@ -797,11 +812,42 @@ class ReadBookController(
         }
     }
 
+    /**
+     * 书籍身份守卫：换源/替换书籍是原地进行的，页表里还留着旧源整章页时，
+     * 窗口发布路径（暖页复用、时间/电量重发）会按相同 chapterIndex 把旧正文
+     * 瞬间发回画面。bookUrl 一变就作废页表与在排任务，让画面停留在加载占位页
+     * 直到新书的批次提交。
+     */
+    private fun guardDirectReaderPagesBookIdentity() {
+        val currentBookUrl = ReadBook.readerChapterInputWindow.current?.book?.bookUrl
+            ?: ReadBook.book?.bookUrl
+        if (currentBookUrl == null || directReaderPagesBookUrl == currentBookUrl) return
+        if (directReaderPages.isNotEmpty()) {
+            readerChapterPaginationJobs.values.forEach { it.job.cancel() }
+            readerChapterPaginationJobs.clear()
+            directReaderLayoutKey = null
+            directReaderPaginationEnvironmentKey = null
+            directReaderStreamGeneration += 1
+            clearStreamedReaderChapters()
+            directReaderPages = emptyList()
+            directReaderPageIndex = null
+            directReaderChapterPageCounts = emptyMap()
+            directReaderPageContexts.clear()
+            paginatedChapterIdentities.clear()
+            // 立刻用加载/消息页顶掉画布上的旧正文；不能发空窗，路由层
+            // lastReadablePageWindow 兜底会把换源前的内容再画回来。
+            publishLoadingReaderWindow()
+        }
+        directReaderPagesBookUrl = currentBookUrl
+    }
+
     private fun rebuildDirectReaderPages() {
         readerChapterPaginationJobs.values.forEach { it.job.cancel() }
         readerChapterPaginationJobs.clear()
         directReaderLayoutKey = null
         directReaderPaginationEnvironmentKey = null
+        // 记下重排依据的日夜模式：主题通道（onAppThemeChanged）靠它判断这一次切换是不是已经作废过。
+        directReaderPagesNightTheme = ReadStyleResolver.isNightTheme()
         directReaderStreamGeneration += 1
         clearStreamedReaderChapters()
         // Clearing only the key leaves complete pages in the window. The next publish then
@@ -1204,10 +1250,12 @@ class ReadBookController(
                 ReaderPageNavigator.locate(pages, result.chapterIndex, bodyPosition)
             )
         }
-        // 旧 View 的全文搜索命中是一次**真选区**（`isSelectingSearchResult` + selectStart/End +
-        // `isTextSelected = true`）：有手柄、可拖动、弹出选区菜单。窗口发布之后再推给画布，
-        // 让它能按新窗口算锚点。
-        _composeSelections.tryEmit(selection)
+        // 搜索命中只作为页面级高亮（`searchSelection` 已进页面对象的 searchStart/
+        // searchEndInclusive），不建画布选区：跳结果的人是想看这个词出现在哪，没有对选区做
+        // 下一步操作的意图，而真选区会画出两端手柄、吞掉跳转后的第一次点击
+        // （`ReaderCanvasSurface` 的 suppressTap）并禁掉拉书签。这里只清掉用户自己长按留下的
+        // 旧选区——它属于上一页，留着会按新窗口重锚出一个错位的菜单。
+        cancelComposeSelection()
     }
 
     private fun publishDirectReaderPageWindow(
@@ -1218,6 +1266,7 @@ class ReadBookController(
     ): Boolean {
         val contentPadding = layoutController.viewport.value?.contentPadding ?: ReaderPadding()
         val inputWindow = ReadBook.readerChapterInputWindow
+        guardDirectReaderPagesBookIdentity()
         val chapter = inputWindow.current ?: run {
             // 内容未装载（进入书籍/目录跳转装载中）：发布"加载中"占位页窗口，让
             // 阅读画布保持组合、点击分区与菜单照常可用，装载完成后由分页批次
@@ -1293,6 +1342,9 @@ class ReadBookController(
             append('|').append(resolvedPaginationStyle.titleBottomSpacingPx)
             append('|').append(resolvedPaginationStyle.paragraphSpacing)
             append('|').append(ReadBookConfig.durConfig.highlightRules.hashCode())
+            // 跟随主角的规则按人物表现场展开，规则哈希不变但展开结果会变，
+            // 并入代次才能让「设完主角后复用旧页表」的路径重排。
+            append('|').append(HighlightProtagonistPatterns.generation)
         }
         val key = "$chapterLayoutIdentity,$paginationEnvironmentKey"
         if (directReaderLayoutKey == key && directReaderPages.isNotEmpty()) {
@@ -1730,6 +1782,11 @@ class ReadBookController(
             )
             publishWindowReaderPaginationSnapshots(paginationGeneration)
             directReaderPageIndex?.let(::publishDirectReaderWindow)
+            // 当前章页面被这批新页替换 = 新样式已烘进画面，通知标记域撤掉粘性预览。
+            // 邻章批次不通知：它们的提交与当前章可见内容无关。
+            if (chapterIndex in replacementChapterIndexes) {
+                viewModel.onComposeReaderPagesCommitted(chapterIndex)
+            }
         }
     }
 
@@ -1785,7 +1842,18 @@ class ReadBookController(
         // java.getThemeConfig() 产出与主题相关的图片），而不是因为清了解码缓存。
         // Compose 不重建 Activity，这里走与样式方案切换相同的路径：
         // 重下当前窗口图片 → 替换位图 → loadContent(false) 重新处理正文并重排。
-        if (modeChanged) refreshInlineImagesThenReload()
+        if (modeChanged) {
+            // 正文/标题/文字阴影/页底下划线四类色已经在上面原地改过，页面背景和九宫格底图是绘制期
+            // 取的，都不必重排。剩下的『排版期才按日夜解析一次、烧进页里』的那些：高亮规则的
+            // `*Night` 字色/底色/下划线（`LegacyReaderStyleRangeMapper.resolveModeColor`）和替换
+            // 规则定色的文本区间。排版环境 key 不含颜色，所以只重发窗口会原样复用暖页——
+            // 表现就是「切了日夜，规则色要退出书籍重进才变」。系统深色跟随与主题设置页只走到这里
+            // （不走 ReadConfigUpdateBus），所以这里按日夜按钮相同的语义作废一次：暖页出处清空后
+            // 当前章与邻章都会按新模式重排，旧页仍留在表上撑画面，不会闪加载页。
+            val nightTheme = ReadStyleResolver.isNightTheme()
+            if (directReaderPagesNightTheme != nightTheme) rebuildDirectReaderPages()
+            refreshInlineImagesThenReload()
+        }
         upSystemUiVisibility()
         LogUtils.d(
             "ReadBookTheme",
@@ -2122,6 +2190,11 @@ class ReadBookController(
     }
 
     fun onMenuActionFinally() {
+        cancelComposeSelection()
+    }
+
+    /** 清掉画布上的用户选区及其菜单。 */
+    private fun cancelComposeSelection() {
         dismissTextActionMenu()
         composeSelection = null
         composeSelectedText = null
@@ -2410,6 +2483,7 @@ class ReadBookController(
             is ReadBookEffect.UpTime, is ReadBookEffect.UpBattery -> {
                 // 时间/电量是烘进页眉页脚 decoration 的动态信息（`directReaderWindow` 里现建），
                 // 必须重发窗口才会刷新；页表还没落地（装载期整窗占位）时也要强制重建。
+                guardDirectReaderPagesBookIdentity()
                 val index = directReaderPageIndex
                 if (index != null && directReaderPages.isNotEmpty()) {
                     publishDirectReaderWindow(index)
@@ -2422,12 +2496,7 @@ class ReadBookController(
                 ReadBook.loadContent(false)
             }
 
-            is ReadBookEffect.CancelSelect -> {
-                dismissTextActionMenu()
-                composeSelection = null
-                composeSelectedText = null
-                _composeSelectionCancels.tryEmit(Unit)
-            }
+            is ReadBookEffect.CancelSelect -> cancelComposeSelection()
             is ReadBookEffect.MenuImageStyleChanged -> rebuildDirectReaderPages()
             is ReadBookEffect.InvalidateReaderImage -> {
                 activity.lifecycleScope.launch { replaceReaderImages(setOf(effect.source)) }
@@ -2503,14 +2572,19 @@ class ReadBookController(
                     publishReaderPageWindow()
                 } else {
                     // 定位只对本次跳章有效；openChapter 成功仍未消费时放弃，
-                    // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置
+                    // 避免挂起导航在用户之后主动进入同一章时劫持阅读位置。
+                    // 注意：不能在此回调里清除 pendingSearchNavigation——openChapter 的
+                    // success 回调在 layoutLoadedChapter 完成后、readerChapterInputChanged
+                    // 触发之前执行，提前清除会导致 resolveSearchNavigation 永远不被调用，
+                    // 阅读器停留在 openChapter 传入的初始位置（章首）。
                     ReadBook.openChapter(
                         result.chapterIndex,
                         // Search offsets may include a title prefix. The body offset is resolved
                         // after the cached chapter input has been published.
                         0,
                     ) {
-                        pendingSearchNavigation = null
+                        // 如果 pendingSearchNavigation 已被 readerChapterInputChanged 消费，
+                        // 这里什么都不做；否则保留它，让后续 input changed 回调处理。
                     }
                 }
             }

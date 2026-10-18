@@ -9,9 +9,11 @@ import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.model.PlaybackTimer
 import io.legado.app.domain.model.readaloud.ContentSplitPolicies
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
+import io.legado.app.domain.model.readaloud.SpeechVoiceStatus
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
+import io.legado.app.help.readaloud.cast.BgmPoolStore
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
@@ -111,7 +113,9 @@ class ReadAloudPlayerCoordinator(
             chapterPosition = playback.chapterPosition,
             chapterLength = playback.chapterLength.coerceAtLeast(1),
             playbackText = playback.text,
-            engineName = playback.engineName,
+            voiceLabel = playback.displayVoiceLabel,
+            voiceStatus = playback.voiceStatus,
+            voiceStatusReason = playback.voiceStatusReason,
             speakerName = playback.characterName.ifBlank { playback.roleType.storageValue },
             isPaused = session.status != ReadAloudSessionStatus.Playing,
             isPreparing = session.status == ReadAloudSessionStatus.Preparing,
@@ -120,6 +124,7 @@ class ReadAloudPlayerCoordinator(
             timerMode = settings.timerMode,
             timerChapters = settings.timerChapters,
             finishCurrentChapterAfterTimer = settings.finishCurrentChapterAfterTimer,
+            bgmVolume = settings.bgmVolume,
         )
     }
 
@@ -141,7 +146,9 @@ class ReadAloudPlayerCoordinator(
             chapterPosition = playback.chapterPosition,
             chapterLength = playback.chapterLength.coerceAtLeast(1),
             playbackText = playback.text,
-            engineName = playback.engineName,
+            voiceLabel = playback.displayVoiceLabel,
+            voiceStatus = playback.voiceStatus,
+            voiceStatusReason = playback.voiceStatusReason,
             speakerName = playback.characterName.ifBlank { playback.roleType.storageValue },
             isPaused = session.status != ReadAloudSessionStatus.Playing,
             isPreparing = session.status == ReadAloudSessionStatus.Preparing,
@@ -151,6 +158,7 @@ class ReadAloudPlayerCoordinator(
             timerChapters = readAloudSettingsGateway.currentSettings.timerChapters,
             finishCurrentChapterAfterTimer =
                 readAloudSettingsGateway.currentSettings.finishCurrentChapterAfterTimer,
+            bgmVolume = readAloudSettingsGateway.currentSettings.bgmVolume,
         )
     }
 
@@ -279,6 +287,18 @@ class ReadAloudPlayerCoordinator(
         ReadAloud.upTtsSpeechRate(application)
     }
 
+    /**
+     * 背景音乐音量：写 prefs + 立即对已加载的声音池生效。
+     *
+     * 与阅读页的 `ReadAloudDelegate.setBgmVolume` 语义一致——只改配乐轨音量，
+     * 绝不碰朗读分页，否则正在念的页会被拽走。
+     */
+    suspend fun setBgmVolume(value: Float) {
+        val volume = value.coerceIn(0f, 1f)
+        readAloudSettingsGateway.update { it.copy(bgmVolume = volume) }
+        BgmPoolStore.setVolume(volume)
+    }
+
     suspend fun setTimer(minutes: Int) {
         val timer = PlaybackTimer.normalize(minutes)
         readAloudSettingsGateway.update {
@@ -394,7 +414,17 @@ data class ReadAloudPlayerSourceState(
     val chapterPosition: Int,
     val chapterLength: Int,
     val playbackText: String,
-    val engineName: String,
+    /**
+     * 实际发声的音色标签（只含音色名）。
+     *
+     * 播放后端上报的才是实际值；后端还没上报时退回计划值。不能再拿计划值当显示值：
+     * 路由与引擎拒绝都发生在计划之后，那正是过去界面和耳朵长期对不上的原因。
+     */
+    val voiceLabel: String,
+    /** 计划音色与实际发声的差异状态；[SpeechVoiceStatus.Applied] 表示一致。 */
+    val voiceStatus: SpeechVoiceStatus,
+    /** 差异的人话说明，仅非 [SpeechVoiceStatus.Applied] 时有内容。 */
+    val voiceStatusReason: String,
     val speakerName: String,
     val isPaused: Boolean,
     val isPreparing: Boolean,
@@ -403,6 +433,8 @@ data class ReadAloudPlayerSourceState(
     val timerMode: String,
     val timerChapters: Int,
     val finishCurrentChapterAfterTimer: Boolean,
+    /** 背景音乐音量（0f..1f）；只影响配乐轨，与朗读本身的音量无关。 */
+    val bgmVolume: Float,
 )
 
 /** 语速调节范围，与经典朗读控制（ReadAloudScreen 的 valueRange = 0f..80f）保持一致。 */

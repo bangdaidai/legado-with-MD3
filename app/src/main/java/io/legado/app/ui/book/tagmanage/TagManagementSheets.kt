@@ -58,7 +58,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,6 +88,8 @@ import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.reorderAccessibility
 import io.legado.app.ui.widget.components.settingItem.SettingItem
 import io.legado.app.utils.move
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -400,6 +404,7 @@ private fun TagGroupItem(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val state = rememberTextFieldState(initialText = group.name)
+    val currentGroup by rememberUpdatedState(group)
 
     LaunchedEffect(expanded) {
         if (expanded) {
@@ -407,6 +412,19 @@ private fun TagGroupItem(
                 replace(0, length, group.name)
             }
         }
+    }
+
+    // 分组名实时保存：输入停顿后再写库，省掉确认按钮；空白或未变化时不落库。
+    LaunchedEffect(state) {
+        snapshotFlow { state.text.toString() }
+            .drop(1)
+            .debounce(400)
+            .collect { text ->
+                val name = text.trim()
+                if (name.isNotEmpty() && name != currentGroup.name) {
+                    onUpdateGroup(currentGroup, name)
+                }
+            }
     }
 
     SettingItem(
@@ -457,25 +475,8 @@ private fun TagGroupItem(
                     start = 12.dp,
                     end = 12.dp
                 ),
-                onKeyboardAction = {
-                    onUpdateGroup(group, state.text.toString())
-                    expanded = false
-                }
+                onKeyboardAction = { expanded = false }
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                MediumTonalButton(
-                    onClick = {
-                        onUpdateGroup(group, state.text.toString())
-                        expanded = false
-                    },
-                    icon = Icons.Default.Check,
-                    contentDescription = stringResource(id = R.string.ok),
-                )
-            }
         }
     )
 }

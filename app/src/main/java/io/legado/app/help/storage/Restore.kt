@@ -25,6 +25,7 @@ import io.legado.app.data.entities.AiProviderProfile
 import io.legado.app.data.entities.AiTaskPreset
 import io.legado.app.data.entities.AuthorProfile
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookCastMemory
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.BookCharacterEvent
@@ -36,6 +37,8 @@ import io.legado.app.data.entities.BookOutlineNode
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookVoiceBindingEntity
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.CastCharacter
+import io.legado.app.data.entities.ChapterRoleAssignment
 import io.legado.app.data.entities.CloudTtsEngineEntity
 import io.legado.app.data.entities.DictRule
 import io.legado.app.data.entities.ReadAloudVoiceEntity
@@ -61,6 +64,7 @@ import io.legado.app.data.entities.TagMapping
 import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.entities.ShareCardTemplate
+import io.legado.app.data.entities.VoiceEffectPreset
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordIdentity
@@ -73,6 +77,7 @@ import io.legado.app.domain.usecase.SyncHttpTtsCatalogUseCase
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.readaloud.cast.VoicePoolTransfer
 import io.legado.app.help.readaloud.speech.HttpTtsCatalogParser
 import io.legado.app.help.book.upType
 import io.legado.app.help.config.AppConfigStore
@@ -395,6 +400,47 @@ object Restore : KoinComponent {
         }
         fileToListT<BookVoiceBindingEntity>(path, "bookVoiceBindings.json")?.let {
             appDb.readAloudVoiceDao.insertBindings(it)
+        }
+        // 变声预设按名字被角色/分配行引用，先于角色恢复
+        fileToListT<VoiceEffectPreset>(path, "voiceEffectPresets.json")?.let {
+            appDb.voiceEffectDao.insertAll(it)
+        }
+        // 声音池：复用 VoicePoolTransfer 的合并语义（同名并入 + id 重映射 + 成员 IGNORE），
+        // 不裸写池表——REPLACE 同名池会删掉本地行，而成员表无外键不级联，会留下悬空成员。
+        File(path, "voicePools.json").takeIf { it.exists() }?.readText()?.let { text ->
+            runCatching { VoicePoolTransfer.importJson(text) }
+                .onFailure { AppLog.put("恢复声音池出错\n${it.localizedMessage}", it) }
+        }
+        // 角色配音：本地已有同 (书,名,池) 的角色时保本地并重映射 id，
+        // 章内分配的 characterId 必须跟着映射，否则指向不存在的角色、分配静默失效。
+        val characters = fileToListT<CastCharacter>(path, "castCharacters.json")
+        val characterIdMap = HashMap<String, String>()
+        characters?.forEach { character ->
+            val local = appDb.castCharacterDao
+                .getByNameAndPool(character.bookUrl, character.name, character.poolLabel)
+            if (local != null) {
+                characterIdMap[character.id] = local.id
+            } else {
+                appDb.castCharacterDao.insertIgnore(character)
+                characterIdMap[character.id] = character.id
+            }
+        }
+        fileToListT<ChapterRoleAssignment>(path, "chapterRoleAssignments.json")?.let { assigns ->
+            appDb.chapterRoleAssignmentDao.upsertAll(
+                if (characterIdMap.isEmpty()) {
+                    // 备份里没有角色表（旧备份）但有分配行：原样恢复，
+                    // characterId 可能悬空但无外键不报错，比丢掉整章分配好
+                    assigns
+                } else {
+                    assigns.mapNotNull { assignment ->
+                        characterIdMap[assignment.characterId]
+                            ?.let { assignment.copy(characterId = it) }
+                    }
+                },
+            )
+        }
+        fileToListT<BookCastMemory>(path, "bookCastMemory.json")?.let {
+            appDb.bookCastMemoryDao.insertAll(it)
         }
         fileToListT<AiChatConversation>(path, "aiChatConversations.json")?.let {
             appDb.aiChatDao.insertConversations(it)

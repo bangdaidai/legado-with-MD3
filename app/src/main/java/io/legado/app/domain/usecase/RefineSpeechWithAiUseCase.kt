@@ -30,6 +30,7 @@ import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.model.readaloud.SPEAKER_DIALOGUE_FEMALE_NAME
 import io.legado.app.domain.model.readaloud.SPEAKER_DIALOGUE_MALE_NAME
 import io.legado.app.domain.model.readaloud.dialogueFallbackName
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.segment.AiSpeechAtom
 import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.utils.GSON
@@ -509,8 +510,12 @@ class RefineSpeechWithAiUseCase(
          * 仍截断才放弃（该段保留规则结果），而不是把整章作废回落规则。
          */
         suspend fun processChunk(chunk: List<ChapterSpeechSegment>) {
+            // 池显示名单独解析一份：voiceAgeBand 现在是枚举，AI 提示词里要的是池名
+            val poolLabels = profiles.associate { it.id to VoicePoolStore.poolLabelOf(it) }
             val payload = mapOf(
-                "characters" to profiles.map { it.toPromptMap() },
+                "characters" to profiles.map {
+                    it.toPromptMap(poolLabels[it.id].orEmpty())
+                },
                 "segments" to chunk.map { segment ->
                     mapOf(
                         "segmentId" to segment.id,
@@ -694,8 +699,12 @@ class RefineSpeechWithAiUseCase(
         val result = mutableListOf<ChapterSpeechSegment>()
         suspend fun processAtomChunk(chunk: List<AiSpeechAtom>) {
             val paragraphsById = paragraphs.associateBy(CanonicalSpeechParagraph::index)
+            // 池显示名单独解析一份：voiceAgeBand 现在是枚举，AI 提示词里要的是池名
+            val poolLabels = knownProfiles.associate { it.id to VoicePoolStore.poolLabelOf(it) }
             val payload = mapOf(
-                "characters" to knownProfiles.map { it.toPromptMap() },
+                "characters" to knownProfiles.map {
+                    it.toPromptMap(poolLabels[it.id].orEmpty())
+                },
                 "atoms" to chunk.map { atom ->
                     val paragraphText = paragraphsById[atom.paragraphIndex]?.text.orEmpty()
                     mapOf(
@@ -1059,13 +1068,15 @@ class RefineSpeechWithAiUseCase(
     private fun JsonObject.optionalString(name: String): String? =
         get(name)?.takeUnless { it.isJsonNull }?.asString
 
-    private fun BookCharacterProfile.toPromptMap(): Map<String, Any?> = mapOf(
+    /** [poolLabel] 是关联声音池的显示名（如「女青年」）；voiceAgeBand 已回归枚举语义， */
+    /** 单独传池名保持 AI 提示词里可见的是可读池名而非 young_adult 这类键。 */
+    private fun BookCharacterProfile.toPromptMap(poolLabel: String = ""): Map<String, Any?> = mapOf(
         "characterId" to id,
         "name" to name,
         "aliasesJson" to aliasesJson,
         "role" to role,
         "voiceGender" to voiceGender,
-        "voiceAgeBand" to voiceAgeBand,
+        "voiceAgeBand" to poolLabel.ifEmpty { voiceAgeBand },
         "personality" to personality,
     )
 

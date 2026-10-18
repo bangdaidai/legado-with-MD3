@@ -51,7 +51,9 @@ import io.legado.app.domain.model.readaloud.ReadAloudPlaybackQueue
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechEngineRoute
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.readaloud.SpeechVoiceOutcome
 import io.legado.app.domain.model.readaloud.SpeechVoiceRouter
+import io.legado.app.domain.model.readaloud.SpeechVoiceStatus
 import io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig
 import io.legado.app.domain.model.settings.OtherSettings
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
@@ -66,6 +68,7 @@ import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.exoplayer.InputStreamDataSource
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
 import io.legado.app.help.readaloud.cast.CastAssignmentStore
 import io.legado.app.help.readaloud.effect.VoiceEffectAudio
 import io.legado.app.help.readaloud.effect.VoiceEffectStore
@@ -426,7 +429,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             preparePlayback()
         } else {
             super.play()
-            if (readAloudSettings.streamReadAloudAudio && !hasFileSynthesisCue()) {
+            if (readAloudSettings.streamReadAloudAudio && canStreamPlayback()) {
                 downloadAndPlayAudiosStream()
             } else {
                 downloadAndPlayAudios()
@@ -1443,7 +1446,14 @@ class HttpReadAloudService : BaseReadAloudService(),
         // 没走角色路由时 toneID 是空的，此时连名字一起留空：默认行的 displayName
         // 是引擎名（比如「1.百度」），把它当音色名传给源脚本没有意义
         val toneId = voice?.speakerId.orEmpty()
-        val speakerName = if (toneId.isBlank()) "" else voice?.displayName.orEmpty()
+        // 必须是裸音色名：displayName 对带多个音色的源是 `引擎名 · 音色名`（见
+        // HttpTtsVoiceCatalog.catalogEntries），书源脚本拿它去匹配音色只会一直匹配不上
+        val speakerName = if (toneId.isBlank()) {
+            ""
+        } else {
+            HttpTtsVoiceCatalog.fromVoice(voice)?.name?.takeIf { it.isNotBlank() }
+                ?: voice.voiceLabel
+        }
         while (true) {
             try {
                 val analyzeUrl = AnalyzeUrl(
@@ -1542,13 +1552,33 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     private fun Long?.orZero(): Long = this ?: 0L
 
-    private fun hasFileSynthesisCue(): Boolean = playbackQueue.cues.indices.any { index ->
-        voiceForCue(playbackQueue, index, ReadAloud.httpTTS ?: return@any false).engineType in
-            setOf(
-                ReadAloudVoice.ENGINE_SYSTEM,
-                ReadAloudVoice.ENGINE_CLOUD,
-            )
+    /**
+     * 这一章能不能走流式输出。
+ *
+ * 流式路径只有 HTTP 源能执行：只要有一条 cue 被路由到系统合成或云端合成，就必须走
+ * 文件合成（先把音频造出来再喂给播放器），否则那条 cue 会被降级成"HTTP 源 + 空音色"，
+ * 界面上写着一个音色名、耳朵里是引擎默认声。
+ *
+ * 没有 HTTP 源时直接判否并说明原因：原来的写法在探测里 `?: return@any false`，
+ * 会静默选上流式，然后第一行就抛 `NoStackTraceException("tts is null")`。
+ */
+private fun canStreamPlayback(): Boolean {
+        if (!readAloudSettings.streamReadAloudAudio) return false
+        val httpTts = ReadAloud.httpTTS ?: run {
+            AppLog.put("流式朗读需要一个已配置的 TTS 源，当前没有，已改用文件合成")
+            return false
+        }
+        return !hasFileSynthesisCue(httpTts)
     }
+
+    private fun hasFileSynthesisCue(httpTts: HttpTTS): Boolean =
+        playbackQueue.cues.indices.any { index ->
+            routeVoiceForCue(playbackQueue, index, httpTts).effectiveVoice?.engineType in
+                setOf(
+                    ReadAloudVoice.ENGINE_SYSTEM,
+                    ReadAloudVoice.ENGINE_CLOUD,
+                )
+        }
 
     /**
      * 根据引擎类型生成用于文件名和缓存的 sourceKey
@@ -1600,18 +1630,23 @@ class HttpReadAloudService : BaseReadAloudService(),
                 "${routedVoice.speakerId}:$cueEmotion:${itemHttpTts.url}"
     }
 
-    private fun voiceForCue(
+    /**
+     * 文件合成路径的角色路由：三种引擎都能执行。
+     *
+     * 探测（[hasFileSynthesisCue]）和播放（[downloadAndPlayAudios]）必须走同一个函数，
+     * 否则探测按一套口径判"要不要文件合成"、播放按另一套口径选音色，同一条 cue 两边结论不同。
+     */
+    private fun routeVoiceForCue(
         queue: ReadAloudPlaybackQueue,
         index: Int,
         default: HttpTTS,
-    ): ReadAloudVoice {
+    ): SpeechVoiceOutcome {
+        val fallback = runtimeHttpVoice(default)
         val cue = queue.cues.getOrNull(index)
-            ?: return ReadAloudVoice(
-                id = "runtime-http:${default.id}",
-                engineType = ReadAloudVoice.ENGINE_HTTP,
-                engineId = default.id.toString(),
-                speakerId = "",
-                displayName = default.name,
+            ?: return SpeechVoiceOutcome(
+                plannedVoice = null,
+                effectiveVoice = fallback,
+                status = SpeechVoiceStatus.Applied,
             )
         return SpeechVoiceRouter.route(
             cue = cue,
@@ -1625,36 +1660,54 @@ class HttpReadAloudService : BaseReadAloudService(),
                 engineId = ReadAloud.coordinatorDefaultEngineId,
                 speakerId = ReadAloud.coordinatorDefaultSpeakerId,
             ),
-        ).voice!!
+        )
     }
 
-    /** 流式路径用的角色路由结果：带音色 id，合成时要传给源脚本。 */
-    private fun httpVoiceForCue(index: Int, default: HttpTTS): ReadAloudVoice {
-        return httpVoiceForCue(playbackQueue, index, default)
-    }
-
-    private fun httpVoiceForCue(
+    /** 取本句真正用来合成的音色，并把结算结果上报给界面。 */
+    private fun voiceForCue(
         queue: ReadAloudPlaybackQueue,
         index: Int,
         default: HttpTTS,
     ): ReadAloudVoice {
-        val fallback = ReadAloudVoice(
-            id = "runtime-http:${default.id}",
-            engineType = ReadAloudVoice.ENGINE_HTTP,
-            engineId = default.id.toString(),
-            speakerId = "",
-            displayName = default.name,
-        )
-        val cue = queue.cues.getOrNull(index) ?: return fallback
-        return SpeechVoiceRouter.route(
-            cue = cue,
-            supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
-            defaultRoute = SpeechEngineRoute(
-                engineType = ReadAloudVoice.ENGINE_HTTP,
-                engineId = default.id.toString(),
-            ),
-        ).voice ?: fallback
+        val outcome = routeVoiceForCue(queue, index, default)
+        reportEffectiveVoice(index, outcome)
+        return outcome.effectiveVoice ?: runtimeHttpVoice(default)
     }
+
+    /**
+     * 流式路径的角色路由：只有 HTTP 源能执行。
+     *
+     * 与文件路径口径不同是有意的——流式边合成边播，塞不进系统/云端合成器。但降级必须
+     * 看得见：这里照常上报 `EngineMismatch`，界面会提示这个音色流式播不了，而不是
+     * 安安静静换个声音念。
+     */
+    private fun httpVoiceForCue(index: Int, default: HttpTTS): ReadAloudVoice {
+        val fallback = runtimeHttpVoice(default)
+        val outcome = playbackQueue.cues.getOrNull(index)?.let { cue ->
+            SpeechVoiceRouter.route(
+                cue = cue,
+                supportedEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
+                defaultRoute = SpeechEngineRoute(
+                    engineType = ReadAloudVoice.ENGINE_HTTP,
+                    engineId = default.id.toString(),
+                ),
+            )
+        } ?: SpeechVoiceOutcome(
+            plannedVoice = null,
+            effectiveVoice = fallback,
+            status = SpeechVoiceStatus.Applied,
+        )
+        reportEffectiveVoice(index, outcome)
+        return outcome.effectiveVoice ?: fallback
+    }
+
+    private fun runtimeHttpVoice(default: HttpTTS) = ReadAloudVoice(
+        id = "runtime-http:${default.id}",
+        engineType = ReadAloudVoice.ENGINE_HTTP,
+        engineId = default.id.toString(),
+        speakerId = "",
+        displayName = default.name,
+    )
 
     private fun createSilentSound(fileName: String) {
         val part = createSpeakPartFile(fileName)

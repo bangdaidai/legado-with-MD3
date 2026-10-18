@@ -1,8 +1,8 @@
 package io.legado.app.help.readaloud.cast
 
 import io.legado.app.constant.AppLog
-import io.legado.app.data.appDb
 import io.legado.app.data.entities.CastCharacter
+import io.legado.app.domain.gateway.CastSpeechGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
@@ -12,7 +12,6 @@ import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.feature.reader.core.cast.CastMarkers
 import io.legado.app.feature.reader.core.readaloud.isUnspeakableReadAloudUnit
 import io.legado.app.ui.config.readConfig.ReadConfig
-import org.koin.core.context.GlobalContext
 
 /**
  * 多角色朗读的分配覆盖层：已分配的引号段用那个角色的音色读，其余一律旁白。
@@ -24,6 +23,11 @@ import org.koin.core.context.GlobalContext
  * 开关口径：「多角色朗读」决定我们这套分配发不发生效；「多角色分配」决定正文里有没有标记与胶囊。
  * 标记的唯一来源是「多角色分配」注入正文的那份文本，本层只读它、绝不自己补标记——
  * 关掉分配就是没有分配信息可读，整章旁白（引擎侧若认这套标记则另说）。
+ *
+ * **两侧必须共用这一个覆盖层**：朗读服务与分镜页各自算一份计划时，分镜页显示的是覆盖
+ * 之前的结果，界面上写着一个人、耳朵里是另一个角色的声音。数据来源经 [CastSpeechGateway]
+ * 与 [ReadAloudVoiceGateway] 两条窄接口注入，因此覆盖层本身不再直连 DAO，也不需要知道
+ * 调用方是 UI 还是服务。
  */
 object CastSpeechOverlay {
 
@@ -48,13 +52,13 @@ object CastSpeechOverlay {
         chapterIndex: Int,
         paragraphs: List<CanonicalSpeechParagraph>,
         plan: List<SpeechPlanItem>,
+        castGateway: CastSpeechGateway,
+        voiceGateway: ReadAloudVoiceGateway,
     ): List<SpeechPlanItem> {
         if (plan.isEmpty()) return plan
         // 正则角色独立于多角色分配：它不认引号、不查分配表，命中文字换音色或不念改音效，
         // 「多角色朗读」关着时也生效（规则与生效口径见 RegexCastRuleStore.effectsFor）。
-        val effects = runCatching {
-            appDb.bookDao.getBook(bookUrl)?.let { RegexCastRuleStore.effectsFor(it) }
-        }.getOrNull().orEmpty()
+        val effects = runCatching { castGateway.regexEffects(bookUrl) }.getOrNull().orEmpty()
         val multiRole = ReadConfig.useMultiSpeaker
         // 提前返回的这几路整章按旁白读，计划会直接当播放队列用：不发声段仍要按同一口径丢掉
         if (!multiRole && effects.isEmpty()) return dropSilentUnits(plan).first
@@ -62,9 +66,8 @@ object CastSpeechOverlay {
         val effectsOfQuote = if (paragraphs.isEmpty() || !multiRole) {
             emptyMap()
         } else {
-            appDb.chapterRoleAssignmentDao.getForChapter(bookUrl, chapterIndex)
-                .filter { it.voiceEffect.isNotBlank() }
-                .associate { it.quoteOrdinal to it.voiceEffect }
+            runCatching { castGateway.quoteVoiceEffects(bookUrl, chapterIndex) }
+                .getOrDefault(emptyMap())
         }
         val spans = if (multiRole) spansOf(paragraphs, effectsOfQuote) else emptyList()
         if (spans.isEmpty() && effects.isEmpty()) {
@@ -76,11 +79,10 @@ object CastSpeechOverlay {
             )
             return kept
         }
-        val gateway = runCatching { GlobalContext.get().get<ReadAloudVoiceGateway>() }
-            .getOrNull() ?: return dropSilentUnits(plan).first
-        val characters = appDb.castCharacterDao.getByBook(bookUrl)
-        val voices = gateway.getEnabledVoices().associateBy { it.id }
-        val narrator = gateway.bindingVoice(
+        val characters = runCatching { castGateway.characters(bookUrl) }
+            .getOrDefault(emptyList())
+        val voices = voiceGateway.getEnabledVoices().associateBy { it.id }
+        val narrator = voiceGateway.bindingVoice(
             bookUrl,
             BookVoiceBinding.SUBJECT_NARRATOR,
             voices,
@@ -149,10 +151,18 @@ object CastSpeechOverlay {
 
                 else -> {
                     val resolved = picked.getOrPut(character.id) {
-                        CastVoicePicker.ensureVoice(character)
+                        castGateway.ensureCharacterVoice(character)
                     }
-                    val characterVoice = voices[resolved.voiceId]
-                        ?: gateway.bindingVoice(bookUrl, resolved.id, voices)
+                    // 绑定才是权威（[CastVoicePicker.bindUserVoice] 的契约），cast_characters.voiceId
+                    // 只是分配表那一侧的副本。配音页选音只写绑定、不写角色行的 voiceId，反过来
+                    // 优先读副本就会「配音页显示新音色、实际发旧音色」。绑定优先、副本兜底。
+                    // 主体 id 有两套并存（角色行 id 与人物档案 id），绑定可能只挂一侧，按全集兜底。
+                    val characterVoice = voiceGateway.bindingVoiceAny(
+                        bookUrl,
+                        (listOf(resolved.id) +
+                            castGateway.subjectIdsFor(bookUrl, resolved.name)).distinct(),
+                        voices,
+                    ) ?: voices[resolved.voiceId]
                     if (characterVoice == null) {
                         // 角色音丢掉、退回旁白是「换了分配却听不出来」的直接原因：
                         // 音色被停用/删除，或配音页绑的 id 已经不在音色表里
@@ -454,5 +464,21 @@ object CastSpeechOverlay {
             BookVoiceBinding.SUBJECT_CHARACTER
         }
         return getBinding(bookUrl, subjectType, subjectId)?.voiceId?.let(voices::get)
+    }
+
+    /**
+     * 多个候选主体 id 里第一个有绑定音色的。
+     *
+     * 顺序即优先级：调用方把角色行 id 放最前，档案 id 兜底（两套 id 并存时绑定可能只挂一侧）。
+     * 都读不到返回 null，调用方按旁白处理并打日志。
+     */
+    private suspend fun ReadAloudVoiceGateway.bindingVoiceAny(
+        bookUrl: String,
+        subjectIds: List<String>,
+        voices: Map<String, ReadAloudVoice>,
+    ): ReadAloudVoice? = subjectIds.firstNotNullOfOrNull { subjectId ->
+        getBinding(bookUrl, BookVoiceBinding.SUBJECT_CHARACTER, subjectId)
+            ?.voiceId
+            ?.let(voices::get)
     }
 }

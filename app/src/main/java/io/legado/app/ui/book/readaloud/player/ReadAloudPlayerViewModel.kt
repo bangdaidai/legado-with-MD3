@@ -107,6 +107,9 @@ class ReadAloudPlayerViewModel(
             is ReadAloudPlayerIntent.SetSpeed -> viewModelScope.launch {
                 coordinator.setSpeed(intent.value)
             }
+            is ReadAloudPlayerIntent.SetBgmVolume -> viewModelScope.launch {
+                coordinator.setBgmVolume(intent.value)
+            }
             is ReadAloudPlayerIntent.SetTimer -> viewModelScope.launch {
                 coordinator.setTimer(intent.minutes)
             }
@@ -128,6 +131,14 @@ class ReadAloudPlayerViewModel(
                 chapterPosition = intent.chapterPosition,
                 chapterLength = uiState.value.chapterLength,
             )
+
+            // 没有书就没法按书分配角色，跳了只会让用户点了没反应
+            ReadAloudPlayerIntent.OpenVoiceCasting -> {
+                val bookUrl = uiState.value.bookUrl
+                if (bookUrl.isNotBlank()) {
+                    effect(ReadAloudPlayerEffect.OpenBookVoiceCasting(bookUrl))
+                }
+            }
         }
     }
 
@@ -195,6 +206,9 @@ class ReadAloudPlayerViewModel(
                         }
                     }
                     readAloudSettingsGateway.update { it.copy(speechAnalysisMode = value) }
+                    // 分析模式进 resolverVersion，不重启就是「设置显示 AI、实际还是旧规则结果」，
+                    // 直到下一章才生效——分镜页却已经开始按 AI 版本标注了
+                    restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
                 ReadAloudConfigOption.SpeechAnalysisReasoningLevel -> {
@@ -204,6 +218,7 @@ class ReadAloudPlayerViewModel(
                     readAloudSettingsGateway.update {
                         it.copy(speechAnalysisReasoningLevel = level.storageValue)
                     }
+                    restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
 
@@ -214,11 +229,17 @@ class ReadAloudPlayerViewModel(
                     restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
-                ReadAloudConfigOption.MultiRoleCast ->
+                // 这两项改正文渲染（角色标记注入、♪ 配乐胶囊）也改朗读计划，
+                // 光写设置等于开关变了但什么都没发生
+                ReadAloudConfigOption.MultiRoleCast -> {
                     readAloudSettingsGateway.update { it.copy(multiRoleCast = selected) }
+                    applyReaderRenderedSwitch(readAloudSessionStore, application)
+                }
 
-                ReadAloudConfigOption.BgmAssign ->
+                ReadAloudConfigOption.BgmAssign -> {
                     readAloudSettingsGateway.update { it.copy(bgmAssign = selected) }
+                    applyReaderRenderedSwitch(readAloudSessionStore, application)
+                }
 
                 ReadAloudConfigOption.ContentSplit -> {
                     val (mode, symbols) = ReadAloudContentSplitSetting.decode(value)
@@ -228,6 +249,8 @@ class ReadAloudPlayerViewModel(
                             contentSplitSymbols = ReadAloudSplitSymbol.storageValues(symbols),
                         )
                     }
+                    // 划分方式进 resolverVersion：改了不重启，当前章还按旧粒度切
+                    restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
                 ReadAloudConfigOption.PreDownloadNum ->
@@ -325,7 +348,9 @@ class ReadAloudPlayerViewModel(
             nextText = source.textLines.getOrNull(activeIndex + 1)?.text.orEmpty(),
             chapterPosition = chapterPosition,
             chapterLength = source.chapterLength,
-            engineName = source.engineName,
+            voiceLabel = source.voiceLabel,
+            voiceStatus = source.voiceStatus,
+            voiceStatusReason = source.voiceStatusReason,
             speakerName = source.speakerName,
             isPaused = source.isPaused,
             isPreparing = source.isPreparing,
@@ -338,6 +363,7 @@ class ReadAloudPlayerViewModel(
             bgMode = bgMode,
             activeSheet = sheet,
             bodyTextSize = ReadBookConfig.textSize,
+            bgmVolume = source.bgmVolume,
         )
     }
 

@@ -229,14 +229,13 @@ private fun StoryboardTopBar(
         },
         actions = {
             if (inChapterDetail) {
-                // 只有正在读的那一章能重新分析：其它章拿不到排版结果
-                if (state.isCurrentChapter) {
-                    TopBarActionButton(
-                        imageVector = Icons.Default.Autorenew,
-                        contentDescription = stringResource(R.string.speech_storyboard_reanalyze),
-                        onClick = { onIntent(SpeechStoryboardIntent.Reanalyze) },
-                    )
-                }
+                // 非当前章也能重新分析：非当前章走的是「有缓存就只重算音色」这条路，
+                // 改完划分方式或分析模式后不重跑就永远停在旧分段上。
+                TopBarActionButton(
+                    imageVector = Icons.Default.Autorenew,
+                    contentDescription = stringResource(R.string.speech_storyboard_reanalyze),
+                    onClick = { onIntent(SpeechStoryboardIntent.Reanalyze) },
+                )
                 TopBarActionButton(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = stringResource(R.string.refresh),
@@ -396,11 +395,12 @@ private fun chapterRowLabel(chapter: StoryboardChapterUi): String {
             chapter.characterCount,
         )
     }
-    return if (chapter.isCurrent) {
-        "$counts · ${stringResource(R.string.speech_storyboard_current_chapter)}"
-    } else {
-        counts
+    val markers = buildList {
+        if (chapter.isCurrent) add(stringResource(R.string.speech_storyboard_current_chapter))
+        // 停在旧划分方式/旧分析模式上的那一章：朗读时根本不会用它，不标出来用户会当成正在播的
+        if (!chapter.usesCurrentConfig) add(stringResource(R.string.speech_storyboard_stale_config))
     }
+    return if (markers.isEmpty()) counts else "$counts · ${markers.joinToString(" · ")}"
 }
 
 @Composable
@@ -448,6 +448,8 @@ private fun StoryboardList(
                         showHeader = showHeader,
                         expanded = expanded,
                         previewingItemId = state.previewingItemId,
+                        playingChapterPosition = state.playingChapterPosition,
+                        playingVoiceLabel = state.playingVoiceLabel,
                         expandedItems = expandedItems,
                         onToggleScene = {
                             collapsedScenes = if (expanded) {
@@ -477,6 +479,8 @@ private fun SceneCard(
     showHeader: Boolean,
     expanded: Boolean,
     previewingItemId: String?,
+    playingChapterPosition: Int,
+    playingVoiceLabel: String,
     expandedItems: Set<String>,
     onToggleScene: () -> Unit,
     onToggleDetails: (String) -> Unit,
@@ -495,11 +499,15 @@ private fun SceneCard(
         }
         if (expanded) {
             scene.items.forEachIndexed { index, item ->
+                val isPlaying = playingChapterPosition in item.playRange()
                 SegmentRow(
                     item = item,
                     isFirst = index == 0,
                     isLast = index == scene.items.lastIndex,
                     previewing = previewingItemId == item.id,
+                    playing = isPlaying,
+                    // 结算后的实际发声音色只在当前正在念的那一行生效；其余行保持计划音色
+                    playingVoiceLabel = if (isPlaying) playingVoiceLabel else "",
                     detailsExpanded = item.id in expandedItems,
                     onToggleDetails = { onToggleDetails(item.id) },
                     onPreview = { onPreview(item.id) },
@@ -568,6 +576,8 @@ private fun SegmentRow(
     isFirst: Boolean,
     isLast: Boolean,
     previewing: Boolean,
+    playing: Boolean,
+    playingVoiceLabel: String,
     detailsExpanded: Boolean,
     onToggleDetails: () -> Unit,
     onPreview: () -> Unit,
@@ -632,9 +642,10 @@ private fun SegmentRow(
                 .padding(top = 14.dp, bottom = 14.dp, end = 6.dp),
         ) {
             AppText(
-                text = statusLabel(item),
+                text = statusLabel(item, playingVoiceLabel),
                 style = LegadoTheme.typography.labelMedium,
-                color = if (item.voiceName.isEmpty()) {
+                // 有结算音色（=当前正在念）时不再标红"未分配"：计划音色可能为空但实际在发声
+                color = if (item.voiceName.isEmpty() && playingVoiceLabel.isEmpty()) {
                     LegadoTheme.colorScheme.error
                 } else {
                     LegadoTheme.colorScheme.onSurfaceVariant
@@ -649,6 +660,12 @@ private fun SegmentRow(
                 style = LegadoTheme.typography.bodyMedium,
                 // 本页是核对用的密集列表，正文按用户口径收到 13sp，与小字各档同径
                 fontSize = 13.sp,
+                // 正在念的这一条压深色：分镜是核对清单，"读到哪了"必须一眼能定位到
+                color = if (playing) {
+                    LegadoTheme.colorScheme.onSurface
+                } else {
+                    LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                },
                 modifier = Modifier.padding(top = 8.dp),
             )
             if (detailsExpanded) {
@@ -924,11 +941,18 @@ private fun roleWord(role: StoryboardRole): String = when (role) {
  * 正文上方细灰行：角色名 · 情绪 · 音色。
  * 音色的 displayName 在 http 书源是「引擎名 · 音色名」拼出来的
  * （HttpTtsVoiceCatalog），行内只留最后一段音色名，引擎名不进列表。
+ *
+ * [playingVoiceLabel] 非空时优先显示它：那是当前正在念的那一句的**运行时结算**音色
+ * （音色路由 / 引擎拒绝发生在发声瞬间），与朗读服务实际送进引擎的一致。其余行没有
+ * 结算值（只有正在播的那句才知道），保持显示覆盖后的计划音色。
  */
 @Composable
-private fun statusLabel(item: StoryboardItemUi): String {
-    val voice = item.voiceName.substringAfterLast(" · ")
-        .ifEmpty { stringResource(R.string.voice_not_assigned) }
+private fun statusLabel(item: StoryboardItemUi, playingVoiceLabel: String = ""): String {
+    // voiceName 已在 ViewModel 里取 voiceLabel（只含音色名），这里不要再拆一次分隔符：
+    // 引擎名本来就不进这一行，拆第二次会把音色名里本来就有的分隔符也切掉
+    val voice = playingVoiceLabel.ifEmpty {
+        item.voiceName.ifEmpty { stringResource(R.string.voice_not_assigned) }
+    }
     val emotion = item.emotion.takeIf { it.isNotEmpty() && it != "neutral" }
     return listOfNotNull(
         item.speakerName.takeIf { it.isNotEmpty() },

@@ -10,6 +10,7 @@ import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.CancellationException
@@ -119,6 +120,10 @@ class PrepareChapterSpeechPlanUseCase(
                 autoAssignVoiceBindings(
                     bookUrl = bookUrl,
                     performances = resolved.speakingPerformances(),
+                    // 音色的结构化年龄段从声音池派生（音色本身没有年龄字段），
+                    // 传进去让自动分配优先精确匹配，而不是拿关键词撞风格标签
+                    voiceAgeBands = VoicePoolStore.voiceClassificationMap()
+                        .mapValues { (_, classification) -> classification.second },
                 )
             }.onFailure {
                 AppLog.put("自动分配音色失败\n${it.localizedMessage}", it)

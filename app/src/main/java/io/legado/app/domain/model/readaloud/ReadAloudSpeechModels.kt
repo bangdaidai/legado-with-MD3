@@ -41,12 +41,31 @@ data class ReadAloudVoice(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {
+    /**
+     * 只含音色名的短标签。
+     *
+     * [displayName] 对"一条引擎带多个音色"的来源是 `引擎名 · 音色名` 拼出来的
+     * （见 `HttpTtsVoiceCatalog.catalogEntries`），不能直接当音色名用：传给书源脚本的
+     * `currentSpeakerName` 是裸音色名，界面上紧凑位置（分镜行）也只放得下音色名。
+     * 单一音色来源的 displayName 本来就没有引擎前缀，这里原样返回。
+     */
+    val voiceLabel: String get() = displayName.substringAfterLast(DISPLAY_NAME_SEPARATOR)
+
+    /** displayName 里的引擎名部分；单一音色来源返回空串。 */
+    val engineLabel: String get() = displayName.substringBeforeLast(
+        DISPLAY_NAME_SEPARATOR,
+        missingDelimiterValue = "",
+    ).takeIf { it != displayName }.orEmpty()
+
     companion object {
         const val ENGINE_SYSTEM = "system"
         const val ENGINE_HTTP = "http"
         const val ENGINE_CLOUD = "cloud_tts"
         const val MANAGED_BY_USER = "user"
         const val MANAGED_BY_CONFIGURED_TTS = "configured_tts"
+
+        /** [displayName] 里引擎名与音色名的分隔符，形态与列表里显示的一致。 */
+        const val DISPLAY_NAME_SEPARATOR = " · "
 
         /**
          * 自动同步来的音色被用户改过名字：条目仍由引擎目录维护，但 [displayName] 归用户。
@@ -167,6 +186,19 @@ data class ChapterSpeechSummary(
     val segmentCount: Int,
     val characterCount: Int,
     val updatedAt: Long,
+    /**
+     * 这份分段是否由当前朗读设置（划分方式 + 分析模式 + 人物档案）算出来的。
+     *
+     * false 表示它是历史划分：朗读时不会用这份结果，界面上显示的角色与音色不能当准。
+     */
+    val isCurrent: Boolean = true,
+)
+
+/** 某一章存下来的分镜片段，连同"是不是当前设置那一份"。 */
+data class ChapterSpeechSegments(
+    val segments: List<ChapterSpeechSegment>,
+    /** 见 [ChapterSpeechSummary.isCurrent]。 */
+    val isCurrent: Boolean,
 )
 
 data class CanonicalSpeechParagraph(
@@ -212,7 +244,11 @@ data class CharacterPerformanceProfile(
     val characterId: String,
     val role: String = "",
     val voiceGender: String = "unknown",
+    /** 结构化年龄段枚举（child/teen/young_adult/adult/elderly/unknown）。 */
     val voiceAgeBand: String = "unknown",
+    /** 关联的声音池显示名（如「女青年」）；空串 = 未指定池。与 [voiceAgeBand] 分开： */
+    /** 后者是枚举供匹配，前者是池名供 TTS 表演指令等展示场景使用。 */
+    val voicePoolLabel: String = "",
     val personality: String = "",
     val updatedAt: Long = 0L,
 )
@@ -274,4 +310,53 @@ enum class SpeechAnalysisStatus(val storageValue: String) {
         fun fromStorage(value: String): SpeechAnalysisStatus =
             entries.firstOrNull { it.storageValue == value } ?: Failed
     }
+}
+
+/**
+ * 一条朗读单元**实际发声**时的音色状态。
+ *
+ * 存在的理由：计划音色（`SpeechPlanItem.voice`）和真正送进引擎的音色不是同一个值。
+ * 路由器会按引擎能力换掉它，引擎又可能拒绝执行它，两者过去都不回流到界面，
+ * 于是听书页上写着一个音色名、耳朵里是另一个声音。播放后端把实际结果按本枚举
+ * 上报（`BaseReadAloudService.reportEffectiveVoice`），界面据此显示，不再显示计划值。
+ */
+enum class SpeechVoiceStatus {
+    /** 计划音色原样执行。 */
+    Applied,
+
+    /** 计划音色当前引擎执行不了，退到了候选链里的另一条音色。 */
+    FellBack,
+
+    /** 候选链全被过滤掉，只能用引擎出厂默认音发声。 */
+    EngineDefault,
+
+    /** 计划音色属于别的引擎类型（例如绑了云端音色却走系统直读）。 */
+    EngineMismatch,
+
+    /** 计划音色没记录具体音色（speakerId 为空），引擎会用它自己的默认声。 */
+    NoSpeaker,
+
+    /** 计划音色的名字在引擎目录里查不到（引擎升级改名、getVoices 整表为空等）。 */
+    NotFound,
+
+    /** 引擎拒绝了这次切换，已退回默认音。 */
+    ApplyFailed,
+    ;
+
+    /** 是否真的按计划发出了声。界面只对 [Applied] 之外的取值给出提示。 */
+    val isApplied: Boolean get() = this == Applied
+}
+
+/** 一次发声的音色结算结果：计划是什么、实际是什么、为什么不一样。 */
+data class SpeechVoiceOutcome(
+    val plannedVoice: ReadAloudVoice?,
+    val effectiveVoice: ReadAloudVoice?,
+    val status: SpeechVoiceStatus,
+    val reason: String = "",
+) {
+    /** 界面展示用：实际生效音色的短标签，空表示引擎默认声。 */
+    val effectiveLabel: String get() = effectiveVoice?.voiceLabel.orEmpty()
+
+    /** 界面展示用：计划音色的短标签。 */
+    val plannedLabel: String get() = plannedVoice?.voiceLabel.orEmpty()
 }

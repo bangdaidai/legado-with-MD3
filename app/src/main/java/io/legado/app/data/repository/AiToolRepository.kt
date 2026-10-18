@@ -25,6 +25,7 @@ import io.legado.app.domain.model.AiToolResult
 import io.legado.app.domain.model.AiWebSearchQuery
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.Dispatchers
@@ -420,7 +421,7 @@ class AiToolRepository(
             bookUrl = book.bookUrl,
             query = query,
             limit = limit,
-        ).map { it.toToolMap() }
+        ).map { it.toToolMap(VoicePoolStore.poolLabelOf(it)) }
         return GSON.toJson(
             mapOf(
                 "book" to book.toIdentityMap(),
@@ -454,7 +455,7 @@ class AiToolRepository(
         return GSON.toJson(
             mapOf(
                 "book" to book.toIdentityMap(),
-                "character" to profile.toToolMap(),
+                "character" to profile.toToolMap(VoicePoolStore.poolLabelOf(profile)),
                 "maxChapterIndex" to maxChapterIndex,
                 "events" to events,
                 "relations" to relations,
@@ -548,6 +549,12 @@ class AiToolRepository(
         if (name.isBlank()) return """{"error":"name is required"}"""
         val now = System.currentTimeMillis()
         val existing = bookKnowledgeGateway.getCharacterProfile(book.bookUrl, name)
+        // AI 给的 voiceAgeBand 是池显示名（如「女青年」）；规范化为 poolId + 枚举 ageBand，
+        // 留空或查无此池时回落到已有档案，避免新条目把老配置冲成 unknown。
+        val poolLabel = args.string("voiceAgeBand")?.trim().orEmpty().ifEmpty {
+            existing?.let { VoicePoolStore.poolLabelOf(it) }.orEmpty()
+        }
+        val pool = VoicePoolStore.poolByName(poolLabel)
         val profile = BookCharacterProfile(
             id = args.string("id")?.trim()?.takeIf { it.isNotBlank() }
                 ?: existing?.id
@@ -560,8 +567,10 @@ class AiToolRepository(
             role = args.string("role") ?: existing?.role.orEmpty(),
             voiceGender = args.string("voiceGender") ?: existing?.voiceGender
             ?: BookCharacterProfile.VOICE_GENDER_UNKNOWN,
-            voiceAgeBand = args.string("voiceAgeBand") ?: existing?.voiceAgeBand
-            ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
+            voicePoolId = pool?.id ?: existing?.voicePoolId.orEmpty(),
+            voiceAgeBand = pool?.ageBand
+                ?: existing?.voiceAgeBand?.takeIf { it.isNotBlank() }
+                ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
             personality = args.string("personality") ?: existing?.personality.orEmpty(),
             summary = args.string("summary") ?: existing?.summary.orEmpty(),
             status = args.int("status", existing?.status ?: BookCharacterProfile.STATUS_ACTIVE),
@@ -575,7 +584,7 @@ class AiToolRepository(
             mapOf(
                 "saved" to true,
                 "book" to book.toIdentityMap(),
-                "character" to profile.toToolMap()
+                "character" to profile.toToolMap(VoicePoolStore.poolLabelOf(profile))
             )
         )
     }
@@ -820,7 +829,8 @@ class AiToolRepository(
         return null
     }
 
-    private fun BookCharacterProfile.toToolMap(): Map<String, Any?> {
+    /** [poolLabel] 是关联声音池显示名；AI 工具面看到的 voiceAgeBand 保持池名而非枚举。 */
+    private fun BookCharacterProfile.toToolMap(poolLabel: String = ""): Map<String, Any?> {
         return mapOf(
             "id" to id,
             "bookUrl" to bookUrl,
@@ -830,7 +840,7 @@ class AiToolRepository(
             "tagsJson" to tagsJson,
             "role" to role,
             "voiceGender" to voiceGender,
-            "voiceAgeBand" to voiceAgeBand,
+            "voiceAgeBand" to poolLabel.ifEmpty { voiceAgeBand },
             "personality" to personality,
             "summary" to summary,
             "status" to status,

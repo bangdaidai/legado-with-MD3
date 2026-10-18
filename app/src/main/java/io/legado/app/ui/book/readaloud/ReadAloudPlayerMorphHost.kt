@@ -84,6 +84,8 @@ fun ReadAloudPlayerMorphHost(
                 is ReadAloudPlayerEffect.OpenTtsCache,
                 is ReadAloudPlayerEffect.OpenBookVoiceCasting,
                 is ReadAloudPlayerEffect.OpenSpeechStoryboard,
+                is ReadAloudPlayerEffect.OpenVoicePool,
+                is ReadAloudPlayerEffect.OpenBgmPool,
                 -> {
                     configVisible = false
                     morph.animateTo(0f)

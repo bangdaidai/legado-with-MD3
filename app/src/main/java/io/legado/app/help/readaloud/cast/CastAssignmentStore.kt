@@ -100,7 +100,7 @@ object CastAssignmentStore {
                         id = profile.id,
                         bookUrl = bookUrl,
                         name = profile.name,
-                        poolLabel = VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand),
+                        poolLabel = VoicePoolStore.poolLabelOf(profile),
                         voiceId = voiceId,
                         createdAt = profile.createdAt,
                         updatedAt = profile.updatedAt,
@@ -111,9 +111,9 @@ object CastAssignmentStore {
             // 官方那侧改了名字或声音池（人物详情、AI 识别人物、事记、关系图都写档案），
             // 这一侧要跟着改，否则正文胶囊、分配行和朗读用的还是旧名字。
             // 档案与配音角色同 id（新建角色时 [CastProfileMirror] 就用角色 id 建档案），
-            // 所以按 id 抄档案的 name / voiceAgeBand 就是双向同步的另一半。
+            // 所以按 id 抄档案的 name / 声音池就是双向同步的另一半。
             val character = appDb.castCharacterDao.getById(profile.id)
-            val pool = VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand)
+            val pool = VoicePoolStore.poolLabelOf(profile)
             val trimmed = profile.name.trim()
             if (character != null && trimmed.isNotEmpty() && CastMarkers.isValidName(trimmed) &&
                 (character.name != trimmed || character.poolLabel != pool) &&

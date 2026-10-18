@@ -153,7 +153,7 @@ class BookVoiceCastingViewModel(
                 role = profile.role,
                 avatarUri = profile.avatarUri,
                 poolLabel = row?.poolLabel
-                    ?: VoicePoolStore.poolNameOrEmpty(profile.voiceAgeBand),
+                    ?: VoicePoolStore.poolLabelOf(profile),
                 voiceEffect = row?.voiceEffect.orEmpty(),
                 chapterCount = row?.chapterCount ?: 0,
                 lineCount = row?.lineCount ?: 0,
@@ -175,7 +175,9 @@ class BookVoiceCastingViewModel(
                 hasBinding = binding != null,
                 voiceId = binding?.voiceId.orEmpty(),
                 voiceName = voice?.displayName.orEmpty(),
-                voiceAvailable = voice?.let { it.available && it.enabled } == true,
+                // excluded 的音色不进选音候选（见 ReadAloudVoiceDao.getEnabledVoices），
+                // 这里漏判会让"已绑定"看着是好的，实际早就不发声了
+                voiceAvailable = voice?.let { it.available && it.enabled && !it.excluded } == true,
             )
         }
         val voiceOptions = voices.map { voice ->
@@ -185,7 +187,7 @@ class BookVoiceCastingViewModel(
                 name = voice.displayName,
                 engineType = voice.engineType,
                 engineName = engineNames[voice.id] ?: voice.engineId,
-                selectable = voice.available && voice.enabled,
+                selectable = voice.available && voice.enabled && !voice.excluded,
                 gender = traits.gender,
                 // 一行装不下太多标签, 只取前 3 条
                 descriptors = traits.descriptors.take(3).toImmutableList(),
