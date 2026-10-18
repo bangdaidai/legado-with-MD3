@@ -1448,7 +1448,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         val toneId = voice?.speakerId.orEmpty()
         // 必须是裸音色名：displayName 对带多个音色的源是 `引擎名 · 音色名`（见
         // HttpTtsVoiceCatalog.catalogEntries），书源脚本拿它去匹配音色只会一直匹配不上
-        val speakerName = if (toneId.isBlank()) {
+        val speakerName = if (toneId.isBlank() || voice == null) {
             ""
         } else {
             HttpTtsVoiceCatalog.fromVoice(voice)?.name?.takeIf { it.isNotBlank() }

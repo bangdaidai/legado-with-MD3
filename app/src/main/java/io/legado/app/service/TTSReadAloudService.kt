@@ -421,8 +421,8 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
     }
 
     /**
-     * 绑到的音色记录本身没有 speakerId 时，[applyVoice] 会在 `ifBlank { defaultVoiceName }`
-     * 处直接早退，连「音色不可用」都不会报——表现和音色名匹配失败完全一样，
+     * 绑到的音色记录本身没有 speakerId 时，[applyVoice] 直接退回引擎默认并按 NoSpeaker 上报，
+     * 不会走「音色不可用」那条路——表现和音色名匹配失败完全一样，
      * 必须单独说清楚，否则这两种成因分不开。
      */
     private fun reportBoundVoiceHasNoSpeaker(voice: ReadAloudVoice) {
@@ -605,9 +605,12 @@ class TTSReadAloudService : BaseReadAloudService(), KoinComponent {
         if (requestedName == reportedVoiceName) return
         reportedVoiceName = requestedName
         val available = voiceCatalog().map { it.name }
+        // 引擎报不出默认音色时（defaultVoice 为 null）名字是空串，显示「未知」
+        val factoryDefaultName = runCatching { textToSpeech?.defaultVoice?.name }
+            .getOrNull().orEmpty()
         AppLog.put(
             "系统 TTS 音色不可用：「$requestedName」，改用默认音色\n" +
-                "引擎：${engineLabel()}｜出厂默认音色：${defaultVoiceName.ifBlank { "未知" }}\n" +
+                "引擎：${engineLabel()}｜出厂默认音色：${factoryDefaultName.ifBlank { "未知" }}\n" +
                 "该引擎报告了 ${available.size} 个音色：" +
                 available.take(30).joinToString().ifBlank { "（空）" },
             toast = true,

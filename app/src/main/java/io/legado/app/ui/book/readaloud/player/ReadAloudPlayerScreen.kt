@@ -412,7 +412,7 @@ fun ReadAloudPlayerScreenContent(
                         contentPadding = pageContentPadding,
                     )
 
-                    1 -> CoverPage(state, pageContentPadding, flowingTextModifier)
+                    1 -> CoverPage(state, pageContentPadding, flowingTextModifier, onIntent)
                     else -> ChapterTextPage(
                         state = state,
                         contentPadding = pageContentPadding,
@@ -464,6 +464,7 @@ private fun CoverPage(
     state: ReadAloudPlayerUiState,
     contentPadding: PaddingValues,
     flowingTextModifier: Modifier,
+    onIntent: (ReadAloudPlayerIntent) -> Unit,
 ) {
     Column(
         modifier = Modifier

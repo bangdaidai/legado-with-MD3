@@ -254,7 +254,6 @@ data class ReadBookUiState(
     val readAloudFollow: Boolean = true,
     /** 朗读位置脱离当前页时的悬浮提示开关；关闭时手动翻页朗读跟随新页面。 */
     val readAloudDetachReminderEnabled: Boolean = false,
-    val readAloudEngineName: String = "",
     val readAloudCharacterName: String = "",
     val readAloudRoleType: SpeechRoleType = SpeechRoleType.Narrator,
     val readAloudChapterPosition: Int = 0,

@@ -56,6 +56,9 @@ class BookVoiceCastingViewModel(
 
     /** 音色 → 引擎显示名，进页面/刷新时取一次，给旁白的音色候选当副标题。 */
     private var engineNames: Map<String, String> = emptyMap()
+
+    /** 档案 id → 声音池显示名；进页面/刷新时在 IO 上解析一次，publish 不再逐条查库。 */
+    private var poolLabels: Map<String, String> = emptyMap()
     private var loadJob: Job? = null
     private var previewJob: Job? = null
 
@@ -98,11 +101,14 @@ class BookVoiceCastingViewModel(
                     // 否则老角色会在这页显示成「还没有人物档案」。
                     val rows = BookCastStore.rowsForBook(bookUrl).associateBy { it.id }
                     engineNames = VoicePoolStore.voiceEngineNames()
-                    bookKnowledgeGateway.getCharacterProfiles(bookUrl, 200, includeDrafts = true)
+                    val profilesNow = bookKnowledgeGateway
+                        .getCharacterProfiles(bookUrl, 200, includeDrafts = true)
                         .filter {
                             it.status == BookCharacterProfile.STATUS_ACTIVE ||
                                 it.status == BookCharacterProfile.STATUS_DRAFT
-                        } to rows
+                        }
+                    poolLabels = profilesNow.associate { it.id to VoicePoolStore.poolLabelOf(it) }
+                    profilesNow to rows
                 }
                 profiles = liveProfiles
                 castRows = castRowsById
@@ -153,7 +159,7 @@ class BookVoiceCastingViewModel(
                 role = profile.role,
                 avatarUri = profile.avatarUri,
                 poolLabel = row?.poolLabel
-                    ?: VoicePoolStore.poolLabelOf(profile),
+                    ?: poolLabels[profile.id].orEmpty(),
                 voiceEffect = row?.voiceEffect.orEmpty(),
                 chapterCount = row?.chapterCount ?: 0,
                 lineCount = row?.lineCount ?: 0,

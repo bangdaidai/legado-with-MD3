@@ -140,6 +140,7 @@ import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.BookshelfTagGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
+import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.gateway.CastSpeechGateway
 import io.legado.app.domain.gateway.CheckSourceSettingsGateway
 import io.legado.app.domain.gateway.CloudTtsEngineGateway

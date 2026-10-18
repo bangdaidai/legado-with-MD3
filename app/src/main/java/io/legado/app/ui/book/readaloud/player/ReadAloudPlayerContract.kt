@@ -39,9 +39,6 @@ data class ReadAloudPlayerUiState(
     val voiceStatus: SpeechVoiceStatus = SpeechVoiceStatus.Applied,
     val voiceStatusReason: String = "",
 
-    /** 实际音色与计划音色不一致；界面据此把音色卡标红并展开原因。 */
-    val hasVoiceMismatch: Boolean get() = !voiceStatus.isApplied,
-
     val speakerName: String = "",
     val isPaused: Boolean = false,
     val isPreparing: Boolean = false,
@@ -66,7 +63,10 @@ data class ReadAloudPlayerUiState(
     val bodyTextSize: Int = 20,
     /** 背景音乐音量（0f..1f）；只影响配乐轨，不改朗读本身的音量。 */
     val bgmVolume: Float = 1f,
-)
+) {
+    /** 实际音色与计划音色不一致；界面据此把音色卡标红并展开原因。 */
+    val hasVoiceMismatch: Boolean get() = !voiceStatus.isApplied
+}
 
 sealed interface ReadAloudPlayerSheet {
     data object Speed : ReadAloudPlayerSheet

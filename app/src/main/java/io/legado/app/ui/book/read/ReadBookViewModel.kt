@@ -1953,7 +1953,6 @@ class ReadBookViewModel(
                         isReadAloudPaused = ownsReader && status == ReadAloudSessionStatus.Paused,
                         isReadAloudPreparing = status == ReadAloudSessionStatus.Preparing,
                         readAloudFollow = !ownsReader || session.followReadAloudPosition,
-                        readAloudEngineName = info.engineName,
                         readAloudCharacterName = info.characterName,
                         readAloudRoleType = info.roleType,
                         readAloudChapterPosition = info.chapterPosition,

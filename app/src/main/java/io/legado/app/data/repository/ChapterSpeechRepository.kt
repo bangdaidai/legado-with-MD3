@@ -6,6 +6,7 @@ import io.legado.app.data.entities.ChapterSpeechSegmentEntity
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ChapterSpeechSegments
 import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
@@ -61,7 +62,7 @@ class ChapterSpeechRepository(
      * 于是"先用 AI 模式读过、后切回规则模式"的章节会一直返回旧划分。界面按那份分段显示的
      * 角色与音色，跟实际播出的完全是两套。
      */
-override suspend fun getChapterSegmentsFor(
+    override suspend fun getChapterSegmentsFor(
         bookUrl: String,
         chapterIndex: Int,
         resolverVersion: String,

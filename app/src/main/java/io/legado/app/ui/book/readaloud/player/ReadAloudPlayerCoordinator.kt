@@ -124,7 +124,7 @@ class ReadAloudPlayerCoordinator(
             timerMode = settings.timerMode,
             timerChapters = settings.timerChapters,
             finishCurrentChapterAfterTimer = settings.finishCurrentChapterAfterTimer,
-            bgmVolume = settings.bgmVolume,
+            bgmVolume = BgmPoolStore.volume(),
         )
     }
 
@@ -158,7 +158,7 @@ class ReadAloudPlayerCoordinator(
             timerChapters = readAloudSettingsGateway.currentSettings.timerChapters,
             finishCurrentChapterAfterTimer =
                 readAloudSettingsGateway.currentSettings.finishCurrentChapterAfterTimer,
-            bgmVolume = readAloudSettingsGateway.currentSettings.bgmVolume,
+            bgmVolume = BgmPoolStore.volume(),
         )
     }
 
@@ -295,7 +295,6 @@ class ReadAloudPlayerCoordinator(
      */
     suspend fun setBgmVolume(value: Float) {
         val volume = value.coerceIn(0f, 1f)
-        readAloudSettingsGateway.update { it.copy(bgmVolume = volume) }
         BgmPoolStore.setVolume(volume)
     }
 

@@ -2,6 +2,7 @@ package io.legado.app.domain.gateway
 
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ChapterSpeechSegments
 import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 
 interface ChapterSpeechGateway {
