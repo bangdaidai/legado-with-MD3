@@ -567,7 +567,7 @@ val appModule = module {
     singleOf(::ReadingMemoryRepository)
     singleOf(::AuthorProfileRepository)
     singleOf(::ShareCardRepository)
-    single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get()) }
+    single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get(), get()) }
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }
     single<ChapterSpeechGateway> { ChapterSpeechRepository(get()) }

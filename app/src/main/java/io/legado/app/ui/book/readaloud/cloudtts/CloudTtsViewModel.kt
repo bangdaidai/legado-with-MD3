@@ -12,6 +12,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.UploadRepository
+import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
@@ -21,6 +22,7 @@ import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.CloudTtsSynthesisRequest
 import io.legado.app.domain.model.readaloud.CloudTtsVoiceCatalogType
 import io.legado.app.domain.model.readaloud.CloudTtsVoiceConfig
+import io.legado.app.domain.model.readaloud.HttpTtsVoice
 import io.legado.app.domain.model.readaloud.HttpTtsCatalogDraft
 import io.legado.app.domain.model.readaloud.ReadAloudEngineSelection
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
@@ -29,16 +31,22 @@ import io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig
 import io.legado.app.domain.model.readaloud.TtsEngineDescriptor
 import io.legado.app.help.readaloud.speech.HttpTtsCatalogParser
 import io.legado.app.domain.model.readaloud.profile
+import io.legado.app.domain.usecase.SyncReadAloudVoicesUseCase
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
+import io.legado.app.help.readaloud.VoiceTraits
 import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.playback.HttpTtsAudioSynthesizer
 import io.legado.app.help.readaloud.playback.CloudTtsAudioSynthesizer
+import io.legado.app.help.readaloud.playback.HttpTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsVoiceCatalog
+import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -76,6 +84,9 @@ class CloudTtsViewModel(
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val uploadRepository: UploadRepository,
     private val httpTtsRepository: HttpTtsRepository,
+    private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
+    private val previewSynthesizer: VoicePreviewSynthesizer,
+    private val aiLogRepository: AiLogRepository,
 ) : ViewModel() {
 
     /** 最近一次解析出的源 → 源自带目录，按源 id 索引，保存导入时取用。 */
@@ -84,8 +95,8 @@ class CloudTtsViewModel(
     val uiState = _uiState.asStateFlow()
     private val _effects = MutableSharedFlow<CloudTtsEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
+    private val synthesizer = CloudTtsAudioSynthesizer(engineGateway, aiLogRepository)
     private val httpSynthesizer = HttpTtsAudioSynthesizer(httpTtsRepository)
-    private val synthesizer = CloudTtsAudioSynthesizer(engineGateway)
     private val systemCatalog = SystemTtsVoiceCatalog(application)
     private val systemSynthesizer = SystemTtsFileSynthesizer(application)
     private var engines = emptyList<CloudTtsEngine>()
@@ -192,19 +203,7 @@ class CloudTtsViewModel(
                         loginUrl = engine.loginUrl,
                     )
                 }.toImmutableList(),
-                voices = voices.map { voice ->
-                    CloudTtsVoiceItemUi(
-                        voice.id,
-                        voice.displayName,
-                        buildString {
-                            append(engineName(voice.engineType, voice.engineId))
-                            if (voice.managedBy != ReadAloudVoice.MANAGED_BY_USER) append(application.getString(R.string.cloud_tts_auto_synced_suffix))
-                            if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
-                        },
-                        deletable = isRemovable(voice),
-                        editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
-                    )
-                }.toImmutableList(),
+                voices = voiceItems(state.voiceGenderFilter),
                 availableEngines = engineOptions(),
             )
         }
@@ -304,6 +303,15 @@ class CloudTtsViewModel(
             CloudTtsIntent.DismissPoolPicker -> _uiState.update { it.copy(poolPicker = null) }
             is CloudTtsIntent.ConfirmAddToPool -> addVoicesToPool(intent.poolId)
             is CloudTtsIntent.EditVoice -> editVoice(intent.id)
+            is CloudTtsIntent.PreviewSavedVoice -> previewSavedVoice(intent.id)
+            is CloudTtsIntent.RequestRenameVoice -> requestRenameVoice(intent.id)
+            is CloudTtsIntent.ToggleDefaultNarratorVoice -> toggleDefaultNarratorVoice(intent.id)
+            is CloudTtsIntent.SetVoiceGenderFilter -> _uiState.update {
+                val gender = intent.gender.takeUnless { value -> value == it.voiceGenderFilter }
+                    .orEmpty()
+                it.copy(voiceGenderFilter = gender, voices = voiceItems(gender))
+            }
+            is CloudTtsIntent.ConfirmRenameVoice -> confirmRenameVoice(intent.name)
             is CloudTtsIntent.UpdateEngineEditor -> _uiState.update { it.copy(engineEditor = intent.editor) }
             is CloudTtsIntent.UpdateVoiceEditor -> _uiState.update { it.copy(voiceEditor = intent.editor) }
             CloudTtsIntent.DismissEngineEditor -> _uiState.update { it.copy(engineEditor = null) }
@@ -316,6 +324,7 @@ class CloudTtsViewModel(
             is CloudTtsIntent.SelectVoice -> selectVoice(intent.id)
             CloudTtsIntent.TestEngine -> testEngine()
             CloudTtsIntent.Preview -> preview()
+            is CloudTtsIntent.PreviewCandidateVoice -> previewCandidate(intent.voiceId)
             is CloudTtsIntent.PreviewVoice -> previewVoice(intent.id, intent.text)
             is CloudTtsIntent.SavePreviewText -> savePreviewText(intent.text)
             CloudTtsIntent.Save -> if (_uiState.value.engineEditor != null) saveEngine() else saveVoice()
@@ -404,6 +413,9 @@ class CloudTtsViewModel(
                 if (voice.engineType == ReadAloudVoice.ENGINE_HTTP) DEFAULT_ENGINE_VOICE_ID else ""
             },
             voiceName = voice.displayName,
+            gender = cloudConfig?.gender?.takeIf(String::isNotBlank)
+                ?: ReadAloudVoiceTraits.of(voice).gender,
+            notes = cloudConfig?.notes.orEmpty(),
             locale = cloudConfig?.locale.orEmpty(),
             style = cloudConfig?.style.orEmpty(),
             role = cloudConfig?.role.orEmpty(),
@@ -483,20 +495,37 @@ class CloudTtsViewModel(
                     )
                 }
             } else {
-                listOf(CloudTtsDiscoveredVoiceUi(
-                    id = DEFAULT_ENGINE_VOICE_ID,
-                    label = application.getString(R.string.cloud_tts_engine_default_voice),
-                    locale = "",
-                    styles = persistentListOf(),
-                    roles = persistentListOf(),
-                ))
+                // jsLib 里定义了 voices() 的引擎，音色由 syncConfiguredTtsVoices 同步进音色表；
+                // 没定义就只有引擎自己的默认音色
+                voices.filter {
+                    it.engineType == ReadAloudVoice.ENGINE_HTTP &&
+                            it.engineId == editor.engineId &&
+                            it.speakerId.isNotBlank()
+                }.map { voice ->
+                    CloudTtsDiscoveredVoiceUi(
+                        id = voice.speakerId,
+                        label = voice.displayName,
+                        locale = "",
+                        styles = persistentListOf(),
+                        roles = persistentListOf(),
+                    )
+                }.ifEmpty {
+                    listOf(CloudTtsDiscoveredVoiceUi(
+                        id = DEFAULT_ENGINE_VOICE_ID,
+                        label = application.getString(R.string.cloud_tts_engine_default_voice),
+                        locale = "",
+                        styles = persistentListOf(),
+                        roles = persistentListOf(),
+                    ))
+                }
             }
         }.onSuccess { catalog ->
+            val uniqueCatalog = catalog.distinctBy { it.id }
             _uiState.update { state ->
-                val defaultVoice = catalog.singleOrNull()
+                val defaultVoice = uniqueCatalog.singleOrNull()
                     ?.takeIf { editor.engineType == ReadAloudVoice.ENGINE_HTTP }
                 state.copy(
-                    discoveredVoices = catalog.toImmutableList(),
+                    discoveredVoices = uniqueCatalog.toImmutableList(),
                     voiceEditor = if (defaultVoice == null) state.voiceEditor else {
                         state.voiceEditor?.copy(
                             voiceId = defaultVoice.id,
@@ -505,7 +534,7 @@ class CloudTtsViewModel(
                     },
                 )
             }
-            toast(application.getString(R.string.cloud_tts_voice_count, catalog.size))
+            toast(application.getString(R.string.cloud_tts_voice_count, uniqueCatalog.size))
         }.onFailure { showError(formatError(it)) }
         _uiState.update { it.copy(discovering = false) }
     }
@@ -559,6 +588,126 @@ class CloudTtsViewModel(
         }.onSuccess { toast(application.getString(R.string.cloud_tts_connection_success)) }
             .onFailure { if (it is CancellationException) throw it else showError(formatError(it)) }
         _uiState.update { it.copy(testing = false) }
+    }
+
+    private fun previewCandidate(voiceId: String) = viewModelScope.launch {
+        val editor = _uiState.value.voiceEditor ?: return@launch
+        if (voiceId.isBlank()) {
+            return@launch toast(application.getString(R.string.cloud_tts_select_voice_first))
+        }
+        _uiState.update { it.copy(testing = true, previewingCandidateVoiceId = voiceId) }
+        // buildRequest 校验失败会 return@launch，用 finally 兜住否则按钮一直停在「生成中」
+        try {
+        runCatching {
+            val file = File(
+                application.cacheDir,
+                "cloud_tts_preview/${editor.engineId.hashCode()}_${voiceId.hashCode()}.audio",
+            )
+            if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
+                check(systemSynthesizer.synthesize(
+                    engine = editor.engineId,
+                    voiceName = voiceId,
+                    text = application.getString(R.string.system_tts_preview_text),
+                    output = file,
+                    speechRate = editor.speed.toFloatOrNull() ?: 1f,
+                )) { application.getString(R.string.system_tts_preview_failed) }
+            } else if (editor.engineType == ReadAloudVoice.ENGINE_HTTP) {
+                val httpTts = editor.engineId.toLongOrNull()?.let { httpTtsRepository.findById(it) }
+                    ?: error(application.getString(R.string.cloud_tts_engine_missing))
+                // 试听固定用正常语速：编辑器里的 speed 是云端引擎的倍率语义，和脚本的 speakSpeed 不通用
+                val previewVoice = if (voiceId == DEFAULT_ENGINE_VOICE_ID) {
+                    null // 脚本没有 voices()，交给脚本自己的默认音色
+                } else {
+                    withContext(Dispatchers.IO) {
+                        HttpTtsVoiceCatalog.getVoices(httpTts)
+                            .firstOrNull { it.id == voiceId }
+                    } ?: HttpTtsVoice(id = voiceId, name = voiceId)
+                }
+                check(HttpTtsFileSynthesizer.synthesize(
+                    httpTts = httpTts,
+                    text = application.getString(R.string.system_tts_preview_text),
+                    output = file,
+                    speechRate = HTTP_PREVIEW_SPEECH_RATE,
+                    voice = previewVoice,
+                )) { application.getString(R.string.cloud_tts_no_audio) }
+            } else {
+                val engine = engines.firstOrNull { it.id == editor.engineId }
+                    ?: error(application.getString(R.string.cloud_tts_engine_missing))
+                val request = buildRequest(editor, voiceId) ?: return@launch
+                check(synthesizer.synthesize(engine, request, file)) {
+                    application.getString(R.string.cloud_tts_no_audio)
+                }
+            }
+            file
+        }.onSuccess { _effects.tryEmit(CloudTtsEffect.PlayPreview(it.absolutePath)) }
+            .onFailure { showError(formatError(it)) }
+        } finally {
+            _uiState.update { it.copy(testing = false, previewingCandidateVoiceId = null) }
+        }
+    }
+
+    /**
+     * 试听音色表里已保存的一条音色。
+     *
+     * 合成走 [VoicePreviewSynthesizer]，和真正朗读同一条路径，听到的就是朗读时的效果；
+     * 播放交给界面的 MediaPlayer。
+     */
+    private fun previewSavedVoice(id: String) {
+        if (_uiState.value.previewingVoiceId != null) return
+        val voice = voices.firstOrNull { it.id == id } ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(previewingVoiceId = id) }
+            runCatching {
+                val file = File(application.cacheDir, "voice_preview/${id.hashCode()}.audio")
+                check(
+                    previewSynthesizer.synthesize(
+                        voice = voice,
+                        text = application.getString(R.string.voice_preview_text),
+                        output = file,
+                    )
+                ) { application.getString(R.string.voice_preview_failed) }
+                file
+            }.onSuccess { _effects.tryEmit(CloudTtsEffect.PlayPreview(it.absolutePath)) }
+                .onFailure { showError(formatError(it)) }
+            _uiState.update { it.copy(previewingVoiceId = null) }
+        }
+    }
+
+    private fun requestRenameVoice(id: String) {
+        val voice = voices.firstOrNull { it.id == id } ?: return
+        _uiState.update {
+            it.copy(activeDialog = CloudTtsDialog.RenameVoice(voice.id, voice.displayName))
+        }
+    }
+
+    /**
+     * 自动同步来的音色也能改名。
+     *
+     * 改过名的条目标成 [ReadAloudVoice.MANAGED_BY_USER_NAMED]，
+     * 引擎目录下次刷新时只更新其它字段，不会把名字覆盖回去。
+     */
+    private fun confirmRenameVoice(name: String) = viewModelScope.launch {
+        val dialog = _uiState.value.activeDialog as? CloudTtsDialog.RenameVoice ?: return@launch
+        val newName = name.trim()
+        val voice = voices.firstOrNull { it.id == dialog.id }
+        if (voice == null || newName.isBlank() || newName == voice.displayName) {
+            return@launch _uiState.update { it.copy(activeDialog = null) }
+        }
+        val managedBy = if (voice.managedBy == ReadAloudVoice.MANAGED_BY_USER) {
+            voice.managedBy
+        } else {
+            ReadAloudVoice.MANAGED_BY_USER_NAMED
+        }
+        voiceGateway.upsertVoice(
+            voice.copy(
+                displayName = newName,
+                managedBy = managedBy,
+                revision = voice.revision + 1,
+                updatedAt = System.currentTimeMillis(),
+            )
+        )
+        _uiState.update { it.copy(activeDialog = null) }
+        toast(application.getString(R.string.cloud_tts_voice_saved))
     }
 
     private fun preview() {
@@ -709,6 +858,8 @@ class CloudTtsViewModel(
             speakerId = speakerId.trim(),
             displayName = editor.voiceName.trim().ifBlank { engineName(editor.engineType, editor.engineId) },
             traitsJson = request?.let { value -> GSON.toJson(CloudTtsVoiceConfig(
+                gender = editor.gender,
+                notes = editor.notes,
                 locale = value.locale,
                 style = value.style,
                 role = value.role,
@@ -792,6 +943,72 @@ class CloudTtsViewModel(
                 )
             })
         }.toImmutableList()
+
+    /**
+     * 音色行：可用状态 + 性别与风格标签。
+     *
+     * 引擎名和「自动同步」每行都一样, 是重复信息, 不再写进描述。
+     * 标签来自 [ReadAloudVoiceTraits]（http 引擎脚本 `voices()` 声明的 gender/style/tags、
+     * 云端音色的 style/role），音色表本身没有这些列。
+     */
+    private fun voiceItems(genderFilter: String) = voices.mapNotNull { voice ->
+        val traits = ReadAloudVoiceTraits.of(voice)
+        if (genderFilter.isNotEmpty() && traits.gender != genderFilter) return@mapNotNull null
+        val defaultNarrator = voice.id ==
+            readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId &&
+            voice.id.isNotBlank()
+        CloudTtsVoiceItemUi(
+            voice.id,
+            voice.displayName,
+            buildString {
+                traitLabels(traits).joinTo(this, " · ")
+                if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
+                // 默认旁白标记与性别/风格标签同排展示，写法对齐引擎行的「当前默认」
+                if (defaultNarrator) {
+                    if (isNotEmpty()) append(" · ")
+                    append(application.getString(R.string.cloud_tts_default_narrator_marker))
+                }
+            }.removePrefix(" · "),
+            deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
+            editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
+            gender = traits.gender,
+        )
+    }.toImmutableList()
+
+    /**
+     * 长按音色行：设为/取消全局默认旁白音色。
+     *
+     * 解析槽在多角色朗读计划里（本书配音没绑旁白时兜底），不影响未开多角色的经典朗读；
+     * 禁用的音色解析不到，长按直接拒绝并说明原因，避免设完听感没变化成哑谜。
+     */
+    private fun toggleDefaultNarratorVoice(id: String) = viewModelScope.launch {
+        val voice = voices.firstOrNull { it.id == id } ?: return@launch
+        if (!voice.enabled) {
+            toast(application.getString(R.string.cloud_tts_default_narrator_disabled))
+            return@launch
+        }
+        val cleared = readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId == id
+        readAloudSettingsGateway.update {
+            it.copy(defaultNarratorVoiceId = if (cleared) "" else id)
+        }
+        _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter)) }
+        toast(
+            application.getString(
+                if (cleared) R.string.cloud_tts_default_narrator_cleared
+                else R.string.cloud_tts_default_narrator_set
+            )
+        )
+    }
+
+    /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多两行也放不下 */
+    private fun traitLabels(traits: VoiceTraits): List<String> =
+        listOfNotNull(genderLabel(traits.gender)) + traits.descriptors.take(3)
+
+    private fun genderLabel(gender: String): String? = when (gender) {
+        ReadAloudVoiceTraits.GENDER_MALE -> application.getString(R.string.voice_gender_male)
+        ReadAloudVoiceTraits.GENDER_FEMALE -> application.getString(R.string.voice_gender_female)
+        else -> null
+    }
 
     private fun engineName(engineType: String, engineId: String): String = when (engineType) {
         // 系统音色的 engineId 有两种写法：目录同步存裸包名，「发现音色」存 system:包名
@@ -984,13 +1201,34 @@ class CloudTtsViewModel(
 
     private fun saveHttpTts(value: HttpTTS) = viewModelScope.launch {
         httpTtsRepository.insert(value)
+        refreshHttpVoiceCatalog()
         _uiState.update { it.copy(httpTtsEditor = null) }
         toast(application.getString(R.string.success))
+    }
+
+    /**
+     * 引擎增删改后立刻把 http 音色同步进音色表。
+     *
+     * 不做这一步的话，音色表要等下次进阅读页（`ReadBookViewModel` 构造或打开朗读弹层）才刷新，
+     * 表现就是刚导入的引擎只有一个音色，退出去再进来才变多。
+     */
+    private suspend fun refreshHttpVoiceCatalog() {
+        val entries = withContext(Dispatchers.IO) {
+            HttpTtsVoiceCatalog.catalogEntries(httpTtsRepository.getAllSync())
+        }
+        syncReadAloudVoicesUseCase(
+            entries = entries,
+            managedSources = ReadAloudVoice.CATALOG_MANAGED,
+            removeMissingEngineTypes = setOf(ReadAloudVoice.ENGINE_HTTP),
+            // 这里只同步 http，系统音色不在本次条目里，别被判成失效
+            managedScope = { it.engineType == ReadAloudVoice.ENGINE_HTTP },
+        )
     }
 
     private fun deleteHttpTts(engineId: String) = viewModelScope.launch {
         val id = engineId.toLongOrNull() ?: return@launch
         httpTtsRepository.deleteById(id)
+        refreshHttpVoiceCatalog()
         if (isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engineId)) {
             readAloudSettingsGateway.update { it.copy(ttsEngine = null) }
             ReadAloud.upReadAloudClass()
@@ -1130,6 +1368,7 @@ class CloudTtsViewModel(
         httpTtsRepository.importWithCatalogs(selected.map { source ->
             source to (httpTtsImportCatalogs[source.id] ?: HttpTtsCatalogDraft())
         })
+        refreshHttpVoiceCatalog()
         _uiState.update { it.copy(httpTtsImportState = BaseImportUiState.Idle) }
         toast(application.getString(R.string.success))
     }
@@ -1313,6 +1552,8 @@ private fun String.isHttpTtsImportUri(): Boolean {
 
 private const val DEFAULT_ENGINE_VOICE_ID = "__engine_default__"
 
+/** HttpTTS 脚本里 speakSpeed 的正常语速基准值 */
+private const val HTTP_PREVIEW_SPEECH_RATE = 10
 /** 用户音色可删除，外部目录音色可排除；其他自动目录由同步维护。 */
 internal fun isRemovable(voice: ReadAloudVoice): Boolean =
     voice.managedBy == ReadAloudVoice.MANAGED_BY_USER ||

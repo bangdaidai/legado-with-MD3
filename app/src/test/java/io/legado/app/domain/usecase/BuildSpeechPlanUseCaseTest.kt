@@ -264,6 +264,8 @@ private class FakeVoiceGateway(
     private val voices: List<ReadAloudVoice>,
     private val bindings: List<BookVoiceBinding>,
 ) : ReadAloudVoiceGateway {
+    override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
+    override suspend fun countExcludedVoices(): Int = voices.count { it.excluded }
     override fun observeVoices(): Flow<List<ReadAloudVoice>> = flowOf(voices)
     override suspend fun getVoices(): List<ReadAloudVoice> = voices
     override suspend fun getEnabledVoices(): List<ReadAloudVoice> = voices

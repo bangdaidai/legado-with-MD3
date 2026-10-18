@@ -105,6 +105,9 @@ import io.legado.app.ui.book.read.ReadBookViewModel
 import io.legado.app.ui.book.read.ReaderSessionViewModel
 import io.legado.app.ui.book.readRecord.ReadRecordOverviewRouteScreen
 import io.legado.app.ui.book.readRecord.ReadRecordRouteScreen
+import io.legado.app.ui.book.readingmemory.ReadingMemoryEffect
+import io.legado.app.ui.book.readingmemory.ReadingMemoryScreen
+import io.legado.app.ui.book.readingmemory.ReadingMemoryViewModel
 import io.legado.app.ui.book.readaloud.ReadAloudPlayerOverlayBus
 import io.legado.app.ui.book.readaloud.cache.TtsCacheRouteScreen
 import io.legado.app.ui.book.readaloud.cast.BgmPoolRouteScreen
@@ -127,11 +130,14 @@ import io.legado.app.ui.book.search.SearchRouteScreen
 import io.legado.app.ui.book.search.SearchViewModel
 import io.legado.app.ui.book.searchContent.SearchContentRouteScreen
 import io.legado.app.ui.book.searchContent.SearchContentViewModel
+import io.legado.app.ui.book.shareCard.ShareCardManageScreen
+import io.legado.app.ui.book.shareCard.ShareCardManageViewModel
 import io.legado.app.ui.book.source.debug.BookSourceDebugRoute
 import io.legado.app.ui.book.source.debug.BookSourceDebugViewModel
 import io.legado.app.ui.book.source.edit.BookSourceEditRoute
 import io.legado.app.ui.book.source.edit.BookSourceEditViewModel
 import io.legado.app.ui.book.source.manage.BookSourceRouteScreen
+import io.legado.app.ui.book.tagmanage.TagManagementRouteScreen
 import io.legado.app.ui.book.toc.TocIntent
 import io.legado.app.ui.book.toc.TocRouteScreen
 import io.legado.app.ui.book.toc.TocViewModel
@@ -145,8 +151,10 @@ import io.legado.app.ui.config.ConfigNavScreen
 import io.legado.app.ui.config.ai.AiConfigRouteScreen
 import io.legado.app.ui.config.ai.AiModelEditRouteScreen
 import io.legado.app.ui.config.ai.AiProviderEditRouteScreen
+import io.legado.app.ui.config.ai.log.AiLogRouteScreen
 import io.legado.app.ui.config.ai.prompt.AiPromptConfigRouteScreen
 import io.legado.app.ui.config.ai.summary.AiSummaryConfigRouteScreen
+import io.legado.app.ui.config.ai.websearch.AiWebSearchConfigRouteScreen
 import io.legado.app.ui.config.backupConfig.BackupConfigRouteScreen
 import io.legado.app.ui.config.coverConfig.CoverAlbumManageRouteScreen
 import io.legado.app.ui.config.coverConfig.CoverConfigRouteScreen
@@ -165,6 +173,7 @@ import io.legado.app.ui.login.SourceLoginIntent
 import io.legado.app.ui.login.SourceLoginRoute
 import io.legado.app.ui.login.SourceLoginType
 import io.legado.app.ui.login.SourceLoginViewModel
+import io.legado.app.ui.main.my.authorManage.AuthorManageRouteScreen
 import io.legado.app.ui.replace.ReplaceRuleRouteScreen
 import io.legado.app.ui.replace.edit.ReplaceEditRouteScreen
 import io.legado.app.ui.replace.edit.ReplaceEditViewModel
@@ -698,6 +707,18 @@ fun MainActivity.mainEntryProvider(
             onNavigateToAllBookmark = {
                 onNavigateToRoute(MainRouteAllBookmark)
             },
+            onNavigateToReadingMemoryList = {
+                onNavigateToRoute(MainRouteReadingMemory)
+            },
+            onNavigateToShareCardManage = {
+                onNavigateToRoute(MainRouteShareCardManage)
+            },
+            onNavigateToTagManagement = {
+                onNavigateToRoute(MainRouteTagManagement)
+            },
+            onNavigateToAuthorManagement = {
+                onNavigateToRoute(MainRouteAuthorManagement)
+            },
             onNavigateToAbout = {
                 onNavigateToRoute(MainRouteAbout)
             },
@@ -773,7 +794,9 @@ fun MainActivity.mainEntryProvider(
             },
             onNavigateToTranslation = { pushRoute(MainRouteSettingsTranslation) },
             onNavigateToAiSummary = { pushRoute(MainRouteSettingsAiSummary) },
-            onNavigateToAiPrompt = { pushRoute(MainRouteSettingsAiPrompt) }
+            onNavigateToAiPrompt = { pushRoute(MainRouteSettingsAiPrompt) },
+            onNavigateToAiWebSearch = { pushRoute(MainRouteSettingsAiWebSearch) },
+            onNavigateToAiLog = { pushRoute(MainRouteSettingsAiLog) }
         )
     }
 
@@ -805,6 +828,9 @@ fun MainActivity.mainEntryProvider(
                         coverPath = book.coverPath
                     )
                 )
+            },
+            onSearchBook = { bookName ->
+                onNavigateToRoute(MainRouteSearch(key = bookName))
             }
         )
     }
@@ -1443,18 +1469,20 @@ fun MainActivity.mainEntryProvider(
             onOpenSettings = {
                 onNavigateToRoute(MainRouteSettingsPrivate)
             },
-            onOpenReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenReader = { bookUrl, inBookshelf, chapterChanged, chapterIndex, chapterPos ->
                 onNavigateToRoute(
                     MainRouteReadBook(
                         bookUrl = bookUrl,
                         inBookshelf = inBookshelf,
                         chapterChanged = chapterChanged,
+                        chapterIndex = chapterIndex,
+                        chapterPos = chapterPos,
                         // 与详情页封面登记在同一个 key 上，封面才能从详情页继续飞进阅读页。
                         sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(bookUrl),
                     )
                 )
             },
-            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged, _, _ ->
                 onNavigateToRoute(
                     MainRouteReadManga(
                         bookUrl = bookUrl,
@@ -1884,6 +1912,59 @@ fun MainActivity.mainEntryProvider(
         AboutScreen(
             state = viewModel.uiState.collectAsStateWithLifecycle().value,
             onIntent = viewModel::onIntent,
+            onBack = { onNavigateBack() },
+        )
+    }
+
+    entry<MainRouteSettingsAiLog> {
+        AiLogRouteScreen(onBackClick = { onNavigateBack() })
+    }
+
+    entry<MainRouteSettingsAiWebSearch> {
+        AiWebSearchConfigRouteScreen(onBackClick = { onNavigateBack() })
+    }
+
+    entry<MainRouteTagManagement> {
+        TagManagementRouteScreen(
+            onBack = { onNavigateBack() },
+            onOpenTagDetail = { tagId -> onNavigateToRoute(MainRouteTagDetail(tagId)) },
+            onNavigateToExcludedTag = { onNavigateToRoute(MainRouteExcludedTag) },
+        )
+    }
+
+    entry<MainRouteAuthorManagement> {
+        AuthorManageRouteScreen(
+            onBack = { onNavigateBack() },
+            onClickAuthor = { name -> onNavigateToRoute(MainRouteAuthorDetail(name)) },
+        )
+    }
+
+    entry<MainRouteReadingMemory> {
+        val readingMemoryViewModel = koinViewModel<ReadingMemoryViewModel>()
+        val readingMemoryUiState by readingMemoryViewModel.uiState.collectAsStateWithLifecycle()
+        LaunchedEffect(readingMemoryViewModel) {
+            readingMemoryViewModel.effect.collectLatest { effect ->
+                when (effect) {
+                    is ReadingMemoryEffect.NavigateToDetail -> {
+                        onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = effect.bookUrl))
+                    }
+                }
+            }
+        }
+        ReadingMemoryScreen(
+            uiState = readingMemoryUiState,
+            onBack = { onNavigateBack() },
+            onIntent = readingMemoryViewModel::onIntent,
+        )
+    }
+
+    entry<MainRouteShareCardManage> {
+        val shareCardViewModel = koinViewModel<ShareCardManageViewModel>()
+        val shareCardState by shareCardViewModel.uiState.collectAsStateWithLifecycle()
+        ShareCardManageScreen(
+            state = shareCardState,
+            onIntent = shareCardViewModel::onIntent,
+            effects = shareCardViewModel.effects,
             onBack = { onNavigateBack() },
         )
     }

@@ -452,8 +452,18 @@ class ReadBookController(
     fun dismissTextActionMenu() {
         textMenuRequestVersion++
         _textMenuState.value = null
-        viewModel.onIntent(ReadBookIntent.DismissQuickMarking)
     }
+
+    /** 画布点击正文已有划线后上报标记选区锚点：把本次位置补上，笔记弹层据此悬浮。 */
+    fun onComposeReaderMarkingSheetAnchor(anchor: ReaderSelectionMenuAnchor) {
+        viewModel.onIntent(ReadBookIntent.SetMarkingSheetAnchor(anchor))
+    }
+
+    /** 画布点笔记角标：只弹备注浮窗，不开笔记弹层、不建选区。 */
+    fun onComposeReaderMarkingNoteClick(markingId: String, anchor: ReaderSelectionMenuAnchor) {
+        viewModel.onIntent(ReadBookIntent.ShowMarkingNote(markingId, anchor))
+    }
+
     private val popupAction by lazy { PopupAction(activity) }
     private var screenTimeOut: Long = 0
     private var appliedDarkTheme: Boolean? = null
@@ -1905,7 +1915,7 @@ class ReadBookController(
     }
 
     fun onMarkingClick(markingId: String) {
-        viewModel.onIntent(ReadBookIntent.OpenQuickMarkingEdit(markingId))
+        viewModel.onIntent(ReadBookIntent.EditMarking(markingId))
     }
 
     fun oldClickImg(src: String): Boolean {
@@ -1998,16 +2008,6 @@ class ReadBookController(
                 bookText = selectedText
             }
         }
-
-    fun openQuickMarking(): Boolean {
-        val selection = composeSelectionBookmark(bodyOnly = true)
-        if (selection == null) {
-            activity.toastOnUi(R.string.create_bookmark_error)
-            return false
-        }
-        viewModel.onIntent(ReadBookIntent.OpenQuickMarking(selection))
-        return true
-    }
 
     fun onMenuItemSelected(itemId: Int): Boolean {
         when (itemId) {
@@ -2570,6 +2570,7 @@ class ReadBookController(
             is ReadBookEffect.OpenMenuCustomIconPicker,
             is ReadBookEffect.OpenTitleBarCustomIconPicker,
             is ReadBookEffect.OpenSystemTtsSettings,
+            is ReadBookEffect.OpenReadAloudConfig,
             ReadBookEffect.OpenTtsEnginesAndVoices,
             ReadBookEffect.OpenTtsCache,
             is ReadBookEffect.OpenBookVoiceCasting,
@@ -2587,6 +2588,7 @@ class ReadBookController(
             }
 
             is ReadBookEffect.UpBookmarkBadge -> directReaderPageIndex?.let(::publishDirectReaderWindow)
+            is ReadBookEffect.UpMarkingNoteBadges -> directReaderPageIndex?.let(::publishDirectReaderWindow)
         }
     }
 

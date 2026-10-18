@@ -110,6 +110,10 @@ class SyncHttpTtsCatalogUseCaseTest {
 
         val voices = mutableListOf<ReadAloudVoice>()
 
+        override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
+
+        override suspend fun countExcludedVoices(): Int = voices.count { it.excluded }
+
         override fun observeVoices(): Flow<List<ReadAloudVoice>> = flowOf(voices)
 
         override suspend fun getVoices(): List<ReadAloudVoice> = voices.toList()
