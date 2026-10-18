@@ -287,7 +287,7 @@ fun BookInfoRouteScreen(
         groups = viewModel.allGroups
             .collectAsStateWithLifecycle(persistentListOf<BookGroup>()).value,
         onIntent = viewModel::onIntent,
-        onBack = onBack,
+        onBack = { onBack() },
         bookshelfState = bookshelfState,
         otherWorksState = otherWorksState,
         otherWorksScopeRaw = otherWorksScopeRaw,

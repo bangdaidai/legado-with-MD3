@@ -427,6 +427,7 @@ fun ReadBookRouteScreen(
                             }
                             ReadBookEffect.OpenTtsEnginesAndVoices -> onOpenTtsEnginesAndVoices()
                             ReadBookEffect.OpenTtsCache -> onOpenTtsCache()
+                            is ReadBookEffect.TtsCacheCleared -> context.toastOnUi(effect.message)
                             is ReadBookEffect.MenuSettingReplace -> {
                                 onOpenReplaceRule(ReadBook.book?.bookUrl, null)
                             }

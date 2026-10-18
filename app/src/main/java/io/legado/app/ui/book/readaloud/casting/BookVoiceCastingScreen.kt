@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.readaloud.casting
 
+import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -91,11 +92,20 @@ fun BookVoiceCastingScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    val player = remember { MediaPlayer() }
+    val previewFailed = stringResource(R.string.voice_preview_failed)
+    DisposableEffect(player) { onDispose { player.release() } }
 
     LaunchedEffect(effects) {
         effects.collectLatest { effect ->
             when (effect) {
                 is BookVoiceCastingEffect.ShowToast -> context.toastOnUi(effect.message)
+                is BookVoiceCastingEffect.PlayPreview -> runCatching {
+                    player.reset()
+                    player.setDataSource(effect.path)
+                    player.prepare()
+                    player.start()
+                }.onFailure { context.toastOnUi(previewFailed) }
             }
         }
     }
@@ -632,4 +642,5 @@ private fun subjectTitle(kind: CastingSubjectKind, name: String): String = when 
     CastingSubjectKind.UnknownFemale -> stringResource(R.string.voice_role_unknown_female)
     CastingSubjectKind.Unknown -> stringResource(R.string.voice_role_unknown)
     CastingSubjectKind.Character -> name
+    CastingSubjectKind.TemporaryCharacter -> name
 }

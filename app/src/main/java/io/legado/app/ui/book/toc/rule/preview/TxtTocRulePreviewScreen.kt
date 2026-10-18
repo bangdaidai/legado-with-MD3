@@ -1,8 +1,5 @@
 package io.legado.app.ui.book.toc.rule.preview
 
-import android.app.Activity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
@@ -61,7 +58,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.ui.replace.ReplaceEditRoute
-import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.theme.adaptiveHorizontalPadding
@@ -94,18 +90,11 @@ fun TxtTocRulePreviewRouteScreen(
     onBack: () -> Unit,
     onApplyRule: (String) -> Unit,
     onOpenManagePage: () -> Unit,
+    /** 打开替换净化规则列表（null）或某条规则的编辑页；返回后由宿主回灌 RulesClosed 触发刷新。 */
+    onOpenReplaceRule: (ReplaceEditRoute?) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
-    // 编辑替换规则返回后刷新（网络书预览用）
-    val editReplaceLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.onIntent(TxtTocRulePreviewIntent.Refresh)
-        }
-    }
 
     LaunchedEffect(bookUrl) {
         viewModel.init(bookUrl, currentTocRegex)
@@ -116,21 +105,11 @@ fun TxtTocRulePreviewRouteScreen(
             when (effect) {
                 is TxtTocRulePreviewEffect.ShowToast -> context.toastOnUi(effect.message)
                 is TxtTocRulePreviewEffect.OpenManagePage -> onOpenManagePage()
-                is TxtTocRulePreviewEffect.OpenReplaceRuleManagePage -> {
-                    // 走同一个 launcher：管理页进入即 setResult(RESULT_OK)，返回时顺带重算命中
-                    editReplaceLauncher.launch(
-                        ReplaceRuleActivity.startIntent(context, bookUrl = bookUrl)
-                    )
-                }
+                is TxtTocRulePreviewEffect.OpenReplaceRuleManagePage ->
+                    onOpenReplaceRule(null)
                 is TxtTocRulePreviewEffect.ApplyRule -> onApplyRule(effect.rule)
-                is TxtTocRulePreviewEffect.OpenReplaceRuleEditor -> {
-                    editReplaceLauncher.launch(
-                        ReplaceRuleActivity.startIntent(
-                            context,
-                            ReplaceEditRoute(id = effect.ruleId),
-                        )
-                    )
-                }
+                is TxtTocRulePreviewEffect.OpenReplaceRuleEditor ->
+                    onOpenReplaceRule(ReplaceEditRoute(id = effect.ruleId))
             }
         }
     }

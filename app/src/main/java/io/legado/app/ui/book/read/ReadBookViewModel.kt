@@ -29,6 +29,7 @@ import io.legado.app.data.repository.ReplaceRuleRepository
 import io.legado.app.data.repository.SettingsRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.domain.gateway.AiArtifactGateway
+import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiPromptPresetGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.AppUiConfigurationGateway
@@ -146,6 +147,7 @@ class ReadBookViewModel(
     private val bookMarkingGateway: BookMarkingGateway,
     private val aiArtifactGateway: AiArtifactGateway,
     private val aiPromptPresetGateway: AiPromptPresetGateway,
+    private val aiProfileGateway: AiProfileGateway,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
     private val readAloudSessionStore: ReadAloudSessionStore,
     private val aiCastAssignUseCase: io.legado.app.help.readaloud.cast.AiCastAssignUseCase,
@@ -691,6 +693,7 @@ class ReadBookViewModel(
         readAloudSessionStore = readAloudSessionStore,
         httpTtsRepository = httpTtsRepository,
         syncReadAloudVoicesUseCase = syncReadAloudVoicesUseCase,
+        aiProfileGateway = aiProfileGateway,
     ) }
 
     // --- 菜单按钮配置域（无自持状态，按钮列表仍在 menuConfig）---

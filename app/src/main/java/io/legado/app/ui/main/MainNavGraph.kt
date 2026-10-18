@@ -136,7 +136,9 @@ import io.legado.app.ui.book.toc.TocIntent
 import io.legado.app.ui.book.toc.TocRouteScreen
 import io.legado.app.ui.book.toc.TocViewModel
 import io.legado.app.ui.book.toc.rule.TxtRuleRouteScreen
+import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewIntent
 import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewRouteScreen
+import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewViewModel
 import io.legado.app.ui.browser.WebViewModel
 import io.legado.app.ui.browser.WebViewRouteScreen
 import io.legado.app.ui.config.ConfigNavScreen
@@ -1782,14 +1784,31 @@ fun MainActivity.mainEntryProvider(
     }
 
     entry<MainRouteTxtTocRulePreview> { route ->
+        // VM 提到 entry 里，是为了让「替换净化规则」子页返回后能回灌刷新（网络书预览重算命中）。
+        val previewViewModel = koinViewModel<TxtTocRulePreviewViewModel>()
+        ConsumeBookPageResult(
+            route,
+            backStack.lastOrNull() == route,
+            navRouteTracker,
+        ) { result ->
+            if (result is BookPageResult.RulesClosed) {
+                previewViewModel.onIntent(TxtTocRulePreviewIntent.Refresh)
+            }
+        }
         TxtTocRulePreviewRouteScreen(
             bookUrl = route.bookUrl,
             currentTocRegex = route.currentTocRegex,
+            viewModel = previewViewModel,
             onBack = { onNavigateBack() },
             onApplyRule = { rule ->
                 closeBookPage(backStack, route, BookPageResult.TxtTocRuleChosen(rule))
             },
             onOpenManagePage = { onNavigateToRoute(MainRouteTxtTocRule()) },
+            onOpenReplaceRule = { editor ->
+                onNavigateToRoute(
+                    editor?.let { MainRouteReplaceEdit(it) } ?: MainRouteReplaceRules(route.bookUrl)
+                )
+            },
         )
     }
 

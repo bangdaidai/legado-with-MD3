@@ -1182,6 +1182,8 @@ sealed interface ReadBookEffect {
     data object OpenSystemTtsSettings : ReadBookEffect
     data object OpenTtsEnginesAndVoices : ReadBookEffect
     data object OpenTtsCache : ReadBookEffect
+    /** 音频缓存清理完成，宿主弹 toast（[message] 由触发侧按语言资源生成）。 */
+    data class TtsCacheCleared(val message: String) : ReadBookEffect
     data class OpenBookVoiceCasting(val bookUrl: String) : ReadBookEffect
     data class OpenReadAloudSubPage(val page: ReadAloudSubPage) : ReadBookEffect
     data object OpenHighlightRuleImportPicker : ReadBookEffect

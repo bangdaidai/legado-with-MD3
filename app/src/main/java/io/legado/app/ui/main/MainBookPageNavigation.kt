@@ -26,7 +26,9 @@ internal fun MainActivity.closeBookPage(
                 parent is MainRouteReadBook || parent is MainRouteReadManga ||
                         parent is MainRouteBookInfo ||
                         // 目录页也会从子页拿结果：TXT 规则列表的选择模式把选中的规则回传给它。
-                        parent is MainRouteToc
+                        parent is MainRouteToc ||
+                        // 目录规则预览页打开替换净化规则后，返回时靠 RulesClosed 重算预览。
+                        parent is MainRouteTxtTocRulePreview
                 )
     ) {
         navRouteTracker.reportBookPageResult(parent, resolvedResult)

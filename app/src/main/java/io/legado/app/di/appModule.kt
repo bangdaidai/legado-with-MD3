@@ -922,6 +922,7 @@ val appModule = module {
             bookMarkingGateway = get(),
             aiArtifactGateway = get(),
             aiPromptPresetGateway = get(),
+            aiProfileGateway = get(),
             syncReadAloudVoicesUseCase = get(),
             readAloudSessionStore = get(),
             replaceRuleRepository = get(),

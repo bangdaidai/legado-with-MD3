@@ -582,7 +582,7 @@ abstract class BaseReadAloudService : BaseService(),
             var preparedContentChapterPositions: List<Int?> =
                 preparedParagraphs.map { it.chapterPosition }
             val preparedSpeechPlan = buildSpeechPlan(
-                bookUrl = prepared.book?.bookUrl.orEmpty(),
+                bookUrl = bookSession.book?.bookUrl.orEmpty(),
                 chapterIndex = input.chapter.index,
                 paragraphs = preparedChapter.canonicalSpeechParagraphs(
                     splitByPage = preparedReadAloudByPage,

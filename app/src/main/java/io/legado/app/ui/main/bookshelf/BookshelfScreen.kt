@@ -733,7 +733,7 @@ fun BookshelfScreen(
                                         )
                                         dismiss()
                                     },
-                                    leadingIcon = { Icon(Icons.Default.Search, null) }
+                                    leadingIcon = { AppIcon(Icons.Default.Search, null) }
                                 )
                                 RoundDropdownMenuItem(
                                     text = stringResource(R.string.selection_mode),

@@ -7,7 +7,11 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.ReadAloudSettingsRepository
+import io.legado.app.domain.gateway.AiProfileGateway
+import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.PlaybackTimer
+import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.VoiceCatalogEntry
 import io.legado.app.domain.model.settings.ReadAloudSettings
@@ -19,17 +23,18 @@ import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.readaloud.ReadAloudPlayerOverlayBus
+import io.legado.app.utils.TTSCacheUtils
 import io.legado.app.utils.postEvent
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 朗读域。
@@ -50,6 +55,7 @@ class ReadAloudDelegate(
     private val readAloudSessionStore: ReadAloudSessionStore,
     private val httpTtsRepository: HttpTtsRepository,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
+    private val aiProfileGateway: AiProfileGateway,
 ) {
 
     val readerSessions = combine(
@@ -285,14 +291,6 @@ class ReadAloudDelegate(
         host.openReadMenuRoute(ReadBookMenuRoute.ReadAloud)
     }
 
-    fun openConfigSheet() {
-        // 从底栏重新打开算「新一次设置」，回到常规页；被整屏页盖住再回来才停在那一 tab
-        host.updateState {
-            it.copy(activeSheet = ReadBookSheet.ReadAloudConfig, readAloudConfigTab = 0)
-        }
-        scope.launch { syncConfiguredTtsVoices() }
-    }
-
     /** 卡片里滑页/点 tab：tab 住在状态里，弹层被拆掉重建才不会退回常规。 */
     fun setConfigTab(tab: Int) {
         host.updateState { it.copy(readAloudConfigTab = tab.coerceIn(0, 2)) }
@@ -332,82 +330,6 @@ class ReadAloudDelegate(
         host.emitEffect(
             ReadBookEffect.TtsCacheCleared(context.getString(R.string.clear_cache_success))
         )
-    }
-
-    // --- 四个数值选择弹层 ---
-
-    fun openPreDownloadNumPicker() {
-        host.updateState {
-            it.copy(
-                preDownloadNum = host.preDownloadNum,
-                activeSheet = ReadBookSheet.PreDownloadConfig,
-            )
-        }
-    }
-
-    fun openPreSynthesisConcurrencyPicker() {
-        host.updateState {
-            it.copy(
-                preSynthesisConcurrency =
-                    readAloudSettingsRepository.currentSettings.ttsPreSynthesisConcurrency,
-                activeSheet = ReadBookSheet.PreSynthesisConcurrencyConfig,
-            )
-        }
-    }
-
-    fun openParagraphIntervalPicker() {
-        host.updateState {
-            it.copy(
-                readAloudParagraphInterval =
-                    readAloudSettingsRepository.currentSettings.ttsParagraphInterval,
-                activeSheet = ReadBookSheet.ParagraphIntervalConfig,
-            )
-        }
-    }
-
-    fun openCacheCleanTimePicker() {
-        host.updateState {
-            it.copy(
-                audioCacheCleanTime = readAloudSettingsRepository.currentSettings.audioCacheCleanTime,
-                activeSheet = ReadBookSheet.AudioCacheCleanConfig,
-            )
-        }
-    }
-
-    fun applyPreDownloadNum(value: Int) {
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            readSettingsRepository.setPreDownloadNum(value)
-        }
-        host.updateState {
-            it.copy(preDownloadNum = value, activeSheet = ReadBookSheet.ReadAloudConfig)
-        }
-    }
-
-    fun applyPreSynthesisConcurrency(value: Int) {
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            readAloudSettingsRepository.update {
-                it.copy(ttsPreSynthesisConcurrency = value.coerceIn(1, 8))
-            }
-        }
-        host.updateState {
-            it.copy(preSynthesisConcurrency = value, activeSheet = ReadBookSheet.ReadAloudConfig)
-        }
-    }
-
-    fun applyAudioCacheCleanTime(value: Int) {
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            readAloudSettingsRepository.update { it.copy(audioCacheCleanTime = value) }
-        }
-        host.updateState {
-            it.copy(audioCacheCleanTime = value, activeSheet = ReadBookSheet.ReadAloudConfig)
-        }
-    }
-
-    fun applyParagraphInterval(value: Int) {
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            readAloudSettingsRepository.update { it.copy(ttsParagraphInterval = value) }
-        }
-        host.updateState { it.copy(readAloudParagraphInterval = value) }
     }
 
     // --- 开关类设置 ---

@@ -108,12 +108,17 @@ fun Modifier.responsiveHazeEffectStatusBar(state: HazeState): Modifier {
     // 模糊框高度即状态栏高度：渐进 1f→0f 从状态栏顶部满模糊、到底部归零，
     // 与下方无模糊内容自然衔接，不外扩成额外缓冲带。
     val style = HazeLegado.ultraThinPlus(containerColor = containerColor)
-    return this.hazeEffect(state = state, style = style) {
-        progressive = HazeProgressive.verticalGradient(
-            startIntensity = 1f,
-            endIntensity = 0f
-        )
-    }
+    return this.hazeBlur(
+        input = HazeInput.Sources(state),
+        style = style.then {
+            progressive(
+                HazeProgressive.verticalGradient(
+                    startIntensity = 1f,
+                    endIntensity = 0f
+                )
+            )
+        }
+    )
 }
 
 /**
