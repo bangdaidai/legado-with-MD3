@@ -30,7 +30,6 @@ import io.legado.app.domain.usecase.AddBookUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
-import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.FindShelfDuplicatesUseCase
 import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
@@ -102,7 +101,6 @@ class BookshelfViewModel(
     private val importBookshelfUseCase: ImportBookshelfUseCase,
     private val exportBookshelfUseCase: ExportBookshelfUseCase,
     private val findShelfDuplicatesUseCase: FindShelfDuplicatesUseCase,
-    private val deleteBooksUseCase: DeleteBooksUseCase,
     private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val bookshelfTagGateway: BookshelfTagGateway,
     private val appShellSettingsGateway: AppShellSettingsGateway,
