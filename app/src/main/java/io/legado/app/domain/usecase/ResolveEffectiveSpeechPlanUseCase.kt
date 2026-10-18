@@ -2,6 +2,7 @@ package io.legado.app.domain.usecase
 
 import io.legado.app.constant.AppLog
 import io.legado.app.domain.gateway.CastSpeechGateway
+import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
@@ -11,7 +12,6 @@ import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.help.readaloud.cast.CastSpeechOverlay
-import io.legado.app.ui.config.readConfig.ReadConfig
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -32,6 +32,7 @@ class ResolveEffectiveSpeechPlanUseCase(
     private val buildSpeechPlan: BuildSpeechPlanUseCase,
     private val castGateway: CastSpeechGateway,
     private val voiceGateway: ReadAloudVoiceGateway,
+    private val readAloudSettingsGateway: ReadAloudSettingsGateway,
 ) {
 
     suspend operator fun invoke(
@@ -46,7 +47,8 @@ class ResolveEffectiveSpeechPlanUseCase(
         source: String = "朗读",
     ): List<SpeechPlanItem> {
         if (bookUrl.isEmpty() || paragraphs.isEmpty()) return emptyList()
-        val multiSpeakerOn = ReadConfig.useMultiSpeaker
+        val settings = readAloudSettingsGateway.currentSettings
+        val multiSpeakerOn = settings.useMultiSpeaker
         // 「多角色朗读」是唯一的发声开关：关掉就没有任何计划，整章回到用户在朗读设置里
         // 选的默认引擎。「多角色分配」只管正文胶囊，不参与决定用谁的声音念。
         //
@@ -64,11 +66,11 @@ class ResolveEffectiveSpeechPlanUseCase(
                 paragraphs = paragraphs,
                 preferredDefaultVoiceId = preferredDefaultVoiceId,
                 analysisMode = analysisMode
-                    ?: SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode)
+                    ?: SpeechAnalysisMode.fromStorage(settings.speechAnalysisMode)
                         .let { if (multiSpeakerOn) it else SpeechAnalysisMode.Rule },
                 analysisReasoningLevel = analysisReasoningLevel
                     ?: AiReasoningLevel.fromStorage(
-                        ReadConfig.speechAnalysisReasoningLevel,
+                        settings.speechAnalysisReasoningLevel,
                         AiReasoningLevel.OFF,
                     ),
                 useMultiSpeaker = multiSpeakerOn,
@@ -112,7 +114,7 @@ class ResolveEffectiveSpeechPlanUseCase(
         bookUrl: String,
         segments: List<ChapterSpeechSegment>,
         characterPerformances: Map<String, CharacterPerformanceProfile> = emptyMap(),
-        useMultiSpeaker: Boolean = ReadConfig.useMultiSpeaker,
+        useMultiSpeaker: Boolean = readAloudSettingsGateway.currentSettings.useMultiSpeaker,
     ): List<SpeechPlanItem> = buildSpeechPlan(
         bookUrl = bookUrl,
         segments = segments,
