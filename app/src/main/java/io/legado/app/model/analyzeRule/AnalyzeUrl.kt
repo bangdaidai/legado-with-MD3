@@ -51,6 +51,7 @@ import io.legado.app.utils.isXml
 import io.legado.app.utils.parseIpsFromString
 import io.legado.app.utils.stackTraceStr
 import kotlinx.coroutines.runBlocking
+import okhttp3.Call
 import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -98,6 +99,7 @@ class AnalyzeUrl(
      */
     private val currentToneID: String = "",
     private val currentSpeakerName: String = "",
+    private val currentEmotionName: String = "",
     private val currentEmotionTag: String = "",
     private var baseUrl: String = "",
     private val source: BaseSource? = null,
@@ -391,6 +393,7 @@ class AnalyzeUrl(
             bindings["emotion"] = speakEmotion
             bindings["currentToneID"] = currentToneID
             bindings["currentSpeakerName"] = currentSpeakerName
+            bindings["currentEmotionName"] = currentEmotionName
             bindings["currentEmotionTag"] = currentEmotionTag
             bindings["book"] = ruleData as? Book
             bindings["source"] = source
@@ -569,10 +572,13 @@ class AnalyzeUrl(
     /**
      * 访问网站,返回Response
      */
-    suspend fun getResponseAwait(): Response {
+    suspend fun getResponseAwait(): Response = getResponseAwait { }
+
+    /** 将实际 Call 的取消能力交给需要继续读取响应体的调用方。 */
+    suspend fun getResponseAwait(onCall: (Call) -> Unit): Response {
         concurrentRateLimiter.withLimit {
             setCookie()
-            val response = getClient().newCallResponse(retry) {
+            val response = getClient().newCallResponse(retry, onCall) {
                 addHeaders(headerMap)
                 when (method) {
                     RequestMethod.POST -> {
