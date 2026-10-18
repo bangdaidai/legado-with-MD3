@@ -44,7 +44,9 @@ private data class ExploreShowKindState(
 )
 
 /**
- * 涔︽簮瑙勫垯閲屾病鏈夋樉寮忕殑鍒嗙粍瀛楁锛岀害瀹氾細鍗犳弧鏁磋銆佹棦娌℃湁 url 涔熸病鏈?action 鐨?kind 鏄ぇ鍒嗙被鏍囬锛? * 瀹冨悗闈㈢殑鍒嗙被閮藉綊灞炰簬瀹冿紝鐩村埌閬囧埌涓嬩竴涓ぇ鍒嗙被鏍囬銆? */
+ * 书源规则里没有显式的分组字段，约定：占满整行、既没有 url 也没有 action 的 kind 是大分类标题，
+ * 它后面的分类都归属于它，直到遇到下一个大分类标题。
+ */
 private fun isExploreGroupHeader(kind: ExploreKind): Boolean {
     if (!kind.url.isNullOrBlank()) return false
     if (!kind.action.isNullOrBlank()) return false
@@ -53,7 +55,7 @@ private fun isExploreGroupHeader(kind: ExploreKind): Boolean {
         (style.layout_flexGrow >= 1f && style.layout_flexBasisPercent < 0f)
 }
 
-/** 鍘绘帀鍒嗙被鏍囬涓や晶鐨勮楗扮鍙凤紝渚嬪銆屸梿 鎺掕 鈼嗐€嶁啋銆屾帓琛屻€?*/
+/** 去掉分类标题两侧的装饰符号，例如「◆ 排行 ◆」→「排行」 */
 private fun resolveExploreGroupTitle(kind: ExploreKind): String {
     val raw = kind.title.trim()
     return raw.replace(Regex("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$"), "").ifBlank { raw }
@@ -67,7 +69,7 @@ private fun groupExploreKinds(kinds: List<ExploreKind>, ungroupedLabel: String):
             currentGroup = resolveExploreGroupTitle(kind).ifBlank { ungroupedLabel }
             return@forEach
         }
-        // 鍙湁 url 绫诲瀷鐨勫垎绫昏兘鐩存帴鍒囨崲锛屽叾浣欑被鍨嬩粛璧?ExploreKindSelectSheet
+        // 只有 url 类型的分类能直接切换，其余类型仍走 ExploreKindSelectSheet
         if (kind.type != ExploreKind.Type.url || kind.url.isNullOrBlank()) return@forEach
         grouped.getOrPut(currentGroup ?: ungroupedLabel) { mutableListOf() }.add(kind)
     }
@@ -173,7 +175,9 @@ class ExploreShowViewModel(
     }
 
     /**
-     * 棰勮 sheet 鐢細鐩存帴鎸夊綋鍓嶄功鏋跺揩鐓у疄鏃惰绠椼€?     * 涓嶈浠庡睍绀哄垪琛ㄥ弽鏌モ€斺€旂瓫閫夋妸璇ヤ功闅愯棌鍚庡氨鏌ヤ笉鍒帮紝浼氳鍒ゆ垚涓嶅湪涔︽灦銆?     */
+     * 预览 sheet 用：直接按当前书架快照实时计算。
+     * 不要从展示列表反查——筛选把该书隐藏后就查不到，会误判成不在书架。
+     */
     fun getCurrentBookShelfState(book: SearchBook): BookShelfState =
         resolveBookShelfStateUseCase.execute(
             name = book.name,
@@ -265,8 +269,9 @@ class ExploreShowViewModel(
                         )
                     }
                 } else {
-                    // 閫氳繃 java.open("explore", ...) 浼犲叆鐨勮嚜瀹氫箟 URL(渚嬪 data:page 涔﹀崟/璇勮鍒楄〃),
-                    // 涓嶅睘浜庝功婧愬垎绫讳綋绯? 闅愯棌椤堕儴鍒嗙被鏍囩鏍? 鍙樉绀轰功鍗曟湰韬?                    groupedKinds = emptyMap()
+                    // 通过 java.open("explore", ...) 传入的自定义 URL(例如 data:page 书单/评论列表),
+                    // 不属于书源分类体系, 隐藏顶部分类标签栏, 只显示书单本身
+                    groupedKinds = emptyMap()
                     _kindState.value = ExploreShowKindState()
                 }
             }
@@ -279,7 +284,8 @@ class ExploreShowViewModel(
         val raw = repository.getSourceExploreKinds(sourceUrl)
         val grouped = groupExploreKinds(raw, appCtx.getString(R.string.all))
         groupedKinds = grouped
-        // 鍙湁瀛樺湪澶氫釜澶у垎绫绘椂鎵嶆樉绀哄垎缁勮锛屽惁鍒欓€€鍖栦负鍗曡鏍囩鏉?        val groups = if (grouped.size > 1) grouped.keys.toList() else emptyList()
+        // 只有存在多个大分类时才显示分组行，否则退化为单行标签条
+        val groups = if (grouped.size > 1) grouped.keys.toList() else emptyList()
         val defaultGroup = grouped.keys.firstOrNull()
         _kindState.update {
             it.copy(

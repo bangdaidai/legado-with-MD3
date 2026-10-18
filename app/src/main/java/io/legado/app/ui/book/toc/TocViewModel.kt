@@ -103,7 +103,7 @@ data class TocBookmarkItemUi(
     val raw: Bookmark
 )
 
-/** 鍒掔嚎/楂樹寒绗旇锛坆ook_marks 琛級鍦ㄧ洰褰?Sheet 閲岀殑灞曠ず椤广€?*/
+/** 划线/高亮笔记（book_marks 表）在目录 Sheet 里的展示项。 */
 @Immutable
 data class TocMarkingItemUi(
     val id: String,
@@ -112,7 +112,7 @@ data class TocMarkingItemUi(
     val text: String,
     val note: String,
     val chapterName: String,
-    /** 鍒涘缓鏃剁殑婧愶紙婧愭寚绾癸級锛岀敤浜庡湪绗旇椤垫爣鍑鸿法婧愮瑪璁般€?*/
+    /** 创建时的源（源指纹），用于在笔记页标出跨源笔记。 */
     val bookUrl: String,
     val isDur: Boolean,
     val raw: BookMarking
@@ -282,7 +282,8 @@ class TocViewModel(
                 ""
             )
 
-    // 鎸夐渶闃呰鍐欑殑鍥剧墖/姝ｆ枃涓嶇粡杩?CacheBook锛屼笉浼氭湁 cacheSuccessFlow锛屽彧鑳藉湪鐩綍鎵撳紑鏃堕噸鎵ˉ榻愩€?    private val cachedChapterRescan = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    // 按需阅读写的图片/正文不经过 CacheBook，不会有 cacheSuccessFlow，只能在目录打开时重扫补齐。
+    private val cachedChapterRescan = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     private val _cachedChapterIndices: StateFlow<Set<Int>> = bookState.filterNotNull()
         .map { it.bookUrl to it.getFolderName() }
@@ -293,8 +294,9 @@ class TocViewModel(
                     val book = bookRepository.getBook(bookUrl) ?: return emptySet()
                     return bookRepository.getChapters(bookUrl)
                         .filter { chapter ->
-                            // 鏄剧ず鐢ㄥ鏉惧垽瀹氾細鏈夋鏂囧嵆绠楀凡缂撳瓨锛堢己鍥句笉鍐嶅垽涓烘湭缂撳瓨锛夛紱
-                            // 涓嬭浇鏄惁闇€瑕佽ˉ鍥句粛鐢ㄤ弗鏍肩殑 isChapterCacheComplete銆?                            chapter.isVolume || withContext(Dispatchers.IO) {
+                            // 显示用宽松判定：有正文即算已缓存（缺图不再判为未缓存）；
+                            // 下载是否需要补图仍用严格的 isChapterCacheComplete。
+                            chapter.isVolume || withContext(Dispatchers.IO) {
                                 BookHelp.hasContent(book, chapter)
                             }
                         }
@@ -378,7 +380,8 @@ class TocViewModel(
             book to query
         }
             .flatMapLatest { (book, query) ->
-                // 鎸夈€屼功鍚?浣滆€呫€嶈闃呭叏閮ㄧ珷鑺傜殑鏍囪锛氭崲婧愬悗璺ㄦ簮绗旇浠嶅垪鍑?                bookMarkingGateway
+                // 按「书名+作者」订阅全部章节的标记：换源后跨源笔记仍列出
+                bookMarkingGateway
                     .flowByBook(book.name, book.author)
                     .map { list ->
                         list
@@ -484,7 +487,7 @@ class TocViewModel(
     private var titleCacheJob: Job? = null
     private var lastTitleCacheKey: TitleCacheKey? = null
 
-    /** 鐩綍琛屽彸渚ч偅涓ゆ灇鐘舵€佸浘鏍囩殑鏁版嵁婧愶細鏈珷鍒嗛厤杩囪鑹?/ 鏈珷涓嬭浇杩囧惉涔﹂煶棰戙€?*/
+    /** 目录行右侧那两枚状态图标的数据源：本章分配过角色 / 本章下载过听书音频。 */
     private data class TocStatusFlags(
         val assigned: Set<Int> = emptySet(),
         val downloaded: Set<Int> = emptySet(),
@@ -647,7 +650,7 @@ class TocViewModel(
     }
 
     override fun ruleItemToEntity(item: TocItemUi): TocDomainItem {
-        throw NotImplementedError("TOC 涓嶉渶瑕佸悜鍚庡弽杞疄浣?)
+        throw NotImplementedError("TOC 不需要向后反转实体")
     }
 
     override suspend fun generateJson(entities: List<TocDomainItem>) = ""
@@ -885,7 +888,8 @@ class TocViewModel(
             Bookmark(
                 bookName = book.name,
                 bookAuthor = book.author,
-                // 淇濈暀鍒涘缓鏃朵功婧愶紝鎹㈡簮鍚庤烦杞椂鎵嶈兘鏍￠獙绔犺妭鍧愭爣鏄惁浠嶅彲闈犮€?                bookUrl = book.bookUrl,
+                // 保留创建时书源，换源后跳转时才能校验章节坐标是否仍可靠。
+                bookUrl = book.bookUrl,
                 chapterIndex = item.id,
                 chapterPos = 0,
                 chapterName = item.title,
@@ -901,21 +905,23 @@ class TocViewModel(
         }
     }
 
-    /** 鍒犻櫎鎵€閫夌珷鑺傜殑瑙掕壊鍒嗛厤锛堢洰褰曢暱鎸夎彍鍗曘€屽垹闄ゅ垎閰嶃€嶏級銆?*/
+    /** 删除所选章节的角色分配（目录长按菜单「删除分配」）。 */
     fun deleteAssignmentsForSelected() = deleteSelectedChapters(
         { book, index -> CastAssignmentStore.deleteChapter(book.bookUrl, index) },
         R.string.cast_assignment_deleted_chapters,
     )
 
-    /** 鍒犻櫎鎵€閫夌珷鑺傜殑鍚功闊抽锛堢洰褰曢暱鎸夎彍鍗曘€屽垹闄ゅ惉涔︺€嶏級銆?*/
+    /** 删除所选章节的听书音频（目录长按菜单「删除听书」）。 */
     fun deleteAudioDownloadsForSelected() = deleteSelectedChapters(
         { book, index -> ReadAloudAudioStore.delete(book.bookUrl, index) },
         R.string.read_aloud_audio_download_deleted_chapters,
     )
 
     /**
-     * 瀵规墍閫夌珷鑺傞€愮珷鎵ц [action]锛屽畬鎴愬悗鎻愮ず鍒犱簡鍑犵珷銆佹竻鎺夐€夋嫨銆?     *
-     * 姝ｅ湪鏈楄杩欐湰涔︽椂璁╂湕璇讳晶閲嶆帓闃熷垪锛屽惁鍒欑敤鎴峰惉瀹岃繖鍙ヨ繕鍦ㄧ敤鍒氬垹鎺夌殑鍒嗛厤銆?     */
+     * 对所选章节逐章执行 [action]，完成后提示删了几章、清掉选择。
+     *
+     * 正在朗读这本书时让朗读侧重排队列，否则用户听完这句还在用刚删掉的分配。
+     */
     private fun deleteSelectedChapters(
         action: suspend (Book, Int) -> Unit,
         doneMessageRes: Int,

@@ -509,7 +509,7 @@ fun BookshelfConfigSheet(
                                     )
                                     CompactClickableSettingItem(
                                         title = stringResource(R.string.bookshelf_tag_content),
-                                        description = selectedTagSources.joinToString(" 路 ")
+                                        description = selectedTagSources.joinToString(" · ")
                                             .ifEmpty { stringResource(R.string.bookshelf_tag_none) },
                                         color = LegadoTheme.colorScheme.surface,
                                         onClick = { showTagContentDialog = true },

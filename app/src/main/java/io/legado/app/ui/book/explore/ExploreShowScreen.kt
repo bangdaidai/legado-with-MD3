@@ -174,8 +174,8 @@ fun ExploreShowScreen(
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val isGridMode = state.layoutState == 1
     val hazeState = remember { HazeState() }
-    // 鍙湁 url 绫诲瀷鐨勫垎绫昏兘鐩存帴鍒囨崲锛屽叾浣欑被鍨嬶紙button/text/toggle/select锛変粛璧?ExploreKindSelectSheet
-    // ViewModel 宸茬粡鎸夊ぇ鍒嗙被鍒嗙粍骞惰繃婊ゅソ锛宻tate.kinds 鍙寘鍚綋鍓嶉€変腑澶у垎绫讳笅鐨?url 鏍囩
+    // 只有 url 类型的分类能直接切换，其余类型（button/text/toggle/select）仍走 ExploreKindSelectSheet
+    // ViewModel 已经按大分类分组并过滤好，state.kinds 只包含当前选中大分类下的 url 标签
     val chipKinds = state.kinds
     val chipListState = rememberLazyListState()
     val selectedChipIndex = remember(chipKinds, state.selectedKindTitle) {
@@ -237,14 +237,15 @@ fun ExploreShowScreen(
         }
     }
 
-    // 鍒囨崲鍒嗙被鍚庢妸閫変腑鐨勬爣绛炬粴鍔ㄥ埌鍙鑼冨洿
+    // 切换分类后把选中的标签滚动到可见范围
     LaunchedEffect(selectedChipIndex) {
         if (selectedChipIndex >= 0) {
             chipListState.animateScrollToItem(selectedChipIndex)
         }
     }
 
-    // 鍒囨崲澶у垎绫诲悗鎶婇€変腑鐨勫ぇ鍒嗙被婊氬姩鍒板彲瑙佽寖鍥?    LaunchedEffect(selectedGroupIndex) {
+    // 切换大分类后把选中的大分类滚动到可见范围
+    LaunchedEffect(selectedGroupIndex) {
         if (selectedGroupIndex >= 0) {
             groupListState.animateScrollToItem(selectedGroupIndex)
         }
@@ -264,12 +265,12 @@ fun ExploreShowScreen(
             horizontalArrangement = Arrangement.Center
         ) {
             AppText(
-                text = "甯冨眬鍒楁暟",
+                text = "布局列数",
                 style = LegadoTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Spacer(modifier = Modifier.width(12.dp))
             TextCard(
-                text = "${state.gridCount} 鍒?,
+                text = "${state.gridCount} 列",
                 textStyle = LegadoTheme.typography.titleSmall,
                 backgroundColor = LegadoTheme.colorScheme.onSheetContent,
                 verticalPadding = 4.dp,

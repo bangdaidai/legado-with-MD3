@@ -196,11 +196,14 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
- * WebView 绫婚〉闈紙鍐呯疆娴忚鍣ㄣ€佽闃呴槄璇伙級鍙仛浣嶇Щ杞満銆? *
- * WebView 鏄?AndroidView interop view锛氭墍鍦ㄥ瓙鏍戜竴鏃﹁鍔犱笂 graphicsLayer锛坒ade 鐨?alpha銆? * scaleOut 鐨勭缉鏀撅級锛孋ompose 浼氭妸缃戦〉涓€骞剁敾杩涚灞?RenderNode
- * 锛坄AndroidViewHolder.draw` 鈫?`AndroidComposeView.drawAndroidView`锛夛紝Chromium 鍦ㄨ繖鏉＄粯鍒惰矾寰勪笂
- * 涓嶇ǔ瀹氾紝閮ㄥ垎璁惧浼氳〃鐜颁负缃戦〉闂儊銆俙slideIntoContainer` / `slideOutOfContainer` 鍙敼 layout
- * offset銆佷笉浜х敓鍥惧眰锛屾墍浠ヨ繖閲屼繚鐣欓粯璁ょ殑浣嶇Щ涓庢椂闀匡紝鍘绘帀 fade 涓?scale銆? */
+ * WebView 类页面（内置浏览器、订阅阅读）只做位移转场。
+ *
+ * WebView 是 AndroidView interop view：所在子树一旦被加上 graphicsLayer（fade 的 alpha、
+ * scaleOut 的缩放），Compose 会把网页一并画进离屏 RenderNode
+ * （`AndroidViewHolder.draw` → `AndroidComposeView.drawAndroidView`），Chromium 在这条绘制路径上
+ * 不稳定，部分设备会表现为网页闪烁。`slideIntoContainer` / `slideOutOfContainer` 只改 layout
+ * offset、不产生图层，所以这里保留默认的位移与时长，去掉 fade 与 scale。
+ */
 private fun webViewEntryMetadata(predictiveBackEnabled: Boolean) = metadata {
     put(NavDisplay.TransitionKey) {
         slideIntoContainer(
@@ -239,7 +242,7 @@ private fun webViewEntryMetadata(predictiveBackEnabled: Boolean) = metadata {
     }
 }
 
-/** 鍏ㄥ睆涔﹂〉锛堥槄璇?婕敾锛夎蛋鏅€?nav3 鍦烘櫙锛氫笌鏂囨湰闃呰椤靛悓涓€娈?600ms 浜ゅ弶娣″叆娣″嚭銆?*/
+/** 全屏书页（阅读/漫画）走普通 nav3 场景：与文本阅读页同一段 600ms 交叉淡入淡出。 */
 private fun readerEntryMetadata(predictiveBackEnabled: Boolean) = metadata {
     put(NavDisplay.TransitionKey) {
         fadeIn(animationSpec = tween(600)) togetherWith fadeOut(animationSpec = tween(600))
@@ -254,7 +257,7 @@ private fun readerEntryMetadata(predictiveBackEnabled: Boolean) = metadata {
     }
 }
 
-/** 璇︽儏椤垫洿蹇竴妗ｏ細瀹冩槸銆屾墦寮€涓€鏈功銆嶇殑绗簩娈碉紝涓嬮潰杩樺帇鐫€闃呰椤点€?*/
+/** 详情页更快一档：它是「打开一本书」的第二段，下面还压着阅读页。 */
 private fun bookInfoEntryMetadata(predictiveBackEnabled: Boolean) = metadata {
     put(NavDisplay.TransitionKey) {
         fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
@@ -280,9 +283,11 @@ private fun modalOverlayEntryMetadata(): Map<String, Any> =
     }
 
 /**
- * 鍚功鎾斁寮瑰眰銆岀粡鍏告帶鍒躲€嶇殑鐩爣鍒ゅ畾锛氭爤椤舵槸闃呰鐣岄潰鏃舵妸璇锋眰浜ょ粰瀹冿紝
- * 鍚﹀垯鏂板紑闃呰鐣岄潰銆傛娊鎴愮函鍑芥暟浠ヤ究鍗曟祴瑕嗙洊杩欐潯鍒嗘敮銆? *
- * 鎾斁寮瑰眰涓嶅湪瀵艰埅鏍堜笂锛屾墍浠ュ垽鎹槸銆屽綋鍓嶉《灞傘€嶈€屼笉鏄€屼笂涓€绔欍€嶃€? */
+ * 听书播放弹层「经典控制」的目标判定：栈顶是阅读界面时把请求交给它，
+ * 否则新开阅读界面。抽成纯函数以便单测覆盖这条分支。
+ *
+ * 播放弹层不在导航栈上，所以判据是「当前顶层」而不是「上一站」。
+ */
 internal fun isReaderOnTop(backStack: List<NavKey>): Boolean =
     backStack.lastOrNull() is MainRouteReadBook
 
@@ -320,14 +325,18 @@ fun MainActivity.mainEntryProvider(
     onNavigationRailWidthChanged: (androidx.compose.ui.unit.Dp) -> Unit,
     onNavigateBack: () -> Unit,
     /**
-     * 銆岃兌鍥?鈫?鍚功鎾斁椤点€嶇殑褰㈠彉鐘舵€併€?     *
-     * 涓荤晫闈㈣鎶婂惉涔﹁兌鍥婃帓鍦ㄦ偓娴簳鏍忓悓涓€琛岄噷锛岄渶瑕佹妸鑳跺泭鐨勯敋鐐逛笂鎶ョ粰鍚屼竴涓繘搴︽簮锛?     * 鎵€浠ヨ繖閲岄€忎紶锛堝叾浣欑洰鐨勫湴涓嶇敤锛夈€?     */
+     * 「胶囊 ↔ 听书播放页」的形变状态。
+     *
+     * 主界面要把听书胶囊排在悬浮底栏同一行里，需要把胶囊的锚点上报给同一个进度源，
+     * 所以这里透传（其余目的地不用）。
+     */
     readAloudMorph: ReadAloudMorphState?,
     homePlaybackCapsuleEnabled: Boolean,
     capsuleAnchorPreview: io.legado.app.domain.model.PlaybackCapsuleState?,
 ) = mainPaneEntryProvider(backStack, panesEnabled, navRouteTracker, navigateToRoute) {
     entry<MainRouteToc> { route ->
-        // VM 鎻愬埌 entry 閲岋紝鏄负浜嗚銆岃鍒欏垪琛ㄩ€夊ソ鐨勮鍒欍€嶈兘浠庤繖閲屽洖鐏岋紙SaveTocRegex锛夈€?        val tocViewModel = koinViewModel<TocViewModel>()
+        // VM 提到 entry 里，是为了让「规则列表选好的规则」能从这里回灌（SaveTocRegex）。
+        val tocViewModel = koinViewModel<TocViewModel>()
         ConsumeBookPageResult(route, backStack.lastOrNull() == route, navRouteTracker) { result ->
             when (result) {
                 is BookPageResult.TxtTocRuleChosen -> {
@@ -700,7 +709,8 @@ fun MainActivity.mainEntryProvider(
             onBackClick = { onNavigateBack() },
             onNavigateToOther = { pushRoute(MainRouteSettingsOther) },
             onNavigateToRead = { pushRoute(MainRouteSettingsRead) },
-            // 鏈楄瑙勫垯 hub锛氬叆鍙ｄ粠銆屾垜鐨勩€嶇Щ鍒拌缃紝椤甸潰鏍囬涓庤繖閲岀粺涓€鍙€屾湕璇昏缃€?            onNavigateToReadAloud = { pushRoute(MainRouteMultiRoleRule) },
+            // 朗读规则 hub：入口从「我的」移到设置，页面标题与这里统一叫「朗读设置」
+            onNavigateToReadAloud = { pushRoute(MainRouteMultiRoleRule) },
             onNavigateToCover = { pushRoute(MainRouteSettingsCover) },
             onNavigateToTheme = { pushRoute(MainRouteSettingsTheme) },
             onNavigateToBackup = { pushRoute(MainRouteSettingsBackup) },
@@ -821,7 +831,9 @@ fun MainActivity.mainEntryProvider(
     }
 
     entry<MainRouteSettingsPrivate> {
-        // 闅愮璁剧疆椤靛彲浠ュ叧鎺変笁绉嶉獙璇佹椂鏈猴紝鎵€浠ヨ繘鍏ュ墠瑕佹眰纭韬唤锛堢敓鐗╂垨瀵嗙爜锛夈€?        // 鍙牎楠屻€佷笉鎺堜簣锛氳繘鏉ヤ竴娆′笉璇ラ『甯﹁В閿佺瀵嗗唴瀹广€?        PrivateVerifyGate(onCancel = { onNavigateBack() }) {
+        // 隐私设置页可以关掉三种验证时机，所以进入前要求确认身份（生物或密码）。
+        // 只校验、不授予：进来一次不该顺带解锁私密内容。
+        PrivateVerifyGate(onCancel = { onNavigateBack() }) {
             PrivateConfigRouteScreen(onBackClick = { onNavigateBack() })
         }
     }
@@ -873,8 +885,9 @@ fun MainActivity.mainEntryProvider(
     entry<MainRouteReadBook>(
         metadata = readerEntryMetadata(configuration.appShell.predictiveBackEnabled)
     ) { route ->
-        // 绉佸瘑闂搁棬锛氶槄璇昏褰?/ 閫氱煡鏍?/ 娣遍摼绛夌洿寮€闃呰鍣ㄧ殑璺緞鍏ㄩ兘鍦ㄨ繖閲岃鎷︿竴娆★紝
-        // 鏈巿鏉冩椂闃呰鍣ㄦ牴鏈笉浼氳缁勫悎锛堜篃灏辨病鏈夊姞杞芥鏂囩殑鏈轰細锛?        PrivateReadGate(
+        // 私密闸门：阅读记录 / 通知栏 / 深链等直开阅读器的路径全都在这里被拦一次，
+        // 未授权时阅读器根本不会被组合（也就没有加载正文的机会）
+        PrivateReadGate(
             bookUrl = route.bookUrl,
             onExit = {
                 if (backStack.size > 1) {
@@ -885,7 +898,8 @@ fun MainActivity.mainEntryProvider(
                         fromRoute = route,
                     )
                 } else {
-                    // 閫氱煡 / 娣遍摼鍙兘璁╅槄璇诲櫒鎴愪负鏍堥噷鍞竴涓€椤癸細娌℃湁"褰撳墠椤?鍙€€锛?                    // 鎸夌害瀹氳惤鍒颁功鏋讹紝鑰屼笉鏄妸搴旂敤鍏虫帀
+                    // 通知 / 深链可能让阅读器成为栈里唯一一项：没有"当前页"可退，
+                    // 按约定落到书架，而不是把应用关掉
                     backStack.clear()
                     backStack.add(MainRouteHome)
                 }
@@ -908,8 +922,9 @@ fun MainActivity.mainEntryProvider(
                     this@mainEntryProvider,
                     readBookViewModel,
                     readerSessionViewModel,
-                    // 鐢诲竷鍦ㄩ娆＄粍鍚堝氨浼氳姹傚垎椤碉紝鏈矾鐢辫寮€鍝湰涔﹀繀椤婚殢鏋勯€犲氨浣嶏細
-                    // 閭ｆ湡闂?ReadBook 鍗曚緥閲屽彲鑳借繕鏄笂涓€鏈功鐨勭珷鑺傘€?                    routeBookUrl = route.bookUrl,
+                    // 画布在首次组合就会请求分页，本路由要开哪本书必须随构造就位：
+                    // 那期间 ReadBook 单例里可能还是上一本书的章节。
+                    routeBookUrl = route.bookUrl,
                 )
             }
             ReaderPerfTrace.marker("nav.controller.ready")
@@ -952,7 +967,8 @@ fun MainActivity.mainEntryProvider(
             }
             val readerResumeState = remember(controller, lifecycleOwner) { booleanArrayOf(false) }
             val collectorReady = remember(readBookViewModel) { booleanArrayOf(false) }
-            // 鏄惁璺熼殢鏈楄浣嶇疆锛氱敤鎴锋墜鍔ㄧ炕椤?璺崇珷鍚庝负 false锛屾鏃跺洖闃呰鐣岄潰涓嶅洖鎷夊彲瑙侀〉銆?            val readAloudSessionStore: ReadAloudSessionStore = org.koin.compose.koinInject()
+            // 是否跟随朗读位置：用户手动翻页/跳章后为 false，此时回阅读界面不回拉可见页。
+            val readAloudSessionStore: ReadAloudSessionStore = org.koin.compose.koinInject()
             val readAloudFollow = remember(readBookViewModel) { booleanArrayOf(true) }
             LaunchedEffect(readAloudSessionStore) {
                 readAloudSessionStore.state
@@ -965,7 +981,10 @@ fun MainActivity.mainEntryProvider(
                 readerResumeState[0] = true
                 controller.onResume()
                 readBookViewModel.onIntent(ReadBookIntent.OnResume)
-                // 鍥炲埌闃呰鐣岄潰鏃舵妸鍙椤靛榻愬埌褰撳墠鏈楄浣嶇疆锛氭湕璇绘湡闂寸敤鎴峰彲鑳借繘鍚功椤佃烦娈?璺崇珷锛?                // 鏈嶅姟椹卞姩鐨勬槸鍐呴儴椤垫父鏍囷紝鍙椤甸渶瑕佹樉寮忓洖浣嶏紝鍚﹀垯鍋滃湪绂诲紑鏃堕偅涓€椤点€?                // 鍙湪璺熼殢鐘舵€佷笅鍋氾紙鐢ㄦ埛鎵嬪姩缈婚〉鑴辩鍚庝笉鍥炴媺锛夛紝璇箟涓庛€屽洖鍒版湕璇讳綅缃€嶄竴鑷淬€?                if (ReadBook.isCurrentBookReadAloud && readAloudFollow[0]) {
+                // 回到阅读界面时把可见页对齐到当前朗读位置：朗读期间用户可能进听书页跳段/跳章，
+                // 服务驱动的是内部页游标，可见页需要显式回位，否则停在离开时那一页。
+                // 只在跟随状态下做（用户手动翻页脱离后不回拉），语义与「回到朗读位置」一致。
+                if (ReadBook.isCurrentBookReadAloud && readAloudFollow[0]) {
                     readBookViewModel.onIntent(ReadBookIntent.BackToSpeakingPosition)
                 }
             }
@@ -1167,7 +1186,8 @@ fun MainActivity.mainEntryProvider(
         }
     }
 
-    // 鍏煎宸蹭繚瀛樼殑瀵艰埅鏍堛€傛柊鍏ュ彛鍦?MainActivity 鐩存帴鎵撳紑鍚岀獥鍙ｆ挱鏀炬诞灞傘€?    entry<MainRouteAudioPlay>(metadata = modalOverlayEntryMetadata()) { route ->
+    // 兼容已保存的导航栈。新入口在 MainActivity 直接打开同窗口播放浮层。
+    entry<MainRouteAudioPlay>(metadata = modalOverlayEntryMetadata()) { route ->
         LaunchedEffect(route) {
             ReadAloudPlayerOverlayBus.request(
                 PlaybackCapsuleState(
@@ -1417,7 +1437,8 @@ fun MainActivity.mainEntryProvider(
             onOpenSourceLogin = { sourceUrl ->
                 onNavigateToRoute(MainRouteSourceLogin(SourceLoginType.BookSource, sourceUrl))
             },
-            // 绉佸瘑鍐呭闇€瑕佹湰鍦板瘑鐮侊細鐩存帴鎶婁汉閫佸埌绉佸瘑璁剧疆椤碉紝鑰屼笉鏄彧寮逛竴鍙ユ彁绀?            onOpenSettings = {
+            // 私密内容需要本地密码：直接把人送到私密设置页，而不是只弹一句提示
+            onOpenSettings = {
                 onNavigateToRoute(MainRouteSettingsPrivate)
             },
             onOpenReader = { bookUrl, inBookshelf, chapterChanged ->
@@ -1426,7 +1447,8 @@ fun MainActivity.mainEntryProvider(
                         bookUrl = bookUrl,
                         inBookshelf = inBookshelf,
                         chapterChanged = chapterChanged,
-                        // 涓庤鎯呴〉灏侀潰鐧昏鍦ㄥ悓涓€涓?key 涓婏紝灏侀潰鎵嶈兘浠庤鎯呴〉缁х画椋炶繘闃呰椤点€?                        sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(bookUrl),
+                        // 与详情页封面登记在同一个 key 上，封面才能从详情页继续飞进阅读页。
+                        sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(bookUrl),
                     )
                 )
             },
@@ -1502,7 +1524,8 @@ fun MainActivity.mainEntryProvider(
             onBack = { onNavigateBack() },
             onPickAvatar = { showAvatarSource = true },
         )
-        // 澶村儚鏈変袱绉嶆潵婧愶紙鏈湴鏂囦欢 / 鍥剧墖閾炬帴锛夛紝閫夋嫨鍣ㄥ悓鏃舵彁渚涖€岀紪杈戝綋鍓嶅ご鍍忋€嶉噸杩涜鍓€?        CharacterAvatarSourceSheet(
+        // 头像有两种来源（本地文件 / 图片链接），选择器同时提供「编辑当前头像」重进裁剪。
+        CharacterAvatarSourceSheet(
             show = showAvatarSource,
             onDismissRequest = { showAvatarSource = false },
             onPickLocal = {
@@ -1511,8 +1534,9 @@ fun MainActivity.mainEntryProvider(
             },
             onUrl = { url ->
                 showAvatarSource = false
-                // 鏃уご鍍忔枃浠剁敱 ViewModel 鍦ㄨ惤搴撴垚鍔熷悗鍐嶅垹锛堣 save 鐨?avatarChanged 鍒嗘敮锛夛細
-                // 鍦ㄨ繖閲屽垹鐨勮瘽锛岀敤鎴蜂笉淇濆瓨灏遍€€鍑猴紝妗ｆ閲岀暀鐨勬槸涓凡琚垹鎺夌殑鍦板潃銆?                viewModel.onIntent(CharacterDetailIntent.SetAvatarUri(url))
+                // 旧头像文件由 ViewModel 在落库成功后再删（见 save 的 avatarChanged 分支）：
+                // 在这里删的话，用户不保存就退出，档案里留的是个已被删掉的地址。
+                viewModel.onIntent(CharacterDetailIntent.SetAvatarUri(url))
             },
             hasAvatar = state.avatarUri.isNotBlank(),
             onEditAvatar = {
@@ -1712,7 +1736,7 @@ fun MainActivity.mainEntryProvider(
 
         ExploreShowRouteScreen(
             viewModel = exploreViewModel,
-            title = route.title ?: "鎺㈢储",
+            title = route.title ?: "探索",
             onBack = { onNavigateBack() },
             onBookClick = { book, sharedCoverKey ->
                 onNavigateToRoute(
@@ -1737,8 +1761,9 @@ fun MainActivity.mainEntryProvider(
         )
     }
 
-    // 浠ヤ笅涓変釜鍘熷厛鍚勮嚜鏄竴涓杽澹?Activity锛堝彧涓?setContent 鑰屽瓨鍦級銆傛敼鎴愭櫘閫氱洰鐨勫湴鍚庯紝
-    // 瀹界獥鍙ｄ笅鑳戒笌棣栭〉骞舵帓鎴愬彸鏍忥紝涔熷洖鍒?NavDisplay 鐨勭粺涓€杞満閲屻€?
+    // 以下三个原先各自是一个薄壳 Activity（只为 setContent 而存在）。改成普通目的地后，
+    // 宽窗口下能与首页并排成右栏，也回到 NavDisplay 的统一转场里。
+
     entry<MainRouteDictRule> {
         DictRuleRouteScreen(onBackClick = { onNavigateBack() })
     }
@@ -1746,7 +1771,8 @@ fun MainActivity.mainEntryProvider(
     entry<MainRouteTxtTocRule> { route ->
         TxtRuleRouteScreen(
             initialRule = route.initialRule,
-            // 閫夋嫨妯″紡锛氫负鎵撳紑瀹冪殑鐩綍椤垫寫涓€鏉¤鍒欙紝閫変腑鍗冲洖浼犲苟閫€鍑恒€?            onPickRule = route.pickForBookUrl?.let {
+            // 选择模式：为打开它的目录页挑一条规则，选中即回传并退出。
+            onPickRule = route.pickForBookUrl?.let {
                 { rule ->
                     closeBookPage(backStack, route, BookPageResult.TxtTocRuleChosen(rule))
                 }
@@ -1844,7 +1870,7 @@ fun MainActivity.mainEntryProvider(
     }
 }
 
-/** 鏈夊０涔︾殑 Android 瀹夸富鍔ㄤ綔锛涙挱鏀鹃〉涓庡惉涔﹂〉鍏辩敤鍚岀獥鍙ｅ舰鍙樼粍浠躲€?*/
+/** 有声书的 Android 宿主动作；播放页与听书页共用同窗口形变组件。 */
 @Composable
 internal fun MainActivity.AudioPlayerMorphOverlay(
     bookUrl: String,
@@ -1855,7 +1881,8 @@ internal fun MainActivity.AudioPlayerMorphOverlay(
     predictiveBackEnabled: Boolean,
     onDismiss: () -> Unit,
 ) {
-    // 娴眰鍏抽棴鍚庨噴鏀鹃〉闈?VM锛涙挱鏀炬湇鍔″拰浼氳瘽缁х画淇濈暀锛岄噸鏂版墦寮€浼氶噸鏂板悓姝ヤ功绫嶃€?    val playerStoreOwner = remember {
+    // 浮层关闭后释放页面 VM；播放服务和会话继续保留，重新打开会重新同步书籍。
+    val playerStoreOwner = remember {
         object : ViewModelStoreOwner {
             override val viewModelStore = ViewModelStore()
         }
