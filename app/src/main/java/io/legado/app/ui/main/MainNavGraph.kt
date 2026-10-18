@@ -1094,6 +1094,10 @@ fun MainActivity.mainEntryProvider(
                 onOpenReadAloudSubPage = { page ->
                     onNavigateToRoute(page.toMainRoute())
                 },
+                // 朗读菜单里的「朗读设置」：整页设置宿主，按本书上下文进入
+                onOpenReadAloudConfig = { bookUrl ->
+                    onNavigateToRoute(MainRouteReadAloudConfig(bookUrl))
+                },
                 onOpenTtsEnginesAndVoices = {
                     onNavigateToRoute(MainRouteCloudTtsEngines(route.bookUrl))
                 },
@@ -1549,6 +1553,12 @@ fun MainActivity.mainEntryProvider(
             },
             onOpenEventList = { bookUrl ->
                 onNavigateToRoute(MainRouteBookEventList(bookUrl))
+            },
+            onNavigateToReadingMemory = { bookUrl ->
+                onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl))
+            },
+            onNavigateToAuthorDetail = { author ->
+                onNavigateToRoute(MainRouteAuthorDetail(name = author))
             },
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = LocalNavAnimatedContentScope.current,
