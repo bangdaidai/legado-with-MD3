@@ -8,6 +8,7 @@ import io.legado.app.domain.gateway.BackupSettingsGateway
 import io.legado.app.domain.model.settings.BackupSettings
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.WebDavBackupUseCase
+import io.legado.app.utils.AppLog
 import io.legado.app.utils.isContentScheme
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -299,7 +300,7 @@ class BackupConfigViewModel(
             runCatching { backupRestoreUseCase.restoreLocal(Uri.parse(uri).toString()) }
                 .fold(
                     onSuccess = { finishRestoreSuccess() },
-                    onFailure = { finishRestoreFailure(it.localizedMessage) },
+                    onFailure = { finishRestoreFailure(it.localizedMessage, error = it) },
                 )
         }
     }
@@ -343,7 +344,7 @@ class BackupConfigViewModel(
             runCatching { webDavBackupUseCase.restore(name) }
                 .fold(
                     onSuccess = { finishRestoreSuccess() },
-                    onFailure = { finishRestoreFailure(it.localizedMessage, webDav = true) },
+                    onFailure = { finishRestoreFailure(it.localizedMessage, webDav = true, error = it) },
                 )
         }
     }
@@ -353,16 +354,23 @@ class BackupConfigViewModel(
         _uiState.update { it.copy(activeDialog = null) }
     }
 
-    private suspend fun finishRestoreFailure(message: String?, webDav: Boolean = false) =
-        withContext(Dispatchers.Main) {
-            _uiState.update { it.copy(activeDialog = null) }
-            _effects.tryEmit(
-                BackupConfigEffect.ShowMessage(
-                    if (webDav) R.string.webdav_restore_fail else R.string.restore_fail_with_error,
-                    message,
-                )
-            )
+    private suspend fun finishRestoreFailure(
+        message: String?,
+        webDav: Boolean = false,
+        error: Throwable? = null,
+    ) = withContext(Dispatchers.Main) {
+        // 设置页恢复此前只把 localizedMessage 塞进弹窗、不落日志，用户报错时拿不到堆栈。
+        if (error != null) {
+            AppLog.put("${if (webDav) "WebDav" else "本地"}恢复出错\n${error.localizedMessage}", error)
         }
+        _uiState.update { it.copy(activeDialog = null) }
+        _effects.tryEmit(
+            BackupConfigEffect.ShowMessage(
+                if (webDav) R.string.webdav_restore_fail else R.string.restore_fail_with_error,
+                message,
+            )
+        )
+    }
 
     private companion object {
         fun loadIgnoreItems() = io.legado.app.help.storage.BackupConfig.ignoreKeys
