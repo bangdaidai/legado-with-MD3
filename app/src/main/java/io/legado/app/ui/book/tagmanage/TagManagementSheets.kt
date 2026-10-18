@@ -348,7 +348,13 @@ fun GroupManageSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = "分组管理",
-        endAction = { SmallPlainButton(text = "新增", icon = Icons.Default.Add, onClick = onAdd) },
+        endAction = {
+            MediumTonalButton(
+                onClick = onAdd,
+                icon = Icons.Default.Add,
+                contentDescription = stringResource(R.string.add),
+            )
+        },
     ) {
         LazyColumn(
             state = listState,
@@ -461,13 +467,13 @@ private fun TagGroupItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                SmallPlainButton(
+                MediumTonalButton(
                     onClick = {
                         onUpdateGroup(group, state.text.toString())
                         expanded = false
                     },
                     icon = Icons.Default.Check,
-                    text = stringResource(id = R.string.ok)
+                    contentDescription = stringResource(id = R.string.ok),
                 )
             }
         }
