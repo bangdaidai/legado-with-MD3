@@ -254,7 +254,7 @@ val verifyConfigArchitecture = tasks.register<VerifyConfigArchitectureTask>(
             // 保留 0 值条目让棘轮继续盯着这个文件——新增一处直连就报红。
             "io/legado/app/ui/book/read/ReadBookViewModel.kt" to 0,
             // 护栏缺席期间（MAD-3 未合并窗口）main 新增的直连，随合并冻结，清理归 Track A/F2
-            "io/legado/app/ui/book/readaloud/cloudtts/CloudTtsViewModel.kt" to 13,
+            "io/legado/app/ui/book/readaloud/cloudtts/CloudTtsViewModel.kt" to 5,
             // Track E: Tag 功能新增 ViewModel，冻结基线
             "io/legado/app/ui/book/tagdetail/TagDetailViewModel.kt" to 38,
             "io/legado/app/ui/book/tagmanage/TagManagementViewModel.kt" to 23,
