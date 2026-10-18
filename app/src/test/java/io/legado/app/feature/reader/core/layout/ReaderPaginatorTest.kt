@@ -983,6 +983,86 @@ class ReaderPaginatorTest {
     }
 
     /**
+     * 外边距（bgMargin）把原始断行挤短时，不能把原始行拆出一字残行：
+     * 第二行照样放下剩下的字，且每个气泡段首仍让出 marginStart。
+     */
+    @Test
+    fun nineSliceReflowDoesNotStrandTheRemainderOfAnOriginalLine() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 3f,
+            marginEndPx = 4f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = (0 until 4).map { index ->
+                        ReaderMeasuredInlineItem.Text("字", 10f, framedStyle, index)
+                    },
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 35, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        // bgMargin（每字 10 + 3 + 4 = 17px）把原始 3 字行挤成 2 字，但不把原始行拆成
+        // 一字残行：第二行同样放下剩下的两个字。
+        assertEquals(listOf(0f, 0f, 20f, 20f), glyphs.map { it.bounds.top })
+        assertEquals(listOf(3f, 13f, 3f, 13f), glyphs.map { it.bounds.left })
+    }
+
+    /**
+     * 外边距收缩断行时，最近候选点违反避头尾（下一行将以句号开头）必须跳过禁则
+     * 继续向前找合法断点，不能放弃收缩保留整行：未让出外边距的行尾会越出版心，
+     * 内容层按版心裁字（contentClipPadPx 常规为 0），行尾文字被整字剪掉（真机丢字）。
+     */
+    @Test
+    fun marginShrinkWalksPastForbiddenBreaksInsteadOfOverflowingTheLine() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 11f,
+            marginEndPx = 2f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        // 内容区宽 34：原始断点 3 字整行放下（30≤34），加外边距后 43>34 必须收缩。
+        // 首个候选断点在 乙|。 之间（句号不能起行，禁则），更早的 甲|乙 才合法。
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = listOf(
+                        ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 0),
+                        ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 1),
+                        ReaderMeasuredInlineItem.Text("。", 10f, framedStyle, 2),
+                    ),
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 34, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        // 收缩落点前移一字：第一行只放「甲」，「乙。」整体换行，行尾不越内容区（34）。
+        assertEquals(listOf("甲", "乙", "。"), glyphs.map { it.value })
+        assertEquals(listOf(0f, 20f, 20f), glyphs.map { it.bounds.top })
+        assertEquals(listOf(11f, 11f, 21f), glyphs.map { it.bounds.left })
+        assertTrue(glyphs.all { it.bounds.right <= 34f })
+    }
+
+    /**
      * 命中行行距：包含命中的那一行整行往下抬 before 那一截，之后多留 after 那一截；
      * 行盒本身高度不变，不然字会被挤扁。
      */

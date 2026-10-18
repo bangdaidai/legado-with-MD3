@@ -52,6 +52,21 @@ data class ReaderTextBackgroundImage(
     val ninePatchRight: Float = 0.1f,
     val ninePatchTop: Float = 0.1f,
     val ninePatchBottom: Float = 0.1f,
+    /**
+     * 内边距（px）：文字在背景图内部的边距，背景框相对文字四周向外扩这么多。
+     * 旧引擎 `bgPadding*`，与规则编辑预览同一套语义（上下内边距并入中段拉伸区，不塞进角块）。
+     * 负值把背景框向文字内侧收。
+     */
+    val paddingLeftPx: Float = 0f,
+    val paddingRightPx: Float = 0f,
+    val paddingTopPx: Float = 0f,
+    val paddingBottomPx: Float = 0f,
+    /**
+     * 外边距（px）：背景段与相邻文字的水平间距，只在排版避让时让出，不随图片画出。
+     * 旧引擎 `bgMargin*Start/End`（见 `ReaderPaginator.backgroundMarginBefore/After`）。
+     */
+    val marginStartPx: Float = 0f,
+    val marginEndPx: Float = 0f,
     /** 九宫格左偏移（px）：中间那一格向左多拉（负值少拉）这么多，左边那两条边跟着平移。 */
     val lengthOffsetLeftPx: Float = 0f,
     /** 九宫格右偏移（px）：见 [lengthOffsetLeftPx]，方向相反。 */
@@ -154,7 +169,10 @@ private fun ReaderTextBackgroundImage.sizeFactor(): Float = scale.coerceIn(0.1f,
  */
 fun ReaderTextBackgroundImage.verticalScalePx(lineHeightPx: Float): Float {
     if (fit != 3 || contentBandHeightPx <= 0f || lineHeightPx <= 0f) return 1f
-    return lineHeightPx * sizeFactor() / contentBandHeightPx
+    // 中带目标高 = 行盒 × 图片大小 + 上下内边距：内边距把中段拉伸区一起撑大，
+    // 与规则编辑预览 NinePatchDrawHelper.layout 的 middleDstH 同口径。
+    val bandPx = (lineHeightPx * sizeFactor() + paddingTopPx + paddingBottomPx).coerceAtLeast(1f)
+    return bandPx / contentBandHeightPx
 }
 
 /**
@@ -169,11 +187,21 @@ fun ReaderTextBackgroundImage.bandOverhangPx(lineHeightPx: Float): Float =
  * 非九宫格不外扩。
  */
 fun ReaderTextBackgroundImage.frameTopPx(lineHeightPx: Float): Float =
-    if (fit != 3) 0f else bandOverhangPx(lineHeightPx) + contentInsetTopPx * verticalScalePx(lineHeightPx)
+    if (fit != 3) {
+        0f
+    } else {
+        bandOverhangPx(lineHeightPx) + contentInsetTopPx * verticalScalePx(lineHeightPx) +
+                paddingTopPx
+    }
 
 /** [frameTopPx] 的下沿那一半：额外那一截上下各分一半，字才会留在带子正中。 */
 fun ReaderTextBackgroundImage.frameBottomPx(lineHeightPx: Float): Float =
-    if (fit != 3) 0f else bandOverhangPx(lineHeightPx) + contentInsetBottomPx * verticalScalePx(lineHeightPx)
+    if (fit != 3) {
+        0f
+    } else {
+        bandOverhangPx(lineHeightPx) + contentInsetBottomPx * verticalScalePx(lineHeightPx) +
+                paddingBottomPx
+    }
 
 /**
  * 九宫格左边条画出去多宽 = 左边条也按**同一个** [verticalScalePx] 换算。
@@ -184,11 +212,11 @@ fun ReaderTextBackgroundImage.frameBottomPx(lineHeightPx: Float): Float =
  * 只有中间那一格允许被单独拉宽（那是文字宽度，见 [stretchLeftPx]）。
  */
 fun ReaderTextBackgroundImage.frameLeftPx(lineHeightPx: Float): Float =
-    if (fit != 3) 0f else contentInsetLeftPx * verticalScalePx(lineHeightPx)
+    if (fit != 3) 0f else contentInsetLeftPx * verticalScalePx(lineHeightPx) + paddingLeftPx
 
 /** [frameLeftPx] 的右边那一半。 */
 fun ReaderTextBackgroundImage.frameRightPx(lineHeightPx: Float): Float =
-    if (fit != 3) 0f else contentInsetRightPx * verticalScalePx(lineHeightPx)
+    if (fit != 3) 0f else contentInsetRightPx * verticalScalePx(lineHeightPx) + paddingRightPx
 
 /**
  * 中间带（= 文字显示区域）的下限，占整张图高：倍率的最大值由它决定，

@@ -3259,10 +3259,13 @@ internal fun drawTextBackground(
                 rightX = 1f - image.ninePatchRight.coerceIn(0f, 1f),
                 topY = image.ninePatchTop.coerceIn(0f, 1f),
                 bottomY = 1f - image.ninePatchBottom.coerceIn(0f, 1f),
-                cornerL = (content.left - frame.left).coerceAtLeast(0f),
-                cornerR = (frame.right - content.right).coerceAtLeast(0f),
-                cornerT = (content.top - frame.top).coerceAtLeast(0f),
-                cornerB = (frame.bottom - content.bottom).coerceAtLeast(0f),
+                // 外框 bounds 里已经含了内边距（frame*Px 加上了 padding*）：角块只画原图
+                // 边条那一截（不含 padding），中段拉伸区才把 padding 一起吞进去，
+                // 与规则编辑预览 NinePatchDrawHelper.layout 的 box/corner 同一套口径。
+                cornerL = (content.left - frame.left - image.paddingLeftPx).coerceAtLeast(0f),
+                cornerR = (frame.right - content.right - image.paddingRightPx).coerceAtLeast(0f),
+                cornerT = (content.top - frame.top - image.paddingTopPx).coerceAtLeast(0f),
+                cornerB = (frame.bottom - content.bottom - image.paddingBottomPx).coerceAtLeast(0f),
                 borderPx = if (image.hasNinePatchBorder) 1f else 0f,
             )
         }

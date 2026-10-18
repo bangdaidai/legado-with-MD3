@@ -411,6 +411,12 @@ object LegacyReaderStyleRangeMapper {
                 ninePatchRight = automatic?.right ?: npRight,
                 ninePatchTop = automatic?.top ?: npTop,
                 ninePatchBottom = automatic?.bottom ?: npBottom,
+                paddingLeftPx = bgPaddingStart.dpToPx(),
+                paddingRightPx = bgPaddingEnd.dpToPx(),
+                paddingTopPx = bgPaddingTop.dpToPx(),
+                paddingBottomPx = bgPaddingBottom.dpToPx(),
+                marginStartPx = bgMarginStart.dpToPx(),
+                marginEndPx = bgMarginEnd.dpToPx(),
                 lengthOffsetLeftPx = bgLengthOffsetLeft.dpToPx(),
                 lengthOffsetRightPx = bgLengthOffsetRight.dpToPx(),
             ).let { image ->

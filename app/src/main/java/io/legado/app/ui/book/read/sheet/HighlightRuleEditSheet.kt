@@ -124,6 +124,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
+import kotlin.math.roundToInt
 
 @Composable
 fun HighlightRuleEditSheet(
@@ -747,6 +748,21 @@ fun HighlightRuleEditSheet(
                                     showNinePatchEditor = true
                                 }
                             },
+                        )
+
+                        // 图片大小：整张背景图的等比倍率。1.0 时中段（字号区）正好等于行高，
+                        // 即纯粹随行高等比；>1 整张图（含四角）一起放大，<1 一起缩小。
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.highlight_bg_image_scale),
+                            value = bgImageScale,
+                            // 与 HighlightRuleRepository.sanitizeRule 的 coerceIn(0.1f, 5f) 一致
+                            valueRange = 0.1f..5f,
+                            steps = 48,
+                            stepSize = 0.1f,
+                            showDecimal = true,
+                            valueFormat = { String.format("%.1f", it) },
+                            description = String.format("%.1fx", bgImageScale),
+                            onValueChange = { bgImageScale = (it * 10).roundToInt() / 10f },
                         )
 
                         AnimatedVisibility(visible = bgImageFit == 3) {
