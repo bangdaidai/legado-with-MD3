@@ -712,26 +712,6 @@ internal class ReaderPaginationSession(
             (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)?.style?.backgroundImage
         } else null
 
-        /**
-         * 外边距（bgMargin）只对九宫格背景生效：背景框不随排版画出，但段首字之前、
-         * 段尾字之后要让出用户设的间距，把相邻文字从气泡上推开。
-         */
-        fun itemFrame(index: Int) = backgroundOf(index)?.takeIf { it.fit == 3 }
-
-        fun backgroundMarginBefore(index: Int, lineStart: Int): Float {
-            val image = itemFrame(index) ?: return 0f
-            return if (index == lineStart || itemFrame(index - 1) != image) {
-                image.marginStartPx.coerceAtLeast(0f)
-            } else 0f
-        }
-
-        fun backgroundMarginAfter(index: Int, lineEnd: Int): Float {
-            val image = itemFrame(index) ?: return 0f
-            return if (index + 1 == lineEnd || itemFrame(index + 1) != image) {
-                image.marginEndPx.coerceAtLeast(0f)
-            } else 0f
-        }
-
         val breaker = ChineseLineBreaker(
             clusters = clusters,
             widthsPx = paragraph.items.mapIndexed { index, item ->
@@ -748,7 +728,8 @@ internal class ReaderPaginationSession(
         val originalEnds = breaker.lineClusterStarts.drop(1)
         val refineStartNs = if (metrics != null) System.nanoTime() else 0L
         val starts = mutableListOf(0)
-        // 背景图（含九宫格）不参与排版：它只是压在字后面的装饰，超出边距也只超出图本身。
+        // 背景图（含九宫格）不参与排版：它只是压在字后面的装饰，外边距/内边距超出的部分
+        // 也只超出图本身（见 ReaderTextBackgroundRun.textBackgroundRuns 的收尾外扩）。
         // 这里只按字形宽 + 命中字距收紧行尾，让断行结果与不开任何背景图时逐字一致。
         // Keep a forbidden Chinese break intact even if its row has to consume the
         // remaining slack, matching the legacy punctuation priority.
@@ -757,9 +738,6 @@ internal class ReaderPaginationSession(
             val lineIndent =
                 if (starts.size == 1) indentWidth else paragraph.restLineIndentWidthPx
             val available = config.contentWidthPx - lineIndent
-            // Advance the original visual-line cursor even when a frame forces the
-            // preceding row shorter. Reusing the first end after `from` would strand the
-            // remainder of that row as an unnecessary one-character line.
             var until = originalEnds.getOrElse(starts.lastIndex) { paragraph.items.size }
                 .coerceAtLeast(from + 1)
 
@@ -767,9 +745,7 @@ internal class ReaderPaginationSession(
                 var widthSum = 0.0
                 for (index in from until endExclusive) {
                     widthSum += (paragraph.items[index].widthPx +
-                            matchSpacingPx[index] +
-                            backgroundMarginBefore(index, from) +
-                            backgroundMarginAfter(index, endExclusive)).toDouble()
+                            matchSpacingPx[index]).toDouble()
                 }
                 return widthSum.toFloat() +
                         letterSpacing * (endExclusive - from - 1).coerceAtLeast(0)
@@ -798,13 +774,6 @@ internal class ReaderPaginationSession(
             val lineItems = paragraph.items.subList(from, until)
             val itemCount = until - from
 
-            // 本行内每一项的左右外边距（只对九宫格背景非零，行内其余项恒为 0）。
-            fun backgroundMarginBefore(index: Int) =
-                backgroundMarginBefore(from + index, from)
-
-            fun backgroundMarginAfter(index: Int) =
-                backgroundMarginAfter(from + index, until)
-
             // 行内项每多一趟遍历，开销就乘上整章字形数：这里把字号缩放、首字颜色、
             // 行内图高、自然宽度、命中留白和空格数并为一次遍历，去掉原先各自产生的临时列表。
             var maxTextScale = 1f
@@ -812,7 +781,6 @@ internal class ReaderPaginationSession(
             var markerColorArgb: Int? = null
             var widthSum = 0.0
             var matchSum = 0.0
-            var marginSum = 0.0
             var wordSpaceCount = 0
             // 命中行行距是行级属性：一行里被多条规则命中时按留得最多的那条算，不逐字累加。
             var linePadTopPx = 0f
@@ -821,8 +789,6 @@ internal class ReaderPaginationSession(
                 val item = lineItems[itemIndex]
                 widthSum += item.widthPx.toDouble()
                 matchSum += matchSpacingPx[from + itemIndex].toDouble()
-                marginSum += (backgroundMarginBefore(itemIndex) +
-                        backgroundMarginAfter(itemIndex)).toDouble()
                 if (item is ReaderMeasuredInlineItem.Text) {
                     // Inline HTML may shrink every glyph in a row (<small>, font-size, etc.).
                     // It changes glyph drawing but not the paragraph's base line box; otherwise
@@ -872,8 +838,7 @@ internal class ReaderPaginationSession(
             val indent = if (lineIndex == 0) indentWidth else paragraph.restLineIndentWidthPx
             val available = (config.contentWidthPx - indent).coerceAtLeast(0f)
             val naturalWidth = widthSum.toFloat() +
-                    letterSpacing * (itemCount - 1).coerceAtLeast(0) + matchSum.toFloat() +
-                    marginSum.toFloat()
+                    letterSpacing * (itemCount - 1).coerceAtLeast(0) + matchSum.toFloat()
             val indentItems = (paragraph.leadingIndentItems - from).coerceIn(0, itemCount)
             val stretchableGaps = (itemCount - indentItems - 1).coerceAtLeast(0)
             val shouldJustify =
@@ -929,11 +894,10 @@ internal class ReaderPaginationSession(
             val underlineElementStart = elements.size + indentItems
             var previousItemBackground: ReaderTextBackgroundImage? = null
             var previousMatchSpacingAfterPx = 0f
-            var previousBackgroundMarginAfterPx = 0f
             lineItems.forEachIndexed { itemIndex, item ->
                 val matchStyle = (item as? ReaderMeasuredInlineItem.Text)?.style
                 val spacingBefore = matchStyle?.matchSpacingBeforePx ?: 0f
-                x += spacingBefore + backgroundMarginBefore(itemIndex)
+                x += spacingBefore
                 val itemBackground = backgroundOf(from + itemIndex)
                 when (item) {
                     is ReaderMeasuredInlineItem.Text -> {
@@ -960,15 +924,12 @@ internal class ReaderPaginationSession(
                             // 的更新条件），否则一句对白会被中间的胶囊切成两个半截气泡。
                             // 命中字距留出的那截空隙在命中段**外面**（正文里空隙前后都不属于
                             // 任何字），所以它必须把 run 断掉：吞进气泡就等于内容没变、
-                            // 图却被拉长了。外边距同理：它把相邻文字从气泡上推开，那截间距
-                            // 不能并进气泡。
+                            // 图却被拉长了。外边距不再切 run：它只是收尾时向外延伸的绘制量。
                             continuesBackgroundRun = itemBackground != null &&
                                     itemIndex > 0 &&
                                     previousItemBackground == itemBackground &&
                                     spacingBefore <= 0f &&
-                                    previousMatchSpacingAfterPx <= 0f &&
-                                    backgroundMarginBefore(itemIndex) <= 0f &&
-                                    previousBackgroundMarginAfterPx <= 0f,
+                                    previousMatchSpacingAfterPx <= 0f,
                             // 九宫格等比缩放：上下两条切线之间是字的显示区域，所以按行盒高与
                             // 「图片大小」算出一个倍率，四条边让出去的都是各自边条按这**同一个**
                             // 倍率换算后的厚度（上下两条还要再加上带子比行盒多出来、按上下对称分的
@@ -1052,7 +1013,6 @@ internal class ReaderPaginationSession(
                 )
                 x += item.widthPx + letterSpacing +
                         (matchStyle?.matchSpacingAfterPx ?: 0f) +
-                        backgroundMarginAfter(itemIndex) +
                         if (item is ReaderMeasuredInlineItem.Text && item.value == " ") wordSpaceExtra else 0f
                 x += if (itemIndex >= indentItems) justifyGap else 0f
                 // 胶囊是我们自己插进去的按钮，原文里没有它，所以它对背景 run 完全透明：
@@ -1063,7 +1023,6 @@ internal class ReaderPaginationSession(
                 ) {
                     previousItemBackground = itemBackground
                     previousMatchSpacingAfterPx = matchStyle?.matchSpacingAfterPx ?: 0f
-                    previousBackgroundMarginAfterPx = backgroundMarginAfter(itemIndex)
                 }
             }
             addPageUnderline(underlineElementStart, y + actualLineHeight)

@@ -9,6 +9,7 @@ import androidx.room.withTransaction
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.withTransaction
+import com.google.gson.JsonParser
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -313,7 +314,9 @@ object Restore : KoinComponent {
             }
         }
         if (BackupConfig.dbIsNotIgnored("bookCharacterProfile")) {
-            fileToListT<BookCharacterProfile>(path, "bookCharacterProfile.json")?.let {
+            fileToListT<BookCharacterProfile>(path, "bookCharacterProfile.json") { json ->
+                fillMissingVoicePoolId(json)
+            }?.let {
                 appDb.bookKnowledgeDao.insertCharacterProfiles(it)
             }
         }
@@ -936,15 +939,25 @@ object Restore : KoinComponent {
         }
     }
 
-    private inline fun <reified T> fileToListT(path: String, fileName: String): List<T>? {
+    /**
+     * 读备份 JSON 并反序列化成列表。
+     *
+     * [jsonTransform] 在解析前介入，用于向后兼容：旧备份缺少当前实体的新增非空字段时，
+     * Gson 用 Unsafe.allocateInstance 绕过构造函数，该字段会落成 null 而不是默认值，
+     * 插入 NOT NULL 列抛异常会中断整个恢复流程，让排在它后面的所有表都恢复不了。
+     */
+    private inline fun <reified T> fileToListT(
+        path: String,
+        fileName: String,
+        jsonTransform: (String) -> String = { it },
+    ): List<T>? {
         try {
             val file = File(path, fileName)
             if (file.exists()) {
                 LogUtils.d(TAG, "阅读恢复备份 $fileName 文件大小 ${file.length()}")
-                FileInputStream(file).use {
-                    return GSON.fromJsonArray<T>(it).getOrThrow().also { list ->
-                        LogUtils.d(TAG, "阅读恢复备份 $fileName 列表大小 ${list.size}")
-                    }
+                val json = jsonTransform(file.readText())
+                return GSON.fromJsonArray<T>(json).getOrThrow().also { list ->
+                    LogUtils.d(TAG, "阅读恢复备份 $fileName 列表大小 ${list.size}")
                 }
             } else {
                 LogUtils.d(TAG, "阅读恢复备份 $fileName 文件不存在")
@@ -954,6 +967,23 @@ object Restore : KoinComponent {
         }
         return null
     }
+
+    /**
+     * 旧备份补默认值：`BookCharacterProfile.voicePoolId` 是 fork 后加的非空列，
+     * 更早的备份里没有它。Gson 用 Unsafe.allocateInstance 绕过构造函数，缺失字段
+     * 会落成 null 而不是 `""`，插入 NOT NULL 列即抛异常；而这段恢复排在标签分组、
+     * 主题、阅读排版、阅读记忆之前，一旦抛出整条链就断在那里，后面的表全恢复不了。
+     */
+    private fun fillMissingVoicePoolId(json: String): String = runCatching {
+        val root = JsonParser.parseString(json)
+        if (!root.isJsonArray) return json
+        root.asJsonArray.forEach { element ->
+            if (element.isJsonObject && !element.asJsonObject.has("voicePoolId")) {
+                element.asJsonObject.addProperty("voicePoolId", "")
+            }
+        }
+        root.toString()
+    }.getOrDefault(json)
 
     /**
      * readRecord.json 的兼容 DTO。兼容 md（bookAuthor/deviceId/bookType）与

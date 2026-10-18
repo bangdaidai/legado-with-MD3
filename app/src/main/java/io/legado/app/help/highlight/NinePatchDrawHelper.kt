@@ -59,15 +59,19 @@ object NinePatchDrawHelper {
     /**
      * 以文字矩形为基准计算背景框（与九宫格切图预览 NineSlicePreview 同一套语义）：
      * 1. 整张图等比缩放，锚点是"中带源高 ((1-npTop-npBottom)×图高) 缩放后恰好
-     *    等于 文字高 + 上下 padding"，因此背景框高度 = 图高 × scale，
+     *    等于 文字高 × [imageScale] + 上下 padding"，因此背景框高度 = 图高 × ratio，
      *    图案整体比例不变，只有中段做水平拉伸，不会被纵向拉变形
-     * 2. 缩放后的角块尺寸 = 源角块 × scale（宽高比天然一致）
-     * 3. 背景框 = 文字矩形向外扩角块与 padding
+     * 2. 缩放后的角块尺寸 = 源角块 × ratio（宽高比天然一致）
+     * 3. 背景框 = 文字矩形向外扩角块与 padding；[imageScale] ≠ 1 时中带比行盒高
+     *    （或矮）的那一截按上下对称补出去，文字仍居中（正文 bandOverhangPx 同一口径）
      * 4. 安全回退：若角块总宽超出文字宽度，统一缩小（保持宽高比）
      *
      * 绘制时把返回的角尺寸传给 [draw]，draw 内部只拉伸中段，四角保持缩放后尺寸不变。
      * [borderPx] 为 .9.png 的 1px 引导边宽度（非 .9.png 传 0）：切分与缩放一律按
      * 剥边后的内容尺寸计算，绘制时源矩形再加回边偏移。
+     * [imageScale] 为「图片大小」倍率，1.0 时中段正好等于文字高（纯随行高比例）。
+     * [borderScale] 为「边框大小」倍率：只缩放四角与四条边条的厚度，中段不等。1.0 原样，
+     * <1 四角与边条一起变细（四角宽高同比缩、不变形），与正文 [frameTopPx] 同口径。
      */
     fun layout(
         textLeft: Float,
@@ -85,6 +89,8 @@ object NinePatchDrawHelper {
         padTop: Float = 0f,
         padBottom: Float = 0f,
         borderPx: Float = 0f,
+        imageScale: Float = 1f,
+        borderScale: Float = 1f,
     ): Box? {
         val textW = textRight - textLeft
         val textH = textBottom - textTop
@@ -93,25 +99,31 @@ object NinePatchDrawHelper {
         val contentH = bitmapHeight - borderPx * 2f
         if (contentW <= 0f || contentH <= 0f) return null
 
-        // 与切图预览一致：中带源高缩放后恰好容下"文字高 + 上下 padding"，
-        // 整张图等比缩放（背景框高 = 图高 × scale），只有中段水平拉伸；
-        // 两线过近时中带源高夹一个最小值，防止 scale 发散
+        // 与切图预览一致：中带源高缩放后恰好容下「文字高 × 图片大小 + 上下 padding」，
+        // 整张图等比缩放（背景框高 = 图高 × ratio），只有中段水平拉伸；
+        // 两线过近时中带源高夹一个最小值，防止 ratio 发散
         val middleSrcH = (1f - npTop - npBottom).coerceIn(0.02f, 1f) * contentH
-        val middleDstH = (textH + padTop + padBottom).coerceAtLeast(1f)
-        val scale = middleDstH / middleSrcH
-        var cornerL = npLeft * contentW * scale
-        var cornerR = npRight * contentW * scale
-        var cornerT = npTop * contentH * scale
-        var cornerB = npBottom * contentH * scale
+        val middleDstH = (textH * imageScale + padTop + padBottom).coerceAtLeast(1f)
+        val ratio = middleDstH / middleSrcH
+        // 边框大小：四角宽高同比缩放（角块不变形），中段源高不受影响——缩的只是边框。
+        val borderFactor = borderScale.coerceIn(0.1f, 3f)
+        var cornerL = npLeft * contentW * ratio * borderFactor
+        var cornerR = npRight * contentW * ratio * borderFactor
+        var cornerT = npTop * contentH * ratio * borderFactor
+        var cornerB = npBottom * contentH * ratio * borderFactor
+
+        // 图片大小 ≠ 1 时中带比行盒高（或多出/少掉一截）：多出来的那一截上下对称分给带子，
+        // 文字仍居中。与正文 ReaderTextBackgroundImage.bandOverhangPx 同一口径。
+        val overhang = textH * (imageScale - 1f) / 2f
 
         // 角块宽高比天然一致，不做额外处理
         // 九宫格中段负责水平拉伸，角块超出文字宽度时自然溢出由 clipRect 裁切
 
         return Box(
             left = textLeft - cornerL - padStart,
-            top = textTop - cornerT - padTop,
+            top = textTop - overhang - cornerT - padTop,
             right = textRight + cornerR + padEnd,
-            bottom = textBottom + cornerB + padBottom,
+            bottom = textBottom + overhang + cornerB + padBottom,
             cornerL = cornerL,
             cornerR = cornerR,
             cornerT = cornerT,

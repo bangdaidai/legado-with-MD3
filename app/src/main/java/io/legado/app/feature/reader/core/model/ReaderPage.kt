@@ -62,8 +62,10 @@ data class ReaderTextBackgroundImage(
     val paddingTopPx: Float = 0f,
     val paddingBottomPx: Float = 0f,
     /**
-     * 外边距（px）：背景段与相邻文字的水平间距，只在排版避让时让出，不随图片画出。
-     * 旧引擎 `bgMargin*Start/End`（见 `ReaderPaginator.backgroundMarginBefore/After`）。
+     * 外边距（px）：九宫格背景框在段首/段尾向外延伸的量，不参与排版——命中文字的断行
+     * 与落位与不开背景时逐字一致，延伸出去的只是背景图本身（中段拉伸区吞掉这一截，
+     * 角块厚度不变，见 `ReaderTextBackgroundRun.textBackgroundRuns` 的 run 合成收尾）。
+     * 负值不外扩。旧引擎 `bgMargin*Start/End`。
      */
     val marginStartPx: Float = 0f,
     val marginEndPx: Float = 0f,
@@ -83,6 +85,14 @@ data class ReaderTextBackgroundImage(
      * 纵向的等比倍率以它为基准（见 [verticalScalePx]）。
      */
     val contentBandHeightPx: Float = 0f,
+    /**
+     * 边框大小（1.0=原样）：只缩放四角与上下左右四条边条的厚度，中间文字带不受影响。
+     *
+     * 四角宽高同比缩（[frameTopPx] / [frameLeftPx] 都乘它，角块不变形）；四条边条只缩厚度、
+     * 横向照旧拉满文字宽。中间那一格仍是「行盒 × 图片大小 + 上下内边距」，所以缩的只是边框。
+     * 非九宫格（fit != 3）不生效。旧引擎/规则编辑预览（[NinePatchDrawHelper.layout]）同口径。
+     */
+    val borderScale: Float = 1f,
 ) {
     val hasNinePatchBorder: Boolean
         get() = source.substringBefore('?').substringBefore('#')
@@ -160,6 +170,9 @@ private fun minContentBandPx(contentHeightPx: Int): Int =
 /** 「图片大小」这一栏的取值范围：与另外三种适配（平铺/拉伸/居中）共用同一个口径。 */
 private fun ReaderTextBackgroundImage.sizeFactor(): Float = scale.coerceIn(0.1f, 5f)
 
+/** 「边框大小」的取值范围，与 [HighlightRuleRepository.sanitizeRule] 一致。 */
+private fun ReaderTextBackgroundImage.borderFactor(): Float = borderScale.coerceIn(0.1f, 3f)
+
 /**
  * 整张图的等比缩放倍率：上下两条切线之间就是文字的显示区域，所以让中间带等于
  * 「行盒高 × 图片大小」，整张图按这一个倍率变大小——四条边跟着一起长缩，任何一格都不被单独拉伸。
@@ -188,14 +201,15 @@ fun ReaderTextBackgroundImage.bandOverhangPx(lineHeightPx: Float): Float =
     if (fit != 3) 0f else lineHeightPx * (sizeFactor() - 1f) / 2f
 
 /**
- * 九宫格上沿要在行盒上方再外扩多少 = 额外的那一截 + 上边条按 [verticalScalePx] 换算后的厚度。
- * 非九宫格不外扩。
+ * 九宫格上沿要在行盒上方再外扩多少 = 额外的那一截 + 上边条按 [verticalScalePx] 换算后的厚度
+ * （再乘 [borderFactor] 的「边框大小」）。非九宫格不外扩。
  */
 fun ReaderTextBackgroundImage.frameTopPx(lineHeightPx: Float): Float =
     if (fit != 3) {
         0f
     } else {
-        bandOverhangPx(lineHeightPx) + contentInsetTopPx * verticalScalePx(lineHeightPx) +
+        bandOverhangPx(lineHeightPx) +
+                contentInsetTopPx * verticalScalePx(lineHeightPx) * borderFactor() +
                 paddingTopPx
     }
 
@@ -204,7 +218,8 @@ fun ReaderTextBackgroundImage.frameBottomPx(lineHeightPx: Float): Float =
     if (fit != 3) {
         0f
     } else {
-        bandOverhangPx(lineHeightPx) + contentInsetBottomPx * verticalScalePx(lineHeightPx) +
+        bandOverhangPx(lineHeightPx) +
+                contentInsetBottomPx * verticalScalePx(lineHeightPx) * borderFactor() +
                 paddingBottomPx
     }
 
@@ -215,13 +230,16 @@ fun ReaderTextBackgroundImage.frameBottomPx(lineHeightPx: Float): Float =
  * 左右两条边若仍按原图像素宽画，同一张图就纵向缩了、横向没缩——倍率小于 1 时右边那块图案
  * 被压扁，大于 1 时被拉长；拖动上下两条切线就是在改这个倍率，形变会跟着切线显现。
  * 只有中间那一格允许被单独拉宽（那是文字宽度，见 [stretchLeftPx]）。
+ * 再乘 [borderFactor] 的「边框大小」：左右边条只缩厚度，四角与上下边条一起同比变细。
  */
 fun ReaderTextBackgroundImage.frameLeftPx(lineHeightPx: Float): Float =
-    if (fit != 3) 0f else contentInsetLeftPx * verticalScalePx(lineHeightPx) + paddingLeftPx
+    if (fit != 3) 0f else contentInsetLeftPx * verticalScalePx(lineHeightPx) * borderFactor() +
+            paddingLeftPx
 
 /** [frameLeftPx] 的右边那一半。 */
 fun ReaderTextBackgroundImage.frameRightPx(lineHeightPx: Float): Float =
-    if (fit != 3) 0f else contentInsetRightPx * verticalScalePx(lineHeightPx) + paddingRightPx
+    if (fit != 3) 0f else contentInsetRightPx * verticalScalePx(lineHeightPx) * borderFactor() +
+            paddingRightPx
 
 /**
  * 中间带（= 文字显示区域）的下限，占整张图高：倍率的最大值由它决定，

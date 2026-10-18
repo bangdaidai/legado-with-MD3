@@ -73,13 +73,15 @@ object DatabaseMigrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_regex_cast_rules_groupId_order` ON `regex_cast_rules` (`groupId`, `order`)")
             // fork 本地扩展列：上游 123→124 / 124→125 整表重建 highlightRules 时只带上了
             // 上游列，本地列（在 100→101 里 ADD 的）会被那次重建丢掉。这里守卫式补回，
-            // 已存在就跳过，避免重复 ADD COLUMN 让迁移失败。
+            // 已存在就跳过，避免重复 ADD COLUMN 让迁移失败。新增的本地列也统一挂在这里——
+            // 与 AppDatabase 版本号无关，任何低于 128 的库都会经过这一次守卫 ADD。
             val highlightRuleColumns = db.query("PRAGMA table_info(highlightRules)").use { cursor ->
                 val nameAt = cursor.getColumnIndexOrThrow("name")
                 buildSet { while (cursor.moveToNext()) add(cursor.getString(nameAt)) }
             }
             listOf(
                 "useProtagonist INTEGER NOT NULL DEFAULT 0",
+                "bgBorderScale REAL NOT NULL DEFAULT 1",
                 "textColorNight INTEGER",
                 "bgColorNight INTEGER",
                 "underlineColorNight INTEGER",

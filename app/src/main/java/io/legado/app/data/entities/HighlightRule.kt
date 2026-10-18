@@ -28,6 +28,13 @@ data class HighlightRule(
     var bgImage: String? = null,
     var bgImageFit: Int = 0,
     var bgImageScale: Float = 1f,
+    /**
+     * 边框大小：只缩放九宫格四角与上下左右四条边条的厚度，不动中间的文字带。
+     * 1.0=跟随整张图的等比倍率（原样）；<1 四角与边条一起变细（四角宽高同比缩、边条只缩厚度），
+     * 中间文字带始终等于行盒 × 图片大小，不随它变。仅 [bgImageFit] == 3 生效。
+     */
+    @ColumnInfo(defaultValue = "1")
+    var bgBorderScale: Float = 1f,
     var configName: String? = null,
     var fontPath: String? = null,
     var fontWeight: Int = 400,

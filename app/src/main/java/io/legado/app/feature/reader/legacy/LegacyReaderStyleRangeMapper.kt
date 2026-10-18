@@ -407,6 +407,7 @@ object LegacyReaderStyleRangeMapper {
                 source = it,
                 fit = bgImageFit,
                 scale = bgImageScale,
+                borderScale = bgBorderScale,
                 ninePatchLeft = automatic?.left ?: npLeft,
                 ninePatchRight = automatic?.right ?: npRight,
                 ninePatchTop = automatic?.top ?: npTop,

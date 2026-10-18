@@ -960,7 +960,7 @@
     <string name="svg_path_hint">Coordinates: X(0-100), Y(0-100)</string>
     <string name="bg_image_fit">Background Fit</string>
     <string name="highlight_bg_image">Background Image</string>
-    <string name="highlight_bg_image_scale">Image Scale</string>
+    <string name="highlight_bg_border_scale">Border Size</string>
     <string name="bg_fit_tile">Tile</string>
     <string name="bg_fit_stretch">Stretch</string>
     <string name="bg_fit_crop">Center Crop</string>

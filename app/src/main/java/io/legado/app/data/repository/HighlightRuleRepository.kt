@@ -227,6 +227,7 @@ class HighlightRuleRepository(
             bgImage = runCatching { rule.bgImage }.getOrNull()?.takeIf { it.isNotBlank() },
             bgImageFit = runCatching { rule.bgImageFit }.getOrDefault(0).coerceIn(0, 3),
             bgImageScale = runCatching { rule.bgImageScale }.getOrDefault(1f).coerceIn(0.1f, 5f),
+            bgBorderScale = runCatching { rule.bgBorderScale }.getOrDefault(1f).coerceIn(0.1f, 3f),
             configName = runCatching { rule.configName }.getOrNull()?.takeIf { it.isNotBlank() },
             fontPath = runCatching { rule.fontPath }.getOrNull()?.takeIf { it.isNotBlank() },
             fontWeight = runCatching { rule.fontWeight }.getOrDefault(400).coerceIn(300, 700),

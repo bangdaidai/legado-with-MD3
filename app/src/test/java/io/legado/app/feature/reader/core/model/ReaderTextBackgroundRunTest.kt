@@ -87,6 +87,35 @@ class ReaderTextBackgroundRunTest {
     }
 
     /**
+     * 外边距不参与排版：它只在 run 收尾时让外框向段首/段尾各延伸 marginStart/End，
+     * 文字矩形（contentBounds）不受影响；非九宫格不外扩。
+     */
+    @Test
+    fun `nine slice margins extend only the frame ends without moving text`() {
+        val framed = image.copy(marginStartPx = 5f, marginEndPx = 7f)
+        val framedStyle = style.copy(backgroundImage = framed)
+        val page = page(
+            text(10f, 0f, 20f, 20f, framedStyle),
+            text(20f, 0f, 35f, 20f, framedStyle, continues = true),
+        )
+
+        val run = page.textBackgroundRuns().single()
+        assertEquals(ReaderRect(10f, 0f, 35f, 20f), run.contentBounds)
+        assertEquals(ReaderRect(5f, 0f, 42f, 20f), run.bounds)
+
+        // 非九宫格：margin 不外扩，外框就是文字矩形。
+        val tiled = framed.copy(fit = 0)
+        val tiledPage = page(
+            text(10f, 0f, 20f, 20f, style.copy(backgroundImage = tiled)),
+            text(20f, 0f, 35f, 20f, style.copy(backgroundImage = tiled), continues = true),
+        )
+        assertEquals(
+            ReaderRect(10f, 0f, 35f, 20f),
+            tiledPage.textBackgroundRuns().single().bounds,
+        )
+    }
+
+    /**
      * 上下两条切线之间就是文字的显示区域：中间带对上行盒高，整张图按同一个倍率变大小
      * （等比缩放，没有哪一格被单独拉伸）。行盒 28 = 中间带自然高时倍率为 1，上下边条是 4/8；
      * 行盒翻到 56 时三条一起翻倍，气泡高从 40 长到 80。

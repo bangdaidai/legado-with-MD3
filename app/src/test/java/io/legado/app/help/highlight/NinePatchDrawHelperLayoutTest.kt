@@ -51,6 +51,25 @@ class NinePatchDrawHelperLayoutTest {
     }
 
     @Test
+    fun imageScaleAnchorsWholeImageAndCentersText() {
+        // 图片大小 = 2：中带目标高 = 文字高 × 2，整张图按同一 ratio 放大，四角跟着变大；
+        // 多出来的一截上下各外扩一半（正文 bandOverhangPx 同口径），文字仍居中。
+        val box = NinePatchDrawHelper.layout(
+            0f, 0f, 100f, 40f,
+            bitmapWidth = 50f, bitmapHeight = 100f,
+            npLeft = 0.2f, npRight = 0.2f, npTop = 0.2f, npBottom = 0.1f,
+            imageScale = 2f,
+        )!!
+        // 中带源高 (1-0.2-0.1)*100=70，目标 40*2=80 → ratio=80/70
+        val ratio = 80f / 70f
+        assertEquals(0.2f * 50f * ratio, box.cornerL, 0.01f)
+        assertEquals(0.2f * 100f * ratio, box.cornerT, 0.01f)
+        val overhang = 40f * (2f - 1f) / 2f
+        assertEquals(-overhang - box.cornerT, box.top, 0.01f)
+        assertEquals(40f + overhang + box.cornerB, box.bottom, 0.01f)
+    }
+
+    @Test
     fun rawNinePatchBorderIsExcludedFromContentGeometry() {
         val stripped = NinePatchDrawHelper.layout(
             0f, 0f, 100f, 40f,

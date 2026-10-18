@@ -1676,7 +1676,7 @@
     <string name="svg_path_hint">座標：X(0-100)，Y(0-100)</string>
     <string name="bg_image_fit">背景適配</string>
     <string name="highlight_bg_image">背景圖片</string>
-    <string name="highlight_bg_image_scale">圖片縮放</string>
+    <string name="highlight_bg_border_scale">邊框大小</string>
     <string name="bg_fit_tile">並排</string>
     <string name="bg_fit_stretch">延伸</string>
     <string name="bg_fit_crop">置中裁切</string>

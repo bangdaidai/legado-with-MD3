@@ -65,7 +65,19 @@ fun ReaderPage.textBackgroundRuns(): List<ReaderTextBackgroundRun> {
         }
         previousElement = text
     }
-    return runs.map { run -> run.copy(bounds = run.image.nineSliceFrame(run.bounds, run.contentBounds.width)) }
+    // 外边距只作用在收尾：九宫格 run 的外框向段首/段尾各延伸 marginStart/End（负值不外扩），
+    // 延伸量进中段拉伸区（角块厚度不变，见 drawTextBackground 的 corner 口径）；文字矩形
+    // 与排版不受影响。非九宫格不外扩——它们按内容框绘制，延伸会被 clipRect 吃掉。
+    return runs.map { run ->
+        val framed = run.copy(bounds = run.image.nineSliceFrame(run.bounds, run.contentBounds.width))
+        if (run.image.fit != 3) return@map framed
+        framed.copy(
+            bounds = framed.bounds.copy(
+                left = framed.bounds.left - run.image.marginStartPx.coerceAtLeast(0f),
+                right = framed.bounds.right + run.image.marginEndPx.coerceAtLeast(0f),
+            ),
+        )
+    }
 }
 
 /**
