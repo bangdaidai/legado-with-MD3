@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -208,6 +209,11 @@ internal fun readMenuButtonInfos(context: Context): List<ReadMenuButtonInfo> = l
         "refresh_current",
         Icons.Default.Refresh,
         context.getString(R.string.menu_refresh_dur),
+    ),
+    ReadMenuButtonInfo(
+        "ai_recap",
+        Icons.Default.History,
+        context.getString(R.string.ai_chapter_recap),
     ),
     ReadMenuButtonInfo(
         "ai_summary",
@@ -406,6 +412,9 @@ internal fun buildReadMenuActionDefs(
         },
         def("refresh_current") {
             onIntent(ReadBookIntent.RefreshCurrentChapter)
+        },
+        def("ai_recap") {
+            onIntent(ReadBookIntent.OpenChapterRecap)
         },
         def("ai_summary") {
             onIntent(ReadBookIntent.OpenChapterSummary)
