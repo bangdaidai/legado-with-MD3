@@ -3254,11 +3254,12 @@ internal fun drawTextBackground(
             val frame = run.bounds
             val frameTop = frame.top + nineSliceTextInsetPx
             val frameBottom = (frame.bottom - nineSliceTextInsetPx).coerceAtLeast(frameTop + 1f)
-            // 角块厚度 = 外框相对文字的外扩量减去两截非边框部分：内边距 padding、
-            // 外边距 margin（run 收尾把外框向段首/段尾外扩了 margin*，那截属于中段拉伸区），
+            // 角块厚度 = 外框相对文字的外扩量减去两截非边框部分：内边距 padding，
             // 以及「图片大小 ≠ 1 时中带比行盒多出来的那一截」bandOverhang（上下各一半）。
             // 这几截本来就属于中段拉伸区，混进角块会把角块/中段压扁（图片大小调大时尤其明显）。
             // 外框已经把「边框大小」倍率算进 frame*Px 了，所以这里直接反推即可。
+            // 外边距不在这里：它按旧引擎语义参与排版、把命中段前后的文字推开，气泡外框
+            // 只包住命中文字矩形，不因外边距变宽（对照 ReaderPaginator.backgroundMarginBefore）。
             val bandOverhang = content.height * (scale - 1f) / 2f
             io.legado.app.help.highlight.NinePatchDrawHelper.draw(
                 canvas,
@@ -3269,21 +3270,15 @@ internal fun drawTextBackground(
                 rightX = 1f - image.ninePatchRight.coerceIn(0f, 1f),
                 topY = image.ninePatchTop.coerceIn(0f, 1f),
                 bottomY = 1f - image.ninePatchBottom.coerceIn(0f, 1f),
-                // 外框 bounds 里已经含了内边距/外边距（frame*Px 与 run 收尾加上了 padding* /
-                // margin*）与「边框大小」倍率（frame*Px 乘了 borderScale）：角块只画原图边条
-                // 那一截（不含 padding / margin、不算 bandOverhang），中段拉伸区才把它们一起
-                // 吞进去，与规则编辑预览 NinePatchDrawHelper.layout 的 box/corner 同一套口径。
-                cornerL = (content.left - frame.left - image.paddingLeftPx -
-                        image.marginStartPx.coerceAtLeast(0f)).coerceAtLeast(0f),
-                cornerR = (frame.right - content.right - image.paddingRightPx -
-                        image.marginEndPx.coerceAtLeast(0f)).coerceAtLeast(0f),
+                // 外框 bounds 里已经含了内边距（frame*Px 与 padding*）与「边框大小」倍率
+                // （frame*Px 乘了 borderScale）：角块只画原图边条那一截（不含 padding、
+                // 不算 bandOverhang），中段拉伸区才把它们一起吞进去，与规则编辑预览
+                // NinePatchDrawHelper.layout 的 box/corner 同一套口径。
+                cornerL = (content.left - frame.left - image.paddingLeftPx).coerceAtLeast(0f),
+                cornerR = (frame.right - content.right - image.paddingRightPx).coerceAtLeast(0f),
                 cornerT = (content.top - frameTop - image.paddingTopPx - bandOverhang).coerceAtLeast(0f),
                 cornerB = (frameBottom - content.bottom - image.paddingBottomPx - bandOverhang).coerceAtLeast(0f),
                 borderPx = if (image.hasNinePatchBorder) 1f else 0f,
-                // 外边距只扩中段、不动角块：角块落在文字±内边距的自然位置，margin 那一截
-                // 由中段拉伸区横向吞掉。frame 已含 margin，这里把 margin 显式传给 draw。
-                marginLeftPx = image.marginStartPx.coerceAtLeast(0f),
-                marginRightPx = image.marginEndPx.coerceAtLeast(0f),
             )
         }
         else -> {

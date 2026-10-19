@@ -87,11 +87,12 @@ class ReaderTextBackgroundRunTest {
     }
 
     /**
-     * 外边距不参与排版：它只在 run 收尾时让外框向段首/段尾各延伸 marginStart/End，
-     * 文字矩形（contentBounds）不受影响；非九宫格不外扩。
+     * 外边距不再外扩外框：它按旧引擎语义在排版层让出留白
+     * （ReaderPaginator.backgroundMarginBefore/After），run 外框就是命中文字矩形本身；
+     * 非九宫格同样不外扩。
      */
     @Test
-    fun `nine slice margins extend only the frame ends without moving text`() {
+    fun `nine slice margins no longer widen the run frame`() {
         val framed = image.copy(marginStartPx = 5f, marginEndPx = 7f)
         val framedStyle = style.copy(backgroundImage = framed)
         val page = page(
@@ -101,7 +102,8 @@ class ReaderTextBackgroundRunTest {
 
         val run = page.textBackgroundRuns().single()
         assertEquals(ReaderRect(10f, 0f, 35f, 20f), run.contentBounds)
-        assertEquals(ReaderRect(5f, 0f, 42f, 20f), run.bounds)
+        // 外框不向段首/段尾延伸 margin：左沿仍是文字左沿，右沿仍是文字右沿。
+        assertEquals(ReaderRect(10f, 0f, 35f, 20f), run.bounds)
 
         // 非九宫格：margin 不外扩，外框就是文字矩形。
         val tiled = framed.copy(fit = 0)

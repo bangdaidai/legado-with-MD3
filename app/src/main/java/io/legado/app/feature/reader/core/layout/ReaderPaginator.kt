@@ -712,6 +712,35 @@ internal class ReaderPaginationSession(
             (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)?.style?.backgroundImage
         } else null
 
+        /**
+         * 九宫格（fit==3）背景图。外边距 bgMarginStart/End 只对九宫格生效：旧引擎
+         * `calcNineSliceMargin` 把它按「命中段前后的文字留白」参与排版，背景图本身不因
+         * 外边距变宽。与 [backgroundOf] 分开：后者按任意背景图判定 run 连续性，前者只用于排版。
+         */
+        fun itemFrame(index: Int) =
+            (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
+                ?.style?.backgroundImage?.takeIf { it.fit == 3 }
+
+        /**
+         * 命中段首字前要让出的外边距（负值钳为 0）。只在行首、或前一项换了图时才给值，
+         * 段内恒为 0——留白只出现在命中段**外面**，气泡外框仍只包住命中文字矩形，
+         * 被推开的文字之间那道空隙不属于任何字，也就不会落在图里。
+         */
+        fun backgroundMarginBefore(index: Int, lineStart: Int): Float {
+            val image = itemFrame(index) ?: return 0f
+            return if (index == lineStart || itemFrame(index - 1) != image) {
+                image.marginStartPx.coerceAtLeast(0f)
+            } else 0f
+        }
+
+        /** 命中段末字后要让出的外边距，见 [backgroundMarginBefore]。 */
+        fun backgroundMarginAfter(index: Int, lineEnd: Int): Float {
+            val image = itemFrame(index) ?: return 0f
+            return if (index + 1 == lineEnd || itemFrame(index + 1) != image) {
+                image.marginEndPx.coerceAtLeast(0f)
+            } else 0f
+        }
+
         val breaker = ChineseLineBreaker(
             clusters = clusters,
             widthsPx = paragraph.items.mapIndexed { index, item ->
@@ -728,9 +757,10 @@ internal class ReaderPaginationSession(
         val originalEnds = breaker.lineClusterStarts.drop(1)
         val refineStartNs = if (metrics != null) System.nanoTime() else 0L
         val starts = mutableListOf(0)
-        // 背景图（含九宫格）不参与排版：它只是压在字后面的装饰，外边距/内边距超出的部分
-        // 也只超出图本身（见 ReaderTextBackgroundRun.textBackgroundRuns 的收尾外扩）。
-        // 这里只按字形宽 + 命中字距收紧行尾，让断行结果与不开任何背景图时逐字一致。
+        // 背景图本身不参与排版：它只是压在字后面的装饰，内边距超出的部分也只超出图本身
+        // （见 ReaderTextBackgroundRun.textBackgroundRuns 现算的外框）。只有九宫格的
+        // 外边距例外——它按旧引擎语义在命中段前后让出排版留白（见 backgroundMarginBefore/
+        // After），所以这里按字形宽 + 命中字距 + 外边距收紧行尾。
         // Keep a forbidden Chinese break intact even if its row has to consume the
         // remaining slack, matching the legacy punctuation priority.
         while (starts.last() < paragraph.items.size) {
@@ -745,7 +775,9 @@ internal class ReaderPaginationSession(
                 var widthSum = 0.0
                 for (index in from until endExclusive) {
                     widthSum += (paragraph.items[index].widthPx +
-                            matchSpacingPx[index]).toDouble()
+                            matchSpacingPx[index] +
+                            backgroundMarginBefore(index, from) +
+                            backgroundMarginAfter(index, endExclusive)).toDouble()
                 }
                 return widthSum.toFloat() +
                         letterSpacing * (endExclusive - from - 1).coerceAtLeast(0)
@@ -781,6 +813,7 @@ internal class ReaderPaginationSession(
             var markerColorArgb: Int? = null
             var widthSum = 0.0
             var matchSum = 0.0
+            var marginSum = 0.0
             var wordSpaceCount = 0
             // 命中行行距是行级属性：一行里被多条规则命中时按留得最多的那条算，不逐字累加。
             var linePadTopPx = 0f
@@ -789,6 +822,8 @@ internal class ReaderPaginationSession(
                 val item = lineItems[itemIndex]
                 widthSum += item.widthPx.toDouble()
                 matchSum += matchSpacingPx[from + itemIndex].toDouble()
+                marginSum += (backgroundMarginBefore(from + itemIndex, from) +
+                        backgroundMarginAfter(from + itemIndex, until)).toDouble()
                 if (item is ReaderMeasuredInlineItem.Text) {
                     // Inline HTML may shrink every glyph in a row (<small>, font-size, etc.).
                     // It changes glyph drawing but not the paragraph's base line box; otherwise
@@ -838,7 +873,8 @@ internal class ReaderPaginationSession(
             val indent = if (lineIndex == 0) indentWidth else paragraph.restLineIndentWidthPx
             val available = (config.contentWidthPx - indent).coerceAtLeast(0f)
             val naturalWidth = widthSum.toFloat() +
-                    letterSpacing * (itemCount - 1).coerceAtLeast(0) + matchSum.toFloat()
+                    letterSpacing * (itemCount - 1).coerceAtLeast(0) + matchSum.toFloat() +
+                    marginSum.toFloat()
             val indentItems = (paragraph.leadingIndentItems - from).coerceIn(0, itemCount)
             val stretchableGaps = (itemCount - indentItems - 1).coerceAtLeast(0)
             val shouldJustify =
@@ -898,6 +934,9 @@ internal class ReaderPaginationSession(
                 val matchStyle = (item as? ReaderMeasuredInlineItem.Text)?.style
                 val spacingBefore = matchStyle?.matchSpacingBeforePx ?: 0f
                 x += spacingBefore
+                // 外边距按旧引擎语义落成排版留白：命中段首字前推开 marginStart，
+                // 相邻同图段之间（段内）不推。气泡外框由文字矩形现算，留白落在图外。
+                x += backgroundMarginBefore(from + itemIndex, from)
                 val itemBackground = backgroundOf(from + itemIndex)
                 when (item) {
                     is ReaderMeasuredInlineItem.Text -> {
@@ -922,9 +961,9 @@ internal class ReaderPaginationSession(
                             // 否则字间距会把它切成逐字绘制。
                             // 前一项是角色/配乐胶囊时放行标记要跨过去（见 previousItemBackground
                             // 的更新条件），否则一句对白会被中间的胶囊切成两个半截气泡。
-                            // 命中字距留出的那截空隙在命中段**外面**（正文里空隙前后都不属于
-                            // 任何字），所以它必须把 run 断掉：吞进气泡就等于内容没变、
-                            // 图却被拉长了。外边距不再切 run：它只是收尾时向外延伸的绘制量。
+                            // 命中字距与命中段首/末的外边距留出的那截空隙都在命中段**外面**
+                            // （正文里空隙前后都不属于任何字），所以它必须把 run 断掉：吞进
+                            // 气泡就等于内容没变、图却被拉长了。
                             continuesBackgroundRun = itemBackground != null &&
                                     itemIndex > 0 &&
                                     previousItemBackground == itemBackground &&
@@ -1013,6 +1052,8 @@ internal class ReaderPaginationSession(
                 )
                 x += item.widthPx + letterSpacing +
                         (matchStyle?.matchSpacingAfterPx ?: 0f) +
+                        // 命中段末字后同样推进 marginEnd（段内为 0，见 backgroundMarginAfter）
+                        backgroundMarginAfter(from + itemIndex, until) +
                         if (item is ReaderMeasuredInlineItem.Text && item.value == " ") wordSpaceExtra else 0f
                 x += if (itemIndex >= indentItems) justifyGap else 0f
                 // 胶囊是我们自己插进去的按钮，原文里没有它，所以它对背景 run 完全透明：

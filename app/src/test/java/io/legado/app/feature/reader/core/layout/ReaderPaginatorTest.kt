@@ -983,11 +983,11 @@ class ReaderPaginatorTest {
     }
 
     /**
-     * 外边距（bgMargin）不参与排版：命中文字的断行与落位与不开背景时逐字一致，
-     * 超出的部分只超出背景图本身——气泡 run 在收尾时向段首/段尾各延伸 margin。
+     * 外边距（bgMargin）按旧引擎语义参与排版：命中段首字前推开 marginStart、末字后推开
+     * marginEnd，行宽把它们一并计入，所以断行与不开背景时不同；气泡外框只包住命中文字本身。
      */
     @Test
-    fun nineSliceMarginsDoNotAffectLineBreaking() {
+    fun nineSliceMarginsAreLaidOutAsTextSpacing() {
         val frame = ReaderTextBackgroundImage(
             source = "frame.png",
             fit = 3,
@@ -1013,24 +1013,25 @@ class ReaderPaginatorTest {
         ).single()
 
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        // 与不开背景时一致：首行放下 3 字（30≤35），第 4 字整字换行，不被外边距挤短。
-        assertEquals(listOf(0f, 0f, 0f, 20f), glyphs.map { it.bounds.top })
-        assertEquals(listOf(0f, 10f, 20f, 0f), glyphs.map { it.bounds.left })
-        // 气泡外框在收尾外扩：每个 run 向段首/段尾各延伸 marginStart/End，文字矩形不受影响。
+        // 行宽 = 字形宽 + 外边距：3+4 让两字行占 27（≤35），第三字（再加 3+4 = 37）放不下，
+        // 所以一行只放两字，第 3 字整字换行。
+        assertEquals(listOf(0f, 0f, 20f, 20f), glyphs.map { it.bounds.top })
+        // 每行首字都被 marginStart=3 推开，段内相邻字不留间距。
+        assertEquals(listOf(3f, 13f, 3f, 13f), glyphs.map { it.bounds.left })
+        // 气泡外框不再外扩 margin：就是命中文字矩形本身（每行两字）。
         val runs = page.textBackgroundRuns()
         assertEquals(2, runs.size)
-        assertEquals(-3f, runs[0].bounds.left, 0.01f)
-        assertEquals(34f, runs[0].bounds.right, 0.01f)
-        assertEquals(-3f, runs[1].bounds.left, 0.01f)
-        assertEquals(14f, runs[1].bounds.right, 0.01f)
+        assertEquals(3f, runs[0].bounds.left, 0.01f)
+        assertEquals(23f, runs[0].bounds.right, 0.01f)
+        assertEquals(3f, runs[1].bounds.left, 0.01f)
+        assertEquals(23f, runs[1].bounds.right, 0.01f)
     }
 
     /**
-     * 外边距不改变断行：整段命中且带避头尾禁则字符时，行宽仍按字形宽计算，
-     * 不会因外边距收缩触发禁则回退，行尾文字也不会越出版心。
+     * 外边距计入行宽后会触发行尾收缩，但避头尾禁则仍要遵守：标点不能因为收缩被挤到行首。
      */
     @Test
-    fun nineSliceMarginsKeepOriginalLineBreakingWithForbiddenPunctuation() {
+    fun nineSliceMarginsKeepForbiddenPunctuationOutOfLineStart() {
         val frame = ReaderTextBackgroundImage(
             source = "frame.png",
             fit = 3,
@@ -1039,7 +1040,8 @@ class ReaderPaginatorTest {
             marginEndPx = 2f,
         )
         val framedStyle = style.copy(backgroundImage = frame)
-        // 内容区宽 34：3 字 30≤34 整行放下。外边距（11+2）不再计入行宽，不触发收缩。
+        // 内容区宽 34：三字 + 外边距 11+2 = 43 放不下；收缩到两字（33≤34）时落点正好在
+        // “。”之前，禁则要求继续前移，于是首行只剩“甲”。
         val page = ReaderPaginator.paginateBlocks(
             listOf(
                 ReaderMeasuredBlock.InlineParagraph(
@@ -1060,13 +1062,16 @@ class ReaderPaginatorTest {
 
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
         assertEquals(listOf("甲", "乙", "。"), glyphs.map { it.value })
-        assertEquals(listOf(0f, 0f, 0f), glyphs.map { it.bounds.top })
-        assertEquals(listOf(0f, 10f, 20f), glyphs.map { it.bounds.left })
-        // 单 run 外扩：左延伸 marginStart、右延伸 marginEnd，字与字之间没有间距。
+        assertEquals(listOf(0f, 20f, 20f), glyphs.map { it.bounds.top })
+        // 两个行首字都被 marginStart=11 推开；行尾不留 margin 到文字框里。
+        assertEquals(listOf(11f, 11f, 21f), glyphs.map { it.bounds.left })
+        // 一行一个 run：气泡外框就是命中文字矩形，不因外边距变宽。
         val runs = page.textBackgroundRuns()
-        assertEquals(1, runs.size)
-        assertEquals(-11f, runs[0].bounds.left, 0.01f)
-        assertEquals(32f, runs[0].bounds.right, 0.01f)
+        assertEquals(2, runs.size)
+        assertEquals(11f, runs[0].bounds.left, 0.01f)
+        assertEquals(21f, runs[0].bounds.right, 0.01f)
+        assertEquals(11f, runs[1].bounds.left, 0.01f)
+        assertEquals(31f, runs[1].bounds.right, 0.01f)
         assertTrue(glyphs.all { it.bounds.right <= 34f })
     }
 

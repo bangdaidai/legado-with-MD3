@@ -131,12 +131,6 @@ object NinePatchDrawHelper {
         )
     }
 
-    /**
-     * @param marginLeftPx  左外边距（px）：只拉伸中段、不移动左角块。0=无外边距。
-     *   高亮规则 `bgMarginStart` 在渲染层与预览都走这一条；角块右沿落在文字左沿
-     *   减内边距处，margin 那一截由中段拉伸区吞掉（不参与排版，只扩背景图本身）。
-     * @param marginRightPx 右外边距（px），见 [marginLeftPx]。
-     */
     fun draw(
         canvas: Canvas,
         bitmap: Bitmap,
@@ -154,8 +148,6 @@ object NinePatchDrawHelper {
         cornerT: Float = 0f,
         cornerB: Float = 0f,
         borderPx: Float = 0f,
-        marginLeftPx: Float = 0f,
-        marginRightPx: Float = 0f,
     ) {
         val rectW = right - left
         val rectH = bottom - top
@@ -164,15 +156,6 @@ object NinePatchDrawHelper {
         val bw = bitmap.width - borderPx * 2f
         val bh = bitmap.height - borderPx * 2f
         if (bw <= 0f || bh <= 0f) return
-
-        // 外边距只扩中段、不动角块：角块左沿从 left+marginLeft 起算，右沿到
-        // right-marginRight 为止；中段（含上下两条横边与中心格）横向铺满整张
-        // 外框 [left, right]，把 margin 那一截一起吞进拉伸区。
-        val mL = marginLeftPx.coerceAtLeast(0f)
-        val mR = marginRightPx.coerceAtLeast(0f)
-        val hasMargin = mL > 0f || mR > 0f
-        // 角块可用宽度 = 外框宽减去两侧外边距；角块之和超出时按比例缩小。
-        val cornerAvailableW = (rectW - mL - mR).coerceAtLeast(0f)
 
         // 归一化线位置，各自夹紧范围；并保证 leftX<=rightX、topY<=bottomY（允许重合）
         val lx0 = leftX.coerceIn(0.02f, 0.98f)
@@ -195,10 +178,10 @@ object NinePatchDrawHelper {
         var hT = if (cornerT > 0f) cornerT else hTsrc * s
         var hB = if (cornerB > 0f) cornerB else hBsrc * s
 
-        // 角块之和超出可用宽度时按比例缩小（同 TextLine.drawNinePatchBitmap 的处理），
-        // 否则中段坐标反转，短文字高亮时角块会被压扁。可用宽度已扣除外边距。
-        if (wL + wR > cornerAvailableW && wL + wR > 0f) {
-            val ratio = cornerAvailableW / (wL + wR)
+        // 目标框放不下四角之和时按比例缩小四角（同 TextLine.drawNinePatchBitmap 的处理），
+        // 否则中段坐标反转，短文字高亮时角块会被压扁
+        if (wL + wR > rectW && wL + wR > 0f) {
+            val ratio = rectW / (wL + wR)
             wL *= ratio
             wR *= ratio
         }
@@ -207,14 +190,15 @@ object NinePatchDrawHelper {
             hT *= ratio
             hB *= ratio
         }
+        val wM = (rectW - wL - wR).coerceAtLeast(0f)
         val hM = (rectH - hT - hB).coerceAtLeast(0f)
 
-        // 角块分界：左角块从 left+marginLeft 起，右角块到 right-marginRight 止，
-        // 两边外边距留给中段拉伸区。无外边距时退回与旧版完全一致的 [left, right]。
-        val x0 = left + mL
-        val x1 = (x0 + wL).roundToInt().toFloat().coerceIn(x0, right - mR)
-        val x2 = (right - mR - wR).roundToInt().toFloat().coerceIn(x1, right - mR)
-        val x3 = right - mR
+        // 内部分界取整到整数像素：相邻块共享同一条边，消除子像素缝隙；
+        // 且各格严格平铺、互不重叠（见下方绘制循环）。
+        val x0 = left
+        val x1 = (left + wL).roundToInt().toFloat().coerceIn(x0, right)
+        val x2 = (right - wR).roundToInt().toFloat().coerceIn(x1, right)
+        val x3 = right
         val y0 = top
         val y1 = (top + hT).roundToInt().toFloat().coerceIn(y0, bottom)
         val y2 = (bottom - hB).roundToInt().toFloat().coerceIn(y1, bottom)
@@ -261,39 +245,29 @@ object NinePatchDrawHelper {
             cellSrc(0, 2), cellSrc(1, 2), cellSrc(2, 2),
         )
 
-        // 无外边距：三列严格平铺 [left, right]，与旧版完全一致。
-        // 有外边距：中段（col 1）横向铺满 [left, right] 吞掉两侧 margin，
-        // 角块列（col 0/2）落在各自自然位置、压在中段之上；因此先画中段再画角块。
-        val midLeft = if (hasMargin) left else x1
-        val midRight = if (hasMargin) right else x2
         val dstRects = arrayOf(
             RectF(x0, y0, x1, y1),
-            RectF(midLeft, y0, midRight, y1),
+            RectF(x1, y0, x2, y1),
             RectF(x2, y0, x3, y1),
             RectF(x0, y1, x1, y2),
-            RectF(midLeft, y1, midRight, y2),
+            RectF(x1, y1, x2, y2),
             RectF(x2, y1, x3, y2),
             RectF(x0, y2, x1, y3),
-            RectF(midLeft, y2, midRight, y3),
+            RectF(x1, y2, x2, y3),
             RectF(x2, y2, x3, y3)
         )
-        // 中段索引 1/4/7，角块索引 0/2/3/5/6/8。有外边距时先画中段再画角块，
-        // 角块才能盖住中段在角块位置铺的拉伸像素；无外边距时各格互不重叠，顺序无关。
-        val drawOrder = if (hasMargin) {
-            intArrayOf(1, 4, 7, 0, 2, 3, 5, 6, 8)
-        } else {
-            intArrayOf(0, 1, 2, 3, 4, 5, 6, 7, 8)
-        }
 
         // 裁切到目标矩形：避免极小高亮框里角块相互覆盖
         canvas.save()
         canvas.clipRect(left, top, right, bottom)
-        for (i in drawOrder) {
+        for (i in 0 until 9) {
             val src = srcRects[i]
             if (src.width() <= 0 || src.height() <= 0) continue
-            // 无外边距时各格在整数分界上严格平铺、互不重叠；有外边距时中段先铺满
-            // 外框、角块再压上去，靠绘制顺序而非 0.5px 重叠盖缝，避免半透明图
-            // 相邻格 alpha 叠加出分割线。
+            // 相邻格在整数分界上严格平铺，不做边界外扩：
+            // 曾经按每边 0.5px 扩展靠重叠盖缝（a60fddd49），但半透明高亮图在
+            // 两条横线、两条竖线的重叠带上会被叠加两次 alpha，夜间深色底上
+            // 呈现为四条分割线（2026-09-22 真机确认）。历史分支上验证过的
+            // 做法是整数分界共享边（e63c0eebc），缝隙与叠加两者都不出现。
             canvas.drawBitmap(bitmap, src, dstRects[i], paint)
         }
         canvas.restore()
