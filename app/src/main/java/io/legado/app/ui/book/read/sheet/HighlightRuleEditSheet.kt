@@ -1602,14 +1602,14 @@ internal fun HighlightRulePreview(
                                     // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
                                     // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内；
                                     // 渲染层矩形上下各内缩 1dp（TextLine.bgPaddingTop/Bottom），这里保持一致。
-                                    // 外边距只在命中段首/末行的外侧延伸（与正文 run 收尾外扩同口径）。
+                                    // 外边距只在命中段首/末行的外侧延伸（与正文 run 收尾外扩同口径）：
+                                    // layout 用原始文字矩形算角块与内边距，draw 时把外框向段首/段尾
+                                    // 各扩 margin 并显式传入，角块不动、中段拉伸区吞掉 margin 那一截。
                                     val nineSliceInset = minOf(1.dp.toPx(), (rectB - rectT) / 4f)
-                                    val frameL = rectL -
-                                            if (segmentIndex == 0) marginStartPx else 0f
-                                    val frameR = rectR +
-                                            if (segmentIndex == segments.lastIndex) marginEndPx else 0f
+                                    val segMarginLeft = if (segmentIndex == 0) marginStartPx else 0f
+                                    val segMarginRight = if (segmentIndex == segments.lastIndex) marginEndPx else 0f
                                     io.legado.app.help.highlight.NinePatchDrawHelper.layout(
-                                        frameL, rectT + nineSliceInset, frameR, rectB - nineSliceInset,
+                                        rectL, rectT + nineSliceInset, rectR, rectB - nineSliceInset,
                                         bgRawBitmap.width.toFloat(), bgRawBitmap.height.toFloat(),
                                         npLeft, npRight, npTop, npBottom,
                                         bgPadStart * density, bgPadEnd * density,
@@ -1620,11 +1620,14 @@ internal fun HighlightRulePreview(
                                         io.legado.app.help.highlight.NinePatchDrawHelper.draw(
                                             drawContext.canvas.nativeCanvas,
                                             bgRawBitmap,
-                                            box.left, box.top, box.right, box.bottom,
+                                            box.left - segMarginLeft, box.top,
+                                            box.right + segMarginRight, box.bottom,
                                             ninePatchPaint,
                                             leftX = npLeft, rightX = 1f - npRight,
                                             topY = npTop, bottomY = 1f - npBottom,
                                             box.cornerL, box.cornerR, box.cornerT, box.cornerB,
+                                            marginLeftPx = segMarginLeft,
+                                            marginRightPx = segMarginRight,
                                         )
                                     }
                                 } else {

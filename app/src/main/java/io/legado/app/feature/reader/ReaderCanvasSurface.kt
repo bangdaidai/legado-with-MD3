@@ -3280,6 +3280,10 @@ internal fun drawTextBackground(
                 cornerT = (content.top - frameTop - image.paddingTopPx - bandOverhang).coerceAtLeast(0f),
                 cornerB = (frameBottom - content.bottom - image.paddingBottomPx - bandOverhang).coerceAtLeast(0f),
                 borderPx = if (image.hasNinePatchBorder) 1f else 0f,
+                // 外边距只扩中段、不动角块：角块落在文字±内边距的自然位置，margin 那一截
+                // 由中段拉伸区横向吞掉。frame 已含 margin，这里把 margin 显式传给 draw。
+                marginLeftPx = image.marginStartPx.coerceAtLeast(0f),
+                marginRightPx = image.marginEndPx.coerceAtLeast(0f),
             )
         }
         else -> {
