@@ -1290,8 +1290,9 @@ private data class PreviewLineSegment(
 /**
  * 预览文本与外边距留白的分段结果。
  *
- * 外边距在引擎里是排版留白（ReaderPaginator.backgroundMarginBefore/After）：预览把命中段
- * 前后各插一个宽度=外边距的占位空格来复现同一排版。[text] 是插入占位后的显示文本，
+ * 外边距在引擎里是排版留白（ReaderPaginator.backgroundMarginBefore/After）：预览在命中段
+ * 那一侧**确实还有文字**时插一个宽度=外边距的占位空格来复现同一排版（命中段落在样本文本
+ * 开头/结尾＝正文行首/行尾，前面/后面没有字，不插）。[text] 是插入占位后的显示文本，
  * [ranges] 是命中文字在 [text] 中的新区间（画气泡与下划线都用它），[placeholders]
  * 交给 TextMeasurer 渲染成对应宽度的空白，占位本身没有字形、也不落在气泡里。
  */
@@ -1405,11 +1406,12 @@ internal fun HighlightRulePreview(
     }
 
     // 外边距预览：引擎只在九宫格（fit==3）背景下消费 bgMargin——它按旧引擎语义参与排版，
-    // 命中段起点前推进 marginStart、终点后推进 marginEnd，把命中段前后的文字推开
-    // （ReaderPaginator.backgroundMarginBefore/After），背景图本身不因外边距变宽。
-    // 预览在命中段前后插入宽度=外边距的占位空格复现同一排版：占位本身无字形，
-    // 气泡仍画在命中文字矩形上，留白落在图外。引擎把相邻的同图文字视作一个 run
-    // （中间不产生间隙），所以先合并贴合的命中区间再插占位。
+    // 把命中段前后的文字推开（ReaderPaginator.backgroundMarginBefore/After），背景图本身
+    // 不因外边距变宽。留白只在命中段那一侧**确实还有文字**时才出现：命中段落在行首/行尾
+    // （前面/后面没有字）时不再让白，否则整段命中会凭空多出前后缩进。预览据此在命中段
+    // 前后插入宽度=外边距的占位空格复现同一排版：占位本身无字形，气泡仍画在命中文字矩形上，
+    // 留白落在图外。引擎把相邻的同图文字视作一个 run（中间不产生间隙），所以先合并贴合的
+    // 命中区间再插占位。
     val density = LocalDensity.current
     val marginStartWidth = with(density) { bgMarginStart.coerceAtLeast(0f).dp.toSp() }
     val marginEndWidth = with(density) { bgMarginEnd.coerceAtLeast(0f).dp.toSp() }
@@ -1436,7 +1438,8 @@ internal fun HighlightRulePreview(
             var cursor = 0
             runs.forEach { range ->
                 builder.append(sampleText, cursor, range.first)
-                if (marginStartWidth.value > 0f) {
+                // 命中段落在样本文本开头＝正文里的行首，前面没有字可推，不让白。
+                if (marginStartWidth.value > 0f && range.first > 0) {
                     val at = builder.length
                     builder.append(' ')
                     placeholders += AnnotatedString.Range(
@@ -1452,7 +1455,8 @@ internal fun HighlightRulePreview(
                 val hitStart = builder.length
                 builder.append(sampleText, range.first, range.last + 1)
                 shifted += hitStart until builder.length
-                if (marginEndWidth.value > 0f) {
+                // 命中段落在样本文本结尾＝正文里的行尾，后面没有字可推，不让白。
+                if (marginEndWidth.value > 0f && range.last + 1 < sampleText.length) {
                     val at = builder.length
                     builder.append(' ')
                     placeholders += AnnotatedString.Range(

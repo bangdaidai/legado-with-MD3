@@ -722,21 +722,26 @@ internal class ReaderPaginationSession(
                 ?.style?.backgroundImage?.takeIf { it.fit == 3 }
 
         /**
-         * 命中段首字前要让出的外边距（负值钳为 0）。只在行首、或前一项换了图时才给值，
-         * 段内恒为 0——留白只出现在命中段**外面**，气泡外框仍只包住命中文字矩形，
-         * 被推开的文字之间那道空隙不属于任何字，也就不会落在图里。
+         * 命中段首字前要让出的外边距（负值钳为 0）。留白的作用是把命中段和它**前面**的文字
+         * 横向拉开，所以只有前面确实还有字（不在行首）、且不是同一段背景时才让；命中段正好
+         * 落在行首时不再让，否则整段命中会凭空多出一截行首缩进。段内（同图相邻）恒为 0。
          */
         fun backgroundMarginBefore(index: Int, lineStart: Int): Float {
             val image = itemFrame(index) ?: return 0f
-            return if (index == lineStart || itemFrame(index - 1) != image) {
+            if (index == lineStart) return 0f
+            return if (itemFrame(index - 1) != image) {
                 image.marginStartPx.coerceAtLeast(0f)
             } else 0f
         }
 
-        /** 命中段末字后要让出的外边距，见 [backgroundMarginBefore]。 */
+        /**
+         * 命中段末字后要让出的外边距，见 [backgroundMarginBefore]：只有后面确实还有字
+         * （不在行尾）时才让，否则留白会变成行尾的多余空白，还会把居中/两端对齐的行算偏。
+         */
         fun backgroundMarginAfter(index: Int, lineEnd: Int): Float {
             val image = itemFrame(index) ?: return 0f
-            return if (index + 1 == lineEnd || itemFrame(index + 1) != image) {
+            if (index + 1 == lineEnd) return 0f
+            return if (itemFrame(index + 1) != image) {
                 image.marginEndPx.coerceAtLeast(0f)
             } else 0f
         }
@@ -759,8 +764,8 @@ internal class ReaderPaginationSession(
         val starts = mutableListOf(0)
         // 背景图本身不参与排版：它只是压在字后面的装饰，内边距超出的部分也只超出图本身
         // （见 ReaderTextBackgroundRun.textBackgroundRuns 现算的外框）。只有九宫格的
-        // 外边距例外——它按旧引擎语义在命中段前后让出排版留白（见 backgroundMarginBefore/
-        // After），所以这里按字形宽 + 命中字距 + 外边距收紧行尾。
+        // 外边距例外——它按旧引擎语义在命中段两侧让出排版留白（见 backgroundMarginBefore/
+        // After），且只在那一侧确实还有文字时才让，所以这里按字形宽 + 命中字距 + 外边距收紧行尾。
         // Keep a forbidden Chinese break intact even if its row has to consume the
         // remaining slack, matching the legacy punctuation priority.
         while (starts.last() < paragraph.items.size) {
@@ -934,8 +939,8 @@ internal class ReaderPaginationSession(
                 val matchStyle = (item as? ReaderMeasuredInlineItem.Text)?.style
                 val spacingBefore = matchStyle?.matchSpacingBeforePx ?: 0f
                 x += spacingBefore
-                // 外边距按旧引擎语义落成排版留白：命中段首字前推开 marginStart，
-                // 相邻同图段之间（段内）不推。气泡外框由文字矩形现算，留白落在图外。
+                // 外边距按旧引擎语义落成排版留白：命中段首字前推开 marginStart，但行首
+                // 前面没有字、相邻同图段之间（段内）也不推。气泡外框由文字矩形现算，留白落在图外。
                 x += backgroundMarginBefore(from + itemIndex, from)
                 val itemBackground = backgroundOf(from + itemIndex)
                 when (item) {

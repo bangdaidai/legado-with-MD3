@@ -62,10 +62,11 @@ data class ReaderTextBackgroundImage(
     val paddingTopPx: Float = 0f,
     val paddingBottomPx: Float = 0f,
     /**
-     * 外边距（px）：命中段前后让出的排版留白。旧引擎 `calcNineSliceMargin` 把它按
-     * 「命中段首字前 / 末字后」的间距参与排版（ReaderPaginator.backgroundMarginBefore/After），
-     * 把命中文字前后的字符推开；背景框本身不因外边距变宽，仍只包住命中文字矩形。
-     * 负值钳为 0（不外扩），且只在九宫格（fit==3）背景下生效。
+     * 外边距（px）：命中段前后让出的排版留白，用来把命中段和它前后的文字拉开。旧引擎
+     * `calcNineSliceMargin` 把它按「命中段首字前 / 末字后」的间距参与排版
+     * （ReaderPaginator.backgroundMarginBefore/After），把命中文字前后的字符推开；
+     * 只有那一侧确实还有文字时才让（命中段落在行首/行尾时不让），背景框本身不因外边距
+     * 变宽，仍只包住命中文字矩形。负值钳为 0（不外扩），且只在九宫格（fit==3）背景下生效。
      */
     val marginStartPx: Float = 0f,
     val marginEndPx: Float = 0f,

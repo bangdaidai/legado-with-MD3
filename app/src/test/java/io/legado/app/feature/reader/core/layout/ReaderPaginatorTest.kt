@@ -983,72 +983,29 @@ class ReaderPaginatorTest {
     }
 
     /**
-     * 外边距（bgMargin）按旧引擎语义参与排版：命中段首字前推开 marginStart、末字后推开
-     * marginEnd，行宽把它们一并计入，所以断行与不开背景时不同；气泡外框只包住命中文字本身。
+     * 外边距（bgMargin）按旧引擎语义在排版层把命中段和它两侧的文字拉开，且**只在那一侧
+     * 确实还有文字时**才让白：命中段落在行首/行尾（或整行都是命中段）时不再让，否则会凭空
+     * 多出一截前后缩进。气泡外框仍只包住命中文字本身。
      */
     @Test
-    fun nineSliceMarginsAreLaidOutAsTextSpacing() {
+    fun nineSliceMarginsOnlySeparateTheHighlightFromAdjacentText() {
         val frame = ReaderTextBackgroundImage(
             source = "frame.png",
             fit = 3,
             scale = 1f,
-            marginStartPx = 3f,
-            marginEndPx = 4f,
+            marginStartPx = 6f,
+            marginEndPx = 8f,
         )
         val framedStyle = style.copy(backgroundImage = frame)
-        val page = ReaderPaginator.paginateBlocks(
-            listOf(
-                ReaderMeasuredBlock.InlineParagraph(
-                    items = (0 until 4).map { index ->
-                        ReaderMeasuredInlineItem.Text("字", 10f, framedStyle, index)
-                    },
-                    indentCharacters = 0,
-                    alignment = ReaderTextAlignment.START,
-                    lineHeightPx = 20f,
-                    baselineOffsetPx = 15f,
-                    baseTextSizePx = 10f,
-                )
-            ),
-            config.copy(viewportWidthPx = 35, viewportHeightPx = 100),
-        ).single()
-
-        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        // 行宽 = 字形宽 + 外边距：3+4 让两字行占 27（≤35），第三字（再加 3+4 = 37）放不下，
-        // 所以一行只放两字，第 3 字整字换行。
-        assertEquals(listOf(0f, 0f, 20f, 20f), glyphs.map { it.bounds.top })
-        // 每行首字都被 marginStart=3 推开，段内相邻字不留间距。
-        assertEquals(listOf(3f, 13f, 3f, 13f), glyphs.map { it.bounds.left })
-        // 气泡外框不再外扩 margin：就是命中文字矩形本身（每行两字）。
-        val runs = page.textBackgroundRuns()
-        assertEquals(2, runs.size)
-        assertEquals(3f, runs[0].bounds.left, 0.01f)
-        assertEquals(23f, runs[0].bounds.right, 0.01f)
-        assertEquals(3f, runs[1].bounds.left, 0.01f)
-        assertEquals(23f, runs[1].bounds.right, 0.01f)
-    }
-
-    /**
-     * 外边距计入行宽后会触发行尾收缩，但避头尾禁则仍要遵守：标点不能因为收缩被挤到行首。
-     */
-    @Test
-    fun nineSliceMarginsKeepForbiddenPunctuationOutOfLineStart() {
-        val frame = ReaderTextBackgroundImage(
-            source = "frame.png",
-            fit = 3,
-            scale = 1f,
-            marginStartPx = 11f,
-            marginEndPx = 2f,
-        )
-        val framedStyle = style.copy(backgroundImage = frame)
-        // 内容区宽 34：三字 + 外边距 11+2 = 43 放不下；收缩到两字（33≤34）时落点正好在
-        // “。”之前，禁则要求继续前移，于是首行只剩“甲”。
+        // 命中段夹在普通文字中间：前后都有字，外边距把两侧文字推开。
         val page = ReaderPaginator.paginateBlocks(
             listOf(
                 ReaderMeasuredBlock.InlineParagraph(
                     items = listOf(
-                        ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 0),
-                        ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 1),
-                        ReaderMeasuredInlineItem.Text("。", 10f, framedStyle, 2),
+                        ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                        ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 1),
+                        ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 2),
+                        ReaderMeasuredInlineItem.Text("后", 10f, style, 3),
                     ),
                     indentCharacters = 0,
                     alignment = ReaderTextAlignment.START,
@@ -1057,22 +1014,177 @@ class ReaderPaginatorTest {
                     baseTextSizePx = 10f,
                 )
             ),
-            config.copy(viewportWidthPx = 34, viewportHeightPx = 100),
+            config.copy(viewportWidthPx = 100, viewportHeightPx = 100),
         ).single()
 
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
-        assertEquals(listOf("甲", "乙", "。"), glyphs.map { it.value })
-        assertEquals(listOf(0f, 20f, 20f), glyphs.map { it.bounds.top })
-        // 两个行首字都被 marginStart=11 推开；行尾不留 margin 到文字框里。
-        assertEquals(listOf(11f, 11f, 21f), glyphs.map { it.bounds.left })
-        // 一行一个 run：气泡外框就是命中文字矩形，不因外边距变宽。
+        assertEquals(listOf(0f, 0f, 0f, 0f), glyphs.map { it.bounds.top })
+        // 单行：前[0] 甲[16] 乙[26] 后[44]——甲前让 6，乙后让 8。
+        assertEquals(listOf(0f, 16f, 26f, 44f), glyphs.map { it.bounds.left })
+        // 气泡只包住命中文字本身（甲16 .. 乙36），外边距不并进外框。
+        val runs = page.textBackgroundRuns()
+        assertEquals(1, runs.size)
+        assertEquals(16f, runs[0].bounds.left, 0.01f)
+        assertEquals(36f, runs[0].bounds.right, 0.01f)
+    }
+
+    /**
+     * 命中段两侧没有文字时不再让白：整段命中（行首行尾都是命中段）、命中段落在段首只让后侧、
+     * 落在段尾只让前侧，三种情况各验一遍。
+     */
+    @Test
+    fun nineSliceMarginsVanishOnTheSideWithoutNeighbourText() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 5f,
+            marginEndPx = 7f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        fun page(texts: List<Pair<String, Boolean>>) = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = texts.mapIndexed { index, (value, matched) ->
+                        ReaderMeasuredInlineItem.Text(
+                            value, 10f, if (matched) framedStyle else style, index,
+                        )
+                    },
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 100, viewportHeightPx = 100),
+        ).single()
+
+        // 整段就是命中段：前后都没有字，两边都不让白。
+        val whole = page(listOf("甲" to true, "乙" to true))
+        assertEquals(
+            listOf(0f, 10f),
+            whole.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+        assertEquals(0f, whole.textBackgroundRuns().single().bounds.left, 0.01f)
+        assertEquals(20f, whole.textBackgroundRuns().single().bounds.right, 0.01f)
+
+        // 命中段在段首：前侧不让、后侧让 7。
+        val atHead = page(listOf("甲" to true, "乙" to true, "后" to false))
+        assertEquals(
+            listOf(0f, 10f, 27f),
+            atHead.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+
+        // 命中段在段尾：前侧让 5、后侧不让。
+        val atTail = page(listOf("前" to false, "甲" to true, "乙" to true))
+        assertEquals(
+            listOf(0f, 15f, 25f),
+            atTail.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+    }
+
+    /**
+     * 外边距计入行宽后仍会收紧行尾：命中段后面还有字时，外边距把命中段推出去，
+     * 后面的字被挤到下一行，说明外边距确实参与了断行。
+     */
+    @Test
+    fun nineSliceMarginsStillShrinkTheLineWhenTextFollows() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 6f,
+            marginEndPx = 6f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        // 宽 30：命中段前的 6px 外边距让「前甲」占 26，「乙」带不下（26 + 10 + 行尾 6 = 42 > 30），
+        // 「乙」被挤到下一行。
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = listOf(
+                        ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                        ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 1),
+                        ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 2),
+                        ReaderMeasuredInlineItem.Text("后", 10f, style, 3),
+                    ),
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 30, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        assertEquals(listOf(0f, 0f, 20f, 20f), glyphs.map { it.bounds.top })
+        // 「前」0、「甲」16（前面让 6）；第二行「乙」0、「后」16（乙后让 6）。
+        assertEquals(listOf(0f, 16f, 0f, 16f), glyphs.map { it.bounds.left })
         val runs = page.textBackgroundRuns()
         assertEquals(2, runs.size)
-        assertEquals(11f, runs[0].bounds.left, 0.01f)
-        assertEquals(21f, runs[0].bounds.right, 0.01f)
-        assertEquals(11f, runs[1].bounds.left, 0.01f)
-        assertEquals(31f, runs[1].bounds.right, 0.01f)
-        assertTrue(glyphs.all { it.bounds.right <= 34f })
+        assertEquals(16f, runs[0].bounds.left, 0.01f)
+        assertEquals(26f, runs[0].bounds.right, 0.01f)
+        assertEquals(0f, runs[1].bounds.left, 0.01f)
+        assertEquals(10f, runs[1].bounds.right, 0.01f)
+    }
+
+    /**
+     * 外边距把行挤短时仍要遵守避头尾禁则：收窄候选点正好落在标点之前（标点落行首是非法
+     * 断点）时继续前移，标点不会被挤到行首。
+     */
+    @Test
+    fun nineSliceMarginsKeepForbiddenPunctuationOutOfLineStart() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 12f,
+            marginEndPx = 2f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        // 宽 40：断行基准把首行排到「。」结尾（正好 40）；命中段前的 12px 外边距让首行占 52
+        // 超出，收窄候选落在「。」之前——那是禁则非法断点，继续前移到「乙」之前，
+        // 于是首行只剩「前甲」，「。」留在第二行。
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = listOf(
+                        ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                        ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 1),
+                        ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 2),
+                        ReaderMeasuredInlineItem.Text("。", 10f, framedStyle, 3),
+                        ReaderMeasuredInlineItem.Text("后", 10f, style, 4),
+                    ),
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 40, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        assertEquals(
+            listOf("前", "甲", "乙", "。", "后"),
+            glyphs.map { it.value },
+        )
+        assertEquals(listOf(0f, 0f, 20f, 20f, 20f), glyphs.map { it.bounds.top })
+        // 第二行行首是「乙」不是「。」——禁则回退生效。
+        assertEquals("乙", glyphs[2].value)
+        // 「甲」被前面的 12px 外边距推到 22；第二行「后」被「。」后的 2px 外边距推到 22。
+        assertEquals(listOf(0f, 22f, 0f, 10f, 22f), glyphs.map { it.bounds.left })
+        val runs = page.textBackgroundRuns()
+        assertEquals(2, runs.size)
+        assertEquals(22f, runs[0].bounds.left, 0.01f)
+        assertEquals(32f, runs[0].bounds.right, 0.01f)
+        assertEquals(0f, runs[1].bounds.left, 0.01f)
+        assertEquals(20f, runs[1].bounds.right, 0.01f)
+        assertTrue(glyphs.all { it.bounds.right <= 40f })
     }
 
     /**
