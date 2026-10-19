@@ -722,25 +722,38 @@ internal class ReaderPaginationSession(
                 ?.style?.backgroundImage?.takeIf { it.fit == 3 }
 
         /**
+         * [start, end) 是否全是不可见空白字（段首缩进 / 尾随空格 / 制表符 / 排版空格）。
+         * 命中段紧贴这些空白时视觉上仍处于行首/行尾，不能算「前面/后面还有字」。
+         */
+        fun onlyBlankGlyphs(start: Int, end: Int): Boolean {
+            for (index in start until end) {
+                val item = paragraph.items[index]
+                if (item !is ReaderMeasuredInlineItem.Text || !item.value.isBlank()) return false
+            }
+            return true
+        }
+
+        /**
          * 命中段首字前要让出的外边距（负值钳为 0）。留白的作用是把命中段和它**前面**的文字
-         * 横向拉开，所以只有前面确实还有字（不在行首）、且不是同一段背景时才让；命中段正好
-         * 落在行首时不再让，否则整段命中会凭空多出一截行首缩进。段内（同图相邻）恒为 0。
+         * 横向拉开，所以只有前面确实还有可见字时才让；命中段正好落在行首，或前面只剩段首
+         * 缩进/空白（不可见）时不再让，否则命中段紧跟段首缩进之后也会凭空多出一截缩进。
+         * 段内（同图相邻）恒为 0。
          */
         fun backgroundMarginBefore(index: Int, lineStart: Int): Float {
             val image = itemFrame(index) ?: return 0f
-            if (index == lineStart) return 0f
+            if (index == lineStart || onlyBlankGlyphs(lineStart, index)) return 0f
             return if (itemFrame(index - 1) != image) {
                 image.marginStartPx.coerceAtLeast(0f)
             } else 0f
         }
 
         /**
-         * 命中段末字后要让出的外边距，见 [backgroundMarginBefore]：只有后面确实还有字
-         * （不在行尾）时才让，否则留白会变成行尾的多余空白，还会把居中/两端对齐的行算偏。
+         * 命中段末字后要让出的外边距，见 [backgroundMarginBefore]：只有后面确实还有可见字
+         * 时才让，否则留白会变成行尾的多余空白，还会把居中/两端对齐的行算偏。
          */
         fun backgroundMarginAfter(index: Int, lineEnd: Int): Float {
             val image = itemFrame(index) ?: return 0f
-            if (index + 1 == lineEnd) return 0f
+            if (index + 1 == lineEnd || onlyBlankGlyphs(index + 1, lineEnd)) return 0f
             return if (itemFrame(index + 1) != image) {
                 image.marginEndPx.coerceAtLeast(0f)
             } else 0f

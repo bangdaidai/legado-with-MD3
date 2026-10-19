@@ -222,21 +222,24 @@ object NinePatchDrawHelper {
         // 源图四条分界线 X0|X1|X2|X3（Y 同理），X1/X2 即两条内部切割线。
         val sxLines = intArrayOf(bx, bx + sxLi, bx + sxRi, bx + bwI)
         val syLines = intArrayOf(by, by + sxTi, by + sxBii, by + bhI)
-        // 每格在内部切割线一侧向邻区多取 1px 源像素（夹在本格两条外分界之间）：
-        // FILTER_BITMAP 双线性在 srcRect 边缘会采样到切割线外侧，透明边缘图
-        // 每格靠缝约 1px 的 alpha 被拉低，深色底上呈"缝隙线"。越沿采样让边界
-        // 像素取到邻区真实内容，接缝连续；目标矩形仍严格平铺、互不重叠，
-        // 半透明图不会再出现 0.5px 外扩造成的双重 alpha 叠加四线。
+        // 每格源矩形严格落在内部分界线上，不向邻区越沿采样。曾经每格靠缝再借邻格 1px
+        // （658c48b2a）想让 FILTER_BITMAP 的边界采样连续，但中段横向拉伸会把借来的邻格
+        // 边框像素放大成一条明显的分割线、四角也会画出中段的像素，图案在分界处错位。
+        // 目标矩形已按整数分界严格平铺（e63c0eebc），源图本身在分界两侧就是相邻像素，
+        // 不需要借邻像素；只有某格源宽/高为 0（两条切线几乎重合的退化情形）时才借 1px，
+        // 避免该格被整格跳过留下空白。
         fun cellSrc(col: Int, row: Int): Rect {
             val l = sxLines[col]
             val r = sxLines[col + 1]
             val t = syLines[row]
             val b = syLines[row + 1]
+            val degenerateX = r - l < 1
+            val degenerateY = b - t < 1
             return Rect(
-                if (col > 0) (l - 1).coerceAtLeast(sxLines[0]) else l,
-                if (row > 0) (t - 1).coerceAtLeast(syLines[0]) else t,
-                if (col < 2) (r + 1).coerceAtMost(sxLines[3]) else r,
-                if (row < 2) (b + 1).coerceAtMost(syLines[3]) else b,
+                if (degenerateX) (l - 1).coerceAtLeast(sxLines[0]) else l,
+                if (degenerateY) (t - 1).coerceAtLeast(syLines[0]) else t,
+                if (degenerateX) (r + 1).coerceAtMost(sxLines[3]) else r,
+                if (degenerateY) (b + 1).coerceAtMost(syLines[3]) else b,
             )
         }
         val srcRects = arrayOf(

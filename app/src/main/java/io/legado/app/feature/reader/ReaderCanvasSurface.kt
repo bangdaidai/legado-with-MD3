@@ -115,6 +115,8 @@ import io.legado.app.feature.reader.core.model.ReaderTipRowLayout
 import io.legado.app.feature.reader.core.model.ReaderTipVisual
 import io.legado.app.feature.reader.core.model.contentClipRect
 import io.legado.app.feature.reader.core.model.emphasisUnderlineRunsFor
+import io.legado.app.feature.reader.core.model.stretchLeftPx
+import io.legado.app.feature.reader.core.model.stretchRightPx
 import io.legado.app.feature.reader.core.model.textBackgroundRuns
 import io.legado.app.feature.reader.core.navigation.ReaderPageNavigator
 import io.legado.app.feature.reader.core.readaloud.ReaderVisibleTextPosition
@@ -3245,41 +3247,53 @@ internal fun drawTextBackground(
             canvas.restore()
         }
         3 -> {
-            // 九宫格：外框由分页期按同一个等比倍率算好（run.bounds = 文字矩形外扩
-            // frame*Px），这里只把整张图按那份外框切成九格——中间那一格拉到文字宽、
-            // 上下两条边与四角保持分页期算出的厚度，任何一格都不再单独拉伸。
-            // 与 main 旧引擎 TextLine.drawBgImageSegment 同口径：外框顶边各内缩固定 1dp
-            // （对照规则编辑预览的 nineSliceInset），背景框不顶满行盒，行与行之间不粘连。
+            // 九宫格背景与规则编辑预览共用同一套几何：以（上下各内缩固定 1dp 的）文字矩形
+            // 为基准交给 NinePatchDrawHelper.layout 现算外框与四角，再交给 draw 切成九格。
+            // 分页期预存的 frame*Px 只留给滚动裁剪用，绘制这里绝不能自己再推一遍角块/中段：
+            // 只要正文与预览各算各的，切分线就会错位（角块被长度偏移横向拉扁、气泡整体
+            // 上下差一截都是这么来的）。长度偏移并进中段拉伸区：只改左右文字边界，
+            // 四角厚度不受影响。
             val content = run.contentBounds
-            val frame = run.bounds
-            val frameTop = frame.top + nineSliceTextInsetPx
-            val frameBottom = (frame.bottom - nineSliceTextInsetPx).coerceAtLeast(frameTop + 1f)
-            // 角块厚度 = 外框相对文字的外扩量减去两截非边框部分：内边距 padding，
-            // 以及「图片大小 ≠ 1 时中带比行盒多出来的那一截」bandOverhang（上下各一半）。
-            // 这几截本来就属于中段拉伸区，混进角块会把角块/中段压扁（图片大小调大时尤其明显）。
-            // 外框已经把「边框大小」倍率算进 frame*Px 了，所以这里直接反推即可。
-            // 外边距不在这里：它按旧引擎语义参与排版、把命中段前后的文字推开，气泡外框
-            // 只包住命中文字矩形，不因外边距变宽（对照 ReaderPaginator.backgroundMarginBefore）。
-            val bandOverhang = content.height * (scale - 1f) / 2f
-            io.legado.app.help.highlight.NinePatchDrawHelper.draw(
-                canvas,
-                bitmap,
-                frame.left, frameTop, frame.right, frameBottom,
-                paint,
-                leftX = image.ninePatchLeft.coerceIn(0f, 1f),
-                rightX = 1f - image.ninePatchRight.coerceIn(0f, 1f),
-                topY = image.ninePatchTop.coerceIn(0f, 1f),
-                bottomY = 1f - image.ninePatchBottom.coerceIn(0f, 1f),
-                // 外框 bounds 里已经含了内边距（frame*Px 与 padding*）与「边框大小」倍率
-                // （frame*Px 乘了 borderScale）：角块只画原图边条那一截（不含 padding、
-                // 不算 bandOverhang），中段拉伸区才把它们一起吞进去，与规则编辑预览
-                // NinePatchDrawHelper.layout 的 box/corner 同一套口径。
-                cornerL = (content.left - frame.left - image.paddingLeftPx).coerceAtLeast(0f),
-                cornerR = (frame.right - content.right - image.paddingRightPx).coerceAtLeast(0f),
-                cornerT = (content.top - frameTop - image.paddingTopPx - bandOverhang).coerceAtLeast(0f),
-                cornerB = (frameBottom - content.bottom - image.paddingBottomPx - bandOverhang).coerceAtLeast(0f),
-                borderPx = if (image.hasNinePatchBorder) 1f else 0f,
-            )
+            // .9.png 引导边只用于切分探测，绘制时要把它排除在内容尺寸之外（与预览同一口径）。
+            val borderPx = if (image.hasNinePatchBorder) 1f else 0f
+            val textInset = minOf(nineSliceTextInsetPx, content.height / 4f)
+            val textLeft = content.left - image.stretchLeftPx(content.width)
+            val textRight = content.right + image.stretchRightPx(content.width)
+            io.legado.app.help.highlight.NinePatchDrawHelper.layout(
+                textLeft = textLeft,
+                textTop = content.top + textInset,
+                textRight = textRight,
+                textBottom = content.bottom - textInset,
+                bitmapWidth = bitmap.width.toFloat(),
+                bitmapHeight = bitmap.height.toFloat(),
+                npLeft = image.ninePatchLeft.coerceIn(0f, 1f),
+                npRight = image.ninePatchRight.coerceIn(0f, 1f),
+                npTop = image.ninePatchTop.coerceIn(0f, 1f),
+                npBottom = image.ninePatchBottom.coerceIn(0f, 1f),
+                padStart = image.paddingLeftPx,
+                padEnd = image.paddingRightPx,
+                padTop = image.paddingTopPx,
+                padBottom = image.paddingBottomPx,
+                borderPx = borderPx,
+                imageScale = scale,
+                borderScale = image.borderScale,
+            )?.let { box ->
+                io.legado.app.help.highlight.NinePatchDrawHelper.draw(
+                    canvas,
+                    bitmap,
+                    box.left, box.top, box.right, box.bottom,
+                    paint,
+                    leftX = image.ninePatchLeft.coerceIn(0f, 1f),
+                    rightX = 1f - image.ninePatchRight.coerceIn(0f, 1f),
+                    topY = image.ninePatchTop.coerceIn(0f, 1f),
+                    bottomY = 1f - image.ninePatchBottom.coerceIn(0f, 1f),
+                    cornerL = box.cornerL,
+                    cornerR = box.cornerR,
+                    cornerT = box.cornerT,
+                    cornerB = box.cornerB,
+                    borderPx = borderPx,
+                )
+            }
         }
         else -> {
             val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)

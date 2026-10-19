@@ -1291,16 +1291,144 @@ private data class PreviewLineSegment(
  * 预览文本与外边距留白的分段结果。
  *
  * 外边距在引擎里是排版留白（ReaderPaginator.backgroundMarginBefore/After）：预览在命中段
- * 那一侧**确实还有文字**时插一个宽度=外边距的占位空格来复现同一排版（命中段落在样本文本
- * 开头/结尾＝正文行首/行尾，前面/后面没有字，不插）。[text] 是插入占位后的显示文本，
- * [ranges] 是命中文字在 [text] 中的新区间（画气泡与下划线都用它），[placeholders]
- * 交给 TextMeasurer 渲染成对应宽度的空白，占位本身没有字形、也不落在气泡里。
+ * 那一侧**确实还有文字**时插一个宽度=外边距的占位空格来复现同一排版（见
+ * [buildMarginSegmentation]）。[text] 是插入占位后的显示文本，[ranges] 是命中文字在
+ * [text] 中的新区间（画气泡与下划线都用它），[placeholders] 交给 TextMeasurer 渲染成对应
+ * 宽度的空白，占位本身没有字形、也不落在气泡里。
  */
 private data class MarginSegmentation(
     val text: String,
     val ranges: List<IntRange>,
     val placeholders: List<AnnotatedString.Range<Placeholder>>,
 )
+
+/** 按命中区间给 [text] 套上预览样式（颜色/背景/粗斜/字号偏移），供两次测量共用。 */
+private fun buildPreviewAnnotated(
+    text: String,
+    ranges: List<IntRange>,
+    resolvedTextColor: Color,
+    bgColor: Int?,
+    bgBitmap: androidx.compose.ui.graphics.ImageBitmap?,
+    fontWeight: Int,
+    isItalic: Boolean,
+    fontSizeOffset: Int,
+): AnnotatedString = buildAnnotatedString {
+    append(text)
+    ranges.forEach { range ->
+        addStyle(
+            SpanStyle(
+                color = resolvedTextColor,
+                background = if (bgColor != null && bgBitmap == null) Color(bgColor) else Color.Unspecified,
+                fontWeight = when {
+                    fontWeight >= 700 -> androidx.compose.ui.text.font.FontWeight.Bold
+                    fontWeight <= 300 -> androidx.compose.ui.text.font.FontWeight.Light
+                    else -> null
+                },
+                fontStyle = if (isItalic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+                // 字号偏移只作用于命中文字，不影响整行
+                fontSize = if (fontSizeOffset != 0) {
+                    (previewBaseFontSize + fontSizeOffset).sp
+                } else {
+                    androidx.compose.ui.unit.TextUnit.Unspecified
+                },
+            ),
+            range.first,
+            (range.last + 1).coerceAtMost(text.length),
+        )
+    }
+}
+
+/**
+ * 先把贴合命中的区间合并成 run，再在每一侧**确实还有可见字**处插一个宽度=外边距的占位空格。
+ *
+ * 「有没有字」按 [baseResult] 的**可视行边界**判断（同一行上命中段前面/后面还有可见字形才
+ * 让白，命中段正好落在折行后的行首/行尾、或那一侧只剩段首缩进/尾随空格时不让），与引擎的
+ * [io.legado.app.feature.reader.core.layout.ReaderPaginator] `backgroundMarginBefore/After`
+ * 同一口径——样本文本按卡片宽度折行后，只在样本文本首尾判断会让折行处的行首长出一截缩进。
+ */
+private fun buildMarginSegmentation(
+    sampleText: String,
+    matchRanges: List<IntRange>,
+    baseResult: TextLayoutResult,
+    marginStartWidth: androidx.compose.ui.unit.TextUnit,
+    marginEndWidth: androidx.compose.ui.unit.TextUnit,
+): MarginSegmentation {
+    val runs = ArrayList<IntRange>(matchRanges.size)
+    matchRanges.forEach { range ->
+        val last = runs.lastOrNull()
+        if (last != null && range.first <= last.last + 1) {
+            runs[runs.lastIndex] = last.first..maxOf(last.last, range.last)
+        } else {
+            runs += range
+        }
+    }
+    // 该偏移前面/后面在同一可视行上是否还有**可见**字形（换行处的边界由 baseResult 给出）。
+    // 只有段首缩进/尾随空格这类不可见空白时不算「还有字」，与引擎 backgroundMarginBefore/
+    // After 的 onlyBlankGlyphs 同一口径，否则命中段紧跟缩进之后也会在预览里让出一截外边距。
+    fun hasVisibleOnLine(startExclusive: Int, endExclusive: Int): Boolean {
+        for (index in startExclusive until endExclusive) {
+            if (!sampleText[index].isWhitespace()) return true
+        }
+        return false
+    }
+
+    fun hasPrevOnLine(offset: Int): Boolean {
+        if (offset <= 0) return false
+        if (baseResult.getLineForOffset(offset - 1) != baseResult.getLineForOffset(offset)) {
+            return false
+        }
+        val lineStart = baseResult.getLineStart(baseResult.getLineForOffset(offset))
+        return hasVisibleOnLine(lineStart, offset)
+    }
+
+    fun hasNextOnLine(offset: Int): Boolean {
+        if (offset + 1 >= sampleText.length) return false
+        val line = baseResult.getLineForOffset(offset)
+        if (baseResult.getLineForOffset(offset + 1) != line) return false
+        val lineEnd = baseResult.getLineEnd(line).coerceAtMost(sampleText.length)
+        return hasVisibleOnLine(offset + 1, lineEnd)
+    }
+
+    val builder = StringBuilder(sampleText.length)
+    val shifted = ArrayList<IntRange>(runs.size)
+    val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>(runs.size * 2)
+    var cursor = 0
+    runs.forEach { range ->
+        builder.append(sampleText, cursor, range.first)
+        if (marginStartWidth.value > 0f && hasPrevOnLine(range.first)) {
+            val at = builder.length
+            builder.append(' ')
+            placeholders += AnnotatedString.Range(
+                Placeholder(
+                    width = marginStartWidth,
+                    height = previewBaseFontSize.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                ),
+                at,
+                at + 1,
+            )
+        }
+        val hitStart = builder.length
+        builder.append(sampleText, range.first, range.last + 1)
+        shifted += hitStart until builder.length
+        if (marginEndWidth.value > 0f && hasNextOnLine(range.last)) {
+            val at = builder.length
+            builder.append(' ')
+            placeholders += AnnotatedString.Range(
+                Placeholder(
+                    width = marginEndWidth,
+                    height = previewBaseFontSize.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                ),
+                at,
+                at + 1,
+            )
+        }
+        cursor = range.last + 1
+    }
+    builder.append(sampleText, cursor, sampleText.length)
+    return MarginSegmentation(builder.toString(), shifted, placeholders)
+}
 
 /** 排版背景图的加载地址；bgType 0 是纯色，1 是 assets 内置图，2 是外部图片 */
 private fun pageBgImagePathOf(bgType: Int, bgStr: String): String? = when (bgType) {
@@ -1383,6 +1511,10 @@ internal fun HighlightRulePreview(
     }
     val bgBitmap = remember(bgRawBitmap) { bgRawBitmap?.asImageBitmap() }
 
+    // 与渲染层同一个 .9.png 判定：引导边占 1px，切分/绘制时都要从内容尺寸里排除。
+    val bgBorderPx = if (bgImage.substringBefore('?').substringBefore('#')
+            .endsWith(".9.png", ignoreCase = true)) 1f else 0f
+
     // 九宫格绘制用的 Paint
     val ninePatchPaint = remember {
         android.graphics.Paint().apply {
@@ -1417,94 +1549,6 @@ internal fun HighlightRulePreview(
     val marginEndWidth = with(density) { bgMarginEnd.coerceAtLeast(0f).dp.toSp() }
     val applyBgMargins = bgBitmap != null && bgImageFit == 3 &&
             (marginStartWidth.value > 0f || marginEndWidth.value > 0f)
-    val marginSegmentation = remember(
-        sampleText, matchRanges, applyBgMargins, marginStartWidth, marginEndWidth
-    ) {
-        if (!applyBgMargins) {
-            MarginSegmentation(sampleText, matchRanges, emptyList())
-        } else {
-            val runs = ArrayList<IntRange>(matchRanges.size)
-            matchRanges.forEach { range ->
-                val last = runs.lastOrNull()
-                if (last != null && range.first <= last.last + 1) {
-                    runs[runs.lastIndex] = last.first..maxOf(last.last, range.last)
-                } else {
-                    runs += range
-                }
-            }
-            val builder = StringBuilder(sampleText.length)
-            val shifted = ArrayList<IntRange>(runs.size)
-            val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>(runs.size * 2)
-            var cursor = 0
-            runs.forEach { range ->
-                builder.append(sampleText, cursor, range.first)
-                // 命中段落在样本文本开头＝正文里的行首，前面没有字可推，不让白。
-                if (marginStartWidth.value > 0f && range.first > 0) {
-                    val at = builder.length
-                    builder.append(' ')
-                    placeholders += AnnotatedString.Range(
-                        Placeholder(
-                            width = marginStartWidth,
-                            height = previewBaseFontSize.sp,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                        at,
-                        at + 1,
-                    )
-                }
-                val hitStart = builder.length
-                builder.append(sampleText, range.first, range.last + 1)
-                shifted += hitStart until builder.length
-                // 命中段落在样本文本结尾＝正文里的行尾，后面没有字可推，不让白。
-                if (marginEndWidth.value > 0f && range.last + 1 < sampleText.length) {
-                    val at = builder.length
-                    builder.append(' ')
-                    placeholders += AnnotatedString.Range(
-                        Placeholder(
-                            width = marginEndWidth,
-                            height = previewBaseFontSize.sp,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                        at,
-                        at + 1,
-                    )
-                }
-                cursor = range.last + 1
-            }
-            builder.append(sampleText, cursor, sampleText.length)
-            MarginSegmentation(builder.toString(), shifted, placeholders)
-        }
-    }
-
-    val annotated = remember(
-        marginSegmentation, bgBitmap, resolvedTextColor, bgColor, fontWeight, isItalic, fontSizeOffset
-    ) {
-        buildAnnotatedString {
-            append(marginSegmentation.text)
-            marginSegmentation.ranges.forEach { range ->
-                addStyle(
-                    SpanStyle(
-                        color = resolvedTextColor,
-                        background = if (bgColor != null && bgBitmap == null) Color(bgColor) else Color.Unspecified,
-                        fontWeight = when {
-                            fontWeight >= 700 -> androidx.compose.ui.text.font.FontWeight.Bold
-                            fontWeight <= 300 -> androidx.compose.ui.text.font.FontWeight.Light
-                            else -> null
-                        },
-                        fontStyle = if (isItalic) androidx.compose.ui.text.font.FontStyle.Italic else null,
-                        // 字号偏移只作用于命中文字，不影响整行
-                        fontSize = if (fontSizeOffset != 0) {
-                            (previewBaseFontSize + fontSizeOffset).sp
-                        } else {
-                            androidx.compose.ui.unit.TextUnit.Unspecified
-                        },
-                    ),
-                    range.first,
-                    (range.last + 1).coerceAtMost(marginSegmentation.text.length),
-                )
-            }
-        }
-    }
 
     val labelColor = if (ColorUtils.isColorLight(pageBgColor)) {
         Color(0x99000000)
@@ -1597,14 +1641,55 @@ internal fun HighlightRulePreview(
                             .loadTypeface(ReadBookConfig.textFont, textBoldWeight, false)
                     }.textHeight
                 }
+                val previewTextStyle = TextStyle(
+                    fontSize = previewBaseFontSize.sp,
+                    color = defaultTextColor,
+                    lineHeight = with(density) { bodyLineHeight.toSp() },
+                    letterSpacing = ReadBookConfig.letterSpacing.em,
+                )
+                // 先按不含外边距占位的文本量一次，拿到每个命中段折行后的可视行边界：
+                // 行首/行尾没有字的一侧不插外边距占位，与引擎 backgroundMarginBefore/After
+                // 同一口径（预览折行后也不会在行首凭空多出一截缩进）。
+                val baseAnnotated = remember(
+                    sampleText, matchRanges, resolvedTextColor, bgColor, bgBitmap,
+                    fontWeight, isItalic, fontSizeOffset,
+                ) {
+                    buildPreviewAnnotated(
+                        sampleText, matchRanges, resolvedTextColor, bgColor, bgBitmap,
+                        fontWeight, isItalic, fontSizeOffset,
+                    )
+                }
+                val basePreviewResult = textMeasurer.measure(
+                    text = baseAnnotated,
+                    style = previewTextStyle,
+                    maxLines = 5,
+                    constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
+                )
+                val marginSegmentation = remember(
+                    applyBgMargins, sampleText, matchRanges, marginStartWidth, marginEndWidth,
+                    basePreviewResult,
+                ) {
+                    if (!applyBgMargins) {
+                        MarginSegmentation(sampleText, matchRanges, emptyList())
+                    } else {
+                        buildMarginSegmentation(
+                            sampleText, matchRanges, basePreviewResult,
+                            marginStartWidth, marginEndWidth,
+                        )
+                    }
+                }
+                val annotated = remember(
+                    marginSegmentation, bgBitmap, resolvedTextColor, bgColor,
+                    fontWeight, isItalic, fontSizeOffset,
+                ) {
+                    buildPreviewAnnotated(
+                        marginSegmentation.text, marginSegmentation.ranges, resolvedTextColor,
+                        bgColor, bgBitmap, fontWeight, isItalic, fontSizeOffset,
+                    )
+                }
                 val previewTextResult = textMeasurer.measure(
                     text = annotated,
-                    style = TextStyle(
-                        fontSize = previewBaseFontSize.sp,
-                        color = defaultTextColor,
-                        lineHeight = with(density) { bodyLineHeight.toSp() },
-                        letterSpacing = ReadBookConfig.letterSpacing.em,
-                    ),
+                    style = previewTextStyle,
                     placeholders = marginSegmentation.placeholders,
                     maxLines = 5,
                     constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
@@ -1623,6 +1708,7 @@ internal fun HighlightRulePreview(
                         npLeft, npRight, npTop, npBottom,
                         bgPadStart * density.density, bgPadEnd * density.density,
                         bgPadTop * density.density, bgPadBottom * density.density,
+                        borderPx = bgBorderPx,
                         imageScale = bgImageScale,
                         borderScale = bgBorderScale,
                     )
@@ -1690,6 +1776,7 @@ internal fun HighlightRulePreview(
                                         npLeft, npRight, npTop, npBottom,
                                         bgPadStart * density, bgPadEnd * density,
                                         bgPadTop * density, bgPadBottom * density,
+                                        borderPx = bgBorderPx,
                                         imageScale = bgImageScale,
                                         borderScale = bgBorderScale,
                                     )?.let { box ->
@@ -1701,6 +1788,7 @@ internal fun HighlightRulePreview(
                                             leftX = npLeft, rightX = 1f - npRight,
                                             topY = npTop, bottomY = 1f - npBottom,
                                             box.cornerL, box.cornerR, box.cornerT, box.cornerB,
+                                            borderPx = bgBorderPx,
                                         )
                                     }
                                 } else {

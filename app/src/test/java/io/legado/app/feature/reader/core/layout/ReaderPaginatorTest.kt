@@ -1085,6 +1085,70 @@ class ReaderPaginatorTest {
     }
 
     /**
+     * 命中段紧贴段首缩进或尾随空白时不算「前后还有文字」：正文把缩进/尾随空格当真实字符
+     * 排进段落，若只看上一项是不是同图，命中段紧跟段首缩进之后也会让出一截外边距，视觉上
+     * 就是行首凭空多出缩进。这一条锁住这两侧都不再让白。
+     */
+    @Test
+    fun nineSliceMarginsIgnoreLeadingIndentAndTrailingBlankGlyphs() {
+        val frame = ReaderTextBackgroundImage(
+            source = "frame.png",
+            fit = 3,
+            scale = 1f,
+            marginStartPx = 5f,
+            marginEndPx = 7f,
+        )
+        val framedStyle = style.copy(backgroundImage = frame)
+        fun page(items: List<ReaderMeasuredInlineItem.Text>, leadingIndentItems: Int = 0) =
+            ReaderPaginator.paginateBlocks(
+                listOf(
+                    ReaderMeasuredBlock.InlineParagraph(
+                        items = items,
+                        indentCharacters = 0,
+                        leadingIndentItems = leadingIndentItems,
+                        alignment = ReaderTextAlignment.START,
+                        lineHeightPx = 20f,
+                        baselineOffsetPx = 15f,
+                        baseTextSizePx = 10f,
+                    )
+                ),
+                config.copy(viewportWidthPx = 100, viewportHeightPx = 100),
+            ).single()
+
+        // 命中段紧跟两个段首缩进空格：前面只剩不可见空白，不再让 marginStart。
+        val atHead = page(
+            listOf(
+                ReaderMeasuredInlineItem.Text("\u3000", 10f, style, 0),
+                ReaderMeasuredInlineItem.Text("\u3000", 10f, style, 1),
+                ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 2),
+                ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 3),
+            ),
+            leadingIndentItems = 2,
+        )
+        assertEquals(
+            listOf(0f, 10f, 20f, 30f),
+            atHead.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+        assertEquals(20f, atHead.textBackgroundRuns().single().bounds.left, 0.01f)
+        assertEquals(40f, atHead.textBackgroundRuns().single().bounds.right, 0.01f)
+
+        // 命中段后面只剩尾随空格、前面还有字：前侧让 5、后侧不让。
+        val atTail = page(
+            listOf(
+                ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                ReaderMeasuredInlineItem.Text("甲", 10f, framedStyle, 1),
+                ReaderMeasuredInlineItem.Text("乙", 10f, framedStyle, 2),
+                ReaderMeasuredInlineItem.Text(" ", 10f, style, 3),
+                ReaderMeasuredInlineItem.Text(" ", 10f, style, 4),
+            )
+        )
+        assertEquals(
+            listOf(0f, 15f, 25f, 35f, 45f),
+            atTail.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+    }
+
+    /**
      * 外边距计入行宽后仍会收紧行尾：命中段后面还有字时，外边距把命中段推出去，
      * 后面的字被挤到下一行，说明外边距确实参与了断行。
      */
