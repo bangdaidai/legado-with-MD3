@@ -3,6 +3,7 @@ package io.legado.app.ui.book.knowledge
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
@@ -109,6 +110,12 @@ class BookCharacterDetailViewModel(
                     }
                 }
                 currentProfile = profile
+                // ⚠️ 临时诊断：进这一页时库里那一行到底是什么。跟「保存诊断」两条对照就能定性：
+                // 保存后回读是对的、重进读取是旧的＝这一行被别的写入盖了；两条都旧＝根本没写进去。
+                AppLog.put(
+                    "人物档案·进页读取 " +
+                        (profile?.describeForCastLog() ?: "按 id 查无此行 id=${state.characterId}")
+                )
                 val events = profile?.let {
                     withContext(Dispatchers.IO) {
                         bookKnowledgeGateway.getCharacterEvents(state.bookUrl, it.id, null, 30)
@@ -262,6 +269,18 @@ class BookCharacterDetailViewModel(
                 )
             }
             _effects.tryEmit(CharacterDetailEffect.ShowToast(appCtx.getString(R.string.character_saved)))
+            // ⚠️ 临时诊断（定性「人物详情弹窗保存没生效」之后可删）：写完立刻按 id 回读库里那一行，
+            // 把「界面要存的」和「库里真有」并排打出来。两者不一致＝这一行被别的写入盖掉了；
+            // 一致＝库里是对的，问题出在重进页面时的读取或显示那一路。
+            runCatching {
+                val stored = withContext(Dispatchers.IO) {
+                    bookKnowledgeGateway.getCharacterProfile(profile.bookUrl, profile.id)
+                }
+                AppLog.put(
+                    "人物档案·保存诊断 写入[${profile.describeForCastLog()}] " +
+                        "回读[${stored?.describeForCastLog() ?: "查无此行"}]"
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -304,6 +323,11 @@ class BookCharacterDetailViewModel(
         }
     }
 }
+
+/** ⚠️ 临时诊断用的一行摘要：三栏下拉值，加上认出「到底是哪一行」所需的 id / 名字 / 状态 / 来源。 */
+private fun BookCharacterProfile.describeForCastLog(): String =
+    "角色=[${role}] 声音性别=[${voiceGender}] 池=[${voicePoolId}]" +
+        " 名字=[${name}] id=[${id}] 状态=[${status}] 来源=[${source}]"
 
 private fun String?.toTagList(): ImmutableList<String> {
     return GSON.fromJsonArray<String>(this)
