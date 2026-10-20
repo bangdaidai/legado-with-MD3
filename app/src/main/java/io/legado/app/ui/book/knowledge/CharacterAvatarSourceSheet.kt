@@ -37,6 +37,9 @@ import io.legado.app.ui.widget.components.text.AppText
  *
  * 「编辑头像」用的是已经存下的那一份：只有走选图器才会重新弹裁剪，换过一次头像后
  * 想挪一下取景框就只能重新导入原图，这里把它做成同一份菜单里的一项。
+ *
+ * 「移除头像」也在这同一份菜单里：头像一旦设上就没有回头的出口，想退回原来那个灰色人形
+ * 只能换一张图盖住它。已经有头像时才出这一项，点了就清空（本地那份文件由落库成功后删掉）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +50,7 @@ fun CharacterAvatarSourceSheet(
     onUrl: (String) -> Unit,
     hasAvatar: Boolean = false,
     onEditAvatar: () -> Unit = {},
+    onRemoveAvatar: () -> Unit = {},
 ) {
     var editUrl by remember(show) { mutableStateOf(false) }
     var url by remember(show) { mutableStateOf("") }
@@ -92,6 +96,11 @@ fun CharacterAvatarSourceSheet(
                         icon = AppIcons.Edit,
                         text = stringResource(R.string.character_avatar_edit),
                         onClick = onEditAvatar,
+                    )
+                    AvatarSourceRow(
+                        icon = AppIcons.Delete,
+                        text = stringResource(R.string.character_avatar_remove),
+                        onClick = onRemoveAvatar,
                     )
                 }
             }

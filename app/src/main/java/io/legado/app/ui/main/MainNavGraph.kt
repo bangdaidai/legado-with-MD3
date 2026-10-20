@@ -1591,7 +1591,8 @@ fun MainActivity.mainEntryProvider(
             onBack = { onNavigateBack() },
             onPickAvatar = { showAvatarSource = true },
         )
-        // 头像有两种来源（本地文件 / 图片链接），选择器同时提供「编辑当前头像」重进裁剪。
+        // 头像有两种来源（本地文件 / 图片链接），选择器同时提供「编辑当前头像」重进裁剪、
+        // 「移除头像」退回没有头像那一份灰色人形。
         CharacterAvatarSourceSheet(
             show = showAvatarSource,
             onDismissRequest = { showAvatarSource = false },
@@ -1609,6 +1610,12 @@ fun MainActivity.mainEntryProvider(
             onEditAvatar = {
                 showAvatarSource = false
                 pendingAvatarUri = state.avatarUri
+            },
+            onRemoveAvatar = {
+                showAvatarSource = false
+                // 清空走的还是「应用头像」那一条路：旧本地文件由 ViewModel 落库成功后删掉，
+                // 图片链接那份不在头像目录里，不会被误删。
+                viewModel.onIntent(CharacterDetailIntent.SetAvatarUri(""))
             },
         )
         CharacterAvatarCropDialog(

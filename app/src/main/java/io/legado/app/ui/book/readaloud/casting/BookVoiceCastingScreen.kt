@@ -406,6 +406,8 @@ private fun VoiceCastingList(
                 imagePicker.launch(arrayOf("image/*"))
             },
             onUrl = { url -> commitAvatar(url) },
+            // 与人物详情同一份菜单：传空串即退回没有头像那一份，旧本地文件由 setAvatar 落库后删
+            onRemoveAvatar = { commitAvatar("") },
         )
         val saveFailedMsg = stringResource(R.string.save_failed)
         CharacterAvatarCropDialog(

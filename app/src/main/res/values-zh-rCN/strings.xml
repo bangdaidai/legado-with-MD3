@@ -3086,6 +3086,7 @@
     <string name="character_avatar_crop">裁剪头像</string>
     <string name="character_avatar_source">设置头像</string>
     <string name="character_avatar_edit">编辑头像</string>
+    <string name="character_avatar_remove">移除头像</string>
     <string name="character_avatar_url">图片链接</string>
     <string name="character_avatar_zoom">缩放</string>
     <string name="character_tags">标签</string>

@@ -3141,6 +3141,7 @@
     <string name="character_avatar_crop">Crop avatar</string>
     <string name="character_avatar_source">Set avatar</string>
     <string name="character_avatar_edit">Edit avatar</string>
+    <string name="character_avatar_remove">Remove avatar</string>
     <string name="character_avatar_url">Image link</string>
     <string name="character_avatar_zoom">Zoom</string>
     <string name="character_tags">Tags</string>
