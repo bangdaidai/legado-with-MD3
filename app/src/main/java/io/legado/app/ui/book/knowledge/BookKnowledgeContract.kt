@@ -18,7 +18,7 @@ data class CharacterDetailUiState(
     val role: String = "",
     val voiceGender: String = "unknown",
     val isProtagonist: Boolean = false,
-    /** 声音池名，存放在人物档案的 voiceAgeBand 列里；空 = 未分配。 */
+    /** 声音池显示名：落库时按名字查池，写进档案的 voicePoolId（枚举年龄段一起写 voiceAgeBand）；空 = 未分配。 */
     val voicePool: String = "",
     val poolNames: ImmutableList<String> = persistentListOf(),
     val personality: String = "",
@@ -45,16 +45,26 @@ data class CharacterRelationUi(
 )
 
 sealed interface CharacterDetailIntent {
-    data class SetName(val value: String) : CharacterDetailIntent
-    data class SetAliasesText(val value: String) : CharacterDetailIntent
+    /**
+     * 弹窗里的整包应用：不管这一次改了几栏，一次「应用」= 一个动作 = 一行写入。
+     *
+     * 不要再按栏拆成多个 Set* 动作：每个动作都会把整行档案原样写回库一遍，而前面几遍带的还是用户
+     * 改动前的角色、声音性别与声音池，各遍谁最后落库不作保证——落库顺序一翻，界面就成了
+     * 「选了男配、返回再进来又空了」。以后栏位加到十栏也是往这一个动作里加字段，不是多发几个动作。
+     */
+    data class ApplyProfile(
+        val name: String,
+        val aliasesText: String,
+        val role: String,
+        val voiceGender: String,
+        val voicePool: String,
+        val isProtagonist: Boolean,
+    ) : CharacterDetailIntent
+
     data class SetAvatarUri(val value: String) : CharacterDetailIntent
     data class SetTagInput(val value: String) : CharacterDetailIntent
     data class AddTag(val tag: String) : CharacterDetailIntent
     data class RemoveTag(val index: Int) : CharacterDetailIntent
-    data class SetRole(val value: String) : CharacterDetailIntent
-    data class SetVoiceGender(val value: String) : CharacterDetailIntent
-    data class SetIsProtagonist(val value: Boolean) : CharacterDetailIntent
-    data class SetVoicePool(val value: String) : CharacterDetailIntent
     data class SetPersonality(val value: String) : CharacterDetailIntent
     data class SetSummary(val value: String) : CharacterDetailIntent
     data class Delete(

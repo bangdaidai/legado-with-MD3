@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import kotlin.uuid.Uuid
@@ -45,14 +47,26 @@ class BookCharacterDetailViewModel(
 
     private var currentProfile: BookCharacterProfile? = null
 
+    /** 落库串行锁：见 [save]，单栏动作连续触发时整行写入不能互相插队。 */
+    private val saveMutex = Mutex()
+
     init {
         load()
     }
 
     fun onIntent(intent: CharacterDetailIntent) {
         when (intent) {
-            is CharacterDetailIntent.SetName -> updateAndSave { it.copy(name = intent.value) }
-            is CharacterDetailIntent.SetAliasesText -> updateAndSave { it.copy(aliasesText = intent.value) }
+            is CharacterDetailIntent.ApplyProfile -> updateAndSave {
+                it.copy(
+                    name = intent.name,
+                    aliasesText = intent.aliasesText,
+                    role = intent.role,
+                    voiceGender = intent.voiceGender,
+                    voicePool = intent.voicePool,
+                    isProtagonist = intent.isProtagonist,
+                )
+            }
+
             is CharacterDetailIntent.SetAvatarUri -> updateAndSave { it.copy(avatarUri = intent.value) }
             is CharacterDetailIntent.SetTagInput -> _uiState.update { it.copy(tagInput = intent.value) }
             is CharacterDetailIntent.AddTag -> updateAndSave {
@@ -72,20 +86,13 @@ class BookCharacterDetailViewModel(
                     .toImmutableList())
             }
 
-            // 男主/女主/男配/女配本身就带性别，选完角色定位顺手把声音性别带出来，用户之后仍可手改
-            is CharacterDetailIntent.SetRole -> updateAndSave {
-                it.copy(role = intent.value, voiceGender = intent.value.impliedVoiceGender() ?: it.voiceGender)
-            }
-            is CharacterDetailIntent.SetVoiceGender -> updateAndSave { it.copy(voiceGender = intent.value) }
-            is CharacterDetailIntent.SetVoicePool -> updateAndSave { it.copy(voicePool = intent.value) }
-            is CharacterDetailIntent.SetIsProtagonist -> updateAndSave { it.copy(isProtagonist = intent.value) }
             is CharacterDetailIntent.SetPersonality -> updateAndSave { it.copy(personality = intent.value) }
             is CharacterDetailIntent.SetSummary -> updateAndSave { it.copy(summary = intent.value) }
             is CharacterDetailIntent.Delete -> delete(intent)
         }
     }
 
-    /** 每个“应用”动作都即时落库，不再依赖统一保存入口 */
+    /** 每个动作都即时落库，不再依赖统一保存入口；真正写库时读的是当时的最新快照 */
     private fun updateAndSave(update: (CharacterDetailUiState) -> CharacterDetailUiState) {
         _uiState.update(update)
         save()
@@ -170,7 +177,21 @@ class BookCharacterDetailViewModel(
         }
     }
 
+    /**
+     * 整行落库。
+     *
+     * 弹窗里一次「应用」现在是一个 [CharacterDetailIntent.ApplyProfile] 动作，只触发一次写入；
+     * [saveMutex] 盯的是另一类重叠：性格/简介这类单栏动作在输入时每敲一个字都会发一次整行写入，
+     * 这些写入跑在不同线程上、谁最后进库不作保证，后一笔若带着前一笔之前的旧快照就会把刚存的覆盖掉。
+     * 所以写入必须串行，并且快照在这瞬间才取。
+     */
     private fun save() {
+        viewModelScope.launch {
+            saveMutex.withLock { saveNow() }
+        }
+    }
+
+    private suspend fun saveNow() {
         val state = _uiState.value
         val name = state.name.trim()
         if (name.isBlank()) {
@@ -179,79 +200,77 @@ class BookCharacterDetailViewModel(
             _effects.tryEmit(CharacterDetailEffect.ShowToast(appCtx.getString(R.string.character_name_empty)))
             return
         }
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true) }
-            try {
-                val now = System.currentTimeMillis()
-                val existing = currentProfile
-                // 池显示名 → 结构化外键：voicePoolId 存真正的池 id，voiceAgeBand 存枚举
-                val poolEntity = VoicePoolStore.poolByName(state.voicePool)
-                val profile = BookCharacterProfile(
-                    id = existing?.id ?: state.characterId ?: Uuid.random().toString(),
-                    bookUrl = state.bookUrl,
-                    name = name,
-                    aliasesJson = state.aliasesText.toAliasesJson(),
-                    avatarUri = state.avatarUri.trim().takeIf { it.isNotBlank() },
-                    tagsJson = state.tags.toTagsJson(),
-                    role = state.role,
-                    voiceGender = state.voiceGender,
-                    voicePoolId = poolEntity?.id.orEmpty(),
-                    voiceAgeBand = poolEntity?.ageBand ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
-                    isProtagonist = state.isProtagonist,
-                    personality = state.personality.trim(),
-                    summary = state.summary.trim(),
-                    status = existing?.status ?: BookCharacterProfile.STATUS_ACTIVE,
-                    source = BookCharacterProfile.SOURCE_USER,
-                    confidence = existing?.confidence ?: 1f,
-                    schemaVersion = existing?.schemaVersion ?: 1,
-                    createdAt = existing?.createdAt ?: now,
-                    updatedAt = now,
+        _uiState.update { it.copy(isSaving = true) }
+        try {
+            val now = System.currentTimeMillis()
+            val existing = currentProfile
+            // 池显示名 → 结构化外键：voicePoolId 存真正的池 id，voiceAgeBand 存枚举
+            val poolEntity = VoicePoolStore.poolByName(state.voicePool)
+            val profile = BookCharacterProfile(
+                id = existing?.id ?: state.characterId ?: Uuid.random().toString(),
+                bookUrl = state.bookUrl,
+                name = name,
+                aliasesJson = state.aliasesText.toAliasesJson(),
+                avatarUri = state.avatarUri.trim().takeIf { it.isNotBlank() },
+                tagsJson = state.tags.toTagsJson(),
+                role = state.role,
+                voiceGender = state.voiceGender,
+                voicePoolId = poolEntity?.id.orEmpty(),
+                voiceAgeBand = poolEntity?.ageBand ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
+                isProtagonist = state.isProtagonist,
+                personality = state.personality.trim(),
+                summary = state.summary.trim(),
+                status = existing?.status ?: BookCharacterProfile.STATUS_ACTIVE,
+                source = BookCharacterProfile.SOURCE_USER,
+                confidence = existing?.confidence ?: 1f,
+                schemaVersion = existing?.schemaVersion ?: 1,
+                createdAt = existing?.createdAt ?: now,
+                updatedAt = now,
+            )
+            val avatarChanged = existing?.avatarUri.orEmpty() != profile.avatarUri.orEmpty()
+            withContext(Dispatchers.IO) {
+                bookKnowledgeGateway.upsertCharacterProfile(profile)
+                // 档案与配音角色是同一份信息（档案 id 就是角色 id）：这里改了名字或池，
+                // 分配表与朗读音色要立刻跟着改，否则朗读还在用旧池。
+                val castChanged = BookCastStore.syncFromProfile(
+                    bookUrl = profile.bookUrl,
+                    profileId = profile.id,
+                    name = profile.name,
+                    poolLabel = state.voicePool,
                 )
-                val avatarChanged = currentProfile?.avatarUri.orEmpty() != profile.avatarUri.orEmpty()
-                withContext(Dispatchers.IO) {
-                    bookKnowledgeGateway.upsertCharacterProfile(profile)
-                    // 档案与配音角色是同一份信息（档案 id 就是角色 id）：这里改了名字或池，
-                    // 分配表与朗读音色要立刻跟着改，否则朗读还在用旧池。
-                    val castChanged = BookCastStore.syncFromProfile(
-                        bookUrl = profile.bookUrl,
-                        profileId = profile.id,
-                        name = profile.name,
-                        poolLabel = state.voicePool,
-                    )
-                    // 本书角色记忆也认这一份：AI 下一趟读的就是它，不改这里人物页补的别名
-                    // 与简介对下一次分配等于不存在。
-                    CastMemoryMirror.applyProfileToMemory(profile.bookUrl, profile)
-                    // 一次保存只重排一遍：头像与名字/池同时改时，两条各自 reload 会把同一章排两遍
-                    if (castChanged || avatarChanged) {
-                        // 胶囊上那张图与那行字都是分页时定下来的，不换一次重排就还是旧的
-                        BookCastStore.reloadReaderChapter(profile.bookUrl)
-                    }
-                    if (avatarChanged) {
-                        // 换掉的本地头像到这一步才真没人引用了：若在选完新图就立刻删旧文件，
-                        // 用户不保存退出后，档案里留着的会是已被删掉的地址。
-                        currentProfile?.avatarUri?.let { deleteCharacterAvatar(appCtx, it) }
-                    }
+                // 本书角色记忆也认这一份：AI 下一趟读的就是它，不改这里人物页补的别名
+                // 与简介对下一次分配等于不存在。
+                CastMemoryMirror.applyProfileToMemory(profile.bookUrl, profile)
+                // 一次保存只重排一遍：头像与名字/池同时改时，两条各自 reload 会把同一章排两遍
+                if (castChanged || avatarChanged) {
+                    // 胶囊上那张图与那行字都是分页时定下来的，不换一次重排就还是旧的
+                    BookCastStore.reloadReaderChapter(profile.bookUrl)
                 }
-                // 主角标记/角色分类/别名可能变了，跟随主角的高亮正则展开缓存需失效
-                HighlightProtagonistPatterns.invalidate()
-                currentProfile = profile
-                _uiState.update {
-                    it.copy(
-                        characterId = profile.id,
-                        isSaving = false,
-                    )
+                if (avatarChanged) {
+                    // 换掉的本地头像到这一步才真没人引用了：若在选完新图就立刻删旧文件，
+                    // 用户不保存退出后，档案里留着的会是已被删掉的地址。
+                    currentProfile?.avatarUri?.let { deleteCharacterAvatar(appCtx, it) }
                 }
-                _effects.tryEmit(CharacterDetailEffect.ShowToast(appCtx.getString(R.string.character_saved)))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                _uiState.update { it.copy(isSaving = false) }
-                _effects.tryEmit(
-                    CharacterDetailEffect.ShowToast(
-                        e.localizedMessage ?: appCtx.getString(R.string.character_save_failed)
-                    )
+            }
+            // 主角标记/角色分类/别名可能变了，跟随主角的高亮正则展开缓存需失效
+            HighlightProtagonistPatterns.invalidate()
+            currentProfile = profile
+            _uiState.update {
+                it.copy(
+                    characterId = profile.id,
+                    isSaving = false,
                 )
             }
+            _effects.tryEmit(CharacterDetailEffect.ShowToast(appCtx.getString(R.string.character_saved)))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            _uiState.update { it.copy(isSaving = false) }
+            _effects.tryEmit(
+                CharacterDetailEffect.ShowToast(
+                    e.localizedMessage ?: appCtx.getString(R.string.character_save_failed)
+                )
+            )
         }
     }
 
@@ -292,19 +311,6 @@ private fun String?.toTagList(): ImmutableList<String> {
         .orEmpty()
         .distinct()
         .toImmutableList()
-}
-
-/** 角色定位隐含的声音性别；其它定位（配角、反派等）看不出性别就返回 null，交给用户自己选 */
-private fun String.impliedVoiceGender(): String? = when (this) {
-    BookCharacterProfile.ROLE_MALE_LEAD,
-    BookCharacterProfile.ROLE_MALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_MALE
-
-    BookCharacterProfile.ROLE_FEMALE_LEAD,
-    BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_FEMALE
-
-    BookCharacterProfile.ROLE_SUPPORTING -> null
-
-    else -> null
 }
 
 private fun ImmutableList<String>.toTagsJson(): String {

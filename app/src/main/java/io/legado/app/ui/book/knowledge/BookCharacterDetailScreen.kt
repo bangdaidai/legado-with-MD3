@@ -234,12 +234,17 @@ private fun CharacterDetailContent(
         title = stringResource(R.string.character_detail),
         confirmText = stringResource(R.string.apply),
         onConfirm = {
-            onIntent(CharacterDetailIntent.SetName(dialogName))
-            onIntent(CharacterDetailIntent.SetAliasesText(dialogAliases))
-            onIntent(CharacterDetailIntent.SetRole(dialogRole))
-            onIntent(CharacterDetailIntent.SetVoiceGender(dialogVoiceGender))
-            onIntent(CharacterDetailIntent.SetVoicePool(dialogPool))
-            onIntent(CharacterDetailIntent.SetIsProtagonist(dialogIsProtagonist))
+            // 弹窗里改了几栏都算一件事：只发一个动作、只写一行，不按栏拆成多个动作各存一遍整行
+            onIntent(
+                CharacterDetailIntent.ApplyProfile(
+                    name = dialogName,
+                    aliasesText = dialogAliases,
+                    role = dialogRole,
+                    voiceGender = dialogVoiceGender,
+                    voicePool = dialogPool,
+                    isProtagonist = dialogIsProtagonist,
+                )
+            )
             showProfileDialog = false
         },
         dismissText = stringResource(R.string.cancel),
@@ -264,7 +269,12 @@ private fun CharacterDetailContent(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProfileRoleDropdown(
                         selectedRole = dialogRole,
-                        onRoleSelected = { dialogRole = it },
+                        onRoleSelected = { role ->
+                            dialogRole = role
+                            // 男主/女配这类定位本身带性别：选完顺手把声音性别那一格改出来给用户看见，
+                            // 之后仍可手改。这里只动弹窗里的显示，落库仍然只有「应用」那一次。
+                            impliedVoiceGenderOf(role)?.let { dialogVoiceGender = it }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                     NormalCard(
@@ -460,6 +470,17 @@ private fun voiceGenderDisplayName(value: String): String = when (value) {
     BookCharacterProfile.VOICE_GENDER_MALE -> stringResource(R.string.voice_gender_male)
     BookCharacterProfile.VOICE_GENDER_FEMALE -> stringResource(R.string.voice_gender_female)
     else -> stringResource(R.string.voice_gender_unknown)
+}
+
+/** 角色定位隐含的声音性别；配角或没选定位时返回 null，说明看不出来，交给用户自己选 */
+private fun impliedVoiceGenderOf(role: String): String? = when (role) {
+    BookCharacterProfile.ROLE_MALE_LEAD,
+    BookCharacterProfile.ROLE_MALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_MALE
+
+    BookCharacterProfile.ROLE_FEMALE_LEAD,
+    BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> BookCharacterProfile.VOICE_GENDER_FEMALE
+
+    else -> null
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
