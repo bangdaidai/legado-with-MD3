@@ -105,6 +105,14 @@ fun KnowledgeFlowTagEditor(
     onAddTag: (String) -> Unit,
     onRemoveTag: (Int) -> Unit,
     showCloseIcon: Boolean = true,
+    /**
+     * 排在标签前面的属性小牌（人物页用它显示角色、声音性别、声音池）。
+     *
+     * 跟标签一样在这排里换行出现，但不带叉：它们是这一行档案自带的字段，
+     * 只能去档案弹窗里改，不能在这儿删掉。
+     */
+    leadingChips: List<String> = emptyList(),
+    onLeadingChipClick: () -> Unit = {},
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var newTagValue by remember { mutableStateOf("") }
@@ -122,6 +130,12 @@ fun KnowledgeFlowTagEditor(
             verticalArrangement = Arrangement.spacedBy(6.dp),
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
+            leadingChips.forEach { chip ->
+                TagChip(
+                    text = chip,
+                    onClick = onLeadingChipClick,
+                )
+            }
             tags.forEachIndexed { index, tag ->
                 TagChip(
                     text = tag,

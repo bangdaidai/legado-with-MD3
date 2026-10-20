@@ -48,7 +48,6 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.NormalCard
-import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
@@ -61,7 +60,6 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.toastOnUi
-import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 
@@ -158,6 +156,17 @@ private fun CharacterDetailContent(
     var dialogPool by remember(state.voicePool) { mutableStateOf(state.voicePool) }
     var dialogIsProtagonist by remember(state.isProtagonist) { mutableStateOf(state.isProtagonist) }
 
+    /** 打开档案弹窗：名字那一块和标签排里的角色小牌都走这一个入口 */
+    val openProfileDialog: () -> Unit = {
+        dialogName = state.name
+        dialogAliases = state.aliasesText
+        dialogRole = state.role
+        dialogVoiceGender = state.voiceGender
+        dialogPool = state.voicePool
+        dialogIsProtagonist = state.isProtagonist
+        showProfileDialog = true
+    }
+
     Column(
         modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -166,20 +175,8 @@ private fun CharacterDetailContent(
             name = state.name,
             aliasesText = state.aliasesText,
             avatarUri = state.avatarUri,
-            roleDisplayName = state.role,
-            voiceGender = state.voiceGender,
-            voicePool = state.voicePool,
-            tags = state.tags,
             onPickAvatar = onPickAvatar,
-            onInfoClick = {
-                dialogName = state.name
-                dialogAliases = state.aliasesText
-                dialogRole = state.role
-                dialogVoiceGender = state.voiceGender
-                dialogPool = state.voicePool
-                dialogIsProtagonist = state.isProtagonist
-                showProfileDialog = true
-            },
+            onInfoClick = openProfileDialog,
         )
         KnowledgeFlowTagEditor(
             title = stringResource(R.string.character_tags),
@@ -187,6 +184,14 @@ private fun CharacterDetailContent(
             onAddTag = { onIntent(CharacterDetailIntent.AddTag(it)) },
             onRemoveTag = { onIntent(CharacterDetailIntent.RemoveTag(it)) },
             showCloseIcon = true,
+            // 角色、声音性别、声音池不再挤在名字旁边，改成跟标签一样平铺在这一排里；
+            // 它们不带叉（要改的是档案本身），点一下开的是同一份档案弹窗。
+            leadingChips = characterAttributeChips(
+                role = state.role,
+                voiceGender = state.voiceGender,
+                voicePool = state.voicePool,
+            ),
+            onLeadingChipClick = openProfileDialog,
         )
         KnowledgeEditFieldCard(
             label = stringResource(R.string.character_personality),
@@ -472,6 +477,37 @@ private fun voiceGenderDisplayName(value: String): String = when (value) {
     else -> stringResource(R.string.voice_gender_unknown)
 }
 
+/**
+ * 角色、声音性别、声音池这三样改到标签那一排里当小牌出现：没选的角色、没分到的声音池、
+ * 还是「未知」的性别都不占位，剩下几枚就跟标签一样平铺换行。
+ */
+@Composable
+private fun characterAttributeChips(
+    role: String,
+    voiceGender: String,
+    voicePool: String,
+): List<String> {
+    val roleLabel = when (role) {
+        BookCharacterProfile.ROLE_MALE_LEAD -> stringResource(R.string.role_male_lead)
+        BookCharacterProfile.ROLE_FEMALE_LEAD -> stringResource(R.string.role_female_lead)
+        BookCharacterProfile.ROLE_MALE_SUPPORTING -> stringResource(R.string.role_male_supporting)
+        BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> stringResource(R.string.role_female_supporting)
+        BookCharacterProfile.ROLE_SUPPORTING -> stringResource(R.string.role_supporting)
+        else -> ""
+    }
+    val chips = mutableListOf<String>()
+    if (roleLabel.isNotBlank()) {
+        chips += roleLabel
+    }
+    if (voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN) {
+        chips += voiceGenderDisplayName(voiceGender)
+    }
+    if (voicePool.isNotBlank()) {
+        chips += voicePool
+    }
+    return chips
+}
+
 /** 角色定位隐含的声音性别；配角或没选定位时返回 null，说明看不出来，交给用户自己选 */
 private fun impliedVoiceGenderOf(role: String): String? = when (role) {
     BookCharacterProfile.ROLE_MALE_LEAD,
@@ -514,22 +550,10 @@ private fun CharacterHeader(
     name: String,
     aliasesText: String,
     avatarUri: String,
-    roleDisplayName: String,
-    voiceGender: String,
-    voicePool: String,
-    tags: ImmutableList<String>,
     onPickAvatar: () -> Unit,
     onInfoClick: () -> Unit,
 ) {
     val avatarLoadFailed = remember(avatarUri) { mutableStateOf(false) }
-    val resolvedRole = when (roleDisplayName) {
-        BookCharacterProfile.ROLE_MALE_LEAD -> stringResource(R.string.role_male_lead)
-        BookCharacterProfile.ROLE_FEMALE_LEAD -> stringResource(R.string.role_female_lead)
-        BookCharacterProfile.ROLE_MALE_SUPPORTING -> stringResource(R.string.role_male_supporting)
-        BookCharacterProfile.ROLE_FEMALE_SUPPORTING -> stringResource(R.string.role_female_supporting)
-        BookCharacterProfile.ROLE_SUPPORTING -> stringResource(R.string.role_supporting)
-        else -> ""
-    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -574,25 +598,10 @@ private fun CharacterHeader(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AnimatedTextLine(
-                    text = name.ifBlank { "—" },
-                    style = LegadoTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (resolvedRole.isNotBlank()) {
-                    TextCard(text = resolvedRole)
-                }
-                if (voiceGender != BookCharacterProfile.VOICE_GENDER_UNKNOWN) {
-                    TextCard(text = voiceGenderDisplayName(voiceGender))
-                }
-                if (voicePool.isNotBlank()) {
-                    TextCard(text = voicePool)
-                }
-            }
+            AnimatedTextLine(
+                text = name.ifBlank { "—" },
+                style = LegadoTheme.typography.titleMedium,
+            )
             if (aliasesText.isNotBlank()) {
                 AnimatedTextLine(
                     text = aliasesText,
