@@ -3,6 +3,8 @@ package io.legado.app.help.readaloud.cast
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookVoiceBindingEntity
 import io.legado.app.data.entities.CastCharacter
+import io.legado.app.data.entities.ReadAloudVoiceEntity
+import io.legado.app.data.repository.toDomain
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.config.readConfig.ReadConfig
@@ -48,8 +50,10 @@ object CastVoicePicker {
      */
     private suspend fun pickFromPool(character: CastCharacter, poolVoices: List<String>): String? {
         val wanted = poolVoices.toSet()
+        // DAO 给的是实体行，打分链和 [ReadAloudVoiceTraits] 认的是领域音色，先换一层形状
         val voices = appDb.readAloudVoiceDao.getEnabledVoices()
             .filter { it.id in wanted && it.available }
+            .map(ReadAloudVoiceEntity::toDomain)
         if (voices.isEmpty()) return null
         val classification = VoiceLabelStore.classificationMap()
         val poolAgeBand = VoicePoolStore.poolByName(character.poolLabel)

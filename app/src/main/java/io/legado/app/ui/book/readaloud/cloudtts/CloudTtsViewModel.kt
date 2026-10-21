@@ -398,7 +398,7 @@ class CloudTtsViewModel(
         } ?: return@launch
         val engine = _uiState.value.availableEngines.firstOrNull {
             it.engineType == voice.engineType && it.engineId == voice.engineId
-        } ?: return toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
+        } ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
         val editor = withContext(Dispatchers.IO) { voiceEditorOf(voice, engine.title) }
         _uiState.update { state -> state.copy(
             voiceEditor = editor,
@@ -788,12 +788,15 @@ class CloudTtsViewModel(
     }
 
     /** 列表行上的试听按钮：拿这一行音色自己的参数合成一句，不碰编辑弹窗。 */
-    private fun previewVoice(id: String, text: String? = null) {
-        val voice = voices.firstOrNull { it.id == id } ?: return
+    private fun previewVoice(id: String, text: String? = null) = viewModelScope.launch {
+        val voice = voices.firstOrNull { it.id == id } ?: return@launch
         val engine = _uiState.value.availableEngines.firstOrNull {
             it.engineType == voice.engineType && it.engineId == voice.engineId
-        } ?: return toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
-        previewWith(voiceEditorOf(voice, engine.title), text)
+        } ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
+        // 取参数这一份要读音色标注（[voiceEditorOf] 是挂起函数、要碰库），所以行内试听也得起协程；
+        // 参数取好之后仍走 [previewWith]，与弹窗试听共用同一套合成，不另写一份。
+        val editor = withContext(Dispatchers.IO) { voiceEditorOf(voice, engine.title) }
+        previewWith(editor, text)
     }
 
     private fun previewWith(editor: TtsVoicePresetEditorUi, textOverride: String? = null) =

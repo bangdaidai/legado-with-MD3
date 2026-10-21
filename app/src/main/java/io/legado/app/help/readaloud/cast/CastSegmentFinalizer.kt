@@ -222,7 +222,7 @@ object CastSegmentFinalizer {
             .flatMap { targetsOf(bridge.segments, it) }
             .map { it.id }
             .distinct()
-            .forEach { unlock(it.id) }
+            .forEach { unlock(it) }
     }
 
     /**
