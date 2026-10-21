@@ -3272,9 +3272,9 @@
     <string name="speech_analysis_ai_model_required">请先配置 AI 模型，再启用 AI 章节分片</string>
     <string name="speech_analysis_reasoning_level">分析推理级别</string>
     <string name="speech_analysis_reasoning_level_summary">全书唯一的推理强度，章节分析与阅读页的 AI 分配角色共用这一项。「不思考」= 显式叫模型别想；「跟随模型」= 软件一个参数都不发，完全听服务商自己的。默认不思考：默认开启思考的模型（智谱 GLM、DeepSeek 等）只把内容放在推理字段里，会导致分析失败</string>
-    <string name="use_multi_speaker">按角色分声朗读</string>
+    <string name="use_multi_speaker">多角色朗读</string>
     <string name="use_multi_speaker_summary">总闸：为旁白、对话等不同角色使用不同音色。关掉后整本只用旁白音色，也不再做说话人分析</string>
-    <string name="multi_role_cast">正文显示角色名</string>
+    <string name="multi_role_cast">显示角色</string>
     <string name="multi_role_cast_summary">在对话引号后显示角色胶囊，点击可手动指定这句话是谁说的；分配结果会写进正文标记</string>
     <string name="cast_unassigned">未分配</string>
     <string name="cast_sheet_title">分配角色</string>

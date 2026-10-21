@@ -245,8 +245,8 @@ fun ReadAloudConfigContent(
                         onClick = { onIntent(ReadAloudConfigIntent.OpenSystemTtsSettings) },
                     )
                     ReadAloudSectionTitle(R.string.read_aloud_group_ai_cast)
-                    // 这一节的两条总闸先摆：关掉「按角色分声朗读」整套 AI 归因不参与播放，
-                    // 关掉「正文显示角色名」正文里就没有角色标记。
+                    // 这一节的两条总闸先摆：关掉「多角色朗读」整套 AI 归因不参与播放，
+                    // 关掉「显示角色」正文里就没有角色标记。
                     TinySwitchSettingItem(
                         title = stringResource(R.string.use_multi_speaker),
                         description = stringResource(R.string.use_multi_speaker_summary),

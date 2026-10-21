@@ -3327,9 +3327,9 @@
     <string name="speech_analysis_ai_model_required">Configure an AI model before enabling AI chapter segmentation</string>
     <string name="speech_analysis_reasoning_level">Analysis reasoning</string>
     <string name="speech_analysis_reasoning_level_summary">The single reasoning setting for the whole app: chapter analysis and the reader\'s AI role casting share it. "Off" explicitly asks the model not to think; "Model default" sends no parameter at all and follows the provider. Off by default: models that think by default (Zhipu GLM, DeepSeek, …) return the answer only in the reasoning field, which makes analysis fail</string>
-    <string name="use_multi_speaker">Per-role voices</string>
+    <string name="use_multi_speaker">Multi-role reading</string>
     <string name="use_multi_speaker_summary">Master switch: give narration, dialogue and other roles different voices. Turning it off reads the whole book in the narrator voice and skips speaker analysis</string>
-    <string name="multi_role_cast">Show speaker names</string>
+    <string name="multi_role_cast">Show speaker</string>
     <string name="bgm_assign">Background music</string>
     <string name="bgm_assign_summary">Show a music capsule at paragraph starts and play background music per scene while reading; the capsule is visual only and is never spoken</string>
     <string name="cast_bgm_scene_title">Scene music</string>

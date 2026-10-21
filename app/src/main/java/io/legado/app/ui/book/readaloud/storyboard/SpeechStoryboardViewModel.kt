@@ -461,7 +461,7 @@ private fun splitPolicy(): ContentSplitPolicy {
         if (base.isEmpty()) return base
         val paragraphs = chapterParagraphs(chapterIndex, policy) ?: return base
         // 同源闸门：覆盖层按正文段落重新定位说话人，段落必须和分析当时用的那一份一字不差。
-        // 对不上（改过「正文显示角色名」、正文或划分口径变过、退回的是旧设置那份）就不套——
+        // 对不上（改过「显示角色」、正文或划分口径变过、退回的是旧设置那份）就不套——
         // 拿错坐标去套胶囊，屏幕上显示的会是把归属安错人的结果。
         val hash = SpeechIdentity.chapterContentHash(paragraphs)
         if (stored.contentHash.isBlank() || hash != stored.contentHash) {

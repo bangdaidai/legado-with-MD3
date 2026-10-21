@@ -116,7 +116,8 @@ D2、D8 按推荐批下并已落地，D3 你改判不做（"200 个够够的"）
    前者决定"换不换声音"（进合成计划，`BuildSpeechPlanUseCase.kt:58`、`ReadAloud.kt:115`、
    `BaseReadAloudService.kt:853`），后者决定"正文里能不能点着分"（注入标记 + 胶囊 + 分页签名，
    `help/readaloud/cast/CastRenderOptions.kt:32,55`、`feature/reader/.../ReadBook.kt:609`）。
-   → 不必合并成一个开关，**改名即可**：「按角色分声朗读」/「正文显示角色名」。
+   → 不必合并成一个开关，**改名即可**：「多角色朗读」/「显示角色」（2026-10-21 定稿，第一版
+   「按角色分声朗读」/「正文显示角色名」被判定太长）。
 5. **旧：「听书预加载数量」= 播放队列音频预取。** 错得更彻底：它是**章节正文预下载**
    `ReadSettings.preDownloadNum`（`ReadAloudConfigContent.kt:389`→`ReadBookViewModel.kt:257`），
    还和「下载与缓存」页共用同一个键（`ui/book/.../DownloadCacheConfigScreen.kt:131`）。
@@ -290,7 +291,7 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
 ```text
 〔声音〕用哪些声音        :224 引擎与音色 · :375 角色声音池 · :380 背景音乐池 · :385 系统 TTS
 〔多角色朗读（AI）〕谁用哪个声音、怎么判
-        :347 按角色分声朗读（总闸） · :359 正文显示角色名 · :239 分析模式 · :260 推理强度
+        :347 多角色朗读（总闸） · :359 显示角色 · :239 分析模式 · :260 推理强度
         :367 顺带识别配乐场景 · 归因口径（新并入） · 顺带往后分析几章（新并入） · prompt 入口
         :234 人物与角色配音[进入] · :255 分镜结果[进入]
 〔切分与节奏〕一句多大、念多快、往后备多少
@@ -334,7 +335,7 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
 | 步 | 内容 | 依赖 | 动权威 | 回退 | 可观察验证 |
 |---|---|---|---|---|---|
 | **S1 现象可见 + 一个行为级 bug**（7 项） | ①分镜页自建 `ALOUD_AI_FALLBACK` 订阅（现只有服务订，`BaseReadAloudService.kt:383-386`）；②冷却期命中给可区分提示（现静默，`RefineSpeechWithAiUseCase.kt:241`）；③场景拆分失败给提示（现 `catch(Throwable)→return plan` 不撤账不提示，`SpeechStoryboardViewModel.kt:546-548`）；④`ai_cast` 入口加 AI 模型门禁（现恒可用，`ReadAloudCastDelegate.kt:83`）；⑤每章标注"结论来自规则还是 AI、有没有被分配表覆盖"；⑥纠正 `CastSpeechOverlay.kt:76-79` 日志措辞（那条分支其实原样保留官方角色音）；⑦**修 N4**：草稿档案应走角色编辑器（按 `SUBJECT_CHARACTER` + 档案 id 绑），只有真旁白行才发 `SetNarratorVoice`——现两者共用面板、发同一 Intent（`BookVoiceCastingScreen.kt:609-618`），并配 AppLog 记下"这次写的是哪个主体"作回归观察点 | 无 | 否（纯新增 + 一处分支修正） | 直接 revert | 关掉播放再进分镜页，失败时看得见 toast；给临时角色选音色后旁白不变、那句角色音变 |
-| **S2 旋钮合一** | ①推理强度只留 DataStore 那份（`AiCastPresetStore.kt:502-512` 退役，旧值作初值读出后删，**不静默丢**）；档位取全枚举 7 档（`domain/model/AiModels.kt:257-264`），AUTO=不发参数跟随服务商、OFF=显式不思考，差别写进小字；②「听书预加载数量」按真实语义改名（它是正文预下载），并给 `audioPreDownloadNum` 补一个入口（§3.5）；③两个开关改名：「按角色分声朗读」/「正文显示角色名」（§3.4）；④清第三个 Tab 死口径（§6.3） | 无 | 否（设置介质） | revert；旧键未删即无损 | 弹窗里不再有强度 chips |
+| **S2 旋钮合一** | ①推理强度只留 DataStore 那份（`AiCastPresetStore.kt:502-512` 退役，旧值作初值读出后删，**不静默丢**）；档位取全枚举 7 档（`domain/model/AiModels.kt:257-264`），AUTO=不发参数跟随服务商、OFF=显式不思考，差别写进小字；②「听书预加载数量」按真实语义改名（它是正文预下载），并给 `audioPreDownloadNum` 补一个入口（§3.5）；③两个开关改名：「多角色朗读」/「显示角色」（§3.4）；④清第三个 Tab 死口径（§6.3） | 无 | 否（设置介质） | revert；旧键未删即无损 | 弹窗里不再有强度 chips |
 | **S3 音色标签 + 池分组**（四层接通） | ①新建 `voice_labels` 表承载用户标注（**不能加列到 `read_aloud_voices`**），标签为空时读取侧回落 `traitsJson` 预填，所以是加法不是切换；名字启发降为预填提示；未标注显示灰字而非硬猜；②池 `gender/ageBand` 补编辑入口（`VoicePoolStore.createPool/updatePool:363-403` 签名要加参数）、`voiceClassificationMap` 的性别不再被丢弃（`PrepareChapterSpeechPlanUseCase.kt:125-126`）；③`voice_pool_members` 写入侧收成 1:1 + 存量折叠报告（**不加唯一索引**，见 D4）；④定死"成员标签优先于池分类"；⑤备份补 `voice_labels` 字段 | 无 | 是（新表） | `voice_labels` 空即等同现状 | 同一角色两次进配音页，音色不再变 |
 | **S4 选音合一** | `CastVoicePicker.ensureVoice` 并入 `AutoAssignVoiceBindingsUseCase`，统一打分链，`random()`（`:31`）改稳定序，**年龄第一次真正进播放路径**；`syncBinding` 的 `source` 默认值按实际来源写（修 N3），界面据此显示"你选的 / 自动选音" | S3 | 是（选音结果可复现性） | revert 恢复旧补音 | 同书同池重跑给出同一个音色 |
 | **S5 定稿写入打通**（2026-10-20 安全切片已落：非当前章套覆盖 + 锁定此段 + 转正入口 + 场景回写不再顶掉分析段；**只剩①定稿写入未落**，理由见下方"本轮已落"） | 正文胶囊分配（唯一出口 `assign():337-371`）在写分配表的同时，把结论写成 segments 的 `characterId + userLocked=true`；分镜页加"锁定/解锁此段"Intent（现无任何编辑/锁定动作，`SpeechStoryboardContract` 只有列表/重分析/试听/删除）；**非当前章也套覆盖**（`planFromSegments` 后补 `overlayOnSegments`，`ResolveEffectiveSpeechPlanUseCase.kt:132-144`），使 L7 完整；补「转正」UI 入口（§3.8）**——必须与 D2（角色库移出缓存键）同轮，否则第一次点转正就当场重烧全书（N1）**；并落 D2 的两条零 token 本地归并：转正＝纯 status 改写、新人入库后老章同名草稿卡按名字/别名重定向到正式档案（行级 `UPDATE characterId`） | 无阻塞 | 否（补写入方） | 无写入方时等同现状 | 正文改一句 → 翻到别章再翻回来，分镜页仍是那个角色；转正一张卡之后，已分析章不重烧 |
@@ -355,7 +356,8 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
   ⑦N4 见 §4。
 - **S2 全 4 项已落**：推理强度并成 DataStore 一份（旧 SharedPreferences 值 `takeLegacyReasoningLevel()`
   一次性搬进、弹窗里 chips 退役只读回显）；「正文章节预载数量」/「音频预取数量」按真实语义拆开命名，
-  `audioPreDownloadNum` 补了滑块入口；两个开关改名为「按角色分声朗读」/「正文显示角色名」；
+  `audioPreDownloadNum` 补了滑块入口；两个开关改名，最终定为「多角色朗读」/「显示角色」
+  （2026-10-21 第一版「按角色分声朗读」/「正文显示角色名」被判定太长，zh-rHK/rTW 原本就写作「多角色朗讀」）；
   第三个 Tab 的死口径清干净（`readAloudConfigTab` 只留 0 常规 / 1 引擎与音色，
   `read_aloud_settings_casting_tab` 从 zh-rTW/zh-rHK 一并删除）。
 - **D2 的缓存键部分已落**（角色库时间戳移出 `resolverVersion`，顺带让版本号不再读库）；
@@ -371,7 +373,7 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
     `readerChapterInputWindow.current` 扩到上/当前/下一章三份（`chapterParagraphs`），并在套之前加
     **同源闸门**：`SpeechIdentity.chapterContentHash(段落)` 必须等于那份分析的 `contentHash`
     （`ChapterSpeechSegments` 新增该字段，只有当前设置那份才带基准，退回旧划分时为空即跳过）。
-    闸门是必需的：`ReaderChapterSourceParser` 在「正文显示角色名」打开时往 `semanticContent` 注入
+    闸门是必需的：`ReaderChapterSourceParser` 在「显示角色」打开时往 `semanticContent` 注入
     `<<名字（池）>>` 标记，分析段的坐标就在带标记的空间里，标记一变整套坐标一起挪，
     不加判据套覆盖会把胶囊安到错的人身上。跳过时写 AppLog 说明原因。
     ②**分镜页「锁定/解锁这一段」**：`ToggleSegmentLock` Intent → `ChapterSpeechGateway.setSegmentUserLocked`

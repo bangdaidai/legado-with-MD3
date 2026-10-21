@@ -20,8 +20,8 @@ import io.legado.app.ui.config.readConfig.ReadConfig
  * 分配表能改到句，朗读就得跟到句。官方链路负责切分，这里只把「谁念哪一段」换成用户的分配。
  * 标记是否送给引擎由朗读服务的 `speechText()` 决定（偏移算完后才去掉，见 [CastMarkers.strip]）。
  *
- * 开关口径：「按角色分声朗读」决定我们这套分配发不发生效；「正文显示角色名」决定正文里有没有标记与胶囊。
- * 标记的唯一来源是「正文显示角色名」注入正文的那份文本，本层只读它、绝不自己补标记——
+ * 开关口径：「多角色朗读」决定我们这套分配发不发生效；「显示角色」决定正文里有没有标记与胶囊。
+ * 标记的唯一来源是「显示角色」注入正文的那份文本，本层只读它、绝不自己补标记——
  * 关掉它就是没有按句的分配可读，只能用分析链算好的那份音色计划（引擎侧若认这套标记则另说）。
  *
  * **两侧必须共用这一个覆盖层**：朗读服务与分镜页各自算一份计划时，分镜页显示的是覆盖
@@ -72,7 +72,7 @@ object CastSpeechOverlay {
         val spans = if (multiRole) spansOf(paragraphs, effectsOfQuote) else emptyList()
         if (spans.isEmpty() && effects.isEmpty()) {
             /*
-             * 正文里没有角色标记：要么没开「正文显示角色名」（标记由它注入），要么这一章还没分配过角色。
+             * 正文里没有角色标记：要么没开「显示角色」（标记由它注入），要么这一章还没分配过角色。
              *
              * 但这一路**不等于整章旁白**——plan 是分析链按 segments 算好的音色计划，官方角色卡和
              * AI 归因给出的角色音都已经在里面了，这里只是没有按句的分配表来覆盖它。原先一句
@@ -81,7 +81,7 @@ object CastSpeechOverlay {
             val (kept, dropped) = dropSilentUnits(plan)
             val voiceCount = kept.mapNotNull { it.voice?.id }.distinct().size
             AppLog.put(
-                "多角色朗读: 第${chapterIndex + 1}章正文里没有角色标记（未开「正文显示角色名」或本章未分配），" +
+                "多角色朗读: 第${chapterIndex + 1}章正文里没有角色标记（未开「显示角色」或本章未分配），" +
                         "沿用分析链的音色计划（$voiceCount 种音色在播，只有一种就是全程旁白），" +
                         "丢掉 $dropped 个不发声单元"
             )
