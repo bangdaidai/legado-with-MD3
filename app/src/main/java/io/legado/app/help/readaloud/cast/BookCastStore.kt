@@ -113,7 +113,7 @@ object BookCastStore {
 
     /**
      * 分配表内编辑角色状态（确认语义）：改名/换池/换音色/换变声器，同步所有引用行。
-     * 名字非法或与其它角色同名同池时失败。
+     * 名字非法或这本书里已经有同名角色时失败（一人一名，池只是属性，换池不是再建一个他）。
      *
      * [voiceEffect] 是**角色级（全局）**的变声器状态，就存 [CastCharacter.voiceEffect] 这一列：
      * 朗读侧每句都按 characterId 查它（[io.legado.app.help.readaloud.effect.VoiceEffectStore.ofCharacter]），
@@ -133,10 +133,13 @@ object BookCastStore {
         if (trimmed.isEmpty() || !CastMarkers.isValidName(trimmed)) return false
         val character = appDb.castCharacterDao.getById(characterId) ?: return false
         val pool = poolLabel.trim().take(12)
-        if (character.name != trimmed || character.poolLabel != pool) {
-            val clash = appDb.castCharacterDao.getByName(bookUrl, trimmed)
-                .any { it.id != characterId && it.poolLabel == pool }
-            if (clash) return false
+        if (character.name != trimmed) {
+            // 改名才要挡同名：另一行不管填的什么池都算把一个人拆成两个，折叠器下次进来又并掉，
+            // 与其让它并不如在这里挡回去，用户得到的是「改名失败」而不是「多出来一个同名」。
+            // 只换池不挡——池是这个人的属性，同名的其它行本来就已经是该并的历史遗留。
+            if (appDb.castCharacterDao.getByName(bookUrl, trimmed).any { it.id != characterId }) {
+                return false
+            }
         }
         val updated = CastVoicePicker.ensureVoice(
             character.copy(
@@ -198,7 +201,11 @@ object BookCastStore {
         return true
     }
 
-    /** 分配表内新建角色（不绑定句子，纯建档案）。 */
+    /**
+     * 分配表内新建角色（不绑定句子，纯建档案）。
+     *
+     * 同名即拒绝（一人一名）：要给已经有这个人换个池/换个声音，去编辑那一行，别再造一个他。
+     */
     suspend fun createCharacter(
         bookUrl: String,
         name: String,
@@ -209,7 +216,7 @@ object BookCastStore {
         val trimmed = name.trim()
         if (trimmed.isEmpty() || !CastMarkers.isValidName(trimmed)) return false
         val pool = poolLabel.trim().take(12)
-        if (appDb.castCharacterDao.getByNameAndPool(bookUrl, trimmed, pool) != null) return false
+        if (appDb.castCharacterDao.getByName(bookUrl, trimmed).isNotEmpty()) return false
         val character = CastCharacter(
             id = UUID.randomUUID().toString(),
             bookUrl = bookUrl,
@@ -303,9 +310,9 @@ object BookCastStore {
         ) {
             return false
         }
-        // (bookUrl, name, poolLabel) 唯一：撞别的角色就什么都不改，留给用户自己合
+        // 一人一名：这个名字已经有别的角色行就什么都不改，留给用户自己合
         if (appDb.castCharacterDao.getByName(bookUrl, trimmed)
-                .any { it.id != character.id && it.poolLabel == pool }
+                .any { it.id != character.id }
         ) {
             return false
         }

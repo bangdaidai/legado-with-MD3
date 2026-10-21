@@ -1,33 +1,38 @@
 package io.legado.app.help.readaloud.cast
 
 import io.legado.app.constant.AppLog
-import io.legado.app.data.entities.CastCharacter
 import io.legado.app.domain.gateway.CastSpeechGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
-import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.feature.reader.core.cast.CastMarkers
 import io.legado.app.feature.reader.core.readaloud.isUnspeakableReadAloudUnit
 import io.legado.app.ui.config.readConfig.ReadConfig
 
 /**
- * 多角色朗读的分配覆盖层：已分配的引号段用那个角色的音色读，其余一律旁白。
+ * 多角色朗读的**效果层**：正则角色（命中换音色 / 不念放音效）与分配表里那一句的专属变声器。
  *
- * 归属权威是分配表（`chapter_role_assignments`）注入正文的标记，不是官方规则/AI 分析的结果——
- * 分配表能改到句，朗读就得跟到句。官方链路负责切分，这里只把「谁念哪一段」换成用户的分配。
- * 标记是否送给引擎由朗读服务的 `speechText()` 决定（偏移算完后才去掉，见 [CastMarkers.strip]）。
+ * 它不再决定「谁说话」。过去这一层会按正文里的角色标记把说话人重新认领一遍，认领得到就用那个角色的
+ * 音色、认领不到就抹成旁白——等于播放队列自己又判了一次归属，而分镜页与正文胶囊读的是分析链那份
+ * 真相，界面上写着一个人、耳朵里是另一个人的声音，AI 认出来的角色更是被这句「抹成旁白」直接吞掉。
+ * 现在用户在胶囊里的分配由 [CastSegmentFinalizer] 在分析跑完当场写回 `chapter_speech_segments`
+ * （连 `userLocked` 一起），音色由 [io.legado.app.domain.usecase.BuildSpeechPlanUseCase] 按段上的
+ * 角色解析。一份结论，两侧同读。
  *
- * 开关口径：「多角色朗读」决定我们这套分配发不发生效；「显示角色」决定正文里有没有标记与胶囊。
+ * 那为什么还要读一遍正文里的标记：分配表把变声器存在**那一句**上
+ * （`chapter_role_assignments.voiceEffect`），而整段/整页划分下一个朗读单元就是一整段，旁白和台词
+ * 混在同一段文字里——不按台词边界切开，那一句的变声就糊到整段。因此只有真配了句级变声器的台词才切
+ * （见 [piecesOf] 的调用点）；没配的话单元保持分析链给的那一份，分镜页那行与实际发声的单元一一对应。
+ *
+ * 开关口径不变：「多角色朗读」决定分配表那一份效果发不发生效；「显示角色」决定正文里有没有标记与胶囊。
  * 标记的唯一来源是「显示角色」注入正文的那份文本，本层只读它、绝不自己补标记——
- * 关掉它就是没有按句的分配可读，只能用分析链算好的那份音色计划（引擎侧若认这套标记则另说）。
+ * 关掉它就是没有按句的变声器可读，只能用分析链算好的那份音色计划（引擎侧若认这套标记则另说）。
  *
- * **两侧必须共用这一个覆盖层**：朗读服务与分镜页各自算一份计划时，分镜页显示的是覆盖
- * 之前的结果，界面上写着一个人、耳朵里是另一个角色的声音。数据来源经 [CastSpeechGateway]
- * 与 [ReadAloudVoiceGateway] 两条窄接口注入，因此覆盖层本身不再直连 DAO，也不需要知道
- * 调用方是 UI 还是服务。
+ * **两侧必须共用这一层**：朗读服务与分镜页各自算一份计划时，覆盖只做在一侧就会「显示的和听的不一样」。
+ * 数据来源经 [CastSpeechGateway] 与 [ReadAloudVoiceGateway] 两条窄接口注入，因此覆盖层本身不再直连
+ * DAO，也不需要知道调用方是 UI 还是服务。
  */
 object CastSpeechOverlay {
 
@@ -60,7 +65,7 @@ object CastSpeechOverlay {
         // 「多角色朗读」关着时也生效（规则与生效口径见 RegexCastRuleStore.effectsFor）。
         val effects = runCatching { castGateway.regexEffects(bookUrl) }.getOrNull().orEmpty()
         val multiRole = ReadConfig.useMultiSpeaker
-        // 提前返回的这几路整章按旁白读，计划会直接当播放队列用：不发声段仍要按同一口径丢掉
+        // 提前返回的这几路拿分析链那份计划直接当播放队列用：不发声段仍要按同一口径丢掉
         if (!multiRole && effects.isEmpty()) return dropSilentUnits(plan).first
         // 段级变声器按引号序号存在分配表里（正文胶囊那一栏设的，只管那一句）
         val effectsOfQuote = if (paragraphs.isEmpty() || !multiRole) {
@@ -69,52 +74,54 @@ object CastSpeechOverlay {
             runCatching { castGateway.quoteVoiceEffects(bookUrl, chapterIndex) }
                 .getOrDefault(emptyMap())
         }
-        val spans = if (multiRole) spansOf(paragraphs, effectsOfQuote) else emptyList()
+        val spans = if (multiRole) {
+            // 只留下真配了句级变声器的那几句：其余单元不切，分镜页那一行才与实际发声的单元对得上
+            spansOf(paragraphs, effectsOfQuote).filter { it.effect.isNotBlank() }
+        } else {
+            emptyList()
+        }
         if (spans.isEmpty() && effects.isEmpty()) {
             /*
-             * 正文里没有角色标记：要么没开「显示角色」（标记由它注入），要么这一章还没分配过角色。
+             * 这一路不切单元：正文里没有标记（没开「显示角色」或本章没分配过），
+             * 或者有标记但没有一句设过专属变声器。
              *
-             * 但这一路**不等于整章旁白**——plan 是分析链按 segments 算好的音色计划，官方角色卡和
-             * AI 归因给出的角色音都已经在里面了，这里只是没有按句的分配表来覆盖它。原先一句
-             * "整章按旁白读"把这条分支说成完全失效，日志里看不出 AI 那一份到底有没有出声。
+             * 但这一路**不等于整章旁白**——plan 是分析链按 segments 算好的音色计划，官方角色卡、
+             * AI 归因、还有定稿回放进段里的用户分配，音色都已经在里面了，这一层只是不需要再动它。
+             * 原先一句"整章按旁白读"把这条分支说成完全失效，日志里看不出 AI 那一份到底有没有出声。
              */
             val (kept, dropped) = dropSilentUnits(plan)
             val voiceCount = kept.mapNotNull { it.voice?.id }.distinct().size
             AppLog.put(
-                "多角色朗读: 第${chapterIndex + 1}章正文里没有角色标记（未开「显示角色」或本章未分配），" +
-                        "沿用分析链的音色计划（$voiceCount 种音色在播，只有一种就是全程旁白），" +
+                "多角色效果层: 第${chapterIndex + 1}章没有要切开的句子（正文无角色标记，或没有一句设过" +
+                        "专属变声器），沿用分析链的音色计划（$voiceCount 种音色在播，只有一种就是全程旁白），" +
                         "丢掉 $dropped 个不发声单元"
             )
             return kept
         }
-        val characters = runCatching { castGateway.characters(bookUrl) }
-            .getOrDefault(emptyList())
         val voices = voiceGateway.getEnabledVoices().associateBy { it.id }
         val narrator = voiceGateway.bindingVoice(
             bookUrl,
             BookVoiceBinding.SUBJECT_NARRATOR,
             voices,
         )
-        // 官方人物页/AI 识别建的角色可能还没选过音色（没进过配音页）：按声音池就地补一次，
-        // 否则那句角色台词会退回旁白音。ensureVoice 幂等，选完落库并镜像绑定。
-        val picked = HashMap<String, CastCharacter>()
-        var voiced = 0
         var regexVoiced = 0
         var regexMuted = 0
+        var sentenceEffects = 0
         val sample = StringBuilder()
         val result = ArrayList<SpeechPlanItem>()
         // 整段文字都被「不念」吃掉时，音频没有后继单元可挂，先攒着落到下一个朗读单元上
         var carrySound = ""
 
         /**
-         * 一个切块 → 一个朗读单元。音色优先级：正则角色 > 分配表角色 > 旁白——
-         * 这条优先级在这里落地，正则侧的选择结果由 [RegexCastSplitter.Part.voiceId] 带过来，
-         * 正则侧那条规则自己选的变声器由 [RegexCastSplitter.Part.voiceEffect] 带过来（同一优先级）。
+         * 一个切块 → 一个朗读单元。这一层只可能改两样：**正则角色顶掉的音色**
+         * （[RegexCastSplitter.Part.voiceId]）和**那一句的变声器**（[span] 的 effect）。
+         * 谁说话、用哪个角色的声音，全由分析链那一份计划决定（含定稿回放写进去的用户分配），
+         * 这里不再另判一次。
          *
          * [part] 带着切块自己的章内起点，所以被音效吃掉的那段文字在这里就是个空洞：
          * 前后两块各归各的坐标，区间只留缝、不重叠（播放队列不许重叠）。
          */
-        suspend fun speechFor(
+        fun speechFor(
             item: SpeechPlanItem,
             part: RegexCastSplitter.Part,
             span: Span?,
@@ -128,83 +135,29 @@ object CastSpeechOverlay {
             }
             if (part.voiceId != null && voices.containsKey(part.voiceId)) regexVoiced++
             if (part.sound.isNotEmpty()) regexMuted++
-            val character = span?.let { characters.match(it.name, it.pool) }
+            if (span != null) sentenceEffects++
             // 播放单元里保留标记原文：偏移要按含标记的正文算，去掉标记是送进引擎前的最后一步
             val segment = item.segment.copy(
                 text = spoken,
                 start = item.segment.start + delta,
                 end = item.segment.start + delta + spoken.length,
                 chapterPosition = part.start,
+                // 句级变声器只跟着这一句。分析链从不写这一列（见 ChapterSpeechSegment.voiceEffect
+                // 的写入方），所以在这里覆盖它不会盖掉谁的结论
+                voiceEffect = span?.effect.orEmpty(),
             )
-            val built = when {
-                // 没开多角色朗读：官方解析出来的那个音色就是这句的声音，正则没顶到它就原样留着
-                !multiRole -> item.copy(
-                    segment = segment,
-                    voice = regexVoice ?: item.voice,
-                    fallbackVoices = item.fallbackVoices,
-                    characterPerformance = item.characterPerformance,
-                )
-
-                character == null -> item.copy(
-                    segment = segment.copy(
-                        roleType = SpeechRoleType.Narrator,
-                        characterId = null,
-                        characterName = "",
-                        voiceEffect = span?.effect.orEmpty(),
-                    ),
-                    voice = regexVoice ?: narrator,
-                    fallbackVoices = emptyList(),
-                    characterPerformance = null,
-                )
-
-                else -> {
-                    val resolved = picked.getOrPut(character.id) {
-                        castGateway.ensureCharacterVoice(character)
-                    }
-                    // 绑定才是权威（[CastVoicePicker.bindUserVoice] 的契约），cast_characters.voiceId
-                    // 只是分配表那一侧的副本。配音页选音只写绑定、不写角色行的 voiceId，反过来
-                    // 优先读副本就会「配音页显示新音色、实际发旧音色」。绑定优先、副本兜底。
-                    // 主体 id 有两套并存（角色行 id 与人物档案 id），绑定可能只挂一侧，按全集兜底。
-                    val characterVoice = voiceGateway.bindingVoiceAny(
-                        bookUrl,
-                        (listOf(resolved.id) +
-                            castGateway.subjectIdsFor(bookUrl, resolved.name)).distinct(),
-                        voices,
-                    ) ?: voices[resolved.voiceId]
-                    if (characterVoice == null) {
-                        // 角色音丢掉、退回旁白是「换了分配却听不出来」的直接原因：
-                        // 音色被停用/删除，或配音页绑的 id 已经不在音色表里
-                        AppLog.put(
-                            "多角色朗读: 角色「${resolved.name}」的音色 ${resolved.voiceId} " +
-                                "不在启用的音色表里，这句按旁白读",
-                        )
-                    } else {
-                        voiced++
-                        if (sample.isEmpty()) {
-                            sample.append("${resolved.name}=${characterVoice.displayName}")
-                                .append('/').append(characterVoice.engineType)
-                                .append('/').append(characterVoice.engineId)
-                                .append(" speaker=").append(characterVoice.speakerId.ifBlank { "空" })
-                                .append(" 旁白=").append(narrator?.displayName ?: "无")
-                                .append('/').append(narrator?.engineType ?: "-")
-                        }
-                    }
-                    item.copy(
-                        segment = segment.copy(
-                            roleType = SpeechRoleType.Character,
-                            characterId = resolved.id,
-                            characterName = resolved.name,
-                            voiceEffect = span.effect,
-                        ),
-                        voice = regexVoice ?: characterVoice ?: narrator,
-                        fallbackVoices = listOfNotNull(
-                            narrator?.takeIf { it.id != (regexVoice ?: characterVoice)?.id },
-                        ),
-                        characterPerformance = item.characterPerformance
-                            ?.takeIf { it.characterId == resolved.id },
-                    )
-                }
+            if (regexVoice != null && sample.isEmpty()) {
+                sample.append("正则「").append(part.label).append("」=")
+                    .append(regexVoice.displayName)
+                    .append('/').append(regexVoice.engineType)
+                    .append('/').append(regexVoice.engineId)
             }
+            val built = item.copy(
+                segment = segment,
+                voice = regexVoice ?: item.voice,
+                fallbackVoices = item.fallbackVoices,
+                characterPerformance = item.characterPerformance,
+            )
             // 音效串整条透传（格式契约在 RegexCastSplitter 底部），下游经
             // ReadAloudPlaybackCue.soundEffect 到 BaseReadAloudService.takeCueSounds 解析。
             // 变声器同理跟着这一单元走：写进 segment.voiceEffect，下游 ReadAloudPlaybackQueue.from
@@ -244,16 +197,16 @@ object CastSpeechOverlay {
         }
         // 只剩空白的段不进队列（见 dropSilentUnits）
         val (kept, blankDropped) = dropSilentUnits(result)
-        AppLog.put(
-            "多角色朗读: 本章 ${plan.size} 个朗读单元，$voiced 段用角色音" +
-                if (effects.isEmpty()) {
-                    ""
-                } else {
-                    "；正则角色顶音色 $regexVoiced 段、吞字放音效 $regexMuted 段"
-                } +
-                    "；丢掉 $blankDropped 个不发声单元（空白/纯符号，无声占位）" +
-                "；$sample"
-        )
+        val summary = arrayListOf("本章 ${plan.size} 个朗读单元")
+        if (effects.isNotEmpty()) {
+            summary += "正则角色顶音色 $regexVoiced 段、吞字放音效 $regexMuted 段"
+        }
+        if (sentenceEffects > 0) {
+            summary += "句级变声器 $sentenceEffects 段"
+        }
+        summary += "丢掉 $blankDropped 个不发声单元（空白/纯符号，无声占位）"
+        if (sample.isNotEmpty()) summary += sample.toString()
+        AppLog.put("多角色效果层: " + summary.joinToString("；"))
         return kept
     }
 
@@ -456,10 +409,6 @@ object CastSpeechOverlay {
         return spans
     }
 
-    private fun List<CastCharacter>.match(name: String, pool: String): CastCharacter? =
-        firstOrNull { it.name == name && it.poolLabel == pool }
-            ?: firstOrNull { it.name == name }
-
     /** 配音页给某个主体绑定的音色；旁白的 subjectId 就是它自己。 */
     private suspend fun ReadAloudVoiceGateway.bindingVoice(
         bookUrl: String,
@@ -472,21 +421,5 @@ object CastSpeechOverlay {
             BookVoiceBinding.SUBJECT_CHARACTER
         }
         return getBinding(bookUrl, subjectType, subjectId)?.voiceId?.let(voices::get)
-    }
-
-    /**
-     * 多个候选主体 id 里第一个有绑定音色的。
-     *
-     * 顺序即优先级：调用方把角色行 id 放最前，档案 id 兜底（两套 id 并存时绑定可能只挂一侧）。
-     * 都读不到返回 null，调用方按旁白处理并打日志。
-     */
-    private suspend fun ReadAloudVoiceGateway.bindingVoiceAny(
-        bookUrl: String,
-        subjectIds: List<String>,
-        voices: Map<String, ReadAloudVoice>,
-    ): ReadAloudVoice? = subjectIds.firstNotNullOfOrNull { subjectId ->
-        getBinding(bookUrl, BookVoiceBinding.SUBJECT_CHARACTER, subjectId)
-            ?.voiceId
-            ?.let(voices::get)
     }
 }

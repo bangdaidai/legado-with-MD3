@@ -111,6 +111,7 @@ private fun readAloudMappingSamples(): List<ReadAloudSettings> {
         defaultInterface = "player",
         contentSelectSpeakMode = 55,
         audioPreDownloadNum = 66,
+        speechAheadAnalysisChapters = 7,
         capsuleAutoCollapse = false,
         ttsPreSynthesisConcurrency = 7,
     )
@@ -180,5 +181,6 @@ private fun ReadAloudSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.defaultReadAloudInterface to defaultInterface,
     PreferKey.contentSelectSpeakMod to contentSelectSpeakMode,
     PreferKey.audioPreDownloadNum to audioPreDownloadNum,
+    PreferKey.speechAheadAnalysisChapters to speechAheadAnalysisChapters,
     PreferKey.ttsPreSynthesisConcurrency to ttsPreSynthesisConcurrency,
 )

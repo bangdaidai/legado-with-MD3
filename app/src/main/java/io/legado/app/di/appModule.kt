@@ -335,7 +335,6 @@ import io.legado.app.ui.dict.DictViewModel
 import io.legado.app.ui.book.knowledge.CharacterQueryViewModel
 import io.legado.app.ui.ai.AiModelSwitchViewModel
 import io.legado.app.ui.dict.rule.DictRuleViewModel
-import io.legado.app.help.readaloud.cast.AiCastAssignUseCase
 import io.legado.app.help.readaloud.cast.AiSceneAssignUseCase
 import io.legado.app.ui.book.readaloud.cast.VoiceEffectViewModel
 import io.legado.app.ui.book.readaloud.cast.BgmPoolViewModel
@@ -648,7 +647,6 @@ val appModule = module {
     viewModelOf(::RegexCastRuleViewModel)
     viewModelOf(::VoiceEffectViewModel)
     viewModelOf(::MultiRoleRecognitionViewModel)
-    singleOf(::AiCastAssignUseCase)
     singleOf(::AiSceneAssignUseCase)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)
@@ -851,7 +849,6 @@ val appModule = module {
         SpeechStoryboardViewModel(
             bookUrl = bookUrl,
             resolveEffectiveSpeechPlan = get(),
-            refineSpeechWithAi = get(),
             chapterSpeechGateway = get(),
             bookKnowledgeGateway = get(),
             previewSynthesizer = get(),

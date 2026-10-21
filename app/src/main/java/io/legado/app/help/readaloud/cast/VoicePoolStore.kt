@@ -1,11 +1,13 @@
 package io.legado.app.help.readaloud.cast
 
 import android.content.Context
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.ReadAloudVoiceEntity
 import io.legado.app.data.entities.VoicePoolEntity
 import io.legado.app.data.entities.VoicePoolGroupEntity
+import io.legado.app.data.entities.VoicePoolMember
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import org.koin.core.context.GlobalContext
 import java.util.UUID
@@ -51,6 +53,9 @@ object VoicePoolStore {
     private const val PREFS = "cast_prefs"
     private const val KEY_SEEDED = "voicePoolsSeeded"
     private const val KEY_GROUPS_SEEDED = "voicePoolGroupsSeeded"
+
+    /** 存量成员表收成「一音色一组」只做一次（报告进日志，见 [foldDuplicateMembers]）。 */
+    private const val KEY_MEMBERS_FOLDED = "voicePoolMembersFolded"
     private const val MAX_NAME = 12
     private const val MAX_GROUP_NAME = 12
 
@@ -179,6 +184,8 @@ object VoicePoolStore {
                 isDefault = it.isDefault,
                 total = totalByPool[it.id] ?: 0,
                 enabledCount = enabledByPool[it.id] ?: 0,
+                gender = it.gender,
+                ageBand = it.ageBand,
             )
         }
     }
@@ -312,12 +319,15 @@ object VoicePoolStore {
     /**
      * voiceId → (性别, 年龄段)，从**启用池的成员关系**派生。
      *
-     * 音色本身没有年龄字段，年龄从「属于哪个池」推导：一个音色可能在多个池里，
-     * 取第一个有明确分类（gender/ageBand 都不是 unknown）的池；全在无分类池里则不出现在结果里
-     * （调用方按 unknown 兜底，走关键词匹配）。
+     * 音色本身没有年龄字段，年龄从「属于哪个池」推导。成员表已收成「一音色一组」
+     * （[foldDuplicateMembers]），所以这里 `putIfAbsent` 只是兜底，不再决定结果。
+     * 全在无分类池里的音色不出现在结果里（调用方按 unknown 兜底，走关键词匹配）。
+     *
+     * **用户自己标的标签优先于这里的结果**，合并发生在
+     * [VoiceLabelStore.classificationMap]（S3④ 定死的口径），选音只认那一处。
      */
     suspend fun voiceClassificationMap(): Map<String, Pair<String, String>> {
-        ensureSeeded()
+        foldDuplicateMembers()
         val classifiedPools = appDb.voicePoolDao.getAll()
             .filter { it.enabled }
             .mapNotNull { pool -> poolClassificationOf(pool)?.let { pool.id to it } }
@@ -360,9 +370,15 @@ object VoicePoolStore {
     }
 
     /** 名字全局唯一；非法/重名返回 false。[groupId] 空串 = 未分组。 */
-    suspend fun createPool(name: String, groupId: String): Boolean {
+    suspend fun createPool(
+        name: String,
+        groupId: String,
+        gender: String,
+        ageBand: String,
+    ): Boolean {
         val n = name.trim()
         if (n.isEmpty() || n.length > MAX_NAME) return false
+        if (!isClassifiable(gender, ageBand)) return false
         ensureGroups()
         if (appDb.voicePoolDao.getByName(n) != null) return false
         val dao = appDb.voicePoolDao
@@ -373,19 +389,30 @@ object VoicePoolStore {
                 groupId = groupId,
                 groupName = pathByGroupId()[groupId].orEmpty(),
                 order = nextPoolOrder(groupId),
+                gender = gender.trim(),
+                ageBand = ageBand.trim(),
             ),
         )
         return true
     }
 
-    /** 改名/换组；改名为已存在的其它池名时失败。 */
-    suspend fun updatePool(id: String, name: String, groupId: String): Boolean {
+    /** 改名/换组/改分类；改名为已存在的其它池名时失败。 */
+    suspend fun updatePool(
+        id: String,
+        name: String,
+        groupId: String,
+        gender: String,
+        ageBand: String,
+    ): Boolean {
         val dao = appDb.voicePoolDao
         val pool = dao.getAll().firstOrNull { it.id == id } ?: return false
         val n = name.trim()
         if (n.isEmpty() || n.length > MAX_NAME) return false
+        if (!isClassifiable(gender, ageBand)) return false
         val other = dao.getByName(n)
         if (other != null && other.id != id) return false
+        val nextGender = gender.trim()
+        val nextAgeBand = ageBand.trim()
         if (pool.groupId != groupId) {
             dao.update(
                 pool.copy(
@@ -393,14 +420,47 @@ object VoicePoolStore {
                     groupId = groupId,
                     groupName = pathByGroupId()[groupId].orEmpty(),
                     order = nextPoolOrder(groupId),
+                    gender = nextGender,
+                    ageBand = nextAgeBand,
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
         } else {
-            dao.update(pool.copy(name = n, updatedAt = System.currentTimeMillis()))
+            dao.update(
+                pool.copy(
+                    name = n,
+                    gender = nextGender,
+                    ageBand = nextAgeBand,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
         }
         return true
     }
+
+    /**
+     * 池分类的合法取值校验：只接受枚举本身或 `unknown`（未分类），不接受空串以外的自由文本。
+     *
+     * 非法值返回 false 让调用方当场失败，不静默归一成 unknown——界面给的是枚举，
+     * 走到非法值说明调用方写错了，归一会把"没生效"伪装成"生效了"。
+     */
+    fun isClassifiable(gender: String, ageBand: String): Boolean =
+        gender.trim() in CLASSIFIABLE_GENDERS && ageBand.trim() in CLASSIFIABLE_AGE_BANDS
+
+    private val CLASSIFIABLE_GENDERS = setOf(
+        VoicePoolEntity.VOICE_POOL_GENDER_MALE,
+        VoicePoolEntity.VOICE_POOL_GENDER_FEMALE,
+        VoicePoolEntity.VOICE_POOL_GENDER_UNKNOWN,
+    )
+
+    private val CLASSIFIABLE_AGE_BANDS = setOf(
+        VoicePoolEntity.VOICE_POOL_AGE_CHILD,
+        VoicePoolEntity.VOICE_POOL_AGE_TEEN,
+        VoicePoolEntity.VOICE_POOL_AGE_YOUNG_ADULT,
+        VoicePoolEntity.VOICE_POOL_AGE_ADULT,
+        VoicePoolEntity.VOICE_POOL_AGE_ELDERLY,
+        VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN,
+    )
 
     private suspend fun nextPoolOrder(groupId: String): Int =
         (appDb.voicePoolDao.getAll().filter { it.groupId == groupId }.maxOfOrNull { it.order } ?: 0) + 1
@@ -534,9 +594,67 @@ object VoicePoolStore {
     private fun validGroupName(name: String): Boolean =
         name.isNotEmpty() && name.length <= MAX_GROUP_NAME && !name.contains(GROUP_SEPARATOR)
 
-    /** 池成员全量替换（成员选择页保存）。 */
+    /**
+     * 池成员全量替换（成员选择页保存），并保证**一音色一组**（S3③，口径见 D4）。
+     *
+     * 这次加进来的音色如果本来挂在别的池里，从**别的池**摘掉，不是把它从本池剔除：
+     * 用户在这一屏的动作就是"这个音色归这一池"。互斥之后「音色 → 池分类」才是一对一，
+     * [voiceClassificationMap] 不必再靠成员表顺序撞第一个有分类的池。
+     * 不加唯一索引（给已有表加索引属结构变更，本 fork 不自行提版本号），约束由写入侧守住。
+     */
     suspend fun setMembers(poolId: String, voiceIds: Set<String>) {
-        appDb.voicePoolDao.setMembers(poolId, voiceIds)
+        val dao = appDb.voicePoolDao
+        val before = dao.getAllMembers()
+        dao.setMembers(poolId, voiceIds)
+        val moved = before.filter { it.voiceId in voiceIds && it.poolId != poolId }
+        if (moved.isEmpty()) return
+        val poolNames = dao.getAll().associate { it.id to it.name }
+        moved.groupBy { it.poolId }.forEach { (otherPoolId, rows) ->
+            dao.removeMembers(otherPoolId, rows.map { it.voiceId })
+        }
+        AppLog.putDebug(
+            "一音色一组：${moved.size} 个音色改挂到「${poolNames[poolId].orEmpty()}」，" +
+                moved.joinToString("；") {
+                    "音色 ${it.voiceId.take(8)} 从「${poolNames[it.poolId].orEmpty()}」移出"
+                }
+        )
+    }
+
+    /**
+     * 存量成员表折叠：把"同一个音色挂在多个池里"收敛成一条，幂等，prefs 标记只跑一次。
+     *
+     * 保留哪一池按可复现的顺序判：①池启用 ②池有结构化分类（这才是折叠真正要保护的东西——
+     * 没分类的池留着也不参与匹配）③列表顺序（groupId, order, name）第一个。
+     * 摘掉了什么全部写进日志：这一步动的是用户自己组的池，静默收掉等于偷改他的分类。
+     */
+    suspend fun foldDuplicateMembers() {
+        if (prefs().getBoolean(KEY_MEMBERS_FOLDED, false)) return
+        ensureSeeded()
+        val dao = appDb.voicePoolDao
+        val pools = dao.getAll().associateBy { it.id }
+        val members = dao.getAllMembers()
+        val duplicates = members.groupBy { it.voiceId }.filterValues { it.size > 1 }
+        if (duplicates.isNotEmpty()) {
+            val dropped = ArrayList<String>()
+            duplicates.forEach { (voiceId, rows) ->
+                val keep = rows.sortedWith(
+                    compareByDescending<VoicePoolMember> { pools[it.poolId]?.enabled == true }
+                        .thenByDescending { pools[it.poolId]?.let { pool -> poolClassificationOf(pool) != null } == true }
+                        .thenBy { pools[it.poolId]?.groupId.orEmpty() }
+                        .thenBy { pools[it.poolId]?.order ?: 0 }
+                        .thenBy { pools[it.poolId]?.name.orEmpty() }
+                ).first()
+                rows.filter { it.poolId != keep.poolId }.forEach { stale ->
+                    dao.removeMembers(stale.poolId, listOf(voiceId))
+                    dropped += "音色 ${voiceId.take(8)} 移出「${pools[stale.poolId]?.name.orEmpty()}」"
+                }
+            }
+            AppLog.putDebug(
+                "声音池收成「一音色一组」：$dropped.size 条重复归属已移出，保留的那一池见下；" +
+                    dropped.joinToString("；")
+            )
+        }
+        prefs().edit().putBoolean(KEY_MEMBERS_FOLDED, true).apply()
     }
 
     suspend fun memberVoiceIds(poolId: String): Set<String> =

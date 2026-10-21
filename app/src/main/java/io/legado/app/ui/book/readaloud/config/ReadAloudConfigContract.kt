@@ -47,6 +47,15 @@ sealed interface ReadAloudConfigIntent {
     /** 归因口径；[value] 是 `SpeechAttributionStrictness.storageValue`。 */
     data class SetSpeechAttributionStrictness(val value: String) : ReadAloudConfigIntent
 
+    /**
+     * 顺带往后分析几章：播放当前章时把往后这么多章的**说话人分析**也跑出来。
+     *
+     * 与 [SetAudioPreDownloadNum] 分得很清：那一档预取的是**音频**，这一档只多跑一次 AI 归因
+     * 与选音、不合成任何音频。它是「AI 分配角色」弹窗里那个"跑几章"的落点——范围不再由弹窗
+     * 现场挑，改成朗读时顺带做几章。
+     */
+    data class SetSpeechAheadAnalysisChapters(val value: Int) : ReadAloudConfigIntent
+
     /** [value] 是 [ReadAloudContentSplitSetting.encode] 的 `方式|标点` 编码。 */
     data class SetContentSplitMode(val value: String) : ReadAloudConfigIntent
 

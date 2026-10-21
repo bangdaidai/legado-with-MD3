@@ -67,6 +67,12 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
         is ReadAloudConfigIntent.SetSpeechAttributionStrictness ->
             onConfigIntent(ReadAloudConfigOption.SpeechAttributionStrictness, value = intent.value)
 
+        is ReadAloudConfigIntent.SetSpeechAheadAnalysisChapters ->
+            onConfigIntent(
+                ReadAloudConfigOption.SpeechAheadAnalysisChapters,
+                intValue = intent.value,
+            )
+
         is ReadAloudConfigIntent.SetUseMultiSpeaker ->
             onConfigIntent(ReadAloudConfigOption.UseMultiSpeaker, selected = intent.value)
 

@@ -43,17 +43,37 @@ interface ChapterSpeechDao {
     suspend fun getSegments(analysisId: String): List<ChapterSpeechSegmentEntity>
 
     /**
-     * 只取这一章**最近一次**分析的结果：换过 resolverVersion 的旧分段还留在库里，混在一起会重复。
+     * 这一章**存下来的那一份**分析：不比 `resolverVersion`，也不比 `contentHash`。
      *
-     * 注意这是"没有匹配版本时兜底看一眼"的读法，**不能拿来判"这一章是不是当前设置在用的那份"**——
-     * 命中缓存时写入方不刷 `updatedAt`（见 `AnalyzeChapterSpeechUseCase` 的 fromCache 分支），
-     * 最新一行未必就是当前版本那一份。判当前用 [getAnalysisByResolverVersion] /
-     * [getChapterCurrentAnalyses]。
+     * 这是「这一章到底有没有结果」的唯一读法。划分方式 / 分析模式 / 模型 / 提示词 / 归因口径
+     * 都写在版本号里，过去拿它一比就当没有——用户改一次设置，已经做好的分镜当场作废、再烧一次 AI。
+     * 现在的口径是「没人点『重新分析』，库里那一份就是这一章的结果」，所以挑行只看时间，
+     * `pending` / `running` 那种半成品除外（正文是否还同源的判定不在这里，
+     * 见 [io.legado.app.domain.model.readaloud.SpeechIdentity.alignsWithParagraphs]）。
+     *
+     * 写入方 [saveAnalysis] 会先删掉本章其它版本那几行，一章正常情况下只剩一行；
+     * 这里留着 `order by updatedAt desc limit 1` 是为了认这次改动之前留下的历史数据。
+     */
+    @Query(
+        "select * from chapter_speech_analysis where bookUrl = :bookUrl " +
+            "and chapterIndex = :chapterIndex " +
+            "and status in ('success', 'partial', 'failed') " +
+            "order by updatedAt desc limit 1"
+    )
+    suspend fun getStoredAnalysis(
+        bookUrl: String,
+        chapterIndex: Int,
+    ): ChapterSpeechAnalysisEntity?
+
+    /**
+     * 这一章存下来的分段——与 [getStoredAnalysis] 挑的是同一行，界面与朗读不会各拿一份。
      */
     @Query(
         "select * from chapter_speech_segments where analysisId = " +
             "(select id from chapter_speech_analysis where bookUrl = :bookUrl " +
-            "and chapterIndex = :chapterIndex order by updatedAt desc limit 1) " +
+            "and chapterIndex = :chapterIndex " +
+            "and status in ('success', 'partial', 'failed') " +
+            "order by updatedAt desc limit 1) " +
             "order by paragraphIndex, start, end"
     )
     suspend fun getChapterSegments(
@@ -61,41 +81,11 @@ interface ChapterSpeechDao {
         chapterIndex: Int,
     ): List<ChapterSpeechSegmentEntity>
 
-    /** 只认当前设置会用的那一份分析。 */
-    @Query(
-        "select * from chapter_speech_analysis where bookUrl = :bookUrl " +
-            "and chapterIndex = :chapterIndex and resolverVersion = :resolverVersion " +
-            "order by updatedAt desc limit 1"
-    )
-    suspend fun getAnalysisByResolverVersion(
-        bookUrl: String,
-        chapterIndex: Int,
-        resolverVersion: String,
-    ): ChapterSpeechAnalysisEntity?
-
     /**
-     * 每章「当前设置会用到的那一份」分析：先挑版本号等于 `:resolverVersion` 的行，
-     * 这一章没有那种行才退回最近一次。
+     * 章节列表的统计行：每章只统计 [getStoredAnalysis] 会拿到的那一行。
      *
-     * 这是章节列表判「这份分析现在还作不作数」的唯一口径，与 [getAnalysisByResolverVersion]
-     * 的 exact 命中同源。过去用的是「本章 `max(updatedAt)` 那一行等不等于当前版本」，
-     * 而命中缓存时 `updatedAt` 根本不刷（`AnalyzeChapterSpeechUseCase` 的 fromCache 分支），
-     * 于是「先用 AI 读过、再切回规则重读」的章节明明在用的是当前那份，也照样标成旧划分。
-     */
-    @Query(
-        "select * from chapter_speech_analysis a where a.bookUrl = :bookUrl " +
-            "and a.id = (select x.id from chapter_speech_analysis x " +
-            "where x.bookUrl = a.bookUrl and x.chapterIndex = a.chapterIndex " +
-            "order by (x.resolverVersion = :resolverVersion) desc, x.updatedAt desc limit 1)"
-    )
-    suspend fun getChapterCurrentAnalyses(
-        bookUrl: String,
-        resolverVersion: String,
-    ): List<ChapterSpeechAnalysisEntity>
-
-    /**
-     * 章节列表的统计行：只统计每章 [getChapterCurrentAnalyses] 选中的那一份分析，
-     * 段数/人数与「这一份现在作不作数」的徽标必须来自同一行，否则列表自相矛盾。
+     * 段数/人数与点进去看到的那一份必须来自同一行，否则列表和详情自相矛盾。过去这里多一条
+     * 「版本号等于当前设置的那行优先」，是拿来算「旧划分」徽标的；徽标和那套判据一起删了。
      */
     @Query(
         "select s.chapterIndex as chapterIndex, ifnull(c.title, '') as title, " +
@@ -107,12 +97,12 @@ interface ChapterSpeechDao {
             "where a.bookUrl = :bookUrl and a.id = " +
             "(select x.id from chapter_speech_analysis x " +
             "where x.bookUrl = a.bookUrl and x.chapterIndex = a.chapterIndex " +
-            "order by (x.resolverVersion = :resolverVersion) desc, x.updatedAt desc limit 1)) " +
+            "and x.status in ('success', 'partial', 'failed') " +
+            "order by x.updatedAt desc limit 1)) " +
             "group by s.chapterIndex order by s.chapterIndex"
     )
     suspend fun getChapterSummaries(
         bookUrl: String,
-        resolverVersion: String,
     ): List<ChapterSpeechSummaryRow>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -130,6 +120,46 @@ interface ChapterSpeechDao {
     )
     suspend fun setUserLocked(id: String, locked: Boolean, now: Long)
 
+    /**
+     * 定稿这一段的归属：正文胶囊分配/取消一句话时走行级 UPDATE。
+     *
+     * 与 [setUserLocked] 同一个道理——界面上那一行可能是分配覆盖切过的碎片，
+     * 整份 `replaceSegments` 回写会把库里那条分析段的正文和起止点换成碎片。
+     * 这里一次写齐「谁在说 + 是不是用户定的」：归属写进 `characterId/characterName/roleType`，
+     * `source` 记成 user，`userLocked` 决定重跑分析时这一段跳不跳过
+     * （现成的六处跳过判断见 `RefineSpeechWithAiUseCase`、`ResolveLocalSpeakersUseCase`、
+     * `LocalCharacterSpeakerResolver`）。取消分配则传 `locked = false` 回落旁白，
+     * AI 那份原判断要重新分析才回来。
+     */
+    @Query(
+        "update chapter_speech_segments set roleType = :roleType, characterId = :characterId, " +
+            "characterName = :characterName, source = :source, userLocked = :locked, " +
+            "updatedAt = :now where id = :id"
+    )
+    suspend fun setAttribution(
+        id: String,
+        roleType: String,
+        characterId: String?,
+        characterName: String,
+        source: String,
+        locked: Boolean,
+        now: Long,
+    )
+
+    /**
+     * 角色并档：把引用了被丢掉那一行的分段改到留下来的角色上。
+     *
+     * 同名多池折叠删的是重复的 `cast_characters` 行，而老章分段里存的是那一行的 id
+     * （AI 归因与定稿回放都写它）。不重映射就成了「查无此人」：分镜页那一行显示没人、
+     * 朗读拿不到绑定音色退回旁白。只动 `characterId` 一列——名字本来就是同一个人，
+     * 正文、起止点与 `userLocked` 都不碰。
+     */
+    @Query(
+        "update chapter_speech_segments set characterId = :keeperId, updatedAt = :now " +
+            "where bookUrl = :bookUrl and characterId = :droppedId"
+    )
+    suspend fun remapCharacterId(bookUrl: String, droppedId: String, keeperId: String, now: Long)
+
     @Query("delete from chapter_speech_segments where analysisId = :analysisId")
     suspend fun deleteSegments(analysisId: String)
 
@@ -142,11 +172,24 @@ interface ChapterSpeechDao {
         if (segments.isNotEmpty()) upsertSegments(segments)
     }
 
+    /**
+     * 写入这一章的分析：**先把这一章其它版本那份旧行删掉**，再写本次的结果。
+     *
+     * 一章只留一份必须落在写入这一刻，不能只指望读侧挑。库里同时留着「整段」和「按符号」两份
+     * 分段时，章节列表按 [getChapterSummaries] 挑中一行、朗读发声用的是另一条链写下的那一行，
+     * 用户看到的就是"分镜里全是两种划分、不知道哪份算数"。读侧现在按 [getStoredAnalysis]
+     * 取最近一次那份，所以这里这一刀是"一章一份"这个不变量的唯一保证。
+     *
+     * 同一条分析的段落本来就是整份替换（[replaceSegments] 先删后插），所以这里多加的一刀只影响
+     * **其它版本号**的行：改过划分方式 / 分析模式 / 归因口径之后，这一章被点「重新分析」重跑时
+     * 就把旧那份一起清掉，不再让它挂在列表里。
+     */
     @Transaction
     suspend fun saveAnalysis(
         analysis: ChapterSpeechAnalysisEntity,
         segments: List<ChapterSpeechSegmentEntity>,
     ) {
+        deleteChapter(analysis.bookUrl, analysis.chapterIndex)
         upsertAnalysis(analysis)
         replaceSegments(analysis.id, segments)
     }

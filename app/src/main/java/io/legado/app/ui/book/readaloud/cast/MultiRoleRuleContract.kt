@@ -12,12 +12,21 @@ import kotlinx.collections.immutable.persistentSetOf
 
 enum class CastTab { Pools, Assignments }
 
-/** 新建/编辑声音池对话框状态（editingId = null 为新建）。groupId 空串 = 未分组。 */
+/**
+ * 新建/编辑声音池对话框状态（editingId = null 为新建）。groupId 空串 = 未分组。
+ *
+ * [showsClassification] 打开时对话框多两栏「性别 / 年龄段」——这两个值是选音那条
+ * 精确匹配链的唯一依据（S3②），以前只有种子池带着、用户自建池永远是 unknown。
+ * 角色池页开，共用这套弹窗的其它页（背景音乐池）不开。
+ */
 @Stable
 data class PoolEditDialogState(
     val editingId: String? = null,
     val name: String = "",
     val groupId: String = "",
+    val gender: String = "unknown",
+    val ageBand: String = "unknown",
+    val showsClassification: Boolean = false,
     /** 保存失败的字符串资源 id（重名/非法名）。 */
     val errorRes: Int? = null,
 )
@@ -171,6 +180,9 @@ sealed interface MultiRoleRuleIntent {
         val editingId: String?,
         val name: String,
         val groupId: String,
+        /** 与 name/groupId 一次提交（一件事一次写库，不分两次落盘）。 */
+        val gender: String = "unknown",
+        val ageBand: String = "unknown",
     ) : MultiRoleRuleIntent
 
     data class SetPoolEnabled(val poolId: String, val enabled: Boolean) : MultiRoleRuleIntent

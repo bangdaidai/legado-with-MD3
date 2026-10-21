@@ -10,6 +10,11 @@ import androidx.room.Index
  * 阅读器渲染成胶囊、朗读链路直接读到标记文本。分配音色本身仍走
  * [BookVoiceBindingEntity]（subjectType=character），这里只记「哪句话归谁」。
  *
+ * 「谁说了这句」的真相在 `chapter_speech_segments`，本表是**改写那份真相的记录（定稿层）**：
+ * 每次跑完这一章的分析，这里的分配会回放到对应的段上（写 `characterId` + `userLocked`），
+ * 见 [io.legado.app.help.readaloud.cast.CastSegmentFinalizer]。所以它不需要知道段的 id——
+ * 回放与取消都在「与分析当时同一份带标记正文」上重新量一遍坐标，两边永远同源。
+ *
  * 锚点是章内开引号序号（对内容处理后的文本计数）：重新从源站拉取正文后，
  * 只要段落引号结构不变分配就仍然有效；构建时越界的序号自动忽略。
  */

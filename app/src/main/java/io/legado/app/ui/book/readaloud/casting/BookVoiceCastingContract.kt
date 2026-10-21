@@ -39,6 +39,15 @@ data class VoiceCastingItemUi(
     val voiceId: String = "",
     val voiceName: String = "",
     val voiceAvailable: Boolean = false,
+    /**
+     * 这一行的音色是**机器补的**还是用户亲自挑的。
+     *
+     * 判定跟着绑定行的 `source`（自动补音链写 `auto`，两条人工入口写 `user`），
+     * 并把历史上没锁定的老行一并算进来——那批是补音链写的，当时忘了写 source，
+     * 实体默认值把它们记成了"user"（N3）。配音页据此显示「自动选音 / 你选的」，
+     * 用户才能看出哪个声音不是自己定的。
+     */
+    val bindingSourceAuto: Boolean = false,
     /** 角色声音池（配音侧的权威值，档案的 voiceAgeBand 列存的就是它）。 */
     val poolLabel: String = "",
     /**

@@ -11,6 +11,8 @@ import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.help.readaloud.cast.CastSegmentFinalizer
+import io.legado.app.help.readaloud.cast.VoiceLabelStore
 import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.segment.RuleBasedSpeechSegmenter
 import io.legado.app.utils.postEvent
@@ -20,9 +22,10 @@ import kotlinx.coroutines.TimeoutCancellationException
 /**
  * Builds the persisted speech plan used by a read-aloud session.
  *
- * Segmentation is pagination independent, while speaker resolution is refreshed when the
- * character database changes. Keeping the orchestration here prevents Android services from
- * knowing about the analysis cache or character repository.
+ * 分段与翻页无关；说话人识别只在**同一套划分**上随人物档案刷新（改过划分方式时那一份分段不动，
+ * 见 [ResolveLocalSpeakersUseCase]）。编排留在这里，Android 服务不需要知道分析缓存和角色库。
+ *
+ * 已经跑过的章整份照用：这一趟只做「读那一份 + 现算音色 + 套定稿」，不再重切也不再发 AI。
  */
 class PrepareChapterSpeechPlanUseCase(
     private val analyzeChapterSpeech: AnalyzeChapterSpeechUseCase,
@@ -51,7 +54,7 @@ class PrepareChapterSpeechPlanUseCase(
         policy: ContentSplitPolicy,
         /** 发起者标注（朗读/预合成），进 AI 日志与回落提示，区分同一章的两条分析链 */
         source: String = "朗读",
-        /** 归因口径：决定发给模型的口径文本，同时参与分析身份（见 [RefineSpeechWithAiUseCase.resolverVersion]）。 */
+        /** 归因口径：决定发给模型的口径文本，也写进这一轮**新落下**的那份版本号；已经判过的章不看它。 */
         attributionStrictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
     ): List<SpeechPlanItem> {
         if (paragraphs.isEmpty()) return emptyList()
@@ -93,7 +96,14 @@ class PrepareChapterSpeechPlanUseCase(
             analysisResult = analysis,
             paragraphs = paragraphs,
         )
-        val resolved = if (effectiveMode == SpeechAnalysisMode.Rule) {
+        /*
+         * 「这一章已经有结果」就不再过 AI 复核：分析模式、模型、提示词、归因口径全都只写进
+         * 版本号，过去版本号一变就重发一次请求，等于用户改一次设置把自己做好的分镜冲掉。
+         *
+         * 真的会发请求的只剩两种：这一章没跑过（或正文换过、对不上现在的坐标），
+         * 以及用户在分镜页点「重新分析」——那里先删掉库里那一份再跑这一条链。
+         */
+        val resolved = if (effectiveMode == SpeechAnalysisMode.Rule || analysis.fromCache) {
             locallyResolved
         } else {
             runCatching {
@@ -120,16 +130,39 @@ class PrepareChapterSpeechPlanUseCase(
                 }
             }.getOrDefault(locallyResolved)
         }
+        /*
+         * 定稿回放：把正文胶囊分好的那一句写进 segments（characterId + userLocked），当场生效。
+         *
+         * 放在选音之前，于是三件事一次做完：这一句立刻用那个角色的声音念（不用等下一章）、
+         * 只在分配里出现而 AI 没认出的角色也会走下面那步自动补音、重跑分析时那几处
+         * 「跳过锁定段」的判断开始起作用。
+         * 库里那一份分段是按别的划分方式切的也没关系：回放比的是章内绝对坐标，
+         * 与粒度无关；正文真换过（对不上现在的位置）时它自己会整趟跳过。
+         * 一条分配都没有的书在这里零成本（读一次分配表就返回）。
+         */
+        val finalized = runCatching {
+            resolved.copy(
+                segments = CastSegmentFinalizer.replay(
+                    bookUrl = bookUrl,
+                    chapterIndex = chapterIndex,
+                    paragraphs = paragraphs,
+                    segments = resolved.segments,
+                ),
+            )
+        }.onFailure {
+            if (it is CancellationException) throw it
+            AppLog.put("定稿回放失败，本章按分析结果朗读\n${it.localizedMessage}", it)
+        }.getOrDefault(resolved)
         if (useMultiSpeaker) {
             // 必须在 buildSpeechPlan 之前落库，否则新分配的音色要等下一章才生效
             runCatching {
                 autoAssignVoiceBindings(
                     bookUrl = bookUrl,
-                    performances = resolved.speakingPerformances(),
-                    // 音色的结构化年龄段从声音池派生（音色本身没有年龄字段），
-                    // 传进去让自动分配优先精确匹配，而不是拿关键词撞风格标签
-                    voiceAgeBands = VoicePoolStore.voiceClassificationMap()
-                        .mapValues { (_, classification) -> classification.second },
+                    performances = finalized.speakingPerformances(),
+                    // 音色的结构化性别与年龄段都由这一份派生（音色行自己两样都没有列）：
+                    // 用户标注 > 声音池分类，缺的才退回引擎声明 / 名字启发。
+                    // 以前只把年龄段传进去、性别丢掉（S3②），池分类与标注里的「女」没人读。
+                    voiceClassification = VoiceLabelStore.classificationMap(),
                 )
             }.onFailure {
                 AppLog.put("自动分配音色失败\n${it.localizedMessage}", it)
@@ -137,11 +170,11 @@ class PrepareChapterSpeechPlanUseCase(
         }
         return buildSpeechPlan(
             bookUrl = bookUrl,
-            segments = resolved.segments,
+            segments = finalized.segments,
             preferredDefaultVoiceId = preferredDefaultVoiceId,
-            characterPerformances = resolved.characterPerformances.associateBy { it.characterId },
+            characterPerformances = finalized.characterPerformances.associateBy { it.characterId },
             useMultiSpeaker = useMultiSpeaker,
-        ).also { plan -> logPlanSummary(chapterIndex, effectiveMode, resolved, plan) }
+        ).also { plan -> logPlanSummary(chapterIndex, effectiveMode, finalized, plan) }
     }
 
     /**
@@ -217,7 +250,9 @@ class PrepareChapterSpeechPlanUseCase(
 /**
  * 纯规则分段的分析标识。
  *
- * 内容划分方式会改变切分结果，必须参与版本号，否则切换划分方式后会命中旧划分的分析缓存。
+ * 内容划分方式会改变切分结果，所以它进这一串；**但它已经不是复用判据**——
+ * 改了划分方式不会让库里那一份作废、也不会重跑（读侧只看「这一章有没有结果」，
+ * 见 [AnalyzeChapterSpeechUseCase]）。这一串只说明**新写下的那一份**当时是按哪一档跑的。
  */
 fun ruleResolverVersion(policy: ContentSplitPolicy): String =
     "${RuleBasedSpeechSegmenter.VERSION}:${policy.identifier}"

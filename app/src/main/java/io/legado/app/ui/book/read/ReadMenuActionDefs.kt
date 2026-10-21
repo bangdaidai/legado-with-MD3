@@ -240,10 +240,12 @@ internal fun readMenuButtonInfos(context: Context): List<ReadMenuButtonInfo> = l
         Icons.Default.TableRows,
         context.getString(R.string.book_voice_casting),
     ),
+    // id 仍叫 ai_cast：它存在用户的顶栏/底栏按钮配置里，改名等于让已配好的那颗按钮凭空消失。
+    // 「AI 分配角色」入口退役（S7 切片D）后它开的是配乐场景那一趟，标签与动作一起换。
     ReadMenuButtonInfo(
         "ai_cast",
         Icons.Default.SmartToy,
-        context.getString(R.string.ai_cast_roles),
+        context.getString(R.string.ai_cast_scene_only),
     ),
     ReadMenuButtonInfo(
         "more_actions",
@@ -432,7 +434,7 @@ internal fun buildReadMenuActionDefs(
             onIntent(ReadBookIntent.OpenBookVoiceCasting)
         },
         def("ai_cast") {
-            onIntent(ReadBookIntent.OpenAiCastDialog)
+            onIntent(ReadBookIntent.OpenAiSceneDialog)
         },
         def("more_actions") {
             onIntent(ReadBookIntent.ShowSheet(ReadBookSheet.MoreActions))

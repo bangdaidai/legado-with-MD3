@@ -39,19 +39,12 @@ interface CastCharacterDao {
     @Query("SELECT bubbleRuleJson FROM cast_characters WHERE bubbleRuleJson <> ''")
     fun getBubbleRefs(): List<String>
 
-    @Query(
-        """
-        SELECT * FROM cast_characters
-        WHERE bookUrl = :bookUrl AND name = :name AND poolLabel = :poolLabel
-        """
-    )
-    suspend fun getByNameAndPool(
-        bookUrl: String,
-        name: String,
-        poolLabel: String,
-    ): CastCharacter?
-
-    /** 身份唯一键冲突时忽略并返回 -1（创建按钮的「已存在」判定依赖此行为）。 */
+    /**
+     * 撞唯一索引时忽略并返回 -1。
+     *
+     * 写入侧（`CastAssignmentStore.create` / `BookCastStore.createCharacter`）已经先按**名字**挡过一层，
+     * 这里只剩兜底：两次写入撞在一起、或库里还留着折叠前的同名多行时不至于插入成功。
+     */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIgnore(character: CastCharacter): Long
 

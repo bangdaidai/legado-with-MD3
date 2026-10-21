@@ -207,8 +207,8 @@ class ReadAloudPlayerViewModel(
                         }
                     }
                     readAloudSettingsGateway.update { it.copy(speechAnalysisMode = value) }
-                    // 分析模式进 resolverVersion，不重启就是「设置显示 AI、实际还是旧规则结果」，
-                    // 直到下一章才生效——分镜页却已经开始按 AI 版本标注了
+                    // 重启只为了**还没跑过的章**：不重播一遍当前章，下一章仍会拿着切换前的
+                    // 口径去跑。已经分析过的章不动，那一份还是原来那一份
                     restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
@@ -223,13 +223,21 @@ class ReadAloudPlayerViewModel(
                 }
 
                 ReadAloudConfigOption.SpeechAttributionStrictness -> {
-                    // 口径同时换发给模型的 prompt 和分析身份：不重启就是「设置已切成另一档、
-                    // 这一章听见的还是上一档判出来的归属」，与分析模式那条同一个道理。
+                    // 换的是发给模型的归因口径，只对**还没跑过的章**生效：已经判过的章那一份照旧。
+                    // 仍要重启一次，不然这一轮往后各章还会拿切换前的口径去跑新分析。
                     val strictness = SpeechAttributionStrictness.fromStorage(value)
                     readAloudSettingsGateway.update {
                         it.copy(speechAttributionStrictness = strictness.storageValue)
                     }
                     restartReadAloudPipeline(readAloudSessionStore, application)
+                }
+
+                ReadAloudConfigOption.SpeechAheadAnalysisChapters -> {
+                    // 上限 50：往后每多一章就是多一次整章 AI 归因，这个数直接决定 token 花销。
+                    // 不重启朗读：它只决定"接下来顺带多分析几章"，不改变当前这一章怎么判。
+                    readAloudSettingsGateway.update {
+                        it.copy(speechAheadAnalysisChapters = intValue.coerceIn(0, 50))
+                    }
                 }
 
                 ReadAloudConfigOption.UseMultiSpeaker -> {
@@ -259,7 +267,8 @@ class ReadAloudPlayerViewModel(
                             contentSplitSymbols = ReadAloudSplitSymbol.storageValues(symbols),
                         )
                     }
-                    // 划分方式进 resolverVersion：改了不重启，当前章还按旧粒度切
+                    // 划分方式只管**还没切过的章**：已经存下来的那一份照旧念，不会因为换了粒度
+                    // 重切重分析。重启一次是让往后各章立刻按新粒度跑
                     restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
@@ -419,6 +428,7 @@ private fun toReadAloudSettingsUiState(
     readAloudContentSplitSymbols = aloud.contentSplitSymbols,
     preDownloadNum = read.preDownloadNum,
     audioPreDownloadNum = aloud.audioPreDownloadNum,
+    speechAheadAnalysisChapters = aloud.speechAheadAnalysisChapters,
     preSynthesisConcurrency = aloud.ttsPreSynthesisConcurrency,
     readAloudParagraphInterval = aloud.ttsParagraphInterval,
     audioCacheCleanTime = aloud.audioCacheCleanTime,

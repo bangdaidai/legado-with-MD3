@@ -106,6 +106,8 @@ object ReadConfig {
     val speechAnalysisMode get() = aloud.speechAnalysisMode
     val speechAnalysisReasoningLevel get() = aloud.speechAnalysisReasoningLevel
     val speechAttributionStrictness get() = aloud.speechAttributionStrictness
+    /** 顺带往后分析几章：只跑说话人分析，不合成音频。 */
+    val speechAheadAnalysisChapters get() = aloud.speechAheadAnalysisChapters
     val useMultiSpeaker get() = aloud.useMultiSpeaker
     val multiRoleCast get() = aloud.multiRoleCast
     val bgmAssign get() = aloud.bgmAssign

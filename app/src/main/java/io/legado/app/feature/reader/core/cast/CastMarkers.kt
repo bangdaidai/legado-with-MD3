@@ -28,10 +28,11 @@ object CastMarkers {
      * [QuotePairs] 里「单引号」那一类的**开**字符（弯单引号 `‘` 与直单引号 `'`）。
      *
      * 中文排版用单引号包内心独白（心声），双引号/方头引号（`“ ” 「 」 『 』`）是正常台词，
-     * 所以这一档只认单引号。唯一的消费方是
-     * [io.legado.app.help.readaloud.cast.CastAssignmentStore.thoughtOrdinals] 与 AI 分配那一趟：
-     * 它们据此决定新建分配行时要不要默认给那句套上
-     * [io.legado.app.help.readaloud.effect.VoiceEffectStore.THOUGHT_EFFECT]。
+     * 所以这一档只认单引号。消费方是
+     * [io.legado.app.help.readaloud.cast.CastAssignmentStore.thoughtOrdinals] 与
+     * [io.legado.app.help.readaloud.cast.CastSegmentFinalizer]：前者据此决定新建分配行时要不要
+     * 默认给那句套上 [io.legado.app.help.readaloud.effect.VoiceEffectStore.THOUGHT_EFFECT]，
+     * 后者据此决定这一句写进真相表的角色类型是心声还是台词。
      */
     val SingleQuoteOpens: Set<Char> = setOf('‘', '\'')
 

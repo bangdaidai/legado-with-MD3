@@ -20,8 +20,9 @@ import java.util.UUID
  *
  * 读取侧供 ReaderChapterSourceParser.parse 注入 `<<名字（池）>>` 标记；
  * 写入侧供分配悬浮窗的「确认 / 创建 / 取消分配」落库。
- * 角色状态权威在 cast_characters 表（身份 = 书 + 名字 + 声音池，同名不同池可并存），
- * 分配关系权威在 chapter_role_assignments，声音池本身在 voice_pools（VoicePoolStore）。
+ * 角色状态权威在 cast_characters 表（**身份 = 书 + 名字**，池只是这个人的一条属性，
+ * 同名不再并存——见 [CastIdentityFolder]），分配关系权威在 chapter_role_assignments，
+ * 声音池本身在 voice_pools（VoicePoolStore）。
  * UI/ViewModel 一律经本 Store 访问 DAO（架构护栏：ui 层禁止 DAO 直连）。
  */
 object CastAssignmentStore {
@@ -84,15 +85,23 @@ object CastAssignmentStore {
      * 停用（status=DISABLED）的档案不参与：那是从配音列表删掉的 AI 人物，
      * 人物页里资料还在，但不能再把它长回配音角色。
      *
+     * 开头先跑 [CastIdentityFolder.fold]：同名多池是历史遗留，一人一行是这张表往后的前提。
+     * 折叠必须**在档案导入之前**——否则这一趟会照着档案把刚并掉的那个人再长回来。
+     *
      * 末尾再跑一次反方向（[CastProfileMirror.backfillAll]）：档案镜像上线前建的角色只有
      * `cast_characters` 行，官方「人物」一节会当他们不存在。
      */
     suspend fun migrateLegacyProfiles(bookUrl: String) {
+        val folded = CastIdentityFolder.fold(bookUrl)
         val profiles = appDb.bookKnowledgeDao.getCharacterProfiles(bookUrl, 500)
             .filter { it.status == BookCharacterProfile.STATUS_ACTIVE }
         var renamed = false
         for (profile in profiles) {
-            if (appDb.castCharacterDao.getById(profile.id) == null) {
+            // 先按 id 认，认不到再按**名字**认：并档留下的可能是另一行的 id，而档案主键不动。
+            // 只按 id 找会把刚刚并掉的那个人照档案重新建一行出来，折叠就白跑了。
+            val character = appDb.castCharacterDao.getById(profile.id)
+                ?: appDb.castCharacterDao.getByName(bookUrl, profile.name).firstOrNull()
+            if (character == null) {
                 val voiceId = appDb.readAloudVoiceDao
                     .getBinding(bookUrl, "character", profile.id)?.voiceId.orEmpty()
                 appDb.castCharacterDao.insertIgnore(
@@ -112,13 +121,11 @@ object CastAssignmentStore {
             // 这一侧要跟着改，否则正文胶囊、分配行和朗读用的还是旧名字。
             // 档案与配音角色同 id（新建角色时 [CastProfileMirror] 就用角色 id 建档案），
             // 所以按 id 抄档案的 name / 声音池就是双向同步的另一半。
-            val character = appDb.castCharacterDao.getById(profile.id)
             val pool = VoicePoolStore.poolLabelOf(profile)
             val trimmed = profile.name.trim()
-            if (character != null && trimmed.isNotEmpty() && CastMarkers.isValidName(trimmed) &&
+            if (trimmed.isNotEmpty() && CastMarkers.isValidName(trimmed) &&
                 (character.name != trimmed || character.poolLabel != pool) &&
-                appDb.castCharacterDao.getByName(bookUrl, trimmed)
-                    .none { it.id != character.id && it.poolLabel == pool }
+                appDb.castCharacterDao.getByName(bookUrl, trimmed).none { it.id != character.id }
             ) {
                 val now = System.currentTimeMillis()
                 appDb.castCharacterDao.update(
@@ -131,8 +138,8 @@ object CastAssignmentStore {
             }
         }
         CastProfileMirror.backfillAll(bookUrl)
-        if (renamed) {
-            // 胶囊上写的就是这个名字：正在读的这章要重取，否则旧名字一直挂着
+        if (renamed || folded > 0) {
+            // 胶囊上写的就是这个名字与池：正在读的这章要重取，否则旧写法一直挂着
             BookCastStore.reloadReaderChapter(bookUrl)
         }
     }
@@ -209,7 +216,7 @@ object CastAssignmentStore {
 
     /**
      * 确认 = 分配这句话 + 更新已有角色的状态（永不创建）。
-     * 目标解析顺序：下拉中刚选中的角色 → 「名字（池）」精确匹配 → 名字唯一匹配；
+     * 目标解析顺序：下拉中刚选中的角色 → 同名且同池 → 同名唯一那一行；
      * 都没命中返回 NOT_FOUND，由弹层提示改点「创建」。
      *
      * [voiceEffect] 只写这一句（`chapter_role_assignments.voiceEffect`），不动
@@ -224,7 +231,7 @@ object CastAssignmentStore {
         characterName: String,
         voicePoolLabel: String,
         voiceId: String,
-        /** 这一句的变声器预设名，空 = 跟随角色的全局值。AI 分配链路不传。 */
+        /** 这一句的变声器预设名，空 = 跟随角色的全局值（单引号心声那一类建行时默认给混响）。 */
         voiceEffect: String = "",
     ): CastResult {
         CastSyntaxStore.current()
@@ -264,8 +271,9 @@ object CastAssignmentStore {
     }
 
     /**
-     * 创建 = 新增角色（身份 = 名字 + 声音池，同名不同池可并存）并分配给这句话。
-     * 同名同池已存在时返回 EXISTS。
+     * 创建 = 新增角色（身份 = 书 + 名字，**同名不再并存**）并分配给这句话。
+     * 这个名字已经有角色时返回 EXISTS，由弹层提示改点「确认」——那一条才会更新这个人
+     * 自己的池与音色（见 [confirm]）。
      *
      * [voiceEffect] 同 [confirm]：只记在这一句的分配行上，新角色自己的全局变声器留空。
      */
@@ -276,12 +284,15 @@ object CastAssignmentStore {
         characterName: String,
         voicePoolLabel: String,
         voiceId: String,
-        /** 这一句的变声器预设名，空 = 跟随角色的全局值。AI 分配链路不传。 */
+        /** 这一句的变声器预设名，空 = 跟随角色的全局值（单引号心声那一类建行时默认给混响）。 */
         voiceEffect: String = "",
     ): CastResult {
         CastSyntaxStore.current()
         val name = characterName.trim()
         if (name.isEmpty() || !CastMarkers.isValidName(name)) return CastResult.INVALID_NAME
+        // 折叠器进页面时已经把同名多行并成一行，所以这里命中的那一行就是这个人唯一的一行。
+        // 换池不再是「再建一个同名角色」，而是在下拉里点他、由确认那一趟改他的池。
+        if (appDb.castCharacterDao.getByName(bookUrl, name).isNotEmpty()) return CastResult.EXISTS
         val character = CastCharacter(
             id = UUID.randomUUID().toString(),
             bookUrl = bookUrl,
@@ -306,6 +317,12 @@ object CastAssignmentStore {
         return CastResult.OK
     }
 
+    /**
+     * 弹层「确认」要落到的那一行：下拉里刚选中的 → 名字相同且池相同的 → 名字相同的那一行。
+     *
+     * 名字是唯一入口（一人一名），池只用来在少数历史脏数据里挑得更准：折叠前留下的两行同名
+     * 不同池时，池相同的那一行才是用户这句话里写的那个人。
+     */
     private suspend fun resolveCharacter(
         bookUrl: String,
         selectedCharacterId: String,
@@ -317,22 +334,25 @@ object CastAssignmentStore {
                 ?.takeIf { it.bookUrl == bookUrl }
                 ?.let { return it }
         }
-        appDb.castCharacterDao.getByNameAndPool(bookUrl, name, poolLabel)?.let { return it }
-        return appDb.castCharacterDao.getByName(bookUrl, name).singleOrNull()
+        val sameName = appDb.castCharacterDao.getByName(bookUrl, name)
+        return sameName.firstOrNull { it.poolLabel == poolLabel } ?: sameName.singleOrNull()
     }
 
     /**
-     * 记录一条分配；同键覆盖。调用方负责随后可见的章节刷新。
+     * 记录一条分配；同键覆盖。
+     *
+     * 写完分配行紧接着把这一句的归属写进真相表（[CastSegmentFinalizer.finalize]），
+     * 所以点完「确认／新建」分镜页立刻是那一个角色，不必等本章重新准备。
+     * 调用方只负责刷新自己那页的显示。
      *
      * [voiceEffect] 是这一句的段级变声器（空 = 跟随角色全局），朗读侧的取值规则见
      * [io.legado.app.help.readaloud.effect.VoiceEffectStore.ofSpeech]。
      *
-     * [thoughtQuote] = 这一句是不是**单引号**台词（心声那一类）。null = 调用方没扫过正文，
-     * 由本函数现查 [thoughtOrdinals]；AI 分配那一趟整章已经数过一遍，直接传布尔值，
-     * 免得每句重读一次正文。只在**建行**那一刻起作用：单引号那句第一次被分配时默认套上
-     * [io.legado.app.help.readaloud.effect.VoiceEffectStore.THOUGHT_EFFECT]，
+     * 单引号台词（心声那一类）在**建行**那一刻默认套上 [VoiceEffectStore.THOUGHT_EFFECT]：
+     * 是不是单引号现扫正文（[thoughtOrdinals]，尺子与注入/胶囊同一把），只在还没有这条分配行时扫，
+     * 覆盖旧行不再补默认值。
      * 用户后来在胶囊里清空或改掉就永不再补——空串在读取时区分不出「没设过」和「清过」，
-     * 所以这份默认只能写一次，落点就是这个唯一的建行出口（confirm / create / AI 分配都走这里）。
+     * 所以这份默认只能写一次，落点就是这个唯一的建行出口。
      */
     suspend fun assign(
         bookUrl: String,
@@ -342,14 +362,15 @@ object CastAssignmentStore {
         characterName: String,
         voicePoolLabel: String,
         voiceEffect: String = "",
-        thoughtQuote: Boolean? = null,
     ) {
         val now = System.currentTimeMillis()
         val dao = appDb.chapterRoleAssignmentDao
         val existing = dao.getOne(bookUrl, chapterIndex, quoteOrdinal)
         val effect = voiceEffect.trim().take(24).ifBlank {
-            val isThought = thoughtQuote ?: (quoteOrdinal in thoughtOrdinals(bookUrl, chapterIndex))
-            if (existing == null && isThought) {
+            // 只有第一次建行才需要知道这一句是不是心声：覆盖旧行时一律不补默认混响
+            val isThought = existing == null &&
+                quoteOrdinal in thoughtOrdinals(bookUrl, chapterIndex)
+            if (isThought) {
                 VoiceEffectStore.usableName(VoiceEffectStore.THOUGHT_EFFECT)
             } else {
                 VoiceEffectStore.NONE
@@ -368,12 +389,22 @@ object CastAssignmentStore {
                 updatedAt = now,
             ),
         )
+        // 分配当场写进真相表：分镜页读的就是 `chapter_speech_segments` 那一份，写完立刻是那一个角色，
+        // 不用等本章重新准备。对不上桥（这一章还没分析过／库里那份不是当前设置算的）时这里什么都不写，
+        // 出计划那一次由 replay 补——所以这一步失败不影响这一次分配成立。见 [CastSegmentFinalizer]。
+        CastSegmentFinalizer.finalize(
+            bookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            quoteOrdinal = quoteOrdinal,
+            characterId = characterId,
+            characterName = characterName,
+        )
     }
 
     /**
      * 本章以**单引号**开口的锚点序号（= 心声那一类台词）。
      *
-     * 尺子与注入/胶囊/AI 分配完全同一个：内容处理之后、标记注入之前的段落逐字符喂
+     * 尺子与标记注入、正文胶囊完全同一个：内容处理之后、标记注入之前的段落逐字符喂
      * [CastMarkers.CastQuoteTracker]，`feed` 返回 true 的那个字符就是该锚点的开引号
      * （判档口径见 [CastMarkers.SingleQuoteOpens]）。
      * 消费方只有 [assign]：新建分配行时决定要不要默认写「心声混响」。
@@ -405,13 +436,25 @@ object CastAssignmentStore {
     fun flowAssignedChapters(bookUrl: String): Flow<Set<Int>> =
         appDb.chapterRoleAssignmentDao.flowAssignedChapters(bookUrl).map { it.toSet() }
 
-    /** 删除整章分配（AI 分配悬浮窗「删除分配」）。 */
+    /**
+     * 删除整章分配（目录长按菜单「删除分配」，见 `TocViewModel.deleteAssignmentsForSelected`）。
+     *
+     * 先放开定稿再删行，理由同 [unassign]：正文里那一句的角色标记就是这些行注入的。
+     */
     suspend fun deleteChapter(bookUrl: String, chapterIndex: Int) {
+        CastSegmentFinalizer.releaseChapter(bookUrl, chapterIndex)
         appDb.chapterRoleAssignmentDao.deleteChapter(bookUrl, chapterIndex)
     }
 
-    /** 撤销一句话的分配（回到「未分配」占位胶囊）。 */
+    /**
+     * 撤销一句话的分配（回到「未分配」占位胶囊）。
+     *
+     * 必须在删行之前放开 segments 上那一份定稿：分配写进真相表时把这一段锁成了用户结论
+     * （见 [CastSegmentFinalizer]），而这一句的坐标要靠**这一行注入的角色标记**才量得到。
+     * 行先删掉就再也量不到，那一段会一直挂着旧归属和锁定标记。
+     */
     suspend fun unassign(bookUrl: String, chapterIndex: Int, quoteOrdinal: Int) {
+        CastSegmentFinalizer.release(bookUrl, chapterIndex, quoteOrdinal)
         appDb.chapterRoleAssignmentDao.deleteOne(bookUrl, chapterIndex, quoteOrdinal)
     }
 }

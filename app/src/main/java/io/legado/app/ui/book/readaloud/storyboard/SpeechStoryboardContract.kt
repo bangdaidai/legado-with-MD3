@@ -43,8 +43,12 @@ data class SpeechStoryboardUiState(
      * 才知道结算值。所以它只在当前行覆盖 [StoryboardItemUi.voiceName]，其余行保持计划音色。
      */
     val playingVoiceLabel: String = "",
-    /** 细节页这一章的缓存是不是当前朗读设置生成的那一份；false 时列表要提示"历史划分" */
-    val usesCurrentConfig: Boolean = true,
+    /** 批量补分析在跑：跑批期间标题栏那颗按钮变成「停止」 */
+    val batchRunning: Boolean = false,
+    /** 已跑完几章（含跳过与失败），与 [batchTotal] 一起显示进度 */
+    val batchDone: Int = 0,
+    /** 这一批一共几章；0 = 没在跑批 */
+    val batchTotal: Int = 0,
 )
 
 @Stable
@@ -55,13 +59,6 @@ data class StoryboardChapterUi(
     val characterCount: Int,
     /** 正在读的那一章 */
     val isCurrent: Boolean = false,
-    /**
-     * 这一章的分段是否由当前划分方式 / 分析模式生成。
-     *
-     * false 表示它停在旧设置那一份上，朗读时根本不会用它——界面上得说清楚，
-     * 否则用户会以为看到的就是正在播的。
-     */
-    val usesCurrentConfig: Boolean = true,
 )
 
 @Stable
@@ -135,7 +132,12 @@ enum class StoryboardSource {
 sealed interface SpeechStoryboardIntent {
     data object Refresh : SpeechStoryboardIntent
 
-    /** 丢掉这一章的分析缓存重新跑一遍，改了角色卡 / 分析模式后用；只对正在读的那一章有效 */
+    /**
+     * 丢掉这一章的分析缓存重新跑一遍，改了角色卡 / 分析模式 / 归因口径后用。
+     *
+     * 不再只对正在读的那一章有效：段落来源已经从"屏幕上的章节输入窗口"扩到"本地正文重建"
+     * （见 [SpeechStoryboardViewModel]），下载过正文的章都能重跑。正文还没下载的章返回空列表。
+     */
     data object Reanalyze : SpeechStoryboardIntent
 
     data class OpenChapter(val chapterIndex: Int) : SpeechStoryboardIntent
@@ -171,6 +173,18 @@ sealed interface SpeechStoryboardIntent {
 
     /** 章节列表里删除单章的分析缓存 */
     data class DeleteChapter(val chapterIndex: Int) : SpeechStoryboardIntent
+
+    /**
+     * 把勾选的章逐章补上说话人分析——旧「AI 分配角色」弹窗里"选起止章跑一批"的落点。
+     *
+     * 与"重新分析"的区别是它**不重做已经有结果的章**（一个 token 都不花），
+     * 所以拿它跑全书等于"续跑 + 补齐"：只有没跑成过的（含失败章）会真的发请求。
+     * 改了划分方式 / 模型 / 提示词的章也算跑过，要按新口径重判得点「重新分析」。
+     */
+    data object AnalyzeSelectedChapters : SpeechStoryboardIntent
+
+    /** 停止批量分析：只关掉后面还没开的章，在飞的那一章照样跑完落库 */
+    data object CancelBatchAnalysis : SpeechStoryboardIntent
 }
 
 sealed interface SpeechStoryboardEffect {

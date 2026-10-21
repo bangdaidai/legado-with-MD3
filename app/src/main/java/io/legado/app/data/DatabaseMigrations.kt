@@ -173,6 +173,18 @@ object DatabaseMigrations {
                     (SELECT ageBand FROM voice_pools WHERE id = book_character_profiles.voicePoolId), 'unknown'
                 ) WHERE voicePoolId != ''"""
             )
+
+            // fork 本地扩展表：用户对单个音色的分类标注（性别 / 年龄段 / 风格标签）。
+            // 不给 read_aloud_voices 加列——那一行由引擎同步逐字段 REPLACE 重建，
+            // 挂在行上的用户标注会被抹掉（与 voice_pool_members 同一理由）。
+            // IF NOT EXISTS 与上面的守卫式 ADD COLUMN 同一套写法：重复执行必须无副作用。
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `voice_labels` (
+                    `voiceId` TEXT NOT NULL, `gender` TEXT NOT NULL DEFAULT '',
+                    `ageBand` TEXT NOT NULL DEFAULT '', `tagsJson` TEXT NOT NULL DEFAULT '[]',
+                    `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`voiceId`))"""
+            )
         }
     }
 

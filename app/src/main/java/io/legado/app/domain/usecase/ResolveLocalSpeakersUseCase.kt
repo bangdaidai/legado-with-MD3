@@ -69,6 +69,13 @@ class ResolveLocalSpeakersUseCase(
             append(':')
             append(SpeechIdentity.characterRevision(characters))
         }
+        // 那一份分段不是本轮这套朗读单元切出来的（改过划分方式或整页/整段视图不同）：
+        // 段上的 paragraphIndex/start/end 是当时那一份的**段内相对坐标**，拿本轮的单元列表去查
+        // 会查到别的句子上，重认一次等于把归属改错。用户没点「重新分析」就不动它，
+        // 音色照样在这一趟现算（characterPerformances 照常带出去给选音）。
+        if (!analysisResult.paragraphSpaceMatches) {
+            return analysisResult.copy(characterPerformances = characterPerformances)
+        }
         if (analysisResult.analysis.characterRevision == characterRevision) {
             return analysisResult.copy(
                 fromCache = true,

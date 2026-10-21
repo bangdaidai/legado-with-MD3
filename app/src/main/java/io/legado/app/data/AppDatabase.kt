@@ -29,6 +29,7 @@ import io.legado.app.data.dao.ShareCardTemplateDao
 import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.dao.BookCastMemoryDao
 import io.legado.app.data.dao.CastCharacterDao
+import io.legado.app.data.dao.VoiceLabelDao
 import io.legado.app.data.dao.VoicePoolDao
 import io.legado.app.data.dao.ChapterRoleAssignmentDao
 import io.legado.app.data.dao.ChapterSpeechDao
@@ -101,6 +102,7 @@ import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.ChapterSpeechAnalysisEntity
 import io.legado.app.data.entities.BookCastMemory
 import io.legado.app.data.entities.CastCharacter
+import io.legado.app.data.entities.VoiceLabel
 import io.legado.app.data.entities.VoicePoolEntity
 import io.legado.app.data.entities.VoicePoolGroupEntity
 import io.legado.app.data.entities.VoicePoolMember
@@ -178,7 +180,7 @@ val appDb by lazy {
         BgmTrackEntity::class, BgmPoolEntity::class, BgmPoolMember::class, BgmPoolGroupEntity::class,
         BgmSceneMark::class, VoiceEffectPreset::class, BookMarking::class,
         ReadAloudAudioDownload::class, RegexCastRule::class, RegexCastGroup::class,
-        AuthorProfile::class],
+        AuthorProfile::class, VoiceLabel::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -314,6 +316,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val castCharacterDao: CastCharacterDao
     abstract val bookCastMemoryDao: BookCastMemoryDao
     abstract val voicePoolDao: VoicePoolDao
+    abstract val voiceLabelDao: VoiceLabelDao
     abstract val bgmPoolDao: BgmPoolDao
     abstract val bgmSceneDao: BgmSceneDao
     abstract val regexCastRuleDao: RegexCastRuleDao

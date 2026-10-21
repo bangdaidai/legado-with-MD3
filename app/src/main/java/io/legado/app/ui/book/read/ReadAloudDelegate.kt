@@ -130,6 +130,7 @@ class ReadAloudDelegate(
                         preDownloadNum = host.preDownloadNum,
                         // 音频预取章数住在朗读设置这一份，与上面的正文预下载是两个键，别混
                         audioPreDownloadNum = prefs.audioPreDownloadNum,
+                        speechAheadAnalysisChapters = prefs.speechAheadAnalysisChapters,
                         audioCacheCleanTime = prefs.audioCacheCleanTime,
                         readAloudParagraphInterval = prefs.ttsParagraphInterval,
                     )

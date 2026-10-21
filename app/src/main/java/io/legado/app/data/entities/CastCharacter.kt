@@ -10,10 +10,14 @@ import io.legado.app.utils.fromJsonObject
 /**
  * 配音角色：多角色分配功能自己的角色档案。
  *
- * 身份 = (bookUrl, name, poolLabel)——同名不同声音池可以并存
- * （如「李星菲（女少女）」与「李星菲（女中年）」），voiceId 是该角色绑定的音色。
- * 与多角色朗读/AI 链路共用的 [BookCharacterProfile] 区分：后者按 (bookUrl, name) 唯一，
- * 无法承载同名多版本；分配弹层的候选、回填与状态更新一律读本表。
+ * 身份 = (bookUrl, name)——一个人在一本书里只有一行、只有一个声音，
+ * `poolLabel` 是这个人的**属性**（该用哪一路声音池），不再参与身份。
+ * 唯一索引仍是 (bookUrl, name, poolLabel)：本 fork 的版本号跟着上游走，改索引属结构变更、
+ * 已发布的库不会重跑迁移，所以「同名只留一行」由两处保证——写入侧按名字拒绝新建/改名
+ * （`CastAssignmentStore.create`、`BookCastStore.createCharacter/updateCharacter/syncFromProfile`），
+ * 折叠前的历史遗留由 [io.legado.app.help.readaloud.cast.CastIdentityFolder] 在进配音页时并掉。
+ * 与多角色朗读/AI 链路共用的 [BookCharacterProfile] 区分：后者同样按 (bookUrl, name) 唯一，
+ * 只多了头像/别名/简介那些「这个人是谁」的信息；分配弹层的候选、回填与状态更新一律读本表。
  * chapter_role_assignments.characterId 指向本表 id。
  */
 @Entity(
@@ -28,7 +32,7 @@ data class CastCharacter(
     val id: String,
     val bookUrl: String,
     val name: String,
-    /** 声音池名（voice_pools.name，如「女青年」）；角色身份 = 书 + 名字 + 池名。 */
+    /** 声音池名（voice_pools.name，如「女青年」）：这个人**该用哪一路池**的属性，不参与身份。 */
     val poolLabel: String,
     /** 音色 id（read_aloud_voices.id），空 = 未选。 */
     val voiceId: String = "",

@@ -132,6 +132,10 @@ internal fun Preferences.toReadAloudSettings(): ReadAloudSettings = ReadAloudSet
     contentSelectSpeakMode = compatDsValue(ReadAloudKeys.ContentSelectSpeakMode, 0),
     audioPreDownloadNum = compatDsValue(ReadAloudKeys.AudioPreDownloadNum, 3),
     ttsPreSynthesisConcurrency = compatDsValue(ReadAloudKeys.PreSynthesisConcurrency, 3),
+    speechAheadAnalysisChapters = compatDsValue(
+        ReadAloudKeys.SpeechAheadAnalysisChapters,
+        0,
+    ),
 )
 
 /**
@@ -195,6 +199,7 @@ internal fun ReadAloudSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.contentSelectSpeakMod to contentSelectSpeakMode,
     PreferKey.audioPreDownloadNum to audioPreDownloadNum,
     PreferKey.ttsPreSynthesisConcurrency to ttsPreSynthesisConcurrency,
+    PreferKey.speechAheadAnalysisChapters to speechAheadAnalysisChapters,
 )
 
 private object ReadAloudKeys {
@@ -245,4 +250,5 @@ private object ReadAloudKeys {
     val ContentSelectSpeakMode = intPreferencesKey(PreferKey.contentSelectSpeakMod)
     val AudioPreDownloadNum = intPreferencesKey(PreferKey.audioPreDownloadNum)
     val PreSynthesisConcurrency = intPreferencesKey(PreferKey.ttsPreSynthesisConcurrency)
+    val SpeechAheadAnalysisChapters = intPreferencesKey(PreferKey.speechAheadAnalysisChapters)
 }

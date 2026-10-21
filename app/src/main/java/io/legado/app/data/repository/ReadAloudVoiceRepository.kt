@@ -50,6 +50,11 @@ class ReadAloudVoiceRepository(
 
     override suspend fun deleteVoice(voice: ReadAloudVoice) = withContext(Dispatchers.IO) {
         dao.deleteVoice(voice.toEntity())
+        // 音色没了，用户给它写的分类标注也一并清掉。挂在这一层是因为删除音色的入口有五六处
+        // （批量删除、删引擎、改名换行、同步清理、孤儿回收），全部走本方法，
+        // 让每个调用方各自记得清反而最容易漏。
+        // 表可能不存在（老库没重跑过那条建表语句）：标注清不掉只留一行孤儿，不能把删除带崩。
+        runCatching { database.voiceLabelDao.delete(voice.id) }
     }
 
     override fun observeBindings(bookUrl: String): Flow<List<BookVoiceBinding>> =

@@ -468,6 +468,16 @@ private fun VoiceCastingCard(
         voiceName.isNotBlank() -> stringResource(R.string.voice_unavailable_named, voiceName)
         else -> stringResource(R.string.voice_unavailable)
     }
+    // 这一行的声音是谁定的：机器补的要写出来，用户才知道它不是自己挑的（N3 的另一半）。
+    // 只在真的绑上之后才标——"尚未指定"后面再挂一个「自动选音」就成了两句假话。
+    val voiceLine = if (item.hasBinding) {
+        voiceText + " · " + stringResource(
+            if (item.bindingSourceAuto) R.string.cast_voice_source_auto
+            else R.string.cast_voice_source_user
+        )
+    } else {
+        voiceText
+    }
     val isCharacter = item.kind == CastingSubjectKind.Character
     // 人物档案上那份头像（人物详情里设的）在这里也要露脸：一屏角色靠脸认比靠名字快，
     // 取不到图（链接失效、文件被清）就退回默认图标，不留空圈。
@@ -550,13 +560,13 @@ private fun VoiceCastingCard(
                     }
                     AnimatedTextLine(
                         text = if (item.lineCount > 0) {
-                            voiceText + " · " + stringResource(
+                            voiceLine + " · " + stringResource(
                                 R.string.cast_table_row_count,
                                 item.chapterCount,
                                 item.lineCount,
                             )
                         } else {
-                            voiceText
+                            voiceLine
                         },
                         style = LegadoTheme.typography.labelMedium,
                         color = if (item.hasBinding && !item.voiceAvailable) {

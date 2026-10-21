@@ -4,7 +4,6 @@ import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
-import io.legado.app.domain.model.readaloud.ChapterSpeechSegments
 import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.ContentSplitPolicies
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
@@ -117,6 +116,13 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
             it.resolverVersion == resolverVersion
     }
 
+    override suspend fun getStoredAnalysis(
+        bookUrl: String,
+        chapterIndex: Int,
+    ): ChapterSpeechAnalysis? = analysis?.takeIf {
+        it.bookUrl == bookUrl && it.chapterIndex == chapterIndex
+    }
+
     override suspend fun upsertAnalysis(analysis: ChapterSpeechAnalysis) {
         this.analysis = analysis
     }
@@ -149,24 +155,34 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         it.bookUrl == bookUrl && it.chapterIndex == chapterIndex
     }
 
-    override suspend fun getChapterSegmentsFor(
-        bookUrl: String,
-        chapterIndex: Int,
-        resolverVersion: String,
-    ): ChapterSpeechSegments = ChapterSpeechSegments(
-        segments = getChapterSegments(bookUrl, chapterIndex),
-        isCurrent = true,
-        contentHash = analysis?.contentHash.orEmpty(),
-    )
-
     override suspend fun getChapterSummaries(
         bookUrl: String,
-        resolverVersion: String,
     ): List<ChapterSpeechSummary> = emptyList()
 
     override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) {
         segments = segments.map {
             if (it.id == segmentId) it.copy(userLocked = locked) else it
+        }
+    }
+
+    override suspend fun setSegmentAttribution(
+        segmentId: String,
+        roleType: SpeechRoleType,
+        characterId: String?,
+        characterName: String,
+        userLocked: Boolean,
+    ) {
+        segments = segments.map {
+            if (it.id == segmentId) {
+                it.copy(
+                    roleType = roleType,
+                    characterId = characterId,
+                    characterName = characterName,
+                    userLocked = userLocked,
+                )
+            } else {
+                it
+            }
         }
     }
 

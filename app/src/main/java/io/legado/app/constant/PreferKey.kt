@@ -327,6 +327,8 @@ object PreferKey {
 
     /** 归因口径（必答 / 宁缺毋滥），见 [io.legado.app.domain.model.readaloud.SpeechAttributionStrictness]。 */
     const val speechAttributionStrictness = "speechAttributionStrictness"
+    /** 顺带往后分析几章：只跑说话人分析，不合成音频；0 = 不额外分析。 */
+    const val speechAheadAnalysisChapters = "speechAheadAnalysisChapters"
     const val useMultiSpeaker = "useMultiSpeaker"
     const val defaultNarratorVoiceId = "defaultNarratorVoiceId"
     /** 多角色分配：开启后正文对话引号内渲染角色胶囊，点击可分配角色（与多角色朗读独立）。 */

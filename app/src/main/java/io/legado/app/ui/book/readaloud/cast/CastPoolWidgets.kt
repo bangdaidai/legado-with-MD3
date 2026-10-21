@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import io.legado.app.data.entities.VoicePoolEntity
 import io.legado.app.help.readaloud.cast.CastGroupRow
 import io.legado.app.help.readaloud.cast.CastPoolRow
 import io.legado.app.help.readaloud.cast.VoicePoolStore
@@ -761,13 +762,16 @@ fun castGroupOptions(groups: List<CastGroupRow>): List<CastOption> = buildList {
  *
  * 分组改成从列表里选（三角展开分组树），不再手打组名——所以整屏只剩一个真输入框，
  * 切行不会让键盘先收再弹，见 [CastFieldStack]。
+ *
+ * [PoolEditDialogState.showsClassification] 打开时多两栏「性别 / 年龄段」——那是选音那条
+ * 精确匹配链的唯一依据（S3②）。共用本弹窗的背景音乐池不开这一档，屏上还是原来那两栏。
  */
 @Composable
 fun PoolEditDialog(
     dialog: PoolEditDialogState?,
     groups: List<CastGroupRow>,
     wording: CastPoolWording,
-    onSave: (editingId: String?, name: String, groupId: String) -> Unit,
+    onSave: (editingId: String?, name: String, groupId: String, gender: String, ageBand: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     // 调用方必须常驻组合本弹窗、只把 dialog 置 null：miuix 的窗口靠 show 驱动退场动画，
@@ -777,13 +781,25 @@ fun PoolEditDialog(
     if (dialog != null) cached = dialog
     val current = cached ?: return
     val options = castGroupOptions(groups)
+    val genderOptions = poolGenderOptions()
+    val ageOptions = poolAgeBandOptions()
     var name by remember(current) { mutableStateOf(current.name) }
     var groupId by remember(current) { mutableStateOf(current.groupId) }
+    var gender by remember(current) { mutableStateOf(current.gender) }
+    var ageBand by remember(current) { mutableStateOf(current.ageBand) }
     // 选中项的显示名。打字是按它筛选，所以不能拿 groupId 反推。
     var groupQuery by remember(current) {
         mutableStateOf(options.firstOrNull { it.key == current.groupId }?.label.orEmpty())
     }
+    var genderQuery by remember(current) {
+        mutableStateOf(genderOptions.firstOrNull { it.key == current.gender }?.label.orEmpty())
+    }
+    var ageQuery by remember(current) {
+        mutableStateOf(ageOptions.firstOrNull { it.key == current.ageBand }?.label.orEmpty())
+    }
     var groupExpanded by remember(current) { mutableStateOf(false) }
+    var genderExpanded by remember(current) { mutableStateOf(false) }
+    var ageExpanded by remember(current) { mutableStateOf(false) }
     AppAlertDialog(
         show = dialog != null,
         onDismissRequest = onDismiss,
@@ -793,27 +809,65 @@ fun PoolEditDialog(
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 CastFieldStack(
-                    specs = listOf(
-                        CastFieldSpec(
-                            id = POOL_NAME_FIELD,
-                            label = stringResource(wording.poolField),
-                            value = name,
-                            onValueChange = { name = it },
-                        ),
-                        CastFieldSpec(
-                            id = GROUP_FIELD,
-                            label = stringResource(R.string.cast_group),
-                            value = groupQuery,
-                            options = options,
-                            expanded = groupExpanded,
-                            onValueChange = { groupQuery = it },
-                            onSelected = {
-                                groupId = it.key
-                                groupQuery = it.label
-                            },
-                            onExpand = { groupExpanded = it },
-                        ),
-                    ),
+                    specs = buildList {
+                        add(
+                            CastFieldSpec(
+                                id = POOL_NAME_FIELD,
+                                label = stringResource(wording.poolField),
+                                value = name,
+                                onValueChange = { name = it },
+                            )
+                        )
+                        add(
+                            CastFieldSpec(
+                                id = GROUP_FIELD,
+                                label = stringResource(R.string.cast_group),
+                                value = groupQuery,
+                                options = options,
+                                expanded = groupExpanded,
+                                onValueChange = { groupQuery = it },
+                                onSelected = {
+                                    groupId = it.key
+                                    groupQuery = it.label
+                                },
+                                onExpand = { groupExpanded = it },
+                            )
+                        )
+                        // 两栏分类只在角色池那一页出现；和分组栏一样走 CastFieldStack，
+                        // 切栏不会让键盘先收再弹
+                        if (current.showsClassification) {
+                            add(
+                                CastFieldSpec(
+                                    id = POOL_GENDER_FIELD,
+                                    label = stringResource(R.string.voice_gender_label),
+                                    value = genderQuery,
+                                    options = genderOptions,
+                                    expanded = genderExpanded,
+                                    onValueChange = { genderQuery = it },
+                                    onSelected = {
+                                        gender = it.key
+                                        genderQuery = it.label
+                                    },
+                                    onExpand = { genderExpanded = it },
+                                )
+                            )
+                            add(
+                                CastFieldSpec(
+                                    id = POOL_AGE_FIELD,
+                                    label = stringResource(R.string.voice_age_label),
+                                    value = ageQuery,
+                                    options = ageOptions,
+                                    expanded = ageExpanded,
+                                    onValueChange = { ageQuery = it },
+                                    onSelected = {
+                                        ageBand = it.key
+                                        ageQuery = it.label
+                                    },
+                                    onExpand = { ageExpanded = it },
+                                )
+                            )
+                        }
+                    },
                 )
                 current.errorRes?.let {
                     AppText(
@@ -825,11 +879,29 @@ fun PoolEditDialog(
             }
         },
         confirmText = stringResource(R.string.ok),
-        onConfirm = { onSave(current.editingId, name, groupId) },
+        onConfirm = { onSave(current.editingId, name, groupId, gender, ageBand) },
         dismissText = stringResource(R.string.cancel),
         onDismiss = onDismiss,
     )
 }
+
+@Composable
+private fun poolGenderOptions(): List<CastOption> = listOf(
+    CastOption(VoicePoolEntity.VOICE_POOL_GENDER_MALE, stringResource(R.string.voice_gender_male)),
+    CastOption(VoicePoolEntity.VOICE_POOL_GENDER_FEMALE, stringResource(R.string.voice_gender_female)),
+    CastOption(VoicePoolEntity.VOICE_POOL_GENDER_UNKNOWN, stringResource(R.string.voice_gender_unknown)),
+)
+
+/** 池的年龄段候选：按由小到大排，「未知」固定收尾（与 [VoicePoolStore.isClassifiable] 同一套枚举）。 */
+@Composable
+private fun poolAgeBandOptions(): List<CastOption> = listOf(
+    CastOption(VoicePoolEntity.VOICE_POOL_AGE_CHILD, stringResource(R.string.voice_age_child)),
+    CastOption(VoicePoolEntity.VOICE_POOL_AGE_TEEN, stringResource(R.string.voice_age_teen)),
+    CastOption(VoicePoolEntity.VOICE_POOL_AGE_YOUNG_ADULT, stringResource(R.string.voice_age_young_adult)),
+    CastOption(VoicePoolEntity.VOICE_POOL_AGE_ADULT, stringResource(R.string.voice_age_adult)),
+    CastOption(VoicePoolEntity.VOICE_POOL_AGE_ELDERLY, stringResource(R.string.voice_age_elderly)),
+    CastOption(VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN, stringResource(R.string.voice_age_unknown)),
+)
 
 @Composable
 fun GroupEditDialog(
@@ -1029,6 +1101,8 @@ fun MemberPickerDialog(
 const val UNGROUPED = ""
 private const val POOL_NAME_FIELD = "pool_name"
 private const val GROUP_FIELD = "pool_group"
+private const val POOL_GENDER_FIELD = "pool_gender"
+private const val POOL_AGE_FIELD = "pool_age_band"
 
 /** 树形缩进用的全角空格：半角空格在 Text 里会被压缩，缩进就看不出来了。 */
 private const val INDENT = "　"

@@ -66,6 +66,7 @@ import io.legado.app.data.entities.ReadingMemory
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.data.entities.ShareCardTemplate
 import io.legado.app.data.entities.VoiceEffectPreset
+import io.legado.app.data.entities.VoiceLabel
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordIdentity
@@ -408,19 +409,28 @@ object Restore : KoinComponent {
         fileToListT<VoiceEffectPreset>(path, "voiceEffectPresets.json")?.let {
             appDb.voiceEffectDao.insertAll(it)
         }
+        // 音色分类标注：主键 voiceId，@Upsert 覆盖本地同音色的旧标注（备份里那一份是用户最新的意见）。
+        // 表在这台机器上可能还没建起来（建表语句追在历史迁移里），失败只记日志，
+        // 不能让一份带标注的备份把整本恢复流程打断。
+        fileToListT<VoiceLabel>(path, "voiceLabels.json")?.let {
+            runCatching { appDb.voiceLabelDao.insertAll(it) }
+                .onFailure { AppLog.put("恢复音色标注出错\n${it.localizedMessage}", it) }
+        }
         // 声音池：复用 VoicePoolTransfer 的合并语义（同名并入 + id 重映射 + 成员 IGNORE），
         // 不裸写池表——REPLACE 同名池会删掉本地行，而成员表无外键不级联，会留下悬空成员。
         File(path, "voicePools.json").takeIf { it.exists() }?.readText()?.let { text ->
             runCatching { VoicePoolTransfer.importJson(text) }
                 .onFailure { AppLog.put("恢复声音池出错\n${it.localizedMessage}", it) }
         }
-        // 角色配音：本地已有同 (书,名,池) 的角色时保本地并重映射 id，
+        // 角色配音：身份是「书 + 名」，本地已有同名的那一行就保本地并重映射 id，
         // 章内分配的 characterId 必须跟着映射，否则指向不存在的角色、分配静默失效。
+        // 老备份里「张三（女少女）/张三（女中年）」是两行：第二行按名字命中第一行并映射过去，
+        // 恢复当场就并成一个人，不用再等进配音页的折叠器跑第二遍。
         val characters = fileToListT<CastCharacter>(path, "castCharacters.json")
         val characterIdMap = HashMap<String, String>()
         characters?.forEach { character ->
-            val local = appDb.castCharacterDao
-                .getByNameAndPool(character.bookUrl, character.name, character.poolLabel)
+            val local = appDb.castCharacterDao.getByName(character.bookUrl, character.name)
+                .firstOrNull()
             if (local != null) {
                 characterIdMap[character.id] = local.id
             } else {

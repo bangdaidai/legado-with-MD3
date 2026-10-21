@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -238,7 +239,13 @@ private fun StoryboardTopBar(
             },
             state.selectedChapterIndexes.size,
         ),
-        subtitle = state.chapterTitle,
+        subtitle = if (state.batchTotal > 0) {
+            // 跑批进行中把进度顶到副标题：这一批动辄几十章、每章一次 AI，
+            // 没有回数看着就像卡住了
+            stringResource(R.string.speech_storyboard_batch_progress, state.batchDone, state.batchTotal)
+        } else {
+            state.chapterTitle
+        },
         navigationIcon = {
             TopBarNavigationButton(
                 onClick = {
@@ -269,6 +276,24 @@ private fun StoryboardTopBar(
                     imageVector = Icons.Default.SelectAll,
                     contentDescription = stringResource(R.string.select_all),
                     onClick = { onIntent(SpeechStoryboardIntent.SelectAllChapters) },
+                )
+                // 勾选就是这批的范围：旧「AI 分配角色」弹窗自己那套起止章选择器退役了，
+                // 这一页本来就有同一套多选语法（批量删除在用），不必再造一个。
+                // 跑批期间这颗钮变成停止——只关掉后面还没开的章，在飞的那一章照样落库。
+                TopBarActionButton(
+                    imageVector = if (state.batchRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                    contentDescription = stringResource(
+                        if (state.batchRunning) R.string.stop else R.string.speech_storyboard_analyze_selected,
+                    ),
+                    onClick = {
+                        onIntent(
+                            if (state.batchRunning) {
+                                SpeechStoryboardIntent.CancelBatchAnalysis
+                            } else {
+                                SpeechStoryboardIntent.AnalyzeSelectedChapters
+                            },
+                        )
+                    },
                 )
                 TopBarActionButton(
                     imageVector = Icons.Default.Delete,
@@ -420,8 +445,6 @@ private fun chapterRowLabel(chapter: StoryboardChapterUi): String {
     }
     val markers = buildList {
         if (chapter.isCurrent) add(stringResource(R.string.speech_storyboard_current_chapter))
-        // 停在旧划分方式/旧分析模式上的那一章：朗读时根本不会用它，不标出来用户会当成正在播的
-        if (!chapter.usesCurrentConfig) add(stringResource(R.string.speech_storyboard_stale_config))
     }
     return if (markers.isEmpty()) counts else "$counts · ${markers.joinToString(" · ")}"
 }
@@ -878,17 +901,6 @@ private fun SummaryCards(state: SpeechStoryboardUiState) {
                         },
                     ),
                 )
-                /*
-                 * 章节列表那一行只能挂一句短徽标，说不清"为什么不作数、我能做什么"。
-                 * 点开这一章的人在配置卡里看到完整解释和动作，不用自己猜是不是功能坏了。
-                 */
-                if (!state.usesCurrentConfig) {
-                    AppText(
-                        text = stringResource(R.string.speech_storyboard_stale_hint),
-                        style = LegadoTheme.typography.bodySmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
         val summary = state.summary

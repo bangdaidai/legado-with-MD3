@@ -290,6 +290,8 @@ data class ReadBookUiState(
     val preDownloadNum: Int = 10,
     /** 在线朗读引擎的音频预取章数；系统 TTS 不读这一项。 */
     val audioPreDownloadNum: Int = 3,
+    /** 顺带往后分析几章：只跑说话人分析，不合成音频；0 = 不额外分析。 */
+    val speechAheadAnalysisChapters: Int = 0,
     val preSynthesisConcurrency: Int = 3,
     val audioCacheCleanTime: Int = 10,
     // Read aloud config
@@ -942,19 +944,17 @@ sealed interface ReadBookIntent {
         val voiceEffect: String = "",
     ) : ReadBookIntent
 
-        /** AI 分配角色（当前章起 N 章批量识别+分配）。 */
-    data object OpenAiCastDialog : ReadBookIntent
-
     /**
-     * AI 识别背景音乐场景（同一个悬浮窗，但只跑配乐清那一趟）。
+     * AI 识别背景音乐场景（朗读菜单那颗 AI 按钮打开的悬浮窗）。
      *
-     * 从朗读设置的背景音乐区进来：背景音乐分配就是它的开关，
-     * 不需要先开多角色朗读。
+     * 角色那一趟已经随「AI 分配角色」入口退役（S7 切片D）：逐句归属由朗读链路自己产出，
+     * 批量补分析落在分镜结果页，范围落在朗读设置的「顺带往后分析几章」。这里只剩配乐，
+     * 它不需要先开多角色朗读——背景音乐分配就是它的开关。
      */
     data object OpenAiSceneDialog : ReadBookIntent
 
     /**
-     * 启动 AI 分配。
+     * 启动这一趟 AI 识别配乐场景。
      *
      * 范围三种给法，优先级从下到上：[onlyChapters]（重试，只跑这些章）>
      * [endChapter]（悬浮窗「指定范围」的显式终点）> [startChapter] + [count]（旧的「当前章 + N」）。
@@ -964,14 +964,8 @@ sealed interface ReadBookIntent {
         val startChapter: Int,
         val count: Int,
         val reassign: Boolean,
-        val presetId: String = "",
-        val temporaryInstruction: String = "",
         /** 推理强度：AUTO 表示软件完全不干预，跟随模型与服务商的设置。思考过程一律回显（默认收起），不再有显示开关。 */
         val reasoningLevel: AiReasoningLevel = AiReasoningLevel.AUTO,
-        /** 同一趟里再跑一遍 AI 分配背景音乐场景（角色分配完成后串行执行）。 */
-        val assignScene: Boolean = false,
-        /** 跑角色那一趟。纯场景入口给 false：只配乐，不动角色分配。 */
-        val rolesPass: Boolean = true,
         /** 范围终点（含，0 基）；-1 = 由 [count] 推出。 */
         val endChapter: Int = -1,
         /** 只重跑这些章（失败/跳过的章）；非空时忽略范围三兄弟。 */
@@ -982,15 +976,13 @@ sealed interface ReadBookIntent {
     data object CancelAiCast : ReadBookIntent
 
     /**
-     * 删除整章分配（AI 分配悬浮窗的「删除分配」）。
+     * 清掉本章的 AI 配乐场景（悬浮窗头部那颗「清除本章场景」）。
      *
-     * [alsoScenes] = 连本章的背景音乐场景一起清掉：悬浮窗勾了「同时分配背景音乐场景」
-     * 或走的是纯场景入口时，删除必须把这次分配的东西全清，否则场景会残留、
-     * 表现为「删除分配对场景分配没作用」。
+     * 这一趟只产配乐场景，删除也就只清配乐场景：手工分配的角色胶囊归正文那套
+     * 取消分配管（`UnassignRoleCast`），不该由这个窗口代删。
      */
-    data class DeleteChapterCastAssignments(
+    data class DeleteChapterBgmScenes(
         val chapterIndex: Int,
-        val alsoScenes: Boolean = false,
     ) : ReadBookIntent
 
     /** 取消一句话的分配（回到未分配占位胶囊）。 */
@@ -1247,10 +1239,13 @@ sealed interface ReadBookSheet {
     data object ShadowSet : ReadBookSheet
 
     /**
-     * AI 分配悬浮窗。[sceneOnly] = 从背景音乐区进来的纯场景模式：
-     * 角色状态、分配要求、临时要求、角色记忆这些只管角色的分区都不显示。
+     * AI 识别配乐场景悬浮窗。
+     *
+     * 角色那半（本章已分配数、分配要求预设、临时要求、本书角色记忆）随「AI 分配角色」入口
+     * 一起退役（S7 切片D）——逐句归属现在只有朗读链路一个产出方，这个窗口不再碰它，
+     * 「删除分配」也只清本章的配乐场景。
      */
-    data class AiCastDialog(val sceneOnly: Boolean = false) : ReadBookSheet
+    data object AiCastDialog : ReadBookSheet
 
     data class RoleCast(
         val ordinal: Int,

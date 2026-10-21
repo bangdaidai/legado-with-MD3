@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
@@ -1150,6 +1151,8 @@ private fun TtsVoicePresetEditorContent(
     var styleMenu by remember { mutableStateOf(false) }
     var roleMenu by remember { mutableStateOf(false) }
     var formatMenu by remember { mutableStateOf(false) }
+    var labelGenderMenu by remember { mutableStateOf(false) }
+    var labelAgeMenu by remember { mutableStateOf(false) }
     var voiceQuery by remember { mutableStateOf("") }
     var manualVoiceIdVisible by remember(editor.engineId) { mutableStateOf(false) }
     val selectedVoice = state.discoveredVoices.firstOrNull { it.id == editor.voiceId }
@@ -1391,10 +1394,101 @@ private fun TtsVoicePresetEditorContent(
                             text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
                         )
                     }
+                    // 分类标注：三种引擎都给这一节（系统音色不声明性别，http 脚本常常不写，
+                    // 而自动选音只认这一份）。它写在旁表 voice_labels 里，引擎同步逐字段重建
+                    // traitsJson 也动不到；和本页「保存」同一批提交，弹窗里改几栏都算一件事。
+                    EngineSectionTitle(R.string.voice_label_section)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            MenuButton(
+                                stringResource(
+                                    R.string.voice_label_gender_value,
+                                    labelOptionText(voiceLabelGenderOptions(), editor.labelGender),
+                                )
+                            ) { labelGenderMenu = true }
+                            RoundDropdownMenu(labelGenderMenu, { labelGenderMenu = false }) {
+                                voiceLabelGenderOptions().forEach { option ->
+                                    RoundDropdownMenuItem(
+                                        text = option.second,
+                                        onClick = {
+                                            labelGenderMenu = false
+                                            update(editor.copy(labelGender = option.first))
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            MenuButton(
+                                stringResource(
+                                    R.string.voice_label_age_value,
+                                    labelOptionText(voiceLabelAgeOptions(), editor.labelAgeBand),
+                                )
+                            ) { labelAgeMenu = true }
+                            RoundDropdownMenu(labelAgeMenu, { labelAgeMenu = false }) {
+                                voiceLabelAgeOptions().forEach { option ->
+                                    RoundDropdownMenuItem(
+                                        text = option.second,
+                                        onClick = {
+                                            labelAgeMenu = false
+                                            update(editor.copy(labelAgeBand = option.first))
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Field(
+                        editor.labelTags,
+                        { update(editor.copy(labelTags = it)) },
+                        stringResource(R.string.voice_label_tags),
+                    )
+                    // 没标注的栏告诉他"现在按什么"，但那只是提示、不是取值：
+                    // 推测值不写回表，也不算用户标的（实字/灰字的分界就在这两行小字上）
+                    editor.labelFallback.takeIf(String::isNotBlank)?.let {
+                        AppText(
+                            stringResource(R.string.voice_label_fallback, it),
+                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    AppText(
+                        stringResource(R.string.voice_label_hint),
+                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
     }
 }
+
+/** 标注下拉的选项：first 是 voice_labels 里存的取值，空串 = 未标注（读取侧继续回落）。 */
+@Composable
+private fun voiceLabelGenderOptions(): List<Pair<String, String>> = listOf(
+    "" to stringResource(R.string.voice_label_unlabeled),
+    ReadAloudVoiceTraits.GENDER_MALE to stringResource(R.string.voice_gender_male),
+    ReadAloudVoiceTraits.GENDER_FEMALE to stringResource(R.string.voice_gender_female),
+)
+
+@Composable
+private fun voiceLabelAgeOptions(): List<Pair<String, String>> = listOf(
+    "" to stringResource(R.string.voice_label_unlabeled),
+    BookCharacterProfile.VOICE_AGE_CHILD to stringResource(R.string.voice_age_child),
+    BookCharacterProfile.VOICE_AGE_TEEN to stringResource(R.string.voice_age_teen),
+    BookCharacterProfile.VOICE_AGE_YOUNG_ADULT to stringResource(R.string.voice_age_young_adult),
+    BookCharacterProfile.VOICE_AGE_ADULT to stringResource(R.string.voice_age_adult),
+    BookCharacterProfile.VOICE_AGE_ELDERLY to stringResource(R.string.voice_age_elderly),
+    BookCharacterProfile.VOICE_AGE_UNKNOWN to stringResource(R.string.voice_age_unknown),
+)
+
+/** 按钮上显示当前选中项；库里存的值认不出来时按「未标注」显示，不让按钮空着。 */
+private fun labelOptionText(options: List<Pair<String, String>>, value: String): String =
+    options.firstOrNull { it.first == value }?.second ?: options.first().second
 
 private fun String.toGenderLabel(): String = when (this) {
     ReadAloudVoiceTraits.GENDER_MALE -> "男"

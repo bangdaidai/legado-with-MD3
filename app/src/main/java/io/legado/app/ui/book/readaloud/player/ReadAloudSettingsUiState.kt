@@ -32,6 +32,8 @@ enum class ReadAloudConfigOption {
     PreDownloadNum,
     /** 在线朗读引擎的音频预取章数（系统 TTS 不适用）。 */
     AudioPreDownloadNum,
+    /** 顺带往后分析几章：只跑说话人分析，不合成音频。 */
+    SpeechAheadAnalysisChapters,
     PreSynthesisConcurrency,
     ParagraphInterval,
     AudioCacheCleanTime,
@@ -65,6 +67,8 @@ data class ReadAloudSettingsUiState(
     val preDownloadNum: Int = 10,
     /** 在线朗读引擎的音频预取章数；系统 TTS 不读这一项。 */
     val audioPreDownloadNum: Int = 3,
+    /** 顺带往后分析几章：只跑说话人分析，不合成音频；0 = 不额外分析。 */
+    val speechAheadAnalysisChapters: Int = 0,
     val preSynthesisConcurrency: Int = 3,
     val readAloudParagraphInterval: Int = 0,
     val audioCacheCleanTime: Int = 10,

@@ -33,6 +33,13 @@ data class CastPoolRow(
      * 空 = 不占行。池那两页没有这一栏，行内容还是「名字 + 所在分组」。
      */
     val subtitle: String = "",
+    /**
+     * 池的结构化分类（S3②）：角色池用得上（选音按「性别 × 年龄」精确匹配），
+     * 背景音乐池留空。空串在这里等于"这一页不显示这两栏"，不是"未分类"——
+     * 未分类是 `unknown`，由 [VoicePoolEntity.gender] 那一套枚举表达。
+     */
+    val gender: String = "",
+    val ageBand: String = "",
 ) {
     /** 能不能作为新建分配的候选池。 */
     val usable: Boolean get() = enabled && groupEnabled

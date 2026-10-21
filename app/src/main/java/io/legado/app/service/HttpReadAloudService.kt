@@ -69,6 +69,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.exoplayer.InputStreamDataSource
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
+import io.legado.app.help.readaloud.analysis.ChapterSpeechBatchAnalyzer
 import io.legado.app.help.readaloud.cast.CastAssignmentStore
 import io.legado.app.help.readaloud.effect.VoiceEffectAudio
 import io.legado.app.help.readaloud.effect.VoiceEffectStore
@@ -996,6 +997,51 @@ class HttpReadAloudService : BaseReadAloudService(),
         return PreDownloadChapter(displayTitle, queue, contentList)
     }
 
+    /**
+     * 「顺带往后分析几章」：预合成跑完之后，再多往前跑一段**只分析、不合成**的窗口。
+     *
+     * 两个窗口是两种成本，所以各一档：音频那档管"合多少章的声音"，在线引擎并发低、一次只推
+     * 两三章；说话人分析是每章一次 AI 请求、秒级，10–20 章也跑得动。音频窗口里（1..[audioWindow]）
+     * 的章在上面那圈已经分析过一次了，这里从它后面接着数，免得白跑一遍段落重建。
+     *
+     * 放在音频循环**之后**：用户先要的是下一段声音，分析是背景活，不能排在它前面。
+     * 正文还没下载的章算 ContentMissing 直接过，补分析不替朗读排队下载。
+     */
+    private suspend fun analyzeAheadChapters(book: Book, audioWindow: Int) {
+        val ahead = readAloudSettings.speechAheadAnalysisChapters
+        if (ahead <= audioWindow) return
+        if (!ChapterSpeechBatchAnalyzer.isWorthRunning()) {
+            AppLog.putDebug("顺带往后分析没跑：多角色朗读没开，或分析模式是纯规则")
+            return
+        }
+        if (!preDownloadSessionAlive(book.bookUrl)) return
+        val start = bookSession.chapterIndex + audioWindow + 1
+        val indexes = (start..bookSession.chapterIndex + ahead).toList()
+        val outcomes = try {
+            ChapterSpeechBatchAnalyzer.analyze(
+                bookUrl = book.bookUrl,
+                chapterIndexes = indexes,
+                source = "顺带分析",
+            )
+        } catch (e: CancellationException) {
+            // 换章/停止都会掐这一轮；在飞的那一章由分析链自己的不可取消上下文跑完落库
+            throw e
+        } catch (e: Throwable) {
+            AppLog.put("顺带往后分析异常:${e.javaClass.simpleName}:${e.localizedMessage}", e)
+            return
+        }
+        val analyzed = outcomes.count {
+            it.result == ChapterSpeechBatchAnalyzer.ChapterOutcome.Analyzed
+        }
+        outcomes.filter { it.result == ChapterSpeechBatchAnalyzer.ChapterOutcome.Failed }
+            .forEach { AppLog.put("顺带往后分析失败：第${it.chapterIndex + 1}章 ${it.error.orEmpty()}") }
+        AppLog.putDebug(
+            "顺带往后分析：跑了 $analyzed/${outcomes.size} 章" +
+                "（跳过已分析 ${outcomes.count { it.result == ChapterSpeechBatchAnalyzer.ChapterOutcome.AlreadyAnalyzed }}、" +
+                "无正文 ${outcomes.count { it.result == ChapterSpeechBatchAnalyzer.ChapterOutcome.ContentMissing }}）"
+        )
+    }
+
     private suspend fun preDownloadAudios(httpTts: HttpTTS) {
         val book = bookSession.book ?: return
         val currentIdx = bookSession.chapterIndex
@@ -1018,6 +1064,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val chapterFailed = synthesizeChapterCues(prepared, httpTts, concurrency, book.bookUrl)
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }
+            analyzeAheadChapters(book, limit)
         } catch (e: Exception) {
             // 换章/退出都会 cancel 预合成，JobCancellationException（"job was cancelled"）
             // 是正常收尾，不是异常——原先每次换章都往日志页塞一条带堆栈的"预下载异常"。
@@ -1318,6 +1365,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 )
                 consecutiveFailures = if (chapterFailed) consecutiveFailures + 1 else 0
             }
+            analyzeAheadChapters(book, limit)
         } catch (e: Exception) {
             // 同上：取消是正常收尾，不当异常记
             if (e is CancellationException) throw e

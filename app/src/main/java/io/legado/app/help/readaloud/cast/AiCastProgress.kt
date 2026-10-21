@@ -57,8 +57,8 @@ object AiCastProgress {
          */
         val request: String = "",
         /**
-         * 本次跑失败的章号（**0 基**，与 chapter_role_assignments.chapterIndex 同一口径；
-         * 界面显示一律 +1，写入侧见 `AiCastAssignUseCase.execute` 的 onProgress）。
+         * 本次跑失败的章号（**0 基**，与 bgm_scene_marks.chapterIndex 同一口径；
+         * 界面显示一律 +1，写入侧见 `AiSceneAssignUseCase.execute` 的 onProgress）。
          * 「重试」按钮只重跑这些章，不重跑整段范围。
          */
         val failedChapters: List<Int> = emptyList(),

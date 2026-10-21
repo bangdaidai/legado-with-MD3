@@ -309,10 +309,9 @@ fun ReadBookScreen(
         onIntent = onIntent,
     )
 
-    // AI 分配角色弹层
+    // AI 识别配乐场景弹层（角色那一趟已随「AI 分配角色」入口退役）
     io.legado.app.ui.book.read.sheet.AiCastDialogSheet(
         show = state.activeSheet is ReadBookSheet.AiCastDialog,
-        sceneOnly = (state.activeSheet as? ReadBookSheet.AiCastDialog)?.sceneOnly == true,
         // 推理强度的唯一真相在朗读设置，这里只把当前值交给弹层回显
         reasoningLevel = AiReasoningLevel.fromStorage(
             state.speechAnalysisReasoningLevel,

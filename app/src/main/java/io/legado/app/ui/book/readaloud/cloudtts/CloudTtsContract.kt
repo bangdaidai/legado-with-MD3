@@ -148,6 +148,18 @@ data class TtsVoicePresetEditorUi(
     val volume: String = "1.0",
     val format: String = "mp3",
     val formatOptions: ImmutableList<String> = persistentListOf(),
+    /**
+     * 用户给这条音色的分类标注（`voice_labels`）。空串 = 未标注。
+     *
+     * 这三栏与引擎自己声明的那份分开存：引擎声明在音色行的 `traitsJson` 里，同步时会被
+     * 逐字段重建；标注在旁表里，谁也不覆盖谁，读取侧按「标注 > 池分类 > 声明 > 名字推测」回落。
+     */
+    val labelGender: String = "",
+    val labelAgeBand: String = "",
+    /** 逗号分隔的自由文本；入库前按 [io.legado.app.help.readaloud.cast.VoiceLabelStore.parseTags] 拆。 */
+    val labelTags: String = "",
+    /** 未标注那几栏当前实际按什么走（已本地化，只作提示，绝不写回表）。 */
+    val labelFallback: String = "",
 )
 
 sealed interface CloudTtsIntent {

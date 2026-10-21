@@ -2729,6 +2729,8 @@
     <string name="voice_not_assigned">尚未指定聲音</string>
     <string name="voice_unavailable">已指定的聲音不可用</string>
     <string name="voice_unavailable_named">%1$s（不可用）</string>
+    <string name="cast_voice_source_auto">自動選音</string>
+    <string name="cast_voice_source_user">你選的</string>
     <string name="no_available_voices">暫無可用聲音，請先新增或啟用朗讀引擎。</string>
     <string name="clear_voice_binding">清除聲音綁定</string>
     <string name="http_tts">HTTP TTS</string>
@@ -2776,6 +2778,8 @@
     <string name="speech_attribution_must_answer">必答（拿不準也給一個人）</string>
     <string name="speech_attribution_evidence_only">寧缺毋濫（拿不準留空）</string>
     <string name="speech_attribution_strictness_summary">AI 判不準一句話是誰說的時怎麼辦。必答：每一條都給說話人，沉默、咳血、慘叫、人群齊聲都算某個人發的聲——漏分會讓整句掉回默認音，比錯分更難歸因。寧缺毋濫：只有原文給得出證據才判人，判不出的留空用默認音。換這一檔等於換發給模型的口徑，已經分析過的章節會在下次聽到時各自重跑一次</string>
+    <string name="speech_ahead_analysis_chapters">順帶往後分析幾章</string>
+    <string name="speech_ahead_analysis_chapters_summary">播放當前章時，額外把往後 %1$d 章的說話人分析跑出來落庫。只跑分析、不合成音頻、不排隊下載，所以它燒的是 AI 請求而不是合成時間；音頻預取已經覆蓋的章不重複合成。0 為不額外分析；10–20 夠撐一次收聽，場景也在你翻到之前拆好</string>
     <string name="use_multi_speaker">多角色朗讀</string>
     <string name="use_multi_speaker_summary">為旁白、對話等不同角色使用不同音色</string>
     <string name="read_aloud_content_split_mode">內容劃分方式</string>
@@ -2939,6 +2943,15 @@
     <string name="voice_age_adult">成年人</string>
     <string name="voice_age_elderly">老人</string>
     <string name="voice_age_unknown">未知</string>
+    <string name="voice_gender_label">性別</string>
+    <string name="voice_age_label">年齡段</string>
+    <string name="voice_label_section">分類標註</string>
+    <string name="voice_label_unlabeled">未標註</string>
+    <string name="voice_label_gender_value">性別：%1$s</string>
+    <string name="voice_label_age_value">年齡段：%1$s</string>
+    <string name="voice_label_tags">風格標籤（逗號分隔）</string>
+    <string name="voice_label_fallback">沒標註的欄仍按：%1$s</string>
+    <string name="voice_label_hint">這幾欄只給自動選音用。你標過的以標註為準，優先於引擎聲明、聲音池和名字推測。</string>
     <string name="voice_demographic_fallbacks">年齡與性別後備音色</string>
     <string name="voice_male_child">男童</string>
     <string name="voice_female_child">女童</string>

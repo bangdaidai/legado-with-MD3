@@ -28,7 +28,6 @@ import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
-import io.legado.app.domain.model.readaloud.ChapterSpeechSegments
 import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
@@ -417,6 +416,11 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         resolverVersion: String,
     ): ChapterSpeechAnalysis? = analysis
 
+    override suspend fun getStoredAnalysis(
+        bookUrl: String,
+        chapterIndex: Int,
+    ): ChapterSpeechAnalysis? = analysis
+
     override suspend fun upsertAnalysis(analysis: ChapterSpeechAnalysis) {
         this.analysis = analysis
     }
@@ -434,15 +438,8 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         chapterIndex: Int,
     ): List<ChapterSpeechSegment> = emptyList()
 
-    override suspend fun getChapterSegmentsFor(
-        bookUrl: String,
-        chapterIndex: Int,
-        resolverVersion: String,
-    ): ChapterSpeechSegments = ChapterSpeechSegments(emptyList(), isCurrent = true)
-
     override suspend fun getChapterSummaries(
         bookUrl: String,
-        resolverVersion: String,
     ): List<ChapterSpeechSummary> =
         emptyList()
 
@@ -452,6 +449,15 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
     ) = Unit
 
     override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) = Unit
+
+    // 定稿写入是正文胶囊那条链的事，这一组的用例只跑分析链，收到归属改写当没发生即可。
+    override suspend fun setSegmentAttribution(
+        segmentId: String,
+        roleType: SpeechRoleType,
+        characterId: String?,
+        characterName: String,
+        userLocked: Boolean,
+    ) = Unit
 
     override suspend fun deleteChapter(bookUrl: String, chapterIndex: Int) {
         analysis = null

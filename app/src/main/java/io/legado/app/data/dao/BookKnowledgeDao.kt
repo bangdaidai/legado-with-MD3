@@ -14,11 +14,18 @@ import io.legado.app.data.entities.BookOutlineNode
 @Dao
 interface BookKnowledgeDao {
 
+    /**
+     * 按名字/别名/简介搜档案。
+     *
+     * 口径与 [getCharacterProfiles] 对齐（修 N5）：以前这里只排 DELETED，草稿卡会混进
+     * AI 工具的搜索结果里，等于让模型把「这一章临时认出的说话人」当成书上确有其人。
+     */
     @Query(
         """
         select * from book_character_profiles
         where bookUrl = :bookUrl
           and status != ${BookCharacterProfile.STATUS_DELETED}
+          and status != ${BookCharacterProfile.STATUS_DRAFT}
           and (:query = '' or name like '%' || :query || '%' or aliasesJson like '%' || :query || '%' or summary like '%' || :query || '%')
         order by updatedAt desc
         limit :limit

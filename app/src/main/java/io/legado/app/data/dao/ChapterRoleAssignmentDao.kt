@@ -103,6 +103,22 @@ interface ChapterRoleAssignmentDao {
     @Query("DELETE FROM chapter_role_assignments WHERE bookUrl = :bookUrl AND characterId = :characterId")
     suspend fun deleteForCharacter(bookUrl: String, characterId: String)
 
+    /**
+     * 角色并档：把指向被丢角色的分配行改到留下来的那一行上。
+     *
+     * 只改 `characterId` 与时间戳——同名的两行念的是同一个人，`characterName` 与
+     * `voicePoolLabel` 那两栏冗余字段交给折叠器按 keeper 的最终池再同步一次
+     * （[updateForCharacter]）。折叠器幂等，重复执行时这里匹配不到行，什么都不改。
+     */
+    @Query(
+        """
+        UPDATE chapter_role_assignments
+        SET characterId = :keeperId, updatedAt = :now
+        WHERE bookUrl = :bookUrl AND characterId = :droppedId
+        """
+    )
+    suspend fun remapCharacter(bookUrl: String, droppedId: String, keeperId: String, now: Long)
+
     /** 分配表 tab：每个角色被分配的句子数。 */
     @Query(
         """

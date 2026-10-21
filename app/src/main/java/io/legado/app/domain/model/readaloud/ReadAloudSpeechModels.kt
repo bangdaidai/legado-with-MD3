@@ -178,7 +178,13 @@ data class ChapterSpeechSegment(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
-/** 一本书里某一章已存下来的分镜统计，用于分镜章节列表 */
+/**
+ * 一本书里某一章已存下来的分镜统计，用于分镜章节列表。
+ *
+ * 这里没有「是不是当前设置生成的」那一档：库里那一份就是这一章的结果，改划分方式 /
+ * 分析模式 / 模型 / 提示词 / 归因口径都不会让它作废（见
+ * [io.legado.app.domain.usecase.AnalyzeChapterSpeechUseCase]），所以列表也无从分出现用与不用。
+ */
 data class ChapterSpeechSummary(
     val chapterIndex: Int,
     /** 目录里的章节标题，目录被清过时为空 */
@@ -186,28 +192,6 @@ data class ChapterSpeechSummary(
     val segmentCount: Int,
     val characterCount: Int,
     val updatedAt: Long,
-    /**
-     * 这份分段是否由当前朗读设置（划分方式 + 分析模式 + 人物档案）算出来的。
-     *
-     * false 表示它是历史划分：朗读时不会用这份结果，界面上显示的角色与音色不能当准。
-     */
-    val isCurrent: Boolean = true,
-)
-
-/** 某一章存下来的分镜片段，连同"是不是当前设置那一份"。 */
-data class ChapterSpeechSegments(
-    val segments: List<ChapterSpeechSegment>,
-    /** 见 [ChapterSpeechSummary.isCurrent]。 */
-    val isCurrent: Boolean,
-    /**
-     * 这一份分段当时是按哪一份正文算出来的（`chapter_speech_analysis.contentHash`）。
-     *
-     * 空串 = 取到的不是当前设置那一份，没有可对比的基准。它存在的唯一理由是给分镜页做
-     * **同源判定**：分配表覆盖层的坐标量在「带角色标记的正文」上，而库里那一份分段的坐标
-     * 是分析当时那份正文上的；正文或标记变过，两边就对不上，硬套覆盖会把角色安到别的句子上。
-     * 只有两边哈希一致才允许套。
-     */
-    val contentHash: String = "",
 )
 
 data class CanonicalSpeechParagraph(
@@ -246,6 +230,16 @@ data class ChapterSpeechAnalysisResult(
     val analysis: ChapterSpeechAnalysis,
     val segments: List<ChapterSpeechSegment>,
     val fromCache: Boolean,
+    /**
+     * 库里那一份分段与本轮这份朗读单元列表是不是**同一套划分切出来的**（比对 `contentHash`）。
+     *
+     * 换划分方式时它是 false：分段行上的 `paragraphIndex / start / end` 是当时那套单元的
+     * **段内相对坐标**，拿本轮的单元列表去查会查到别的句子上，所以
+     * [io.legado.app.domain.usecase.ResolveLocalSpeakersUseCase] 靠它决定要不要重认说话人。
+     * 章内绝对坐标（`chapterPosition` + 原文）不受粒度影响，定稿回放与分配表覆盖照常用，
+     * 它们用的是 [SpeechIdentity.alignsWithParagraphs] 那条与粒度无关的同源判据。
+     */
+    val paragraphSpaceMatches: Boolean = true,
     val characterPerformances: List<CharacterPerformanceProfile> = emptyList(),
 )
 
@@ -278,7 +272,8 @@ enum class SpeechAnalysisMode(val storageValue: String) {
  *
  * 两套判定规则与输出契约完全共用，切换只换这一档的口径文本（见
  * [io.legado.app.domain.usecase.RefineSpeechWithAiUseCase]），所以解析器不会分裂。
- * 但它改变发给模型的提示词 → 参与分析缓存身份，改这一档会让已分析过的章在下次听到时重跑一次。
+ * 它改变发给模型的提示词，因此写进新分析的版本号里；**已经分析过的章不受影响**——
+ * 那一档只管下一次真正跑分析时怎么问模型，要让它管到旧章就点「重新分析」。
  *
  * - [MustAnswer]（默认）：每一条都要给说话人，沉默、咳嗽、惨叫、人群齐声也算某个人发出的声音。
  *   漏分的代价是整句掉回兜底音，比错分更难归因。

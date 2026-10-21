@@ -132,10 +132,11 @@ class RefineSpeechWithAiUseCase(
     /**
      * 给缺少场景分组的分段补上场景：按章分段（含文本顺序）交给 AI 切分成连续的场景组。
      *
-     * 唯一的发起方是分镜页 withScenes：点开某章、发现该章存在无场景分段时按需补一次
-     * （source=分镜）。说话人分析主链不产出场景——场景只对分镜页的阅读呈现有用，对朗读
-     * 本身零消费，不值得占用起播/预合成那一轮。失败原样返回、不写冷却：场景是锦上添花层，
-     * 拆坏了既不能拖累功能，调用方按「无场景」降级展示，下次进页再补。
+     * 唯一的发起方是**本章说话人分析收尾**（[analyzeExclusive] 落库之后紧接着跑一次，
+     * source 沿用那一轮的出处），不再等用户点开分镜页按需补。场景只对分镜页的阅读呈现有用、
+     * 对朗读本身零消费，所以它排在结论落库之后：拆坏了不能把已经付过 token 的说话人结论顶掉，
+     * 也不写冷却。调用方拿回原段即视为"这一章没有场景"，分镜页按扁平列表降级显示。
+     * 历史上没跑过场景的旧章用分镜页的「重新分析本章」补。
      */
     suspend fun assignScenes(
         segments: List<ChapterSpeechSegment>,
@@ -182,7 +183,12 @@ class RefineSpeechWithAiUseCase(
     }
 
     /**
-     * 分析缓存版本号 = **解析口径**：切分规则 / 分析模式 / 模型 / 提示词 / 归因口径。
+     * 分析身份 = **解析口径**：切分规则 / 分析模式 / 模型 / 提示词 / 归因口径。
+     *
+     * 这一串只跟着**新写下的那一份**走，用来说明那一行当时是按哪一档跑出来的；
+     * 它**不是复用判据**。改这几项里的任何一项都不会让已经做好的章作废，也不会让它重跑——
+     * 读侧只看「这一章有没有结果」（见 [AnalyzeChapterSpeechUseCase]），新设置只管没跑过的章。
+     * 要旧章也按新模型、新提示词、新口径重判，用分镜页的「重新分析」显式动作。
      *
      * 角色库不在这里。它曾经是本串的一段 `md5(所有非草稿档案的 id:updatedAt)`，代价是
      * 名册里任意一行时间戳一变（转正、改别名、换池，甚至详情页只动头像——保存是整行重建）
@@ -190,10 +196,10 @@ class RefineSpeechWithAiUseCase(
      * 但"谁说了这句"是历史事实：名册变了不改变那句话当时判给谁。
      * 名册对分析的真正影响只有"后续新章要用新名册"，而每次分析都现读档案
      * （见 [analyzeChapter] 里的 `knownProfiles`），这条本来就自动成立。
-     * 想让旧章按新名册重判，用分镜页的「重新分析」显式动作。
+     * 想让旧章按新名册重判，同样用「重新分析」。
      *
-     * 归因口径 [strictness] 在键里：它换的是发给模型的那段口径文本，同一章在两档下
-     * 的结论本来就该不同，共用一个键会让切换后拿到另一档的旧结果。
+     * 归因口径 [strictness] 仍然进这一串：它换的是发给模型的那段口径文本，新跑的那一章
+     * 该带上自己用的是哪一档，两档的结果在库里因此不混成一行。
      *
      * 归零：把该段从串里去掉即恢复旧行为，旧分析行没有删改，键算回去就能命中。
      */
@@ -393,8 +399,8 @@ class RefineSpeechWithAiUseCase(
                 // 再合并相邻同说话人片段（合并依赖虚拟名一致）——原文（书源）普遍按
                 // “一句对话一个段落”切，合并后听书页与分镜页按“说话人连续台词”呈现，
                 // 朗读停顿也随之减少
-                val refined = mergeSameSpeakerSegments(withDialogueGenderFallback(refined))
-                val status = if (refined.any { segment ->
+                val merged = mergeSameSpeakerSegments(withDialogueGenderFallback(refined))
+                val status = if (merged.any { segment ->
                         segment.characterId == null && segment.roleType in setOf(
                             SpeechRoleType.Character,
                             SpeechRoleType.Thought,
@@ -405,13 +411,38 @@ class RefineSpeechWithAiUseCase(
                     SpeechAnalysisStatus.Success
                 }
                 val analysis = analysisResult.analysis.copy(status = status, error = "", updatedAt = now)
-                chapterSpeechGateway.saveAnalysis(analysis, refined)
+                chapterSpeechGateway.saveAnalysis(analysis, merged)
                 // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
                 bookAiCooldownUntil.remove(bookUrl)
                 cooldownNoticeUntil.remove(bookUrl)
+                // 场景拆分挂在**这一章分析收尾**（S7③），不再等用户点开分镜页才补：
+                // 说话人结论先落库，场景是在它上面追加的一层，追加失败绝不能把已经付过
+                // token 的结论顶掉，所以这里独立一次 runCatching，拿回原段即视为没场景。
+                // 拆到场景才第二次落库——写的是同一批分析段加两列，不再"先删后插顶掉分析段"。
+                val withScenes = runCatching {
+                    assignScenes(merged, reasoningLevel, source)
+                }.onFailure { error ->
+                    // 场景拆坏了不影响朗读，但必须留痕：否则分镜页永远是扁平列表，
+                    // 用户既不知道它失败过，也不知道「重新分析本章」能补
+                    AppLog.put(
+                        "分镜场景拆分失败：第${analysisResult.analysis.chapterIndex + 1}章（$source）" +
+                            "本轮没有场景分组，${error.localizedMessage ?: error.javaClass.simpleName}",
+                        error,
+                    )
+                }.getOrDefault(merged)
+                val sceneRows = withScenes.count { it.sceneIndex > 0 }
+                if (sceneRows > 0 && withScenes != merged) {
+                    chapterSpeechGateway.saveAnalysis(analysis, withScenes)
+                }
+                if (sceneRows > 0) {
+                    AppLog.putDebug(
+                        "分镜场景：第${analysisResult.analysis.chapterIndex + 1}章（$source）" +
+                            "随分析收尾拆出 $sceneRows 段"
+                    )
+                }
                 analysisResult.copy(
                     analysis = analysis,
-                    segments = refined,
+                    segments = withScenes,
                     fromCache = false,
                 )
             }
@@ -1043,7 +1074,7 @@ class RefineSpeechWithAiUseCase(
             taskType = AiTaskType.ANALYZE_SPEECH,
             // 场景拆分此前是语音润色里唯一不带章号的一档，取消记录没法定位到章；
             // 章号取块内分段自带的（同一次 assignScenes 只处理同一章）。
-            // 发起链只有分镜页按需补这一路（主链不产出场景，见 assignScenes 注释）
+            // 发起链只有"本章分析收尾"这一路（见 assignScenes 注释），source 沿用那一轮的出处
             sourceLabel = "第 ${chunk.first().chapterIndex + 1} 章（${source}·场景拆分）",
         )
     ).getOrThrow().text
@@ -1321,7 +1352,7 @@ class RefineSpeechWithAiUseCase(
         /**
          * 归因提示词主体，对齐 legado_NG 的 base-routing/protocol 提示词（中文、面向中文网文）。
          *
-         * 2026-10-21 并入旧「AI 分配角色」引擎（[io.legado.app.help.readaloud.cast.AiCastAssignUseCase]）
+         * 2026-10-21 并入旧「AI 分配角色」引擎（`AiCastAssignUseCase`，已退役删除）
          * 里那套判定规则中与本链不冲突的部分：称呼归并（多重身份仍是同一人）、禁止把代词与叙述称谓
          * 当主名、同一称谓同一写法、连着引号时说话人通常在交替。泛称那条**保留本链口径**
          * （「大汉/侍卫」是路人，不建卡），没有吸收旧引擎"按身份称谓建档"的写法。

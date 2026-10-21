@@ -142,7 +142,9 @@ class MultiRoleRuleViewModel(
             }
 
             MultiRoleRuleIntent.ShowCreateDialog ->
-                _uiState.update { it.copy(editDialog = PoolEditDialogState()) }
+                _uiState.update {
+                    it.copy(editDialog = PoolEditDialogState(showsClassification = true))
+                }
 
             is MultiRoleRuleIntent.ShowEditDialog -> _uiState.update {
                 it.copy(
@@ -150,6 +152,9 @@ class MultiRoleRuleViewModel(
                         editingId = intent.pool.id,
                         name = intent.pool.name,
                         groupId = intent.pool.groupId,
+                        gender = intent.pool.gender.ifBlank { "unknown" },
+                        ageBand = intent.pool.ageBand.ifBlank { "unknown" },
+                        showsClassification = true,
                     ),
                 )
             }
@@ -157,10 +162,18 @@ class MultiRoleRuleViewModel(
             MultiRoleRuleIntent.DismissDialog -> _uiState.update { it.copy(editDialog = null) }
 
             is MultiRoleRuleIntent.SavePool -> execute {
+                // 名字、分组、分类一次 copy 提交（VoicePoolStore 那一侧也是整行 update），
+                // 分成两次写会让中途失败留下"改了名没改分类"的半份状态
                 val ok = if (intent.editingId == null) {
-                    VoicePoolStore.createPool(intent.name, intent.groupId)
+                    VoicePoolStore.createPool(intent.name, intent.groupId, intent.gender, intent.ageBand)
                 } else {
-                    VoicePoolStore.updatePool(intent.editingId, intent.name, intent.groupId)
+                    VoicePoolStore.updatePool(
+                        intent.editingId,
+                        intent.name,
+                        intent.groupId,
+                        intent.gender,
+                        intent.ageBand,
+                    )
                 }
                 if (ok) {
                     _uiState.update { it.copy(editDialog = null) }

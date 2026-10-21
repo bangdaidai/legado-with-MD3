@@ -186,6 +186,11 @@ class BookVoiceCastingViewModel(
                 // excluded 的音色不进选音候选（见 ReadAloudVoiceDao.getEnabledVoices），
                 // 这里漏判会让"已绑定"看着是好的，实际早就不发声了
                 voiceAvailable = voice?.let { it.available && it.enabled && !it.excluded } == true,
+                // 这一行的声音是谁定的：机器补的一律 source=auto；
+                // 没锁定的老行（那批由补音链写下、当时 source 还是默认值 user 的）也算机器补的，
+                // 否则配音页会把自动选出来的音色一路显示成"你选的"。
+                bindingSourceAuto = binding != null &&
+                    (binding.source == BookVoiceBinding.SOURCE_AUTO || !binding.locked),
             )
         }
         val voiceOptions = voices.map { voice ->

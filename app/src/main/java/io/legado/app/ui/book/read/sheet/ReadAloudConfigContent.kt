@@ -337,6 +337,23 @@ fun ReadAloudConfigContent(
                             onIntent(ReadAloudConfigIntent.SetSpeechAttributionStrictness(it))
                         },
                     )
+                    // 范围这一档就摆在口径后面：口径管"怎么判"，这一档管"顺带多判几章"。
+                    // 它取代的是「AI 分配角色」弹窗里那个现场挑的跑批范围——设置里定档位，
+                    // 朗读时自动顺带做，要一次补一大片去分镜结果页点显式动作。
+                    ReadAloudNumberSliderItem(
+                        title = stringResource(R.string.speech_ahead_analysis_chapters),
+                        description = stringResource(
+                            R.string.speech_ahead_analysis_chapters_summary,
+                            state.speechAheadAnalysisChapters,
+                        ),
+                        descriptionMaxLines = 2,
+                        value = state.speechAheadAnalysisChapters,
+                        defaultValue = 0,
+                        valueRange = 0f..50f,
+                        onValueChange = {
+                            onIntent(ReadAloudConfigIntent.SetSpeechAheadAnalysisChapters(it))
+                        },
+                    )
                     // 配乐那条闸跟角色那两条同属"要不要按人/按场景分配"，留在同一节里
                     TinySwitchSettingItem(
                         title = stringResource(R.string.bgm_assign),

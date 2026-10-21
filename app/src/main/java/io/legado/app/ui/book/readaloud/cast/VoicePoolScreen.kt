@@ -218,8 +218,8 @@ fun VoicePoolScreen(
             dialog = state.editDialog,
             groups = state.groups,
             wording = VoicePoolWording,
-            onSave = { editingId, name, groupId ->
-                onIntent(MultiRoleRuleIntent.SavePool(editingId, name, groupId))
+            onSave = { editingId, name, groupId, gender, ageBand ->
+                onIntent(MultiRoleRuleIntent.SavePool(editingId, name, groupId, gender, ageBand))
             },
             onDismiss = { onIntent(MultiRoleRuleIntent.DismissDialog) },
         )

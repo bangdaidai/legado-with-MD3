@@ -150,7 +150,6 @@ class ReadBookViewModel(
     private val aiProfileGateway: AiProfileGateway,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
     private val readAloudSessionStore: ReadAloudSessionStore,
-    private val aiCastAssignUseCase: io.legado.app.help.readaloud.cast.AiCastAssignUseCase,
     private val aiSceneAssignUseCase: io.legado.app.help.readaloud.cast.AiSceneAssignUseCase,
     private val replaceRuleRepository: ReplaceRuleRepository,
     private val changeSourceSettingsGateway: ChangeSourceSettingsGateway,
@@ -486,7 +485,6 @@ class ReadBookViewModel(
     private val readAloudCastDelegate by lazy { ReadAloudCastDelegate(
         context = context,
         scope = viewModelScope,
-        aiCastUseCase = aiCastAssignUseCase,
         aiSceneUseCase = aiSceneAssignUseCase,
         aiProfileGateway = aiProfileGateway,
         reloadChapter = { contentProcessDelegate.reloadCurrentChapter() },
@@ -1505,9 +1503,8 @@ class ReadBookViewModel(
             is ReadBookIntent.SetBgmVolume -> readAloudDelegate.setBgmVolume(intent.value)
             is ReadBookIntent.ConfirmRoleCast -> readAloudCastDelegate.confirm(intent)
             is ReadBookIntent.CreateRoleCast -> readAloudCastDelegate.create(intent)
-            ReadBookIntent.OpenAiCastDialog,
             ReadBookIntent.OpenAiSceneDialog, ReadBookIntent.CancelAiCast,
-            is ReadBookIntent.StartAiCast, is ReadBookIntent.DeleteChapterCastAssignments,
+            is ReadBookIntent.StartAiCast, is ReadBookIntent.DeleteChapterBgmScenes,
             is ReadBookIntent.UnassignRoleCast, is ReadBookIntent.SetBgmScene,
             is ReadBookIntent.ClearBgmScene, is ReadBookIntent.UpdateBgmScene,
             is ReadBookIntent.DeleteBgmScene -> readAloudCastDelegate.onCastIntent(intent)

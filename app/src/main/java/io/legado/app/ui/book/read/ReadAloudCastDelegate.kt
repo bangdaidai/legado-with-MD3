@@ -2,7 +2,6 @@ package io.legado.app.ui.book.read
 
 import android.content.Context
 import io.legado.app.R
-import io.legado.app.help.readaloud.cast.AiCastAssignUseCase
 import io.legado.app.help.readaloud.cast.AiCastPresetStore
 import io.legado.app.help.readaloud.cast.AiCastProgress
 import io.legado.app.help.readaloud.cast.AiCastStream
@@ -27,8 +26,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * 多角色分配域：确认（分配 + 更新已有角色状态）/ 创建（新角色身份 = 名字+声音池）/
- * 取消分配，以及 AI 批量分配的成功与取消收尾（同一套「重排当前章 + 朗读队列」，见
+ * 取消分配，以及 AI 识别配乐场景那趟的成功与取消收尾（同一套「重排当前章 + 朗读队列」，见
  * [refreshAfterCast]）与失败提示。
+ *
+ * 逐句认角色那趟（`AiCastAssignUseCase`）已随「AI 分配角色」入口退役（S7 切片D）：归属由朗读
+ * 链路自己产出，这里只剩配乐场景的批量识别。
  *
  * DAO 访问收口在 CastAssignmentStore（架构护栏）；章节重排、关窗与 toast 三条通道
  * 由 VM 以 lambda 注入（`_effects` / `contentProcessDelegate` 只有 VM 能碰）。
@@ -37,7 +39,6 @@ import kotlinx.coroutines.withContext
 class ReadAloudCastDelegate(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val aiCastUseCase: AiCastAssignUseCase,
     private val aiSceneUseCase: AiSceneAssignUseCase,
     private val aiProfileGateway: AiProfileGateway,
     private val reloadChapter: () -> Unit,
@@ -83,12 +84,10 @@ class ReadAloudCastDelegate(
     /** cast 系意图统一入口（ReadBookViewModel 行数预算，域内分发在此收口）。 */
     fun onCastIntent(intent: ReadBookIntent) {
         when (intent) {
-            ReadBookIntent.OpenAiCastDialog -> openAiCastDialog(sceneOnly = false)
-            ReadBookIntent.OpenAiSceneDialog -> openAiCastDialog(sceneOnly = true)
+            ReadBookIntent.OpenAiSceneDialog -> openAiSceneDialog()
             is ReadBookIntent.StartAiCast -> startAiCast(intent)
             ReadBookIntent.CancelAiCast -> cancelAiCast()
-            is ReadBookIntent.DeleteChapterCastAssignments ->
-                deleteChapterAssignments(intent.chapterIndex, intent.alsoScenes)
+            is ReadBookIntent.DeleteChapterBgmScenes -> deleteChapterScenes(intent.chapterIndex)
             is ReadBookIntent.UnassignRoleCast -> unassign(intent.ordinal)
             is ReadBookIntent.SetBgmScene -> setBgmScene(intent)
             is ReadBookIntent.ClearBgmScene -> clearBgmScene(intent.paragraphIndex)
@@ -99,14 +98,13 @@ class ReadAloudCastDelegate(
     }
 
     /**
-     * 打开 AI 分配悬浮窗：先过模型门禁。
+     * 打开 AI 识别配乐场景悬浮窗：先过模型门禁。
      *
      * 这个入口原本恒可用，但真正发请求的是「人物识别」那条任务预设
-     * （见 [AiCastAssignUseCase] 里 `getTaskPreset(IDENTIFY_CHARACTERS) ?: getTaskPreset(CHAT)`）。
-     * 没配模型时悬浮窗照样弹、范围照样选，跑到第一章才抛"未配置 AI 模型"，
-     * 看起来就像功能坏了。判据跟执行侧同源，入口按同一口径拦住。
+     * （见 [AiSceneAssignUseCase] 取的同一份任务配置）。没配模型时悬浮窗照样弹、范围照样选，
+     * 跑到第一章才抛"未配置 AI 模型"，看起来就像功能坏了。判据跟执行侧同源，入口按同一口径拦住。
      */
-    private fun openAiCastDialog(sceneOnly: Boolean) {
+    private fun openAiSceneDialog() {
         scope.launch {
             val configured = aiProfileGateway.getTaskPreset(AiTaskType.IDENTIFY_CHARACTERS)
                 ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
@@ -114,7 +112,7 @@ class ReadAloudCastDelegate(
                 emitToast(context.getString(R.string.ai_cast_model_required))
                 return@launch
             }
-            sendIntent(ReadBookIntent.ShowSheet(ReadBookSheet.AiCastDialog(sceneOnly = sceneOnly)))
+            sendIntent(ReadBookIntent.ShowSheet(ReadBookSheet.AiCastDialog))
         }
     }
 
@@ -137,7 +135,7 @@ class ReadAloudCastDelegate(
     private fun isLiveRun(run: Int) = run == castRun
 
     /**
-     * AI 分配：跑 [request] 指定的那些章（范围或重试清单）。
+     * AI 识别配乐场景：跑 [request] 指定的那些章（范围或重试清单）。
      *
      * 进度、流式文本与**失败明细**写 [AiCastProgress]；收尾统一走 [refreshAfterCast]，
      * 取消走的是同一份收尾（见 [cancelAiCast]）。
@@ -174,61 +172,24 @@ class ReadAloudCastDelegate(
             )
         }
         aiCastJob = scope.launch(Dispatchers.IO) {
-            // 0 基章号，两趟共用一份：重试按钮只跑这些章
+            // 0 基章号：重试按钮只跑这些章
             val failed = sortedSetOf<Int>()
-            // 纯场景入口（背景音乐区的「AI 识别场景」）不跑角色那趟：用户没开多角色朗读时，
-            // 认角色、建角色这些动作对他毫无意义，还会白烧一次 token
-            val message = if (request.rolesPass) {
-                val result = aiCastUseCase.execute(
-                    book = book,
-                    startChapter = request.startChapter,
-                    chapterCount = request.count,
-                    reassign = request.reassign,
-                    presetId = request.presetId,
-                    temporaryInstruction = request.temporaryInstruction,
-                    // 推理强度与「显示思考过程」各自独立：强度只由悬浮窗那一行的
-                    // reasoningLevel 决定，开关仅控制是否展示思考内容。
-                    reasoningLevel = request.reasoningLevel,
-                    endChapter = request.endChapter,
-                    onlyChapters = request.onlyChapters,
-                    onProgress = { index, title, done, total, error ->
-                        reportChapter(run, index, title, done, total, error, failed)
-                    },
-                    onStream = { event -> applyStreamEvent(run, event) },
-                )
-                result.fold(
-                    onSuccess = { context.getString(R.string.ai_cast_finished, it) },
-                    onFailure = {
-                        if (it is CancellationException) null
-                        else it.message?.takeIf { text -> text.isNotBlank() }
-                            ?: failureReason(it)
-                    },
-                )
-            } else {
-                null
-            }
-            // 配乐清的是第二趟：与角色分配串行跑，两趟共用一份流式回显才不会互相覆盖。
-            // 角色那趟被取消时协程本身已取消，这里不会执行；场景那趟的取消由 execute 抛出。
-            val sceneMessage = if (request.assignScene) {
-                runScenePass(
-                    run = run,
-                    book = book,
-                    request = request,
-                    failed = failed,
-                )
-            } else {
-                null
-            }
+            val sceneMessage = runScenePass(
+                run = run,
+                book = book,
+                request = request,
+                failed = failed,
+            )
             if (!isLiveRun(run)) return@launch
-            val finished = listOfNotNull(message, sceneMessage).joinToString("；")
+            val finished = sceneMessage?.takeIf { text -> text.isNotBlank() }
             AiCastProgress.update {
                 it.copy(
                     running = false,
-                    finishedMessage = finished.takeIf { text -> text.isNotBlank() },
+                    finishedMessage = finished,
                 )
             }
             val toast = if (failed.isEmpty()) {
-                finished.takeIf { text -> text.isNotBlank() }
+                finished
             } else {
                 // 断网 / 连不上 AI / 回复读不出来：一条原因直接进 toast，其余在悬浮窗里逐章看
                 (
@@ -238,8 +199,8 @@ class ReadAloudCastDelegate(
                     ).take(MAX_TOAST_CHARS)
             }
             withContext(Dispatchers.IO) {
-                // 失败清单落盘：只有角色那一趟逐章写进度，配乐那一趟的失败不在这儿补一次，
-                // 重开悬浮窗就看不到这些章（续跑起点已经由角色那趟写完，这里只当它跑干净了）
+                // 失败清单落盘：重开悬浮窗才看得到「重试失败 N 章」那颗按钮，
+                // 续跑起点同样在这一步清零（跑干净了就没有"停在第几章"）
                 val stored = AiCastPresetStore.loadCastRunState(book.bookUrl)
                 AiCastPresetStore.saveCastRunState(
                     book.bookUrl,
@@ -257,8 +218,8 @@ class ReadAloudCastDelegate(
     }
 
     /**
-     * 配乐那一趟：失败只记账并回一句话，不影响已经写好的角色分配。
-     * 范围/重试清单与角色那一趟同源（都读 [ReadBookIntent.StartAiCast]），否则两趟会跑不同的章。
+     * 配乐那一趟：失败逐章记账并回一句话，不中断循环。
+     * 范围/重试清单与界面同源（都读 [ReadBookIntent.StartAiCast]）。
      */
     private suspend fun runScenePass(
         run: Int,
@@ -341,7 +302,7 @@ class ReadAloudCastDelegate(
         }
     }
 
-    /** 两趟共用的流式回显：换章清空，reasoning/answer 各自累加。过期那一次的尾巴直接丢。 */
+    /** 流式回显：换章清空，reasoning/answer 各自累加。过期那一次的尾巴直接丢。 */
     private fun applyStreamEvent(run: Int, event: AiCastStream) {
         if (!isLiveRun(run)) return
         when (event) {
@@ -498,14 +459,11 @@ class ReadAloudCastDelegate(
         refreshAloudCast()
     }
 
-    /** 删除整章分配（AI 分配悬浮窗「删除分配」），随后重排。 */
-    fun deleteChapterAssignments(chapterIndex: Int, alsoScenes: Boolean) {
+    /** 清掉本章的 AI 配乐场景（悬浮窗头部那颗删除钮），随后重排。 */
+    fun deleteChapterScenes(chapterIndex: Int) {
         val book = ReadBook.book ?: return
         scope.launch(Dispatchers.IO) {
-            CastAssignmentStore.deleteChapter(book.bookUrl, chapterIndex)
-            // 「删除分配」要连这次一起删的东西：勾了配乐场景（或纯场景入口）时，
-            // 只删角色会留下场景，表现为「删了但场景还在」
-            if (alsoScenes) BgmSceneStore.clearChapter(book.bookUrl, chapterIndex)
+            BgmSceneStore.clearChapter(book.bookUrl, chapterIndex)
             withContext(Dispatchers.Main) {
                 reloadChapter()
                 refreshAloudCast()

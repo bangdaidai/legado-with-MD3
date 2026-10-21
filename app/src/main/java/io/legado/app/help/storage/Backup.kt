@@ -109,6 +109,7 @@ object Backup {
             "chapterRoleAssignments.json",
             "bookCastMemory.json",
             "voiceEffectPresets.json",
+            "voiceLabels.json",
             "aiChatConversations.json",
             "aiChatMessages.json",
             "aiMemory.json",
@@ -374,6 +375,15 @@ object Backup {
         )
         writeListToJson(appDb.bookCastMemoryDao.getAll(), "bookCastMemory.json", backupPath)
         writeListToJson(appDb.voiceEffectDao.getAll(), "voiceEffectPresets.json", backupPath)
+        // 音色分类标注（性别/年龄段/风格标签）：音色行会被引擎同步整行重建，
+        // 用户手标的这几栏只存在这张旁表里，不导出就等于换新机后自动选音退回推测。
+        // 老库可能还没这张表（建表语句追在历史迁移里，装旧备份的机器不一定重跑过），
+        // 读失败只当没标注，不能把整份备份带崩。
+        writeListToJson(
+            runCatching { appDb.voiceLabelDao.getAll() }.getOrDefault(emptyList()),
+            "voiceLabels.json",
+            backupPath,
+        )
         // AI 对话记录、记忆、产物
         writeListToJson(appDb.aiChatDao.getAllConversations(), "aiChatConversations.json", backupPath)
         writeListToJson(appDb.aiChatDao.getAllMessages(), "aiChatMessages.json", backupPath)

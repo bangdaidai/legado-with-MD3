@@ -7,9 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.HttpTTS
+import io.legado.app.data.entities.VoiceLabel
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.UploadRepository
 import io.legado.app.data.repository.ai.AiLogRepository
@@ -40,6 +43,7 @@ import io.legado.app.help.http.text
 import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.help.readaloud.VoiceTraits
+import io.legado.app.help.readaloud.cast.VoiceLabelStore
 import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.playback.HttpTtsAudioSynthesizer
 import io.legado.app.help.readaloud.playback.CloudTtsAudioSynthesizer
@@ -102,6 +106,12 @@ class CloudTtsViewModel(
     private var engines = emptyList<CloudTtsEngine>()
     private var voices = emptyList<ReadAloudVoice>()
     private var savedVoices = emptyList<ReadAloudVoice>()
+
+    /**
+     * voiceId → 用户的分类标注。整表缓存在这里，列表每行取一次；
+     * 音色行变化（增删改）都会重发流，标注跟着同一次 [pruneAndPublish] 刷，不需要单独通知。
+     */
+    private var labels = emptyMap<String, VoiceLabel>()
     private var systemEngines = emptyList<TtsEngineDescriptor>()
     private var httpEngines = emptyList<TtsEngineDescriptor>()
     private var bookUrl: String? = null
@@ -174,6 +184,7 @@ class CloudTtsViewModel(
             savedVoices = savedVoices.filterNot { it in dropped }
         }
         voices = savedVoices
+        labels = VoiceLabelStore.all()
         // 列表本身已经滤掉排除项，这个数要从全量里数，用来决定要不要给「恢复」入口
         val excludedCount = voiceGateway.countExcludedVoices()
         _uiState.update { state ->
@@ -381,25 +392,27 @@ class CloudTtsViewModel(
         if (engine != null) discoverVoices()
     }
 
-    private fun editVoice(id: String) {
+    private fun editVoice(id: String) = viewModelScope.launch {
         val voice = voices.firstOrNull {
             it.id == id && it.managedBy == ReadAloudVoice.MANAGED_BY_USER
-        } ?: return
+        } ?: return@launch
         val engine = _uiState.value.availableEngines.firstOrNull {
             it.engineType == voice.engineType && it.engineId == voice.engineId
         } ?: return toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
+        val editor = withContext(Dispatchers.IO) { voiceEditorOf(voice, engine.title) }
         _uiState.update { state -> state.copy(
-            voiceEditor = voiceEditorOf(voice, engine.title),
+            voiceEditor = editor,
             discoveredVoices = persistentListOf(),
         ) }
         discoverVoices()
     }
 
     /** 音色行 → 编辑器模型。行内试听和编辑弹窗要的是同一套参数，不另算一份。 */
-    private fun voiceEditorOf(
+    private suspend fun voiceEditorOf(
         voice: ReadAloudVoice,
         engineTitle: String,
     ): TtsVoicePresetEditorUi {
+        val label = VoiceLabelStore.get(voice.id)
         val cloudConfig = if (voice.engineType == ReadAloudVoice.ENGINE_CLOUD) {
             runCatching {
                 GSON.fromJson(voice.traitsJson, CloudTtsVoiceConfig::class.java)
@@ -442,7 +455,46 @@ class CloudTtsViewModel(
             volume = cloudConfig?.volume?.toString() ?: "1.0",
             format = cloudConfig?.format ?: defaultFormat(voice.engineType, voice.engineId),
             formatOptions = formatOptions(voice.engineType, voice.engineId),
+            labelGender = label?.gender.orEmpty(),
+            labelAgeBand = label?.ageBand.orEmpty(),
+            labelTags = VoiceLabelStore.tagsOf(label).joinToString("，"),
+            labelFallback = labelFallbackSummary(voice, label),
         )
+    }
+
+    /**
+     * 「没标注的这一栏现在按什么」——只作提示，绝不把推测值当成用户的选择写回表。
+     *
+     * 回落顺序与选音那条链一致（池分类 > 引擎声明 / 名字推测）。两栏都查不出来时返回空串，
+     * 界面不显示这一行，免得在一句没有信息量的话旁边浪费一行。
+     */
+    private suspend fun labelFallbackSummary(
+        voice: ReadAloudVoice,
+        label: VoiceLabel?,
+    ): String {
+        // 挂起取数放在 buildString 外面：那个 lambda 不是 suspend，在里面查库编译不过
+        val fromPools = VoicePoolStore.voiceClassificationMap()[voice.id]
+        val traits = ReadAloudVoiceTraits.of(voice)
+        return buildString {
+            if (label?.gender.isNullOrBlank()) {
+                val gender = fromPools?.first?.takeIf(String::isNotBlank) ?: traits.gender
+                genderLabel(gender)?.let {
+                    append(application.getString(R.string.voice_gender_label))
+                    append(' ')
+                    append(it)
+                }
+            }
+            if (label?.ageBand.isNullOrBlank()) {
+                fromPools?.second?.takeIf(String::isNotBlank)?.let { band ->
+                    ageBandLabel(band)?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append(application.getString(R.string.voice_age_label))
+                        append(' ')
+                        append(it)
+                    }
+                }
+            }
+        }
     }
 
     private fun selectEngine(engineType: String, engineId: String) {
@@ -567,8 +619,22 @@ class CloudTtsViewModel(
     }
 
     private fun saveVoice() = viewModelScope.launch {
+        val editor = _uiState.value.voiceEditor
         val voice = buildVoice() ?: return@launch
         voiceGateway.upsertVoice(voice)
+        // 标注跟着这一次「保存预设」一起提交：弹窗里改几栏都算一件事，不再多一个保存按钮。
+        // 换了原生音色 id 等于换了一行——先按新 id 落一次，旧行删除时随行清掉，标注因此跟着搬家。
+        editor?.let {
+            if (!VoiceLabelStore.save(
+                    voice.id,
+                    it.labelGender,
+                    it.labelAgeBand,
+                    VoiceLabelStore.parseTags(it.labelTags),
+                )
+            ) {
+                AppLog.putDebug("音色标注取值非法，本次未写入：${it.labelGender}/${it.labelAgeBand}")
+            }
+        }
         _uiState.value.voiceEditor?.editingVoiceId
             ?.takeIf { it != voice.id }
             ?.let { oldId -> voices.firstOrNull { it.id == oldId } }
@@ -958,7 +1024,7 @@ class CloudTtsViewModel(
      * 云端音色的 style/role），音色表本身没有这些列。
      */
     private fun voiceItems(genderFilter: String) = voices.mapNotNull { voice ->
-        val traits = ReadAloudVoiceTraits.of(voice)
+        val traits = traitsOf(voice)
         if (genderFilter.isNotEmpty() && traits.gender != genderFilter) return@mapNotNull null
         val defaultNarrator = voice.id ==
             readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId &&
@@ -1009,6 +1075,31 @@ class CloudTtsViewModel(
     /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多两行也放不下 */
     private fun traitLabels(traits: VoiceTraits): List<String> =
         listOfNotNull(genderLabel(traits.gender)) + traits.descriptors.take(3)
+
+    /**
+     * 这一条音色在本页呈现的分类：**用户标注逐栏优先**，没标的才用引擎声明 / 名字推测。
+     *
+     * 性别筛选（页顶那排 chips）也走这一份，否则用户把一条名字里看不出性别的音色标成「女」，
+     * 按「女性」筛选却把它筛没了——标了等于没标。年龄段音色行本来没有，仍只在选音那条链上用。
+     */
+    private fun traitsOf(voice: ReadAloudVoice): VoiceTraits {
+        val declared = ReadAloudVoiceTraits.of(voice)
+        val label = labels[voice.id] ?: return declared
+        return declared.copy(
+            gender = label.gender.ifBlank { declared.gender },
+            tags = (VoiceLabelStore.tagsOf(label) + declared.tags).distinct(),
+        )
+    }
+
+    private fun ageBandLabel(ageBand: String): String? = when (ageBand) {
+        BookCharacterProfile.VOICE_AGE_CHILD -> application.getString(R.string.voice_age_child)
+        BookCharacterProfile.VOICE_AGE_TEEN -> application.getString(R.string.voice_age_teen)
+        BookCharacterProfile.VOICE_AGE_YOUNG_ADULT ->
+            application.getString(R.string.voice_age_young_adult)
+        BookCharacterProfile.VOICE_AGE_ADULT -> application.getString(R.string.voice_age_adult)
+        BookCharacterProfile.VOICE_AGE_ELDERLY -> application.getString(R.string.voice_age_elderly)
+        else -> null
+    }
 
     private fun genderLabel(gender: String): String? = when (gender) {
         ReadAloudVoiceTraits.GENDER_MALE -> application.getString(R.string.voice_gender_male)

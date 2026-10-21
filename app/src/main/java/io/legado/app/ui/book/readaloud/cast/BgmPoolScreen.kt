@@ -304,7 +304,9 @@ fun BgmPoolScreen(
         dialog = state.editDialog,
         groups = state.groups,
         wording = BgmPoolWording,
-        onSave = { editingId, name, groupId ->
+        // 后两个参数是声音池那两栏分类（性别/年龄段）；配乐池的编辑弹窗不开这一档
+        // （PoolEditDialogState.showsClassification 默认 false），这里接到的是出厂值，丢掉即可
+        onSave = { editingId, name, groupId, _, _ ->
             onIntent(BgmPoolIntent.SavePool(editingId, name, groupId))
         },
         onDismiss = { onIntent(BgmPoolIntent.DismissDialog) },

@@ -25,11 +25,14 @@ import kotlinx.coroutines.withContext
 /**
  * AI 分配背景音乐场景：从指定章起，按正文情绪/场景转折在若干段落上换背景音乐池。
  *
- * 与 AI 分配角色同一套走法（逐章请求、流式回显、锚点用段落序号），差别有两点：
- * 1. 锚点是**段落序号**（[BgmSceneStore.ordinals]），不是开引号序号——换音乐看的是段落，
+ * 逐章请求、流式回显、越界夹到目录末尾这些走法与逐句归因那条链一致，但两件事不一样：
+ * 1. 锚点是**段落序号**（[BgmSceneStore.ordinals]）——换音乐看的是段落，
  *    一句话换一次音乐没有意义；
- * 2. 池名**只认用户已有的背景音乐池**，认不出来就丢弃这条。角色池可以让本地兜底补一个，
- *    音乐池补错了会播出一段用户根本没打算用的曲子。
+ * 2. 池名**只认用户已有的背景音乐池**，认不出来就丢弃这条。音乐池补错了会播出一段
+ *    用户根本没打算用的曲子，所以这里不做本地兜底新建。
+ *
+ * 「AI 分配角色」那趟退役后（S7 切片D），本类是这条链上唯一的逐章 AI 批量调用方；
+ * `castChapterPlan` / [AiCastStream] / [failureReason] 这几个原本共用的东西也搬到了本文件。
  */
 class AiSceneAssignUseCase(
     private val aiProfileGateway: AiProfileGateway,
@@ -37,9 +40,9 @@ class AiSceneAssignUseCase(
 ) {
 
     /**
-     * 配乐那一趟与角色那一趟跑同一份计划（[castChapterPlan]）：悬浮窗选了范围就两趟都按范围走，
-     * 点重试也只重跑失败的那几章。进度回调的 [onProgress] 第一个参数是 0 基章号，
-     * 口径与 `AiCastAssignUseCase.execute` 完全一致。
+     * 逐章识别配乐场景。范围/重试清单由悬浮窗给定（[castChapterPlan] 负责夹到目录末尾）：
+     * 填了「指定范围」就跑那一段，点了重试就只跑失败的那几章。
+     * 进度回调 [onProgress] 的第一个参数是 0 基章号，与界面显示差 1。
      */
     suspend fun execute(
         book: Book,
@@ -101,10 +104,11 @@ class AiSceneAssignUseCase(
         val preset = aiProfileGateway.getTaskPreset(AiTaskType.IDENTIFY_CHARACTERS)
             ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: error("未配置 AI 模型，无法使用 AI 分配场景")
-        // 提示词整段都在可编辑预设行里（分配要求管理页的「输出格式要求（背景音乐）」）；
-        // 取一次，回显与发送用同一份，别出现看到的和发出去的不一样
+        // 提示词整段都存在可编辑预设行里（悬浮窗「场景提示词」那一栏改的就是它，见
+        // [AiCastPresetStore.scenePrompt]）；取一次，回显与发送用同一份，
+        // 别出现看到的和发出去的不一样
         val systemPrompt = AiCastPresetStore.scenePrompt()
-        // 除思考开关外全部沿用用户在该预设里配的参数（与原版识别角色同一写法）
+        // 除思考开关外全部沿用用户在该任务预设里配的参数
         val params = preset.params.copy(
             temperature = 0f,
             reasoningLevel = reasoningLevel
@@ -258,7 +262,6 @@ class AiSceneAssignUseCase(
  *
  * @SerializedName 是必须的，不是风格问题：release 包开了 R8，本包不在 proguard-rules.pro 的
  * keep 名单里，字段名会被混淆成 a/b/c…，Gson 靠反射取字段名，模型就只收到一串单字母键。
- * 见 [AiCastPayload] 的同款说明。
  */
 private object AiScenePayload {
     data class Paragraph(
@@ -277,3 +280,46 @@ private object AiScenePayload {
 
     data class Scene(val i: Int, val pool: String)
 }
+
+/**
+ * AI 批量识别过程中可实时展示的流式片段（供悬浮窗显示，不参与解析）。
+ *
+ * 原来定义在「AI 分配角色」那趟里，角色趟退役后由配乐这一趟独家使用，
+ * 名字与包位置不动：悬浮窗（`ReadAloudCastDelegate`）按同一套事件回显。
+ */
+sealed interface AiCastStream {
+    /** 新的一章开始请求，UI 侧据此清空上一章的流式文本。 */
+    data class ChapterStart(val chapterTitle: String) : AiCastStream
+    data class Reasoning(val delta: String) : AiCastStream
+    data class Answer(val delta: String) : AiCastStream
+}
+
+/**
+ * 本次要处理的章（**0 基**、升序去重、夹到目录范围内）。
+ *
+ * [onlyChapters] 非空 = 重试：只跑失败的/被跳过的这些章，不重跑整段范围。
+ * 否则按范围跑：[endChapter] ≥ 0 时用显式终点（悬浮窗的「指定范围」），
+ * 为 -1 时回落到旧的「当前章 + [chapterCount] - 1」。
+ * 越界不报错而是夹回目录：悬浮窗已经实时显示实际章数，跑到书尾就是书尾。
+ */
+internal fun castChapterPlan(
+    tocSize: Int,
+    startChapter: Int,
+    requestedCount: Int,
+    endChapter: Int,
+    onlyChapters: List<Int>,
+): List<Int> {
+    if (tocSize <= 0) return emptyList()
+    val last = tocSize - 1
+    if (onlyChapters.isNotEmpty()) {
+        return onlyChapters.filter { it in 0..last }.distinct().sorted()
+    }
+    val start = startChapter.coerceIn(0, last)
+    val end = (if (endChapter >= 0) endChapter else start + requestedCount - 1)
+        .coerceIn(start, last)
+    return (start..end).toList()
+}
+
+/** 异常 → 给用户看的一句话原因（message 常为空，尤其是 IOException/超时之外的异常）。 */
+internal fun failureReason(error: Throwable): String =
+    error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName

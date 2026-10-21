@@ -120,4 +120,14 @@ data class ReadAloudSettings(
     val contentSelectSpeakMode: Int = 0,
     val audioPreDownloadNum: Int = 3,
     val ttsPreSynthesisConcurrency: Int = 3,
+    /**
+     * 顺带往后分析几章：播放当前章时，额外把往后这么多章的**说话人分析**跑出来落库。
+     *
+     * 只烧分析（AI 归因 + 选音），不合成音频——那是「音频预取数量」管的事。默认 0 = 不额外
+     * 分析，往后章等到真正翻到时才判，与改动前行为一致。落在音频预取窗口内的章本来就会被
+     * 预合成分析掉，所以这一档真正多做的是超出预取数量的那几章。
+     *
+     * 不进分析缓存身份：它决定"哪些章被分析"，不改变"这一章怎么判"，改它不会让已分析的章作废。
+     */
+    val speechAheadAnalysisChapters: Int = 0,
 )
