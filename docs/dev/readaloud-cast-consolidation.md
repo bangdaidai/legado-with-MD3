@@ -32,14 +32,40 @@
 
 **改完之后你直接能感觉到的差别**：AI 认出来的角色不再被无声抹掉；失败 / 冷却 / 纯规则这三种情况会分别
 告诉你；你改过的那句不会被任何重跑冲掉；你给某个人物选音色就真的只改他（现在会顺手把整本书的旁白换掉）；
-给人物改名、加别名、转正，不会引发整本书重新烧钱；朗读设置那一页里，声音 / AI / 切分 / 缓存各有各的
-小标题，不再穿插。
+给人物改名、加别名、转正，不会引发整本书重新烧钱；**改划分方式 / 换模型 / 改提示词 / 切归因口径，
+已经做好的那一章还是原来那一章的内容，不重切、不重烧，只有「重新分析」这一下才重做**；
+朗读设置那一页里，声音 / AI / 切分 / 缓存各有各的小标题，不再穿插。
 
 **开工顺序**：先做"让现象看得见 + 名字改对 + 修那个换错人的 bug"（不碰任何数据，随时可退）→
 再做"只有一位选音算法" → 再做"改一句就是改台词本" → **最后才动"两本名册并一本"**。
 
 下面 §1 起是证据（文件与行号）、去留清单、决策表和分期表。批复状态（2026-10-20）：
-D2、D8 按推荐批下并已落地，D3 你改判不做（"200 个够够的"），D1/D4–D7 沿用旧结论——**当前无待批复项**。
+D2、D8 按推荐批下并已落地，D3 你改判不做（"200 个够够的"），D1/D4–D7 沿用旧结论；
+**D9 由维护者 2026-10-21 口述提出并当场落完（见 §8 D9）——当前无待批复项**。
+
+**进度（2026-10-21，S1–S9 全部落完）**：S1 / S2 / S6 / S5 安全切片 / D2 / N4 / N6 → S7 三个切片
+（B/C/D，「AI 分配角色」入口从此只剩配乐识别）→ **S3（音色标签 + 池分组）、S4（选音合一）、
+S5①（定稿写入）、S8（覆盖层收缩为效果层）、S9（身份合一的规则层）**。
+四条目标（§0 那"要变成的样子"）在行为层全部达成：谁说了哪句只有台词本、一人一行一个声音、
+选音只有一位算法、分析只在点听书的时候。
+**唯 S9 只落了一半**：`cast_characters` 物理退役、档案表追加三列、两套主体 id 归一、
+`book_cast_memory` 文本改结构化导入——这四项属结构收尾，本刀明确不动，分界与理由见 §7 的 S9 记录。
+全部改动**未编译**，构建由维护者跑；每条记录的验收列都还在 §7 表格里。
+孪生的用户视角文档 `readaloud-user-journey.md` 已同步到同一口径。
+
+**同日补刀（2026-10-21，S5① 的收尾）**：原定稿只在出计划时写，"改完归属分镜页看不到"被我当成取舍写进
+交付说明，维护者一句"这可以直接修改呀，又不涉及 AI 重新分析"把它否了——那句确实是挂点选择，不是技术限制
+（取消分配那一路早就在用同一座桥当场重建）。现在点「确认／新建」的当下就走 `CastSegmentFinalizer.finalize`
+把归属写进库里那份分段并锁住，**分镜页立刻可见**；`replay` 退成兜底，只管"这一章还没分析过"和
+"正文换过了、那几段量不到现在这份正文"两种情况（后一条原判据是"不是当前设置算的"，随 D9 改掉）。
+不变的那条是**耳朵**：正在播的本章队列不重建，仍要等本章重新准备。
+
+**同日第三刀（2026-10-21，D9）**：维护者三条口述把"改设置 = 结果作废"这条底层逻辑否了
+（"已经生成的还是按照之前的来，新的按新的来""划分方式改了跟 AI 分析说话人有啥关系"
+"用户没主动点重新分析就没必要重新划分"）。读的时候从此只看**这一章有没有结果**，
+判据换成与划分粒度无关的同源核对（章内起点 + 原文落在同一批字上）；
+那枚「按以前的设置分析，听书没用上」徽标连同它的整条判据、字段、文案一起删除。
+设计与代价见 §8 D9，落地清单见 §7 的 D9 记录，验收见 §10。
 
 ---
 
@@ -55,7 +81,7 @@ D2、D8 按推荐批下并已落地，D3 你改判不做（"200 个够够的"）
 | L4 | 这一章分析完，就用 AI 认出的说话人 + 分配好的音色来念 | 看到的和听到的来自同一份计划 |
 | L5 | 分镜结果页给这一章做场景拆分 | 场景是分析收尾顺带跑的，不是"进页才补" |
 | L6 | 正文显示说话人头像 = AI 分析的结果 | 正文胶囊读的就是 segments 那份真相 |
-| L7 | 在正文改一句，分镜结果页同步跟着改 | **两边读写同一张表**，改哪边另一边立刻变 |
+| L7 | 在正文改一句，分镜结果页同步跟着改 | **两边读写同一张表**，改哪边另一边立刻变（2026-10-21 达成：定稿当场写 segments，不再等本章重新准备） |
 | L8 | 角色已提前绑好音色，AI 就只判文本，分音时直接用绑好的 | AI 不为已绑音色的角色要池，自动补音不覆盖手动 |
 
 **验收方式**：把这八条当测试用例。任何一步让你觉得"这个我刚才在别处也设过一遍"，就是没做完。
@@ -223,6 +249,9 @@ LIKE 误改名路径在现行精确名兜底下已不成立。
 徽标文案换成「按以前的设置分析，听书没用上」，配置卡里补一句说明它只意味着要显式重跑
 （点章节不会自动重跑，非当前章只是读库——这一点原方案写错过，已在
 `docs/dev/readaloud-user-journey.md` 一并纠正）。上面第二条失真（角色库时间戳）随 D2 移出缓存键消失。
+**这段结论已被 D9 作废（2026-10-21）**：徽标不是"判据不准"，是**这个问题本身不存在**——改了划分方式 /
+分析模式 / 模型 / 提示词 / 归因口径，那一份结果照样是这一章的结果、照样念。于是判据、文案、字段
+（`ChapterSpeechSummary.isCurrent` / `usesCurrentConfig`）整套删除，见 §8 的 D9 与 §7 的 D9 记录。
 
 ---
 
@@ -249,7 +278,7 @@ LIKE 误改名路径在现行精确名兜底下已不成立。
 
 ```text
 章级分段 chapter_speech_segments  = 谁说了这句（唯一真相）
-      ↑ 写入者：AI 分析链（三档模式） + 定稿回放（正文/分镜页改一句）
+      ↑ 写入者：AI 分析链（三档模式） + 定稿（正文/分镜页改一句**当场**写，出计划时只兜底）
       ↑ 定稿 = 写 characterId + userLocked=true，重跑永远跳过锁定段
 角色档案 book_character_profiles  = 角色是谁（唯一真相，一人一行）
       ↑ 性别 / 年龄 / 池 / 状态（草稿↔正式）/ 头像 / 别名 / 关系都在这一张表
@@ -268,7 +297,7 @@ LIKE 误改名路径在现行精确名兜底下已不成立。
    ↓ 点朗读 / 预合成（自动，本章）
 规则分段 →【一次 AI 归因】说话人 + 角色类型 + 情绪（+ 未绑音色的新说话人建议池）
    ↓ 落 segments（AI 认出的新人 → 草稿卡，进"临时说话人"栏）
-定稿回放：quoteOrdinal → 覆盖该开引号的 segment → characterId + userLocked=true
+定稿回放（兜底，当场已写的这里空转）：quoteOrdinal → 覆盖该开引号的 segment → characterId + userLocked=true
    ↓
 角色补齐：档案的性别/年龄/池（年龄必须来自**可编辑**的池或用户标注，不能只靠派生）
    ↓
@@ -310,18 +339,18 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
 
 | 构件 | 去处 | 依据 |
 |---|---|---|
-| `chapter_speech_segments` | **保留为唯一说话人真相** | `userLocked` 列已在（`data/entities/ReadAloudSpeech.kt:126`），只缺写入方 |
-| `chapter_role_assignments` | **改造为定稿层**：锚点仍 `(bookUrl,chapterIndex,quoteOrdinal)`，分析后回放到 segments，不再参与播出认领 | 唯一建行出口 `CastAssignmentStore.assign()`（`:337-371`） |
-| `cast_characters` | **退役** → 并档。独有三列 `voiceEffect/sortOrder/bubbleRuleJson` 以**追加列**进档案表；`voiceId` 不搬（绑定才是权威，`CastSpeechOverlay.kt:156-158` 注释自认） | 唯一键粒度差异见 §2；行级折叠不改主键 → 非破坏性 |
-| `CastProfileMirror` / `CastMemoryMirror` | **退役**（一张表没有可镜像的东西） | 双写背离是 bug 源 |
-| `book_cast_memory` | **退役**：别名→`aliasesJson`、池→`voicePoolId`、关系→`book_character_relations` | 文本行是图谱的弱化复制 |
-| `CastSubjectResolver` | 降级为兼容读；**500 上限先修**（N2） | `:41`、`:63` |
-| `voice_pools/_members/_groups` | **保留 + 收成互斥分组**（一音色一组），补 `gender/ageBand` 编辑入口，停止丢弃池性别 | 现复合主键天然多对多（`VoicePoolEntities.kt:109-120`）；`VoicePoolScreen` 对这两字段零引用 |
-| `read_aloud_voices` | **保留，不加列**；用户标签放新表 `voice_labels(voiceId PK, gender, ageBand, tagsJson, updatedAt)` | 同步逐字段 REPLACE 重建（§3.3） |
+| `chapter_speech_segments` | **保留为唯一说话人真相**——**写入方已落（2026-10-21 S5①）**：`CastSegmentFinalizer.finalize` 在用户点「确认／新建」当场写，`replay` 出计划时兜底，两处都写 `userLocked=true` | `userLocked` 列已在（`data/entities/ReadAloudSpeech.kt:126`），6 处"跳过锁定段"自 2026-10-21 起真正生效 |
+| `chapter_role_assignments` | **已改造为定稿层（S5①）**：锚点仍 `(bookUrl,chapterIndex,quoteOrdinal)`，建行同时把结论写进 segments（不再"等回放"），不参与播出认领；剩下的职责是"用户建行入口 + 那一句的变声器" | 唯一建行出口 `CastAssignmentStore.assign()` → `CastSegmentFinalizer.finalize()`；取消分配前先放开定稿（`release`/`releaseChapter`） |
+| `cast_characters` | **未退役（S9 只落了规则层）**：一人一名由"写入侧拒绝 + `CastIdentityFolder` 运行期折叠"保证，表本身与它的 `voiceId` 副本仍在。独有三列 `voiceEffect/sortOrder/bubbleRuleJson` **仍以追加列**进档案表这一步留给下一刀 | 唯一键粒度差异见 §2；行级折叠不改主键 → 非破坏性；追加列属结构变更，须与约 20 个文件的读写搬家同轮做 |
+| `CastProfileMirror` / `CastMemoryMirror` | **暂留**（并表没做，两张表还在就得互抄）。2026-10-21 切片D：**记忆 → 档案**那一向已删（`applyMemoryToProfiles`/`reconcilePoolsWithCast`/`applyUserEdits`）；S9 折叠器新增一处 `syncCharacterRow` 调用（并档后把记忆那行的池跟着保留行） | 双写背离是 bug 源；反向已无产出方 |
+| `book_cast_memory` | **退役**：别名→`aliasesJson`、池→`voicePoolId`、关系→`book_character_relations`。切片D 后这张表**只由人物详情页与配音页写**，分析链不再读它——结构化导入随 S9 下一刀做 | 文本行是图谱的弱化复制 |
+| `CastSubjectResolver` | **保持现形**：一人一名让"两套主体 id"的分叉面变小，但档案 id 与角色行 id 仍可能不同（并档留下的是另一行的 id，档案主键不动），所以读写两侧仍走它取全集。500 上限**不改**（N2/D3 改判不做） | `:41`、`:63`；写入侧统一到 `bindUserVoice`/`syncBinding` 是 S4 落的 |
+| `voice_pools/_members/_groups` | **保留 + 已收成互斥分组（2026-10-21 S3②③ 已落）**：`gender/ageBand` 有编辑入口、池性别不再被丢弃、存量成员按"一音色一组"折叠（不加唯一索引，D4） | 现复合主键天然多对多（`VoicePoolEntities.kt:109-120`），折叠器 `VoicePoolStore.foldDuplicateMembers()` |
+| `read_aloud_voices` | **保留，不加列**；用户标签已放新表 `voice_labels(voiceId PK, gender, ageBand, tagsJson, createdAt, updatedAt)`（**S3① 2026-10-21 已落**，追加进 `migration_127_128`，备份/恢复已接线） | 同步逐字段 REPLACE 重建（§3.3） |
 | `RegexCastRuleStore` / `RegexCastSplitter` | **保留**，优先级仍最高（关掉多角色也生效），UI 注明"正则命中会顶掉 AI 结论" | `CastSpeechOverlay.kt:59-61`、`:133` |
 | `BgmSceneStore` + `AiSceneAssignUseCase` | **保留 + 改名** `BgmCue*`（与分镜场景解名） | 配乐场景与分镜场景零关系 |
-| `AiCastAssignUseCase` 的 AI 调用 | **退役**；独有能力（称呼归并、池建议、续跑、范围）全部迁出后不再发请求 | 其输出是官方链的子集；定稿价值不依赖 AI |
-| `AutoAssignVoiceBindingsUseCase` + `CastVoicePicker.ensureVoice` | **合一为一个 UseCase**，去 `random()` 改稳定序，**年龄进播放链** | 现两套算法见 §2 |
+| `AiCastAssignUseCase` 的 AI 调用 | **退役**；独有能力（称呼归并、池建议、续跑、范围）全部迁出后不再发请求。**2026-10-21 切片D：文件、Koin 绑定、VM/delegate 参数已删**，`castChapterPlan`/`AiCastStream`/`failureReason` 搬进 `AiSceneAssignUseCase.kt` | 其输出是官方链的子集；定稿价值不依赖 AI |
+| `AutoAssignVoiceBindingsUseCase` + `CastVoicePicker.ensureVoice` | **合一为一个比较器（2026-10-21 S4 已落）**：两条链折成同一种候选 + `VoiceMatchScoring.order`，去 `random()`，**年龄进播放链** | 现两套算法见 §2 |
 | `RefineSpeechWithAiUseCase` | **保留为唯一归因引擎**；prompt 取两套并集；缓存键移出角色 revision（D2） | `:150-176` |
 | `IdentifyBookCharactersUseCase` + `ai_artifacts` | **保留独立**（产档案不产逐句归属，与归因不冲突） | 入口在知识页 `ui/book/knowledge/BookCharacterListViewModel.kt:251` |
 
@@ -336,13 +365,13 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
 |---|---|---|---|---|---|
 | **S1 现象可见 + 一个行为级 bug**（7 项） | ①分镜页自建 `ALOUD_AI_FALLBACK` 订阅（现只有服务订，`BaseReadAloudService.kt:383-386`）；②冷却期命中给可区分提示（现静默，`RefineSpeechWithAiUseCase.kt:241`）；③场景拆分失败给提示（现 `catch(Throwable)→return plan` 不撤账不提示，`SpeechStoryboardViewModel.kt:546-548`）；④`ai_cast` 入口加 AI 模型门禁（现恒可用，`ReadAloudCastDelegate.kt:83`）；⑤每章标注"结论来自规则还是 AI、有没有被分配表覆盖"；⑥纠正 `CastSpeechOverlay.kt:76-79` 日志措辞（那条分支其实原样保留官方角色音）；⑦**修 N4**：草稿档案应走角色编辑器（按 `SUBJECT_CHARACTER` + 档案 id 绑），只有真旁白行才发 `SetNarratorVoice`——现两者共用面板、发同一 Intent（`BookVoiceCastingScreen.kt:609-618`），并配 AppLog 记下"这次写的是哪个主体"作回归观察点 | 无 | 否（纯新增 + 一处分支修正） | 直接 revert | 关掉播放再进分镜页，失败时看得见 toast；给临时角色选音色后旁白不变、那句角色音变 |
 | **S2 旋钮合一** | ①推理强度只留 DataStore 那份（`AiCastPresetStore.kt:502-512` 退役，旧值作初值读出后删，**不静默丢**）；档位取全枚举 7 档（`domain/model/AiModels.kt:257-264`），AUTO=不发参数跟随服务商、OFF=显式不思考，差别写进小字；②「听书预加载数量」按真实语义改名（它是正文预下载），并给 `audioPreDownloadNum` 补一个入口（§3.5）；③两个开关改名：「多角色朗读」/「显示角色」（§3.4）；④清第三个 Tab 死口径（§6.3） | 无 | 否（设置介质） | revert；旧键未删即无损 | 弹窗里不再有强度 chips |
-| **S3 音色标签 + 池分组**（四层接通） | ①新建 `voice_labels` 表承载用户标注（**不能加列到 `read_aloud_voices`**），标签为空时读取侧回落 `traitsJson` 预填，所以是加法不是切换；名字启发降为预填提示；未标注显示灰字而非硬猜；②池 `gender/ageBand` 补编辑入口（`VoicePoolStore.createPool/updatePool:363-403` 签名要加参数）、`voiceClassificationMap` 的性别不再被丢弃（`PrepareChapterSpeechPlanUseCase.kt:125-126`）；③`voice_pool_members` 写入侧收成 1:1 + 存量折叠报告（**不加唯一索引**，见 D4）；④定死"成员标签优先于池分类"；⑤备份补 `voice_labels` 字段 | 无 | 是（新表） | `voice_labels` 空即等同现状 | 同一角色两次进配音页，音色不再变 |
-| **S4 选音合一** | `CastVoicePicker.ensureVoice` 并入 `AutoAssignVoiceBindingsUseCase`，统一打分链，`random()`（`:31`）改稳定序，**年龄第一次真正进播放路径**；`syncBinding` 的 `source` 默认值按实际来源写（修 N3），界面据此显示"你选的 / 自动选音" | S3 | 是（选音结果可复现性） | revert 恢复旧补音 | 同书同池重跑给出同一个音色 |
-| **S5 定稿写入打通**（2026-10-20 安全切片已落：非当前章套覆盖 + 锁定此段 + 转正入口 + 场景回写不再顶掉分析段；**只剩①定稿写入未落**，理由见下方"本轮已落"） | 正文胶囊分配（唯一出口 `assign():337-371`）在写分配表的同时，把结论写成 segments 的 `characterId + userLocked=true`；分镜页加"锁定/解锁此段"Intent（现无任何编辑/锁定动作，`SpeechStoryboardContract` 只有列表/重分析/试听/删除）；**非当前章也套覆盖**（`planFromSegments` 后补 `overlayOnSegments`，`ResolveEffectiveSpeechPlanUseCase.kt:132-144`），使 L7 完整；补「转正」UI 入口（§3.8）**——必须与 D2（角色库移出缓存键）同轮，否则第一次点转正就当场重烧全书（N1）**；并落 D2 的两条零 token 本地归并：转正＝纯 status 改写、新人入库后老章同名草稿卡按名字/别名重定向到正式档案（行级 `UPDATE characterId`） | 无阻塞 | 否（补写入方） | 无写入方时等同现状 | 正文改一句 → 翻到别章再翻回来，分镜页仍是那个角色；转正一张卡之后，已分析章不重烧 |
+| **S3 音色标签 + 池分组**（四层接通，2026-10-21 **已全部落地**，含一处口径偏离，见下方记录） | ①新建 `voice_labels` 表承载用户标注（**不能加列到 `read_aloud_voices`**），标签为空时读取侧回落 `traitsJson` 预填，所以是加法不是切换；名字启发降为预填提示；未标注显示灰字而非硬猜；②池 `gender/ageBand` 补编辑入口（`VoicePoolStore.createPool/updatePool:363-403` 签名要加参数）、`voiceClassificationMap` 的性别不再被丢弃（`PrepareChapterSpeechPlanUseCase.kt:125-126`）；③`voice_pool_members` 写入侧收成 1:1 + 存量折叠报告（**不加唯一索引**，见 D4）；④定死"成员标签优先于池分类"；⑤备份补 `voice_labels` 字段 | 无 | 是（新表） | `voice_labels` 空即等同现状 | 同一角色两次进配音页，音色不再变 |
+| **S4 选音合一**（2026-10-21 **已落**） | `CastVoicePicker.ensureVoice` 并入 `AutoAssignVoiceBindingsUseCase`，统一打分链，`random()`（`:31`）改稳定序，**年龄第一次真正进播放路径**；`syncBinding` 的 `source` 默认值按实际来源写（修 N3），界面据此显示"你选的 / 自动选音" | S3 | 是（选音结果可复现性） | revert 恢复旧补音 | 同书同池重跑给出同一个音色 |
+| **S5 定稿写入打通**（2026-10-20 安全切片 + 2026-10-21 ①定稿写入，**全条已落**；①的落地方式与当初"要先补 segment 外键"的判断不同——**零 schema 变更**，见下方两条记录） | 正文胶囊分配（唯一出口 `assign():337-371`）在写分配表的同时，把结论写成 segments 的 `characterId + userLocked=true`；分镜页加"锁定/解锁此段"Intent（现无任何编辑/锁定动作，`SpeechStoryboardContract` 只有列表/重分析/试听/删除）；**非当前章也套覆盖**（`planFromSegments` 后补 `overlayOnSegments`，`ResolveEffectiveSpeechPlanUseCase.kt:132-144`），使 L7 完整；补「转正」UI 入口（§3.8）**——必须与 D2（角色库移出缓存键）同轮，否则第一次点转正就当场重烧全书（N1）**；并落 D2 的两条零 token 本地归并：转正＝纯 status 改写、新人入库后老章同名草稿卡按名字/别名重定向到正式档案（行级 `UPDATE characterId`） | 无阻塞 | 否（补写入方） | 无写入方时等同现状 | 正文改一句 → 分镜页那一行**当场**就是那个角色（2026-10-21 补刀，原先要等本章重新准备），让本章重新准备后实际发声也是那个人，且重跑分析不改它；转正一张卡之后，已分析章不重烧 |
 | **S6 界面归纳** | 按 §6.3 给现有 18 项插四个小标题，「常规」Tab 两块；读写语义一律不动 | 无 | 否 | 逐项挪回原位 | 同一列里不再 AI 项与缓存项穿插 |
-| **S7 prompt 并集 + 逐句 AI 退役 + 执行归位**（2026-10-21 **切片B 已落**：①的两半——规则并集、归因口径两档、新人建议池；剩下范围/续跑/重试与入口退役是切片C/D） | ①两套判定规则并入 `ANALYZE_SPEECH` 契约（含归因口径两档单选、可选 `speakerPool` **只问未绑音色的新人**）；②`AiCastAssignUseCase` 请求侧删除，范围/续跑/重试归位到朗读侧档位「顺带往后分析几章」+ 结果页显式动作（补分析/重试失败章/重新分析），**设置块零运行按钮**；③场景拆分触发点从"进分镜页"上提到"该章分析收尾"，独立调用与 `SCENE_PROMPT` 不变（`RefineSpeechWithAiUseCase.kt:1152-1155` 的隔离保住）；④页面级记账 `sceneAttemptedChapters` 作废；⑤吸收清单逐项打勾，任何一项没落点就不许删调用 | S1/S5，且需先做调用面盘点 | 是（调用拓扑 + 执行入口） | 旧 usecase 与开关保留，按书灰度 | 一次朗读只看到一次归因调用日志 |
-| **S8 覆盖层职责收缩** | 删"分配表认领 + 认领不到降级旁白"（`CastSpeechOverlay.kt:140-150`），只留正则、静音、段级特效 | S7 | 是（呈现语义） | revert 即恢复覆盖 | 分镜页显示的与耳朵里的是同一个角色 |
-| **S9 身份合一** | 先修两处截断（N2）与搜索口径（N5）→ 档案表追加 `voiceEffect/sortOrder/bubbleRuleJson`（**追加到手写迁移 `migration_127_128`**，守卫式 `ADD COLUMN + defaultValue`，先例 `DatabaseMigrations.kt:119-127,153-158`）→ 同名多行折叠成一条档案（保留"有绑定/有音色"的那条，差异进报告）→ 三处 `characterId/subjectId` 重映射 → `cast_characters` 与两个镜像停写退役 → `book_cast_memory` 文本改结构化导入 profiles + relations | S3、S8 | 是（身份权威），但只追加列 + 行级改写，**不改主键** | 追加列不影响旧读路径；折叠器幂等；退役前留角色表只读 | 一个人只有一行、只有一个声音 |
+| **S7 prompt 并集 + 逐句 AI 退役 + 执行归位**（2026-10-21 **切片B、C、D 已全部落地**：B=①的两半（规则并集、归因口径两档、新人建议池）；C=②的范围/续跑/重试归位 + ③场景上提 + ④页面级记账作废；D=⑤吸收清单逐项打勾 + 入口与引擎退役，见下方三段记录） | ①两套判定规则并入 `ANALYZE_SPEECH` 契约（含归因口径两档单选、可选 `speakerPool` **只问未绑音色的新人**）；②`AiCastAssignUseCase` 请求侧删除，范围/续跑/重试归位到朗读侧档位「顺带往后分析几章」+ 结果页显式动作（补分析/重试失败章/重新分析），**设置块零运行按钮**；③场景拆分触发点从"进分镜页"上提到"该章分析收尾"，独立调用与 `SCENE_PROMPT` 不变（`RefineSpeechWithAiUseCase.kt:1152-1155` 的隔离保住）；④页面级记账 `sceneAttemptedChapters` 作废；⑤吸收清单逐项打勾，任何一项没落点就不许删调用 | S1/S5，且需先做调用面盘点 | 是（调用拓扑 + 执行入口） | **usecase 与弹窗那半已删**：revert 切片D 那一笔即恢复原状（旧预设行留在库里未删，无数据损失） | 一次朗读只看到一次归因调用日志 |
+| **S8 覆盖层职责收缩**（2026-10-21 **已落**，四条行为后果见下方记录） | 删"分配表认领 + 认领不到降级旁白"（`CastSpeechOverlay.kt:140-150`），只留正则、静音、段级特效 | S7 | 是（呈现语义） | revert 即恢复覆盖 | 分镜页显示的与耳朵里的是同一个角色 |
+| **S9 身份合一**（2026-10-21 **规则层已落、表结构未并表**，分界见下方记录） | **已落**：搜索口径（N5）→ 同名多池折叠成一行（keeper 按"有绑定/有音色"选，差异进报告）→ 三处 `characterId/subjectId` 重映射 → 写入侧一人一名（弹层创建、配音页新建/改名/官方档案同步、档案补建、备份恢复）→ `getByNameAndPool` 随调用点清零。**未落（下一刀）**：两处截断（N2，D3 已改判不做）、档案表追加 `voiceEffect/sortOrder/bubbleRuleJson` 三列、`cast_characters` 与两个镜像停写退役、`book_cast_memory` 文本改结构化导入 | S3、S8 | 是（身份权威），本刀**只行级改写**（`UPDATE/DELETE`），不追加列、不改主键、不改唯一索引 | 折叠器幂等、写入侧拒绝同名，revert 即恢复"同名可并存"；未追加列所以旧读路径零影响 | 一个人只有一行、只有一个声音 |
 
 **本轮已落（2026-10-20，未编译，构建由维护者跑）**：
 
@@ -368,14 +397,18 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
   只做三次整块搬家（池与系统 TTS 上提到引擎那一项之后、两个总闸上提到本节开头、TTS 缓存下进缓存节）；
   小标题照听书引擎页的样式在本文件加 private `ReadAloudSectionTitle`，未抽公共组件。
 - **D3（200/500 截断）已改判不做**：维护者判定"200 个已经够够的了"，见 §4 N2 与 §8 D3 的处置。
-- **S5 的安全切片已落（2026-10-20），S5① 定稿写入未落**：
+- **S5 的安全切片已落（2026-10-20），S5① 定稿写入随 2026-10-21 那一轮落地**：
   - 已落：①**非当前章也套覆盖**——分镜页缓存路径改成"当前章与非当前章同一条路"，段落重建从
     `readerChapterInputWindow.current` 扩到上/当前/下一章三份（`chapterParagraphs`），并在套之前加
     **同源闸门**：`SpeechIdentity.chapterContentHash(段落)` 必须等于那份分析的 `contentHash`
     （`ChapterSpeechSegments` 新增该字段，只有当前设置那份才带基准，退回旧划分时为空即跳过）。
+    **这条闸门的粒度部分已被 D9 换掉**：现在比的是 `SpeechIdentity.alignsWithParagraphs`
+    （章内起点 + 原文逐段核对），换划分方式不再判不同源，仍会拦住的只有正文真换过的情形。
     闸门是必需的：`ReaderChapterSourceParser` 在「显示角色」打开时往 `semanticContent` 注入
     `<<名字（池）>>` 标记，分析段的坐标就在带标记的空间里，标记一变整套坐标一起挪，
     不加判据套覆盖会把胶囊安到错的人身上。跳过时写 AppLog 说明原因。
+    （**S8 之后这一层只做效果**——正则音色与那一句的变声器，不再改"谁说话"，所以分镜页与耳朵里的
+    归属从"两份结论"变成"同一份"。）
     ②**分镜页「锁定/解锁这一段」**：`ToggleSegmentLock` Intent → `ChapterSpeechGateway.setSegmentUserLocked`
     → DAO 行级 `UPDATE userLocked`（不整份回写分段），行右侧角标按钮与试听钮同款尺寸，
     锁定态转主色；不重启朗读、不重算计划。这一列一写 true，现成的 6 处"跳过锁定段"立即生效。
@@ -385,11 +418,11 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
     ④**「转正」UI 入口**：配音页草稿角色行原来右侧什么都不给（`trailingContent = null`），
     现在挂进本页已有的「更多」菜单语法（`CastDraftRowActions`：转正 / 编辑），
     `BookVoiceCastingIntent.PromoteCharacter` 在 ViewModel 早已实现、全仓无调用点的状态结束。
-  - 未落并改口径的两条，记录核实结果：
-    - **S5①「正文胶囊 → segments 定稿写入」不做位置匹配**。分配表按 `(bookUrl, chapterIndex, quoteOrdinal)`
-      锚定，segments 按 `start/end` 锚定，两者之间没有可依赖的桥；把 quoteOrdinal 换算成段内位置需要
-      重建带标记正文，而同源闸门告诉我们标记空间在设置一变后就不可靠。要落这条得先给分配表补一列
-      segment 外键（写入侧一起改），属数据权威变化，排在 S3/S9 那类迁移轮里。
+  - 当时记下的两条核实结果（**第一条已在 2026-10-21 被推翻并落地，见下面 S5① 那条记录**）：
+    - ~~**S5①「正文胶囊 → segments 定稿写入」不做位置匹配**~~：当时的理由是"分配表按 ordinal 锚定、
+      segments 按 `start/end` 锚定，两者之间没有可依赖的桥，要落这条得先补 segment 外键"。
+      **桥不需要建在库里**——分析刚跑完时，那一份带标记段落就在手上，按同源闸门验过再量一次即可，
+      于是定稿写入以**零 schema 变更**落地。
     - **D2 的归并②（老章同名草稿卡重定向到正式档案）不需要写。**`book_character_profiles` 有
       `(bookUrl, name)` 唯一索引，同名草稿与正式档案无法共存；转正走的又是同 id 的 status 改写，
       老章分段引用的 `characterId` 本来就指向那张卡。真正要盯的是别处按名字 `REPLACE` 入库导致 id 漂移，
@@ -423,6 +456,207 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
     `defaultNarratorVoiceId`，写映射那条按逐字段相等断言，本应早就是红的。本轮补上该键，
     同时补新键，并把测试名里的「29 键」计数去掉（计数与真实条数早已不符，留着只会误导）。
 
+- **S7 切片C 已落（2026-10-21，未编译，构建由维护者跑）**——范围/续跑/重试归位 + 场景上提：
+  - **场景拆分触发点从"进分镜页"上提到"该章分析收尾"**（③）：`RefineSpeechWithAiUseCase.analyzeExclusive`
+    在说话人结论落库之后紧接着跑一次 `assignScenes`，**先落结论再落场景**——场景是追加层，拆坏了
+    （超时、JSON 不合契约、这一块跳过）绝不能把已经付过 token 的结论顶掉，所以第二次 `saveAnalysis`
+    只在真拆出场景时才发。`source` 沿用那一轮出处（朗读 / 预合成 / 顺带分析），AI 取消记录因此
+    能定位到章。独立调用与 `SCENE_PROMPT` 一字未改，配乐场景（`AiSceneAssignUseCase`）不受影响。
+  - **页面级记账全部作废**（④）：`sceneJob` / `sceneAttemptedChapters` / `sceneGeneration` / `sceneMutex` /
+    `withScenes` / `attachScenes` / `analysisStillCurrent` 删除，分镜页**只读不算**场景；旧时代分析过、
+    当时还没拆场景的章用详情页「重新分析本章」补。S1③ 那条"拆分失败给提示"的 toast 随之下线
+    （`speech_storyboard_scene_failed` 字符串删除），失败改为在分析收尾写 AppLog。
+  - **范围 = 朗读侧一档 + 结果页一处显式动作**（②）：新档「顺带往后分析几章」（`speechAheadAnalysisChapters`，
+    默认 0，0..50），挂在朗读设置〔多角色朗读（AI）〕小节、紧跟归因口径；它**不进分析缓存身份**
+    （只决定哪些章被分析，不改变这一章怎么判），改它不会让已分析的章作废，也不需要重启朗读管线。
+    朗读服务两条预合成循环（文件与流式）在音频窗口跑完之后接 `analyzeAheadChapters`，
+    窗口从当前章往后数 N 章，**音频窗口已经覆盖的那几章不重复跑**。
+  - **续跑是免费的**：新 `help/readaloud/analysis/ChapterSpeechBatchAnalyzer` 是跑批的唯一实现，
+    划分口径 / 版本号 / 段落重建 / 分析入口全部与实时朗读同源（旧弹窗自己抄了一套 policy）。
+    库里已有当前设置那份结论的章返回 `AlreadyAnalyzed`，一个 token 不发——所以结果页「分析选中章」
+    全选重跑一遍等于"补齐没跑成的"，这就是旧弹窗"续跑记账"的替代。
+  - **重试** = `resetCache = true`（先 `deleteChapter` 再跑 + 解除本书 AI 冷却），落点是详情页那颗
+    `Autorenew`「重新分析本章」。详情页重跑**不再只对正在读的那一章有效**：段落来源从"屏幕上的
+    章节输入窗口"扩到"本地正文重建"，下载过正文的章都能重跑；两处都没有（正文未下载）返回空列表。
+  - **设置块零运行按钮**：档位只做范围，跑批动作只在分镜结果页（管理态多选语法 + 一颗
+    PlayArrow/Stop 复用钮，副标题显示 `已分析 x/y`）。
+  - **顺带落一处 DAO 级单写者**：`ChapterSpeechDao.saveAnalysis` 改成事务内先 `deleteChapter`
+    再 upsert，于是一章只剩一行，`getChapterSegments` 的 `order by updatedAt desc limit 1` 拿到的一定
+    是发声那一份。代价见下方要点。
+
+- **S7 切片D 已落（2026-10-21，未编译，构建由维护者跑）**——「AI 分配角色」入口与引擎退役：
+  - **入口就地换含义，不改 id**：`ReadMenuActionDefs` 里那颗按钮的 id 仍是 `ai_cast`（它存在用户的
+    顶栏/底栏按钮配置里，改 id 等于让已配好的按钮凭空消失），只把标签换成「AI 识别背景音乐」、
+    intent 换成 `OpenAiSceneDialog`。不新增页面，与 §6.3「零新增页面」同口径。
+  - **弹层收敛为纯配乐**（`AiCastDialogSheet`）：角色那三块（本章已分配数、分配要求预设 + 预设管理页、
+    临时要求、本书角色记忆编辑器）整段下线，`page` 变量与两页结构删除；`sceneOnly` 参数失去意义，
+    `ReadBookSheet.AiCastDialog` 改成 data object。头部两颗钮：左=清除本章场景
+    （新 intent `DeleteChapterBgmScenes`，只清 `BgmSceneStore`，不再代删正文胶囊），右=开始/取消。
+    续跑与重试两颗钮**留着**：它们读的是配乐这一趟的记账（`AiCastRunState`），不是角色那趟的遗产。
+  - **引擎与文件删除**：`help/readaloud/cast/AiCastAssignUseCase.kt`、`AiCastDialogStats.kt`、
+    `AiCastIdentityTest.kt` 删除；Koin 里 `singleOf(::AiCastAssignUseCase)` 与 VM/delegate 的构造参数
+    一并摘掉。`castChapterPlan` / `AiCastStream` / `failureReason` 三兄弟搬到
+    `AiSceneAssignUseCase.kt`（逻辑逐字未改，`internal` 可见性不变，`AiCastChapterPlanTest` 照旧跑得到）。
+  - **运行侧只剩一趟**：`ReadAloudCastDelegate.startAiCast` 不再串两趟，`rolesPass` / `assignScene`
+    两个开关与 `StartAiCast` 的 `presetId` / `temporaryInstruction` 字段删除；失败清单落盘、取消快照、
+    `refreshAfterCast`（重排当前章 + 朗读队列）三条收尾一律保留，配乐这一趟原本就走同一套。
+  - **`AiCastPresetStore` 从 558 行收到 168 行**：只剩场景提示词（`scenePrompt/saveScenePrompt/
+    defaultScenePrompt`，单行 `scene_output_format`）+ 续跑记账 + 旧推理强度搬迁。**旧的分配要求行与
+    角色那四条固定附加行留在库里、不再被任何代码读取**——那是用户写过的文本，静默删除不可逆，
+    清理动作归 S9。这些旧行也不会突然冒出来给用户看：AI 提示词管理页按 taskType 白名单枚举
+    （`AiPromptConfigViewModel.kt:37-87`），`cast_assign` 不在清单里。
+  - **场景提示词补了唯一入口**（这是"零能力损失"里唯一必须新加的一块）：管理页退役后这条文本没有
+    地方可改，而它决定配乐识别准不准。落在弹层底部一张 `CollapsibleHeader` 折叠卡片，展开才读库，
+    「保存」一次点 = 一次写库，「恢复默认」只把框里换成出厂文本、不顺手覆盖用户那一份。
+  - **`CastMemoryMirror` 反向退役**：`applyMemoryToProfiles` / `reconcilePoolsWithCast` / `applyUserEdits`
+    删除（记忆文本不再有 AI 产出方，权威在人物档案表）。保留**档案 → 记忆**（`applyProfileToMemory`，
+    人物详情页保存时整行替换）与改名/改池的随行同步（`syncCharacterRow`，配音页与正文胶囊两个入口）。
+    `UserEdits` / `diffUserEdits` 这对纯文本函数暂时留着给测试盯解析口径，随 S9 一并清。
+  - **⑤ 吸收清单逐项打勾（本轮验收）**：推理强度＝朗读设置那一份，旧弹窗值首次打开即搬走并删键；
+    范围＝朗读侧档位「顺带往后分析几章」+ 分镜结果页显式动作（切片C），配乐这一趟自己仍带范围控件；
+    续跑/重试＝`ChapterSpeechBatchAnalyzer` + `AiCastRunState`；逐句归属＝朗读链路产出，手工改走
+    `ConfirmRoleCast` / `CreateRoleCast` / `UnassignRoleCast` 与配音表；称呼归并＝档案 `aliasesJson`
+    随 payload 的 `characters` 进模型（切片B）；新人池建议＝`speakerPool`（切片B）；提示词＝
+    `ANALYZE_SPEECH` 任务预设走 AI 提示词管理页 + 本轮的场景提示词卡片。**没有一项落在"删除"**。
+  - **字符串口径**：`ai_cast_*` 从 50 键删到 28 键（角色/预设/记忆那 22 条无调用方），保留键里
+    「分配」措辞改「识别」、`ai_cast_model_required` 与 `ai_cast_request_hint` 改成配乐口径，
+    `speech_analysis_reasoning_level_summary` 去掉「与阅读页的 AI 分配角色共用这一项」那句旧说明。
+    values / values-zh-rCN 两份同步（其余 locale 本来就没有这批键，回落英文）。
+  - **三张基线表逐条核对：本批零变化，不动 `build.gradle.kts`**。删除的两个文件在 `help/` 下（护栏只数
+    `io/legado/app/ui/`），改动的 17 个 UI 文件里 `appDb.` / `data.dao.` import / 旧偏好调用计数全为 0，
+    与 HEAD 一致——`ReadBookViewModel.kt to 0` 那两条依旧吻合，棘轮既没被顶高也没被放宽。
+
+- **S3 已落（2026-10-21，未编译，构建由维护者跑）**——音色标签 + 池分组，四层接通：
+  - ①新表 `voice_labels`（`voiceId` 主键，`gender/ageBand/tagsJson` 三栏都可空 = 未标注）**追加到手写迁移
+    `migration_127_128`**，用 `CREATE TABLE IF NOT EXISTS`，与那条里既有的守卫式写法同一套。不给
+    `read_aloud_voices` 加列：那一行由引擎同步逐字段 REPLACE 重建，挂在行上的用户标注会被抹掉
+    （与 `voice_pool_members` 同一个理由）。
+  - 读取侧唯一出口 `VoiceLabelStore.classificationMap()`，回落顺序定死**用户标注 > 池分类 > 引擎声明 >
+    名字启发**。一行标注都没有时行为与引入它之前完全一致，所以这是加法不是切换，回退 = 清空该表。
+  - ②池的性别/年龄段可编辑：`VoicePoolStore.createPool/updatePool` 签名补两栏，多角色规则页的池编辑弹窗
+    在 `showsClassification` 打开时多出「性别 / 年龄段」两栏（候选由小到大、`未知` 固定收尾，与
+    `VoicePoolStore.isClassifiable` 同一套枚举）；`PrepareChapterSpeechPlanUseCase` 不再把性别丢掉。
+  - ③成员写入收成「一音色一组」+ 存量折叠：`VoicePoolStore.foldDuplicateMembers()` 幂等、prefs 标记
+    只跑一次，保留哪一池按可复现顺序判（池启用 > 池有结构化分类 > …），差异写 AppLog 报告。
+    **没有加唯一索引**（D4）。
+  - ④"成员标签优先于池分类"定死在 `classificationMap` 一处（`VoicePoolStore:327` 记下口径），选音只认那一处。
+  - ⑤备份补 `voiceLabels.json`：`Backup.kt` 写出、`Restore.kt` 回读，与既有 list 恢复同套写法。
+  - **与方案的一处口径偏离（记录在案）**：原计划"未标注显示灰字而非硬猜"落在列表行上，实际做成
+    **编辑弹窗里的 `labelFallback` 提示**（"这一栏现在按 ×× 走"，已本地化、绝不写回表）。列表行不掺灰字，
+    免得与引擎声明那一份混在一起看不出区别。
+
+- **S4 已落（2026-10-21，未编译，构建由维护者跑）**——选音合一，两条链折成一条打分链：
+  - `CastVoicePicker.ensureVoice` 的 `random()` 退役。两条链的候选折算成同一种 `VoiceMatchCandidate`、
+    同一份比较器 `VoiceMatchScoring.order`（占用少 → 年龄段匹配 → 风格关键词 → 引擎 → 名字 → id），
+    全序可复现；`AutoAssignVoiceBindingsUseCase` 改为共用它，**年龄第一次真正进播放路径**。
+  - "每章新建的男青年不要永远落在池子第一格"这一条不再靠随机承担，而是靠占用数：第一个角色占走 A，
+    第二个看到 A 用过了就排到 B。引擎取这一池多数人在用的那一档，数量相同按引擎名排。
+  - N3 一并落：`syncBinding` 一律写 `source=auto`、`bindUserVoice` 一律写 `source=user`，
+    两处主体 id 全集统一走 `CastSubjectResolver.subjectIdsFor`（精确名/别名比对，不再各推一套、
+    不再用 SQL LIKE 单条查找）。
+  - 测试：`CastVoicePickerTest.kt` 删除（它断言的就是"随机补音"那套），`VoiceMatchScoringTest.kt`
+    接管比较器的可复现性与优先级断言。
+
+- **S5① 已落（2026-10-21，未编译，构建由维护者跑）**——定稿写入。**上面那条"不做位置匹配、
+  要先给分配表补 segment 外键"的结论已被推翻并落地，且零 schema 变更**：
+  - 桥不在库里的列上，而在**用同一份带标记段落当场量一次坐标**：`CastSegmentFinalizer.replay()`
+    经 `ChapterSpeechBatchAnalyzer` 的同一套 splitPolicy / resolverVersion 重建段落，先过同源闸门
+    （`SpeechIdentity.chapterContentHash(paragraphs) == stored.contentHash`），再把
+    `(ordinal → 台词范围)` 与 segments 按区间重叠配对。分配表仍是唯一的用户入口，segments 才是真相表。
+  - 命中就一次写齐 `roleType/characterId/characterName/source=user/userLocked=true`，走行级
+    `setAttribution`（**不整份 `replaceSegments`**——界面上那一行可能是切过的碎片）。写完现成的 6 处
+    "跳过锁定段"立即生效，重跑分析不再改动那几句；库里那一行已经一致时跳过写入，`updatedAt` 不空跳。
+  - 挂点**两个入口、一条判据**（判据＝"已经是这个角色的定稿就一行都不写"，抽在 `pendingOf` 里共用）：
+    ①`CastAssignmentStore.assign()` 上完一行分配后立刻调 `CastSegmentFinalizer.finalize()`——用户点
+    「确认／新建」的当下就写进库里那份分段，**分镜页立刻可见**，不必等本章重新准备。这一路手上没有那份
+    正文，所以按当前设置重建带标记正文再过同一道同源闸门；对不上（这一章还没分析过／库里那份非当前设置
+    生成）就什么都不写，只留一条 AppLog，**不影响这一次分配成立**。②`PrepareChapterSpeechPlanUseCase`
+    的 AI/规则结论之后、音色自动分配之前仍跑 `replay()` 兜那两种情况，下游一律改用 `finalized`：于是
+    **分镜页、听书队列、自动选音看到的是同一份归属**，且当场写过的那一路到这里是空转（不重刷 `updatedAt`）。
+    回放失败只写 AppLog 并按分析结果朗读，取消照旧透传。
+  - **耳朵那一条没变**：整章队列在准备时一次建好，改归属不重建队列，正在播的本章仍要等重新准备才听得出来。
+    这条曾被我当成"分镜页也要等"写进交付说明，被维护者否掉——页面读的就是库里那份分段，写它不涉及重新分析。
+  - 取消分配的代价（`unassign` / `deleteChapter`）：**必须先放开定稿再删分配行**——这一句的坐标要靠
+    这一行注入的角色标记才量得到，行先删就再也量不到，那一段会一直挂着旧归属和锁定标记。取消后那一段
+    回落旁白，AI 的原判断要重跑本章分析才回来。
+  - 粒度随划分方式：「整段」下一个朗读单元就是一整段，定稿与句级变声都作用在整段上；要按句定稿得把
+    划分方式换成句级。冲突时以哪边为准在代码里写死（用户定稿赢）并记一条 AppLog，不静默。
+
+- **S8 已落（2026-10-21，未编译，构建由维护者跑）**——覆盖层收缩为**效果层**：
+  - 删掉「按正文标记认领说话人 + 认领不到抹成旁白」整段逻辑，连带 `CastSpeechGateway` 的
+    `characters` / `subjectIdsFor` / `ensureCharacterVoice` 三个读方法与仓库实现（网关只剩正则效果 +
+    句级变声器两项）。现在这一层只做两件事：正则角色顶音色/放音效、那一句的专属变声器写进
+    `segment.voiceEffect`。
+  - 切单元只在**真配了句级变声器**的那几句发生（`spansOf(...).filter { it.effect.isNotBlank() }`），
+    所以分镜页那一行与实际发声单元一一对应，不再出现"界面上一段、队列里四块"。
+  - `speechFor` 随之不再是 suspend；日志改成一份汇总（本章 N 个朗读单元；正则角色顶音色 x 段、
+    吞字放音效 y 段；句级变声器 z 段；丢掉 k 个不发声单元）。
+  - **行为后果四条，交付必须告知**：①没分配过的句子现在保留 AI/规则的结论，不再被抹成旁白；
+    ②按句换声/换变声需要句级划分，整段划分下整段一起定稿；③关掉「显示角色」= 正文没有标记 =
+    没有按句的分配可读（音色仍来自分析链那一份）；④取消分配 = 回到旁白，要 AI 的原判断就重跑本章分析。
+    正则命中优先级仍最高，`regex_cast_dialog_hint` 已写明"会盖掉这一句原本分好的角色"，
+    `multi_role_cast_summary` 补上"分配结果会写进正文标记并锁住那几句"。
+  - `CastSpeechOverlayPieceSplitTest` 的类注释同步改成"切口只服务句级变声器"，断言未动
+    （`spansOf`/`piecesOf` 这两层的行为与 S8 前一致）。
+
+- **S9 部分落地（2026-10-21，未编译，构建由维护者跑）**——身份合一：**规则已生效，表结构尚未并表**：
+  - **已落**：N5 搜索口径（`searchCharacterProfiles` 排除草稿，与 `getCharacterProfiles` 同口径，
+    唯一调用方 `AiToolRepository.searchBookCharacters` 因此不再把临时说话人当正式角色返回）；
+    新 `CastIdentityFolder.fold(bookUrl)` 幂等折叠同名多池——keeper 按「有绑定 > 有音色 > 最近更新 >
+    id 最小」选，空栏从被丢的行补齐、`createdAt` 取最早，三处重映射（`chapter_role_assignments`、
+    `chapter_speech_segments`、`book_voice_bindings`）+ 记忆池栏随行 + `CastProfileMirror.ensure`，
+    被丢的池/音色/变声/气泡全部进 AppLog 报告；挂点在 `CastAssignmentStore.migrateLegacyProfiles`
+    **开头**（必须早于档案导入，否则同一趟会照档案把刚并掉的那个人重新长回来）；
+    写入侧一人一名（`create` 按名字拒绝、`resolveCharacter` 名字优先、池只作挑选偏好、
+    `BookCastStore.createCharacter/updateCharacter/syncFromProfile` 同名即挡、
+    `migrateLegacyProfiles` 的档案→角色补建先按 id 认、认不到再按名字认，两边都认不到才建行）；
+    备份恢复同口径（`Restore.kt` 按名字认本地行，老备份里的同名两行在恢复当场并成一个人）；
+    `CastCharacterDao.getByNameAndPool` 随调用点清零删除；`cast_create_exists` 文案改为
+    「这个人已经建过了（同名只留一个角色），可直接点「确认」分配」。
+  - **未落，明确留给下一刀**：`cast_characters` 物理退役与两个镜像停写、档案表追加
+    `voiceEffect/sortOrder/bubbleRuleJson` 三列、两套主体 id 归一、`book_cast_memory` 文本改结构化导入
+    （连带 `UserEdits`/`diffUserEdits` 清理）。原因：这一半是**结构变更 + 约 20 个文件（含 UI）的读写搬家**，
+    在"不能自行提版本号、也不能跑构建自证"的前提下与"一人一名"这条用户可直接感知的规则捆在同一轮，
+    风险和验收面都会失控。S9 验收列（"一个人只有一行、只有一个声音"）已由行为层达成，
+    表层并表可独立回退。
+  - **唯一索引仍是 `(bookUrl, name, poolLabel)`**：不改索引（改主键/改唯一索引属结构变更，会要求重装），
+    一人一名靠"写入侧拒绝 + 运行期折叠"两处保证，`insertIgnore` 只剩两次写入撞车的竞态兜底。
+  - **三张基线表逐条核对：本批（S3/S4/S5①/S8/S9）零变化，不动 `build.gradle.kts`**。按护栏同一套正则
+    在 `app/src/main/java` 全树重跑一遍计数：`io/legado/app/ui/` 下每个文件的 `data.dao.` import 与
+    `appDb.*Dao` 访问，与 `legacyDaoInjectionBaseline` / `legacyUiDaoAccessBaseline` 逐条**相等**
+    （既没顶高也没放宽，`ReadBookViewModel.kt to 0`、`CloudTtsViewModel.kt to 5` 均吻合）；
+    `legacyPreferenceCallBaseline` 全树无新增旧偏好调用（含 `Restore.kt to 2`）。
+    本批唯一进入基线视野的改动是 `Restore.kt` 的角色恢复查找，它不含 `getPref/putPref` 增减；
+    新增的 `CastIdentityFolder`、`CastSegmentFinalizer`、`VoiceLabelStore` 等都在 `help/`、`data/` 下，
+    护栏不数这些目录的 DAO 访问（它们本就该直接持有 `appDb`）。
+
+- **D9 已落（2026-10-21，未编译，构建由维护者跑）**——改设置不再让已有的分镜作废，判据换成
+  "与粒度无关的同源核对"：
+  - **一条新判据**：`SpeechIdentity.alignsWithParagraphs(paragraphs, segments)`
+    逐段核"章内起点 + 原文"落在现在的同一处字上；不比 `chapterContentHash`（那份哈希含单元下标与起点，
+    换划分方式必变）。它成为**唯一的同源口径**，五个调用点全走它：`AnalyzeChapterSpeechUseCase` 复用闸门、
+    `ChapterSpeechBatchAnalyzer.isAnalyzed`（续跑判据）、`CastSegmentFinalizer.bridgeOf` + `replay`（定稿两路）、
+    `SpeechStoryboardViewModel.cachedChapterPlan`（分镜页套分配表覆盖）。
+  - **读侧只认"这一章存下来的那一份"**：DAO 新增 `getStoredAnalysis`（`status in success/partial/failed`
+    取最近一行，不比版本号），`getChapterSegments` 改成挑同一行，`getChapterSummaries(bookUrl)` 去掉版本号参数；
+    `getAnalysisByResolverVersion` / `getChapterCurrentAnalyses` / `getChapterSegmentsFor` /
+    `ChapterSpeechSegments` / `ChapterSpeechBatchAnalyzer.resolverVersion()` 全部删除。
+  - **AI 那一步跟着收口**：`PrepareChapterSpeechPlanUseCase` 只在**本轮真的新跑了分析**时过
+    `refineSpeechWithAi`（`analysis.fromCache` 即整份复用），发请求的只剩"没跑过的章"和「重新分析」。
+  - **段内相对坐标单独设防**：`ChapterSpeechAnalysisResult.paragraphSpaceMatches`（内容哈希完全相等）
+    只给 `ResolveLocalSpeakersUseCase` 用——跨粒度时重认说话人会查到别的句子上，那一步整趟跳过；
+    绝对坐标那一路（回放、覆盖、播放队列）跨粒度照常用。
+  - **徽标整套删除**：`speech_storyboard_stale_config` / `speech_storyboard_stale_hint` 两条文案
+    （`values` + `values-zh-rCN`）、`StoryboardChapterUi.usesCurrentConfig`、
+    `SpeechStoryboardUiState.usesCurrentConfig`、列表行与配置卡两处渲染点、`ChapterSpeechSummary.isCurrent`。
+    批跑汇总那句"已是当前设置那份"跟着改成"已有结果"。
+  - **界面话术同步**：`ReadAloudPlayerViewModel` 里分析模式 / 归因口径 / 划分方式三处的重启注释改成
+    "只为**还没跑过的章**立刻按新口径跑，已经做好的那一份不动"（三处 `restartReadAloudPipeline` 调用保留）。
+  - **测试源集对齐**：两个 `MemoryChapterSpeechGateway` 补 `getStoredAnalysis`、删
+    `getChapterSegmentsFor`、`getChapterSummaries` 去版本号参数（缺一个整个测试源集编不过）。
+  - **本批基线核对**：改动落在 `ui/book/readaloud/{storyboard,player}/` 的只有注释、状态字段与 gateway 调用
+    参数，`data.dao.` import 与 `appDb.*Dao` 访问、旧偏好调用三项**零增减**，`build.gradle.kts` 三张表不动。
+
 要点：
 
 - **S5 必须早于 S8**。定稿保护是硬前置——先收覆盖层再补定稿，会真冲掉用户手工劳动。
@@ -430,11 +664,23 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
   `ResolveLocalSpeakersUseCase.kt:80`、`help/readaloud/resolve/LocalCharacterSpeakerResolver.kt:153`）
   在 `userLocked` 有人写 true 之后立刻生效，**"重跑不冲掉定稿"是现成逻辑，缺的只是写入方**。
 - S1–S4、S6 无阻塞，可立刻做，且都不动数据权威。
-- **S7 会让全书分析缓存失效**（prompt 变 → `promptHash` 变 → 重新分析）。一次性成本必须提前告知。
-  切片B 落的是**两笔**：主体规则并成 12 条改了 promptHash，口径进键又改了 `resolverVersion` 本身
-  （2026-10-21 起，切档也会重烧——这是"两档结论本就该不同"的代价，不做静默复用）。
+- **S7 当时会让全书分析缓存失效**（prompt 变 → `promptHash` 变 → 重新分析）。一次性成本必须提前告知。
+  切片B 落的是**两笔**：主体规则并成 12 条改了 promptHash，口径进键又改了 `resolverVersion` 本身。
+  **这条自 D9 起不再发生**：那一串版本号只写进**新落下**的那份，不再是复用判据，改任何口径都不再重烧
+  （要按新口径重判，用户点「重新分析」）。
   若同时采纳 D2（角色 revision 移出缓存键），则此后"改角色"不再引发全书重烧——这条收益比 S7 的
   一次性代价更值，建议两件事同一轮告知用户。
+- **「分镜场景」没有独立开关**（切片C 核实结论，别再当待办）：§6.2 那行把它列进设置块是早期草稿，
+  §6.3 的"项不增不删"与 line 31 的旋钮清单都没有它，S2/S6 的现场也没有。定案：**场景随分析跑，
+  不设第二把闸**——规则模式本来就不拆场景，`isWorthRunning()` 已经把"多角色没开 / 纯规则模式"
+  这一档挡在跑批外面，再加一把开关等于给同一件事两个入口。
+- **"一章只留一行"在 D9 之后不再是代价**：过去改一次设置就会写新行、顺手删掉旧行，所以"改回去要重烧"；
+  现在改设置根本不重跑，旧行只在**没跑过的章**或「重新分析」那一刻被替换。用户锁过的那几行
+  （`userLocked`）与定稿层（`chapter_role_assignments`）在替换后由回放进段，不会跟着旧行一起丢。
+- **实时 Page 播放与其余三处重建仍不同粒度**（预先存在的偏离，本轮不动）：`ReaderFragment` 在
+  划分方式为「整页」时传 `contentSplitMode = Page`，而预合成 / 顺带分析 / 分镜页重建一律用
+  `pageStarts = listOf(0)` 的整段视图（页边界只在"这一章真的在屏幕上排过版"时才存在）。
+  三者之间彼此一致，只有"整页模式下的实时那一章"是另一种粒度。
 - 每步只留一条可观察验证，见表格最后一列。
 
 ---
@@ -443,8 +689,13 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
 
 **贯穿原则（你定的）：两方对同一功能各有设置或各有规则，一律融合成同一处的可选项，不做删除式取舍。**
 
-**D1 说话人真相 = segments，分配表降为定稿层。**〔已定，沿用〕
+**D1 说话人真相 = segments，分配表降为定稿层。**〔已定，**已执行（2026-10-21：S5① 与 S8 同轮落地）**〕
 L7 的完整达成方式就是 S5；不再让覆盖层拥有"谁说话"的语义（S8）。
+**落地方式与当初的写法有一处不同**：原计划"给分配表补一列 segment 外键（写入侧一起改）"不需要了——
+定稿靠**当场量一次坐标**写回 segments（`CastSegmentFinalizer`，过同源闸门才敢量），零 schema 变更。
+量坐标有两个入口、一条判据：用户点「确认／新建」的当下（`finalize`，按当前设置重建带标记正文），
+和出计划时（`replay`，手里就拿着分析那份段落）。分配表于是只剩两个职责：
+用户的建行入口，和"那一句配了哪个变声器"的存放处。
 
 **D2 把角色库整体从分析缓存键里移出；名册变化的影响改走本地归并。**〔已批复（按推荐：移出）；
 键的部分 2026-10-20 已落；归并② 与 S5 同轮核实后**判定不写**——`(bookUrl, name)` 唯一索引让同名草稿与
@@ -490,31 +741,85 @@ L7 的完整达成方式就是 S5；不再让覆盖层拥有"谁说话"的语义
 默认「必答」——漏分会让整句掉回兜底音，比错分更难归因。两档共用同一份判断规则与输出契约，
 切换只替换口径文本，不动 `pools`/`characters`/契约字段，因此不会分裂解析器。
 
-**D6 同名多池折叠：一人一条记录、一个声音。**〔已定，沿用〕
+**D6 同名多池折叠：一人一条记录、一个声音。**〔已定，**已执行（2026-10-21 S9）**〕
 **内容代价（已接受）**：「李星菲（女少女）」与「李星菲（女中年）」并成一条，其中一个声音被丢弃；
 想换年龄音只能改那一条的池。折叠器必须①按"有绑定/有音色"选保留行②把被丢的池/音色/变声/气泡写进
 迁移报告③幂等（`backfillAll`/`ensure` 挂在进配音页路径上，重复执行必须无变化）。
+**落地时的三处补充**：折叠器是 `CastIdentityFolder.fold(bookUrl)`，三条都按原口径实现，其中 keeper
+的完整次序是「有绑定 > 角色行自己填了音色 > 最近更新 > id 最小」（后两档只为保证同一份数据每次跑出
+同一个结果）。②**挂点必须在 `migrateLegacyProfiles` 的开头**，不是原计划写的"随 `backfillAll`/`ensure`
+顺带跑"——那一趟紧接着照人物档案补建角色行，顺序反了会把刚并掉的那个人当场重新长回来，幂等就破了。
+③光折叠存量不够，**写入侧四入口同时改成按名字拒绝**（弹层「创建」、配音页新建、配音页改名、
+官方人物详情同步），外加备份恢复也按名字认本地行；否则用户下一次就再造一个同名。
+④唯一索引仍是 `(bookUrl, name, poolLabel)`，没有动结构。
 
-**D7 「AI 分配角色」弹窗退役，能力全部吸收。**〔已定，沿用〕
+**D7 「AI 分配角色」弹窗退役，能力全部吸收。**〔已定，**已执行（2026-10-21 S7 切片D）**〕
 强度进设置块（唯一一份）、范围变朗读侧档位「顺带往后分析几章」、prompt 跳管理页、书级记忆改读档案表、
-配乐场景原样独立保留。**弹窗退役的验收标准 = §7 S7 第⑤条的吸收清单逐项打勾。**
+配乐场景原样独立保留。**弹窗退役的验收标准 = §7 S7 第⑤条的吸收清单逐项打勾**——已逐项核过，
+见切片D 记录里那条打勾清单；其中两处与旧文案不同口径：`ai_cast` 那颗按钮的 id 保留（改名会让用户
+已配的按钮消失），场景提示词在配乐弹层里补了一张折叠卡片（管理页退役后它是唯一入口）。
 
 **D8 朗读设置的宿主形态统一。**〔已批复（按推荐：本轮只做 S6 归纳，形态统一留到浮层迁移那轮）；
-S6 本身本轮未执行〕
+S6 的四个小标题已落（2026-10-21）〕
 现状双宿主（Nav3 整页 + `AppModalBottomSheet`，见 §3.6）。归纳（S6）不依赖形态统一，
 且共用同一个 `ReadAloudConfigContent`，改一处两入口同时生效；贸然统一会牵动
 `docs/dev/readaloud-player-morph.md` 那条线，属另一件事。
+
+**D9 已经做好的分镜是"这一章的结果"，不随设置作废。**〔已批复（2026-10-21，维护者口述，本轮已落）〕
+维护者原话三条，逐条对应到实现：
+①"已经完成的分镜结果，主要模型提示词规则方法改变了就不可用，这个逻辑也不对，已经生成的还是按照之前的来，
+新的按新的来"；②"内容划分方式改了也继续念，这个跟你 AI 分析说话人有啥关系呢"；
+③"如果用户没有主动地去点重新分析，就没必要（重新划分）"。
+
+**为什么以前会那样**：那一行结果的主键里写着一串"当前设置的指纹"（`resolverVersion`：划分方式 + 分析模式 +
+模型 + 提示词 + 归因口径），读的时候拿现算的指纹一比，不一样就当这一章没结果 → 重切、重发 AI、
+旧的还常被新行删掉。**根子是把两件事存成了一件**：朗读单元的粒度（怎么切）和台词归属（谁说的），
+再加上一个随设置漂移的键。
+
+**改法（行为口径）**：读的时候只看"这一章有没有结果"，有就整份照用。唯一还算数的核对是
+**那几段量得到量不到现在这份正文**——`SpeechIdentity.alignsWithParagraphs` 逐段比"章内起点 + 原文"，
+与粒度无关（再怎么切，同一个位置还是同一个字）。真会判不同源的只有正文换过：重新下载、改替换规则、
+开关「显示角色」。所以会重跑的只剩两种：这一章从没跑过（或正文换过），以及用户点「重新分析」
+（那里先删掉库里那一份）。改设置不再重切、不再重烧、不再删旧行。
+
+**顺带删掉的两件东西**：章节列表那枚「按以前的设置分析，听书没用上」徽标和配置卡里那段说明
+——它的唯一理由是"朗读不会用这份"，这句话现在不成立了（N6 的判据修正随之作废）。
+`ChapterSpeechSummary.isCurrent`、`usesCurrentConfig`、`ChapterSpeechSegments`、
+`getAnalysisByResolverVersion` / `getChapterCurrentAnalyses` 一并删除。
+
+**保留的一处细账**：`ChapterSpeechAnalysisResult.paragraphSpaceMatches`（内容哈希**完全相等**才算）。
+它只保护一个消费者——`ResolveLocalSpeakersUseCase` 重认说话人时用的是分段行上的
+`paragraphIndex / start / end`，那是**段内相对坐标**，跨粒度去查会查到别的句子上。粒度不一致时那一步
+整趟跳过（什么都不改），音色照样当场按名册现算。绝对坐标那一路（定稿回放、分配表覆盖、播放队列）
+不受影响，跨粒度照常用。
+
+**代价（已接受）**：①换划分方式后，已经读过的章**还是旧粒度**，听感上"设置改了没反应"——要它按新粒度，
+点「重新分析本章」，或在列表里删掉那几章的分镜再跑批；纯规则模式同样如此，规则切出来的那一份也是
+"已经做好的结果"。②规则模式读过的章，之后打开 AI 模式**不会自动补判**（那章已有结果），「分析所选」
+是续跑语义（有结果的章跳过）；想按新口径重判，同样走「重新分析」。③正文换过的那一章会整章重切重判，
+用户锁过的那几行靠 `userLocked` 与定稿层（`chapter_role_assignments`）回放保住。
+**一键归零**：把 `AnalyzeChapterSpeechUseCase` 的复用判据换回
+`getAnalysis(contentHash, resolverVersion)` 精确命中即回旧行为，无数据迁移（旧行始终没删）。
+**验证边界**：未编译。见 §10 新增的三条真机路径。
 
 ---
 
 ## 9. 风险与迁移边界
 
-- **缓存失效**：S7（prompt 并集 → `promptHash` 变）引发全书重分析；若采纳 D2 则此后"改角色"不再引发。
-  两者都在交付说明里明写成本，不接受"先松基线再迁移"式的静默失效。
+- **缓存失效**：S7（prompt 并集 → `promptHash` 变）当时引发过全书重分析；D2 之后"改角色"不再引发，
+  **D9 之后连改口径也不再引发**——版本号只写进新落下的那一份，复用判据换成与粒度无关的同源核对。
+  都在交付说明里明写成本，不接受"先松基线再迁移"式的静默失效。
+- **D9 的失效面（同源核对判错的方向）**：`alignsWithParagraphs` 判"对不上"就整章重切重判，
+  判"对得上"就直接照用。假阴性（该重跑却没重跑）比假阳性更隐蔽：屏幕上仍是旧那一份，但它是
+  同一批字，念出来不会错行，只会"归属停在旧判断上"。所以判据只做一件事——逐段核原文落点，
+  不做区间包含、不做相似度。正文真换过（重新下载、替换规则、开关「显示角色」）时坐标必变，
+  这条判据能抓到。
 - **追加迁移的写法**：本 fork 最新本地扩展在 `migration_127_128`（`DatabaseMigrations.kt:36` 起），
   同一条里既有 `CREATE TABLE IF NOT EXISTS regex_cast_groups`（`:39`）也有守卫式 `ALTER`
   （`voice_pools.gender/ageBand :119-127`、`book_character_profiles.voicePoolId :153-158`）。
-  S3 的 `voice_labels` 与 S9 的三列**追加到这条**，并必须沿用守卫式写法，否则重复执行失败。
+  S3 的 `voice_labels` **已按这条落**（`CREATE TABLE IF NOT EXISTS`，2026-10-21）；S9 的三列**尚未追加**——
+  那一半与角色表退役、约 20 个文件的读写搬家同属结构收尾，见 §7 的 S9 记录与"未落"清单。
+  真要补时必须沿用守卫式写法，且补前去 `app/schemas/` 与 `autoMigrations` 覆盖区间双重核对。
   **不要因为"版本号不变 Room 就不重跑迁移"而拒绝追加**——线上库靠 `autoMigrations` 链升上来，
   真机都完整跑过手写迁移，追加 `ALTER` 对新旧设备都生效。
 - **不要补加"看起来漏了"的列**：`underlineRoundCap`/`underlineFeather`/`characterRole`/`manualNineSlice`
@@ -524,7 +829,10 @@ S6 本身本轮未执行〕
 - **行级操作 ≠ 结构变更**：S9 的折叠与重映射是 `UPDATE/DELETE`，不改主键、不改列类型，
   所以覆盖安装可升，不需要卸载重装。改主键/改列类型/加唯一索引才需要重装或等上游提版本。
 - **冲突处理要显式**：S5 期间同一章可能分配表与 segments 都有结论，**冲突以哪边为准必须在代码里
-  写死并记日志**，不能静默。S9 的文本记忆导入必须按名字去重并在报告里列冲突，同名两行不能静默并成一行。
+  写死并记日志**，不能静默——**已按这条落（2026-10-21 S5①）**：当场与回放两处都是用户定稿赢，被顶掉的原判断
+  数量汇成一条 AppLog（当场：`定稿: 第N章第 x 句改给「…」…顶掉原记「…」`；兜底：`定稿回放: 第N章有 x 段原记「…」`）。S9 的文本记忆导入必须按名字去重并在
+  报告里列冲突，同名两行不能静默并成一行（**这条随结构化导入一起留下一刀**；本刀的折叠报告已按
+  "被丢的池/音色/变声/气泡逐条列出"实现）。
 - **正则角色是第三条独立路径**，本次不动它，但它优先级仍最高；界面必须写清"正则命中会顶掉 AI 结论"。
 - **架构护栏**：S5/S9 会动 `io/legado/app/ui/` 下的 ViewModel 与 DAO 访问。提交前必须回
   `build.gradle.kts` 核对三张基线表（`legacyPreferenceCallBaseline :222`、
@@ -550,20 +858,63 @@ AI 冷却与首次失败提示的分工、`resolverVersion` 的六个组成部�
 - N4 的代码路径已确定（四步无分支），但**影响面**要真机确认：给用户已手动改过主体的草稿卡选音色时，
   旧旁白绑定被覆盖后能否从界面察觉并恢复。
 - 正文改完后回正文，胶囊与朗读各自多久读到新值（分配表侧的章节刷新是否覆盖播放队列）。
-- 三档模式下 AI 分析成功率的真实分布——本轮只确认提示通路，没有证据说明 AI 本身常失败。- D2 采纳后，旧章分析与新档案不一致时用户的实际听感是否可接受。
-- S7 的"范围/续跑/重试"三块能否脱离其请求侧独立运行——属职责搬迁而非重写，但**S7 前必须做一次
-  调用面盘点**（`AiCastAssignUseCase` 的公开面 + `AiCastPresetStore` 的调用方清单）。
+- 三档模式下 AI 分析成功率的真实分布——本轮只确认提示通路，没有证据说明 AI 本身常失败。
+- D2 采纳后，旧章分析与新档案不一致时用户的实际听感是否可接受。
+- S7 的"范围/续跑/重试"三块能否脱离其请求侧独立运行——盘点与搬迁已在切片C/D 落完（静态核对过调用面），
+  但**切片D 之后的整条入口链未编译、未真机**：阅读页那颗 AI 按钮打开的是配乐弹层（不再有角色那两页）、
+  「清除本章场景」真的只清配乐、弹层里新加的场景提示词卡片保存后下一次识别就用新文本、
+  取消仍能续跑。这四条要真机各走一遍。
+- 旧「AI 分配角色」留下的 `cast_assign` 预设行与 `book_cast_memory` 文本仍在库里（未删，见切片D）。
+  真机上确认它们既不出现在 AI 提示词管理页，也不影响任何朗读结果，S9 才敢动手清。
+- **S3/S4 未真机**：①给一条音色写标注后，同一池里新角色补到的声音是否真的跟着年龄段走；
+  ②同书同池连续建两个角色是否拿到不同音色且**重跑还是这两个结果**（稳定序的全部意义）；
+  ③池成员折叠报告是否把用户手工加过的那一条留下了（`foldDuplicateMembers` 只跑一次，
+  靠 prefs 标记，跑第二遍必须无变化）。
+- **S5① 未真机（本批风险最高的一条）**：①正文改一句归属 → **立刻开分镜结果页**（不用重新准备）看那一行
+  是否已是那个角色——当场写入走的是同一座桥，对不上时应有一条"暂时对不上库里那份分段"的日志；
+  ②再让本章重新准备一次（翻走再翻回来继续朗读，或分镜页点「重新分析」）→ 听书是否用那个角色的声音
+  （**耳朵仍要等队列重建**，改完当场听不到不是 bug）；③重跑本章分析是否**没有**冲掉那几句
+  （6 处跳过判断第一次有真写入方）；④取消分配后是否回落旁白、且没有留下"锁着但没人说"的死段；
+  ⑤划分方式为「整段」时整段一起吃定稿是否可接受；⑥日志里 `定稿:`（当场那一次）与 `定稿回放:`
+  （出计划兜底那一次）两行是否与操作对得上；⑦故意挑一章"没分析过"的直接分配，再让它出计划，
+  验证兜底确实补得上（当场那条日志与补写那条日志不该同时出现同一句）。
+- **S8 未真机**：分镜页显示的角色与实际发声是否同一个（这是本条的验收），以及没分配过的句子
+  是否不再被抹成旁白。
+- **S9 未真机**：①库里已有同名多池的书，进配音页一次之后是否只剩一行、AppLog 报告是否列出被丢的
+  那个声音；②再进一次是否空转（无第二份报告）；③正文胶囊"创建"同名角色是否得到「已存在」提示而
+  不是多出一个他；④旧备份恢复后是否已经是一个人行。
+- **D9 未真机（本轮必验，三条）**：
+  ①**改设置不重跑**——先用 AI 模式读透几章（分镜页有角色），再把划分方式换成别的档 / 换模型 /
+  换归因口径，回到那一章继续听：**日志里不应出现这些章的新一轮 AI 请求**，分镜页那几章的角色不变，
+  章节列表也不再有任何"按以前的设置分析"字样（徽标已删）；AI 日志的"缓存=" 那一栏应为 `true`。
+  ②**旧粒度照念照改**——换完划分方式后在正文胶囊把某一句分给某人，**当场开分镜页**应看到那一个角色
+  （桥按绝对坐标照搭）；这一章重新准备后发声也是那一个。
+  ③**正文真换过要重跑**——对一章改替换规则（或开关「显示角色」）让它对不上，听这一章时应重跑一次
+  分析；分镜页此时若跳过分配表覆盖，日志应有一条"分镜页第 N 章跳过分配表覆盖：库里那几段量不到
+  现在这份正文"。
+  ④顺带验 D9 的代价是否可接受：换粒度后旧章仍是旧切法（听感"设置改了没反应"），点「重新分析本章」
+  之后才按新粒度切。
 
 ---
 
 ## 11. 你要干啥
 
-1. **构建与真机验证 S1/S2/S6 + D2/N6/N4 + S5 安全切片这一批**（本仓库规定我不跑构建）：
+1. **构建与真机验证 S1–S9 这一整批**（本仓库规定我不跑构建）：
    `.\gradlew.bat :app:compileAppDebugKotlin`、`.\gradlew.bat verifyConfigArchitecture`，
-   真机重点验三条：①给临时角色选音色，旁白不变；②正文胶囊改一句归属后，去分镜页点这一章——
-   那一句显示的音色/角色就是改后的（不再要"必须正在读这章"）；③草稿角色行右侧菜单点「转正」，
-   这一行从临时说话人变成正式角色卡。锁定按钮验"锁定后重新分析这一句不被改"。
-2. 结果回我，我按"修复一笔 / 提示与日志一笔"拆开提交。
-3. 剩下的下一刀：S5① 定稿写入（要先给分配表补 segment 外键，属权威变化，我会把迁移条目和
-   回滚口径一并交给你核对）或 S3（音色标签 + 池分组，同样要新建表）。
+   真机重点验四条（按风险排序）：
+   ①**S5① + S8 的验收**——正文胶囊把某一句分给某人后，**当场开分镜结果页**就该是那个人（定稿直接写进
+   库里那份分段）；再让这一章重新准备一次（翻走再翻回来继续朗读，或在分镜页点「重新分析」），
+   实际发声也是那个人；接着对这一章再点「重新分析」，那几句不被改回 AI 的判断；取消分配则回落旁白、不留死段。
+   ②**S9 的验收**——库里已有同名多池的书，进「人物与角色配音」一次之后只剩一行，日志里有那份
+   「配音角色同名折叠」报告（写明丢了哪个池/声音）；再进一次不应有第二份报告。
+   ③**S4 + S3 的验收**——同书同池连建两个角色应拿到两个不同音色，且重跑还是这两个；
+   给一条音色标上性别/年龄段后，新角色补到的声音跟着这一栏走。
+   ④**S7 切片D 那条未验的**——阅读页那颗 AI 按钮（标签已变）打开的是配乐弹层：底部「场景提示词」
+   展开能改能存，存完下一次「开始识别」发的就是新文本，头部垃圾桶只清本章配乐、不动正文里的角色胶囊。
+2. 结果回我。编译或真机有问题就单独一笔修；本轮待提交的是「S3/S4/S5①/S8/S9 代码一笔 + 两份文档一笔」
+   **+ D9（改设置不再作废已有分镜、徽标删除）代码一笔 + D9 文档一笔**，
+   按你之前的口径推 `trae/agent-Xgf87B`（agent 分支不出包）。
+3. 剩下的下一刀只有一个：**S9 的结构收尾**——`cast_characters` 退役、档案表追加
+   `voiceEffect/sortOrder/bubbleRuleJson` 三列、两套主体 id 归一、`book_cast_memory` 改结构化导入。
+   这四项要动迁移条目并搬约 20 个文件的读写，我会在动手前把迁移写法与回滚口径交给你核对。
    ~~D3~~ 已按你的判定移出计划，不再出现在任何一刀里。
