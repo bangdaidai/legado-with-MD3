@@ -17,6 +17,7 @@ import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.ui.book.shareCard.ShareCardScene
 import io.legado.app.domain.model.TextProcessStyle
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
@@ -320,6 +321,8 @@ data class ReadBookUiState(
     val readAloudTimerChapters: Int = 0,
     val speechAnalysisMode: String = "rule",
     val speechAnalysisReasoningLevel: String = AiReasoningLevel.OFF.storageValue,
+    /** 归因口径（[SpeechAttributionStrictness.storageValue]）：拿不准的台词硬给一个人，还是宁缺毋滥。 */
+    val speechAttributionStrictness: String = SpeechAttributionStrictness.MustAnswer.storageValue,
     val useMultiSpeaker: Boolean = true,
     /** 多角色分配开关（胶囊渲染 + 点击分配），与多角色朗读独立。 */
     val multiRoleCast: Boolean = false,

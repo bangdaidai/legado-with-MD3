@@ -25,6 +25,7 @@ fun ReadAloudSettingsUiState.asReadBookUiState(): ReadBookUiState = ReadBookUiSt
     readAloudStreamAudio = readAloudStreamAudio,
     speechAnalysisMode = speechAnalysisMode,
     speechAnalysisReasoningLevel = speechAnalysisReasoningLevel,
+    speechAttributionStrictness = speechAttributionStrictness,
     useMultiSpeaker = useMultiSpeaker,
     multiRoleCast = multiRoleCast,
     bgmAssign = bgmAssign,

@@ -10,6 +10,7 @@ import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.help.readaloud.cast.CastSpeechOverlay
 import kotlinx.coroutines.CancellationException
@@ -45,6 +46,8 @@ class ResolveEffectiveSpeechPlanUseCase(
         analysisReasoningLevel: AiReasoningLevel? = null,
         /** 发起者标注，进 AI 日志与回落提示。 */
         source: String = "朗读",
+        /** 归因口径覆盖；null 表示读设置里那一份。 */
+        attributionStrictness: SpeechAttributionStrictness? = null,
     ): List<SpeechPlanItem> {
         if (bookUrl.isEmpty() || paragraphs.isEmpty()) return emptyList()
         val settings = readAloudSettingsGateway.currentSettings
@@ -76,6 +79,8 @@ class ResolveEffectiveSpeechPlanUseCase(
                 useMultiSpeaker = multiSpeakerOn,
                 policy = splitPolicy,
                 source = source,
+                attributionStrictness = attributionStrictness
+                    ?: SpeechAttributionStrictness.fromStorage(settings.speechAttributionStrictness),
             )
         }.onFailure {
             // 新一轮起播掐旧轮时也走到这里：取消不是失败，不得记"生成失败"再拿空计划继续——

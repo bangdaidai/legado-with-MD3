@@ -44,6 +44,9 @@ sealed interface ReadAloudConfigIntent {
     data class SetSpeechAnalysisMode(val value: String) : ReadAloudConfigIntent
     data class SetSpeechAnalysisReasoningLevel(val value: String) : ReadAloudConfigIntent
 
+    /** 归因口径；[value] 是 `SpeechAttributionStrictness.storageValue`。 */
+    data class SetSpeechAttributionStrictness(val value: String) : ReadAloudConfigIntent
+
     /** [value] 是 [ReadAloudContentSplitSetting.encode] 的 `方式|标点` 编码。 */
     data class SetContentSplitMode(val value: String) : ReadAloudConfigIntent
 

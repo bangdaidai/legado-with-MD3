@@ -13,6 +13,7 @@ import io.legado.app.domain.model.readaloud.ContentSplitPolicies
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
@@ -364,7 +365,7 @@ class SpeechStoryboardViewModel(
     }
 
     /** 与朗读服务同一份划分口径：读设置、定 policy，段落重建靠它对齐章内位置。 */
-private fun splitPolicy(): ContentSplitPolicy {
+    private fun splitPolicy(): ContentSplitPolicy {
         val splitMode = ContentSplitPolicies.resolve(
             ReadAloudContentSplitMode.fromStorage(ReadConfig.contentSplitMode),
             ReadConfig.useMultiSpeaker,
@@ -378,13 +379,21 @@ private fun splitPolicy(): ContentSplitPolicy {
      * 只依赖设置项，不需要正文段落也不需要人物档案，所以非当前章也能算出来——这是分镜页能判断
      * "库里那份是不是当前设置生成的"的前提。AI 模式的版本号取不到（没配模型 / 请求失败）时
      * 退回规则版本，与主链的降级口径一致。
+     *
+     * 归因口径必须一起传：它进同一条版本串，漏传就等于分镜页拿默认档去比对主链按用户那一档
+     * 写下的行，切过口径之后每章都会被判成"不是当前设置那份"。
      */
     private suspend fun currentResolverVersion(policy: ContentSplitPolicy): String {
         val rule = ruleResolverVersion(policy)
         val mode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode)
         if (mode == SpeechAnalysisMode.Rule) return rule
-        return runCatching { refineSpeechWithAi.resolverVersion(mode, policy) }
-            .getOrDefault(rule)
+        return runCatching {
+            refineSpeechWithAi.resolverVersion(
+                mode,
+                policy,
+                SpeechAttributionStrictness.fromStorage(ReadConfig.speechAttributionStrictness),
+            )
+        }.getOrDefault(rule)
     }
 
     /** 正在读的那一章：走完整分析链，拿得到最新的说话人与音色。 */

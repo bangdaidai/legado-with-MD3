@@ -273,6 +273,27 @@ enum class SpeechAnalysisMode(val storageValue: String) {
     }
 }
 
+/**
+ * 归因口径：AI 拿不准一句话是谁说的时候该怎么办。
+ *
+ * 两套判定规则与输出契约完全共用，切换只换这一档的口径文本（见
+ * [io.legado.app.domain.usecase.RefineSpeechWithAiUseCase]），所以解析器不会分裂。
+ * 但它改变发给模型的提示词 → 参与分析缓存身份，改这一档会让已分析过的章在下次听到时重跑一次。
+ *
+ * - [MustAnswer]（默认）：每一条都要给说话人，沉默、咳嗽、惨叫、人群齐声也算某个人发出的声音。
+ *   漏分的代价是整句掉回兜底音，比错分更难归因。
+ * - [EvidenceOnly]：只有明确证据才给，其余留空走默认音——宁可漏分，不可错分。
+ */
+enum class SpeechAttributionStrictness(val storageValue: String) {
+    MustAnswer("must_answer"),
+    EvidenceOnly("evidence_only");
+
+    companion object {
+        fun fromStorage(value: String): SpeechAttributionStrictness =
+            entries.firstOrNull { it.storageValue == value } ?: MustAnswer
+    }
+}
+
 data class SpeakerCharacter(
     val id: String,
     val name: String,

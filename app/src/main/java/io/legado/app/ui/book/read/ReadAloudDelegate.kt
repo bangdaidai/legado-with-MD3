@@ -118,6 +118,7 @@ class ReadAloudDelegate(
                         readAloudTimerChapters = prefs.timerChapters,
                         speechAnalysisMode = prefs.speechAnalysisMode,
                         speechAnalysisReasoningLevel = prefs.speechAnalysisReasoningLevel,
+                        speechAttributionStrictness = prefs.speechAttributionStrictness,
                         useMultiSpeaker = prefs.useMultiSpeaker,
                         multiRoleCast = prefs.multiRoleCast,
                         // 漏填这一项会出现「开关显示关、正文胶囊却还是开」：

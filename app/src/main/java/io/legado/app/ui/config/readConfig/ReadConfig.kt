@@ -105,6 +105,7 @@ object ReadConfig {
     val audioCacheCleanTime get() = aloud.audioCacheCleanTime * 60 * 1000L
     val speechAnalysisMode get() = aloud.speechAnalysisMode
     val speechAnalysisReasoningLevel get() = aloud.speechAnalysisReasoningLevel
+    val speechAttributionStrictness get() = aloud.speechAttributionStrictness
     val useMultiSpeaker get() = aloud.useMultiSpeaker
     val multiRoleCast get() = aloud.multiRoleCast
     val bgmAssign get() = aloud.bgmAssign

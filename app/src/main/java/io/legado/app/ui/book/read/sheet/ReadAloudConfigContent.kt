@@ -34,6 +34,7 @@ import io.legado.app.constant.ReadAloudBgMode
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.feature.readaloud.overlay.ReadAloudOverlayPermissionRoute
 import io.legado.app.ui.book.read.ReadBookUiState
@@ -313,6 +314,27 @@ fun ReadAloudConfigContent(
                         ),
                         onValueChange = {
                             onIntent(ReadAloudConfigIntent.SetSpeechAnalysisReasoningLevel(it))
+                        },
+                    )
+                    // 归因口径紧跟推理强度：两者都是"这一章交给 AI 判得多狠"，
+                    // 同属分析侧旋钮，不该散落到别的小节去。
+                    TinyDropdownSettingItem(
+                        title = stringResource(R.string.speech_attribution_strictness),
+                        selectedValue = state.speechAttributionStrictness.ifBlank {
+                            SpeechAttributionStrictness.MustAnswer.storageValue
+                        },
+                        displayEntries = arrayOf(
+                            stringResource(R.string.speech_attribution_must_answer),
+                            stringResource(R.string.speech_attribution_evidence_only),
+                        ),
+                        entryValues = SpeechAttributionStrictness.entries
+                            .map { it.storageValue }
+                            .toTypedArray(),
+                        description = stringResource(
+                            R.string.speech_attribution_strictness_summary
+                        ),
+                        onValueChange = {
+                            onIntent(ReadAloudConfigIntent.SetSpeechAttributionStrictness(it))
                         },
                     )
                     // 配乐那条闸跟角色那两条同属"要不要按人/按场景分配"，留在同一节里

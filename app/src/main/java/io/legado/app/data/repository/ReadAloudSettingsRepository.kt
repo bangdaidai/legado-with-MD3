@@ -10,6 +10,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.PlaybackTimer
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
@@ -116,6 +117,10 @@ internal fun Preferences.toReadAloudSettings(): ReadAloudSettings = ReadAloudSet
         ReadAloudKeys.SpeechAnalysisReasoningLevel,
         AiReasoningLevel.OFF.storageValue,
     ),
+    speechAttributionStrictness = compatDsValue(
+        ReadAloudKeys.SpeechAttributionStrictness,
+        SpeechAttributionStrictness.MustAnswer.storageValue,
+    ),
     useMultiSpeaker = compatDsValue(ReadAloudKeys.UseMultiSpeaker, true),
     defaultNarratorVoiceId = compatDsValue(ReadAloudKeys.DefaultNarratorVoiceId, ""),
     multiRoleCast = compatDsValue(ReadAloudKeys.MultiRoleCast, false),
@@ -181,6 +186,7 @@ internal fun ReadAloudSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.ttsSpeechRate to ttsSpeechRate,
     PreferKey.speechAnalysisMode to speechAnalysisMode,
     PreferKey.speechAnalysisReasoningLevel to speechAnalysisReasoningLevel,
+    PreferKey.speechAttributionStrictness to speechAttributionStrictness,
     PreferKey.useMultiSpeaker to useMultiSpeaker,
     PreferKey.defaultNarratorVoiceId to defaultNarratorVoiceId,
     PreferKey.multiRoleCast to multiRoleCast,
@@ -229,6 +235,8 @@ private object ReadAloudKeys {
     val SpeechAnalysisMode = stringPreferencesKey(PreferKey.speechAnalysisMode)
     val SpeechAnalysisReasoningLevel =
         stringPreferencesKey(PreferKey.speechAnalysisReasoningLevel)
+    val SpeechAttributionStrictness =
+        stringPreferencesKey(PreferKey.speechAttributionStrictness)
     val UseMultiSpeaker = booleanPreferencesKey(PreferKey.useMultiSpeaker)
     val DefaultNarratorVoiceId = stringPreferencesKey(PreferKey.defaultNarratorVoiceId)
     val MultiRoleCast = booleanPreferencesKey(PreferKey.multiRoleCast)

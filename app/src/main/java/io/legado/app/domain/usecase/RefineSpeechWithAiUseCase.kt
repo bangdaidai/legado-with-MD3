@@ -23,6 +23,7 @@ import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.readaloud.SpeechEmotion
 import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
@@ -181,7 +182,7 @@ class RefineSpeechWithAiUseCase(
     }
 
     /**
-     * 分析缓存版本号 = **解析口径**：切分规则 / 分析模式 / 模型 / 提示词。
+     * 分析缓存版本号 = **解析口径**：切分规则 / 分析模式 / 模型 / 提示词 / 归因口径。
      *
      * 角色库不在这里。它曾经是本串的一段 `md5(所有非草稿档案的 id:updatedAt)`，代价是
      * 名册里任意一行时间戳一变（转正、改别名、换池，甚至详情页只动头像——保存是整行重建）
@@ -191,20 +192,25 @@ class RefineSpeechWithAiUseCase(
      * （见 [analyzeChapter] 里的 `knownProfiles`），这条本来就自动成立。
      * 想让旧章按新名册重判，用分镜页的「重新分析」显式动作。
      *
-     * 归零：把该段拼回列表末尾即恢复旧行为，旧分析行没有删改，键算回去就能命中。
+     * 归因口径 [strictness] 在键里：它换的是发给模型的那段口径文本，同一章在两档下
+     * 的结论本来就该不同，共用一个键会让切换后拿到另一档的旧结果。
+     *
+     * 归零：把该段从串里去掉即恢复旧行为，旧分析行没有删改，键算回去就能命中。
      */
     suspend fun resolverVersion(
         mode: SpeechAnalysisMode,
         policy: ContentSplitPolicy,
+        strictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
     ): String {
         if (mode == SpeechAnalysisMode.Rule) return ruleResolverVersion(policy)
         val preset = resolvePreset()
-        val promptHash = MD5Utils.md5Encode(systemPrompt(preset, mode))
+        val promptHash = MD5Utils.md5Encode(systemPrompt(preset, mode, strictness))
         return listOf(
             // 与纯规则分段共用同一前缀，AI 结果才不会被误判成规则模式
             ruleResolverVersion(policy),
             VERSION,
             mode.storageValue,
+            strictness.storageValue,
             preset.model.id,
             promptHash,
         ).joinToString(":")
@@ -218,6 +224,8 @@ class RefineSpeechWithAiUseCase(
         policy: ContentSplitPolicy = ContentSplitPolicy.SentenceLevel,
         now: Long = System.currentTimeMillis(),
         source: String = "朗读",
+        /** 归因口径：拿不准时硬给一个人（必答）还是留空走默认音（宁缺毋滥）。 */
+        strictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
         // 单飞：键就是 analysis.id（书+章+contentHash+resolverVersion 的确定性身份），
@@ -228,7 +236,7 @@ class RefineSpeechWithAiUseCase(
         if (running == null) {
             try {
                 val result = analyzeExclusive(
-                    analysisResult, paragraphs, mode, reasoningLevel, policy, now, source,
+                    analysisResult, paragraphs, mode, reasoningLevel, policy, now, source, strictness,
                 )
                 mine.complete(result)
                 return result
@@ -254,7 +262,9 @@ class RefineSpeechWithAiUseCase(
             null
         }
         if (shared != null) return shared
-        return analyzeExclusive(analysisResult, paragraphs, mode, reasoningLevel, policy, now, source)
+        return analyzeExclusive(
+            analysisResult, paragraphs, mode, reasoningLevel, policy, now, source, strictness,
+        )
     }
 
     private suspend fun analyzeExclusive(
@@ -265,6 +275,7 @@ class RefineSpeechWithAiUseCase(
         policy: ContentSplitPolicy,
         now: Long,
         source: String,
+        strictness: SpeechAttributionStrictness,
     ): ChapterSpeechAnalysisResult {
         val bookUrl = analysisResult.analysis.bookUrl
         // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
@@ -312,6 +323,8 @@ class RefineSpeechWithAiUseCase(
             ) return@withLock analysisResult
             val profiles = knownProfiles(analysisResult.analysis.bookUrl)
             val preset = resolvePreset()
+            // 声音池候选整章取一次：新建说话人要按性别年龄气质挑池（与逐句 AI 分配同一份候选）
+            val pools = runCatching { VoicePoolStore.enabledPoolNames() }.getOrDefault(emptyList())
             val refined = try {
                 // 朗读轮次被新轮取代时会 cancel 掉整条准备链——如果不隔离，已经发出去的
                 // AI 请求（整章分析动辄五六十秒）会被连根掐死、结果全扔，该章下次朗读
@@ -328,6 +341,8 @@ class RefineSpeechWithAiUseCase(
                             reasoningLevel = reasoningLevel,
                             now = now,
                             source = source,
+                            strictness = strictness,
+                            pools = pools,
                         )
                         SpeechAnalysisMode.AiUnderstanding -> {
                             // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
@@ -341,6 +356,8 @@ class RefineSpeechWithAiUseCase(
                                     reasoningLevel = reasoningLevel,
                                     now = now,
                                     source = source,
+                                    strictness = strictness,
+                                    pools = pools,
                                 )
                             } else {
                                 understandAtoms(
@@ -351,6 +368,8 @@ class RefineSpeechWithAiUseCase(
                                     reasoningLevel = reasoningLevel,
                                     now = now,
                                     source = source,
+                                    strictness = strictness,
+                                    pools = pools,
                                 )
                             }
                         }
@@ -529,6 +548,8 @@ class RefineSpeechWithAiUseCase(
         reasoningLevel: AiReasoningLevel,
         now: Long,
         source: String,
+        strictness: SpeechAttributionStrictness,
+        pools: List<String>,
     ): List<ChapterSpeechSegment> {
         val candidates = analysisResult.segments.filter { segment ->
             !segment.userLocked && segment.source != SpeechResolutionSource.Ai && (
@@ -556,6 +577,8 @@ class RefineSpeechWithAiUseCase(
                 "characters" to profiles.map {
                     it.toPromptMap(poolLabels[it.id].orEmpty())
                 },
+                // 新建说话人从这里挑声音池；已有角色带着自己的池进来，模型不该再给
+                "pools" to pools,
                 "segments" to chunk.map { segment ->
                     mapOf(
                         "segmentId" to segment.id,
@@ -568,7 +591,15 @@ class RefineSpeechWithAiUseCase(
                 },
             )
             val response = try {
-                generateResponse(preset, SpeechAnalysisMode.RuleWithAi, payload, reasoningLevel, analysisResult.analysis.chapterIndex, source)
+                generateResponse(
+                    preset = preset,
+                    mode = SpeechAnalysisMode.RuleWithAi,
+                    payload = payload,
+                    reasoningLevel = reasoningLevel,
+                    chapterIndex = analysisResult.analysis.chapterIndex,
+                    source = source,
+                    strictness = strictness,
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -672,17 +703,34 @@ class RefineSpeechWithAiUseCase(
         }
     }
 
-    /** AI 认出的人物声音，但没命中已有角色卡时，返回待建草稿卡的「名字 to 性别」。 */
-    private fun AiSegmentDecision.newSpeaker(): Pair<String, String>? {
-        if (characterId != null) return null
-        if (roleType != SpeechRoleType.Character && roleType != SpeechRoleType.Thought) return null
-        return speakerName?.let { it to speakerGender }
-    }
+    /** AI 认出的人物声音，但没命中已有角色卡时，返回待建草稿卡的称呼、性别与 AI 建议池。 */
+    private fun AiSegmentDecision.newSpeaker(): SpeakerSuggestion? = suggestion(
+        characterId = characterId,
+        roleType = roleType,
+        name = speakerName,
+        gender = speakerGender,
+        poolLabel = speakerPool,
+    )
 
-    private fun AiAtomGroup.newSpeaker(): Pair<String, String>? {
-        if (characterId != null) return null
-        if (roleType != SpeechRoleType.Character && roleType != SpeechRoleType.Thought) return null
-        return speakerName?.let { it to speakerGender }
+    private fun AiAtomGroup.newSpeaker(): SpeakerSuggestion? = suggestion(
+        characterId = characterId,
+        roleType = roleType,
+        name = speakerName,
+        gender = speakerGender,
+        poolLabel = speakerPool,
+    )
+
+    /** 只有没命中已有角色、又确实是人物声音的条目才建卡（泛称走对白兜底，不建卡）。 */
+    private fun suggestion(
+        characterId: String?,
+        roleType: SpeechRoleType,
+        name: String?,
+        gender: String,
+        poolLabel: String,
+    ): SpeakerSuggestion? = when {
+        characterId != null -> null
+        roleType != SpeechRoleType.Character && roleType != SpeechRoleType.Thought -> null
+        else -> name?.let { SpeakerSuggestion(it, gender, poolLabel) }
     }
 
     /**
@@ -690,24 +738,35 @@ class RefineSpeechWithAiUseCase(
      *
      * 草稿卡在配音页单独一栏、可以直接绑音色、在朗读里参与路由，但只有用户点「转正」才会变成正式角色卡。
      * 按名字去重，因为 `book_character_profiles` 对 (bookUrl, name) 有唯一索引。
+     *
+     * AI 建议的声音池只作用在**新建**这一张卡上：已有档案的池一律不动，改池等于换声音。
+     * 池名查无此池（模型自创、或池被删）时留空，交给自动选音按性别兜底。
      */
     private suspend fun ensureDraftProfiles(
         bookUrl: String,
         profiles: List<BookCharacterProfile>,
-        speakers: List<Pair<String, String>>,
+        speakers: List<SpeakerSuggestion>,
         now: Long,
     ): List<BookCharacterProfile> {
         if (speakers.isEmpty()) return profiles
         val existingNames = profiles.mapTo(hashSetOf()) { it.name.trim() }
         val created = mutableListOf<BookCharacterProfile>()
-        speakers.distinctBy { it.first.trim() }.forEach { (name, gender) ->
-            val trimmed = name.trim()
+        speakers.distinctBy { it.name.trim() }.forEach { speaker ->
+            val trimmed = speaker.name.trim()
             if (trimmed.isBlank() || !existingNames.add(trimmed)) return@forEach
+            val pool = speaker.poolLabel.trim()
+                .takeIf { it.isNotEmpty() }
+                ?.let { label -> runCatching { VoicePoolStore.poolByName(label) }.getOrNull() }
+            if (speaker.poolLabel.isNotBlank() && pool == null) {
+                AppLog.putDebug("AI 建议的声音池「${speaker.poolLabel}」不存在，新人「$trimmed」先不指定池")
+            }
             val profile = BookCharacterProfile(
                 id = Uuid.random().toString(),
                 bookUrl = bookUrl,
                 name = trimmed,
-                voiceGender = gender,
+                voiceGender = speaker.gender,
+                voicePoolId = pool?.id.orEmpty(),
+                voiceAgeBand = pool?.ageBand ?: BookCharacterProfile.VOICE_AGE_UNKNOWN,
                 status = BookCharacterProfile.STATUS_DRAFT,
                 source = BookCharacterProfile.SOURCE_AI,
                 confidence = DRAFT_SPEAKER_CONFIDENCE,
@@ -732,6 +791,8 @@ class RefineSpeechWithAiUseCase(
         reasoningLevel: AiReasoningLevel,
         now: Long,
         source: String,
+        strictness: SpeechAttributionStrictness,
+        pools: List<String>,
     ): List<ChapterSpeechSegment> {
         val atoms = paragraphs.flatMap(AiSpeechAtomizer::atomize)
         if (atoms.isEmpty()) return analysisResult.segments
@@ -745,6 +806,8 @@ class RefineSpeechWithAiUseCase(
                 "characters" to knownProfiles.map {
                     it.toPromptMap(poolLabels[it.id].orEmpty())
                 },
+                // 新建说话人从这里挑声音池；已有角色带着自己的池进来，模型不该再给
+                "pools" to pools,
                 "atoms" to chunk.map { atom ->
                     val paragraphText = paragraphsById[atom.paragraphIndex]?.text.orEmpty()
                     mapOf(
@@ -763,7 +826,15 @@ class RefineSpeechWithAiUseCase(
                 },
             )
             val response = try {
-                generateResponse(preset, SpeechAnalysisMode.AiUnderstanding, payload, reasoningLevel, analysisResult.analysis.chapterIndex, source)
+                generateResponse(
+                    preset = preset,
+                    mode = SpeechAnalysisMode.AiUnderstanding,
+                    payload = payload,
+                    reasoningLevel = reasoningLevel,
+                    chapterIndex = analysisResult.analysis.chapterIndex,
+                    source = source,
+                    strictness = strictness,
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -909,15 +980,6 @@ class RefineSpeechWithAiUseCase(
         return result.sortedWith(compareBy(ChapterSpeechSegment::paragraphIndex, ChapterSpeechSegment::start))
     }
 
-    private suspend fun generate(
-        preset: AiTaskPresetConfig,
-        mode: SpeechAnalysisMode,
-        payload: Any,
-        reasoningLevel: AiReasoningLevel,
-        chapterIndex: Int? = null,
-        source: String = "朗读",
-    ): String = generateResponse(preset, mode, payload, reasoningLevel, chapterIndex, source).text
-
     private suspend fun generateResponse(
         preset: AiTaskPresetConfig,
         mode: SpeechAnalysisMode,
@@ -925,6 +987,7 @@ class RefineSpeechWithAiUseCase(
         reasoningLevel: AiReasoningLevel,
         chapterIndex: Int? = null,
         source: String = "朗读",
+        strictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
     ): AiGenerateResponse {
         // 待决策的分段/原子数量决定输出 JSON 的长度：每条决策（segmentId+UUID+枚举）
         // 实测约 200-300 字符。按数量放大 max_tokens，否则长章的决策列表会在
@@ -939,7 +1002,7 @@ class RefineSpeechWithAiUseCase(
             AiGenerateRequest(
                 model = preset.model,
                 messages = listOf(
-                    AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode)),
+                    AiMessage(AiMessageRole.SYSTEM, systemPrompt(preset, mode, strictness)),
                     AiMessage(AiMessageRole.USER, GSON.toJson(payload)),
                 ),
                 params = speechAnalysisParams(preset, reasoningLevel, decisionCount),
@@ -1022,7 +1085,17 @@ class RefineSpeechWithAiUseCase(
                     it.status == BookCharacterProfile.STATUS_DRAFT
             }
 
-    private fun systemPrompt(preset: AiTaskPresetConfig, mode: SpeechAnalysisMode): String {
+    /**
+     * 发给模型的完整 system prompt = 归因规则主体 + **归因口径** + 输出契约。
+     *
+     * 用户在提示词预设里保存过内容时，只替换主体；口径与契约照样追加——口径是朗读设置里
+     * 那一档单选（必答 / 宁缺毋滥），契约必须与解析器严格一致，都不允许被预设改掉。
+     */
+    private fun systemPrompt(
+        preset: AiTaskPresetConfig,
+        mode: SpeechAnalysisMode,
+        strictness: SpeechAttributionStrictness,
+    ): String {
         val custom = preset.promptTemplate.takeIf {
             preset.taskType == AiTaskType.ANALYZE_SPEECH && it.isNotBlank()
         }
@@ -1030,6 +1103,13 @@ class RefineSpeechWithAiUseCase(
             // 主体（角色设定 + 归因规则）：默认来自 NG 对齐版，用户在提示词预设里
             // 保存过则整段覆盖；输出 JSON 契约必须与解析器严格一致，永远由代码追加
             append(custom ?: DEFAULT_PROMPT)
+            append("\n")
+            append(
+                when (strictness) {
+                    SpeechAttributionStrictness.MustAnswer -> ATTRIBUTION_MUST_ANSWER
+                    SpeechAttributionStrictness.EvidenceOnly -> ATTRIBUTION_EVIDENCE_ONLY
+                }
+            )
             if (mode == SpeechAnalysisMode.RuleWithAi) {
                 append(SEGMENT_SCHEMA_RULES)
             } else {
@@ -1047,6 +1127,7 @@ class RefineSpeechWithAiUseCase(
                 characterId = item.optionalString("characterId"),
                 speakerName = item.speakerName(),
                 speakerGender = item.speakerGender(),
+                speakerPool = item.speakerPool(),
                 emotion = item.emotion(),
                 confidence = item.confidence(),
             )
@@ -1061,6 +1142,7 @@ class RefineSpeechWithAiUseCase(
                 characterId = item.optionalString("characterId"),
                 speakerName = item.speakerName(),
                 speakerGender = item.speakerGender(),
+                speakerPool = item.speakerPool(),
                 emotion = item.emotion(),
                 confidence = item.confidence(),
             )
@@ -1084,11 +1166,31 @@ class RefineSpeechWithAiUseCase(
     private fun JsonObject.emotion(): String =
         SpeechEmotion.fromStorage(optionalString("emotion").orEmpty()).storageValue
 
-    /** 正文给出的稳定称呼；泛称（大汉、老捕头之类）一律当路人，不建卡。 */
+    /**
+     * 正文给出的稳定称呼；泛称（大汉、老捕头之类）一律当路人，不建卡。
+     *
+     * 「我/他/旁白」这类占位主名在这里挡第二道：契约里已经明令禁止（DEFAULT_PROMPT 第 6 条），
+     * 但这类名字一旦建档就再也删不干净——它是旧「AI 分配角色」引擎实证的"分错了还越改越乱"
+     * 放大器（任何没依据的句子都能往「我」身上安），所以模型返回了也不落库。
+     * 挡下之后这条决策仍然生效，只是不建卡：那句走对白兜底或默认音。
+     */
     private fun JsonObject.speakerName(): String? =
         optionalString("speakerName")?.trim()?.takeIf {
-            it.isNotBlank() && it.length <= 24 && it !in VIRTUAL_SPEAKER_NAMES
+            it.isNotBlank() && it.length <= 24 &&
+                it.toIntOrNull() == null &&
+                it !in VIRTUAL_SPEAKER_NAMES && it !in PLACEHOLDER_SPEAKER_NAMES
         }
+
+    /**
+     * AI 给新建说话人挑的声音池名；只在逐字命中 pools 时有意义，这里不做校验。
+     *
+     * 落库前由 [ensureDraftProfiles] 按名查池：查不到（模型自创、池已删）就留空，
+     * 让自动选音按性别兜底，绝不自造一个池外键。
+     */
+    private fun JsonObject.speakerPool(): String =
+        optionalString("speakerPool")?.trim()?.takeIf {
+            it.isNotBlank() && it.length <= 24
+        }.orEmpty()
 
     private fun JsonObject.speakerGender(): String {
         val value = optionalString("speakerGender")?.trim().orEmpty()
@@ -1148,6 +1250,7 @@ class RefineSpeechWithAiUseCase(
         val characterId: String?,
         val speakerName: String?,
         val speakerGender: String,
+        val speakerPool: String,
         val emotion: String,
         val confidence: Float,
     )
@@ -1158,8 +1261,21 @@ class RefineSpeechWithAiUseCase(
         val characterId: String?,
         val speakerName: String?,
         val speakerGender: String,
+        val speakerPool: String,
         val emotion: String,
         val confidence: Float,
+    )
+
+    /**
+     * AI 建议新建的说话人：稳定称呼 + 性别 + 建议的声音池名。
+     *
+     * [poolLabel] 只在**新建**这一张卡时用来定池（逐字取自 pools，查无此池即忽略）；
+     * 命中已有档案的说话人不会走到这里，所以它没有"给同人换声音"的机会。
+     */
+    private data class SpeakerSuggestion(
+        val name: String,
+        val gender: String,
+        val poolLabel: String,
     )
 
     companion object {
@@ -1204,9 +1320,15 @@ class RefineSpeechWithAiUseCase(
 
         /**
          * 归因提示词主体，对齐 legado_NG 的 base-routing/protocol 提示词（中文、面向中文网文）。
-         * 提示词预设里保存的自定义内容会整段覆盖它；JSON 输出契约仍由 [SEGMENT_SCHEMA_RULES]
-         * / [ATOM_SCHEMA_RULES] 代码追加。strings.xml 的 ai_prompt_default_analyze_speech
-         * 是同一份文本（提示词配置页的默认值/重置目标），改这里必须同步改它。
+         *
+         * 2026-10-21 并入旧「AI 分配角色」引擎（[io.legado.app.help.readaloud.cast.AiCastAssignUseCase]）
+         * 里那套判定规则中与本链不冲突的部分：称呼归并（多重身份仍是同一人）、禁止把代词与叙述称谓
+         * 当主名、同一称谓同一写法、连着引号时说话人通常在交替。泛称那条**保留本链口径**
+         * （「大汉/侍卫」是路人，不建卡），没有吸收旧引擎"按身份称谓建档"的写法。
+         * 提示词预设里保存的自定义内容会整段覆盖它；归因口径与 JSON 输出契约仍由
+         * [ATTRIBUTION_MUST_ANSWER] / [SEGMENT_SCHEMA_RULES] / [ATOM_SCHEMA_RULES] 代码追加。
+         * strings.xml 的 ai_prompt_default_analyze_speech 是同一份文本（提示词配置页的默认值/重置目标），
+         * 改这里必须同步改它。
          */
         internal const val DEFAULT_PROMPT =
             "你是中文网文有声书的分镜师。结合章节上下文，判断输入分段属于旁白、人物对白、" +
@@ -1219,42 +1341,92 @@ class RefineSpeechWithAiUseCase(
                 "引号不等于人物声音：嵌在完整叙述句里的回想、复述、概括或对某句话的指称用 narrator，" +
                 "例如“那句‘靠你了’总往她心窝子钻”。只有人物此刻真正开口、独立呈现的原话才用 character。\n" +
                 "3. 说话人以发言动词、动作承接、声音说明、上下文主语和连续对话关系为依据。" +
-                "被提到、被称呼、被看见或被想到的人不等于说话人。\n" +
+                "被提到、被称呼、被看见或被想到的人不等于说话人：" +
+                "「李元老，您这话太过了」是**别人对李振富说**的话，说话人不是李振富——" +
+                "第二人称称呼谁，被称呼者就是听者。\n" +
                 "4. 先匹配 characters 里的 characterId。网名、昵称、账号名、群名片、代号、乳名和" +
                 "外号首先是已有人物的身份标签：正文出现「X 是 Y 的网名/昵称」或「哦，是 Y」等" +
-                "明确映射时，必须复用 Y 的 characterId，不得为 X 另立说话人。\n" +
+                "明确映射时，必须复用 Y 的 characterId，不得为 X 另立说话人。" +
+                "同一个人物的所有称呼（本名、化名、卧底或马甲身份、职务称谓、排行）都归到同一个角色；" +
+                "只有正文表明性别不同、或处于不同年龄阶段（回忆童年与现在）时才当成两个人。" +
+                "已有档案把同一个人记成两个名字时，用其真名输出。\n" +
                 "5. 说话人是明确的人但没命中任何已有角色时：characterId 留空，把稳定称呼" +
                 "（姓名、外号、唯一称谓）写进 speakerName，客户端会为它建临时角色。" +
                 "即使这个人物只出现一场，只要有稳定称呼也要写；不确定就留空，不要编造。\n" +
-                "6. 「大汉」「侍卫」「老捕头」「下属」这类一次性职业、群体或外貌泛称是路人：" +
+                "6. speakerName 一律写主名，**禁止把代词和叙述称谓当名字**：" +
+                "「我」「你」「您」「他」「她」「它」「咱」「俺」「本人」「自己」「人家」「旁白」「叙述者」" +
+                "「作者」「读者」这些写法一个都不许出现在 speakerName 里。" +
+                "第一人称叙述者说的话要写成他的姓名，全章查不到姓名就统一写「主角」。" +
+                "叙述里从不点名的配角（某元老、某干部、某侍女），拿叙述行给的身份称谓当主名" +
+                "（如「直系元老」「旁系干部」），整章同一称谓必须同一写法，不要换字、" +
+                "也不要编号成「元老甲/元老乙」。\n" +
+                "7. 「大汉」「侍卫」「老捕头」「下属」这类一次性职业、群体或外貌泛称是路人：" +
                 "characterId 与 speakerName 都留空。但路人只要是人物声音，性别能确认就写 " +
                 "male/female，客户端会用对白兜底音色发声，不要因为身份未知就把对白吞成旁白。\n" +
-                "7. speakerGender 只在正文有依据时返回 male/female：明确性别代词（她/他）、" +
+                "8. 连着几段都是引号、中间没有叙述行时，**不要默认是同一个人**：作者写一问一答" +
+                "正是这种排版，此时说话人通常在交替。用台词之间的呼应来定人——上一句被「您/你」" +
+                "指向的那位是本句的回答者；自称、被提到的亲属与下属关系、语气承接（反问、驳斥、顺承）" +
+                "都是依据。例：甲说「我儿子被砍了」→ 接一句「失去爱子的痛苦我不敢妄自揣测」的必定是乙，" +
+                "不是甲。\n" +
+                "9. speakerGender 只在正文有依据时返回 male/female：明确性别代词（她/他）、" +
                 "性别称呼（小姐、公子、夫人、姑娘、大哥、小妹妹）、「我叫……」类自述都是依据；" +
                 "姓名和职业本身不是证据。输出前复核每个 male/female 能否引用到正文线索，" +
                 "找不到就写 unknown，不要为了选音瞎猜；也尽量把称呼、代词提供的线索找尽，" +
                 "不要轻易留 unknown。\n" +
-                "8. 无法确认是人物声音时才按 narrator 处理；不得因为说话人身份或性别未知" +
+                "10. 新建说话人（characterId 留空且 speakerName 给了稳定称呼）时，从 pools 里挑" +
+                "最贴合其性别、年龄、气质的一个池名逐字写进 speakerPool；" +
+                "characters 里已有的角色**一律不要给 speakerPool**，那等于给同一个人换声音。" +
+                "pools 为空、或拿不准哪个池贴合就省略这个字段，客户端会自己按性别兜底选音。\n" +
+                "11. 无法确认是人物声音时才按 narrator 处理；不得因为说话人身份或性别未知" +
                 "而吞掉已确认的对白。\n" +
-                "9. emotion 只在文本有明确语气线索时给，不确定写 neutral；confidence 如实反映" +
+                "12. emotion 只在文本有明确语气线索时给，不确定写 neutral；confidence 如实反映" +
                 "证据强度，高置信度永远不能代替证据。"
+
+        /**
+         * 归因口径·必答（朗读设置里该档的默认值）。
+         *
+         * 来自旧「AI 分配角色」引擎的「逐条必答」要求：沉默、非语言声响、人群齐声都要给说话人。
+         * 漏分的代价是整句掉回兜底音，比错分更难归因。
+         */
+        private const val ATTRIBUTION_MUST_ANSWER =
+            "归因口径（必答）：输入的每一个分段都要给出一条结论，一个都不许漏。" +
+            "只表示沉默的『……』、咳血/闷哼/惨叫/呜啊啊这类非语言声响、人群齐声与四周惊呼、" +
+            "内心独白的转述，都是某个人物在这一句上发出的声音——按上下文判断是谁发出的并分配给他；" +
+            "同一段里两个人同声接话分不清时，归给上下文更贴合的那一个。" +
+            "不要因为台词短、没有实际内容或听着不像说话就跳过该条。"
+
+        /**
+         * 归因口径·宁缺毋滥。
+         *
+         * 旧引擎的「允许漏分」口径：没有明确证据就不给，让那句话走默认音。
+         * 两档共用同一份解析器与同一套 JSON 契约，漏分在两种模式下都有现成落点：分段模式不返回
+         * 该条（保留规则结果），原子模式把该句单独归成 unknown 组（未引用到的原子同样按未识别走）。
+         */
+        private const val ATTRIBUTION_EVIDENCE_ONLY =
+            "归因口径（宁缺毋滥）：只有这句话的说话人有明确证据（被点名、说话动作归属、" +
+            "上下文直接延续）时才把该条判给某个人物；任何不确定都不要给说话人——" +
+            "分段复核时不要返回该条，原子理解时按 narrator/unknown 归组，" +
+            "两种情况下客户端都保留规则结论走默认音。宁可漏分，不可错分。" +
+            "沉默与非语言声响同样按这个标准处理。"
 
         /** 分段复核模式的 JSON 输出契约，必须与 [parseSegmentDecisions] 的解析严格一致 */
         private const val SEGMENT_SCHEMA_RULES =
             "\n只返回一个 JSON 对象，不要 Markdown 与解释，不要发明 ID：" +
                 "\n{\"segments\":[{\"segmentId\":\"输入中的 ID\",\"roleType\":" +
                 "\"narrator|character|thought|unknown\",\"characterId\":\"characters 中的 ID 或 null\"," +
-                "\"speakerName\":\"稳定称呼或 null\",\"speakerGender\":\"male|female|unknown\"," +
+                "\"speakerName\":\"稳定称呼或 null\",\"speakerPool\":\"逐字取自 pools，可省略\"," +
+                "\"speakerGender\":\"male|female|unknown\"," +
                 "\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\"," +
                 "\"confidence\":0.88}]}。" +
-                "每个输入分段必须返回且只返回一条决策。"
+                "同一个分段最多返回一条决策；要不要逐条返回，按上面的归因口径执行。"
 
         /** 原子理解模式的 JSON 输出契约，必须与 [parseAtomGroups] 的解析严格一致 */
         private const val ATOM_SCHEMA_RULES =
             "\n只返回一个 JSON 对象，不要 Markdown 与解释，不要发明 ID：" +
                 "\n{\"segments\":[{\"atomIds\":[\"输入中的原子 ID\"],\"roleType\":" +
                 "\"narrator|character|thought|unknown\",\"characterId\":\"characters 中的 ID 或 null\"," +
-                "\"speakerName\":\"稳定称呼或 null\",\"speakerGender\":\"male|female|unknown\"," +
+                "\"speakerName\":\"稳定称呼或 null\",\"speakerPool\":\"逐字取自 pools，可省略\"," +
+                "\"speakerGender\":\"male|female|unknown\"," +
                 "\"emotion\":\"neutral|cheerful|sad|angry|fearful|surprised|disgusted|whispering|calm\"," +
                 "\"confidence\":0.88}]}。" +
                 "每个原子必须恰好归入一组、按输入顺序分组；一组内的原子必须连续且同属一段，" +
@@ -1267,6 +1439,17 @@ class RefineSpeechWithAiUseCase(
         private val VIRTUAL_SPEAKER_NAMES = setOf(
             SPEAKER_DIALOGUE_MALE_NAME,
             SPEAKER_DIALOGUE_FEMALE_NAME,
+        )
+
+        /**
+         * 占位主名黑名单：代词与叙述称谓不是任何人物的名字。
+         *
+         * 从旧「AI 分配角色」引擎原样吸收（连纯数字的「1/2/3」一起挡——那是模型给台词编号，
+         * 不是名字）。这类名字既不参与建卡，也不该出现在名册里让后续章节复用。
+         */
+        private val PLACEHOLDER_SPEAKER_NAMES = setOf(
+            "我", "你", "您", "他", "她", "它", "咱", "俺", "本人", "自己", "人家", "别人",
+            "旁白", "叙述者", "叙述", "作者", "读者", "主播", "系统", "无", "未知", "说话人",
         )
 
         /** 邻接称呼传播的女性称呼（NG 同款表） */

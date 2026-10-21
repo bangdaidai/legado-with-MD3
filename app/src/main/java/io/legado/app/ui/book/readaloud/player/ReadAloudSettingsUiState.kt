@@ -23,6 +23,8 @@ enum class ReadAloudConfigOption {
     StreamAudio,
     SpeechAnalysisMode,
     SpeechAnalysisReasoningLevel,
+    /** 归因口径：AI 拿不准时硬给一个人还是留空走默认音。 */
+    SpeechAttributionStrictness,
     UseMultiSpeaker,
     MultiRoleCast,
     BgmAssign,
@@ -53,6 +55,8 @@ data class ReadAloudSettingsUiState(
     val readAloudStreamAudio: Boolean = false,
     val speechAnalysisMode: String = "rule",
     val speechAnalysisReasoningLevel: String = "",
+    /** 归因口径，见 `SpeechAttributionStrictness.storageValue`；空串按默认档（必答）显示。 */
+    val speechAttributionStrictness: String = "",
     val useMultiSpeaker: Boolean = true,
     val multiRoleCast: Boolean = false,
     val bgmAssign: Boolean = false,

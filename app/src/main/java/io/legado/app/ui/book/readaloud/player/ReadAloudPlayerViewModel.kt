@@ -15,6 +15,7 @@ import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.model.settings.ReadSettings
@@ -221,6 +222,15 @@ class ReadAloudPlayerViewModel(
                     restartReadAloudPipeline(readAloudSessionStore, application)
                 }
 
+                ReadAloudConfigOption.SpeechAttributionStrictness -> {
+                    // 口径同时换发给模型的 prompt 和分析身份：不重启就是「设置已切成另一档、
+                    // 这一章听见的还是上一档判出来的归属」，与分析模式那条同一个道理。
+                    val strictness = SpeechAttributionStrictness.fromStorage(value)
+                    readAloudSettingsGateway.update {
+                        it.copy(speechAttributionStrictness = strictness.storageValue)
+                    }
+                    restartReadAloudPipeline(readAloudSessionStore, application)
+                }
 
                 ReadAloudConfigOption.UseMultiSpeaker -> {
                     // 正在朗读时必须重启朗读服务才能换掉合成管线；
@@ -401,6 +411,7 @@ private fun toReadAloudSettingsUiState(
     readAloudStreamAudio = aloud.streamReadAloudAudio,
     speechAnalysisMode = aloud.speechAnalysisMode,
     speechAnalysisReasoningLevel = aloud.speechAnalysisReasoningLevel,
+    speechAttributionStrictness = aloud.speechAttributionStrictness,
     useMultiSpeaker = aloud.useMultiSpeaker,
     multiRoleCast = aloud.multiRoleCast,
     bgmAssign = aloud.bgmAssign,

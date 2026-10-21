@@ -2,6 +2,7 @@ package io.legado.app.data.repository
 
 import io.legado.app.constant.PreferKey
 import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
@@ -11,14 +12,14 @@ import org.junit.Test
 class ReadAloudSettingsMappingTest {
 
     @Test
-    fun `朗读设置 29 键写映射逐字段对应`() {
+    fun `朗读设置偏好键写映射逐字段对应`() {
         readAloudMappingSamples().forEach { settings ->
             assertEquals(settings.expectedPrefMap(), settings.toPrefMap())
         }
     }
 
     @Test
-    fun `朗读设置 29 键读映射逐字段对应`() {
+    fun `朗读设置偏好键读映射逐字段对应`() {
         readAloudMappingSamples().forEach { expected ->
             assertEquals(expected, expected.expectedPrefMap().toTestPreferences().toReadAloudSettings())
         }
@@ -77,6 +78,16 @@ class ReadAloudSettingsMappingTest {
 
         assertEquals(AiReasoningLevel.OFF.storageValue, settings.speechAnalysisReasoningLevel)
     }
+
+    @Test
+    fun `归因口径默认必答`() {
+        val settings = emptyMap<String, Any?>().toTestPreferences().toReadAloudSettings()
+
+        assertEquals(
+            SpeechAttributionStrictness.MustAnswer.storageValue,
+            settings.speechAttributionStrictness,
+        )
+    }
 }
 
 private const val CAPSULE_OFFSET_X = "read_aloud_capsule_offset_x"
@@ -94,6 +105,9 @@ private fun readAloudMappingSamples(): List<ReadAloudSettings> {
         ttsSpeechRate = 44,
         speechAnalysisMode = "ai",
         speechAnalysisReasoningLevel = "medium",
+        speechAttributionStrictness = SpeechAttributionStrictness.EvidenceOnly.storageValue,
+        // 默认旁白音色 id 也在 toPrefMap 里，样本不给非空值就测不出这一键的读写映射
+        defaultNarratorVoiceId = "voice-narrator-unique",
         defaultInterface = "player",
         contentSelectSpeakMode = 55,
         audioPreDownloadNum = 66,
@@ -158,7 +172,9 @@ private fun ReadAloudSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.ttsSpeechRate to ttsSpeechRate,
     PreferKey.speechAnalysisMode to speechAnalysisMode,
     PreferKey.speechAnalysisReasoningLevel to speechAnalysisReasoningLevel,
+    PreferKey.speechAttributionStrictness to speechAttributionStrictness,
     PreferKey.useMultiSpeaker to useMultiSpeaker,
+    PreferKey.defaultNarratorVoiceId to defaultNarratorVoiceId,
     PreferKey.multiRoleCast to multiRoleCast,
     PreferKey.bgmAssign to bgmAssign,
     PreferKey.defaultReadAloudInterface to defaultInterface,

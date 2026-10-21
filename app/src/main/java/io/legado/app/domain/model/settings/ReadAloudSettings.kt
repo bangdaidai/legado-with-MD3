@@ -1,6 +1,7 @@
 package io.legado.app.domain.model.settings
 
 import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 
 /**
  * 听书内容划分方式：决定一段正文被切成多少个朗读单元。
@@ -90,6 +91,14 @@ data class ReadAloudSettings(
      * `reasoning_content` and the analysis fails, so thinking must be opted into explicitly.
      */
     val speechAnalysisReasoningLevel: String = AiReasoningLevel.OFF.storageValue,
+    /**
+     * 归因口径：AI 拿不准这句话是谁说的时候，是「硬着头皮给一个人」还是「留空走默认音」。
+     *
+     * 默认必答——漏分会让整句掉回兜底音，比错分更难归因。这一档改变发给模型的提示词，
+     * 因此参与分析缓存身份：切换后已分析过的章在下次听到时各重跑一次 AI。
+     */
+    val speechAttributionStrictness: String =
+        SpeechAttributionStrictness.MustAnswer.storageValue,
     val useMultiSpeaker: Boolean = true,
     /**
      * 全局默认旁白音色 id；空串表示未选，旁白走现状兜底（引擎默认音色）。

@@ -8,6 +8,7 @@ import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
+import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.help.readaloud.cast.VoicePoolStore
@@ -50,6 +51,8 @@ class PrepareChapterSpeechPlanUseCase(
         policy: ContentSplitPolicy,
         /** 发起者标注（朗读/预合成），进 AI 日志与回落提示，区分同一章的两条分析链 */
         source: String = "朗读",
+        /** 归因口径：决定发给模型的口径文本，同时参与分析身份（见 [RefineSpeechWithAiUseCase.resolverVersion]）。 */
+        attributionStrictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
     ): List<SpeechPlanItem> {
         if (paragraphs.isEmpty()) return emptyList()
         val requestedMode = analysisMode
@@ -57,7 +60,9 @@ class PrepareChapterSpeechPlanUseCase(
         val resolverVersion = if (requestedMode == SpeechAnalysisMode.Rule) {
             ruleVersion
         } else {
-            runCatching { refineSpeechWithAi.resolverVersion(requestedMode, policy) }
+            runCatching {
+                refineSpeechWithAi.resolverVersion(requestedMode, policy, attributionStrictness)
+            }
                 .onFailure {
                     if (it.isCancelledByNextRound()) {
                         // 本轮被新一轮起播裸 cancel() 掐掉，不是「没启用 AI」，不许弹回落 toast
@@ -99,6 +104,7 @@ class PrepareChapterSpeechPlanUseCase(
                     reasoningLevel = analysisReasoningLevel,
                     policy = policy,
                     source = source,
+                    strictness = attributionStrictness,
                 )
             }.onSuccess {
                 lastNotifiedFallback = null
