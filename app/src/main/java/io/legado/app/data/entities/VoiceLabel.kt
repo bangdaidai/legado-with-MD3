@@ -2,7 +2,6 @@ package io.legado.app.data.entities
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 
 /**
  * 用户给单个音色标的分类（性别 / 年龄段 / 风格标签）。
@@ -19,7 +18,9 @@ import androidx.room.PrimaryKey
     primaryKeys = ["voiceId"],
 )
 data class VoiceLabel(
-    @PrimaryKey
+    /** 主键只在 `@Entity(primaryKeys = ...)` 上声明：字段再挂一个 `@PrimaryKey`，Room 会当成
+     *  两处主键而直接报错（`You cannot have multiple primary keys defined`）。本仓库的
+     *  `chapter_speech_segments`、`chapter_role_assignments` 也都是这一种写法。 */
     val voiceId: String,
     /** 取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits]：`male` / `female`，空 = 未标注。 */
     @ColumnInfo(defaultValue = "")
