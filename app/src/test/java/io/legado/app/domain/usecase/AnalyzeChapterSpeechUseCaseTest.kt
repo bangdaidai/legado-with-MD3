@@ -4,6 +4,8 @@ import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
+import io.legado.app.domain.model.readaloud.ChapterSpeechSegments
+import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.ContentSplitPolicies
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechRoleType
@@ -138,11 +140,39 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         this.segments = segments
     }
 
-    // 锁定只改这一列，其余字段原样；假实现按 id 命中即可。
+    // 这个用例只关心"分段落库 + 缓存复用"，下面几个读取口它是路过的，给空实现即可。
+    // （它们是这个接口后来加的，缺一个整个测试源集就编不过去。）
+    override suspend fun getChapterSegments(
+        bookUrl: String,
+        chapterIndex: Int,
+    ): List<ChapterSpeechSegment> = segments.filter {
+        it.bookUrl == bookUrl && it.chapterIndex == chapterIndex
+    }
+
+    override suspend fun getChapterSegmentsFor(
+        bookUrl: String,
+        chapterIndex: Int,
+        resolverVersion: String,
+    ): ChapterSpeechSegments = ChapterSpeechSegments(
+        segments = getChapterSegments(bookUrl, chapterIndex),
+        isCurrent = true,
+        contentHash = analysis?.contentHash.orEmpty(),
+    )
+
+    override suspend fun getChapterSummaries(
+        bookUrl: String,
+        resolverVersion: String,
+    ): List<ChapterSpeechSummary> = emptyList()
+
     override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) {
         segments = segments.map {
             if (it.id == segmentId) it.copy(userLocked = locked) else it
         }
+    }
+
+    override suspend fun deleteBook(bookUrl: String) {
+        analysis = null
+        segments = emptyList()
     }
 
     override suspend fun deleteChapter(bookUrl: String, chapterIndex: Int) {
