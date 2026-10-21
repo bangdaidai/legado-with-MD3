@@ -199,6 +199,15 @@ data class ChapterSpeechSegments(
     val segments: List<ChapterSpeechSegment>,
     /** 见 [ChapterSpeechSummary.isCurrent]。 */
     val isCurrent: Boolean,
+    /**
+     * 这一份分段当时是按哪一份正文算出来的（`chapter_speech_analysis.contentHash`）。
+     *
+     * 空串 = 取到的不是当前设置那一份，没有可对比的基准。它存在的唯一理由是给分镜页做
+     * **同源判定**：分配表覆盖层的坐标量在「带角色标记的正文」上，而库里那一份分段的坐标
+     * 是分析当时那份正文上的；正文或标记变过，两边就对不上，硬套覆盖会把角色安到别的句子上。
+     * 只有两边哈希一致才允许套。
+     */
+    val contentHash: String = "",
 )
 
 data class CanonicalSpeechParagraph(

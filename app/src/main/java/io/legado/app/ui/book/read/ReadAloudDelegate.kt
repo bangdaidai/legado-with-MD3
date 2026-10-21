@@ -127,6 +127,8 @@ class ReadAloudDelegate(
                         bgmVolume = io.legado.app.help.readaloud.cast.BgmPoolStore.volume(),
                         defaultReadAloudInterface = prefs.defaultInterface,
                         preDownloadNum = host.preDownloadNum,
+                        // 音频预取章数住在朗读设置这一份，与上面的正文预下载是两个键，别混
+                        audioPreDownloadNum = prefs.audioPreDownloadNum,
                         audioCacheCleanTime = prefs.audioCacheCleanTime,
                         readAloudParagraphInterval = prefs.ttsParagraphInterval,
                     )
@@ -294,7 +296,8 @@ class ReadAloudDelegate(
 
     /** 卡片里滑页/点 tab：tab 住在状态里，弹层被拆掉重建才不会退回常规。 */
     fun setConfigTab(tab: Int) {
-        host.updateState { it.copy(readAloudConfigTab = tab.coerceIn(0, 2)) }
+        // 卡片只有常规 / 引擎与音色两页，角色与配乐早已是整屏页，不再占 tab。
+        host.updateState { it.copy(readAloudConfigTab = tab.coerceIn(0, 1)) }
     }
 
     /*

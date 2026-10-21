@@ -67,6 +67,14 @@ sealed interface ReadAloudConfigIntent {
     // --- 数值项（整页宿主就地铺滑块） ---
 
     data class SetPreDownloadNum(val value: Int) : ReadAloudConfigIntent
+    /**
+     * 在线朗读引擎的音频预取章数。
+     *
+     * 与 [SetPreDownloadNum] 是两件事：那一项预下载的是**正文章节**，这一项预合成的是**音频**，
+     * 只有 http 引擎读它（`HttpReadAloudService`）。过去界面上只有「听书预加载数量」一个名字，
+     * 挂在正文预下载上，音频那一项根本没有入口。
+     */
+    data class SetAudioPreDownloadNum(val value: Int) : ReadAloudConfigIntent
     data class SetPreSynthesisConcurrency(val value: Int) : ReadAloudConfigIntent
     data class SetParagraphInterval(val value: Int) : ReadAloudConfigIntent
     data class SetAudioCacheCleanTime(val value: Int) : ReadAloudConfigIntent

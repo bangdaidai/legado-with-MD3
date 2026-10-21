@@ -79,6 +79,9 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
         is ReadAloudConfigIntent.SetPreDownloadNum ->
             onConfigIntent(ReadAloudConfigOption.PreDownloadNum, intValue = intent.value)
 
+        is ReadAloudConfigIntent.SetAudioPreDownloadNum ->
+            onConfigIntent(ReadAloudConfigOption.AudioPreDownloadNum, intValue = intent.value)
+
         is ReadAloudConfigIntent.SetPreSynthesisConcurrency ->
             onConfigIntent(ReadAloudConfigOption.PreSynthesisConcurrency, intValue = intent.value)
 

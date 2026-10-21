@@ -16,6 +16,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.repository.ReadPreferences
+import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.usecase.BookmarkTargetVerdict
 import io.legado.app.ui.book.read.sheet.AiRewritePresetConfigSheet
 import io.legado.app.ui.book.read.sheet.AiTextCleanSheet
@@ -312,6 +313,11 @@ fun ReadBookScreen(
     io.legado.app.ui.book.read.sheet.AiCastDialogSheet(
         show = state.activeSheet is ReadBookSheet.AiCastDialog,
         sceneOnly = (state.activeSheet as? ReadBookSheet.AiCastDialog)?.sceneOnly == true,
+        // 推理强度的唯一真相在朗读设置，这里只把当前值交给弹层回显
+        reasoningLevel = AiReasoningLevel.fromStorage(
+            state.speechAnalysisReasoningLevel,
+            AiReasoningLevel.OFF,
+        ),
         onDismissRequest = dismissSheet,
         onIntent = onIntent,
     )

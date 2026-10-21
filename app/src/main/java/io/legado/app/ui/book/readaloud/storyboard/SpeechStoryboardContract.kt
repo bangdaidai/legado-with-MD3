@@ -145,6 +145,15 @@ sealed interface SpeechStoryboardIntent {
     /** 点片段右侧试听：正在试听同一段则停止 */
     data class PreviewSegment(val itemId: String) : SpeechStoryboardIntent
 
+    /**
+     * 锁定 / 解锁这一段（[itemId] 就是 `chapter_speech_segments` 那一行的 id）。
+     *
+     * 锁定 = 用户认可这一句的说话人：现成的「跳过锁定段」判断会让重新分析不再改它，
+     * 这是正文胶囊之外唯一能把结论钉到分析表上的动作。它**不换音色、也不重启朗读**，
+     * 所以只改那一列，界面就地翻转徽标即可。
+     */
+    data class ToggleSegmentLock(val itemId: String) : SpeechStoryboardIntent
+
     data object StopPreview : SpeechStoryboardIntent
 
     /** UI 播放器自然播完，只用来清「试听中」状态 */

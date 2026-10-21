@@ -42,6 +42,16 @@ interface ChapterSpeechGateway {
     ): List<ChapterSpeechSummary>
 
     suspend fun replaceSegments(analysisId: String, segments: List<ChapterSpeechSegment>)
+
+    /**
+     * 分镜页「锁定 / 解锁这一段」：只改这一行的 `userLocked`。
+     *
+     * 只给一列的原因见 [io.legado.app.data.dao.ChapterSpeechDao.setUserLocked]——
+     * 界面上那一行可能是分配表覆盖切过的碎片，整份回写会盖掉库里那条分析段。
+     * 锁定后这条归属就进了现成的「跳过锁定段」名单：AI 重跑分析不再改它。
+     */
+    suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean)
+
     suspend fun deleteChapter(bookUrl: String, chapterIndex: Int)
 
     /** 删书时清掉整本的分镜 */

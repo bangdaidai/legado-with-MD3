@@ -568,6 +568,18 @@ private fun VoiceCastingCard(
                 }
             },
             trailingContent = when {
+                // 草稿角色：能转正、能编辑音色。音色失效的提醒交给下面那行红字，
+                // 这里不再摆一个占位的警告图标——没有菜单的话，这一行就什么动作都没有。
+                item.kind == CastingSubjectKind.TemporaryCharacter -> {
+                    {
+                        CastDraftRowActions(
+                            editing = editing,
+                            onToggleEdit = onToggleEdit,
+                            onPromote = { onIntent(BookVoiceCastingIntent.PromoteCharacter(item.subjectId)) },
+                        )
+                    }
+                }
+
                 !isCharacter && item.hasBinding && !item.voiceAvailable -> {
                     {
                         AppIcon(
@@ -609,11 +621,21 @@ private fun VoiceCastingCard(
                     onCancel = onToggleEdit,
                 )
             } else {
-                CastNarratorEditorPanel(
+                // 旁白和「AI 认出但还没转正」的草稿角色都只有音色这一件事可编辑，共用单音色面板。
+                // 保存必须把这一行的主体一起交给 ViewModel：草稿角色绑的是 (character, 档案 id)，
+                // 而旁白绑的是 (narrator, narrator)。这个面板早年写死了旁白，
+                // 给一个还没转正的说话人选一次音色，整本书的旁白就跟着换了。
+                CastVoiceRowEditorPanel(
                     item = item,
                     voices = voices,
                     onSave = { voiceId ->
-                        onIntent(BookVoiceCastingIntent.SetNarratorVoice(voiceId))
+                        onIntent(
+                            BookVoiceCastingIntent.SetRowVoice(
+                                subjectType = item.subjectType,
+                                subjectId = item.subjectId,
+                                voiceId = voiceId,
+                            )
+                        )
                         onChanged()
                     },
                     onCancel = onToggleEdit,

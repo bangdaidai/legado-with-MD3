@@ -28,6 +28,8 @@ enum class ReadAloudConfigOption {
     BgmAssign,
     ContentSplit,
     PreDownloadNum,
+    /** 在线朗读引擎的音频预取章数（系统 TTS 不适用）。 */
+    AudioPreDownloadNum,
     PreSynthesisConcurrency,
     ParagraphInterval,
     AudioCacheCleanTime,
@@ -57,6 +59,8 @@ data class ReadAloudSettingsUiState(
     val readAloudContentSplitMode: String = "default",
     val readAloudContentSplitSymbols: Set<String> = emptySet(),
     val preDownloadNum: Int = 10,
+    /** 在线朗读引擎的音频预取章数；系统 TTS 不读这一项。 */
+    val audioPreDownloadNum: Int = 3,
     val preSynthesisConcurrency: Int = 3,
     val readAloudParagraphInterval: Int = 0,
     val audioCacheCleanTime: Int = 10,

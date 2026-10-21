@@ -68,6 +68,15 @@ class RefineSpeechWithAiUseCase(
     private val bookAiCooldownUntil = ConcurrentHashMap<String, Long>()
 
     /**
+     * 冷却跳过提示的去重：bookUrl → 已经提示过的冷却截止时间。
+     *
+     * 冷却是上一轮 AI 失败留下的，期间每一章都只会按规则读。原本一声不吭，才有
+     * 「明明配了模型，整本听下来全是旁白，还以为是模型没生效」。同一轮冷却只弹一次，
+     * 后续章节只进日志；下次失败会写入更晚的截止时间，提示随之重新弹一次。
+     */
+    private val cooldownNoticeUntil = ConcurrentHashMap<String, Long>()
+
+    /**
      * 同一本书的 AI 分析串行锁。
      *
      * 朗读服务起播和分镜页点开当前章会并发调用本 use case，而「冷却判断 → AI 调用 → 冷却写入」
@@ -93,6 +102,30 @@ class RefineSpeechWithAiUseCase(
 
     fun clearAiCooldown(bookUrl: String) {
         bookAiCooldownUntil.remove(bookUrl)
+        cooldownNoticeUntil.remove(bookUrl)
+    }
+
+    /**
+     * 冷却期内跳过 AI：这一章只拿到规则结论，必须说清楚"不是模型没配，是上次失败后在冷却"。
+     *
+     * 沉默的回落是「配了模型却全程单角色」最难查的一段——日志里连一行都没有。
+     */
+    private fun notifyCooldownSkip(
+        bookUrl: String,
+        chapterIndex: Int,
+        cooldownUntil: Long,
+        now: Long,
+    ) {
+        val remainingSec = ((cooldownUntil - now + 999) / 1000).coerceAtLeast(1L)
+        val isNewCooldown = cooldownNoticeUntil[bookUrl] != cooldownUntil
+        if (isNewCooldown) {
+            cooldownNoticeUntil[bookUrl] = cooldownUntil
+        }
+        AppLog.put(
+            "AI 分配角色: 第${chapterIndex + 1}章跳过 AI，按规则读——" +
+                "本书上一次 AI 识别失败，冷却还剩 ${remainingSec} 秒",
+            toast = isNewCooldown,
+        )
     }
 
     /**
@@ -147,22 +180,25 @@ class RefineSpeechWithAiUseCase(
         return result
     }
 
+    /**
+     * 分析缓存版本号 = **解析口径**：切分规则 / 分析模式 / 模型 / 提示词。
+     *
+     * 角色库不在这里。它曾经是本串的一段 `md5(所有非草稿档案的 id:updatedAt)`，代价是
+     * 名册里任意一行时间戳一变（转正、改别名、换池，甚至详情页只动头像——保存是整行重建）
+     * 就让全书每一章的 analysisId 对不上，缓存整体失效、重烧一遍 token。
+     * 但"谁说了这句"是历史事实：名册变了不改变那句话当时判给谁。
+     * 名册对分析的真正影响只有"后续新章要用新名册"，而每次分析都现读档案
+     * （见 [analyzeChapter] 里的 `knownProfiles`），这条本来就自动成立。
+     * 想让旧章按新名册重判，用分镜页的「重新分析」显式动作。
+     *
+     * 归零：把该段拼回列表末尾即恢复旧行为，旧分析行没有删改，键算回去就能命中。
+     */
     suspend fun resolverVersion(
-        bookUrl: String,
         mode: SpeechAnalysisMode,
         policy: ContentSplitPolicy,
     ): String {
         if (mode == SpeechAnalysisMode.Rule) return ruleResolverVersion(policy)
         val preset = resolvePreset()
-        val profiles = knownProfiles(bookUrl)
-        val characterRevision = profiles
-            // AI 分析自建的草稿卡是分析的产物：计入版本号会让每次分析都让自己下一次的
-            // 缓存失效（草稿卡落库 → revision 变 → 同章下一次朗读 key 对不上 → 重新
-            // 分析 → 又建卡……死循环）。只有用户手动维护的角色（转正/编辑/新增正式卡）
-            // 才构成「角色库变化」，需要让旧分析过期。
-            .filter { it.status != BookCharacterProfile.STATUS_DRAFT }
-            .sortedBy(BookCharacterProfile::id)
-            .joinToString("|") { "${it.id}:${it.updatedAt}" }
         val promptHash = MD5Utils.md5Encode(systemPrompt(preset, mode))
         return listOf(
             // 与纯规则分段共用同一前缀，AI 结果才不会被误判成规则模式
@@ -171,7 +207,6 @@ class RefineSpeechWithAiUseCase(
             mode.storageValue,
             preset.model.id,
             promptHash,
-            MD5Utils.md5Encode(characterRevision),
         ).joinToString(":")
     }
 
@@ -238,7 +273,11 @@ class RefineSpeechWithAiUseCase(
         // （用户实测等 72 秒）；同章仍互斥（防朗读与分镜页并发重复分析）
         val guard = bookLocks.getOrPut("$bookUrl#${analysisResult.analysis.chapterIndex}") { Mutex() }
         return guard.withLock {
-            if (bookAiCooldownUntil[bookUrl]?.let { now < it } == true) return@withLock analysisResult
+            val cooldownUntil = bookAiCooldownUntil[bookUrl]
+            if (cooldownUntil != null && now < cooldownUntil) {
+                notifyCooldownSkip(bookUrl, analysisResult.analysis.chapterIndex, cooldownUntil, now)
+                return@withLock analysisResult
+            }
             // 等锁期间（上一轮的分析在 NonCancellable 里还在跑）可能已把本章 AI 结果
             // 落库：直接复用最新缓存，否则补发轮会拿着进锁前的规则快照再发一次 AI
             val latest = runCatching {
@@ -350,6 +389,7 @@ class RefineSpeechWithAiUseCase(
                 chapterSpeechGateway.saveAnalysis(analysis, refined)
                 // AI 这次跑通了，解除本书冷却，保证后续章节能正常用多角色
                 bookAiCooldownUntil.remove(bookUrl)
+                cooldownNoticeUntil.remove(bookUrl)
                 analysisResult.copy(
                     analysis = analysis,
                     segments = refined,

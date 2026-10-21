@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
@@ -60,8 +62,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Observer
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.legado.app.R
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
@@ -73,6 +78,7 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarScrollBehavior
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
+import io.legado.app.utils.eventObservable
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -107,6 +113,23 @@ fun SpeechStoryboardScreen(
             true
         }
         onDispose { runCatching { player.release() } }
+    }
+
+    /*
+     * AI 分析回落规则的提示原本只有朗读服务在听（`BaseReadAloudService.observeLiveBus`）。
+     * 分镜页点「重新分析」用的是同一条回落链，但用户完全可以在没播放的情况下进这页——
+     * 那时事件发出来没人接，页面看着像"分析完了但角色还是旁白"。页面自己订一份，
+     * 失败原因当场说清楚，不必先把声音开起来才能看见问题。
+     */
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observable = eventObservable<String>(EventBus.ALOUD_AI_FALLBACK)
+        val observer = Observer<String> { message ->
+            AppLog.put("分镜页收到 AI 回落提示：$message")
+            context.toastOnUi(message)
+        }
+        observable.observe(lifecycleOwner, observer)
+        onDispose { observable.removeObserver(observer) }
     }
 
     BackHandler(enabled = inChapterDetail) {
@@ -466,6 +489,7 @@ private fun StoryboardList(
                             }
                         },
                         onPreview = { id -> onIntent(SpeechStoryboardIntent.PreviewSegment(id)) },
+                        onToggleLock = { id -> onIntent(SpeechStoryboardIntent.ToggleSegmentLock(id)) },
                     )
                 }
             }
@@ -485,6 +509,7 @@ private fun SceneCard(
     onToggleScene: () -> Unit,
     onToggleDetails: (String) -> Unit,
     onPreview: (String) -> Unit,
+    onToggleLock: (String) -> Unit,
 ) {
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
@@ -511,6 +536,7 @@ private fun SceneCard(
                     detailsExpanded = item.id in expandedItems,
                     onToggleDetails = { onToggleDetails(item.id) },
                     onPreview = { onPreview(item.id) },
+                    onToggleLock = { onToggleLock(item.id) },
                 )
             }
         }
@@ -567,7 +593,7 @@ private fun SceneHeaderRow(
 }
 
 /**
- * 段行＝卷轴上的一节：左时间轴节点、说话人左锚、正文全展开、右上角小圆试听钮。
+ * 段行＝卷轴上的一节：左时间轴节点、说话人左锚、正文全展开、右上角小圆锁定+试听钮。
  * 整行点击展开/收起出处详情（对齐 NG 的行内节奏，卡片仍是我们的玻璃卡）。
  */
 @Composable
@@ -581,6 +607,7 @@ private fun SegmentRow(
     detailsExpanded: Boolean,
     onToggleDetails: () -> Unit,
     onPreview: () -> Unit,
+    onToggleLock: () -> Unit,
 ) {
     // 时间轴小圆点要对齐的是「角色行/音色行」这条文字线的视觉中线。
     // 行高由主题字体决定、各档不同，写死 dp 必然错位——改为量出来的中线：
@@ -680,11 +707,57 @@ private fun SegmentRow(
                 )
             }
         }
+        SegmentLockButton(
+            locked = item.locked,
+            onClick = onToggleLock,
+            modifier = Modifier.padding(top = 14.dp, end = 6.dp),
+        )
         PreviewButton(
             previewable = item.previewable,
             previewing = previewing,
             onClick = onPreview,
             modifier = Modifier.padding(top = 14.dp, end = 12.dp),
+        )
+    }
+}
+
+/**
+ * 锁定 / 解锁这一段：钉住这一句的说话人，重新分析时跳过它。
+ *
+ * 与试听同款角标尺寸，放在试听钮左边。未锁定时只给淡灰描不出色，避免一屏十几行
+ * 全是亮按钮抢正文的注意力；锁定后转主色，配合详情里的「已被你锁定」一眼能扫出来。
+ */
+@Composable
+private fun SegmentLockButton(
+    locked: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(28.dp)
+            .background(
+                if (locked) {
+                    LegadoTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.05f)
+                },
+                CircleShape,
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (locked) Icons.Default.Lock else Icons.Default.LockOpen,
+            contentDescription = stringResource(
+                if (locked) R.string.speech_storyboard_unlock else R.string.speech_storyboard_lock,
+            ),
+            tint = if (locked) {
+                LegadoTheme.colorScheme.primary
+            } else {
+                LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+            },
+            modifier = Modifier.size(16.dp),
         )
     }
 }
@@ -805,6 +878,17 @@ private fun SummaryCards(state: SpeechStoryboardUiState) {
                         },
                     ),
                 )
+                /*
+                 * 章节列表那一行只能挂一句短徽标，说不清"为什么不作数、我能做什么"。
+                 * 点开这一章的人在配置卡里看到完整解释和动作，不用自己猜是不是功能坏了。
+                 */
+                if (!state.usesCurrentConfig) {
+                    AppText(
+                        text = stringResource(R.string.speech_storyboard_stale_hint),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         val summary = state.summary

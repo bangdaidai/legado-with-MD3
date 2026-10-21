@@ -31,6 +31,7 @@ fun ReadAloudSettingsUiState.asReadBookUiState(): ReadBookUiState = ReadBookUiSt
     readAloudContentSplitMode = readAloudContentSplitMode,
     readAloudContentSplitSymbols = readAloudContentSplitSymbols.toImmutableSet(),
     preDownloadNum = preDownloadNum,
+    audioPreDownloadNum = audioPreDownloadNum,
     preSynthesisConcurrency = preSynthesisConcurrency,
     readAloudParagraphInterval = readAloudParagraphInterval,
     audioCacheCleanTime = audioCacheCleanTime,

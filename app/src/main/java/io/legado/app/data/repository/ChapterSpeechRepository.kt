@@ -57,7 +57,7 @@ class ChapterSpeechRepository(
     /**
      * 取当前设置会用的那一份，匹配不上才退回最近一次并标 [ChapterSpeechSegments.isCurrent] = false。
      *
-     * 同���章可以同时存在多份 analysis（划分方式、分析模式或人物档案一变 resolverVersion 就变），
+     * 同一章可以同时存在多份 analysis（划分方式、分析模式、模型或提示词一变 resolverVersion 就变；人物档案不在版本号里，见 RefineSpeechWithAiUseCase.resolverVersion），
      * 按 updatedAt 取最新拿到的不一定是正在播的那份——命中缓存时写入方不会更新 updatedAt，
      * 于是"先用 AI 模式读过、后切回规则模式"的章节会一直返回旧划分。界面按那份分段显示的
      * 角色与音色，跟实际播出的完全是两套。
@@ -72,6 +72,9 @@ class ChapterSpeechRepository(
             ChapterSpeechSegments(
                 segments = dao.getSegments(exact.id).map(ChapterSpeechSegmentEntity::toDomain),
                 isCurrent = true,
+                // 当前设置那一份才有可对比的正文基准；退回最近一次时给空串，
+                // 界面据此判「无法确认同源」，不拿覆盖层去套一份坐标可能对不上的分段
+                contentHash = exact.contentHash,
             )
         } else {
             ChapterSpeechSegments(
@@ -86,18 +89,24 @@ class ChapterSpeechRepository(
         bookUrl: String,
         resolverVersion: String,
     ): List<ChapterSpeechSummary> = withContext(Dispatchers.IO) {
-        // getBookAnalyses 已按 updatedAt 降序，每个 chapterIndex 的第一条就是统计查询选中的那份
-        val current = dao.getBookAnalyses(bookUrl)
-            .groupBy({ it.chapterIndex }, { it.resolverVersion })
-            .mapValues { (_, versions) -> versions.first() == resolverVersion }
-        dao.getChapterSummaries(bookUrl).map { row ->
+        /*
+         * 每章先挑「版本号等于当前设置」的那一行，没有才退回最近一次——与
+         * [getChapterSegmentsFor] 的 exact 命中同一个口径，徽标与详情页不会各说各话。
+         *
+         * 旧判据是「本章 max(updatedAt) 那一行等不等于当前版本」。可"最新落库"不等于"现在在用"：
+         * 命中缓存时写入方不刷 updatedAt，所以先用 AI 读过、再切回规则重读的章节，最新那行还是
+         * AI 那份，明明在用的当前结果反倒被标成"旧划分"。
+         */
+        val chosen = dao.getChapterCurrentAnalyses(bookUrl, resolverVersion)
+            .associate { it.chapterIndex to it.resolverVersion }
+        dao.getChapterSummaries(bookUrl, resolverVersion).map { row ->
             ChapterSpeechSummary(
                 chapterIndex = row.chapterIndex,
                 title = row.title,
                 segmentCount = row.segmentCount,
                 characterCount = row.characterCount,
                 updatedAt = row.updatedAt,
-                isCurrent = current[row.chapterIndex] ?: false,
+                isCurrent = chosen[row.chapterIndex] == resolverVersion,
             )
         }
     }
@@ -112,6 +121,15 @@ class ChapterSpeechRepository(
         }
         dao.replaceSegments(analysisId, segments.map(ChapterSpeechSegment::toEntity))
     }
+
+    /**
+     * 只改这一行的 `userLocked`，不碰其它列（口径见
+     * [io.legado.app.domain.gateway.ChapterSpeechGateway.setSegmentUserLocked]）。
+     */
+    override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) =
+        withContext(Dispatchers.IO) {
+            dao.setUserLocked(segmentId, locked, System.currentTimeMillis())
+        }
 
     override suspend fun deleteChapter(bookUrl: String, chapterIndex: Int) =
         withContext(Dispatchers.IO) {

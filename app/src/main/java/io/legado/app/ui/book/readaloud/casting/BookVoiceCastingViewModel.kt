@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readaloud.casting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
@@ -84,7 +85,8 @@ class BookVoiceCastingViewModel(
             is BookVoiceCastingIntent.PreviewVoice -> previewVoice(intent.voiceId)
             BookVoiceCastingIntent.ClearBinding -> clearBinding()
             is BookVoiceCastingIntent.PromoteCharacter -> promoteCharacter(intent.subjectId)
-            is BookVoiceCastingIntent.SetNarratorVoice -> setNarratorVoice(intent.voiceId)
+            is BookVoiceCastingIntent.SetRowVoice ->
+                setRowVoice(intent.subjectType, intent.subjectId, intent.voiceId)
             is BookVoiceCastingIntent.SaveCharacterOrder -> saveCharacterOrder(intent.characterIds)
             is BookVoiceCastingIntent.SetAvatar -> setAvatar(intent.characterId, intent.avatarUri)
         }
@@ -382,16 +384,24 @@ class BookVoiceCastingViewModel(
     }
 
     /**
-     * 旁白的音色绑定。旁白不是角色，没有名字/声音池/变声器可存，只有这一条绑定：
-     * 空 voiceId 就是删掉绑定，朗读侧回落到朗读引擎自己的默认发音人。
+     * 单音色面板的保存：只写传进来的那一个主体，不认死旁白。
+     *
+     * 旁白不是角色——没有名字、不进声音池、也没有角色级变声器那一列可写，它的有效状态
+     * 就是 book_voice_bindings 里的一条 (narrator, narrator)。草稿角色卡共用同一张面板，
+     * 但它的有效状态是 (character, 档案 id) 那一条，所以主体必须由界面一起传过来。
+     *
+     * 空 voiceId 是删绑定：旁白行回到朗读引擎自己的默认发音人，角色行回到自动选音。
+     * 每次写入都把主体记进日志，这是"选一个音、整本书变声"的回归观察点——
+     * 再出现那个症状，先看这一行写的是 (narrator, narrator) 还是 (character, ...)。
      */
-    private fun setNarratorVoice(voiceId: String) {
-        val subject = BookVoiceBinding.SUBJECT_NARRATOR
+    private fun setRowVoice(subjectType: String, subjectId: String, voiceId: String) {
+        val rowLabel = rowLabel(subjectType, subjectId)
         val binding = bindings.firstOrNull {
-            it.subjectType == subject && it.subjectId == subject
+            it.subjectType == subjectType && it.subjectId == subjectId
         }
         if (voiceId.isBlank()) {
             val doomed = binding ?: return
+            AppLog.put("配音页: 取消「$rowLabel」的音色绑定（原来是 ${doomed.voiceId}）")
             viewModelScope.launch {
                 try {
                     voiceGateway.deleteBinding(doomed)
@@ -404,14 +414,19 @@ class BookVoiceCastingViewModel(
             }
             return
         }
-        val voice = voices.firstOrNull { it.id == voiceId && it.available && it.enabled } ?: return
+        val voice = voices.firstOrNull { it.id == voiceId && it.available && it.enabled }
+        if (voice == null) {
+            AppLog.put("配音页: 「$rowLabel」要绑的音色不可用（$voiceId），本次没有写入")
+            return
+        }
+        AppLog.put("配音页: 「$rowLabel」绑定音色 ${voice.displayName}（$subjectType/$subjectId）")
         viewModelScope.launch {
             try {
                 voiceGateway.upsertBinding(
                     BookVoiceBinding(
                         bookUrl = bookUrl,
-                        subjectType = subject,
-                        subjectId = subject,
+                        subjectType = subjectType,
+                        subjectId = subjectId,
                         voiceId = voice.id,
                         locked = true,
                         source = BookVoiceBinding.SOURCE_USER,
@@ -429,6 +444,12 @@ class BookVoiceCastingViewModel(
             }
         }
     }
+
+    /** 日志里说清这一行是谁：用界面上正在显示的名字，查不到才退回主体键。 */
+    private fun rowLabel(subjectType: String, subjectId: String): String =
+        _uiState.value.items.firstOrNull {
+            it.subjectType == subjectType && it.subjectId == subjectId
+        }?.name ?: "$subjectType/$subjectId"
 
     private fun saveCharacterOrder(characterIds: List<String>) {
         viewModelScope.launch {

@@ -13,6 +13,7 @@ import io.legado.app.domain.model.readaloud.ContentSplitPolicies
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
+import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
@@ -54,8 +55,10 @@ import splitties.init.appCtx
  * 实际发声是覆盖**之后**的；整段/整页划分下覆盖层还会再切一刀，一行分镜根本不对应任何
  * 一条实际发声的单元。
  *
- * 正在读的那一章走完整分析链（可以重新分析），其它章只把库里存下来的分段读出来 ——
- * 分段按朗读服务的同一划分口径从新引擎章节输入重建，单独去数据库捞正文再切一次只会和朗读时对不上。
+ * 库里已经有分段的章节一律读缓存再套分配表覆盖，只有"正在读且还没分析过"的那一章才现跑完整
+ * 分析链——分段按朗读服务的同一划分口径从新引擎章节输入重建，单独去数据库捞正文再切一次只会和
+ * 朗读时对不上。套覆盖前还要比一次正文哈希：段落和分析当时不是同一份就跳过，宁可少显示一层，
+ * 也不能把胶囊按错坐标安到别人的话上（见 [cachedChapterPlan]）。
  *
  * 场景分组是朗读分析之外按需补跑的一层（[RefineSpeechWithAiUseCase.assignScenes]）：
  * 只有 AI 分析模式的分镜页会触发，成功才写回库；失败保持扁平列表，不影响朗读。
@@ -166,6 +169,8 @@ class SpeechStoryboardViewModel(
             }
 
             is SpeechStoryboardIntent.PreviewSegment -> previewSegment(intent.itemId)
+
+            is SpeechStoryboardIntent.ToggleSegmentLock -> toggleSegmentLock(intent.itemId)
 
             SpeechStoryboardIntent.StopPreview -> stopPreview()
 
@@ -294,18 +299,20 @@ class SpeechStoryboardViewModel(
                 }
                 val plan = when {
                     reanalyze -> analyzeChapter(chapterIndex, policy, resetCache = true)
-                    isCurrent -> {
+
+                    stored.segments.isNotEmpty() -> {
                         // 朗读期间这章的分析已经落在库里，直接读缓存即可，
                         // 避免和正在进行的朗读并发再发一次 AI（重复生成 / 一直转圈）。
-                        // 只有库里还没有这章分析结果（比如还没起播就先进分镜页看）时才跑完整链路。
-                        if (stored.segments.isNotEmpty()) {
-                            overlayOnCached(chapterIndex, policy, stored.segments)
-                        } else {
-                            analyzeChapter(chapterIndex, policy, resetCache = false)
-                        }
+                        // 当前章和非当前章在这里是同一条路：都读库 + 套覆盖，
+                        // 区别只在于非当前章拿不到段落时不套。
+                        cachedChapterPlan(chapterIndex, policy, stored)
                     }
 
-                    else -> cachedChapterPlan(chapterIndex, policy)
+                    // 库里没有这一章：只有正在读的那一章能现重建段落去跑完整链路，
+                    // 非当前章没有段落来源，也别为它白烧一次 AI。
+                    isCurrent -> analyzeChapter(chapterIndex, policy, resetCache = false)
+
+                    else -> emptyList()
                 }
                 currentPlan = plan
                 val items = plan.map(::toItemUi)
@@ -368,7 +375,7 @@ private fun splitPolicy(): ContentSplitPolicy {
     /**
      * 当前设置会写出的分析版本号。
      *
-     * 只依赖设置与人物档案、不需要正文段落，所以非当前章也能算出来——这是分镜页能判断
+     * 只依赖设置项，不需要正文段落也不需要人物档案，所以非当前章也能算出来——这是分镜页能判断
      * "库里那份是不是当前设置生成的"的前提。AI 模式的版本号取不到（没配模型 / 请求失败）时
      * 退回规则版本，与主链的降级口径一致。
      */
@@ -376,7 +383,7 @@ private fun splitPolicy(): ContentSplitPolicy {
         val rule = ruleResolverVersion(policy)
         val mode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode)
         if (mode == SpeechAnalysisMode.Rule) return rule
-        return runCatching { refineSpeechWithAi.resolverVersion(bookUrl, mode, policy) }
+        return runCatching { refineSpeechWithAi.resolverVersion(mode, policy) }
             .getOrDefault(rule)
     }
 
@@ -386,7 +393,7 @@ private fun splitPolicy(): ContentSplitPolicy {
         policy: ContentSplitPolicy,
         resetCache: Boolean,
     ): List<SpeechPlanItem> {
-        val paragraphs = currentChapterParagraphs(chapterIndex, policy) ?: return emptyList()
+        val paragraphs = chapterParagraphs(chapterIndex, policy) ?: return emptyList()
         if (resetCache) {
             withContext(Dispatchers.IO) {
                 chapterSpeechGateway.deleteChapter(bookUrl, chapterIndex)
@@ -410,19 +417,25 @@ private fun splitPolicy(): ContentSplitPolicy {
     /**
      * 与朗读服务同口径重建段落：同一划分方式与符号策略下，段落文本和章内位置一致，
      * 分镜展示才能和朗读时落库的分析结果对得上。
+     *
+     * 章节输入窗口里带的是上/当前/下一章三份已解析正文，所以这里按章号在窗口里找，
+     * 而不是只认当前章——非当前章只要还在窗口里就重建得出段落，覆盖层才套得上。
      */
-    private suspend fun currentChapterParagraphs(
+    private suspend fun chapterParagraphs(
         chapterIndex: Int,
         policy: ContentSplitPolicy,
     ): List<io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph>? {
-        val input = ReadBook.readerChapterInputWindow.current
-            ?.takeIf { it.chapter.index == chapterIndex } ?: return null
+        val window = ReadBook.readerChapterInputWindow
+        val input = listOf(window.previous, window.current, window.next)
+            .firstOrNull { it?.chapter?.index == chapterIndex } ?: return null
+        val semanticContent = input.source.semanticContent
+        val displayTitle = input.displayTitle
         return withContext(Dispatchers.Default) {
             ReaderReadAloudChapter.create(
                 chapterIndex = chapterIndex,
-                title = input.displayTitle,
-                semanticContent = input.source.semanticContent,
+                title = displayTitle,
                 // 分镜只用整段视图，页边界不参与段落生成
+                semanticContent = semanticContent,
                 pageStarts = listOf(0),
                 contentSplitMode = policy.mode,
             ).canonicalSpeechParagraphs(
@@ -433,56 +446,51 @@ private fun splitPolicy(): ContentSplitPolicy {
     }
 
     /**
-     * 其它章：只读库里存下来的分段，不重新分析。
+     * 读库里存下来的分段算计划（不重跑分析），再套一层分配表覆盖。
      *
-     * 但**必须再套一层分配表覆盖**，否则显示的音色就是覆盖之前的那一份。正文段落从
-     * 当前输入窗口取；取不到（非当前章且阅读器已翻走）时跳过覆盖，并在界面上不宣称
-     * 与正在播出的声音一致。
+     * 覆盖这一步不能省：正文胶囊改的是分配表，朗读时发声的是覆盖**之后**的计划。
+     * 过去只有当前章且段落取得到才套，多数时候分镜页显示的是覆盖之前的音色，
+     * 用户改完胶囊在这里看不到，就成了"改了没用"。
      */
     private suspend fun cachedChapterPlan(
         chapterIndex: Int,
         policy: ContentSplitPolicy,
+        stored: ChapterSpeechSegments,
     ): List<SpeechPlanItem> {
-        val stored = withContext(Dispatchers.IO) {
-            chapterSpeechGateway.getChapterSegmentsFor(
-                bookUrl,
-                chapterIndex,
-                currentResolverVersion(policy),
-            )
+        val base = withContext(Dispatchers.Default) { buildCachedPlan(stored.segments) }
+        if (base.isEmpty()) return base
+        val paragraphs = chapterParagraphs(chapterIndex, policy) ?: return base
+        // 同源闸门：覆盖层按正文段落重新定位说话人，段落必须和分析当时用的那一份一字不差。
+        // 对不上（改过「正文显示角色名」、正文或划分口径变过、退回的是旧设置那份）就不套——
+        // 拿错坐标去套胶囊，屏幕上显示的会是把归属安错人的结果。
+        val hash = SpeechIdentity.chapterContentHash(paragraphs)
+        if (stored.contentHash.isBlank() || hash != stored.contentHash) {
+            val reason = if (stored.contentHash.isBlank()) {
+                "库里那份不是当前设置生成的，没有可比对的正文基准"
+            } else {
+                "重建的段落与分析当时不是同一份（正文标记或划分口径变过）"
+            }
+            AppLog.put("分镜页第${chapterIndex + 1}章跳过分配表覆盖：$reason")
+            return base
         }
-        if (stored.segments.isEmpty()) return emptyList()
-        val paragraphs = if (chapterIndex == currentChapterIndex()) {
-            currentChapterParagraphs(chapterIndex, policy)
-        } else {
-            null
-        }
-        return overlayOnCached(chapterIndex, policy, stored.segments, paragraphs)
+        return overlayOnCached(chapterIndex, paragraphs, base)
     }
 
     /** 落库分段 + 当前音色绑定 + 分配表覆盖：分镜页看到的必须与朗读同源。 */
     private suspend fun overlayOnCached(
         chapterIndex: Int,
-        policy: ContentSplitPolicy,
-        segments: List<io.legado.app.domain.model.readaloud.ChapterSpeechSegment>,
-        paragraphs: List<io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph>? =
-            null,
-    ): List<SpeechPlanItem> {
-        val base = withContext(Dispatchers.Default) {
-            buildCachedPlan(segments)
-        }
-        if (base.isEmpty()) return base
-        val spoken = paragraphs ?: return base
-        return runCatching {
-            resolveEffectiveSpeechPlan.overlayOnSegments(
-                bookUrl = bookUrl,
-                chapterIndex = chapterIndex,
-                paragraphs = spoken,
-                plan = base,
-            )
-        }.onFailure {
-            AppLog.put("分镜页套用分配表失败，本章按原计划显示\n${it.localizedMessage}", it)
-        }.getOrDefault(base)
-    }
+        paragraphs: List<io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph>,
+        base: List<SpeechPlanItem>,
+    ): List<SpeechPlanItem> = runCatching {
+        resolveEffectiveSpeechPlan.overlayOnSegments(
+            bookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            paragraphs = paragraphs,
+            plan = base,
+        )
+    }.onFailure {
+        AppLog.put("分镜页套用分配表失败，本章按原计划显示\n${it.localizedMessage}", it)
+    }.getOrDefault(base)
 
     /**
      * 缺场景且是 AI 分析模式时按需补一次场景拆分，成功才写回库。
@@ -524,8 +532,23 @@ private fun splitPolicy(): ContentSplitPolicy {
                     ) {
                         return@withLock plan
                     }
-                    chapterSpeechGateway.replaceSegments(analysisId, scenes)
+                    // 回写只改场景两列，且写回的是**库里自己那批分段**：plan 里的行可能是分配表
+                    // 覆盖切过的碎片（正文、起止点都被改过），拿碎片整份 replace 等于把分析段顶掉，
+                    // 一次场景分组就能弄坏这一章朗读用的分段。碎片与父段同 id，所以场景天然按父段落库。
+                    val stored = chapterSpeechGateway.getSegments(analysisId)
+                    if (stored.isEmpty()) return@withLock plan
                     val scenesById = scenes.associateBy({ it.id }, { it.sceneIndex to it.sceneTitle })
+                    chapterSpeechGateway.replaceSegments(
+                        analysisId,
+                        stored.map { row ->
+                            val scene = scenesById[row.id] ?: return@map row
+                            if (row.sceneIndex == scene.first && row.sceneTitle == scene.second) {
+                                row
+                            } else {
+                                row.copy(sceneIndex = scene.first, sceneTitle = scene.second)
+                            }
+                        },
+                    )
                     plan.map { item ->
                         val scene = scenesById[item.segment.id] ?: return@map item
                         if (item.segment.sceneIndex == scene.first) {
@@ -544,6 +567,12 @@ private fun splitPolicy(): ContentSplitPolicy {
             sceneAttemptedChapters.remove(chapterIndex)
             throw e
         } catch (e: Throwable) {
+            // 拆分失败原本连日志都不留，还留着"这一章试过了"的记账：页面看着就是"场景永远出不来"，
+            // 用户既不知道它失败过，也不会再有机会重试。撤账 + 说清楚是谁失败了。
+            sceneAttemptedChapters.remove(chapterIndex)
+            val reason = e.localizedMessage ?: e.javaClass.simpleName
+            AppLog.put("分镜场景拆分失败：第${chapterIndex + 1}章本轮没有场景分组，$reason")
+            toast(appCtx.getString(R.string.speech_storyboard_scene_failed, chapterIndex + 1, reason))
             return plan
         }
         if (enriched === plan) return plan
@@ -763,6 +792,60 @@ private fun splitPolicy(): ContentSplitPolicy {
             speakerId = ReadAloud.coordinatorDefaultSpeakerId,
             displayName = "",
         )
+    }
+
+    /**
+     * 锁定 / 解锁这一条分镜。
+     *
+     * 锁定是"这一句的说话人我认可了"的唯一入口：现成的跳过锁定段判断会让重新分析不再动它，
+     * 正文胶囊改归属走的是另一张分配表，钉不住分析结果本身。
+     *
+     * 写入只改 `userLocked` 那一列，**不能拿页面上这一行整份回写分段**——这一行可能是分配表
+     * 覆盖切过之后的碎片（正文和起止点都被改过），回写会把库里分析段换成碎片。
+     * 碎片与它所属的分析段共用同一个 id，所以锁定天然是"按段"生效、界面上同 id 的几行一起翻转，
+     * 与库里真正被锁住的那一行是一致的。
+     *
+     * 这里不重启朗读、不重算计划：锁定只影响下一次重新分析，当前播出的声音不受影响。
+     */
+    private fun toggleSegmentLock(itemId: String) {
+        val item = _uiState.value.scenes.flatMap { it.items }.firstOrNull { it.id == itemId }
+        if (item == null) {
+            // 按钮就长在这一行上，走到这里只能是状态刚被重分析换掉、点下去的那一行已经不在了。
+            // 这不属于要打扰用户的失败，留一行日志给排查用。
+            AppLog.put("分镜锁定段没有找到这一行：$itemId")
+            return
+        }
+        val locked = !item.locked
+        viewModelScope.launch {
+            try {
+                chapterSpeechGateway.setSegmentUserLocked(itemId, locked)
+                _uiState.update { state ->
+                    state.copy(
+                        scenes = state.scenes.map { scene ->
+                            if (scene.items.none { it.id == itemId }) {
+                                scene
+                            } else {
+                                scene.copy(
+                                    items = scene.items.map {
+                                        if (it.id == itemId) it.copy(locked = locked) else it
+                                    }.toImmutableList(),
+                                )
+                            }
+                        }.toImmutableList(),
+                    )
+                }
+                toast(
+                    appCtx.getString(
+                        if (locked) R.string.speech_storyboard_lock_on else R.string.speech_storyboard_lock_off,
+                    )
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                AppLog.put("分镜锁定段写入失败：$itemId\n${e.localizedMessage}", e)
+                toast(e.localizedMessage ?: appCtx.getString(R.string.save_failed))
+            }
+        }
     }
 
     private fun stopPreview() {

@@ -75,8 +75,14 @@ fun AiReasoningModeButton(
     }
 }
 
+/**
+ * 推理级别的界面名。
+ *
+ * 全项目共用这一份映射：朗读设置的下拉、AI 分配角色弹层的回显、各 AI 弹层的滑动选择器
+ * 都从这里取名，不会出现同一个档位在不同页面叫「自动」又叫「跟随模型」。
+ */
 @Composable
-private fun AiReasoningLevel.label(): String = when (this) {
+internal fun AiReasoningLevel.label(): String = when (this) {
     AiReasoningLevel.OFF -> stringResource(R.string.ai_thinking_off)
     AiReasoningLevel.AUTO -> stringResource(R.string.ai_thinking_auto)
     AiReasoningLevel.LOW -> stringResource(R.string.ai_reasoning_level_low)

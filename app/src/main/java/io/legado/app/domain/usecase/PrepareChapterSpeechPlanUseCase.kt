@@ -57,7 +57,7 @@ class PrepareChapterSpeechPlanUseCase(
         val resolverVersion = if (requestedMode == SpeechAnalysisMode.Rule) {
             ruleVersion
         } else {
-            runCatching { refineSpeechWithAi.resolverVersion(bookUrl, requestedMode, policy) }
+            runCatching { refineSpeechWithAi.resolverVersion(requestedMode, policy) }
                 .onFailure {
                     if (it.isCancelledByNextRound()) {
                         // 本轮被新一轮起播裸 cancel() 掐掉，不是「没启用 AI」，不许弹回落 toast

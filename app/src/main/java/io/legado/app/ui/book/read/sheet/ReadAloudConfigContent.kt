@@ -40,6 +40,7 @@ import io.legado.app.ui.book.read.ReadBookUiState
 import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerIntent
 import io.legado.app.ui.book.readaloud.player.ReadAloudPlayerUiState
+import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppSlider
 import io.legado.app.ui.widget.components.button.ConfirmDismissButtonsRow
 import io.legado.app.ui.widget.components.pager.pagerHeight
@@ -221,15 +222,50 @@ fun ReadAloudConfigContent(
                         onClick = { onIntent(ReadAloudConfigIntent.ResetCapsulePosition) },
                     )
                 } else {
+                    // S6 只做归纳：四个小标题把这一列切成〔声音〕〔多角色朗读（AI）〕〔切分与节奏〕〔缓存〕。
+                    // 项不增不删、每项读写语义一字未动，块内搬家只为让"这一节在讲什么"先看见。
+                    ReadAloudSectionTitle(R.string.read_aloud_group_voices)
                     TinyClickableSettingItem(
                         title = stringResource(R.string.read_aloud_engines_and_voices),
                         description = stringResource(R.string.read_aloud_engines_and_voices_summary),
                         onClick = { onIntent(ReadAloudConfigIntent.OpenEnginesAndVoices) },
                     )
                     TinyClickableSettingItem(
-                        title = stringResource(R.string.tts_cache_manage),
-                        description = stringResource(R.string.tts_cache_manage_summary),
-                        onClick = { onIntent(ReadAloudConfigIntent.OpenTtsCache) },
+                        title = stringResource(R.string.cast_voice_pool),
+                        description = stringResource(R.string.cast_voice_pool_summary),
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenVoicePool) },
+                    )
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.cast_bgm_pool),
+                        description = stringResource(R.string.cast_bgm_pool_summary),
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenBgmPool) },
+                    )
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.sys_tts_config),
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenSystemTtsSettings) },
+                    )
+                    ReadAloudSectionTitle(R.string.read_aloud_group_ai_cast)
+                    // 这一节的两条总闸先摆：关掉「按角色分声朗读」整套 AI 归因不参与播放，
+                    // 关掉「正文显示角色名」正文里就没有角色标记。
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.use_multi_speaker),
+                        description = stringResource(R.string.use_multi_speaker_summary),
+                        checked = state.useMultiSpeaker,
+                        onCheckedChange = {
+                            onIntent(ReadAloudConfigIntent.SetUseMultiSpeaker(it))
+                        },
+                    )
+                    // 「多角色分配」决定正文里有没有 <<角色（声音池）>> 标记与胶囊，
+                    // 「背景音乐分配」决定有没有 ♪ 配乐胶囊。两者过去既没有入口、
+                    // 又只在阅读页菜单里有（而默认菜单是空的），等于整套多角色/配乐能力
+                    // 默认不可用：正文标记不生成，分配表注不进去，♪ 胶囊永不渲染。
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.multi_role_cast),
+                        description = stringResource(R.string.multi_role_cast_summary),
+                        checked = state.multiRoleCast,
+                        onCheckedChange = {
+                            onIntent(ReadAloudConfigIntent.SetMultiRoleCast(it))
+                        },
                     )
                     TinyClickableSettingItem(
                         title = stringResource(R.string.read_aloud_character_casting),
@@ -279,6 +315,16 @@ fun ReadAloudConfigContent(
                             onIntent(ReadAloudConfigIntent.SetSpeechAnalysisReasoningLevel(it))
                         },
                     )
+                    // 配乐那条闸跟角色那两条同属"要不要按人/按场景分配"，留在同一节里
+                    TinySwitchSettingItem(
+                        title = stringResource(R.string.bgm_assign),
+                        description = stringResource(R.string.bgm_assign_summary),
+                        checked = state.bgmAssign,
+                        onCheckedChange = {
+                            onIntent(ReadAloudConfigIntent.SetBgmAssign(it))
+                        },
+                    )
+                    ReadAloudSectionTitle(R.string.read_aloud_group_split_pace)
                     TinyDropdownSettingItem(
                         title = stringResource(R.string.read_aloud_content_split_mode),
                         selectedValue = state.readAloudContentSplitMode,
@@ -344,48 +390,6 @@ fun ReadAloudConfigContent(
                             },
                         )
                     }
-                    TinySwitchSettingItem(
-                        title = stringResource(R.string.use_multi_speaker),
-                        description = stringResource(R.string.use_multi_speaker_summary),
-                        checked = state.useMultiSpeaker,
-                        onCheckedChange = {
-                            onIntent(ReadAloudConfigIntent.SetUseMultiSpeaker(it))
-                        },
-                    )
-                    // 「多角色分配」决定正文里有没有 <<角色（声音池）>> 标记与胶囊，
-                    // 「背景音乐分配」决定有没有 ♪ 配乐胶囊。两者过去既没有入口、
-                    // 又只在阅读页菜单里有（而默认菜单是空的），等于整套多角色/配乐能力
-                    // 默认不可用：正文标记不生成，分配表注不进去，♪ 胶囊永不渲染。
-                    TinySwitchSettingItem(
-                        title = stringResource(R.string.multi_role_cast),
-                        description = stringResource(R.string.multi_role_cast_summary),
-                        checked = state.multiRoleCast,
-                        onCheckedChange = {
-                            onIntent(ReadAloudConfigIntent.SetMultiRoleCast(it))
-                        },
-                    )
-                    TinySwitchSettingItem(
-                        title = stringResource(R.string.bgm_assign),
-                        description = stringResource(R.string.bgm_assign_summary),
-                        checked = state.bgmAssign,
-                        onCheckedChange = {
-                            onIntent(ReadAloudConfigIntent.SetBgmAssign(it))
-                        },
-                    )
-                    TinyClickableSettingItem(
-                        title = stringResource(R.string.cast_voice_pool),
-                        description = stringResource(R.string.cast_voice_pool_summary),
-                        onClick = { onIntent(ReadAloudConfigIntent.OpenVoicePool) },
-                    )
-                    TinyClickableSettingItem(
-                        title = stringResource(R.string.cast_bgm_pool),
-                        description = stringResource(R.string.cast_bgm_pool_summary),
-                        onClick = { onIntent(ReadAloudConfigIntent.OpenBgmPool) },
-                    )
-                    TinyClickableSettingItem(
-                        title = stringResource(R.string.sys_tts_config),
-                        onClick = { onIntent(ReadAloudConfigIntent.OpenSystemTtsSettings) },
-                    )
                     ReadAloudNumberSliderItem(
                         title = stringResource(R.string.read_aloud_preload),
                         description = stringResource(
@@ -395,6 +399,20 @@ fun ReadAloudConfigContent(
                         defaultValue = 10,
                         valueRange = 0f..100f,
                         onValueChange = { onIntent(ReadAloudConfigIntent.SetPreDownloadNum(it)) },
+                    )
+                    // 这一项才是「音频」的预取，只有在线合成引擎读它；过去界面没有入口，
+                    // 而上面那一项名字里的「听书预载」其实是正文预下载
+                    ReadAloudNumberSliderItem(
+                        title = stringResource(R.string.read_aloud_audio_preload),
+                        description = stringResource(
+                            R.string.read_aloud_audio_preload_summary, state.audioPreDownloadNum,
+                        ),
+                        value = state.audioPreDownloadNum,
+                        defaultValue = 3,
+                        valueRange = 0f..30f,
+                        onValueChange = {
+                            onIntent(ReadAloudConfigIntent.SetAudioPreDownloadNum(it))
+                        },
                     )
                     ReadAloudNumberSliderItem(
                         title = stringResource(R.string.tts_pre_synthesis_concurrency),
@@ -422,6 +440,12 @@ fun ReadAloudConfigContent(
                             onIntent(ReadAloudConfigIntent.SetParagraphInterval(it))
                         },
                     )
+                    ReadAloudSectionTitle(R.string.read_aloud_group_cache)
+                    TinyClickableSettingItem(
+                        title = stringResource(R.string.tts_cache_manage),
+                        description = stringResource(R.string.tts_cache_manage_summary),
+                        onClick = { onIntent(ReadAloudConfigIntent.OpenTtsCache) },
+                    )
                     ReadAloudNumberSliderItem(
                         title = stringResource(R.string.audio_cache_clean_time),
                         description = stringResource(
@@ -444,6 +468,21 @@ fun ReadAloudConfigContent(
             }
         }
     }
+}
+
+/**
+ * 页签内的小节标题。
+ *
+ * 样式照听书引擎页那一份（`labelMediumEmphasized` + 水平/垂直 12dp），但**不抽公共组件**：
+ * 目前只有这两页用同一种分节，抽出去就成了只有一个调用方的抽象。
+ */
+@Composable
+private fun ReadAloudSectionTitle(titleRes: Int) {
+    AppText(
+        text = stringResource(titleRes),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+        style = LegadoTheme.typography.labelMediumEmphasized,
+    )
 }
 
 /**

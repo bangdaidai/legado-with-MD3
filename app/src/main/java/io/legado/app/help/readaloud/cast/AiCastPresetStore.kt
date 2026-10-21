@@ -4,7 +4,6 @@ import android.content.Context
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiPromptPreset
 import io.legado.app.data.entities.BookCastMemory
-import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
 import java.util.UUID
 import splitties.init.appCtx
@@ -494,21 +493,18 @@ object AiCastPresetStore {
     }
 
     /**
-     * 上次选的推理强度（默认 AUTO = 不发参数、完全听模型与服务商自己的设置）。
+     * 一次性把「AI 分配角色」弹窗自己存的那份推理强度搬到朗读设置里，搬完即删。
      *
-     * 存在 prefs 而不是悬浮窗状态里：用户调一次就该长期有效，不该每次重开悬浮窗都回到
-     * 「跟随模型」。
+     * 这个键**只在用户真的在弹窗里点过强度**时才存在（默认值从不落盘），所以返回 null 表示
+     * "用户没表过态"，不该覆盖设置页的默认「不思考」。删除后本文件再无读取方：推理强度从此
+     * 只有 [io.legado.app.domain.model.settings.ReadAloudSettings.speechAnalysisReasoningLevel]
+     * 一份，不会出现"弹窗改一次、设置页改一次、各存各的"。
      */
-    fun savedReasoningLevel(): AiReasoningLevel = runCatching {
-        AiReasoningLevel.fromStorage(
-            prefs().getString(KEY_REASONING_LEVEL, AiReasoningLevel.AUTO.storageValue)
-                ?: AiReasoningLevel.AUTO.storageValue,
-            AiReasoningLevel.AUTO,
-        )
-    }.getOrDefault(AiReasoningLevel.AUTO)
-
-    fun setReasoningLevel(level: AiReasoningLevel) {
-        prefs().edit().putString(KEY_REASONING_LEVEL, level.storageValue).apply()
+    fun takeLegacyReasoningLevel(): String? {
+        val p = prefs()
+        val value = p.getString(KEY_REASONING_LEVEL, null) ?: return null
+        p.edit().remove(KEY_REASONING_LEVEL).apply()
+        return value
     }
 
     /** [AiCastRunState.resumeChapter] 的「没有要续的章」取值（读取侧据此决定要不要给「继续」入口）。 */

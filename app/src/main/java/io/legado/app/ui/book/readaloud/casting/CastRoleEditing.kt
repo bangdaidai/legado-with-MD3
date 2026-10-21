@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
+import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.feature.reader.core.cast.CastMarkers
 import io.legado.app.help.readaloud.cast.BookCastStore
 import io.legado.app.help.readaloud.cast.VoiceAudition
@@ -140,6 +141,62 @@ fun CastRoleRowActions(
                 onClick = {
                     dismiss()
                     onDelete()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * 草稿角色（AI 认出、还没进正式角色卡）行右侧的动作菜单：转正、编辑音色。
+ *
+ * 转正这个动作 ViewModel 早就有实现，界面上一直没有入口——于是这些说话人只能永远停在草稿：
+ * 换头像、设气泡、进人物详情都只对正式角色开放，用户看着就是"这个名字我改不了"。
+ * 入口挂在本页已有的「更多」菜单里，不新加按钮也不新浮层，与正式角色行同一份语法。
+ */
+@Composable
+fun CastDraftRowActions(
+    editing: Boolean,
+    onToggleEdit: () -> Unit,
+    onPromote: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        SmallPlainButton(
+            icon = AppIcons.MoreVert,
+            contentDescription = stringResource(R.string.menu),
+            selected = editing,
+            onClick = { expanded = true },
+        )
+        RoundDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) { dismiss ->
+            RoundDropdownMenuItem(
+                text = stringResource(R.string.voice_promote_action),
+                leadingIcon = {
+                    MenuItemIcon(
+                        imageVector = AppIcons.Check,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    dismiss()
+                    onPromote()
+                },
+            )
+            RoundDropdownMenuItem(
+                text = stringResource(R.string.edit),
+                leadingIcon = {
+                    MenuItemIcon(
+                        imageVector = AppIcons.Edit,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    dismiss()
+                    onToggleEdit()
                 },
             )
         }
@@ -293,15 +350,19 @@ fun CastRoleEditorPanel(
 }
 
 /**
- * 旁白行内编辑：只有一行「音色」。
+ * 单音色行内编辑：只有一行「音色」+ 试听。
  *
- * 旁白不是角色——没有名字、不进声音池、也没有角色级变声器那一列可写
- * （那些都存在 cast_characters 上，旁白在表里没有行）。所以这里只摆真正生效的
- * 那一件事：book_voice_bindings 里 (narrator, narrator) 的音色绑定。
- * 选「跟随朗读引擎」等于删掉这条绑定，朗读侧回落到引擎自己的默认发音人。
+ * 它服务两类行，两类的有效状态都只是 book_voice_bindings 里的一条：
+ * - 旁白：不是角色，没有名字、不进声音池、也没有角色级变声器那一列可写
+ *   （那些都存在 cast_characters 上，旁白在表里没有行），所以只摆真正生效的那一件事。
+ * - 草稿角色（AI 认出但还没转正）：能定音色，名字和池还没到可编辑的时候。
+ *
+ * 保存只交 voiceId，**主体由调用方在那一行上带下去**（旁白是 (narrator, narrator)，
+ * 草稿角色是 (character, 档案 id)），别在这里认死旁白。
+ * 选空值等于删掉这条绑定：旁白回到朗读引擎自己的默认发音人，草稿角色回到自动选音。
  */
 @Composable
-fun CastNarratorEditorPanel(
+fun CastVoiceRowEditorPanel(
     item: VoiceCastingItemUi,
     voices: List<VoiceOptionUi>,
     onSave: (String) -> Unit,
@@ -311,7 +372,14 @@ fun CastNarratorEditorPanel(
     var voiceId by remember(item.subjectId) { mutableStateOf(item.voiceId) }
     var voiceQuery by remember(item.subjectId) { mutableStateOf(item.voiceName) }
     var expandedRow by remember(item.subjectId) { mutableStateOf<String?>(null) }
-    val defaultLabel = stringResource(R.string.cast_narrator_voice_default)
+    // 空值那一栏对两类行说的不是同一件事，文案按行主体分开
+    val defaultLabel = stringResource(
+        if (item.subjectType == BookVoiceBinding.SUBJECT_CHARACTER) {
+            R.string.cast_character_voice_default
+        } else {
+            R.string.cast_narrator_voice_default
+        }
+    )
     val options = remember(voices, defaultLabel) {
         listOf(CastOption("", defaultLabel)) +
             voices.filter { it.selectable }.map { voice ->

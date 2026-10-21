@@ -2100,8 +2100,10 @@
     <string name="bottom_bar_opacity">底栏不透明度</string>
     <string name="bottom_bar_opacity_summary">%d</string>
     <string name="web_service_auto_start">启动应用时打开Web服务</string>
-    <string name="read_aloud_preload">听书预加载数量</string>
-    <string name="read_aloud_preload_summary">%d</string>
+    <string name="read_aloud_preload">正文章节预载数量</string>
+    <string name="read_aloud_preload_summary">提前下载后面 %1$d 章的正文文字（与阅读页共用同一项，不是音频）</string>
+    <string name="read_aloud_audio_preload">音频预载数量</string>
+    <string name="read_aloud_audio_preload_summary">提前合成后面 %1$d 章的朗读音频，只有在线语音合成引擎生效，系统 TTS 不适用</string>
     <string name="audio_cache_clean_time">音频缓存保留时间(分钟)</string>
     <string name="audio_cache_clean_time_summary">当前%1$d, 输入 0 代表退出即刻清理。</string>
     <string name="tts_paragraph_interval">段落间隔(毫秒)</string>
@@ -3195,7 +3197,8 @@
     <string name="speech_storyboard_chapter_row">分段 %1$d 段 · 角色 %2$d 个</string>
     <string name="speech_storyboard_chapter_pending">还没分析过</string>
     <string name="speech_storyboard_current_chapter">正在读</string>
-    <string name="speech_storyboard_stale_config">旧划分，朗读不会用这份</string>
+    <string name="speech_storyboard_stale_config">按以前的设置分析，听书没用上</string>
+    <string name="speech_storyboard_stale_hint">这一章存着的分析是按以前的设置生成的（划分方式、分析模式、模型或提示词变了都会这样），听书用的不是它。想让分析跟上现在的设置，点右上角「重新分析」重跑这一章；不改的话这一章照旧按当前设置读，不会出错。</string>
     <string name="speech_storyboard_chapters_empty">还没有分析过任何章节，先朗读一章再回来看。</string>
     <string name="speech_storyboard_stat_scenes">场景</string>
     <string name="speech_storyboard_stat_segments">分段</string>
@@ -3206,12 +3209,17 @@
     <string name="speech_storyboard_paragraph">第 %1$d 段</string>
     <string name="speech_storyboard_preview">试听这一片段</string>
     <string name="speech_storyboard_preview_unavailable">这个片段没有可用音色，无法试听</string>
+    <string name="speech_storyboard_scene_failed">第 %1$d 章的场景没有拆出来：%2$s</string>
     <string name="speech_storyboard_source_rule">规则判定</string>
     <string name="speech_storyboard_source_local">本地推断</string>
     <string name="speech_storyboard_source_ai">AI 判定</string>
     <string name="speech_storyboard_source_user">手动指定</string>
     <string name="speech_storyboard_source_fallback">兜底推断</string>
     <string name="speech_storyboard_locked">已被你锁定</string>
+    <string name="speech_storyboard_lock">锁定这一段</string>
+    <string name="speech_storyboard_unlock">解锁这一段</string>
+    <string name="speech_storyboard_lock_on">已锁定：重新分析不会再改这一段</string>
+    <string name="speech_storyboard_lock_off">已解锁：重新分析时可以改写这一段</string>
     <string name="speech_storyboard_confidence">置信度 %1$d%%</string>
     <string name="speech_storyboard_manage">管理</string>
     <string name="speech_storyboard_selected_count">已选 %1$d 章</string>
@@ -3246,7 +3254,10 @@
     <string name="switch_to_classic_read_aloud">经典控制</string>
     <string name="read_aloud_settings_general_tab">常规</string>
     <string name="read_aloud_settings_voice_tab">引擎与音色</string>
-    <string name="read_aloud_settings_casting_tab">角色与配乐</string>
+    <string name="read_aloud_group_voices">声音</string>
+    <string name="read_aloud_group_ai_cast">多角色朗读（AI）</string>
+    <string name="read_aloud_group_split_pace">切分与节奏</string>
+    <string name="read_aloud_group_cache">缓存</string>
     <string name="read_aloud_section_engine">语音引擎</string>
     <string name="read_aloud_section_analysis">章节分析</string>
     <string name="read_aloud_section_casting">多角色与配音</string>
@@ -3260,11 +3271,11 @@
     <string name="speech_analysis_ai_summary">AI 综合理解分片边界、说话人和情感，速度较慢且可能产生模型费用</string>
     <string name="speech_analysis_ai_model_required">请先配置 AI 模型，再启用 AI 章节分片</string>
     <string name="speech_analysis_reasoning_level">分析推理级别</string>
-    <string name="speech_analysis_reasoning_level_summary">默认关闭。默认开启思考的模型（智谱 GLM、DeepSeek 等）只把内容放在推理字段里，会导致分析失败</string>
-    <string name="use_multi_speaker">多角色朗读</string>
-    <string name="use_multi_speaker_summary">为旁白、对话等不同角色使用不同音色</string>
-    <string name="multi_role_cast">多角色分配</string>
-    <string name="multi_role_cast_summary">在对话引号内显示角色胶囊，点击可手动分配角色与音色</string>
+    <string name="speech_analysis_reasoning_level_summary">全书唯一的推理强度，章节分析与阅读页的 AI 分配角色共用这一项。「不思考」= 显式叫模型别想；「跟随模型」= 软件一个参数都不发，完全听服务商自己的。默认不思考：默认开启思考的模型（智谱 GLM、DeepSeek 等）只把内容放在推理字段里，会导致分析失败</string>
+    <string name="use_multi_speaker">按角色分声朗读</string>
+    <string name="use_multi_speaker_summary">总闸：为旁白、对话等不同角色使用不同音色。关掉后整本只用旁白音色，也不再做说话人分析</string>
+    <string name="multi_role_cast">正文显示角色名</string>
+    <string name="multi_role_cast_summary">在对话引号后显示角色胶囊，点击可手动指定这句话是谁说的；分配结果会写进正文标记</string>
     <string name="cast_unassigned">未分配</string>
     <string name="cast_sheet_title">分配角色</string>
     <string name="cast_character_name">角色名</string>
@@ -3381,9 +3392,8 @@
     <string name="ai_cast_retry">重试 %1$d 章</string>
     <string name="ai_cast_cancelled">已取消分配，停在第 %1$d 章</string>
     <string name="ai_cast_no_preset">还没有自定义预设，将使用内置默认</string>
-    <string name="ai_cast_reasoning_level">模型推理强度</string>
-    <string name="ai_cast_reasoning_level_hint">「跟随模型」= 软件一个参数都不发。等得太久就往低调；智谱 GLM-5.3 这类强制思考的模型关不掉，调低也未必有变化。</string>
-    <string name="ai_cast_reasoning_follow">跟随模型</string>
+    <string name="ai_cast_reasoning_level_readonly">推理强度：%1$s（全书只有朗读设置一处可改）</string>
+    <string name="ai_cast_model_required">请先配置 AI 模型，再使用 AI 分配角色</string>
     <string name="ai_cast_answer">AI 返回内容</string>
     <string name="ai_cast_request">发给 AI 的内容</string>
     <string name="ai_cast_request_hint">最近一次请求的系统提示词与用户 JSON，与模型收到的逐字一致。分配不准时展开这里，可以看到送给模型的正文与角色名。</string>
@@ -4015,6 +4025,7 @@
     <string name="cast_voice_effect_sentence">变声器（只这一句）</string>
     <string name="cast_voice_effect_global">变声器（这个角色的所有句子）</string>
     <string name="cast_narrator_voice_default">跟随朗读引擎（不单独指定音色）</string>
+    <string name="cast_character_voice_default">自动选音（不锁定音色）</string>
     <string name="voice_effect">变声器</string>
     <string name="voice_effect_hub_summary">管理音高、语速、混响与金属感预设</string>
     <string name="voice_effect_summary">角色配音可再叠一层变声效果。音高与语速对所有朗读引擎生效，由我们自己处理音频流，录屏能录到。混响与金属感挂在朗读播放器的音频会话上，要朗读走文件合成那条路才挂得上：开启「多角色朗读」后，只要这本书里有带这一层的预设，朗读就自动用文件合成。部分机型的内部录音取自这一层之前，因此耳机里听得到、录屏里没有。</string>

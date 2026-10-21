@@ -287,6 +287,8 @@ data class ReadBookUiState(
     // Content edit
     // 正文编辑域状态见 ContentEditUiState —— 由 ReadContentEditDelegate 独立持有
     val preDownloadNum: Int = 10,
+    /** 在线朗读引擎的音频预取章数；系统 TTS 不读这一项。 */
+    val audioPreDownloadNum: Int = 3,
     val preSynthesisConcurrency: Int = 3,
     val audioCacheCleanTime: Int = 10,
     // Read aloud config
@@ -328,9 +330,9 @@ data class ReadBookUiState(
     val defaultReadAloudInterface: String = ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC,
     val readAloudParagraphInterval: Int = 0,
     /**
-     * 朗读设置卡片当前停在哪个 tab（0 常规 / 1 引擎与音色 / 2 角色与配乐）。
+     * 朗读设置卡片当前停在哪个 tab（0 常规 / 1 引擎与音色）。
      *
-     * 存在这里而不是卡片里：卡片是窗口级浮层，压进整屏页（引擎与音色 / 角色与配乐里
+     * 存在这里而不是卡片里：卡片是窗口级浮层，压进整屏页（引擎与音色里
      * 那几个跳转项）时它会被拆掉，`rememberPagerState` 的初值回到 0，回来就落在常规 tab。
      */
     val readAloudConfigTab: Int = 0,

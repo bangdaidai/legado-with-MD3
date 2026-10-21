@@ -8,6 +8,8 @@ import io.legado.app.help.readaloud.cast.AiCastProgress
 import io.legado.app.help.readaloud.cast.AiCastStream
 import io.legado.app.help.readaloud.cast.AiSceneAssignUseCase
 import io.legado.app.data.entities.Book
+import io.legado.app.domain.gateway.AiProfileGateway
+import io.legado.app.domain.model.AiTaskType
 import io.legado.app.help.readaloud.cast.CastAssignmentStore
 import io.legado.app.help.readaloud.cast.CastAssignmentStore.CastResult
 import io.legado.app.help.readaloud.cast.BgmSceneStore
@@ -37,6 +39,7 @@ class ReadAloudCastDelegate(
     private val scope: CoroutineScope,
     private val aiCastUseCase: AiCastAssignUseCase,
     private val aiSceneUseCase: AiSceneAssignUseCase,
+    private val aiProfileGateway: AiProfileGateway,
     private val reloadChapter: () -> Unit,
     private val sendIntent: (ReadBookIntent) -> Unit,
     private val emitToast: (String) -> Unit,
@@ -80,10 +83,8 @@ class ReadAloudCastDelegate(
     /** cast 系意图统一入口（ReadBookViewModel 行数预算，域内分发在此收口）。 */
     fun onCastIntent(intent: ReadBookIntent) {
         when (intent) {
-            ReadBookIntent.OpenAiCastDialog ->
-                sendIntent(ReadBookIntent.ShowSheet(ReadBookSheet.AiCastDialog()))
-            ReadBookIntent.OpenAiSceneDialog ->
-                sendIntent(ReadBookIntent.ShowSheet(ReadBookSheet.AiCastDialog(sceneOnly = true)))
+            ReadBookIntent.OpenAiCastDialog -> openAiCastDialog(sceneOnly = false)
+            ReadBookIntent.OpenAiSceneDialog -> openAiCastDialog(sceneOnly = true)
             is ReadBookIntent.StartAiCast -> startAiCast(intent)
             ReadBookIntent.CancelAiCast -> cancelAiCast()
             is ReadBookIntent.DeleteChapterCastAssignments ->
@@ -94,6 +95,26 @@ class ReadAloudCastDelegate(
             is ReadBookIntent.UpdateBgmScene -> updateBgmScene(intent)
             is ReadBookIntent.DeleteBgmScene -> deleteBgmScene(intent.paragraphIndex)
             else -> Unit
+        }
+    }
+
+    /**
+     * 打开 AI 分配悬浮窗：先过模型门禁。
+     *
+     * 这个入口原本恒可用，但真正发请求的是「人物识别」那条任务预设
+     * （见 [AiCastAssignUseCase] 里 `getTaskPreset(IDENTIFY_CHARACTERS) ?: getTaskPreset(CHAT)`）。
+     * 没配模型时悬浮窗照样弹、范围照样选，跑到第一章才抛"未配置 AI 模型"，
+     * 看起来就像功能坏了。判据跟执行侧同源，入口按同一口径拦住。
+     */
+    private fun openAiCastDialog(sceneOnly: Boolean) {
+        scope.launch {
+            val configured = aiProfileGateway.getTaskPreset(AiTaskType.IDENTIFY_CHARACTERS)
+                ?: aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
+            if (configured == null) {
+                emitToast(context.getString(R.string.ai_cast_model_required))
+                return@launch
+            }
+            sendIntent(ReadBookIntent.ShowSheet(ReadBookSheet.AiCastDialog(sceneOnly = sceneOnly)))
         }
     }
 

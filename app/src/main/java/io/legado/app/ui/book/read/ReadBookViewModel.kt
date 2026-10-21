@@ -488,6 +488,7 @@ class ReadBookViewModel(
         scope = viewModelScope,
         aiCastUseCase = aiCastAssignUseCase,
         aiSceneUseCase = aiSceneAssignUseCase,
+        aiProfileGateway = aiProfileGateway,
         reloadChapter = { contentProcessDelegate.reloadCurrentChapter() },
         sendIntent = { onIntent(it) },
         emitToast = { _effects.tryEmit(ReadBookEffect.ShowToast(it)) },

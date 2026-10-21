@@ -451,6 +451,8 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         segments: List<ChapterSpeechSegment>,
     ) = Unit
 
+    override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) = Unit
+
     override suspend fun deleteChapter(bookUrl: String, chapterIndex: Int) {
         analysis = null
     }

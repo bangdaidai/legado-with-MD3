@@ -47,6 +47,7 @@ import io.legado.app.help.readaloud.cast.CastMemoryMirror
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.ai.chat.AiThinkingCard
 import io.legado.app.ui.ai.chat.AiThinkingStep
+import io.legado.app.ui.ai.label
 import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.CastFieldSpec
@@ -91,6 +92,13 @@ import kotlinx.coroutines.withContext
 fun AiCastDialogSheet(
     show: Boolean,
     sceneOnly: Boolean = false,
+    /**
+     * 当前推理强度，来自朗读设置那一份唯一的存储（`ReadBookUiState.speechAnalysisReasoningLevel`）。
+     *
+     * 这里只回显、不修改：强度全书只有朗读设置一个入口，弹窗自己那份旧存储会在首次打开时
+     * 搬过去并删掉（见 [AiCastPresetStore.takeLegacyReasoningLevel]）。
+     */
+    reasoningLevel: AiReasoningLevel = AiReasoningLevel.OFF,
     onDismissRequest: () -> Unit,
     onIntent: (ReadBookIntent) -> Unit,
 ) {
@@ -110,8 +118,6 @@ fun AiCastDialogSheet(
     var dialogueCount by remember(chapterIndex) { mutableStateOf(-1) }
     var sceneCount by remember(chapterIndex) { mutableStateOf(-1) }
     var reassign by remember { mutableStateOf(false) }
-    // 思考过程永远回显，只是默认收起（见 thinkingOpen）；这一行才是真的决定模型想多久
-    var reasoningLevel by remember { mutableStateOf(AiReasoningLevel.AUTO) }
     var assignScene by remember { mutableStateOf(sceneOnly) }
     var extraChapters by remember { mutableIntStateOf(0) }
     // 范围模式：起止章直接选（章号从 1 开始填，与听书下载同一套口径），关掉就是「当前章 + 追加章节数」
@@ -190,7 +196,14 @@ fun AiCastDialogSheet(
         if (memoryText == null) {
             withContext(Dispatchers.IO) {
                 memoryText = AiCastPresetStore.memory(bookUrl).also { memoryBaseline = it }
-                reasoningLevel = AiCastPresetStore.savedReasoningLevel()
+            }
+            // 老版本这个弹窗自己存过一份推理强度。第一次打开时把它搬进朗读设置、随即删掉旧键，
+            // 用户表过态的选择不会静默丢；之后强度只有设置页那一份。
+            val legacyLevel = withContext(Dispatchers.IO) {
+                AiCastPresetStore.takeLegacyReasoningLevel()
+            }
+            if (legacyLevel != null) {
+                onIntent(ReadBookIntent.SetSpeechAnalysisReasoningLevel(legacyLevel))
             }
         }
     }
@@ -666,38 +679,16 @@ fun AiCastDialogSheet(
                         color = Color.Transparent,
                         onCheckedChange = { reassign = it },
                     )
-                    // 模型思考多久：这一行真的影响等待时间，思考回不回显都照它跑
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        AppText(
-                            text = stringResource(R.string.ai_cast_reasoning_level),
-                            style = LegadoTheme.typography.bodyLarge,
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            ReasoningLevelChoices.forEach { choice ->
-                                ToggleChip(
-                                    label = stringResource(choice.labelRes),
-                                    selected = choice.level == reasoningLevel,
-                                    enabled = !running,
-                                    onToggle = {
-                                        reasoningLevel = choice.level
-                                        scope.launch(Dispatchers.IO) {
-                                            AiCastPresetStore.setReasoningLevel(choice.level)
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                        AppText(
-                            text = stringResource(R.string.ai_cast_reasoning_level_hint),
-                            style = LegadoTheme.typography.bodySmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    // 强度这一项在本弹窗只回显：全书的推理强度只有朗读设置一处可改，
+                    // 免得两处各存一份、各改各的（旧的那份首次打开这里会搬过去并删键）。
+                    AppText(
+                        text = stringResource(
+                            R.string.ai_cast_reasoning_level_readonly,
+                            reasoningLevel.label(),
+                        ),
+                        style = LegadoTheme.typography.bodySmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
                     if (!sceneOnly) {
                         TinySwitchSettingItem(
                             title = stringResource(R.string.ai_cast_assign_scene),
@@ -860,22 +851,6 @@ private fun AiCastSection(
         }
     }
 }
-
-/**
- * 推理强度可选项。
- *
- * AUTO = 软件一个参数都不发，完全听模型与服务商自己的设置；OFF 只在支持关闭思考的服务商上
- * 有效（GLM-5.3 这类强制思考的模型关不掉，只能少给它想的机会）。
- */
-private class ReasoningLevelChoice(val level: AiReasoningLevel, val labelRes: Int)
-
-private val ReasoningLevelChoices = listOf(
-    ReasoningLevelChoice(AiReasoningLevel.AUTO, R.string.ai_cast_reasoning_follow),
-    ReasoningLevelChoice(AiReasoningLevel.OFF, R.string.ai_thinking_off),
-    ReasoningLevelChoice(AiReasoningLevel.LOW, R.string.ai_reasoning_level_low),
-    ReasoningLevelChoice(AiReasoningLevel.MEDIUM, R.string.ai_reasoning_level_medium),
-    ReasoningLevelChoice(AiReasoningLevel.HIGH, R.string.ai_reasoning_level_high),
-)
 
 /** 预设管理子页：分配要求列表 + 固定附加的提示词（角色设定/判断规则/输出格式）+ 新建编辑表单，全部走 [AiCastPresetStore]。 */
 @Composable

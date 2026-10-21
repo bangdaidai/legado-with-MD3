@@ -99,8 +99,19 @@ sealed interface BookVoiceCastingIntent {
     data object ClearBinding : BookVoiceCastingIntent
     data class PromoteCharacter(val subjectId: String) : BookVoiceCastingIntent
 
-    /** 旁白行展开编辑后保存的音色；空串 = 取消绑定，回到朗读引擎自己的默认发音人。 */
-    data class SetNarratorVoice(val voiceId: String) : BookVoiceCastingIntent
+    /**
+     * 单音色那行编辑面板保存的绑定，写**这一行自己**的主体。
+     *
+     * 主体由界面传进来：真旁白行是 (narrator, narrator)，草稿角色行是
+     * (character, 档案 id)——两者共用同一张面板，早前面板只发过旁白那一条，
+     * 给没转正的说话人选音色会把整本书的旁白换掉。
+     * 空串 = 删掉这条绑定：旁白行回到朗读引擎的默认发音人，角色行回到自动选音。
+     */
+    data class SetRowVoice(
+        val subjectType: String,
+        val subjectId: String,
+        val voiceId: String,
+    ) : BookVoiceCastingIntent
 
     /** 人物拖动排序：松手时把当前显示顺序（角色 id）整表写回。 */
     data class SaveCharacterOrder(val characterIds: List<String>) : BookVoiceCastingIntent

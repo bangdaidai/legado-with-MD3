@@ -256,6 +256,11 @@ class ReadAloudPlayerViewModel(
                 ReadAloudConfigOption.PreDownloadNum ->
                     readSettingsGateway.update { it.copy(preDownloadNum = intValue) }
 
+                ReadAloudConfigOption.AudioPreDownloadNum -> readAloudSettingsGateway.update {
+                    // 上限 30：再大就是让服务同时攥着几十章的音频文件，磁盘与线程都吃不住
+                    it.copy(audioPreDownloadNum = intValue.coerceIn(0, 30))
+                }
+
                 ReadAloudConfigOption.PreSynthesisConcurrency -> readAloudSettingsGateway.update {
                     it.copy(ttsPreSynthesisConcurrency = intValue.coerceIn(1, 8))
                 }
@@ -402,6 +407,7 @@ private fun toReadAloudSettingsUiState(
     readAloudContentSplitMode = aloud.contentSplitMode,
     readAloudContentSplitSymbols = aloud.contentSplitSymbols,
     preDownloadNum = read.preDownloadNum,
+    audioPreDownloadNum = aloud.audioPreDownloadNum,
     preSynthesisConcurrency = aloud.ttsPreSynthesisConcurrency,
     readAloudParagraphInterval = aloud.ttsParagraphInterval,
     audioCacheCleanTime = aloud.audioCacheCleanTime,

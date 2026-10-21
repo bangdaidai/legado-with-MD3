@@ -42,7 +42,14 @@ interface ChapterSpeechDao {
     )
     suspend fun getSegments(analysisId: String): List<ChapterSpeechSegmentEntity>
 
-    /** 只取这一章最近一次分析的结果：换过 resolverVersion 的旧分段还留在库里，混在一起会重复 */
+    /**
+     * 只取这一章**最近一次**分析的结果：换过 resolverVersion 的旧分段还留在库里，混在一起会重复。
+     *
+     * 注意这是"没有匹配版本时兜底看一眼"的读法，**不能拿来判"这一章是不是当前设置在用的那份"**——
+     * 命中缓存时写入方不刷 `updatedAt`（见 `AnalyzeChapterSpeechUseCase` 的 fromCache 分支），
+     * 最新一行未必就是当前版本那一份。判当前用 [getAnalysisByResolverVersion] /
+     * [getChapterCurrentAnalyses]。
+     */
     @Query(
         "select * from chapter_speech_segments where analysisId = " +
             "(select id from chapter_speech_analysis where bookUrl = :bookUrl " +
@@ -66,10 +73,30 @@ interface ChapterSpeechDao {
         resolverVersion: String,
     ): ChapterSpeechAnalysisEntity?
 
-    /** 全书留过的分析版本，供章节列表标注哪些章是"历史划分"。 */
-    @Query("select * from chapter_speech_analysis where bookUrl = :bookUrl order by updatedAt desc")
-    suspend fun getBookAnalyses(bookUrl: String): List<ChapterSpeechAnalysisEntity>
+    /**
+     * 每章「当前设置会用到的那一份」分析：先挑版本号等于 `:resolverVersion` 的行，
+     * 这一章没有那种行才退回最近一次。
+     *
+     * 这是章节列表判「这份分析现在还作不作数」的唯一口径，与 [getAnalysisByResolverVersion]
+     * 的 exact 命中同源。过去用的是「本章 `max(updatedAt)` 那一行等不等于当前版本」，
+     * 而命中缓存时 `updatedAt` 根本不刷（`AnalyzeChapterSpeechUseCase` 的 fromCache 分支），
+     * 于是「先用 AI 读过、再切回规则重读」的章节明明在用的是当前那份，也照样标成旧划分。
+     */
+    @Query(
+        "select * from chapter_speech_analysis a where a.bookUrl = :bookUrl " +
+            "and a.id = (select x.id from chapter_speech_analysis x " +
+            "where x.bookUrl = a.bookUrl and x.chapterIndex = a.chapterIndex " +
+            "order by (x.resolverVersion = :resolverVersion) desc, x.updatedAt desc limit 1)"
+    )
+    suspend fun getChapterCurrentAnalyses(
+        bookUrl: String,
+        resolverVersion: String,
+    ): List<ChapterSpeechAnalysisEntity>
 
+    /**
+     * 章节列表的统计行：只统计每章 [getChapterCurrentAnalyses] 选中的那一份分析，
+     * 段数/人数与「这一份现在作不作数」的徽标必须来自同一行，否则列表自相矛盾。
+     */
     @Query(
         "select s.chapterIndex as chapterIndex, ifnull(c.title, '') as title, " +
             "count(*) as segmentCount, " +
@@ -77,15 +104,31 @@ interface ChapterSpeechDao {
             "max(s.updatedAt) as updatedAt from chapter_speech_segments s " +
             "left join chapters c on c.bookUrl = s.bookUrl and c.`index` = s.chapterIndex " +
             "where s.analysisId in (select a.id from chapter_speech_analysis a " +
-            "where a.bookUrl = :bookUrl and a.updatedAt = " +
-            "(select max(b.updatedAt) from chapter_speech_analysis b " +
-            "where b.bookUrl = a.bookUrl and b.chapterIndex = a.chapterIndex)) " +
+            "where a.bookUrl = :bookUrl and a.id = " +
+            "(select x.id from chapter_speech_analysis x " +
+            "where x.bookUrl = a.bookUrl and x.chapterIndex = a.chapterIndex " +
+            "order by (x.resolverVersion = :resolverVersion) desc, x.updatedAt desc limit 1)) " +
             "group by s.chapterIndex order by s.chapterIndex"
     )
-    suspend fun getChapterSummaries(bookUrl: String): List<ChapterSpeechSummaryRow>
+    suspend fun getChapterSummaries(
+        bookUrl: String,
+        resolverVersion: String,
+    ): List<ChapterSpeechSummaryRow>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSegments(segments: List<ChapterSpeechSegmentEntity>)
+
+    /**
+     * 只改「这一段是不是用户定稿的」这一个动作。
+     *
+     * 分镜页的锁定/解锁必须走行级 UPDATE，不能拿整份分段 `replaceSegments` 回写：
+     * 页面上那一行可能是分配表覆盖**切过之后**的碎片（文本、起止点都被改过），
+     * 整份写回会把库里那条分析段的正文和起止点换成碎片，等于改一句归属却弄坏了整章分段。
+     */
+    @Query(
+        "update chapter_speech_segments set userLocked = :locked, updatedAt = :now where id = :id"
+    )
+    suspend fun setUserLocked(id: String, locked: Boolean, now: Long)
 
     @Query("delete from chapter_speech_segments where analysisId = :analysisId")
     suspend fun deleteSegments(analysisId: String)

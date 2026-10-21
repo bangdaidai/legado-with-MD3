@@ -138,6 +138,13 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         this.segments = segments
     }
 
+    // 锁定只改这一列，其余字段原样；假实现按 id 命中即可。
+    override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) {
+        segments = segments.map {
+            if (it.id == segmentId) it.copy(userLocked = locked) else it
+        }
+    }
+
     override suspend fun deleteChapter(bookUrl: String, chapterIndex: Int) {
         analysis = null
         segments = emptyList()
