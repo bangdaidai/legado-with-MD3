@@ -19,6 +19,8 @@ import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.RuleData
 import io.legado.app.model.analyzeRule.RuleDataInterface
+import io.legado.app.model.jsSource.JsSourceBook
+import io.legado.app.model.jsSource.isJsSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +57,9 @@ object WebBook {
         filter: ((name: String, author: String, kind: String?) -> Boolean)? = null,
         shouldBreak: ((size: Int) -> Boolean)? = null
     ): ArrayList<SearchBook> {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.searchAwait(bookSource, key, page, filter)
+        }
         val searchUrl = bookSource.searchUrl
         if (searchUrl.isNullOrBlank()) {
             throw NoStackTraceException("搜索url不能为空")
@@ -113,6 +118,9 @@ object WebBook {
         key: String? = null,
         isSearch: Boolean = false,
     ): ArrayList<SearchBook> {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.exploreAwait(bookSource, url, page)
+        }
         val analyzeUrl = AnalyzeUrl(
             mUrl = url,
             key = key,
@@ -164,6 +172,9 @@ object WebBook {
         page: Int? = 1,
         ruleData: RuleDataInterface = RuleData(),
     ): Pair<String, ArrayList<SearchBook>> {
+        if (bookSource.isJsSource()) {
+            return url to JsSourceBook.exploreAwait(bookSource, url, page)
+        }
         val analyzeUrl = AnalyzeUrl(
             mUrl = url,
             page = page,
@@ -203,6 +214,9 @@ object WebBook {
         url: String,
         page: Int? = 1,
     ): ArrayList<SearchBook> {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.exploreAwait(bookSource, url, page)
+        }
         val ruleData = RuleData()
         val analyzeUrl = AnalyzeUrl(
             mUrl = url,
@@ -249,6 +263,9 @@ object WebBook {
         book: Book,
         canReName: Boolean = true,
     ): Book {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.getBookInfoAwait(bookSource, book, canReName)
+        }
         if (!book.config.fixedType) {
             book.removeAllBookType()
             book.addType(bookSource.getBookType())
@@ -324,6 +341,9 @@ object WebBook {
         book: Book,
         runPerJs: Boolean = false
     ): Result<List<BookChapter>> {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.getChapterListAwait(bookSource, book)
+        }
         if (!book.config.fixedType) {
             book.removeAllBookType()
             book.addType(bookSource.getBookType())
@@ -402,6 +422,9 @@ object WebBook {
         nextChapterUrl: String? = null,
         needSave: Boolean = true
     ): String {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.getContentAwait(bookSource, book, bookChapter, nextChapterUrl, needSave)
+        }
         if (bookSource.getContentRule().content.isNullOrEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接:${bookChapter.url}")
             return bookChapter.url

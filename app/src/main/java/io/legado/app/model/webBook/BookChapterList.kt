@@ -157,6 +157,16 @@ object BookChapterList {
                 }
             }
         }
+        updateBookTocInfo(book, list)
+        preserveChapterMetadata(list, book)
+        return list
+    }
+
+    /**
+     * 目录解析后的书籍字段收尾（阅读进度标题、最新章节、检查计数）。
+     * 声明式书源与 JS 书源共用；不含翻序/去重/格式化等 HTML 解析特有步骤。
+     */
+    internal suspend fun updateBookTocInfo(book: Book, list: ArrayList<BookChapter>) {
         val replaceRules = ContentProcessor.get(book).getTitleReplaceRules()
         book.durChapterTitle = list.getOrElse(book.durChapterIndex) { list.last() }
             .getDisplayTitle(
@@ -178,8 +188,6 @@ object BookChapterList {
                     chineseConverterType = readSettingsGateway.currentSettings.chineseConverterType,
                 )
         coroutineContext.ensureActive()
-        preserveChapterMetadata(list, book)
-        return list
     }
 
     private suspend fun analyzeChapterList(

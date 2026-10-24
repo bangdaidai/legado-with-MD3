@@ -102,7 +102,9 @@ data class BookSource(
     @ColumnInfo(defaultValue = "0")
     var customButton: Boolean = false, //由书源控制的自定义按钮
     // 首页模块定义，JSON数组。每个元素: key, type(banner/ranking/grid/card/filter), title, args?, url?
-    var homepageModules: String? = null
+    var homepageModules: String? = null,
+    // 单文件 JS 书源主脚本文本，非空即 JS 书源；声明式书源该字段为空
+    var mainJs: String? = null
 ) : Parcelable, BaseSource {
 
     @Ignore
@@ -111,6 +113,11 @@ data class BookSource(
 
     override fun getTag(): String {
         return bookSourceName
+    }
+
+    override fun getLoginJs(): String? {
+        mainJs?.takeIf { it.isNotBlank() }?.let { return it }
+        return super.getLoginJs()
     }
 
     override fun getKey(): String {

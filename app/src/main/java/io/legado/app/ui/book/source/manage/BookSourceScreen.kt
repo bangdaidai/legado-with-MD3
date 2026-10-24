@@ -535,6 +535,7 @@ fun BookSourceScreen(
                     dismiss(); importDocument.launch(
                     arrayOf(
                         "application/json",
+                        "application/javascript",
                         "text/plain",
                         "text/*"
                     )

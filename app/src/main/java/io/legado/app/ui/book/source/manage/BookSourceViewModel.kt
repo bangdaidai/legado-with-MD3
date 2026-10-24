@@ -26,6 +26,7 @@ import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.help.source.SourceHelp
+import io.legado.app.model.jsSource.JsSourceConfig
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
 import io.legado.app.ui.widget.components.importComponents.ImportStatus
@@ -524,7 +525,14 @@ class BookSourceViewModel(
                 } else listOf(GSON.fromJsonObject<BookSource>(text).getOrThrow())
             }
 
-            else -> error(application.getString(io.legado.app.R.string.invalid_format))
+            else -> {
+                // 非 JSON 开头的文本按单文件 JS 书源解析（对齐 legado_NG 约定）
+                val script = text.trimStart('\uFEFF').trim()
+                if (script.isEmpty() || script.startsWith("{") || script.startsWith("[")) {
+                    error(application.getString(io.legado.app.R.string.invalid_format))
+                }
+                listOf(JsSourceConfig.extract(script))
+            }
         }
         require(sources.all { it.bookSourceUrl.isNotBlank() }) {
             application.getString(io.legado.app.R.string.book_source_invalid_source)

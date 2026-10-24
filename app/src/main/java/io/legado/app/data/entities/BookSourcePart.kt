@@ -8,9 +8,10 @@ import io.legado.app.utils.splitNotBlank
 
 
 @DatabaseView(
-    """select bookSourceUrl, bookSourceName, bookSourceGroup, customOrder, enabled, enabledExplore, 
-    (loginUrl is not null and trim(loginUrl) <> '') hasLoginUrl, lastUpdateTime, respondTime, weight, 
-    (exploreUrl is not null and trim(exploreUrl) <> '') hasExploreUrl 
+    """select bookSourceUrl, bookSourceName, bookSourceGroup, customOrder, enabled, enabledExplore,
+    (loginUrl is not null and trim(loginUrl) <> '') hasLoginUrl, lastUpdateTime, respondTime, weight,
+    (exploreUrl is not null and trim(exploreUrl) <> '') hasExploreUrl,
+    (mainJs is not null and trim(mainJs) <> '') hasJs
     from book_sources""",
     viewName = "book_sources_part"
 )
@@ -36,7 +37,9 @@ data class BookSourcePart(
     // 智能排序的权重
     var weight: Int = 0,
     // 是否有发现url
-    var hasExploreUrl: Boolean = false
+    var hasExploreUrl: Boolean = false,
+    // 是否为单文件 JS 书源
+    var hasJs: Boolean = false
 ) {
 
     override fun hashCode(): Int {

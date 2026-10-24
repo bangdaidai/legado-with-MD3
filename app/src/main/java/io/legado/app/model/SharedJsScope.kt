@@ -7,6 +7,7 @@ import com.script.rhino.RhinoScriptEngine
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.model.jsSource.JsSourceCrypto
 import io.legado.app.utils.ACache
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
@@ -22,8 +23,9 @@ import kotlin.coroutines.CoroutineContext
 
 object SharedJsScope {
 
-    private val cacheFolder = File(appCtx.cacheDir, "shareJs")
-    private val aCache = ACache.get(cacheFolder)
+    // lazy 化避免对象初始化即触碰 Android 环境，JVM 单测可安全引用本对象
+    private val cacheFolder by lazy { File(appCtx.cacheDir, "shareJs") }
+    private val aCache by lazy { ACache.get(cacheFolder) }
 
     private val scopeMap = LruCache<String, WeakReference<Scriptable>>(16)
 
@@ -37,6 +39,9 @@ object SharedJsScope {
             scope = RhinoScriptEngine.run {
                 getRuntimeScope(ScriptBindings())
             }
+            // 把内置 CryptoJS 挂为 jsLib 作用域的父级：脚本自带同名对象时自身属性优先。
+            // 必须在 eval jsLib 与 preventExtensions 之前完成，之后该作用域不可再加属性
+            scope.prototype = JsSourceCrypto.cryptoScope(coroutineContext)
             if (jsLib.isJsonObject()) {
                 val jsMap: Map<String, String> = GSON.fromJson(
                     jsLib,
