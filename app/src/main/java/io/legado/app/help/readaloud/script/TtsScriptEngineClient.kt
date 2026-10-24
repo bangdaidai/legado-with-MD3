@@ -19,6 +19,7 @@ import io.legado.app.model.jsSource.JsSourceCrypto
 import io.legado.app.model.jsSource.JsSourceEngine
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.CancellationException
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Response
@@ -376,7 +377,13 @@ object TtsScriptEngineClient {
                     audioEncoding = null,
                     retry = 0
                 )
-                executeRequest(followRequest, source, text = "", voiceId, coroutineContext)
+                executeRequest(
+                    request = followRequest,
+                    source = source,
+                    text = "",
+                    voiceId = voiceId,
+                    coroutineContext = coroutineContext,
+                )
             }
             "base64", "" -> {
                 val audioBytes = audioValue.decodeBase64()?.toByteArray()

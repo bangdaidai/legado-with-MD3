@@ -8,6 +8,7 @@ import io.legado.app.data.entities.ReadAloudVoiceEntity
 import io.legado.app.data.entities.VoicePoolEntity
 import io.legado.app.data.entities.VoicePoolGroupEntity
 import io.legado.app.data.entities.VoicePoolMember
+import io.legado.app.data.repository.toDomain
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.help.readaloud.VoiceTraits
@@ -685,7 +686,8 @@ object VoicePoolStore {
 
     /** 音色 id → 性别/语言/风格/描述标签，成员选择卡展示用。 */
     suspend fun voiceTraits(): Map<String, VoiceTraits> =
-        appDb.readAloudVoiceDao.getVoices().associate { it.id to ReadAloudVoiceTraits.of(it) }
+        appDb.readAloudVoiceDao.getVoices()
+            .associate { it.id to ReadAloudVoiceTraits.of(it.toDomain()) }
 
     /** 分配表行数据（角色 → 音色/书名/句数）。 */
     data class AssignmentRowData(

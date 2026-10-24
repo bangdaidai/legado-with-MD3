@@ -32,7 +32,13 @@ class ScriptTtsAudioSynthesizer {
     ): Boolean = withContext(Dispatchers.IO) {
         output.parentFile?.mkdirs()
         try {
-            openStream(source, text, null, voice, emotion).use { input ->
+            openStream(
+                source = source,
+                text = text,
+                voice = null,
+                emotion = emotion,
+                catalogVoice = voice,
+            ).use { input ->
                 output.outputStream().use { target ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     while (true) {
