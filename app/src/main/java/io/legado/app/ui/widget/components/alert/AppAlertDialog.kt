@@ -45,6 +45,14 @@ fun AppAlertDialog(
     confirmEnabled: Boolean = true,
     dismissText: String = "取消",
     onDismiss: (() -> Unit)? = null,
+    /**
+     * 底部动作条最左的附加动作（如「试听」）：取消在它右边，样式与取消同档。
+     * 两个槽只够放取消/确定，表单弹窗常有的第三个动作（试听、撤销）从这进，
+     * 让动作条整体仍由本组件排布，而不是调用方自己在 content 里画一排按钮。
+     */
+    startActionText: String? = null,
+    onStartAction: (() -> Unit)? = null,
+    startActionEnabled: Boolean = true,
 ) {
     if (ThemeResolver.isMiuixEngine(composeEngine)) {
         WindowDialog(
@@ -81,6 +89,17 @@ fun AppAlertDialog(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (onStartAction != null && startActionText != null) {
+                            SecondaryButton(
+                                text = startActionText,
+                                modifier = Modifier.weight(1f),
+                                enabled = startActionEnabled,
+                                onClick = {
+                                    onStartAction()
+                                }
+                            )
+                        }
+
                         if (onDismiss != null) {
                             SecondaryButton(
                                 text = dismissText,
@@ -163,8 +182,17 @@ fun AppAlertDialog(
                     }
                 },
                 dismissButton = {
-                    if (onDismiss != null) {
-                        ProvideAppDensity {
+                    ProvideAppDensity {
+                        // M3 只给确认/取消两个槽：附加动作并入取消这侧，
+                        // flow row 会把它与确认排进同一排（右对齐，按内容宽）
+                        if (onStartAction != null && startActionText != null) {
+                            SecondaryButton(
+                                onClick = { onStartAction() },
+                                enabled = startActionEnabled,
+                                text = startActionText
+                            )
+                        }
+                        if (onDismiss != null) {
                             SecondaryButton(
                                 onClick = {
                                     onDismiss()
@@ -195,6 +223,9 @@ fun <T> AppAlertDialog(
     confirmEnabled: Boolean = true,
     dismissText: String = "取消",
     onDismiss: (() -> Unit)? = null,
+    startActionText: String? = null,
+    onStartAction: (() -> Unit)? = null,
+    startActionEnabled: Boolean = true,
     modifier: Modifier = Modifier,
     content: (@Composable (T) -> Unit)? = null
 ) {
@@ -224,6 +255,9 @@ fun <T> AppAlertDialog(
             confirmEnabled = confirmEnabled,
             dismissText = dismissText,
             onDismiss = onDismiss,
+            startActionText = startActionText,
+            onStartAction = onStartAction,
+            startActionEnabled = startActionEnabled,
             content = content?.let { { it(currentData) } }
         )
     }

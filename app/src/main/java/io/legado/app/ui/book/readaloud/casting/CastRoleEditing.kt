@@ -3,9 +3,6 @@ package io.legado.app.ui.book.readaloud.casting
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Image
@@ -27,8 +24,6 @@ import io.legado.app.help.readaloud.cast.VoiceAudition
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.OptionDropdownCard
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.PrimaryButton
-import io.legado.app.ui.widget.components.button.SecondaryButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.MenuItemIcon
@@ -208,8 +203,9 @@ fun CastDraftRowActions(
  * 并把选中的音色锁进 book_voice_bindings（发音链路读它）。
  * 变声器那一栏存的是**角色级**的 cast_characters.voiceEffect（全局，这个角色的所有句子都用它）。
  *
- * 底部三按钮：试听（试听的是**未保存的草稿值**）在左，取消、保存靠右，
- * 与项目弹窗的按钮样式同一套。
+ * 标题就是人物名（弹窗从列表行进来，靠名字确认在改谁）。
+ * 底部动作条交给 [AppAlertDialog] 自己排：试听（试听的是**未保存的草稿值**）在最左，
+ * 取消、保存跟上，间距与项目弹窗同一套规范，不在 content 里手画按钮。
  */
 @Composable
 fun CastRoleEditorDialog(
@@ -249,7 +245,30 @@ fun CastRoleEditorDialog(
     AppAlertDialog(
         show = item != null,
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.edit),
+        title = current.name.ifBlank { stringResource(R.string.edit) },
+        startActionText = stringResource(R.string.cloud_tts_preview),
+        onStartAction = audition.toggle,
+        startActionEnabled = audition.enabled,
+        confirmText = stringResource(R.string.save),
+        onConfirm = {
+            scope.launch(Dispatchers.IO) {
+                val ok = BookCastStore.updateCharacter(
+                    bookUrl = bookUrl,
+                    characterId = current.subjectId,
+                    // 名字原样带回：本弹窗不改名（改名去人物详情页）
+                    name = current.name,
+                    poolLabel = pool,
+                    voiceId = voiceId,
+                    voiceEffect = voiceEffect,
+                )
+                if (ok) {
+                    // 正文重排在 updateCharacter 里按「改的是不是正文看得见的那几栏」决定
+                    withContext(Dispatchers.Main) { onSaved() }
+                }
+            }
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = onDismiss,
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OptionDropdownCard(
@@ -284,45 +303,6 @@ fun CastRoleEditorDialog(
                     onOptionClick = { voiceEffect = it },
                     isSelected = { it == voiceEffect },
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    SecondaryButton(
-                        onClick = audition.toggle,
-                        enabled = audition.enabled,
-                        text = stringResource(R.string.cloud_tts_preview),
-                        modifier = Modifier.weight(1f),
-                    )
-                    SecondaryButton(
-                        onClick = onDismiss,
-                        text = stringResource(R.string.cancel),
-                        modifier = Modifier.weight(1f),
-                    )
-                    PrimaryButton(
-                        onClick = {
-                            scope.launch(Dispatchers.IO) {
-                                val ok = BookCastStore.updateCharacter(
-                                    bookUrl = bookUrl,
-                                    characterId = current.subjectId,
-                                    // 名字原样带回：本弹窗不改名（改名去人物详情页）
-                                    name = current.name,
-                                    poolLabel = pool,
-                                    voiceId = voiceId,
-                                    voiceEffect = voiceEffect,
-                                )
-                                if (ok) {
-                                    // 正文重排在 updateCharacter 里按「改的是不是正文看得见的那几栏」决定
-                                    withContext(Dispatchers.Main) { onSaved() }
-                                }
-                            }
-                        },
-                        text = stringResource(R.string.save),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
             }
         },
     )
@@ -330,6 +310,9 @@ fun CastRoleEditorDialog(
 
 /**
  * 单音色编辑对话框：只有一行「音色」+ 试听，与角色编辑同一套弹窗组件。
+ *
+ * 标题用行主体自己的叫法（[subjectTitle]）：草稿角色给名字，旁白/未知角色给文案，
+ * 不再是一句谁都不认得的「编辑」。底部动作条与角色编辑同一套：试听在最左，取消、保存跟上。
  *
  * 它服务两类行，两类的有效状态都只是 book_voice_bindings 里的一条：
  * - 旁白：不是角色，没有名字、不进声音池、也没有角色级变声器那一列可写
@@ -377,7 +360,16 @@ fun CastVoiceRowEditorDialog(
     AppAlertDialog(
         show = item != null,
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.edit),
+        title = subjectTitle(current.kind, current.name).ifBlank {
+            stringResource(R.string.edit)
+        },
+        startActionText = stringResource(R.string.cloud_tts_preview),
+        onStartAction = audition.toggle,
+        startActionEnabled = audition.enabled,
+        confirmText = stringResource(R.string.save),
+        onConfirm = { onSave(voiceId) },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = onDismiss,
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OptionDropdownCard(
@@ -388,29 +380,6 @@ fun CastVoiceRowEditorDialog(
                     onOptionClick = { voiceId = it },
                     isSelected = { it == voiceId },
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    SecondaryButton(
-                        onClick = audition.toggle,
-                        enabled = audition.enabled,
-                        text = stringResource(R.string.cloud_tts_preview),
-                        modifier = Modifier.weight(1f),
-                    )
-                    SecondaryButton(
-                        onClick = onDismiss,
-                        text = stringResource(R.string.cancel),
-                        modifier = Modifier.weight(1f),
-                    )
-                    PrimaryButton(
-                        onClick = { onSave(voiceId) },
-                        text = stringResource(R.string.save),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
             }
         },
     )

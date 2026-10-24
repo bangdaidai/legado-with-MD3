@@ -667,8 +667,9 @@ private fun shortenVoiceName(name: String): String {
     return if (label.length <= VoiceNameMaxChars) label else label.take(VoiceNameMaxChars) + "…"
 }
 
+/** 列表行标题；编辑弹窗的标题（旁白/未知角色给文案，角色给名字）用同一份映射。 */
 @Composable
-private fun subjectTitle(kind: CastingSubjectKind, name: String): String = when (kind) {
+internal fun subjectTitle(kind: CastingSubjectKind, name: String): String = when (kind) {
     CastingSubjectKind.Narrator -> stringResource(R.string.voice_role_narrator)
     CastingSubjectKind.UnknownMale -> stringResource(R.string.voice_role_unknown_male)
     CastingSubjectKind.UnknownFemale -> stringResource(R.string.voice_role_unknown_female)
