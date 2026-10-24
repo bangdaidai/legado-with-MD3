@@ -3,10 +3,6 @@ package io.legado.app.ui.book.readaloud.cast
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -201,6 +197,8 @@ class CastPoolActions(
     val onMemberRemove: (String, String) -> Unit,
     /** (池 id, 筛选词) */
     val onMemberQuery: (String, String) -> Unit,
+    /** 未归池音色「归入声音池」；只有角色声音池页传，背景音乐池页不涉及。 */
+    val onAssignVoice: ((CastMemberUi) -> Unit)? = null,
 )
 
 @Composable
@@ -226,26 +224,10 @@ fun PoolTreeList(
         return (pools.count { it.enabled } + groups.count { it.enabled }) to
             (pools.size + groups.size)
     }
-    // 搜索框和提示必须放在 LazyColumn 外面：reorderable 回调给的是 LazyColumn 的
-    // 绝对下标，列表里只要多一个前置 item，下标就会整体偏移，拖动时条目会来回乱跳。
+    // 池级搜索框不在这里画：它归各页面放进顶栏 bottomContent，与标题栏同一层玻璃背景
+    // （书签/阅读记录的做法）。提示文字仍留在 LazyColumn 外面：reorderable 回调给的是
+    // LazyColumn 的绝对下标，列表里只要多一个前置 item，下标就会整体偏移，拖动时条目会来回乱跳。
     Column(modifier = modifier) {
-        // 显隐走高度+淡入淡出（与书签/阅读记录等界面同一套）：搜索框是「临时加一层筛选」，
-        // 直接 if 进出会让整列表瞬间跳一屏，手指还悬在刚才那条上。
-        AnimatedVisibility(
-            visible = view.searchActive,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
-        ) {
-            SearchBar(
-                query = view.searchQuery,
-                onQueryChange = actions.onQuery,
-                placeholder = stringResource(wording.searchPoolHint),
-                autoFocus = false,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
         if (canReorder) {
             AppText(
                 text = stringResource(R.string.cast_pool_sort_hint),
@@ -266,7 +248,8 @@ fun PoolTreeList(
                         targetValue = if (isDragging) 8.dp else 0.dp,
                         label = "DragElevation",
                     )
-                    val draggable = canReorder && !row.isUngroupedHeader
+                    val draggable = canReorder && !row.isUngroupedHeader &&
+                        !row.isUnassignedHeader && row.unassignedVoice == null
                     val label = row.title.ifBlank { row.pool?.name.orEmpty() }
                     val dragModifier = Modifier
                         .reorderAccessibility(
@@ -292,6 +275,30 @@ fun PoolTreeList(
                             },
                         )
                     when {
+                        row.isUnassignedHeader -> {
+                            val count = rows.count { it.unassignedVoice != null }
+                            GroupHeader(
+                                title = stringResource(R.string.cast_pool_unassigned_section, count),
+                                enabledCount = count,
+                                total = count,
+                                collapsed = view.collapsedGroups.contains(CastPoolTree.UNASSIGNED_VOICES_ID),
+                                dragModifier = dragModifier,
+                                onToggle = { actions.onToggleGroup(CastPoolTree.UNASSIGNED_VOICES_ID) },
+                                onRename = null,
+                                onNewSubgroup = null,
+                                onMove = null,
+                                onDelete = null,
+                            )
+                        }
+
+                        row.unassignedVoice?.let { member ->
+                            UnassignedVoiceRow(
+                                member = member,
+                                onAssign = { actions.onAssignVoice?.invoke(member) },
+                                memberTrailing = memberTrailing,
+                            )
+                        }
+
                         row.isUngroupedHeader -> {
                             val (on, all) = childCount(UNGROUPED, withSubgroups = false)
                             GroupHeader(
@@ -755,6 +762,127 @@ private fun CastPoolCard(
 fun castGroupOptions(groups: List<CastGroupRow>): List<CastOption> = buildList {
     add(CastOption(UNGROUPED, stringResource(R.string.cast_group_none)))
     groups.forEach { add(CastOption(it.id, INDENT.repeat(it.depth) + it.name)) }
+}
+
+/**
+ * 「未归池」段里的一条音色行：整行点击即弹「归入声音池」，行尾可挂试听（复用池页的
+ * [io.legado.app.ui.book.readaloud.cast.VoicePoolScreen] 那个 memberTrailing）。
+ * 视觉与池内成员行同款（名字 + 引擎副行），只是没有勾选与删除——它还不属于任何池。
+ */
+@Composable
+private fun UnassignedVoiceRow(
+    member: CastMemberUi,
+    onAssign: () -> Unit,
+    memberTrailing: (@Composable (CastMemberUi) -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onAssign)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            AppText(
+                text = member.displayName,
+                style = LegadoTheme.typography.labelMediumEmphasized,
+                color = LegadoTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (member.engineName.isNotBlank()) {
+                AppText(
+                    text = member.engineName,
+                    style = LegadoTheme.typography.labelSmall,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        memberTrailing?.invoke(member)
+        SmallPlainButton(
+            onClick = onAssign,
+            icon = Icons.Default.Add,
+            contentDescription = stringResource(R.string.cast_pool_assign_voice_title),
+        )
+    }
+}
+
+/** 「归入声音池」对话框：点一个池即归入（一音色一组，原池自动挪出），无确认步。 */
+@Composable
+fun AssignVoiceDialog(
+    show: Boolean,
+    voiceName: String,
+    choices: List<CastPoolRow>,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AppAlertDialog(
+        show = show,
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.cast_pool_assign_voice_title),
+        content = {
+            Column {
+                AppText(
+                    text = voiceName,
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        if (choices.isEmpty()) {
+                            EmptyMessage(
+                                messageResId = R.string.cast_pool_assign_voice_empty,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        choices.forEach { pool ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPick(pool.id) }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    AppText(
+                                        text = pool.name,
+                                        style = LegadoTheme.typography.labelMediumEmphasized,
+                                        color = LegadoTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (pool.groupName.isNotBlank()) {
+                                        AppText(
+                                            text = pool.groupName,
+                                            style = LegadoTheme.typography.labelSmall,
+                                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = onDismiss,
+    )
 }
 
 /**

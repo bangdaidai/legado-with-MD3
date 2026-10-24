@@ -4,6 +4,11 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,9 +46,11 @@ import io.legado.app.R
 import io.legado.app.help.readaloud.cast.VoiceAudition
 import io.legado.app.help.readaloud.cast.VoicePoolTransfer
 import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
+import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.VoiceAuditionIconButton
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.modalBottomSheet.OptionCard
@@ -180,6 +187,23 @@ fun VoicePoolScreen(
                         contentDescription = stringResource(R.string.cast_group_create),
                     )
                 },
+                // 搜索框跟标题栏同一层玻璃背景（书签/阅读记录的做法）：悬在内容区会跟
+                // 顶栏脱节，收起顶栏时它孤零零留在页面顶部
+                bottomContent = {
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = state.searchActive,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SearchBar(
+                            query = state.searchQuery,
+                            onQueryChange = { onIntent(MultiRoleRuleIntent.UpdateSearch(it)) },
+                            placeholder = stringResource(VoicePoolWording.searchPoolHint),
+                            autoFocus = false,
+                        )
+                    }
+                },
             )
         },
         floatingActionButton = {
@@ -280,6 +304,13 @@ fun VoicePoolScreen(
             onSave = { onIntent(MultiRoleRuleIntent.SaveMemberPicker) },
             onDismiss = { onIntent(MultiRoleRuleIntent.DismissMemberPicker) },
         )
+        AssignVoiceDialog(
+            show = state.assignVoiceTarget != null,
+            voiceName = state.assignVoiceTarget?.displayName.orEmpty(),
+            choices = state.assignChoices,
+            onPick = { poolId -> onIntent(MultiRoleRuleIntent.ConfirmAssignVoice(poolId)) },
+            onDismiss = { onIntent(MultiRoleRuleIntent.DismissAssignVoice) },
+        )
     VoicePoolIoSheet(show = showIoSheet, onDismiss = { showIoSheet = false }, onIntent = onIntent)
     TtsServerImportDialog(
         preview = state.ttsServerPreview,
@@ -313,6 +344,7 @@ private fun voicePoolActions(onIntent: (MultiRoleRuleIntent) -> Unit) = CastPool
     onMemberQuery = { poolId, query ->
         onIntent(MultiRoleRuleIntent.UpdateMemberQuery(poolId, query))
     },
+    onAssignVoice = { voice -> onIntent(MultiRoleRuleIntent.ShowAssignVoicePicker(voice)) },
 )
 
 /**

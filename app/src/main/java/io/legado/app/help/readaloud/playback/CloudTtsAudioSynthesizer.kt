@@ -42,7 +42,9 @@ class CloudTtsAudioSynthesizer(
         request: CloudTtsSynthesisRequest,
         output: File,
     ): Boolean = withContext(Dispatchers.IO) {
-        val audio = logCloudTts(engine, "cloudTts", "语音合成 ${request.text.length} 字") {
+        val audio = logCloudTts(
+            engine, "cloudTts", "语音合成 ${request.text.length} 字", recordOnSuccess = false,
+        ) {
             registry.get(engine.provider).synthesize(engine, request)
         }.getOrNull() ?: return@withContext false
         output.parentFile?.mkdirs()
@@ -84,7 +86,9 @@ class CloudTtsAudioSynthesizer(
             roleInstruction.takeIf(String::isNotBlank),
             emotionControl.instruction.takeIf(String::isNotBlank),
         ).joinToString(" ")
-        val audio = logCloudTts(engine, "cloudTts", "语音合成 ${text.length} 字") {
+        val audio = logCloudTts(
+            engine, "cloudTts", "语音合成 ${text.length} 字", recordOnSuccess = false,
+        ) {
             registry.get(engine.provider).synthesize(
                 engine = engine,
                 request = CloudTtsSynthesisRequest(
@@ -111,22 +115,26 @@ class CloudTtsAudioSynthesizer(
         engine: CloudTtsEngine,
         kind: String,
         summary: String,
+        /** 逐句合成的成功记录会把 AI 日志刷成云端合成流水账：成功不记，失败保留排障 */
+        recordOnSuccess: Boolean = true,
         block: () -> T,
     ): Result<T> {
         val start = System.currentTimeMillis()
         val result = runCatching(block)
-        aiLogRepository.record(
-            AiLogEntry(
-                timeMillis = start,
-                kind = kind,
-                providerName = engine.provider.storageValue,
-                modelId = engine.model.takeIf { it.isNotBlank() } ?: engine.name,
-                summary = summary,
-                success = result.isSuccess,
-                durationMillis = System.currentTimeMillis() - start,
-                error = result.exceptionOrNull()?.message,
+        if (recordOnSuccess || result.isFailure) {
+            aiLogRepository.record(
+                AiLogEntry(
+                    timeMillis = start,
+                    kind = kind,
+                    providerName = engine.provider.storageValue,
+                    modelId = engine.model.takeIf { it.isNotBlank() } ?: engine.name,
+                    summary = summary,
+                    success = result.isSuccess,
+                    durationMillis = System.currentTimeMillis() - start,
+                    error = result.exceptionOrNull()?.message,
+                )
             )
-        )
+        }
         return result
     }
 }

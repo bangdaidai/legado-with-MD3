@@ -265,7 +265,6 @@ private fun VoiceCastingList(
                 VoiceCastingCard(
                     bookUrl = state.bookUrl,
                     item = item,
-                    voices = state.voices,
                     onIntent = onIntent,
                     onOpenCharacterDetail = onOpenCharacterDetail,
                     editing = editingId == item.subjectId,
@@ -305,7 +304,6 @@ private fun VoiceCastingList(
                         VoiceCastingCard(
                             bookUrl = state.bookUrl,
                             item = item,
-                            voices = state.voices,
                             onIntent = onIntent,
                             onOpenCharacterDetail = onOpenCharacterDetail,
                             editing = editingId == item.subjectId,
@@ -373,6 +371,38 @@ private fun VoiceCastingList(
                 editingId = null
                 onIntent(BookVoiceCastingIntent.Refresh)
             },
+        )
+        // 编辑弹窗按行的类别分两个：正式角色四行编辑，旁白与草稿角色共用单音色编辑
+        val editingItem = state.items.firstOrNull { it.subjectId == editingId }
+        CastRoleEditorDialog(
+            bookUrl = state.bookUrl,
+            item = editingItem?.takeIf { it.kind == CastingSubjectKind.Character },
+            onSaved = {
+                editingId = null
+                onIntent(BookVoiceCastingIntent.Refresh)
+            },
+            onDismiss = { editingId = null },
+        )
+        CastVoiceRowEditorDialog(
+            item = editingItem?.takeIf { it.kind != CastingSubjectKind.Character },
+            voices = state.voices,
+            // 保存把这一行的主体一起交给 ViewModel：草稿角色绑的是 (character, 档案 id)，
+            // 而旁白绑的是 (narrator, narrator)，对话框自己不认死旁白
+            onSave = { voiceId ->
+                val target = editingItem
+                editingId = null
+                if (target != null) {
+                    onIntent(
+                        BookVoiceCastingIntent.SetRowVoice(
+                            subjectType = target.subjectType,
+                            subjectId = target.subjectId,
+                            voiceId = voiceId,
+                        )
+                    )
+                    onIntent(BookVoiceCastingIntent.Refresh)
+                }
+            },
+            onDismiss = { editingId = null },
         )
         CastBubbleSheet(
             show = bubbleTarget != null,
@@ -447,7 +477,6 @@ private fun moveCharacter(
 private fun VoiceCastingCard(
     bookUrl: String,
     item: VoiceCastingItemUi,
-    voices: List<VoiceOptionUi>,
     onIntent: (BookVoiceCastingIntent) -> Unit,
     onOpenCharacterDetail: (String) -> Unit,
     editing: Boolean = false,
@@ -619,39 +648,8 @@ private fun VoiceCastingCard(
         ) {
             AnimatedTextLine(text = title)
         }
-        // 编辑面板就地展开。这里不能再套 expandVertically：整张卡是 ReorderableItem 的一行，
-        // 它自带 Modifier.animateItem()，行高变化本来就由列表按同一份时长统一补间——
-        // 再叠一条每帧改高度的动画，两条口径对不上，下面的角色行会压在上面的行上抖。
-        if (editing) {
-            if (isCharacter) {
-                CastRoleEditorPanel(
-                    bookUrl = bookUrl,
-                    item = item,
-                    onSaved = onChanged,
-                    onCancel = onToggleEdit,
-                )
-            } else {
-                // 旁白和「AI 认出但还没转正」的草稿角色都只有音色这一件事可编辑，共用单音色面板。
-                // 保存必须把这一行的主体一起交给 ViewModel：草稿角色绑的是 (character, 档案 id)，
-                // 而旁白绑的是 (narrator, narrator)。这个面板早年写死了旁白，
-                // 给一个还没转正的说话人选一次音色，整本书的旁白就跟着换了。
-                CastVoiceRowEditorPanel(
-                    item = item,
-                    voices = voices,
-                    onSave = { voiceId ->
-                        onIntent(
-                            BookVoiceCastingIntent.SetRowVoice(
-                                subjectType = item.subjectType,
-                                subjectId = item.subjectId,
-                                voiceId = voiceId,
-                            )
-                        )
-                        onChanged()
-                    },
-                    onCancel = onToggleEdit,
-                )
-            }
-        }
+        // 编辑走弹窗（挂在本列表尾部），行内不再展开面板：就地展开的四行输入框
+        // 把卡片撑得像渲染坏了，也和池编辑弹窗的形态不一致
     }
 }
 

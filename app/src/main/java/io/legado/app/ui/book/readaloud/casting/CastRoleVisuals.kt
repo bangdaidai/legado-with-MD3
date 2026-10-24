@@ -55,8 +55,11 @@ fun castRoleLabelRes(role: String): Int? = when (role) {
 }
 
 /**
- * 整卡外观，不是文字标签的外观：男女主拿主色渐变描边＋投影＋主色底，
- * 男女配只有淡底＋细描边，其余（旁白、没有角色）保持默认。
+ * 整卡外观，不是文字标签的外观：男女主拿主色渐变描边＋主色底，
+ * 男女配只有淡底＋细描边，其余（旁白、没有角色）保持默认底＋同款细描边。
+ *
+ * 三档都**不带投影**：整列表里「第一张有阴影、最后一张没边框」的落差被当成渲染 bug
+ * 报过——档次差异靠底色与描边表达足够，阴影只留给拖动中的那张卡。
  *
  * 取色全部走 LegadoTheme，深色下 primaryContainer / secondaryContainer 会自动换成对应的一套。
  */
@@ -70,7 +73,7 @@ fun castRoleCardVisuals(tier: CastRoleTier): CastRoleCardVisuals {
                 width = 1.5.dp,
                 brush = Brush.linearGradient(listOf(colors.primary, colors.tertiary)),
             ),
-            elevation = 4.dp,
+            elevation = 0.dp,
         )
 
         CastRoleTier.Supporting -> CastRoleCardVisuals(
@@ -81,7 +84,7 @@ fun castRoleCardVisuals(tier: CastRoleTier): CastRoleCardVisuals {
 
         CastRoleTier.Unassigned -> CastRoleCardVisuals(
             containerColor = colors.surfaceContainerLow,
-            border = null,
+            border = BorderStroke(width = 1.dp, color = colors.outlineVariant),
             elevation = 0.dp,
         )
     }

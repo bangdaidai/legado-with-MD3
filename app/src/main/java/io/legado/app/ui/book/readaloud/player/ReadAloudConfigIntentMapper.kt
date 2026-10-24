@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.readaloud.player
 
+import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.readaloud.config.ReadAloudConfigIntent
 
 internal enum class ReadAloudPlayerConfigHostAction {
@@ -105,18 +106,22 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
 
         // 跳独立整页：发 Effect，由路由层收集后交给 MainNavGraph 导航。
         ReadAloudConfigIntent.OpenEnginesAndVoices ->
-            effect(ReadAloudPlayerEffect.OpenEnginesAndVoices(uiState.value.bookUrl.ifBlank { null }))
+            effect(
+                ReadAloudPlayerEffect.OpenEnginesAndVoices(
+                    managingBookUrl(uiState.value.bookUrl).ifBlank { null },
+                ),
+            )
 
         ReadAloudConfigIntent.OpenTtsCache ->
             effect(ReadAloudPlayerEffect.OpenTtsCache)
 
         ReadAloudConfigIntent.OpenBookVoiceCasting -> {
-            val bookUrl = uiState.value.bookUrl
+            val bookUrl = managingBookUrl(uiState.value.bookUrl)
             if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenBookVoiceCasting(bookUrl))
         }
 
         ReadAloudConfigIntent.OpenSpeechStoryboard -> {
-            val bookUrl = uiState.value.bookUrl
+            val bookUrl = managingBookUrl(uiState.value.bookUrl)
             if (bookUrl.isNotBlank()) effect(ReadAloudPlayerEffect.OpenSpeechStoryboard(bookUrl))
         }
 
@@ -132,3 +137,13 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
         ReadAloudConfigIntent.ClearTtsCache -> clearTtsCache()
     }
 }
+
+/**
+ * 书级管理页（人物配音 / 分镜结果 / 云引擎）打开时认的书。
+ *
+ * 换书后旧朗读会话还挂着时，播放器快照里是上一本书，从听书页/设置整屏页进这些
+ * 页面就会带着旧 bookUrl 打开旧书的内容。这些页面对着「正在读的书」：阅读书优先，
+ * 快照兜底（只在听书页操作、没开阅读界面的场景）。
+ */
+private fun ReadAloudPlayerViewModel.managingBookUrl(snapshotBookUrl: String): String =
+    ReadBook.book?.bookUrl?.takeIf(String::isNotBlank) ?: snapshotBookUrl

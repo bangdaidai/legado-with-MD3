@@ -3540,6 +3540,12 @@
     <string name="cast_syntax_applies_next_chapter">Name and pool may also be separated by . · 、 (e.g. 张三.男青年). Changes apply to chapters opened afterwards.</string>
     <string name="cast_group">Group</string>
     <string name="cast_group_none">Ungrouped</string>
+    <string name="cast_pool_unassigned_section">Voices in no pool (%1$d)</string>
+    <string name="cast_pool_assign_voice_title">Assign to voice pool</string>
+    <string name="cast_pool_assign_voice_empty">No voice pool yet — create one first</string>
+    <string name="cast_option_unspecified">Unspecified</string>
+    <string name="cast_option_auto_voice">Auto pick</string>
+    <string name="cast_option_no_effect">No effect</string>
     <string name="cast_create_pool">New voice pool</string>
     <string name="cast_edit_pool">Edit voice pool</string>
     <string name="cast_delete_pool">Delete voice pool</string>

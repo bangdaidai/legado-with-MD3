@@ -143,6 +143,31 @@ fun rememberImeShow(): () -> Unit {
 private const val SHOW_IME_COOLDOWN_MS = 400L
 
 /**
+ * 平台方式收起键盘：与 [rememberImeShow] 对称。
+ *
+ * 下拉行的语义是「点开看全部选项」，不是打字；点行/点三角时若输入框还持有焦点
+ * （刚在别的行编辑过），键盘会继续压在候选列表上，所以浏览动作要主动收一次。
+ * 用户想按关键字筛选时点输入框本体即可——[CastFieldEditor] 的抬手补弹会把键盘叫回来。
+ */
+@Composable
+fun rememberImeHide(): () -> Unit {
+    val view = LocalView.current
+    val window = LocalActivity.current?.window
+    // 对话框是另一个窗口：那里拿不到 Activity window，用 Compose 自己的控制器
+    val composeController = LocalSoftwareKeyboardController.current
+    return remember(view, window, composeController) {
+        {
+            val controller = controllerOf(view, window)
+            if (controller != null) {
+                controller.hide(WindowInsetsCompat.Type.ime())
+            } else {
+                composeController?.hide()
+            }
+        }
+    }
+}
+
+/**
  * 输入框获得焦点后的一小段「保护期」内盯住键盘可见性：一旦被平台收掉就补一次弹出
  * （补弹本身走 [rememberImeShow] 的节流，不会互相取消动画）。保护期过后不再干预，
  * 用户主动收起键盘依然有效。聚焦时**不**主动 show——新获得焦点的编辑器自己会走
@@ -265,6 +290,8 @@ fun CastFieldStack(
     var browseAllId by remember { mutableStateOf<String?>(null) }
     val lineTop = remember { mutableStateMapOf<String, Float>() }
     var stackTop by remember { mutableFloatStateOf(0f) }
+    // 浏览动作（点行/点三角）先收键盘：候选列表是给人挑的，键盘压着只会挡选项
+    val hideIme = rememberImeHide()
     val active = specs.indexOfFirst { it.id == activeId }.let { if (it >= 0) it else 0 }
     val activeSpec = specs.getOrNull(active)
 
@@ -291,6 +318,7 @@ fun CastFieldStack(
                     options = visible,
                     hidden = spec === activeSpec,
                     onActivate = {
+                        hideIme()
                         activeId = spec.id
                         if (spec.hasDropdown) {
                             browseAllId = spec.id
@@ -307,6 +335,7 @@ fun CastFieldStack(
             CastFieldEditor(
                 spec = spec,
                 onBrowseAll = { browseAllId = if (it) spec.id else null },
+                hideIme = hideIme,
                 modifier = Modifier.offset {
                     IntOffset(0, ((lineTop[spec.id] ?: 0f) - stackTop).roundToInt())
                 },
@@ -402,6 +431,7 @@ private val CANDIDATE_MAX_HEIGHT = 200.dp
 private fun CastFieldEditor(
     spec: CastFieldSpec,
     onBrowseAll: (Boolean) -> Unit,
+    hideIme: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -423,7 +453,9 @@ private fun CastFieldEditor(
         backgroundColor = LegadoTheme.colorScheme.onSheetContent,
         trailingIcon = if (spec.hasDropdown) {
             {
+                // 三角=浏览全部：先把键盘收掉，候选列表才是完整高度；想打字点输入框本体即可
                 CastArrow(expanded = spec.expanded) {
+                    hideIme()
                     onBrowseAll(true)
                     spec.onExpand(!spec.expanded)
                 }

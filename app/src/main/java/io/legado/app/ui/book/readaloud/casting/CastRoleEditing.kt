@@ -16,21 +16,16 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.domain.model.readaloud.BookVoiceBinding
-import io.legado.app.feature.reader.core.cast.CastMarkers
 import io.legado.app.help.readaloud.cast.BookCastStore
 import io.legado.app.help.readaloud.cast.VoiceAudition
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.CastFieldSpec
-import io.legado.app.ui.widget.components.CastFieldStack
-import io.legado.app.ui.widget.components.CastOption
-import io.legado.app.ui.widget.components.VoiceAuditionButton
+import io.legado.app.ui.widget.components.OptionDropdownCard
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.PrimaryButton
 import io.legado.app.ui.widget.components.button.SecondaryButton
@@ -39,6 +34,7 @@ import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.MenuItemIcon
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
+import io.legado.app.ui.widget.components.rememberVoiceAuditionController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -204,153 +200,136 @@ fun CastDraftRowActions(
 }
 
 /**
- * 角色行内编辑：名字 / 声音池 / 音色 / 变声器四行下拉 + 试听，与分配角色弹层同款组件。
+ * 角色编辑对话框：声音池 / 音色 / 变声器三张纯选择下拉卡（[OptionDropdownCard]，
+ * 与人物详情弹窗同款），点开只弹选项菜单、不弹输入法。
  *
- * 保存走 [BookCastStore.updateCharacter]：它会把名字与池同步进官方人物档案、
- * 改写所有分配句，并把选中的音色锁进 book_voice_bindings（发音链路读它）。
+ * **没有名字栏**：改名去官方的人物详情页（那里带别名与档案联动），这里只管「怎么发声」。
+ * 保存走 [BookCastStore.updateCharacter]：它会把池同步进官方人物档案、改写所有分配句，
+ * 并把选中的音色锁进 book_voice_bindings（发音链路读它）。
  * 变声器那一栏存的是**角色级**的 cast_characters.voiceEffect（全局，这个角色的所有句子都用它）。
+ *
+ * 底部三按钮：试听（试听的是**未保存的草稿值**）在左，取消、保存靠右，
+ * 与项目弹窗的按钮样式同一套。
  */
 @Composable
-fun CastRoleEditorPanel(
+fun CastRoleEditorDialog(
     bookUrl: String,
-    item: VoiceCastingItemUi,
+    item: VoiceCastingItemUi?,
     onSaved: () -> Unit,
-    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
+    // 常驻组合、只把 item 置 null：miuix 的窗口靠 show 驱动退场动画，条件组合会连动画一起摘掉
+    var cached by remember { mutableStateOf(item) }
+    if (item != null) cached = item
+    val current = cached ?: return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val bundle by produceState<BookCastStore.EditBundle?>(initialValue = null, item.subjectId) {
+    val bundle by produceState<BookCastStore.EditBundle?>(initialValue = null, current.subjectId) {
         value = withContext(Dispatchers.IO) { BookCastStore.editBundle(bookUrl) }
     }
     val data = bundle ?: return
-    var name by remember(item.subjectId) { mutableStateOf(item.name) }
-    var pool by remember(item.subjectId) { mutableStateOf(item.poolLabel) }
-    var voiceId by remember(item.subjectId) { mutableStateOf(item.voiceId) }
-    var voiceEffect by remember(item.subjectId) { mutableStateOf(item.voiceEffect) }
-    var voiceQuery by remember(item.subjectId) {
-        mutableStateOf(data.voices.firstOrNull { it.id == item.voiceId }?.displayName.orEmpty())
+    var pool by remember(current.subjectId) { mutableStateOf(current.poolLabel) }
+    var voiceId by remember(current.subjectId) { mutableStateOf(current.voiceId) }
+    var voiceEffect by remember(current.subjectId) { mutableStateOf(current.voiceEffect) }
+    // 池决定音色候选：指了池就只摆池内音色，换池时清掉不在新池里的旧选择
+    val poolVoices = remember(data.voices, pool) {
+        data.voices.filter { pool.isBlank() || it.poolNames.contains(pool.trim()) }
     }
-    var expandedRow by remember(item.subjectId) { mutableStateOf<String?>(null) }
-    val voiceOptions = remember(data.voices, pool) {
-        data.voices
-            .filter { pool.isBlank() || it.poolNames.contains(pool.trim()) }
-            .map { CastOption(it.id, it.displayName) }
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        CastFieldStack(
-            specs = listOf(
-                CastFieldSpec(
-                    id = "name",
-                    label = stringResource(R.string.cast_character_name),
-                    value = name,
-                    options = data.characters
-                        .filter { it.id != item.subjectId }
-                        .map { CastOption(it.id, CastMarkers.labelOf(it.name, it.poolLabel)) },
-                    expanded = expandedRow == "name",
-                    onValueChange = { name = it },
-                    onSelected = { option ->
-                        data.characters.firstOrNull { it.id == option.key }?.let { c ->
-                            name = c.name
-                            pool = c.poolLabel
-                            voiceId = c.voiceId
-                            voiceEffect = c.voiceEffect
-                            voiceQuery = data.voices
-                                .firstOrNull { it.id == c.voiceId }?.displayName.orEmpty()
-                        }
-                    },
-                    onExpand = { open -> expandedRow = if (open) "name" else null },
-                ),
-                CastFieldSpec(
-                    id = "pool",
+    val unspecified = stringResource(R.string.cast_option_unspecified)
+    val autoVoice = stringResource(R.string.cast_option_auto_voice)
+    val noEffect = stringResource(R.string.cast_option_no_effect)
+    fun voiceLabel(id: String): String =
+        if (id.isBlank()) autoVoice
+        else data.voices.firstOrNull { it.id == id }?.displayName ?: unspecified
+    val audition = rememberVoiceAuditionController(
+        voiceId = voiceId,
+        text = remember(context) { VoiceAudition.defaultPreviewText(context) },
+        effect = voiceEffect,
+    )
+    AppAlertDialog(
+        show = item != null,
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.edit),
+        content = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OptionDropdownCard(
                     label = stringResource(R.string.cast_voice_pool),
-                    value = pool,
-                    options = data.pools.map { CastOption(it, it) },
-                    expanded = expandedRow == "pool",
-                    onValueChange = { pool = it },
-                    onSelected = {
-                        pool = it.key
+                    text = pool.ifBlank { unspecified },
+                    options = listOf("") + data.pools,
+                    optionLabel = { it.ifBlank { unspecified } },
+                    onOptionClick = { picked ->
+                        pool = picked
                         if (voiceId.isNotBlank() &&
                             data.voices.firstOrNull { it.id == voiceId }
-                                ?.poolNames?.contains(it.key) != true
+                                ?.poolNames?.contains(picked.trim()) != true
                         ) {
                             voiceId = ""
-                            voiceQuery = ""
                         }
                     },
-                    onExpand = { open -> expandedRow = if (open) "pool" else null },
-                ),
-                CastFieldSpec(
-                    id = "voice",
+                    isSelected = { it == pool },
+                )
+                OptionDropdownCard(
                     label = stringResource(R.string.cast_voice),
-                    value = voiceQuery,
-                    options = voiceOptions,
-                    expanded = expandedRow == "voice",
-                    onValueChange = { voiceQuery = it },
-                    onSelected = {
-                        voiceId = it.key
-                        voiceQuery = it.label
-                    },
-                    onExpand = { open -> expandedRow = if (open) "voice" else null },
-                ),
-                CastFieldSpec(
-                    id = "effect",
+                    text = voiceLabel(voiceId),
+                    options = listOf("") + poolVoices.map { it.id },
+                    optionLabel = { voiceLabel(it) },
+                    onOptionClick = { voiceId = it },
+                    isSelected = { it == voiceId },
+                )
+                OptionDropdownCard(
                     label = stringResource(R.string.cast_voice_effect_global),
-                    value = voiceEffect,
-                    options = data.effects.map { CastOption(it, it) },
-                    expanded = expandedRow == "effect",
-                    // 角色的**全局**变声器：这一份存在 cast_characters.voiceEffect，
-                    // 朗读侧每个角色句都按 characterId 读它，所以改一次全书生效。
-                    // 空 = 不变声，除非正文胶囊给那一句单独指定了预设（段级优先）。
-                    onValueChange = { voiceEffect = it },
-                    onSelected = { voiceEffect = it.key },
-                    onExpand = { open -> expandedRow = if (open) "effect" else null },
-                ),
-            ),
-        )
-        // 试听：用角色声音池那里可自定义的默认试听文本
-        VoiceAuditionButton(
-            voiceId = voiceId,
-            text = remember(context) { VoiceAudition.defaultPreviewText(context) },
-            effect = voiceEffect,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        ) {
-            SecondaryButton(onClick = onCancel, text = stringResource(R.string.cancel))
-            PrimaryButton(
-                enabled = CastMarkers.isValidName(name),
-                onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        val ok = BookCastStore.updateCharacter(
-                            bookUrl = bookUrl,
-                            characterId = item.subjectId,
-                            name = name,
-                            poolLabel = pool,
-                            voiceId = voiceId,
-                            voiceEffect = voiceEffect,
-                        )
-                        if (ok) {
-                            // 正文重排在 updateCharacter 里按「改的是不是正文看得见的那几栏」决定
-                            withContext(Dispatchers.Main) { onSaved() }
-                        }
-                    }
-                },
-                text = stringResource(R.string.save),
-            )
-        }
-    }
+                    text = voiceEffect.ifBlank { noEffect },
+                    options = listOf("") + data.effects,
+                    optionLabel = { it.ifBlank { noEffect } },
+                    onOptionClick = { voiceEffect = it },
+                    isSelected = { it == voiceEffect },
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SecondaryButton(
+                        onClick = audition.toggle,
+                        enabled = audition.enabled,
+                        text = stringResource(R.string.cloud_tts_preview),
+                        modifier = Modifier.weight(1f),
+                    )
+                    SecondaryButton(
+                        onClick = onDismiss,
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrimaryButton(
+                        onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                val ok = BookCastStore.updateCharacter(
+                                    bookUrl = bookUrl,
+                                    characterId = current.subjectId,
+                                    // 名字原样带回：本弹窗不改名（改名去人物详情页）
+                                    name = current.name,
+                                    poolLabel = pool,
+                                    voiceId = voiceId,
+                                    voiceEffect = voiceEffect,
+                                )
+                                if (ok) {
+                                    // 正文重排在 updateCharacter 里按「改的是不是正文看得见的那几栏」决定
+                                    withContext(Dispatchers.Main) { onSaved() }
+                                }
+                            }
+                        },
+                        text = stringResource(R.string.save),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        },
+    )
 }
 
 /**
- * 单音色行内编辑：只有一行「音色」+ 试听。
+ * 单音色编辑对话框：只有一行「音色」+ 试听，与角色编辑同一套弹窗组件。
  *
  * 它服务两类行，两类的有效状态都只是 book_voice_bindings 里的一条：
  * - 旁白：不是角色，没有名字、不进声音池、也没有角色级变声器那一列可写
@@ -362,72 +341,79 @@ fun CastRoleEditorPanel(
  * 选空值等于删掉这条绑定：旁白回到朗读引擎自己的默认发音人，草稿角色回到自动选音。
  */
 @Composable
-fun CastVoiceRowEditorPanel(
-    item: VoiceCastingItemUi,
+fun CastVoiceRowEditorDialog(
+    item: VoiceCastingItemUi?,
     voices: List<VoiceOptionUi>,
     onSave: (String) -> Unit,
-    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
+    // 常驻组合缓存最后一份，退场动画期间仍有内容可画（同 [CastRoleEditorDialog]）
+    var cached by remember { mutableStateOf(item) }
+    if (item != null) cached = item
+    val current = cached ?: return
     val context = LocalContext.current
-    var voiceId by remember(item.subjectId) { mutableStateOf(item.voiceId) }
-    var voiceQuery by remember(item.subjectId) { mutableStateOf(item.voiceName) }
-    var expandedRow by remember(item.subjectId) { mutableStateOf<String?>(null) }
+    var voiceId by remember(current.subjectId) { mutableStateOf(current.voiceId) }
     // 空值那一栏对两类行说的不是同一件事，文案按行主体分开
     val defaultLabel = stringResource(
-        if (item.subjectType == BookVoiceBinding.SUBJECT_CHARACTER) {
+        if (current.subjectType == BookVoiceBinding.SUBJECT_CHARACTER) {
             R.string.cast_character_voice_default
         } else {
             R.string.cast_narrator_voice_default
         }
     )
     val options = remember(voices, defaultLabel) {
-        listOf(CastOption("", defaultLabel)) +
-            voices.filter { it.selectable }.map { voice ->
-                CastOption(
-                    voice.id,
-                    listOf(voice.name, voice.engineName)
-                        .filter(String::isNotBlank).joinToString(" · "),
-                )
-            }
+        listOf("") + voices.filter { it.selectable }.map { it.id }
     }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        CastFieldStack(
-            specs = listOf(
-                CastFieldSpec(
-                    id = "voice",
+    fun voiceLabel(id: String): String = when {
+        id.isBlank() -> defaultLabel
+        else -> voices.firstOrNull { it.id == id }
+            ?.let { listOf(it.name, it.engineName).filter(String::isNotBlank).joinToString(" · ") }
+            ?: defaultLabel
+    }
+    val audition = rememberVoiceAuditionController(
+        voiceId = voiceId,
+        text = remember(context) { VoiceAudition.defaultPreviewText(context) },
+    )
+    AppAlertDialog(
+        show = item != null,
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.edit),
+        content = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OptionDropdownCard(
                     label = stringResource(R.string.cast_voice),
-                    value = voiceQuery,
+                    text = voiceLabel(voiceId),
                     options = options,
-                    expanded = expandedRow == "voice",
-                    onValueChange = { voiceQuery = it },
-                    onSelected = {
-                        voiceId = it.key
-                        voiceQuery = it.label
-                    },
-                    onExpand = { open -> expandedRow = if (open) "voice" else null },
-                ),
-            ),
-        )
-        VoiceAuditionButton(
-            voiceId = voiceId,
-            text = remember(context) { VoiceAudition.defaultPreviewText(context) },
-            effect = "",
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        ) {
-            SecondaryButton(onClick = onCancel, text = stringResource(R.string.cancel))
-            PrimaryButton(onClick = { onSave(voiceId) }, text = stringResource(R.string.save))
-        }
-    }
+                    optionLabel = { voiceLabel(it) },
+                    onOptionClick = { voiceId = it },
+                    isSelected = { it == voiceId },
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SecondaryButton(
+                        onClick = audition.toggle,
+                        enabled = audition.enabled,
+                        text = stringResource(R.string.cloud_tts_preview),
+                        modifier = Modifier.weight(1f),
+                    )
+                    SecondaryButton(
+                        onClick = onDismiss,
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrimaryButton(
+                        onClick = { onSave(voiceId) },
+                        text = stringResource(R.string.save),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        },
+    )
 }
 
 /** 删除确认：连分配句、音色绑定、人物档案与本书记忆里的那一行一起清掉。 */

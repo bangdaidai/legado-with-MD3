@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -45,13 +44,12 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.OptionDropdownCard
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.icon.AppIcon
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AnimatedTextLine
 import io.legado.app.ui.widget.components.text.AppText
@@ -366,7 +364,7 @@ private fun ProfileVoiceTraitDropdown(
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ProfileDropdownCard(
+    OptionDropdownCard(
         label = label,
         text = text,
         options = options,
@@ -376,67 +374,7 @@ private fun ProfileVoiceTraitDropdown(
     )
 }
 
-/** 弹窗里的选项卡片：上标签下当前值，点卡片弹出菜单选择 */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun <T> ProfileDropdownCard(
-    label: String,
-    text: String,
-    options: List<T>,
-    optionLabel: @Composable (T) -> String,
-    onOptionClick: (T) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showDropdown by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
-        NormalCard(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { showDropdown = true },
-            cornerRadius = 12.dp,
-            containerColor = LegadoTheme.colorScheme.surfaceContainerLow,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    AppText(
-                        text = label,
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                    AppText(
-                        text = text,
-                        style = LegadoTheme.typography.bodyMedium,
-                        color = LegadoTheme.colorScheme.onSurface,
-                    )
-                }
-                AppIcon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        RoundDropdownMenu(
-            expanded = showDropdown,
-            onDismissRequest = { showDropdown = false },
-        ) {
-            options.forEach { option ->
-                RoundDropdownMenuItem(
-                    text = optionLabel(option),
-                    onClick = {
-                        onOptionClick(option)
-                        showDropdown = false
-                    },
-                )
-            }
-        }
-    }
-}
+/** 弹窗里的选项卡片已提升为公共组件 [OptionDropdownCard]，人物详情与配音编辑共用。 */
 
 @Composable
 private fun CharacterDeleteDialog(
@@ -532,7 +470,7 @@ private fun ProfileRoleDropdown(
         BookCharacterProfile.ROLE_MALE_SUPPORTING to stringResource(R.string.role_male_supporting),
         BookCharacterProfile.ROLE_FEMALE_SUPPORTING to stringResource(R.string.role_female_supporting),
     )
-    ProfileDropdownCard(
+    OptionDropdownCard(
         label = stringResource(R.string.character_role),
         text = roleDisplayNames[selectedRole] ?: "—",
         options = BookCharacterProfile.ALL_ROLES,

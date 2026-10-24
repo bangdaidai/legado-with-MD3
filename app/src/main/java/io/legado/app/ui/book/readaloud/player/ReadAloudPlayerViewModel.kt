@@ -13,6 +13,7 @@ import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.AiTaskType
+import io.legado.app.model.ReadBook
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
 import io.legado.app.domain.model.readaloud.ReadAloudSplitSymbol
 import io.legado.app.domain.model.readaloud.SpeechAttributionStrictness
@@ -133,9 +134,11 @@ class ReadAloudPlayerViewModel(
                 chapterLength = uiState.value.chapterLength,
             )
 
-            // 没有书就没法按书分配角色，跳了只会让用户点了没反应
+            // 没有书就没法按书分配角色，跳了只会让用户点了没反应。
+            // bookUrl 取「正在读的书」优先：换书后旧朗读会话还挂着时，快照里是上一本书
             ReadAloudPlayerIntent.OpenVoiceCasting -> {
-                val bookUrl = uiState.value.bookUrl
+                val bookUrl = ReadBook.book?.bookUrl?.takeIf(String::isNotBlank)
+                    ?: uiState.value.bookUrl
                 if (bookUrl.isNotBlank()) {
                     effect(ReadAloudPlayerEffect.OpenBookVoiceCasting(bookUrl))
                 }

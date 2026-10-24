@@ -53,6 +53,10 @@ data class PoolTreeRow(
     val isGroup: Boolean,
     /** true = 顶部的「未分组」表头：占位、可作放置目标，但不可拖动/改名/删除。 */
     val isUngroupedHeader: Boolean = false,
+    /** true = 「未归池音色」段头：只管收起展开，不可拖动。 */
+    val isUnassignedHeader: Boolean = false,
+    /** 非空 = 一条未归池音色行（不属于任何声音池的音色）。 */
+    val unassignedVoice: CastMemberUi? = null,
     val depth: Int = 0,
     val title: String = "",
     val group: CastGroupRow? = null,
@@ -117,6 +121,12 @@ data class MultiRoleRuleUiState(
     val pickerPoolId: String? = null,
     val pickerQuery: String = "",
     val pickerCandidates: ImmutableList<CastMemberUi> = persistentListOf(),
+    /** 不属于任何声音池的音色（池页顶部的「未归池」段，随池数据一起刷新）。 */
+    val unassignedVoices: ImmutableList<CastMemberUi> = persistentListOf(),
+    /** 「归入声音池」对话框（非空 = 打开中，值 = 要归池的那条音色）。 */
+    val assignVoiceTarget: CastMemberUi? = null,
+    /** 归池对话框的候选池（全部池，含停用的——归池不改池的启用状态）。 */
+    val assignChoices: ImmutableList<CastPoolRow> = persistentListOf(),
     val assignments: ImmutableList<CastAssignmentRowUi> = persistentListOf(),
     /**
      * 待确认的外部格式导入（非空 = 确认对话框打开中）。
@@ -220,6 +230,11 @@ sealed interface MultiRoleRuleIntent {
     data class UpdatePickerQuery(val query: String) : MultiRoleRuleIntent
     data class TogglePickerSelection(val voiceId: String, val checked: Boolean) : MultiRoleRuleIntent
     data object SaveMemberPicker : MultiRoleRuleIntent
+
+    /** 未归池音色 → 选一个池归进去（一音色一组：归入即从原池挪出，本就在原池外则纯加入）。 */
+    data class ShowAssignVoicePicker(val voice: CastMemberUi) : MultiRoleRuleIntent
+    data object DismissAssignVoice : MultiRoleRuleIntent
+    data class ConfirmAssignVoice(val poolId: String) : MultiRoleRuleIntent
 
     /** 分配表：删除全局配音角色（连同其分配行，仅用于清理）。 */
     data class DeleteCharacter(val characterId: String) : MultiRoleRuleIntent

@@ -79,8 +79,9 @@ class MultiRoleRuleViewModel(
                 }
                 state.copy(
                     collapsedGroups = collapsed.toImmutableSet(),
-                    rows = CastPoolTree.buildRows(state.groups, state.pools, collapsed, state.searchQuery)
-                        .toImmutableList(),
+                    rows = CastPoolTree.buildRows(
+                        state.groups, state.pools, collapsed, state.searchQuery, state.unassignedVoices,
+                    ).toImmutableList(),
                 )
             }
 
@@ -89,8 +90,9 @@ class MultiRoleRuleViewModel(
                 state.copy(
                     searchActive = intent.active,
                     searchQuery = query,
-                    rows = CastPoolTree.buildRows(state.groups, state.pools, state.collapsedGroups, query)
-                        .toImmutableList(),
+                    rows = CastPoolTree.buildRows(
+                        state.groups, state.pools, state.collapsedGroups, query, state.unassignedVoices,
+                    ).toImmutableList(),
                 )
             }
 
@@ -102,6 +104,7 @@ class MultiRoleRuleViewModel(
                         state.pools,
                         state.collapsedGroups,
                         intent.query.trim(),
+                        state.unassignedVoices,
                     ).toImmutableList(),
                 )
             }
@@ -109,6 +112,7 @@ class MultiRoleRuleViewModel(
             is MultiRoleRuleIntent.MoveItem -> {
                 val dragged = _uiState.value.rows.getOrNull(intent.from)
                 if (dragged != null && !dragged.isUngroupedHeader &&
+                    !dragged.isUnassignedHeader && dragged.unassignedVoice == null &&
                     intent.from != intent.to && intent.to in _uiState.value.rows.indices
                 ) {
                     draggedKey = dragged.key
@@ -390,6 +394,29 @@ class MultiRoleRuleViewModel(
                 }
             }
 
+            is MultiRoleRuleIntent.ShowAssignVoicePicker -> _uiState.update {
+                it.copy(
+                    assignVoiceTarget = intent.voice,
+                    assignChoices = it.pools,
+                )
+            }
+
+            MultiRoleRuleIntent.DismissAssignVoice -> _uiState.update {
+                it.copy(assignVoiceTarget = null)
+            }
+
+            is MultiRoleRuleIntent.ConfirmAssignVoice -> {
+                val target = _uiState.value.assignVoiceTarget ?: return
+                execute {
+                    // setMembers 保证一音色一组：这条音色若原本在别的池，会先从那边挪出
+                    val merged = VoicePoolStore.memberVoiceIds(intent.poolId) + target.voiceId
+                    VoicePoolStore.setMembers(intent.poolId, merged)
+                    _uiState.update { it.copy(assignVoiceTarget = null) }
+                    refreshMembers(intent.poolId)
+                    refreshPools()
+                }
+            }
+
             is MultiRoleRuleIntent.DeleteCharacter -> execute {
                 VoicePoolStore.deleteCharacter(intent.characterId)
                 loadAssignments()
@@ -577,18 +604,37 @@ class MultiRoleRuleViewModel(
         execute {
             val pools = VoicePoolStore.listPools()
             val groups = VoicePoolStore.listGroups()
+            val unassigned = loadUnassignedVoices()
             _uiState.update { state ->
                 state.copy(
                     pools = pools.toImmutableList(),
                     groups = groups.toImmutableList(),
-                    rows = CastPoolTree.buildRows(groups, pools, state.collapsedGroups, state.searchQuery)
-                        .toImmutableList(),
+                    unassignedVoices = unassigned.toImmutableList(),
+                    rows = CastPoolTree.buildRows(
+                        groups, pools, state.collapsedGroups, state.searchQuery, unassigned,
+                    ).toImmutableList(),
                     // 列表回到树状顺序，拖动中的落点提示作废
                     dragTargetGroupId = null,
                     dragSourceGroupId = null,
                 )
             }
         }
+    }
+
+    /** 不属于任何声音池的音色：池成员是显式关系（导入认池/编辑成员勾选），普通方式加的音色两边都看不见，靠「未归池」段兜住。 */
+    private suspend fun loadUnassignedVoices(): List<CastMemberUi> {
+        val poolOf = VoicePoolStore.voicePoolMap()
+        val engineNames = VoicePoolStore.voiceEngineNames()
+        return VoicePoolStore.allVoicePairs()
+            .filterNot { (id, _) -> poolOf.containsKey(id) }
+            .map { (id, display) ->
+                CastMemberUi(
+                    voiceId = id,
+                    displayName = display,
+                    engineName = engineNames[id].orEmpty(),
+                    checked = true,
+                )
+            }
     }
 
     /**

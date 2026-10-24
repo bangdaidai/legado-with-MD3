@@ -15,28 +15,48 @@ object CastPoolTree {
     /** 「未分组」段的 id：它不对应分组行，只作拖动落点与收起状态用。 */
     const val UNGROUPED_ID = ""
     const val UNGROUPED_KEY = "row_ungrouped"
+
+    /**
+     * 「未归池音色」段的收起状态 id：同样不对应任何分组行。
+     * 用不可见字符开头，避免与真实分组 id（UUID）相撞。
+     */
+    const val UNASSIGNED_VOICES_ID = "\u0000unassignedVoices"
+    const val UNASSIGNED_HEADER_KEY = "row_unassigned_header"
+    const val UNASSIGNED_VOICE_KEY = "row_unassigned_voice_"
     const val GROUP_KEY = "row_group_"
     const val POOL_KEY = "row_pool_"
 
     /**
      * 分组树 + 池 → 页面的一条拉平列表（拖动排序就作用在它上面）。
      *
-     * 顺序：未分组表头 → 未分组的池 → 各分组（DFS，子组紧跟父组、缩进一层）→ 组内池。
-     * 收起的分组只留表头，整棵子树隐藏。搜索时不分层，直接列命中的池。
+     * 顺序：**未归池音色段（有未归池音色才出现）** → 未分组表头 → 未分组的池 →
+     * 各分组（DFS，子组紧跟父组、缩进一层）→ 组内池。
+     * 收起的分组只留表头，整棵子树隐藏。搜索时不分层，直接列命中的池与未归池音色。
+     *
+     * [unassignedVoices] 为空（背景音乐池页不传、或音色都归了池）时整段不渲染，
+     * 对共用这套规则的调用方是纯加法。
      */
     fun buildRows(
         groups: List<CastGroupRow>,
         pools: List<CastPoolRow>,
         collapsed: Set<String>,
         query: String,
+        unassignedVoices: List<CastMemberUi> = emptyList(),
     ): List<PoolTreeRow> {
         if (query.isNotBlank()) {
-            return pools
+            val hitPools = pools
                 .filter {
                     it.name.contains(query, ignoreCase = true) ||
                         it.groupName.contains(query, ignoreCase = true)
                 }
                 .map { PoolTreeRow(key = POOL_KEY + it.id, groupId = it.groupId, isGroup = false, pool = it) }
+            val hitVoices = unassignedVoices
+                .filter {
+                    it.displayName.contains(query, ignoreCase = true) ||
+                        it.engineName.contains(query, ignoreCase = true)
+                }
+                .map { PoolTreeRow(key = UNASSIGNED_VOICE_KEY + it.voiceId, groupId = "", isGroup = false, unassignedVoice = it) }
+            return hitVoices + hitPools
         }
         val byGroup = pools.groupBy { it.groupId }
         fun poolRows(groupId: String, depth: Int) = byGroup[groupId].orEmpty()
@@ -50,6 +70,25 @@ object CastPoolTree {
                 )
             }
         val rows = ArrayList<PoolTreeRow>()
+        if (unassignedVoices.isNotEmpty()) {
+            rows += PoolTreeRow(
+                key = UNASSIGNED_HEADER_KEY,
+                groupId = "",
+                isGroup = true,
+                isUnassignedHeader = true,
+            )
+            if (!collapsed.contains(UNASSIGNED_VOICES_ID)) {
+                unassignedVoices.forEach { member ->
+                    rows += PoolTreeRow(
+                        key = UNASSIGNED_VOICE_KEY + member.voiceId,
+                        groupId = "",
+                        isGroup = false,
+                        depth = 1,
+                        unassignedVoice = member,
+                    )
+                }
+            }
+        }
         rows += PoolTreeRow(
             key = UNGROUPED_KEY,
             groupId = "",
@@ -153,7 +192,10 @@ object CastPoolTree {
         groups: List<CastGroupRow>,
         draggedKey: String?,
     ): Pair<SlotList, SlotList>? {
-        val targets = rows.filter { !it.isUngroupedHeader }
+        // 未归池段（表头/音色行）不是池也不是组，不参与拖动落库，从回写目标里整体排除
+        val targets = rows.filter {
+            !it.isUngroupedHeader && !it.isUnassignedHeader && it.unassignedVoice == null
+        }
         if (targets.isEmpty()) return null
         val poolParent = pools.associate { it.id to it.groupId }.toMutableMap()
         val groupParent = groups.associate { it.id to it.parentId }.toMutableMap()

@@ -3,6 +3,11 @@ package io.legado.app.ui.book.readaloud.cast
 import android.media.MediaPlayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,10 +54,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
+import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
+import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.TinySwitch
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
@@ -227,6 +234,22 @@ fun BgmPoolScreen(
                     }
                 },
                 bottomContent = {
+                    // 搜索框跟标题栏同一层玻璃背景（书签/阅读记录的做法）：悬在内容区会跟
+                    // 顶栏脱节，收起顶栏时它孤零零留在页面顶部。只服务音乐池那一页，
+                    // 配乐库没有分组、也不按池筛选，切过去就连搜索框一起收掉
+                    AnimatedVisibility(
+                        modifier = Modifier.adaptiveHorizontalPadding(),
+                        visible = state.selectedTab == BgmPoolTab.Pools && state.searchActive,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        SearchBar(
+                            query = state.searchQuery,
+                            onQueryChange = { onIntent(BgmPoolIntent.UpdateSearch(it)) },
+                            placeholder = stringResource(BgmPoolWording.searchPoolHint),
+                            autoFocus = false,
+                        )
+                    }
                     AppTabRow(
                         tabTitles = listOf(
                             stringResource(R.string.cast_bgm_pool),

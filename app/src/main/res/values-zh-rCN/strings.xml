@@ -3485,6 +3485,12 @@
     <string name="cast_syntax_applies_next_chapter">名字与声音池之间也接受 . · 、 等分隔（如 张三.男青年）。改动在此之后打开的章节生效。</string>
     <string name="cast_group">分组</string>
     <string name="cast_group_none">未分组</string>
+    <string name="cast_pool_unassigned_section">未归池音色（%1$d）</string>
+    <string name="cast_pool_assign_voice_title">归入声音池</string>
+    <string name="cast_pool_assign_voice_empty">还没有声音池，先新建一个再归池</string>
+    <string name="cast_option_unspecified">未指定</string>
+    <string name="cast_option_auto_voice">自动选音</string>
+    <string name="cast_option_no_effect">不变声</string>
     <string name="cast_create_pool">新建声音池</string>
     <string name="cast_edit_pool">编辑声音池</string>
     <string name="cast_delete_pool">删除声音池</string>
