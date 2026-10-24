@@ -1807,7 +1807,7 @@ private fun TtsVoicePresetEditorContent(
                                     editor.copy(
                                         memberPools = editor.memberPools.map {
                                             if (it.poolId == pool.poolId) it.copy(checked = checked) else it
-                                        },
+                                        }.toPersistentList(),
                                     )
                                 )
                             },

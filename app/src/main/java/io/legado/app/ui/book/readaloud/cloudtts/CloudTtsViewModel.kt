@@ -475,7 +475,7 @@ class CloudTtsViewModel(
         val membership = VoicePoolStore.voicePoolMap()[voiceId].orEmpty()
         return VoicePoolStore.listPools().map { pool ->
             VoicePoolCheckUi(poolId = pool.id, name = pool.name, checked = pool.id in membership)
-        }
+        }.toPersistentList()
     }
 
     /**
