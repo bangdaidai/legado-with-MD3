@@ -15,6 +15,7 @@ import io.legado.app.exception.ContentEmptyException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
 import io.legado.app.help.source.exploreKinds
+import io.legado.app.model.jsSource.isJsSource
 import io.legado.app.model.webBook.WebBook
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -187,8 +188,10 @@ class BookSourceCheckRepository(
         source.removeErrorComment()
         if (settings.checkSearch) {
             val word = source.getCheckKeyword(keyword)
-            if (source.searchUrl.isNullOrBlank()) source.addGroup("搜索链接规则为空")
-            else {
+            // JS 书源没有 searchUrl，直接试搜；声明式书源没有 searchUrl 才算「搜索链接规则为空」
+            if (source.searchUrl.isNullOrBlank() && !source.isJsSource()) {
+                source.addGroup("搜索链接规则为空")
+            } else {
                 source.removeGroup("搜索链接规则为空")
                 val books = WebBook.searchBookAwait(source, word)
                 if (books.isEmpty()) source.addGroup("搜索失效")

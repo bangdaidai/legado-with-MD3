@@ -9,6 +9,7 @@ import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.domain.model.MatchMode
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.source.SourceVerificationHelp
+import io.legado.app.model.jsSource.isJsSource
 import io.legado.app.model.webBook.WebBook
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -100,7 +101,8 @@ class SearchBooksUseCase(
             sourceParts.map { part ->
                 async(Dispatchers.IO) {
                     val source = gateway.getBookSource(part.bookSourceUrl) ?: return@async null
-                    if (source.searchUrl.isNullOrBlank()) {
+                    // JS 书源没有 searchUrl，搜索能力在 search() 函数里
+                    if (source.searchUrl.isNullOrBlank() && !source.isJsSource()) {
                         return@async null
                     }
                     if (request.types != null && !request.types.contains(source.bookSourceType)) {
