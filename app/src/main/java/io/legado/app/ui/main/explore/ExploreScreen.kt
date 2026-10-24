@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.help.source.getExploreInfoMap
 import io.legado.app.ui.book.search.SearchScope
