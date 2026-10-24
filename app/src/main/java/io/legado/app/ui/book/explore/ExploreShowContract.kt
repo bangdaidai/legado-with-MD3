@@ -23,6 +23,14 @@ data class ExploreShowUiState(
     val errorMsg: String? = null,
     val sheet: ExploreShowSheet = ExploreShowSheet.None,
     val filterStateId: Int = 0,
+    /** 顶栏溢出菜单里可选的其他发现书源（不含当前源），参考上游内容模式的换源菜单 */
+    val switchableSources: ImmutableList<ExploreSourceOptionUi> = persistentListOf(),
+)
+
+@Stable
+data class ExploreSourceOptionUi(
+    val name: String,
+    val url: String,
 )
 
 @Stable
@@ -52,6 +60,8 @@ sealed interface ExploreShowIntent {
     data class SaveGridCount(val count: Int) : ExploreShowIntent
     data class ShowSheet(val sheet: ExploreShowSheet) : ExploreShowIntent
     data object DismissSheet : ExploreShowIntent
+    /** 顶栏溢出菜单切换到另一本书源的发现列表，落在新源第一个可切换分类上 */
+    data class SwitchSource(val sourceUrl: String) : ExploreShowIntent
     data class OpenBook(val book: SearchBook, val sharedCoverKey: String?) : ExploreShowIntent
     data class AddToShelf(val book: SearchBook) : ExploreShowIntent
 }

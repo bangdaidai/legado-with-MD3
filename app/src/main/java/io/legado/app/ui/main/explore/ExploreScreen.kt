@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -80,6 +81,7 @@ import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.progressIndicator.AppContainedLoadingIndicator
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -307,6 +309,29 @@ fun ExploreScreen(
             onSearchQueryChange = { onIntent(ExploreIntent.Search(it)) },
             onSearchToggle = { onIntent(ExploreIntent.ToggleSearch(it)) },
             searchPlaceholder = stringResource(R.string.search),
+            topBarActions = {
+                // 参考上游的发现内容直达入口：跳过分类网格，直接落在具体列表页——
+                // 优先当前展开的书源，其次第一个书源；取它的第一个可切换分类，
+                // 没有可切换分类时退回该源的默认发现页。列表页右上角可再换其他书源。
+                TopBarActionButton(
+                    onClick = {
+                        val source = state.items.firstOrNull {
+                            it.bookSourceUrl == state.expandedId
+                        } ?: state.items.firstOrNull()
+                        if (source == null) return@TopBarActionButton
+                        val kind = state.exploreKinds.firstOrNull {
+                            it.type == ExploreKind.Type.url && !it.url.isNullOrBlank()
+                        }
+                        if (kind != null) {
+                            onOpenExploreShow(kind.title, source.bookSourceUrl, kind.url)
+                        } else {
+                            onOpenExploreShow(null, source.bookSourceUrl, null)
+                        }
+                    },
+                    imageVector = Icons.Filled.SwapHoriz,
+                    contentDescription = stringResource(R.string.explore_main_content),
+                )
+            },
             dropDownMenuContent = { dismiss ->
                 RoundDropdownMenuItem(
                     leadingIcon = { MenuItemIcon(Icons.Default.Group) },

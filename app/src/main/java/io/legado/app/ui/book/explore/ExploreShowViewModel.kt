@@ -97,6 +97,8 @@ class ExploreShowViewModel(
     private val _bookshelf = MutableStateFlow<Set<BookShelfKey>>(emptySet())
     private val _loadState = MutableStateFlow(ExploreShowLoadState())
     private val _kindState = MutableStateFlow(ExploreShowKindState())
+    private val _switchableSources =
+        MutableStateFlow<List<ExploreSourceOptionUi>>(emptyList())
     private val _displayState = MutableStateFlow(
         ExploreShowDisplayState(
             layoutState = 0,
@@ -130,6 +132,7 @@ class ExploreShowViewModel(
 
     init {
         observeBookshelf()
+        observeSwitchableSources()
         combineUiState()
         loadLayoutMode()
         loadGridCount()
@@ -143,6 +146,7 @@ class ExploreShowViewModel(
             ExploreShowIntent.Refresh -> loadMore(isRefresh = true)
             is ExploreShowIntent.SwitchKind -> switchKind(intent.kind)
             is ExploreShowIntent.SwitchGroup -> switchGroup(intent.group)
+            is ExploreShowIntent.SwitchSource -> switchSource(intent.sourceUrl)
             ExploreShowIntent.ToggleLayout -> toggleLayout()
             is ExploreShowIntent.SaveGridCount -> saveGridCount(intent.count)
             is ExploreShowIntent.ShowSheet -> _displayState.update { it.copy(sheet = intent.sheet) }
@@ -174,6 +178,20 @@ class ExploreShowViewModel(
         }
     }
 
+    /** 顶栏溢出菜单的换源候选：全部启用发现的源，当前源在合成状态时再剔除 */
+    private fun observeSwitchableSources() {
+        viewModelScope.launch {
+            repository.getExploreSources(query = "", selectedGroup = "").collect { sources ->
+                _switchableSources.value = sources.map { source ->
+                    ExploreSourceOptionUi(
+                        name = source.bookSourceName,
+                        url = source.bookSourceUrl,
+                    )
+                }
+            }
+        }
+    }
+
     /**
      * 预览 sheet 用：直接按当前书架快照实时计算。
      * 不要从展示列表反查——筛选把该书隐藏后就查不到，会误判成不在书架。
@@ -191,7 +209,10 @@ class ExploreShowViewModel(
             val displayAndCoverSettings = combine(
                 _displayState,
                 coverSettingsGateway.settings,
-            ) { displayState, coverSettings -> displayState to coverSettings }
+                _switchableSources,
+            ) { displayState, coverSettings, sources ->
+                Triple(displayState, coverSettings, sources)
+            }
             combine(
                 _rawBooks,
                 _bookshelf,
@@ -199,7 +220,7 @@ class ExploreShowViewModel(
                 _kindState,
                 displayAndCoverSettings,
             ) { rawBooks, bookshelf, loadState, kindState, displayAndCover ->
-                val (displayState, coverSettings) = displayAndCover
+                val (displayState, coverSettings, switchableSources) = displayAndCover
                 val books = rawBooks.map { item ->
                     ExploreBookItemUi(
                         book = item,
@@ -227,6 +248,9 @@ class ExploreShowViewModel(
                     errorMsg = loadState.errorMsg,
                     sheet = displayState.sheet,
                     filterStateId = coverSettings.exploreFilterState,
+                    switchableSources = switchableSources
+                        .filter { it.url != displayState.sourceUrl }
+                        .toImmutableList(),
                 )
             }.collect { newState ->
                 _uiState.value = newState
@@ -299,6 +323,21 @@ class ExploreShowViewModel(
     private fun switchGroup(group: String) {
         _kindState.update {
             it.copy(selectedGroup = group, kinds = groupedKinds[group] ?: emptyList())
+        }
+    }
+
+    /**
+     * 溢出菜单换书源：先取新书源的分类，把第一个可切换分类当作落点传给 initData——
+     * 落地效果与在主页点它的一个标签完全一致；没有 url 分类时退回源默认发现页。
+     */
+    private fun switchSource(newSourceUrl: String) {
+        if (newSourceUrl == sourceUrl) return
+        viewModelScope.launch {
+            val kinds = runCatching { repository.getSourceExploreKinds(newSourceUrl) }
+                .getOrDefault(emptyList())
+            val firstKind = groupExploreKinds(kinds, appCtx.getString(R.string.all))
+                .values.firstOrNull()?.firstOrNull()
+            initData(newSourceUrl, firstKind?.url)
         }
     }
 

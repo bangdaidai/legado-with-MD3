@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -67,6 +68,9 @@ import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.explore.ExploreKindSelectSheet
+import io.legado.app.ui.widget.components.icon.AppIcons
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuLazy
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
@@ -157,6 +161,7 @@ fun ExploreShowScreen(
 
     var previewBook by remember { mutableStateOf<SearchBook?>(null) }
     var previewSharedCoverKey by remember { mutableStateOf<String?>(null) }
+    var sourceMenuExpanded by remember { mutableStateOf(false) }
 
     val filterStateId = state.filterStateId
     val books = remember(state.books, filterStateId) {
@@ -344,6 +349,33 @@ fun ExploreShowScreen(
                         imageVector = if (!isGridMode) Icons.AutoMirrored.Outlined.FormatListBulleted else Icons.Default.GridView,
                         contentDescription = stringResource(R.string.a11y_switch_layout)
                     )
+
+                    // 溢出菜单：切到其他书源的发现列表（参考上游内容模式的换源入口，
+                    // 落在新源第一个可切换分类上，等价于在主页点它的一个标签）
+                    Box {
+                        TopBarActionButton(
+                            onClick = { sourceMenuExpanded = true },
+                            imageVector = AppIcons.MoreVert,
+                            contentDescription = stringResource(R.string.explore_select_source),
+                        )
+                        RoundDropdownMenuLazy(
+                            expanded = sourceMenuExpanded,
+                            onDismissRequest = { sourceMenuExpanded = false },
+                        ) { dismiss ->
+                            items(
+                                items = state.switchableSources,
+                                key = { it.url }
+                            ) { source ->
+                                RoundDropdownMenuItem(
+                                    text = source.name,
+                                    onClick = {
+                                        dismiss()
+                                        onIntent(ExploreShowIntent.SwitchSource(source.url))
+                                    },
+                                )
+                            }
+                        }
+                    }
                 },
                 scrollBehavior = scrollBehavior,
                 // 两排分类标签放进 bottomContent：与标题栏同一层玻璃背景（阅读记录概览的
