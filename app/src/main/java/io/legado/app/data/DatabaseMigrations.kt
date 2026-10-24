@@ -22,8 +22,29 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83, migration_98_99, migration_99_100, migration_100_101,
             migration_102_103, migration_123_124, migration_124_125, migration_127_128,
-            migration_133_134,
+            migration_132_133, migration_133_134,
         )
+    }
+
+    /**
+     * 132 → 133：fork 三特性合并推进（手写迁移，不走 AutoMigration）。
+     *
+     * AutoMigration 要求 from/to 两端的 schema JSON 都在 app/schemas 里；版本已推进到
+     * 134 后 133.json 不会再被导出，中间版本只能手写。内容：
+     * - book_sources.mainJs：单文件 JS 书源主脚本，可空
+     * - httpTTS.script / scriptOptionsJson：JS 朗读引擎主脚本与 options() 配置值
+     *
+     * 纯加列，不触碰 book_sources_part 视图（Room 校验视图 SQL 形态敏感，
+     * 手写重建容易对不上；JS 徽章投影等真需要时再随上游版本一起演进）。
+     */
+    private val migration_132_133 = object : Migration(132, 133) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `book_sources` ADD COLUMN `mainJs` TEXT")
+            db.execSQL("ALTER TABLE `httpTTS` ADD COLUMN `script` TEXT")
+            db.execSQL(
+                "ALTER TABLE `httpTTS` ADD COLUMN `scriptOptionsJson` TEXT NOT NULL DEFAULT '{}'"
+            )
+        }
     }
 
     /**
