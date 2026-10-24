@@ -52,6 +52,7 @@ interface BookUpdateDao {
     @Transaction
     suspend fun recordIfNewer(record: BookUpdate) {
         val previous = get(record.epochDay, record.bookUrl, record.origin)
-        mergeBookUpdateIfNewer(previous, record)?.let(::insert)
+        // 不能用 ?.let(::insert)：insert 是挂起函数，函数引用传给非挂起的 let 推断失败
+        mergeBookUpdateIfNewer(previous, record)?.let { insert(it) }
     }
 }
