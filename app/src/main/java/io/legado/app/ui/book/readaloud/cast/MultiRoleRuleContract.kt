@@ -83,6 +83,11 @@ data class CastMemberUi(
     val engineName: String = "",
     /** true = 该音色在本池已启用（复选框勾选），会出现在分配角色音色菜单。 */
     val checked: Boolean,
+    /** 音色标签（对齐 legado_NG 音色卡）；gender 为 male/female/unknown 原值，界面负责本地化 */
+    val gender: String = "",
+    val language: String = "",
+    val style: String = "",
+    val tags: List<String> = emptyList(),
 )
 
 @Stable

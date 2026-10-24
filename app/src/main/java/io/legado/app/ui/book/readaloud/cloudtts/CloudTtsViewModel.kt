@@ -47,6 +47,7 @@ import io.legado.app.help.readaloud.cast.VoiceLabelStore
 import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.playback.HttpTtsAudioSynthesizer
 import io.legado.app.help.readaloud.playback.CloudTtsAudioSynthesizer
+import io.legado.app.help.readaloud.script.TtsScriptMetadata
 import io.legado.app.help.readaloud.playback.HttpTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsFileSynthesizer
 import io.legado.app.help.readaloud.playback.SystemTtsVoiceCatalog
@@ -213,6 +214,7 @@ class CloudTtsViewModel(
                         summary = engine.providerName,
                         selected = isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engine.sourceId),
                         loginUrl = engine.loginUrl,
+                        hasScript = engine.hasScript,
                     )
                 }.toImmutableList(),
                 voices = voiceItems(state.voiceGenderFilter),
@@ -243,6 +245,7 @@ class CloudTtsViewModel(
             CloudTtsIntent.ApplyDefaultEngineGlobally -> applyPendingDefaultEngine(forBook = false)
             CloudTtsIntent.ApplyDefaultEngineForBook -> applyPendingDefaultEngine(forBook = true)
             is CloudTtsIntent.EditHttpTts -> editHttpTts(intent.engineId)
+            is CloudTtsIntent.NewScriptTtsFromTemplate -> newScriptTtsFromTemplate(intent.asset)
             is CloudTtsIntent.SaveHttpTts -> saveHttpTts(intent.value)
             is CloudTtsIntent.DeleteHttpTts -> deleteHttpTts(intent.engineId)
             is CloudTtsIntent.OpenHttpTtsLogin -> intent.engineId.toLongOrNull()?.let {
@@ -1036,17 +1039,21 @@ class CloudTtsViewModel(
             voice.id,
             voice.displayName,
             buildString {
-                traitLabels(traits).joinTo(this, " · ")
+                // 性别/风格移到结构化标签行，这里只留异常状态与默认旁白标记
                 if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
-                // 默认旁白标记与性别/风格标签同排展示，写法对齐引擎行的「当前默认」
                 if (defaultNarrator) {
                     if (isNotEmpty()) append(" · ")
                     append(application.getString(R.string.cloud_tts_default_narrator_marker))
                 }
-            }.removePrefix(" · "),
+            },
             deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
             gender = traits.gender,
+            genderLabel = genderLabel(traits.gender).orEmpty(),
+            languageLabel = traits.language.takeIf(String::isNotBlank).orEmpty(),
+            styleLabel = traits.style.takeIf(String::isNotBlank).orEmpty(),
+            tags = traits.tags.take(3),
+            engineName = engineName(voice.engineType, voice.engineId),
         )
     }.toImmutableList()
 
@@ -1198,6 +1205,7 @@ class CloudTtsViewModel(
                         summary = engine.providerName,
                         selected = isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engine.sourceId),
                         loginUrl = engine.loginUrl,
+                        hasScript = engine.hasScript,
                     )
                 }.toImmutableList(),
             )
@@ -1297,6 +1305,20 @@ class CloudTtsViewModel(
             engineId?.toLongOrNull()?.let { httpTtsRepository.findById(it) } ?: HttpTTS()
         }
         _uiState.update { it.copy(httpTtsEditor = value) }
+    }
+
+    /** 从内置脚本模板新建 JS 朗读引擎：读 assets 脚本，直接进编辑器预填，不落库。 */
+    private fun newScriptTtsFromTemplate(asset: String) = viewModelScope.launch {
+        runCatching {
+            val script = withContext(Dispatchers.IO) {
+                application.assets.open(asset).use { it.readBytes().toString(Charsets.UTF_8) }
+            }
+            parseJsTtsScript(script)
+        }.onSuccess { source ->
+            _uiState.update { it.copy(httpTtsEditor = source) }
+        }.onFailure {
+            toast(it.localizedMessage ?: application.getString(R.string.wrong_format))
+        }
     }
 
     private fun saveHttpTts(value: HttpTTS) = viewModelScope.launch {
@@ -1421,7 +1443,34 @@ class CloudTtsViewModel(
             } else url(text)
         }.decompressed().text())
 
+        text.isJsTtsScriptCandidate() -> listOf(
+            HttpTtsImportEntry(
+                source = parseJsTtsScript(text),
+                catalog = HttpTtsCatalogDraft(),
+            )
+        )
+
         else -> throw NoStackTraceException(application.getString(R.string.wrong_format))
+    }
+
+    /** 非 JSON 开头、也非 URL/data URI 的文本，按 JS 朗读引擎脚本处理。 */
+    private fun String.isJsTtsScriptCandidate(): Boolean {
+        val head = trimStart('\uFEFF').trimStart()
+        return head.isNotEmpty() && !head.startsWith("{") && !head.startsWith("[")
+    }
+
+    private fun parseJsTtsScript(text: String): HttpTTS {
+        val script = text.trimStart('\uFEFF').trim()
+        val meta = TtsScriptMetadata.parse(script)
+        if (meta.name.isBlank()) {
+            throw NoStackTraceException("朗读引擎脚本缺少 @name 元信息")
+        }
+        return HttpTTS(
+            name = meta.name,
+            contentType = meta.audioType.takeIf { it.isNotBlank() },
+            script = script,
+            lastUpdateTime = System.currentTimeMillis(),
+        )
     }
 
     private fun toggleHttpTtsImportSelection(index: Int) {

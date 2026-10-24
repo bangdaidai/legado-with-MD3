@@ -3,18 +3,22 @@ package io.legado.app.help.readaloud
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.domain.model.readaloud.HttpTtsVoice
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.VoiceCatalogEntry
+import io.legado.app.help.readaloud.script.TtsScriptEngineClient
+import io.legado.app.help.readaloud.script.isScriptEngine
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 
 /**
- * 从 HttpTTS 的 jsLib 里取发音人目录。
+ * 从 HttpTTS 取发音人目录。
  *
- * jsLib 定义了 `voices()` 时一条引擎可以带多个音色；没定义就返回空，
- * 调用方回落到「一条引擎一个默认音色」的老行为。
+ * 脚本引擎调主脚本的 `voices(options, ctx)`（legado_NG 协议）；
+ * URL 模板引擎从 jsLib 里取 `voices()`——jsLib 定义了 `voices()` 时一条引擎
+ * 可以带多个音色；没定义就返回空，调用方回落到「一条引擎一个默认音色」的老行为。
  *
  * 会同步执行脚本，调用方自己保证不在主线程。
  */
@@ -24,6 +28,12 @@ object HttpTtsVoiceCatalog {
         "typeof voices === 'function' ? JSON.stringify(voices({}, {})) : ''"
 
     fun getVoices(httpTts: HttpTTS): List<HttpTtsVoice> {
+        if (httpTts.isScriptEngine()) {
+            return runCatching { TtsScriptEngineClient.fetchVoices(httpTts) }.getOrElse {
+                AppLog.put("脚本朗读引擎拉取音色失败 ${httpTts.name}: ${it.localizedMessage}")
+                emptyList()
+            }
+        }
         if (httpTts.jsLib.isNullOrBlank()) return emptyList()
         val json = runCatching { httpTts.evalJS(VOICES_JS)?.toString() }
             .getOrNull()?.takeIf { it.isNotBlank() } ?: return emptyList()

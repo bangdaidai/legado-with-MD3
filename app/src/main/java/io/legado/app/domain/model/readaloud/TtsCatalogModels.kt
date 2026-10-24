@@ -9,6 +9,8 @@ data class TtsEngineDescriptor(
     val providerName: String = "",
     val supportsVoiceDiscovery: Boolean = false,
     val loginUrl: String = "",
+    /** HTTP 引擎的脚本形态（JS 朗读引擎）标记 */
+    val hasScript: Boolean = false,
 )
 
 enum class TtsEngineKind {

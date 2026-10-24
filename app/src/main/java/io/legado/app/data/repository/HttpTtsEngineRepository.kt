@@ -4,6 +4,7 @@ import io.legado.app.data.dao.HttpTTSDao
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
 import io.legado.app.domain.model.readaloud.TtsEngineDescriptor
 import io.legado.app.domain.model.readaloud.TtsEngineKind
+import io.legado.app.help.readaloud.script.isScriptEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -21,6 +22,7 @@ class HttpTtsEngineRepository(
                 providerName = "HTTP TTS",
                 supportsVoiceDiscovery = false,
                 loginUrl = source.loginUrl.orEmpty(),
+                hasScript = source.isScriptEngine(),
             )
         }
     }

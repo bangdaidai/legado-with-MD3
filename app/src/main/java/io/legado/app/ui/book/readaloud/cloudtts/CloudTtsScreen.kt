@@ -29,6 +29,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,6 +59,10 @@ import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.profile
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
+import io.legado.app.help.readaloud.script.TtsRandomNumberStore
+import io.legado.app.help.readaloud.script.TtsScriptEngineClient
+import io.legado.app.help.readaloud.script.TtsScriptOption
+import io.legado.app.help.readaloud.script.TtsScriptOptionType
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppFloatingActionButton
@@ -85,9 +95,17 @@ import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.GSON
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** 内置 JS 朗读引擎脚本模板（assets/defaultData/tts/，取自 legado_NG）。 */
+private val TTS_SCRIPT_TEMPLATES = listOf(
+    "defaultData/tts/mimo_v25_tts.js" to "Xiaomi MiMo V2.5 TTS",
+    "defaultData/tts/microsoft_translator.js" to "Microsoft Translator TTS",
+)
 
 @Composable
 fun CloudTtsScreen(
@@ -108,6 +126,7 @@ fun CloudTtsScreen(
         },
     )
     var showAddEngineSheet by remember { mutableStateOf(false) }
+    var showTtsTemplateSheet by remember { mutableStateOf(false) }
     var showHttpTtsImportSheet by remember { mutableStateOf(false) }
     var showHttpTtsUrlInput by remember { mutableStateOf(false) }
     // 行尾试听按钮长按：弹出试听文本悬浮窗（改默认文本 / 直接试听草稿）
@@ -345,12 +364,38 @@ fun CloudTtsScreen(
                     item { AppText(stringResource(R.string.cloud_tts_no_saved_voices), Modifier.padding(24.dp)) }
                 }
                 items(state.voices, key = { "voice:${it.id}" }) { voice ->
-                    TinyClickableSettingItem(
+                    VoiceCardItem(
                         title = voice.title,
-                        // 没有性别/风格标签也没异常状态时不占描述行
-                        description = voice.summary.ifEmpty { null },
-                        // 性别 + 风格标签一行放不下, 给两行
-                        descriptionMaxLines = 2,
+                        tags = {
+                            Column {
+                                val hasTags = voice.genderLabel.isNotBlank() ||
+                                    voice.languageLabel.isNotBlank() ||
+                                    voice.styleLabel.isNotBlank() ||
+                                    voice.tags.isNotEmpty() ||
+                                    voice.engineName.isNotBlank()
+                                if (hasTags) {
+                                    VoiceTraitTagRow(
+                                        genderLabel = voice.genderLabel.takeIf(String::isNotBlank),
+                                        languageLabel = voice.languageLabel.takeIf(String::isNotBlank),
+                                        styleLabel = voice.styleLabel.takeIf(String::isNotBlank),
+                                        tags = voice.tags,
+                                        engineName = voice.engineName.takeIf(String::isNotBlank),
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
+                                // 异常状态/默认旁白标记仍然保留文本行
+                                if (voice.summary.isNotBlank()) {
+                                    AppText(
+                                        text = voice.summary,
+                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
+                            }
+                        },
                         trailingContent = {
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 if (state.voiceBatchMode) {
@@ -461,6 +506,7 @@ fun CloudTtsScreen(
                         TinyClickableSettingItem(
                             title = engine.title,
                             description = listOf(
+                                stringResource(R.string.tts_script_badge).takeIf { engine.hasScript },
                                 engine.summary,
                                 stringResource(R.string.read_aloud_current_default_summary).takeIf { engine.selected },
                             ).filterNotNull().filter(String::isNotBlank).joinToString(" | "),
@@ -534,6 +580,30 @@ fun CloudTtsScreen(
                 onIntent(CloudTtsIntent.EditHttpTts())
             },
         )
+        OptionCard(
+            icon = Icons.Default.RecordVoiceOver,
+            text = stringResource(R.string.tts_new_from_template),
+            onClick = {
+                showAddEngineSheet = false
+                showTtsTemplateSheet = true
+            },
+        )
+    }
+    OptionSheet(
+        show = showTtsTemplateSheet,
+        onDismissRequest = { showTtsTemplateSheet = false },
+        title = stringResource(R.string.tts_new_from_template),
+    ) {
+        TTS_SCRIPT_TEMPLATES.forEach { (asset, name) ->
+            OptionCard(
+                icon = Icons.Default.RecordVoiceOver,
+                text = name,
+                onClick = {
+                    showTtsTemplateSheet = false
+                    onIntent(CloudTtsIntent.NewScriptTtsFromTemplate(asset))
+                },
+            )
+        }
     }
     CloudTtsEngineEditorSheet(state, state.engineEditor, onIntent)
     VoiceEnginePickerSheet(state.showVoiceEnginePicker, state, onIntent)
@@ -547,7 +617,7 @@ fun CloudTtsScreen(
             showHttpTtsImportSheet = false; onIntent(CloudTtsIntent.ImportHttpTtsFile)
         },
         onManualInput = { showHttpTtsImportSheet = false; showHttpTtsUrlInput = true },
-        allowExtensions = arrayOf("json", "txt"),
+        allowExtensions = arrayOf("json", "txt", "js"),
     )
     SourceInputDialog(
         show = showHttpTtsUrlInput,
@@ -754,6 +824,14 @@ private fun HttpTtsEditorSheet(
     val scope = rememberCoroutineScope()
     var name by remember(source) { mutableStateOf(source.name) }
     var url by remember(source) { mutableStateOf(source.url) }
+    var script by remember(source) { mutableStateOf(source.script.orEmpty()) }
+    var optionValues by remember(source) {
+        mutableStateOf(
+            runCatching {
+                GSON.fromJsonObject<Map<String, String>>(source.scriptOptionsJson).getOrNull().orEmpty()
+            }.getOrNull().orEmpty()
+        )
+    }
     var contentType by remember(source) { mutableStateOf(source.contentType.orEmpty()) }
     var concurrentRate by remember(source) { mutableStateOf(source.concurrentRate ?: "0") }
     var header by remember(source) { mutableStateOf(source.header.orEmpty()) }
@@ -766,6 +844,8 @@ private fun HttpTtsEditorSheet(
     fun current() = source.copy(
         name = name,
         url = url,
+        script = script.ifBlank { null },
+        scriptOptionsJson = if (script.isBlank()) "{}" else GSON.toJson(optionValues),
         contentType = contentType.ifBlank { null },
         concurrentRate = concurrentRate,
         header = header.ifBlank { null },
@@ -815,6 +895,12 @@ private fun HttpTtsEditorSheet(
                                     ?: return@launch
                                 HttpTTS.fromJson(text).getOrNull()?.let { imported ->
                                     name = imported.name; url = imported.url
+                                    script = imported.script.orEmpty()
+                                    optionValues = runCatching {
+                                        GSON.fromJsonObject<Map<String, String>>(
+                                            imported.scriptOptionsJson
+                                        ).getOrNull().orEmpty()
+                                    }.getOrNull().orEmpty()
                                     contentType = imported.contentType.orEmpty()
                                     concurrentRate = imported.concurrentRate ?: "0"
                                     header = imported.header.orEmpty(); loginUrl =
@@ -852,6 +938,27 @@ private fun HttpTtsEditorSheet(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+            item {
+                AppTextField(
+                    script,
+                    { script = it },
+                    label = "引擎脚本 (JS)",
+                    minLines = 6,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (script.isNotBlank()) {
+                item {
+                    ScriptOptionsForm(
+                        source = source,
+                        script = script,
+                        optionValues = optionValues,
+                        onOptionChange = { key, value ->
+                            optionValues = optionValues + (key to value)
+                        },
+                    )
+                }
             }
             item {
                 AppTextField(
@@ -936,6 +1043,146 @@ private fun HttpTtsEditorSheet(
                 )
             }
             item { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+}
+
+/**
+ * 脚本引擎 options() 动态配置表单：按配置项类型渲染输入控件，
+ * 值收集进 [optionValues]（保存时序列化回 scriptOptionsJson）。
+ */
+@Composable
+private fun ScriptOptionsForm(
+    source: HttpTTS,
+    script: String,
+    optionValues: Map<String, String>,
+    onOptionChange: (String, String) -> Unit,
+) {
+    var options by remember(script) { mutableStateOf<List<TtsScriptOption>?>(null) }
+    LaunchedEffect(script) {
+        options = withContext(Dispatchers.IO) {
+            runCatching {
+                TtsScriptEngineClient.loadOptions(source.copy(script = script))
+            }.getOrNull().orEmpty()
+        }
+    }
+    val loaded = options
+    if (loaded == null || loaded.isEmpty()) return
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppText(
+            text = stringResource(R.string.tts_script_options_title),
+            fontWeight = FontWeight.SemiBold,
+        )
+        loaded.forEach { option ->
+            ScriptOptionField(
+                source = source,
+                option = option,
+                value = optionValues[option.key].orEmpty(),
+                onChange = { onOptionChange(option.key, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScriptOptionField(
+    source: HttpTTS,
+    option: TtsScriptOption,
+    value: String,
+    onChange: (String) -> Unit,
+) {
+    when (option.normalizedType) {
+        TtsScriptOptionType.BOOLEAN -> TinySwitchSettingItem(
+            title = option.label,
+            checked = value == "true" || (value.isBlank() && option.defaultValue == "true"),
+            onCheckedChange = { onChange(it.toString()) },
+        )
+
+        TtsScriptOptionType.SELECT -> ScriptSelectField(option, value, onChange)
+
+        TtsScriptOptionType.RANDOM_NUMBER -> Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AppTextField(
+                value,
+                onChange,
+                label = option.label,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            MediumTonalButton(
+                onClick = {
+                    onChange(
+                        TtsRandomNumberStore.regenerate(
+                            source.id.toString(),
+                            option.key,
+                            option.digits,
+                            option.allowLeadingZero,
+                        )
+                    )
+                },
+                icon = Icons.Default.Refresh,
+                contentDescription = stringResource(R.string.regenerate),
+            )
+        }
+
+        TtsScriptOptionType.PASSWORD -> AppTextField(
+            value,
+            onChange,
+            label = option.label,
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        TtsScriptOptionType.NUMBER -> AppTextField(
+            value,
+            onChange,
+            label = option.label,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        else -> AppTextField(
+            value,
+            onChange,
+            label = option.label,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun ScriptSelectField(
+    option: TtsScriptOption,
+    value: String,
+    onChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        MediumTonalButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            text = "${option.label}: ${value.ifBlank { "—" }}",
+        )
+        RoundDropdownMenu(expanded, { expanded = false }) {
+            option.values.forEach { item ->
+                RoundDropdownMenuItem(
+                    text = item.label,
+                    onClick = {
+                        expanded = false
+                        onChange(item.value)
+                    },
+                )
+            }
         }
     }
 }
@@ -1193,18 +1440,32 @@ private fun TtsVoicePresetEditorContent(
                     // 同一引擎可以有多个同名音色（小米引擎的 Voice.name 就只有「zh」这种），
                     // 只用 id 当 key 会让 LazyColumn 直接崩溃
                     items(filteredVoices, key = { "${it.id}|${it.locale}" }) { voice ->
-                        TinyClickableSettingItem(
+                        VoiceCardItem(
                             title = voice.label.substringBefore(" · "),
-                            description = buildString {
-                                voice.label.substringAfter(" · ", "").takeIf(String::isNotBlank)?.let(::append)
-                                if (isNotEmpty()) append(" · ")
-                                append(voice.id)
-                                if (voice.id == editor.voiceId) {
-                                    append(" · ")
-                                    append(stringResource(R.string.cloud_tts_selected))
-                                }
+                            tags = {
+                                VoiceTraitTagRow(
+                                    genderLabel = null,
+                                    languageLabel = voice.locale.takeIf(String::isNotBlank),
+                                    styleLabel = null,
+                                    tags = (voice.styles + voice.roles).distinct().take(4),
+                                    engineName = null,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                                AppText(
+                                    text = buildString {
+                                        append(voice.id)
+                                        if (voice.id == editor.voiceId) {
+                                            append(" · ")
+                                            append(stringResource(R.string.cloud_tts_selected))
+                                        }
+                                    },
+                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
                             },
-                            descriptionMaxLines = 2,
                             trailingContent = {
                                 MediumTonalButton(
                                     onClick = {

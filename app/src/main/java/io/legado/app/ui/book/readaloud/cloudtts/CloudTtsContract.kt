@@ -86,6 +86,7 @@ data class TtsManagedEngineItemUi(
     val summary: String = "",
     val selected: Boolean = false,
     val loginUrl: String = "",
+    val hasScript: Boolean = false,
 )
 @Stable data class CloudTtsVoiceItemUi(
     val id: String,
@@ -95,6 +96,12 @@ data class TtsManagedEngineItemUi(
     val editable: Boolean,
     /** 筛选用的性别，取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
     val gender: String = "",
+    /** 结构化标签（对齐 legado_NG 音色卡）：为空时界面回退 [summary] 文本 */
+    val genderLabel: String = "",
+    val languageLabel: String = "",
+    val styleLabel: String = "",
+    val tags: List<String> = emptyList(),
+    val engineName: String = "",
 )
 @Stable data class TtsEngineOptionUi(
     val engineType: String,
@@ -174,6 +181,7 @@ sealed interface CloudTtsIntent {
     data object ApplyDefaultEngineGlobally : CloudTtsIntent
     data object ApplyDefaultEngineForBook : CloudTtsIntent
     data class EditHttpTts(val engineId: String? = null) : CloudTtsIntent
+    data class NewScriptTtsFromTemplate(val asset: String) : CloudTtsIntent
     data class SaveHttpTts(val value: HttpTTS) : CloudTtsIntent
     data class DeleteHttpTts(val engineId: String) : CloudTtsIntent
     data class OpenHttpTtsLogin(val engineId: String) : CloudTtsIntent

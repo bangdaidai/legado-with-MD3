@@ -5,6 +5,8 @@ import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
+import io.legado.app.help.readaloud.script.TtsScriptEngineClient
+import io.legado.app.help.readaloud.script.isScriptEngine
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import java.io.File
 import java.io.FilterInputStream
@@ -29,6 +31,12 @@ class HttpTtsAudioSynthesizer(private val repository: HttpTtsRepository) {
         withContext(Dispatchers.IO) {
             val source = voice.engineId.toLongOrNull()?.let { repository.findById(it) }
                 ?: throw NoStackTraceException("HTTP TTS 引擎不存在：${voice.engineId}")
+            if (source.isScriptEngine()) {
+                return@withContext ScriptTtsAudioSynthesizer().synthesize(
+                    source, text, output,
+                    voice = HttpTtsVoiceCatalog.fromVoice(voice),
+                )
+            }
             output.parentFile?.mkdirs()
             try {
                 openStream(source, text, voice, ownerJob = currentCoroutineContext()[Job]).use { input ->
@@ -156,6 +164,11 @@ class HttpTtsAudioSynthesizer(private val repository: HttpTtsRepository) {
 }
 
 internal fun httpTtsAudioCacheSourceKey(source: HttpTTS, voice: ReadAloudVoice, emotion: String): String {
+    // 脚本引擎：脚本与 options 配置参与缓存键，换音色/情绪也要区分
+    if (source.isScriptEngine()) {
+        return "script:${voice.id}:${voice.revision}:${source.id}:$emotion:" +
+            "${voice.emotionCatalogJson}:${TtsScriptEngineClient.cacheKeyPart(source)}"
+    }
     // 保留旧默认音色在默认合成语速下的离线缓存。
     if (voice.speakerId.isBlank() && emotion.isBlank() && (source.speed == null || source.speed == 5) &&
         HttpTtsEmotionMapper.parseCatalog(voice.emotionCatalogJson).isEmpty()) {

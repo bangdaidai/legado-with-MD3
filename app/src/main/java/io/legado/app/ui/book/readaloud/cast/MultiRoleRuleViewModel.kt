@@ -339,15 +339,21 @@ class MultiRoleRuleViewModel(
                 val poolId = intent.poolId
                 allVoices = VoicePoolStore.allVoicePairs()
                 val engineNames = VoicePoolStore.voiceEngineNames()
+                val voiceTraits = VoicePoolStore.voiceTraits()
                 val inPool = VoicePoolStore.memberVoiceIds(poolId)
                 pickerUniverse = allVoices
                     .filterNot { (id, _) -> inPool.contains(id) }
                     .map { (id, display) ->
+                        val traits = voiceTraits[id]
                         CastMemberUi(
                             voiceId = id,
                             displayName = display,
                             engineName = engineNames[id].orEmpty(),
                             checked = false,
+                            gender = traits?.gender.orEmpty(),
+                            language = traits?.language.orEmpty(),
+                            style = traits?.style.orEmpty(),
+                            tags = traits?.tags.orEmpty().take(3),
                         )
                     }
                 pickerChecked.clear()

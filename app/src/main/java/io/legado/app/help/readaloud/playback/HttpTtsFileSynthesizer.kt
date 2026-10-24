@@ -3,6 +3,7 @@ package io.legado.app.help.readaloud.playback
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.domain.model.readaloud.HttpTtsVoice
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.readaloud.script.isScriptEngine
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,6 +28,16 @@ object HttpTtsFileSynthesizer {
         voice: HttpTtsVoice? = null,
         emotion: String = "",
     ): Boolean = withContext(Dispatchers.IO) {
+        // 脚本引擎走协议合成（options/voices/synthesize），不走 URL 模板求值
+        if (httpTts.isScriptEngine()) {
+            return@withContext ScriptTtsAudioSynthesizer().synthesize(
+                source = httpTts,
+                text = text,
+                output = output,
+                voice = voice,
+                emotion = emotion,
+            )
+        }
         val analyzeUrl = AnalyzeUrl(
             httpTts.url,
             speakText = text,

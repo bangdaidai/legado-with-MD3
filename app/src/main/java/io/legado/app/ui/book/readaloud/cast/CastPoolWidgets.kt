@@ -55,12 +55,14 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.TinySwitch
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.series.MediumOutlinedButton
+import io.legado.app.ui.widget.components.button.series.SmallOutlinedButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.checkBox.AppCheckbox
-import io.legado.app.ui.widget.components.checkBox.CheckboxItem
+import androidx.compose.material3.Checkbox
+import io.legado.app.ui.book.readaloud.cloudtts.VoiceCardItem
+import io.legado.app.ui.book.readaloud.cloudtts.VoiceTraitTagRow
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
@@ -295,6 +297,7 @@ fun PoolTreeList(
                             val member = row.unassignedVoice!!
                             UnassignedVoiceRow(
                                 member = member,
+                                depth = row.depth,
                                 onAssign = { actions.onAssignVoice?.invoke(member) },
                                 memberTrailing = memberTrailing,
                             )
@@ -440,7 +443,10 @@ private fun GroupHeader(
     NormalCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = (depth * 16).dp, top = 6.dp, bottom = 6.dp)
+            // 与池卡、未归池音色行同一套外边距：树形缩进 16dp/层 + 四周 4dp，
+            // 否则同一列表里分组头距屏 12dp、池卡距屏 16dp，左边缘对不齐
+            .padding(start = (depth * 16).dp)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
             .then(dragModifier),
         cornerRadius = 14.dp,
         elevation = elevation,
@@ -698,7 +704,9 @@ private fun CastPoolCard(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    MediumOutlinedButton(
+                    // 行内动作一律 small 系列（32dp）：这行跟成员行同处池卡内部，
+                    // 之前用 Medium 的「+」比同排搜索框和成员行的按钮都高出一截
+                    SmallOutlinedButton(
                         onClick = onAddMembers,
                         icon = Icons.Default.Add,
                         contentDescription = stringResource(wording.addMember),
@@ -768,45 +776,56 @@ fun castGroupOptions(groups: List<CastGroupRow>): List<CastOption> = buildList {
 /**
  * 「未归池」段里的一条音色行：整行点击即弹「归入声音池」，行尾可挂试听（复用池页的
  * [io.legado.app.ui.book.readaloud.cast.VoicePoolScreen] 那个 memberTrailing）。
- * 视觉与池内成员行同款（名字 + 引擎副行），只是没有勾选与删除——它还不属于任何池。
+ * 外壳与分组头同款 [NormalCard]：直接躺在 LazyColumn 顶层，不套卡片就跟周围一行张卡片
+ * 的分组头/池卡对不上。行内是池内成员行同款结构（名字 + 引擎副行），只是没有勾选与删除
+ * ——它还不属于任何池。
  */
 @Composable
 private fun UnassignedVoiceRow(
     member: CastMemberUi,
+    depth: Int,
     onAssign: () -> Unit,
     memberTrailing: (@Composable (CastMemberUi) -> Unit)? = null,
 ) {
-    Row(
+    NormalCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onAssign)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = (depth * 16).dp)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        cornerRadius = 14.dp,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            AppText(
-                text = member.displayName,
-                style = LegadoTheme.typography.labelMediumEmphasized,
-                color = LegadoTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (member.engineName.isNotBlank()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onAssign)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 AppText(
-                    text = member.engineName,
-                    style = LegadoTheme.typography.labelSmall,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    text = member.displayName,
+                    style = LegadoTheme.typography.labelMediumEmphasized,
+                    color = LegadoTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (member.engineName.isNotBlank()) {
+                    AppText(
+                        text = member.engineName,
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
+            memberTrailing?.invoke(member)
+            SmallPlainButton(
+                onClick = onAssign,
+                icon = Icons.Default.Add,
+                contentDescription = stringResource(R.string.cast_pool_assign_voice_title),
+            )
         }
-        memberTrailing?.invoke(member)
-        SmallPlainButton(
-            onClick = onAssign,
-            icon = Icons.Default.Add,
-            contentDescription = stringResource(R.string.cast_pool_assign_voice_title),
-        )
     }
 }
 
@@ -1208,11 +1227,38 @@ fun MemberPickerDialog(
                             )
                         }
                         candidates.forEach { cand ->
-                            CheckboxItem(
+                            VoiceCardItem(
                                 title = cand.displayName,
-                                description = cand.engineName.ifBlank { null },
-                                checked = cand.checked,
-                                onCheckedChange = { onToggle(cand.voiceId, it) },
+                                tags = {
+                                    val genderLabel = when (cand.gender) {
+                                        io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_MALE ->
+                                            stringResource(R.string.voice_gender_male)
+                                        io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_FEMALE ->
+                                            stringResource(R.string.voice_gender_female)
+                                        else -> null
+                                    }
+                                    val hasTags = genderLabel != null ||
+                                        cand.language.isNotBlank() ||
+                                        cand.style.isNotBlank() ||
+                                        cand.tags.isNotEmpty() ||
+                                        cand.engineName.isNotBlank()
+                                    if (hasTags) {
+                                        VoiceTraitTagRow(
+                                            genderLabel = genderLabel,
+                                            languageLabel = cand.language.takeIf(String::isNotBlank),
+                                            styleLabel = cand.style.takeIf(String::isNotBlank),
+                                            tags = cand.tags,
+                                            engineName = cand.engineName.takeIf(String::isNotBlank),
+                                        )
+                                    }
+                                },
+                                trailingContent = {
+                                    Checkbox(
+                                        checked = cand.checked,
+                                        onCheckedChange = { onToggle(cand.voiceId, it) },
+                                    )
+                                },
+                                onClick = { onToggle(cand.voiceId, !cand.checked) },
                             )
                         }
                     }

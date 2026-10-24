@@ -9,6 +9,8 @@ import io.legado.app.data.entities.VoicePoolEntity
 import io.legado.app.data.entities.VoicePoolGroupEntity
 import io.legado.app.data.entities.VoicePoolMember
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
+import io.legado.app.help.readaloud.VoiceTraits
 import org.koin.core.context.GlobalContext
 import java.util.UUID
 
@@ -680,6 +682,10 @@ object VoicePoolStore {
     /** 成员页候选：全部音色 (id → displayName)，用户排除的不在候选里。 */
     suspend fun allVoicePairs(): List<Pair<String, String>> =
         appDb.readAloudVoiceDao.getVoices().filter { !it.excluded }.map { it.id to it.displayName }
+
+    /** 音色 id → 性别/语言/风格/描述标签，成员选择卡展示用。 */
+    suspend fun voiceTraits(): Map<String, VoiceTraits> =
+        appDb.readAloudVoiceDao.getVoices().associate { it.id to ReadAloudVoiceTraits.of(it) }
 
     /** 分配表行数据（角色 → 音色/书名/句数）。 */
     data class AssignmentRowData(

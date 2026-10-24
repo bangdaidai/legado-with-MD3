@@ -44,7 +44,12 @@ data class HttpTTS(
     @ColumnInfo(defaultValue = "1")
     var synthesisThreadCount: Int = 1,
     @ColumnInfo(defaultValue = "0")
-    var lastUpdateTime: Long = System.currentTimeMillis()
+    var lastUpdateTime: Long = System.currentTimeMillis(),
+    // 单文件 JS 朗读引擎主脚本文本，非空即脚本引擎；空则按 URL 模板引擎处理
+    var script: String? = null,
+    // 脚本引擎 options() 配置值，JSON 对象：键为配置项 key，值为用户输入字符串
+    @ColumnInfo(defaultValue = "{}")
+    var scriptOptionsJson: String = "{}"
 ) : BaseSource {
 
     override fun getTag(): String {
@@ -79,7 +84,9 @@ data class HttpTTS(
                     speed = doc.readInt("$.speed"),
                     synthesisThreadCount = doc.readInt("$.synthesisThreadCount")
                         ?.coerceIn(1, MAX_SYNTHESIS_THREAD_COUNT) ?: 1,
-                    lastUpdateTime = doc.readLong("$.lastUpdateTime") ?: System.currentTimeMillis()
+                    lastUpdateTime = doc.readLong("$.lastUpdateTime") ?: System.currentTimeMillis(),
+                    script = doc.readString("$.script"),
+                    scriptOptionsJson = doc.readString("$.scriptOptionsJson") ?: "{}"
                 )
             }
         }

@@ -79,6 +79,8 @@ import io.legado.app.help.readaloud.playback.CloudTtsAudioSynthesizer
 import io.legado.app.help.readaloud.playback.CloudTtsEmotionMapper
 import io.legado.app.help.readaloud.playback.CloudTtsRoleInstructionMapper
 import io.legado.app.help.readaloud.playback.HttpTtsAudioSynthesizer
+import io.legado.app.help.readaloud.playback.ScriptTtsAudioSynthesizer
+import io.legado.app.help.readaloud.script.isScriptEngine
 import io.legado.app.help.readaloud.playback.HttpTtsEmotionMapper
 import io.legado.app.help.readaloud.playback.ReadAloudAudioStore
 import io.legado.app.help.readaloud.playback.SystemTtsFileSynthesizer
@@ -133,6 +135,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         get() = synthesisSpeed(ReadAloud.httpTTS) * globalPlaybackSpeed
 
     private val httpAudioSynthesizer = HttpTtsAudioSynthesizer(GlobalContext.get().get<HttpTtsRepository>())
+    private val scriptTtsAudioSynthesizer by lazy { ScriptTtsAudioSynthesizer() }
     private val readAloudSettingsGateway = GlobalContext.get().get<ReadAloudSettingsGateway>()
     private val readSettingsGateway = GlobalContext.get().get<ReadSettingsGateway>()
     private val otherSettingsGateway = GlobalContext.get().get<OtherSettingsGateway>()
@@ -1621,9 +1624,16 @@ class HttpReadAloudService : BaseReadAloudService(),
     ): InputStream? {
         while (true) {
             try {
-                return httpAudioSynthesizer.openStream(
-                    httpTts, speakText, voice, emotionTag, streamOwner ?: currentCoroutineContext()[Job]
-                ).also {
+                // 脚本引擎协议合成（options/voices/synthesize），其余走 URL 模板
+                val openStream = if (httpTts.isScriptEngine()) {
+                    scriptTtsAudioSynthesizer.openStream(httpTts, speakText, voice, emotionTag)
+                } else {
+                    httpAudioSynthesizer.openStream(
+                        httpTts, speakText, voice, emotionTag,
+                        streamOwner ?: currentCoroutineContext()[Job]
+                    )
+                }
+                return openStream.also {
                     downloadErrorNo = 0
                 }
             } catch (e: Exception) {
@@ -1696,6 +1706,8 @@ private fun canStreamPlayback(): Boolean {
             AppLog.put("流式朗读需要一个已配置的 TTS 源，当前没有，已改用文件合成")
             return false
         }
+        // 脚本引擎统一走文件合成，便于失败重试与缓存键失效
+        if (httpTts.isScriptEngine()) return false
         return !hasFileSynthesisCue(httpTts)
     }
 
