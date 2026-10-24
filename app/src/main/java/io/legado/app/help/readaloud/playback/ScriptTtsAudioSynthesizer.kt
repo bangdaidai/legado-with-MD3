@@ -67,7 +67,8 @@ class ScriptTtsAudioSynthesizer {
         )
         try {
             currentCoroutineContext().ensureActive()
-            val resolvedVoice = catalogVoice ?: voice?.let { HttpTtsVoiceCatalog.fromVoice(it) }            val input = TtsScriptEngineClient.getSynthesisStream(
+            val resolvedVoice = catalogVoice ?: voice?.let { HttpTtsVoiceCatalog.fromVoice(it) }
+            val input = TtsScriptEngineClient.getSynthesisStream(
                 source = source,
                 text = text,
                 voice = resolvedVoice,
