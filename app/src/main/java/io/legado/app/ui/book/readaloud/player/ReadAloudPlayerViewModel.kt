@@ -126,9 +126,6 @@ class ReadAloudPlayerViewModel(
                 viewModelScope.launch {
                     coordinator.setFinishCurrentChapterAfterTimer(intent.value)
                 }
-            is ReadAloudPlayerIntent.SelectVoice -> viewModelScope.launch {
-                coordinator.selectVoice(intent.voiceId)
-            }
             is ReadAloudPlayerIntent.OpenSheet -> activeSheet.value = intent.sheet
             ReadAloudPlayerIntent.DismissSheet -> activeSheet.value = null
             ReadAloudPlayerIntent.LeavingToReader -> coordinator.notifyReaderToFollowVoice()
@@ -391,7 +388,6 @@ class ReadAloudPlayerViewModel(
             timerChapters = source.timerChapters,
             finishCurrentChapterAfterTimer = source.finishCurrentChapterAfterTimer,
             bgMode = bgMode,
-            voices = source.voices,
             activeSheet = sheet,
             bodyTextSize = ReadBookConfig.textSize,
             bgmVolume = source.bgmVolume,

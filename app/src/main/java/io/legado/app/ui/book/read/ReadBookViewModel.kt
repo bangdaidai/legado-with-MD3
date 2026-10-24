@@ -265,7 +265,7 @@ class ReadBookViewModel(
             override fun openMarkingSheet() {
                 // 一键保存检测到已有标记转编辑：此时无原返回 sheet（新建入口来自划词菜单）。
                 markingReturnSheet = null
-                _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
+                _uiState.update { it.withSheet(ReadBookSheet.Marking) }
             }
 
             override fun cancelReaderSelection() {
@@ -311,7 +311,7 @@ class ReadBookViewModel(
     private fun restoreMarkingReturnSheet() {
         val returnSheet = markingReturnSheet
         markingReturnSheet = null
-        _uiState.update { it.copy(activeSheet = returnSheet) }
+        _uiState.update { it.withSheet(returnSheet) }
     }
 
     /**
@@ -324,8 +324,7 @@ class ReadBookViewModel(
         _uiState.update {
             it.copy(
                 shareCardLoading = true,
-                activeSheet = null,
-            )
+            ).clearSheets()
         }
         markingReturnSheet = null
         viewModelScope.launch(IO) {
@@ -356,8 +355,7 @@ class ReadBookViewModel(
         _uiState.update {
             it.copy(
                 shareCardLoading = true,
-                activeSheet = null,
-            )
+            ).clearSheets()
         }
         viewModelScope.launch(IO) {
             val memory = readingMemoryRepository.getByNameAuthor(
@@ -1603,7 +1601,7 @@ class ReadBookViewModel(
                 // 从目录 Sheet 进入：记住原 sheet，保存/删除/取消后返回
                 markingReturnSheet = _uiState.value.activeSheet
                 markingDelegate.openForEdit(intent.id, intent.anchor)
-                _uiState.update { it.copy(activeSheet = ReadBookSheet.Marking) }
+                _uiState.update { it.withSheet(ReadBookSheet.Marking) }
             }
 
             is ReadBookIntent.DismissMarking -> {
@@ -1683,7 +1681,7 @@ class ReadBookViewModel(
 
             is ReadBookIntent.OpenCharacterQuery -> {
                 _uiState.update {
-                    it.copy(activeSheet = ReadBookSheet.CharacterQuery(intent.name))
+                    it.withSheet(ReadBookSheet.CharacterQuery(intent.name))
                 }
             }
 

@@ -1416,7 +1416,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                         ?: return@forEachIndexed
                     val speakText = synthesis.speakText
                     if (speakText.isEmpty()) {
-                        AppLog.put("阅读段落内容为空，使用无声音频代替。\n朗读文本：$text")
+                        AppLog.put("阅读段落内容为空，使用无声音频代替。\n朗读文本：$speakText")
                     }
                     val fileName = synthesis.fileName
                     val dataSourceFactory = createDataSourceFactory(
@@ -1631,8 +1631,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 when (e) {
                     is CancellationException -> throw e
                     is ScriptException, is WrappedException -> {
-                        AppLog.put("js错误
-${e.localizedMessage}", e, true)
+                        AppLog.put("js错误\n${e.localizedMessage}", e, true)
                         e.printOnDebug()
                         throw e
                     }
@@ -1640,8 +1639,7 @@ ${e.localizedMessage}", e, true)
                     is SocketTimeoutException, is ConnectException -> {
                         downloadErrorNo++
                         if (downloadErrorNo > 5) {
-                            val msg = "tts超时或连接错误超过5次
-${e.localizedMessage}"
+                            val msg = "tts超时或连接错误超过5次\n${e.localizedMessage}"
                             AppLog.put(msg, e, true)
                             throw e
                         }
@@ -1649,8 +1647,7 @@ ${e.localizedMessage}"
 
                     else -> {
                         downloadErrorNo++
-                        val msg = "tts下载错误
-${e.localizedMessage}"
+                        val msg = "tts下载错误\n${e.localizedMessage}"
                         AppLog.put(msg, e)
                         e.printOnDebug()
                         if (downloadErrorNo > 5) {
@@ -1658,8 +1655,7 @@ ${e.localizedMessage}"
                             AppLog.put(msg1, e, true)
                             throw e
                         } else {
-                            AppLog.put("TTS下载音频出错，使用无声音频代替。
-朗读文本：$speakText")
+                            AppLog.put("TTS下载音频出错，使用无声音频代替。\n朗读文本：$speakText")
                             break
                         }
                     }

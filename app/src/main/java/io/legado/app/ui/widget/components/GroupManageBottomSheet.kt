@@ -62,6 +62,8 @@ fun GroupManageBottomSheet(
     onDismissRequest: () -> Unit,
     onUpdateGroup: (oldGroup: String, newGroup: String) -> Unit,
     onDeleteGroup: (group: String) -> Unit,
+    // 上游的多选批量删除回调：null 表示该入口不启用批量删除
+    onDeleteGroups: ((groups: List<String>) -> Unit)? = null,
     sceneLabels: List<Pair<String, String>> = emptyList(),
     groupScenes: (group: String) -> List<String> = { emptyList() },
     onToggleGroupScene: (group: String, sceneKey: String) -> Unit = { _, _ -> },

@@ -346,6 +346,7 @@ fun ReadBookScreen(
                     onOpenTextSelectMenuConfig = onOpenTextSelectMenuConfig,
                     onPickBookmarkBadgeImage = onPickBookmarkBadgeImage,
                     onResetBookmarkBadge = onResetBookmarkBadge,
+                    markingNotePreview = markingNotePreview,
                 )
                 additionalSheetContent(layer.sheet, visible) {
                     layerIntent(ReadBookIntent.DismissSheet)
@@ -378,12 +379,13 @@ private fun ReadBookSheetContent(
     onOpenTextSelectMenuConfig: () -> Unit,
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
+    markingNotePreview: MarkingNotePreview?,
 ) {
     val visibleState =
         if (sheetsVisible) state else state.copy(sheetStack = kotlinx.collections.immutable.persistentListOf())
 
     // Each mounted layer composes its own sheet; show controls its enter/exit animation.
-    fun dismissSheet(sheet: ReadBookSheet?): () -> Unit = {
+    fun dismissSheet(sheet: ReadBookSheet? = state.activeSheet): () -> Unit = {
         sheet?.let { onIntent(ReadBookIntent.DismissSheetIfTop(it)) }
     }
 
@@ -426,14 +428,14 @@ private fun ReadBookSheetContent(
             state.speechAnalysisReasoningLevel,
             AiReasoningLevel.OFF,
         ),
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
     )
     // 听书下载悬浮窗：和其余卡片一样常挂，show 由 sheet 类型驱动，退场动画才有地方播
     // （上游 aef93c63b 重写了这份弹层，不再接收 menuConfig；菜单级开关仍由入口项控制）
     io.legado.app.ui.book.read.sheet.ReaderAudioDownloadSheet(
         show = state.activeSheet is ReadBookSheet.AudioDownload,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
 
     if (state.activeSheet is ReadBookSheet.ShadowSet) {
@@ -481,7 +483,7 @@ private fun ReadBookSheetContent(
         title = stringResource(R.string.select_font),
         folderState = fontSelectFolderState,
         selectedFontPath = state.styleConfig.textFont,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onSelectFont = { onIntent(ReadBookIntent.SelectFont(it.uri.toString())) },
         onSelectSystemTypeface = { onIntent(ReadBookIntent.SelectSystemTypeface(it)) },
         onOpenFolderPicker = { onIntent(ReadBookIntent.OpenFontFolderPicker) },
@@ -492,7 +494,7 @@ private fun ReadBookSheetContent(
         title = stringResource(R.string.read_config_title_settings),
         folderState = fontSelectFolderState,
         selectedFontPath = state.styleConfig.titleFont,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onSelectFont = { onIntent(ReadBookIntent.SelectTitleFont(it.uri.toString())) },
         onSelectSystemTypeface = { onIntent(ReadBookIntent.SelectTitleSystemTypeface(it)) },
         onOpenFolderPicker = { onIntent(ReadBookIntent.OpenFontFolderPicker) },
@@ -502,7 +504,7 @@ private fun ReadBookSheetContent(
         show = state.activeSheet is ReadBookSheet.ToolButtonConfig,
         items = state.menuConfig.bottomBarButtons,
         customIcons = state.menuConfig.readMenuCustomIcons,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
     )
     EyeProtectionConfigSheet(
@@ -513,7 +515,7 @@ private fun ReadBookSheetContent(
         schedule = state.eyeProtection.schedule,
         startTime = state.eyeProtection.startTime,
         endTime = state.eyeProtection.endTime,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onEnabledChange = { onIntent(ReadBookIntent.EyeProtectionEnabledChanged(it)) },
         onIntensityChange = { onIntent(ReadBookIntent.EyeProtectionIntensityChanged(it)) },
         onAutoNightChange = { onIntent(ReadBookIntent.EyeProtectionAutoNightChanged(it)) },
@@ -525,14 +527,14 @@ private fun ReadBookSheetContent(
         show = state.activeSheet is ReadBookSheet.FloatingBarIconConfig,
         items = state.menuConfig.titleBarButtons,
         customIcons = state.menuConfig.titleBarCustomIcons,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
     )
     TitleBarActionConfigSheet(
         show = state.activeSheet is ReadBookSheet.TitleBarActionConfig,
         items = state.menuConfig.titleBarActions,
         customIcons = state.menuConfig.titleBarCustomIcons,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
     )
     HighlightRuleConfigSheet(
@@ -540,7 +542,7 @@ private fun ReadBookSheetContent(
         state = highlightRuleState,
         allConfigNames = state.sheetConfig.configNames,
         config = state.sheetConfig,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
     )
     MarkingSheet(
@@ -578,25 +580,25 @@ private fun ReadBookSheetContent(
         show = state.activeSheet is ReadBookSheet.ContentEdit,
         state = contentEditState,
         onIntent = onIntent,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     ChapterSummarySheet(
         show = state.activeSheet is ReadBookSheet.ChapterSummary,
         state = aiState.chapterSummary,
         onIntent = onIntent,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     AiTextCleanSheet(
         show = state.activeSheet is ReadBookSheet.AiTextClean,
         state = aiState.aiTextClean,
         onIntent = onIntent,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     AiTextRewriteSheet(
         show = state.activeSheet is ReadBookSheet.AiTextRewrite,
         state = aiState.aiTextRewrite,
         onIntent = onIntent,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     AiRewritePresetConfigSheet(
         show = state.activeSheet is ReadBookSheet.AiRewritePresetConfig,
@@ -606,7 +608,7 @@ private fun ReadBookSheetContent(
     )
     MoreConfigSheet(
         show = state.activeSheet is ReadBookSheet.MoreConfig,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
         onOpenClickRegionalConfig = {
             onIntent(ReadBookIntent.DismissSheet)
@@ -622,11 +624,11 @@ private fun ReadBookSheetContent(
     )
     AppLogSheet(
         show = state.activeSheet is ReadBookSheet.AppLog,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     BgTextConfigSheet(
         show = state.activeSheet is ReadBookSheet.BgTextConfig,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onIntent = onIntent,
         onSelectImage = { onIntent(ReadBookIntent.OpenReadStyleImagePicker) },
         onSelectImageForMode = { isNight ->
@@ -651,13 +653,13 @@ private fun ReadBookSheetContent(
     DictSheet(
         show = dictSheet != null,
         word = dictSheet?.word ?: "",
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     val characterQuerySheet = state.activeSheet as? ReadBookSheet.CharacterQuery
     CharacterQuerySheet(
         show = characterQuerySheet != null,
         name = characterQuerySheet?.name ?: "",
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
         onJumpToChapter = { chapterIndex ->
             onIntent(ReadBookIntent.DismissSheet)
             onIntent(ReadBookIntent.OpenChapterResult(chapterIndex, 0))
@@ -668,7 +670,7 @@ private fun ReadBookSheetContent(
         show = photoSheet != null,
         src = photoSheet?.src ?: "",
         sourceOrigin = photoSheet?.sourceOrigin,
-        onDismissRequest = dismissSheet,
+        onDismissRequest = dismissSheet(),
     )
     val bookmarkSheet = state.activeSheet as? ReadBookSheet.Bookmark
     bookmarkSheet?.let { sheet ->
@@ -858,6 +860,10 @@ private fun ReadBookSheetContent(
                                 onIntent(ReadBookIntent.DismissSheet)
                                 onIntent(ReadBookIntent.AddSourceAsNewBook(newBook, toc))
                             },
+                            // fork：换源时保留「换本地书」入口
+                            onReplaceLocal = { localBook, toc, _ ->
+                                onIntent(ReadBookIntent.ChangeSource(localBook, toc))
+                            },
                         )
                     }
                 }
@@ -867,43 +873,5 @@ private fun ReadBookSheetContent(
             }
         }
 
-        is ReadBookSheet.ChangeBookSource -> {
-            val changeSourceSheet = state.activeSheet
-            val changeSourceBook = state.book
-            if (changeSourceBook == null) {
-                LaunchedEffect(changeSourceSheet) {
-                    onIntent(ReadBookIntent.DismissSheet)
-                }
-            }
-            if (changeSourceBook != null) {
-                ChangeSourceSheet(
-                    show = true,
-                    oldBook = changeSourceBook,
-                    fromReadBookActivity = true,
-                    allowAddAsNew = false,
-                    dismissOnReplaceStart = true,
-                    onDismissRequest = { onIntent(ReadBookIntent.DismissSheet) },
-                    onReplace = { _, newBook, toc, _ ->
-                        onIntent(ReadBookIntent.DismissSheet)
-                        onIntent(ReadBookIntent.ChangeSource(newBook, toc))
-                    },
-                    onReplaceBook = { newBook ->
-                        onIntent(ReadBookIntent.ChangeSourceBook(newBook))
-                    },
-                    onAddAsNew = { newBook, toc ->
-                        onIntent(ReadBookIntent.DismissSheet)
-                        onIntent(ReadBookIntent.AddSourceAsNewBook(newBook, toc))
-                    },
-                    onReplaceLocal = { localBook, toc, _ ->
-                        onIntent(ReadBookIntent.ChangeSource(localBook, toc))
-                    },
-                )
-            }
-        }
-
-        null -> {}
-
-        // Sheets using AppModalBottomSheet are composed unconditionally above
-        else -> {}
     }
 }

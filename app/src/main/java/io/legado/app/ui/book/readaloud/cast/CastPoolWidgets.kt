@@ -291,7 +291,8 @@ fun PoolTreeList(
                             )
                         }
 
-                        row.unassignedVoice?.let { member ->
+                        row.unassignedVoice != null -> {
+                            val member = row.unassignedVoice!!
                             UnassignedVoiceRow(
                                 member = member,
                                 onAssign = { actions.onAssignVoice?.invoke(member) },

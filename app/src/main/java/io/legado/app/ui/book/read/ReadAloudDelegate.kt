@@ -285,7 +285,7 @@ class ReadAloudDelegate(
      * 返回阅读页时停在干净的页面上。
      */
     fun openConfigPage() {
-        host.updateState { it.copy(menuState = ReadBookMenuState(), activeSheet = null) }
+        host.updateState { it.copy(menuState = ReadBookMenuState()).clearSheets() }
         scope.launch { syncConfiguredTtsVoices() }
         host.emitEffect(ReadBookEffect.OpenReadAloudConfig(ReadBook.book?.bookUrl))
     }

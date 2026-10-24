@@ -357,7 +357,8 @@ fun ReadAloudPlayerScreenContent(
                             text = stringResource(R.string.cloud_tts_step_voice),
                             contentDescription = stringResource(R.string.cloud_tts_step_voice),
                             onCheckedChange = {
-                                onIntent(ReadAloudPlayerIntent.OpenSheet(ReadAloudPlayerSheet.Voice))
+                                // fork：音色快捷入口走人物配音页（上游的页内 Voice 弹层已弃用）
+                                onIntent(ReadAloudPlayerIntent.OpenVoiceCasting)
                             },
                         )
                         SmallAnimatedButton(

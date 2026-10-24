@@ -602,7 +602,7 @@ abstract class BaseReadAloudService : BaseService(),
             )
             if (generation != prepareReadAloudGeneration) return@execute
             var preparedPlaybackQueue = buildPlaybackQueue(
-                prepared.book?.bookUrl.orEmpty(), preparedSpeechPlan,
+                bookSession.book?.bookUrl.orEmpty(), preparedSpeechPlan,
             )
             var preparedPlaybackCursor = preparedPlaybackQueue.cursorAt(preparedReadAloudNumber)
             var pos = startPos
