@@ -5,6 +5,7 @@ import com.google.gson.JsonParser
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.BookCharacterProfile
+import io.legado.app.data.entities.BookCharacterRelation
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.BookKnowledgeGateway
@@ -327,7 +328,23 @@ class RefineSpeechWithAiUseCase(
                 analysisResult.fromCache &&
                 analysisResult.segments.all { it.userLocked || it.source == SpeechResolutionSource.Ai }
             ) return@withLock analysisResult
-            val profiles = knownProfiles(analysisResult.analysis.bookUrl)
+            val profiles = castProfilesFor(
+                profiles = knownProfiles(analysisResult.analysis.bookUrl),
+                paragraphs = paragraphs,
+            )
+            // 图谱里现成的关系串进提示词（第 8 条明说亲属/下属关系是定人依据，过去模型拿不到）
+            val relationsOf = relationsByCharacter(
+                bookUrl = analysisResult.analysis.bookUrl,
+                profiles = profiles,
+            )
+            // 上一章末尾原文：新章开头「他冷笑道」的归属要靠它；拿不到（第一章/未下载）就不带
+            val contextBefore = runCatching {
+                chapterSpeechGateway.previousChapterTail(
+                    bookUrl = analysisResult.analysis.bookUrl,
+                    chapterIndex = analysisResult.analysis.chapterIndex,
+                    maxChars = PREVIOUS_CHAPTER_TAIL_CHARS,
+                )
+            }.getOrNull()?.takeIf { it.isNotBlank() }
             val preset = resolvePreset()
             // 声音池候选整章取一次：新建说话人要按性别年龄气质挑池（与逐句 AI 分配同一份候选）
             val pools = runCatching { VoicePoolStore.enabledPoolNames() }.getOrDefault(emptyList())
@@ -349,6 +366,8 @@ class RefineSpeechWithAiUseCase(
                             source = source,
                             strictness = strictness,
                             pools = pools,
+                            relationsOf = relationsOf,
+                            contextBefore = contextBefore,
                         )
                         SpeechAnalysisMode.AiUnderstanding -> {
                             // 整段/整页划分下不能走原子理解：`AiSpeechAtomizer` 会按句末标点把一段重新
@@ -364,6 +383,8 @@ class RefineSpeechWithAiUseCase(
                                     source = source,
                                     strictness = strictness,
                                     pools = pools,
+                                    relationsOf = relationsOf,
+                                    contextBefore = contextBefore,
                                 )
                             } else {
                                 understandAtoms(
@@ -376,6 +397,8 @@ class RefineSpeechWithAiUseCase(
                                     source = source,
                                     strictness = strictness,
                                     pools = pools,
+                                    relationsOf = relationsOf,
+                                    contextBefore = contextBefore,
                                 )
                             }
                         }
@@ -581,6 +604,10 @@ class RefineSpeechWithAiUseCase(
         source: String,
         strictness: SpeechAttributionStrictness,
         pools: List<String>,
+        /** 登场角色之间的关系串（characterId → 「对方名|关系」列表），见 [relationsByCharacter] */
+        relationsOf: Map<String, List<String>> = emptyMap(),
+        /** 上一章末尾原文，仅作判断背景；null 表示拿不到、payload 里整段省略 */
+        contextBefore: String? = null,
     ): List<ChapterSpeechSegment> {
         val candidates = analysisResult.segments.filter { segment ->
             !segment.userLocked && segment.source != SpeechResolutionSource.Ai && (
@@ -593,6 +620,13 @@ class RefineSpeechWithAiUseCase(
         }
         if (candidates.isEmpty()) return analysisResult.segments
         val updates = linkedMapOf<String, AiSegmentDecision>()
+        // 整章成败账：真实发出并被解析的分块都失败（请求炸/解析炸）时按整轮失败上抛，
+        // 不让块级静默回落把整章包装成成功——否则库里是「全规则判定 + Success」，
+        // 既不弹回落提示也不进冷却，重听与重新分析都白点。截断重试的父块不计账，
+        // 由递归出的叶子块各自记。
+        var attemptedChunks = 0
+        var failedChunks = 0
+        var lastFailure: Throwable? = null
 
         /**
          * 处理一个分块：请求 AI 并把合法决策收进 [updates]。
@@ -606,10 +640,12 @@ class RefineSpeechWithAiUseCase(
             val poolLabels = profiles.associate { it.id to VoicePoolStore.poolLabelOf(it) }
             val payload = mapOf(
                 "characters" to profiles.map {
-                    it.toPromptMap(poolLabels[it.id].orEmpty())
+                    it.toPromptMap(poolLabels[it.id].orEmpty(), relationsOf[it.id].orEmpty())
                 },
                 // 新建说话人从这里挑声音池；已有角色带着自己的池进来，模型不该再给
                 "pools" to pools,
+                // GSON 默认跳过 null 值字段：拿不到上一章背景时整个键不出现
+                "contextBefore" to contextBefore,
                 "segments" to chunk.map { segment ->
                     mapOf(
                         "segmentId" to segment.id,
@@ -634,6 +670,9 @@ class RefineSpeechWithAiUseCase(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                attemptedChunks++
+                failedChunks++
+                lastFailure = e
                 AppLog.putDebug(
                     "AI 语音复核分块请求失败，已跳过该块（${chunk.size} 段保留规则结果）：${e.message}"
                 )
@@ -656,11 +695,15 @@ class RefineSpeechWithAiUseCase(
                 return
             }
             val chunkIds = chunk.mapTo(hashSetOf(), ChapterSpeechSegment::id)
+            // 走到解析这一步才算一次真实应答；截断重试的父块在上面 return 了，不会计账
+            attemptedChunks++
             // 单块解析失败（JSON 结构坏、字段非法等）只丢这一块的决策——对应段保留规则
             // 结果，其他块照常生效；不再让一个坏块把整章作废回落规则。
             val chunkDecisions = try {
                 parseSegmentDecisions(response.text)
             } catch (e: Throwable) {
+                failedChunks++
+                lastFailure = e
                 AppLog.putDebug(
                     "AI 语音复核分块解析失败，已跳过该块（${chunk.size} 段保留规则结果）：${e.message}"
                 )
@@ -687,6 +730,13 @@ class RefineSpeechWithAiUseCase(
         for (chunk in chunks) {
             processChunk(chunk)
         }
+        if (attemptedChunks > 0 && attemptedChunks == failedChunks) {
+            // 全部分块失败＝这次 AI 一个可用结论都没给出，与超时同罪：按整轮失败
+            // 上抛，让调用方写 Failed、弹回落提示并进本书冷却
+            val reason = lastFailure?.let { it.localizedMessage ?: it.javaClass.simpleName }
+                ?: "未知原因"
+            throw IllegalStateException("AI 复核的 $attemptedChunks 个分块全部失败：$reason")
+        }
         val allProfiles = ensureDraftProfiles(
             bookUrl = analysisResult.analysis.bookUrl,
             profiles = profiles,
@@ -699,8 +749,11 @@ class RefineSpeechWithAiUseCase(
             if (segment !in candidates) return@map segment
             val decision = updates[segment.id]
             if (decision == null) {
-                // AI 漏答：维持规则结果，但标记为已复核，避免重听时为它反复发请求
-                return@map segment.copy(source = SpeechResolutionSource.Ai, updatedAt = now)
+                // AI 漏答：保留规则结论和它的真实来源。过去把漏答段改标 source=Ai，
+                // 分镜页上它与「AI 真判过的段」无法区分——用户看到满屏 Ai 徽标，
+                // 实际全是规则结果。防重复请求由整章缓存承担（已有结果的章不再过
+                // AI），不需要段级标记。
+                return@map segment
             }
             val roleType = decision.roleType
             val character = decision.characterId?.let(profilesById::get)
@@ -824,21 +877,32 @@ class RefineSpeechWithAiUseCase(
         source: String,
         strictness: SpeechAttributionStrictness,
         pools: List<String>,
+        /** 登场角色之间的关系串（characterId → 「对方名|关系」列表），见 [relationsByCharacter] */
+        relationsOf: Map<String, List<String>> = emptyMap(),
+        /** 上一章末尾原文，仅作判断背景；null 表示拿不到、payload 里整段省略 */
+        contextBefore: String? = null,
     ): List<ChapterSpeechSegment> {
         val atoms = paragraphs.flatMap(AiSpeechAtomizer::atomize)
         if (atoms.isEmpty()) return analysisResult.segments
         var knownProfiles = profiles
         val result = mutableListOf<ChapterSpeechSegment>()
+        // 与 completeRuleSegments 同一本成败账：真实应答的分块全失败时按整轮失败上抛，
+        // 不能落一份「全未识别 + Success」的库还一声不吭
+        var attemptedChunks = 0
+        var failedChunks = 0
+        var lastFailure: Throwable? = null
         suspend fun processAtomChunk(chunk: List<AiSpeechAtom>) {
             val paragraphsById = paragraphs.associateBy(CanonicalSpeechParagraph::index)
             // 池显示名单独解析一份：voiceAgeBand 现在是枚举，AI 提示词里要的是池名
             val poolLabels = knownProfiles.associate { it.id to VoicePoolStore.poolLabelOf(it) }
             val payload = mapOf(
                 "characters" to knownProfiles.map {
-                    it.toPromptMap(poolLabels[it.id].orEmpty())
+                    it.toPromptMap(poolLabels[it.id].orEmpty(), relationsOf[it.id].orEmpty())
                 },
                 // 新建说话人从这里挑声音池；已有角色带着自己的池进来，模型不该再给
                 "pools" to pools,
+                // GSON 默认跳过 null 值字段：拿不到上一章背景时整个键不出现
+                "contextBefore" to contextBefore,
                 "atoms" to chunk.map { atom ->
                     val paragraphText = paragraphsById[atom.paragraphIndex]?.text.orEmpty()
                     mapOf(
@@ -869,6 +933,9 @@ class RefineSpeechWithAiUseCase(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                attemptedChunks++
+                failedChunks++
+                lastFailure = e
                 AppLog.putDebug("AI 理解分块请求失败，该块按未识别朗读（${chunk.size} 原子）：${e.message}")
                 return
             }
@@ -886,9 +953,13 @@ class RefineSpeechWithAiUseCase(
                 }
             }
             // 解析失败（结构坏、字段非法）该块按未识别朗读——文本保留、整章不再作废
+            // 走到解析这一步才算一次真实应答（截断重试的父块在上面 return，不计账）
+            attemptedChunks++
             val groups = try {
                 parseAtomGroups(response.text)
             } catch (e: Throwable) {
+                failedChunks++
+                lastFailure = e
                 AppLog.putDebug("AI 理解分块解析失败，该块按未识别朗读（${chunk.size} 原子）：${e.message}")
                 emptyList()
             }
@@ -1008,6 +1079,11 @@ class RefineSpeechWithAiUseCase(
         for (chunk in atoms.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }) {
             processAtomChunk(chunk)
         }
+        if (attemptedChunks > 0 && attemptedChunks == failedChunks) {
+            val reason = lastFailure?.let { it.localizedMessage ?: it.javaClass.simpleName }
+                ?: "未知原因"
+            throw IllegalStateException("AI 理解的 $attemptedChunks 个分块全部失败：$reason")
+        }
         return result.sortedWith(compareBy(ChapterSpeechSegment::paragraphIndex, ChapterSpeechSegment::start))
     }
 
@@ -1115,6 +1191,62 @@ class RefineSpeechWithAiUseCase(
                 it.status == BookCharacterProfile.STATUS_ACTIVE ||
                     it.status == BookCharacterProfile.STATUS_DRAFT
             }
+
+    /**
+     * 粗筛登场角色：名字或别名出现在本章正文里的正式卡 + 全部草稿卡。
+     *
+     * 全量名单（大书上百人）整包塞给模型既烧 token 又容易看花眼认错人；草稿卡必须全带，
+     * 临时说话人一旦漏带就会被当新人再建一张卡。一个都筛不中时退回全量——宁可多喂，
+     * 漏喂会把登场老人当新人。单字名/单字别名满篇误命中，当不了筛子，这类角色直接保留。
+     */
+    private fun castProfilesFor(
+        profiles: List<BookCharacterProfile>,
+        paragraphs: List<CanonicalSpeechParagraph>,
+    ): List<BookCharacterProfile> {
+        if (profiles.isEmpty() || paragraphs.isEmpty()) return profiles
+        val chapterText = paragraphs.joinToString("\n") { it.text }
+        return profiles.filter { profile ->
+            profile.status == BookCharacterProfile.STATUS_DRAFT || appearsIn(profile, chapterText)
+        }.ifEmpty { profiles }
+    }
+
+    private fun appearsIn(profile: BookCharacterProfile, chapterText: String): Boolean {
+        if (profile.name.length < 2) return true
+        if (profile.name in chapterText) return true
+        return GSON.fromJsonArray<String>(profile.aliasesJson).getOrNull().orEmpty()
+            .any { alias -> alias.length >= 2 && alias in chapterText }
+    }
+
+    /**
+     * 登场角色两两之间的关系串（characterId → 「对方名|关系」列表）。
+     *
+     * 提示词第 8 条把亲属/下属关系列为定人依据，但过去只给名字不给关系——图谱里现成的
+     * [BookCharacterRelation] 从没进过判定。只带两端都登场的关系（控制长度），每人封顶
+     * [MAX_RELATIONS_PER_CHARACTER] 条；图谱没数据时整列为空，模型照旧只看名字。
+     */
+    private suspend fun relationsByCharacter(
+        bookUrl: String,
+        profiles: List<BookCharacterProfile>,
+    ): Map<String, List<String>> {
+        if (profiles.size < 2) return emptyMap()
+        val relations = runCatching {
+            bookKnowledgeGateway.getBookCharacterRelations(bookUrl, 400)
+        }.getOrNull().orEmpty()
+        if (relations.isEmpty()) return emptyMap()
+        val nameById = profiles.associate { it.id to it.name }
+        val result = HashMap<String, MutableList<String>>()
+        relations
+            .filter { it.status == BookCharacterProfile.STATUS_ACTIVE }
+            .forEach { relation ->
+                val fromName = nameById[relation.fromCharacterId] ?: return@forEach
+                val toName = nameById[relation.toCharacterId] ?: return@forEach
+                val label = relation.relationType.trim()
+                if (label.isEmpty()) return@forEach
+                result.getOrPut(relation.fromCharacterId) { mutableListOf() } += "$toName|$label"
+                result.getOrPut(relation.toCharacterId) { mutableListOf() } += "$fromName|$label"
+            }
+        return result.mapValues { (_, labels) -> labels.take(MAX_RELATIONS_PER_CHARACTER) }
+    }
 
     /**
      * 发给模型的完整 system prompt = 归因规则主体 + **归因口径** + 输出契约。
@@ -1243,7 +1375,11 @@ class RefineSpeechWithAiUseCase(
 
     /** [poolLabel] 是关联声音池的显示名（如「女青年」）；voiceAgeBand 已回归枚举语义， */
     /** 单独传池名保持 AI 提示词里可见的是可读池名而非 young_adult 这类键。 */
-    private fun BookCharacterProfile.toPromptMap(poolLabel: String = ""): Map<String, Any?> = mapOf(
+    /** [relations] 是「对方名|关系」短串；空表时整列不出现（toPromptMap 里转 null 由 GSON 省略）。 */
+    private fun BookCharacterProfile.toPromptMap(
+        poolLabel: String = "",
+        relations: List<String> = emptyList(),
+    ): Map<String, Any?> = mapOf(
         "characterId" to id,
         "name" to name,
         "aliasesJson" to aliasesJson,
@@ -1251,6 +1387,7 @@ class RefineSpeechWithAiUseCase(
         "voiceGender" to voiceGender,
         "voiceAgeBand" to poolLabel.ifEmpty { voiceAgeBand },
         "personality" to personality,
+        "relations" to relations.takeIf { it.isNotEmpty() },
     )
 
     private fun <T> List<T>.chunkByTextLength(
@@ -1326,6 +1463,12 @@ class RefineSpeechWithAiUseCase(
 
         private const val HYBRID_CONFIDENCE_THRESHOLD = 0.75f
         private const val DRAFT_SPEAKER_CONFIDENCE = 0.6f
+
+        /** 上一章末尾背景的截取长度：上游实证够指认新章开头的代词与称呼承接 */
+        private const val PREVIOUS_CHAPTER_TAIL_CHARS = 800
+
+        /** 关系列每卡封顶条数，防长书关系网把提示词撑爆 */
+        private const val MAX_RELATIONS_PER_CHARACTER = 4
 
         /** AI 失败后多久之内不再重试，10 分钟够覆盖「反复点段落起读」这种连续操作 */
         private const val AI_FAILURE_COOLDOWN_MS = 10 * 60 * 1000L
@@ -1411,7 +1554,11 @@ class RefineSpeechWithAiUseCase(
                 "11. 无法确认是人物声音时才按 narrator 处理；不得因为说话人身份或性别未知" +
                 "而吞掉已确认的对白。\n" +
                 "12. emotion 只在文本有明确语气线索时给，不确定写 neutral；confidence 如实反映" +
-                "证据强度，高置信度永远不能代替证据。"
+                "证据强度，高置信度永远不能代替证据。\n" +
+                "13. 输入 JSON 里的 contextBefore 是上一章末尾原文、characters 各项的 relations 是" +
+                "该角色与他人「对方名|关系」的关系串：两者都只作判断背景（新章开头的代词、" +
+                "称呼承接、人物立场要参照它们指人），不在本次要归因的分段/原子范围内，" +
+                "不要为背景内容输出结论。"
 
         /**
          * 归因口径·必答（朗读设置里该档的默认值）。

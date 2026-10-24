@@ -1,5 +1,6 @@
 package io.legado.app.data.repository
 
+import io.legado.app.data.appDb
 import io.legado.app.data.dao.ChapterSpeechDao
 import io.legado.app.data.entities.ChapterSpeechAnalysisEntity
 import io.legado.app.data.entities.ChapterSpeechSegmentEntity
@@ -10,6 +11,7 @@ import io.legado.app.domain.model.readaloud.ChapterSpeechSummary
 import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.help.book.BookHelp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -135,6 +137,23 @@ class ChapterSpeechRepository(
 
     override suspend fun deleteBook(bookUrl: String) = withContext(Dispatchers.IO) {
         dao.delByBook(bookUrl)
+    }
+
+    /**
+     * 上一章缓存正文的末尾片段（处理前的原文，只当判断背景，不走替换规则那条链）。
+     * 与补分析同一条纪律：正文没下载到本地不去触发下载，返回 null 由调用方省略。
+     */
+    override suspend fun previousChapterTail(
+        bookUrl: String,
+        chapterIndex: Int,
+        maxChars: Int,
+    ): String? = withContext(Dispatchers.IO) {
+        if (chapterIndex <= 0) return@withContext null
+        val book = appDb.bookDao.getBook(bookUrl) ?: return@withContext null
+        val chapter = appDb.bookChapterDao.getChapter(bookUrl, chapterIndex - 1)
+            ?: return@withContext null
+        val content = BookHelp.getContent(book, chapter) ?: return@withContext null
+        content.takeLast(maxChars).trim().ifBlank { null }
     }
 }
 

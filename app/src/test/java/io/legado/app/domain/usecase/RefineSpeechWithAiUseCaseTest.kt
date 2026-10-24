@@ -25,6 +25,7 @@ import io.legado.app.domain.model.AiProviderConfig
 import io.legado.app.domain.model.AiProviderDraft
 import io.legado.app.domain.model.AiTaskPresetConfig
 import io.legado.app.domain.model.AiTaskType
+import io.legado.app.domain.model.readaloud.CanonicalSpeechParagraph
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysisResult
 import io.legado.app.domain.model.readaloud.ChapterSpeechSegment
@@ -80,6 +81,74 @@ class RefineSpeechWithAiUseCaseTest {
 
         assertEquals("冷却期内不该再发 AI 请求", 1, ai.calls)
         assertSame(analysis, second)
+    }
+
+    @Test
+    fun `all chunks failing by ordinary errors fails the whole analysis`() = runBlocking {
+        // 401/网络错误这类普通异常过去被块级 catch 吞掉，整章落成
+        // 「全规则判定 + Success」，既不弹回落提示也不进冷却
+        val speech = MemoryChapterSpeechGateway()
+        val ai = FailingAiTextGateway(RuntimeException("401 Unauthorized"))
+        val useCase = refineUseCase(ai, speech)
+        val analysis = ruleAnalysis()
+
+        val error = runCatching {
+            useCase(analysis, emptyList(), SpeechAnalysisMode.RuleWithAi, now = 1_000)
+        }.exceptionOrNull()
+
+        assertTrue(
+            "分块全失败要按整轮失败上抛，不能静默包装成成功",
+            error is IllegalStateException,
+        )
+        assertEquals(SpeechAnalysisStatus.Failed, speech.analysis?.status)
+        assertTrue(speech.analysis?.error?.contains("401") == true)
+
+        // 与超时同罪：整轮失败进本书冷却，第二次调用不再发请求
+        val second = useCase(analysis, emptyList(), SpeechAnalysisMode.RuleWithAi, now = 2_000)
+
+        assertEquals(1, ai.calls)
+        assertSame(analysis, second)
+    }
+
+    @Test
+    fun `an ai-skipped segment keeps its rule source`() = runBlocking {
+        // 宁缺毋滥口径下漏答（空决策数组）是合法应答：段保留规则结论，
+        // source 不许改标成 Ai——分镜页要能看出这句 AI 根本没答
+        val ai = StubAiTextGateway("""{"segments":[]}""")
+        val useCase = refineUseCase(ai, MemoryChapterSpeechGateway())
+
+        val refined = useCase(ruleAnalysis(), emptyList(), SpeechAnalysisMode.RuleWithAi, now = 1_000)
+
+        assertEquals(SpeechResolutionSource.Rule, refined.segments.first().source)
+    }
+
+    @Test
+    fun `only characters present in the chapter go into the ai payload`() = runBlocking {
+        // 名单收窄：登场（名字或别名出现在正文）的才进 payload，未登场且非草稿的被筛掉；
+        // 全量喂大书名单既烧 token 又让模型看花眼认错人
+        val knowledge = FakeBookKnowledgeGateway(
+            profiles = listOf(
+                BookCharacterProfile(id = "p-1", bookUrl = BOOK_URL, name = "张三"),
+                BookCharacterProfile(id = "p-2", bookUrl = BOOK_URL, name = "李四"),
+            ),
+        )
+        val ai = StubAiTextGateway("""{"segments":[]}""")
+        val useCase = refineUseCase(ai, MemoryChapterSpeechGateway(), knowledge)
+
+        useCase(
+            ruleAnalysis(),
+            listOf(
+                CanonicalSpeechParagraph(index = 0, text = "张三说：“你好”", chapterPosition = 0),
+            ),
+            SpeechAnalysisMode.RuleWithAi,
+            now = 1_000,
+        )
+
+        val payload = ai.requests.single().messages.last().content
+        assertTrue("登场的张三要进 payload", payload.contains("张三"))
+        assertTrue("未登场的李四要被筛掉", !payload.contains("李四"))
+        // 上一章背景拿不到（接口默认 null）时整个键不出现
+        assertTrue(!payload.contains("contextBefore"))
     }
 
     @Test
@@ -193,10 +262,11 @@ class RefineSpeechWithAiUseCaseTest {
     private fun refineUseCase(
         ai: AiTextGateway,
         speech: ChapterSpeechGateway,
+        knowledge: FakeBookKnowledgeGateway = FakeBookKnowledgeGateway(),
     ) = RefineSpeechWithAiUseCase(
         aiProfileGateway = FakeAiProfileGateway(preset),
         aiTextGateway = ai,
-        bookKnowledgeGateway = FakeBookKnowledgeGateway(),
+        bookKnowledgeGateway = knowledge,
         chapterSpeechGateway = speech,
     )
 
@@ -286,8 +356,12 @@ private class FailingAiTextGateway(
 private class StubAiTextGateway(
     private val response: String,
 ) : AiTextGateway {
-    override suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse> =
-        Result.success(AiGenerateResponse(text = response))
+    val requests = mutableListOf<AiGenerateRequest>()
+
+    override suspend fun generate(request: AiGenerateRequest): Result<AiGenerateResponse> {
+        requests += request
+        return Result.success(AiGenerateResponse(text = response))
+    }
 
     override fun generateStream(request: AiGenerateRequest): Flow<AiStreamEvent> = emptyFlow()
 
@@ -295,7 +369,9 @@ private class StubAiTextGateway(
         Result.success(emptyList<AiAvailableModel>())
 }
 
-private class FakeBookKnowledgeGateway : BookKnowledgeGateway {
+private class FakeBookKnowledgeGateway(
+    private val profiles: List<BookCharacterProfile> = emptyList(),
+) : BookKnowledgeGateway {
     override suspend fun getBookName(bookUrl: String): String? = null
     override suspend fun searchCharacterProfiles(
         bookUrl: String,
@@ -307,7 +383,7 @@ private class FakeBookKnowledgeGateway : BookKnowledgeGateway {
         bookUrl: String,
         limit: Int,
         includeDrafts: Boolean,
-    ): List<BookCharacterProfile> = emptyList()
+    ): List<BookCharacterProfile> = profiles
 
     override suspend fun getCharacterProfile(
         bookUrl: String,

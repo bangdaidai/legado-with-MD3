@@ -18,6 +18,7 @@ import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.usecase.ResolveEffectiveSpeechPlanUseCase
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
 import io.legado.app.help.readaloud.analysis.ChapterSpeechBatchAnalyzer
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadAloudSessionStore
@@ -489,6 +490,9 @@ class SpeechStoryboardViewModel(
                     role = profile.role,
                     voiceGender = profile.voiceGender,
                     voiceAgeBand = profile.voiceAgeBand,
+                    // 与朗读侧同一来源（ResolveLocalSpeakersUseCase）：池名供表演指令与
+                    // 自动选音的候选域使用，缺了它这一份与耳朵里那份会各挑各的
+                    voicePoolLabel = VoicePoolStore.poolLabelOf(profile),
                     personality = profile.personality,
                     updatedAt = profile.updatedAt,
                 )

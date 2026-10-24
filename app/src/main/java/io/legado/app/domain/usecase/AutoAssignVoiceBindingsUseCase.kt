@@ -8,6 +8,7 @@ import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.help.readaloud.VoiceTraits
 import io.legado.app.help.readaloud.cast.VoiceMatchScoring
+import io.legado.app.help.readaloud.cast.VoicePoolStore
 
 /**
  * 给本章真正有台词、却还没有音色的角色自动挑一个音色，落成 [BookVoiceBinding.SOURCE_AUTO] 绑定。
@@ -15,14 +16,16 @@ import io.legado.app.help.readaloud.cast.VoiceMatchScoring
  * 绑定策略：
  * - 用户手动绑的、导入的、或 locked 的绑定永不覆盖；
  * - 自动绑定只在音色失效（被删、停用、不可用）时重挑，平时不重复评估；
- * - 只有能判断角色性别时才分配，判断不出来就交给原来的性别兜底链，不瞎猜；
- * - 同性别里先按**结构化年龄段**精确匹配，再按角色卡的性格关键词与音色风格标签的重合度
+ * - **候选域与池侧同一份**：角色卡指了声音池就只在池内启用音色里挑（池本身就是性别分组，
+ *   不再按性别筛），与 [io.legado.app.help.readaloud.cast.CastVoicePicker.ensureVoice] 同域、
+ *   同一份打分——同一个角色无论先被哪条链碰到，拿到的都是同一个声音。池内没有启用音色
+ *   时不从池外捞（否则配音页显示池内无音色、耳朵里是池外的声音）；
+ * - 没指池的角色只有能判断性别时才分配，判断不出来就交给原来的性别兜底链，不瞎猜；
+ * - 没池时同性别里先按**结构化年龄段**精确匹配，再按角色卡的性格关键词与音色风格标签的重合度
  *   兜底排序。结构化匹配优先：年龄与性别来自用户标注或声音池的分类（见
  *   [io.legado.app.help.readaloud.cast.VoiceLabelStore.classificationMap]），
  *   比拿关键词撞风格标签可靠得多。
- * - **排序本身只有一份实现**：[VoiceMatchScoring]。分配表那侧的补音
- *   （[io.legado.app.help.readaloud.cast.CastVoicePicker.ensureVoice]）走同一条链，
- *   于是一个角色拿到哪个声音不再取决于它先被哪条链碰到。
+ * - **排序本身只有一份实现**：[VoiceMatchScoring]。
  */
 class AutoAssignVoiceBindingsUseCase(
     private val voiceGateway: ReadAloudVoiceGateway,
@@ -39,6 +42,10 @@ class AutoAssignVoiceBindingsUseCase(
          */
         voiceClassification: Map<String, Pair<String, String>> = emptyMap(),
         now: Long = System.currentTimeMillis(),
+        /** 池名 → 池内启用音色 id；默认直连声音池，测试注入假实现。 */
+        poolVoiceIdsOf: suspend (String) -> List<String> = { label ->
+            runCatching { VoicePoolStore.enabledVoiceIdsOfPool(label) }.getOrDefault(emptyList())
+        },
     ): List<BookVoiceBinding> {
         if (bookUrl.isEmpty() || performances.isEmpty()) return emptyList()
         val voices = voiceGateway.getEnabledVoices().filter { it.available }
@@ -52,21 +59,53 @@ class AutoAssignVoiceBindingsUseCase(
         val preferredEngine = preferredEngineType(bindings, voices)
         val traitsById = voices.associate { it.id to ReadAloudVoiceTraits.of(it) }
         val voicesByGender = voices.groupBy { genderOf(it, traitsById, voiceClassification) }
+        // 同池角色共享一次查询：池名各查一遍，命中过的不再打第二遍
+        val poolVoiceIdsByLabel = HashMap<String, List<String>>()
 
         val created = mutableListOf<Pair<BookVoiceBinding, String>>()
+        // 跳过留痕：性别推不出、池内没有启用音色、没有同性别候选的角色不分配本身是设计
+        // 行为（交给性别兜底链），但过去静默跳过，分镜页只看得到「已分配 0/N 段」却查不出原因
+        var skippedUnknownGender = 0
+        var skippedEmptyPool = 0
+        var skippedNoCandidate = 0
         performances.forEach { performance ->
             val subject = BookVoiceBinding.SUBJECT_CHARACTER to performance.characterId
             val existing = bindingsBySubject[subject]
             if (!existing.needsAutoAssignment(usableVoiceIds)) return@forEach
-            val gender = performance.gender() ?: return@forEach
+            val poolVoiceIds = performance.voicePoolLabel.takeIf { it.isNotBlank() }
+                ?.let { label -> poolVoiceIdsByLabel.getOrPut(label) { poolVoiceIdsOf(label) } }
+            val candidates: List<ReadAloudVoice>
+            // 池模式下没有性别推断这一步（池本身就是明确指定的分组），只留给 confidence 用
+            val explicitGender: String?
+            when {
+                poolVoiceIds == null -> {
+                    val gender = performance.gender() ?: run {
+                        skippedUnknownGender++
+                        return@forEach
+                    }
+                    candidates = voicesByGender[gender].orEmpty()
+                    explicitGender = gender
+                }
+                poolVoiceIds.isEmpty() -> {
+                    skippedEmptyPool++
+                    return@forEach
+                }
+                else -> {
+                    candidates = voices.filter { it.id in poolVoiceIds }
+                    explicitGender = null
+                }
+            }
             val voice = pick(
-                candidates = voicesByGender[gender].orEmpty(),
+                candidates = candidates,
                 traitsById = traitsById,
                 voiceClassification = voiceClassification,
                 taken = takenVoiceIds,
                 preferredEngine = preferredEngine,
                 performance = performance,
-            ) ?: return@forEach
+            ) ?: run {
+                skippedNoCandidate++
+                return@forEach
+            }
             takenVoiceIds += voice.id
             val binding = BookVoiceBinding(
                 bookUrl = bookUrl,
@@ -75,10 +114,10 @@ class AutoAssignVoiceBindingsUseCase(
                 voiceId = voice.id,
                 locked = false,
                 source = BookVoiceBinding.SOURCE_AUTO,
-                confidence = if (performance.voiceGender == gender) {
-                    CONFIDENCE_EXPLICIT
-                } else {
-                    CONFIDENCE_INFERRED
+                confidence = when {
+                    explicitGender == null -> CONFIDENCE_EXPLICIT
+                    performance.voiceGender == explicitGender -> CONFIDENCE_EXPLICIT
+                    else -> CONFIDENCE_INFERRED
                 },
                 createdAt = existing?.createdAt ?: now,
                 updatedAt = now,
@@ -92,6 +131,14 @@ class AutoAssignVoiceBindingsUseCase(
                     created.joinToString { (binding, name) -> "$name(${binding.confidence})" }
             )
         }
+        if (skippedUnknownGender > 0 || skippedEmptyPool > 0 || skippedNoCandidate > 0) {
+            val reasons = buildList {
+                if (skippedUnknownGender > 0) add("$skippedUnknownGender 个角色性别未知")
+                if (skippedEmptyPool > 0) add("$skippedEmptyPool 个角色的池内没有启用音色")
+                if (skippedNoCandidate > 0) add("$skippedNoCandidate 个角色无可用候选音色")
+            }
+            AppLog.put("自动分配音色跳过：${reasons.joinToString("、")}，这些角色按性别兜底链朗读")
+        }
         return created.map { it.first }
     }
 
@@ -101,7 +148,7 @@ class AutoAssignVoiceBindingsUseCase(
         return voiceId !in usableVoiceIds
     }
 
-    /** 只有性别明确才自动分配：角色卡写的性别优先，其次男主/女主这类定位 */
+    /** 没指池时的性别判定：角色卡写的性别优先，其次男主/女主这类定位（指了池的角色不走这里） */
     private fun CharacterPerformanceProfile.gender(): String? = when (voiceGender) {
         ReadAloudVoiceTraits.GENDER_MALE,
         ReadAloudVoiceTraits.GENDER_FEMALE -> voiceGender

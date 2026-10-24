@@ -76,4 +76,16 @@ interface ChapterSpeechGateway {
 
     /** 删书时清掉整本的分镜 */
     suspend fun deleteBook(bookUrl: String)
+
+    /**
+     * 上一章正文的末尾片段，给说话人分析当背景（新章开头的代词、称呼承接要靠它指人）。
+     *
+     * 拿不到（第一章、上一章还没下载到本地、读正文失败）返回 null，调用方省略这一段
+     * 继续分析，不许为背景缺位把正事拦下。默认 null：测试替身与暂未接线的实现不强制覆写。
+     */
+    suspend fun previousChapterTail(
+        bookUrl: String,
+        chapterIndex: Int,
+        maxChars: Int,
+    ): String? = null
 }
