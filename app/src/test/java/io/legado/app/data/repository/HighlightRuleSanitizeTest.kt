@@ -25,7 +25,7 @@ class HighlightRuleSanitizeTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
 
     @Test
-    fun saveAndReloadKeepFullRangeNineSliceFractionsAfterReplacingTheImage() {
+    fun saveAndReloadKeepInEditorRangeNineSliceFractionsAfterReplacingTheImage() {
         val context = RuntimeEnvironment.getApplication().also { it.injectAsAppCtx() }
         InMemoryAppDatabaseFixture(context).use { fixture ->
             val repository = HighlightRuleRepository(fixture.database.highlightRuleDao, context)
@@ -34,10 +34,11 @@ class HighlightRuleSanitizeTest {
                 pattern = "dialog",
                 bgImage = temporaryFolder.newFile("first.png").absolutePath,
                 bgImageFit = 3,
-                npLeft = 0.8f,
-                npRight = 0.65f,
-                npTop = 0.9f,
-                npBottom = 1f,
+                // 各侧之和严格小于 1 的分数属于编辑器合法域，保存/重载/换图都必须原样保留
+                npLeft = 0.6f,
+                npRight = 0.35f,
+                npTop = 0.7f,
+                npBottom = 0.25f,
             )
 
             repository.save("", listOf(rule))
@@ -47,6 +48,23 @@ class HighlightRuleSanitizeTest {
             val replaced = reloaded.copy(bgImage = temporaryFolder.newFile("second.png").absolutePath)
             repository.save("", listOf(replaced))
             assertEquals(replaced, repository.load("").single())
+        }
+    }
+
+    @Test
+    fun sanitizeNormalizesNineSliceFractionsWhoseSidesSumOverOne() {
+        val context = RuntimeEnvironment.getApplication().also { it.injectAsAppCtx() }
+        InMemoryAppDatabaseFixture(context).use { fixture ->
+            val repository = HighlightRuleRepository(fixture.database.highlightRuleDao, context)
+            val rule = HighlightRule(npLeft = 0.8f, npRight = 0.65f, npTop = 0.9f, npBottom = 1f)
+
+            // 本 fork 的分界约束：左右/上下之和超过 1 时按比例缩放，
+            // 保证 leftX <= rightX、topY <= bottomY，分界不再越沿采样。
+            val sanitized = repository.sanitizeRule(rule)
+            assertEquals(0.8f / 1.45f, sanitized.npLeft, 1e-4f)
+            assertEquals(0.65f / 1.45f, sanitized.npRight, 1e-4f)
+            assertEquals(0.9f / 1.9f, sanitized.npTop, 1e-4f)
+            assertEquals(1f / 1.9f, sanitized.npBottom, 1e-4f)
         }
     }
 
