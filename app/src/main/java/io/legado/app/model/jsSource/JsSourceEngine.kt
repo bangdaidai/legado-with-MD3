@@ -5,6 +5,7 @@ import com.script.CompiledScript
 import com.script.buildScriptBindings
 import com.script.rhino.RhinoScriptEngine
 import com.script.rhino.enterRhinoContext
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
@@ -24,6 +25,7 @@ import org.mozilla.javascript.Wrapper
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import java.util.zip.InflaterInputStream
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
