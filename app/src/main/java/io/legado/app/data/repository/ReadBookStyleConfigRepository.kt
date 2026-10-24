@@ -168,7 +168,7 @@ class ReadBookStyleConfigRepository(
 
         // 每删掉一份、且它不晚于当前选中项，选中下标就左移一位
         fun shift(index: Int) = (index - targets.count { it <= index }).coerceAtLeast(0)
-        val readIndex = AppConfigStore.getInt(PreferKey.readStyleSelect) ?: 0
+        // readIndex 在方法开头已读取（保证删的是删前快照里的下标）
         val comicIndex = AppConfigStore.getInt(PreferKey.comicStyleSelect) ?: readIndex
         AppConfigStore.putAll(
             mapOf(
