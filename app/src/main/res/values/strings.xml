@@ -2628,6 +2628,12 @@
     <string name="home_recent_books">Recent reading history</string>
     <string name="home_dashboard_settings">Home components</string>
     <string name="home_no_recent_reading">No reading history yet</string>
+    <string name="home_book_news">Today\'s Book News</string>
+    <string name="home_book_news_loading">Loading today\'s book news…</string>
+    <string name="home_book_news_empty">No updates today</string>
+    <string name="home_book_news_updated">Updated</string>
+    <string name="home_book_news_chapter_count">%1$d new chapters</string>
+    <string name="home_book_news_check">Check for updates</string>
     <string name="home_total_read_books">Books Read</string>
     <string name="home_total_reading_time">Reading Time</string>
     <string name="unit_books">books</string>

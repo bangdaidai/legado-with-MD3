@@ -2297,6 +2297,12 @@
     <string name="home_recent_books">最近阅读记录</string>
     <string name="home_dashboard_settings">首页组件</string>
     <string name="home_no_recent_reading">暂无阅读记录</string>
+    <string name="home_book_news">今日书讯</string>
+    <string name="home_book_news_loading">正在读取今日书讯…</string>
+    <string name="home_book_news_empty">今日暂无更新</string>
+    <string name="home_book_news_updated">已更新</string>
+    <string name="home_book_news_chapter_count">更新 %1$d 章</string>
+    <string name="home_book_news_check">检查更新</string>
     <string name="home_total_read_books">累计阅读</string>
     <string name="home_total_reading_time">阅读时长</string>
     <string name="unit_books">本</string>

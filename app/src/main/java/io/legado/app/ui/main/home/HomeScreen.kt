@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.OutlinedTextField
@@ -105,6 +106,7 @@ import io.legado.app.ui.main.homepage.HomepageViewModel
 import io.legado.app.ui.main.homepage.manage.AddCustomModuleDialog
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppPullToRefresh
+import io.legado.app.ui.widget.components.button.AppIconButton
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
@@ -728,6 +730,17 @@ private fun HomeDashboardContent(
             )
         }
 
+        if (HomeDashboardSection.BookNews in state.visibleSections) {
+            BookNewsCard(
+                books = state.bookNews,
+                isLoaded = state.isBookNewsLoaded,
+                onBookClick = { onIntent(HomeIntent.BookNewsBookClick(it)) },
+                onRefresh = { onIntent(HomeIntent.BookNewsRefreshClick) },
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+
         val hasStatRead = HomeDashboardSection.TotalReadBooks in state.visibleSections
         val hasStatTime = HomeDashboardSection.TotalReadTime in state.visibleSections
         if (hasStatRead || hasStatTime) {
@@ -1108,6 +1121,150 @@ private fun RecentHistoryBookCard(
 }
 
 @Composable
+private fun BookNewsCard(
+    books: List<HomeBookNewsUi>,
+    isLoaded: Boolean,
+    onBookClick: (String) -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
+    GlassCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = 14.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AppIcon(
+                    imageVector = Icons.Default.Update,
+                    contentDescription = null,
+                    tint = LegadoTheme.colorScheme.primary,
+                )
+                AppText(
+                    text = stringResource(R.string.home_book_news),
+                    style = LegadoTheme.typography.titleMediumEmphasized,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                AppIconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    AppIcon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.home_book_news_check),
+                        tint = LegadoTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+
+            when {
+                !isLoaded -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(96.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppText(
+                        text = stringResource(R.string.home_book_news_loading),
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                books.isEmpty() -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(96.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppText(
+                        text = stringResource(R.string.home_book_news_empty),
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                else -> LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    itemsIndexed(books, key = { _, book -> book.bookUrl }) { _, book ->
+                        BookNewsCell(
+                            book = book,
+                            onClick = { onBookClick(book.bookUrl) },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookNewsCell(
+    book: HomeBookNewsUi,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+) {
+    val countText = book.updatedChapterCount
+        ?.let { stringResource(R.string.home_book_news_chapter_count, it) }
+        ?: stringResource(R.string.home_book_news_updated)
+    Column(
+        modifier = Modifier
+            .width(64.dp)
+            .clickable(
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .semantics {
+                contentDescription = "${book.name}，$countText"
+                role = Role.Button
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        BookshelfCover(
+            name = book.name,
+            author = book.author,
+            path = book.coverPath,
+            sourceOrigin = book.origin,
+            bookUrl = book.bookUrl,
+            modifier = Modifier
+                .width(64.dp)
+                .aspectRatio(5f / 7f),
+            coverModifier = Modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            sharedCoverKey = "home_book_news_${book.bookUrl}",
+        )
+        AppText(
+            text = book.name,
+            style = LegadoTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        AppText(
+            text = countText,
+            style = LegadoTheme.typography.labelSmall,
+            color = LegadoTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 private fun ReadingGoalCard(
     todayReadTimeMillis: Long,
     goalMinutes: Int,
@@ -1482,6 +1639,7 @@ private fun AppModalBottomSheet(
 @StringRes
 private fun HomeDashboardSection.labelRes(): Int = when (this) {
     HomeDashboardSection.RecentBook -> R.string.home_recent_reading
+    HomeDashboardSection.BookNews -> R.string.home_book_news
     HomeDashboardSection.TotalReadBooks -> R.string.home_total_read_books
     HomeDashboardSection.TotalReadTime -> R.string.home_total_reading_time
     HomeDashboardSection.RecentBooks -> R.string.home_recent_books
