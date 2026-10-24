@@ -307,101 +307,102 @@ fun ExploreShowScreen(
         modifier = Modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
-                GlassMediumFlexibleTopAppBar(
-                    modifier = Modifier.responsiveHazeEffect(state = hazeState),
-                    title = state.selectedKindTitle ?: title,
-                    navigationIcon = {
-                        TopBarNavigationButton(onClick = onBack)
-                    },
-                    actions = {
+            GlassMediumFlexibleTopAppBar(
+                modifier = Modifier.responsiveHazeEffect(state = hazeState),
+                title = state.selectedKindTitle ?: title,
+                navigationIcon = {
+                    TopBarNavigationButton(onClick = onBack)
+                },
+                actions = {
 
-                        AnimatedVisibility(
-                            visible = isGridMode,
-                            enter = fadeIn(tween(300)),
-                            exit = fadeOut(tween(300))
-                        ) {
-                            TopBarActionButton(
-                                onClick = {
-                                    onIntent(
-                                        ExploreShowIntent.ShowSheet(
-                                            ExploreShowSheet.GridCount
-                                        )
+                    AnimatedVisibility(
+                        visible = isGridMode,
+                        enter = fadeIn(tween(300)),
+                        exit = fadeOut(tween(300))
+                    ) {
+                        TopBarActionButton(
+                            onClick = {
+                                onIntent(
+                                    ExploreShowIntent.ShowSheet(
+                                        ExploreShowSheet.GridCount
                                     )
-                                },
-                                imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
-                                contentDescription = stringResource(R.string.a11y_grid_columns)
-                            )
+                                )
+                            },
+                            imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
+                            contentDescription = stringResource(R.string.a11y_grid_columns)
+                        )
+                    }
+
+                    TopBarActionButton(
+                        onClick = { onIntent(ExploreShowIntent.ShowSheet(ExploreShowSheet.KindSelect)) },
+                        imageVector = Icons.Outlined.FilterAlt,
+                        contentDescription = stringResource(R.string.select_or_search_category)
+                    )
+
+                    TopBarActionButton(
+                        onClick = { onIntent(ExploreShowIntent.ToggleLayout) },
+                        imageVector = if (!isGridMode) Icons.AutoMirrored.Outlined.FormatListBulleted else Icons.Default.GridView,
+                        contentDescription = stringResource(R.string.a11y_switch_layout)
+                    )
+                },
+                scrollBehavior = scrollBehavior,
+                // 两排分类标签放进 bottomContent：与标题栏同一层玻璃背景（阅读记录概览的
+                // 做法），不再悬在页面底色上跟顶栏脱节；收起标题后标签固定在玻璃层里
+                bottomContent = {
+                    Column(
+                        modifier = Modifier.padding(top = 6.dp, bottom = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (state.kindGroups.isNotEmpty()) {
+                            LazyRow(
+                                state = groupListState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fadingEdge(groupListState, gradientWidth = 16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(
+                                    items = state.kindGroups,
+                                    key = { it }
+                                ) { group ->
+                                    ToggleChip(
+                                        label = group,
+                                        selected = group == state.selectedGroup,
+                                        cornerRadius = 50.dp,
+                                        compact = true,
+                                        onToggle = { onIntent(ExploreShowIntent.SwitchGroup(group)) }
+                                    )
+                                }
+                            }
                         }
 
-                        TopBarActionButton(
-                            onClick = { onIntent(ExploreShowIntent.ShowSheet(ExploreShowSheet.KindSelect)) },
-                            imageVector = Icons.Outlined.FilterAlt,
-                            contentDescription = stringResource(R.string.select_or_search_category)
-                        )
-
-                        TopBarActionButton(
-                            onClick = { onIntent(ExploreShowIntent.ToggleLayout) },
-                            imageVector = if (!isGridMode) Icons.AutoMirrored.Outlined.FormatListBulleted else Icons.Default.GridView,
-                            contentDescription = stringResource(R.string.a11y_switch_layout)
-                        )
-                    },
-                    scrollBehavior = scrollBehavior
-                )
-
-                Column(
-                    modifier = Modifier.padding(top = 6.dp, bottom = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (state.kindGroups.isNotEmpty()) {
-                        LazyRow(
-                            state = groupListState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fadingEdge(groupListState, gradientWidth = 16.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(
-                                items = state.kindGroups,
-                                key = { it }
-                            ) { group ->
-                                ToggleChip(
-                                    label = group,
-                                    selected = group == state.selectedGroup,
-                                    cornerRadius = 50.dp,
-                                    compact = true,
-                                    onToggle = { onIntent(ExploreShowIntent.SwitchGroup(group)) }
-                                )
+                        if (chipKinds.isNotEmpty()) {
+                            LazyRow(
+                                state = chipListState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fadingEdge(chipListState, gradientWidth = 16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(
+                                    items = chipKinds,
+                                    key = { exploreKindKey(it) }
+                                ) { kind ->
+                                    ToggleChip(
+                                        label = kind.title,
+                                        selected = kind.title == state.selectedKindTitle,
+                                        cornerRadius = 50.dp,
+                                        compact = true,
+                                        onToggle = { onIntent(ExploreShowIntent.SwitchKind(kind)) }
+                                    )
+                                }
                             }
                         }
                     }
-
-                    if (chipKinds.isNotEmpty()) {
-                        LazyRow(
-                            state = chipListState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fadingEdge(chipListState, gradientWidth = 16.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(
-                                items = chipKinds,
-                                key = { exploreKindKey(it) }
-                            ) { kind ->
-                                ToggleChip(
-                                    label = kind.title,
-                                    selected = kind.title == state.selectedKindTitle,
-                                    cornerRadius = 50.dp,
-                                    compact = true,
-                                    onToggle = { onIntent(ExploreShowIntent.SwitchKind(kind)) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+                },
+            )
         }
     ) { paddingValues ->
         AppPullToRefresh(
