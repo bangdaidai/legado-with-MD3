@@ -215,6 +215,10 @@ fun CloudTtsScreen(
                                     onClick = { expanded = false; showHttpTtsImportSheet = true },
                                 )
                                 RoundDropdownMenuItem(
+                                    text = stringResource(R.string.tts_new_from_template),
+                                    onClick = { expanded = false; showTtsTemplateSheet = true },
+                                )
+                                RoundDropdownMenuItem(
                                     text = stringResource(R.string.export),
                                     onClick = {
                                         expanded = false; onIntent(CloudTtsIntent.ExportHttpTtsFile)
@@ -583,14 +587,6 @@ fun CloudTtsScreen(
                 onIntent(CloudTtsIntent.EditHttpTts())
             },
         )
-        OptionCard(
-            icon = Icons.Default.RecordVoiceOver,
-            text = stringResource(R.string.tts_new_from_template),
-            onClick = {
-                showAddEngineSheet = false
-                showTtsTemplateSheet = true
-            },
-        )
     }
     OptionSheet(
         show = showTtsTemplateSheet,
@@ -948,6 +944,10 @@ private fun HttpTtsEditorSheet(
                     { script = it },
                     label = "引擎脚本 (JS)",
                     minLines = 6,
+                    // 不设 maxLines 的话多行 TextField 会按整段脚本的行数测量，
+                    // 几十 KB 的脚本直接顶破 Compose Constraints 上限（262143px）崩溃；
+                    // 限制可视行数后内容走 TextField 内部滚动
+                    maxLines = 14,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1042,6 +1042,8 @@ private fun HttpTtsEditorSheet(
                     { jsLib = it },
                     label = "jsLib",
                     minLines = 2,
+                    // 同 script：长库文本不设上限会把测量高度顶破 Constraints
+                    maxLines = 14,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
