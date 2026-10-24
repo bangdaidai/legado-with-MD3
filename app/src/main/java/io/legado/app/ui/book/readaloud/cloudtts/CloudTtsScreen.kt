@@ -31,6 +31,9 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Slider
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -73,6 +76,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FabMenuItem
 import io.legado.app.ui.widget.components.SearchBar
+import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
@@ -373,79 +377,97 @@ fun CloudTtsScreen(
                 items(state.voices, key = { "voice:${it.id}" }) { voice ->
                     VoiceCardItem(
                         title = voice.title,
+                        // 第一行：紧跟名字的性别/语言/风格小图标
                         tags = {
-                            Column {
-                                val hasTags = voice.genderLabel.isNotBlank() ||
-                                    voice.languageLabel.isNotBlank() ||
-                                    voice.styleLabel.isNotBlank() ||
-                                    voice.tags.isNotEmpty() ||
-                                    voice.engineName.isNotBlank()
-                                if (hasTags) {
-                                    VoiceTraitTagRow(
-                                        genderLabel = voice.genderLabel.takeIf(String::isNotBlank),
-                                        languageLabel = voice.languageLabel.takeIf(String::isNotBlank),
-                                        styleLabel = voice.styleLabel.takeIf(String::isNotBlank),
-                                        tags = voice.tags,
-                                        engineName = voice.engineName.takeIf(String::isNotBlank),
-                                        modifier = Modifier.padding(top = 2.dp),
+                            Row(
+                                modifier = Modifier.padding(top = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                voice.genderLabel.takeIf(String::isNotBlank)?.let {
+                                    VoiceTraitTag(
+                                        text = when (voice.gender) {
+                                            io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_MALE -> "♂"
+                                            else -> "♀"
+                                        },
+                                        container = if (voice.gender ==
+                                            io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_MALE
+                                        ) {
+                                            LegadoTheme.colorScheme.primaryContainer
+                                        } else {
+                                            LegadoTheme.colorScheme.secondaryContainer
+                                        },
+                                        content = if (voice.gender ==
+                                            io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_MALE
+                                        ) {
+                                            LegadoTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            LegadoTheme.colorScheme.onSecondaryContainer
+                                        },
                                     )
                                 }
-                                // 异常状态/默认旁白标记仍然保留文本行
-                                if (voice.summary.isNotBlank()) {
-                                    AppText(
-                                        text = voice.summary,
-                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 2.dp),
+                                voice.languageLabel.takeIf(String::isNotBlank)?.let {
+                                    VoiceTraitTag(
+                                        text = it.take(6),
+                                        container = LegadoTheme.colorScheme.tertiaryContainer,
+                                        content = LegadoTheme.colorScheme.onTertiaryContainer,
+                                    )
+                                }
+                                voice.styleLabel.takeIf(String::isNotBlank)?.let {
+                                    VoiceTraitTag(
+                                        text = it,
+                                        container = LegadoTheme.colorScheme.surfaceVariant,
+                                        content = LegadoTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
                         },
-                        trailingContent = {
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                if (state.voiceBatchMode) {
-                                    // 任何音色都能勾选：入池不限 managedBy
-                                    MediumTonalButton(
-                                        onClick = {
-                                            onIntent(CloudTtsIntent.ToggleVoiceSelection(voice.id))
-                                        },
-                                        selected = voice.id in state.selectedVoiceIds,
-                                        icon = Icons.Default.Check,
-                                        contentDescription =
-                                            stringResource(R.string.cloud_tts_batch_mode),
+                        // 第二行：引擎名/池/用户标注，横向滑动看全，不与右侧按钮抢宽度
+                        scrollableTags = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                voice.secondaryTags.forEach { tag ->
+                                    AppText(
+                                        text = tag,
+                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
                                     )
-                                } else {
-                                    MediumTonalButton(
-                                        onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
-                                        onLongClick = { previewTextVoice = voice },
-                                        selected = state.previewingVoiceId == voice.id,
-                                        icon = Icons.Default.PlayArrow,
-                                        contentDescription = stringResource(R.string.voice_preview),
-                                    )
-                                    MediumTonalButton(
-                                        onClick = { onIntent(CloudTtsIntent.RequestRenameVoice(voice.id)) },
-                                        icon = Icons.Default.Edit,
-                                        contentDescription = stringResource(R.string.cloud_tts_rename_voice),
-                                    )
-                                    // 「加入声音池」对所有音色开放：目录自动音色也能进池，只有删除仍限用户音色
-                                    MediumTonalButton(
-                                        onClick = {
-                                            onIntent(CloudTtsIntent.RequestAddToPool(listOf(voice.id)))
-                                        },
-                                        icon = Icons.Default.PlaylistAdd,
-                                        contentDescription =
-                                            stringResource(R.string.cloud_tts_add_to_pool),
-                                    )
-                                    if (voice.deletable) {
-                                        MediumTonalButton(
-                                            onClick = { onIntent(CloudTtsIntent.RequestDeleteVoice(voice.id)) },
-                                            icon = Icons.Default.Delete,
-                                            contentDescription = stringResource(R.string.delete),
-                                        )
-                                    }
                                 }
+                                AppText(
+                                    text = voice.engineName,
+                                    color = LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                )
+                            }
+                        },
+                        trailingContent = {
+                            if (state.voiceBatchMode) {
+                                // 任何音色都能勾选：入池不限 managedBy
+                                MediumTonalButton(
+                                    onClick = {
+                                        onIntent(CloudTtsIntent.ToggleVoiceSelection(voice.id))
+                                    },
+                                    selected = voice.id in state.selectedVoiceIds,
+                                    icon = Icons.Default.Check,
+                                    contentDescription =
+                                        stringResource(R.string.cloud_tts_batch_mode),
+                                )
+                            } else {
+                                // 右侧只留试听；改名/入池/删除都收进「编辑音色预设」
+                                MediumTonalButton(
+                                    onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
+                                    onLongClick = { previewTextVoice = voice },
+                                    selected = state.previewingVoiceId == voice.id,
+                                    icon = Icons.Default.PlayArrow,
+                                    contentDescription = stringResource(R.string.voice_preview),
+                                )
                             }
                         },
                         onClick = {
@@ -453,12 +475,10 @@ fun CloudTtsScreen(
                                 state.voiceBatchMode ->
                                     onIntent(CloudTtsIntent.ToggleVoiceSelection(voice.id))
 
-                                voice.editable ->
-                                    onIntent(CloudTtsIntent.EditVoice(voice.id))
+                                else -> onIntent(CloudTtsIntent.EditVoice(voice.id))
                             }
                         },
                         // 与引擎行「点一下设默认」同一套语法：长按＝设为/取消默认旁白音色。
-                        // 目录音色不可编辑，但一样能被长按选中
                         onLongClick = {
                             onIntent(CloudTtsIntent.ToggleDefaultNarratorVoice(voice.id))
                         },
@@ -1524,25 +1544,19 @@ private fun TtsVoicePresetEditorContent(
                         )
                     }
                     EngineSectionTitle(R.string.cloud_tts_step_preset)
-                    Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
-                    Field(editor.notes, { update(editor.copy(notes = it)) }, stringResource(R.string.cloud_tts_preset_notes))
-                    if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD) {
-                        if (!selectedVoice?.roles.isNullOrEmpty()) {
-                            MenuButton(stringResource(R.string.cloud_tts_role_value, editor.role.ifBlank { stringResource(R.string.cloud_tts_default) })) { roleMenu = true }
-                            RoundDropdownMenu(roleMenu, { roleMenu = false }) {
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.cloud_tts_default),
-                                    onClick = { roleMenu = false; update(editor.copy(role = "")) },
-                                )
-                                selectedVoice.roles.forEach { role ->
-                                    RoundDropdownMenuItem(
-                                        text = role,
-                                        onClick = { roleMenu = false; update(editor.copy(role = role)) },
-                                    )
-                                }
-                            }
-                        }
-                        Field(editor.instructions, { update(editor.copy(instructions = it)) }, stringResource(R.string.cloud_tts_instructions))
+                    if (editor.readonlyPreset) {
+                        // 目录同步的音色：预设参数由引擎目录管理，这里只开放标注与声音池
+                        AppText(
+                            stringResource(R.string.voice_preset_readonly_hint),
+                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (!editor.readonlyPreset) {
+                        Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
+                    }
+                    if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD && !editor.readonlyPreset) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1587,27 +1601,20 @@ private fun TtsVoicePresetEditorContent(
                                 }
                             }
                         }
-                        TinySwitchSettingItem(
-                            title = stringResource(R.string.cloud_tts_automatic_emotion),
-                            description = stringResource(R.string.cloud_tts_automatic_emotion_summary),
-                            checked = editor.automaticEmotion,
-                            onCheckedChange = { update(editor.copy(automaticEmotion = it)) },
+                        // 语速/音调/音量一行小滑块（0.5x..2x，默认 1.0），替代手填文本框
+                        VoiceSliderGroup(
+                            listOf(
+                                Triple(stringResource(R.string.cloud_tts_speed), editor.speed.toFloatOrNull() ?: 1f) {
+                                    update(editor.copy(speed = it.toString()))
+                                },
+                                Triple(stringResource(R.string.cloud_tts_pitch), editor.pitch.toFloatOrNull() ?: 1f) {
+                                    update(editor.copy(pitch = it.toString()))
+                                },
+                                Triple(stringResource(R.string.cloud_tts_volume), editor.volume.toFloatOrNull() ?: 1f) {
+                                    update(editor.copy(volume = it.toString()))
+                                },
+                            )
                         )
-                        TinySwitchSettingItem(
-                            title = stringResource(R.string.cloud_tts_character_personality),
-                            description = stringResource(R.string.cloud_tts_character_personality_summary),
-                            checked = editor.characterPersonality,
-                            onCheckedChange = { update(editor.copy(characterPersonality = it)) },
-                        )
-                        TinySwitchSettingItem(
-                            title = stringResource(R.string.cloud_tts_thought_performance),
-                            description = stringResource(R.string.cloud_tts_thought_performance_summary),
-                            checked = editor.thoughtPerformance,
-                            onCheckedChange = { update(editor.copy(thoughtPerformance = it)) },
-                        )
-                        Field(editor.speed, { update(editor.copy(speed = it)) }, stringResource(R.string.cloud_tts_speed))
-                        Field(editor.pitch, { update(editor.copy(pitch = it)) }, stringResource(R.string.cloud_tts_pitch))
-                        Field(editor.volume, { update(editor.copy(volume = it)) }, stringResource(R.string.cloud_tts_volume))
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1630,23 +1637,30 @@ private fun TtsVoicePresetEditorContent(
                                 text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
                             )
                         }
-                    } else if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
+                    } else if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM && !editor.readonlyPreset) {
                         AppText(
                             stringResource(R.string.cloud_tts_system_defaults_hint),
                             Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = LegadoTheme.typography.labelSmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
-                        Field(editor.speed, { update(editor.copy(speed = it)) }, stringResource(R.string.cloud_tts_speed_multiplier))
-                        Field(editor.pitch, { update(editor.copy(pitch = it)) }, stringResource(R.string.cloud_tts_pitch_multiplier))
+                        VoiceSliderGroup(
+                            listOf(
+                                Triple(stringResource(R.string.cloud_tts_speed_multiplier), editor.speed.toFloatOrNull() ?: 1f) {
+                                    update(editor.copy(speed = it.toString()))
+                                },
+                                Triple(stringResource(R.string.cloud_tts_pitch_multiplier), editor.pitch.toFloatOrNull() ?: 1f) {
+                                    update(editor.copy(pitch = it.toString()))
+                                },
+                            )
+                        )
                         MediumTonalButton(
                             onClick = { onIntent(CloudTtsIntent.Preview) },
                             enabled = editor.voiceId.isNotBlank() && !state.testing,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                             text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
                         )
-                    }
-                    if (editor.engineType == ReadAloudVoice.ENGINE_HTTP) {
+                    } else if (editor.engineType == ReadAloudVoice.ENGINE_HTTP && !editor.readonlyPreset) {
                         AppText(
                             stringResource(R.string.cloud_tts_http_voice_hint),
                             Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -1658,6 +1672,44 @@ private fun TtsVoicePresetEditorContent(
                             enabled = editor.voiceId.isNotBlank() && !state.testing,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                             text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+                        )
+                    }
+                    if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD && !editor.readonlyPreset) {
+                        // 朗读表演：角色/指令与三个表演开关，都属于“念的时候怎么演”，跟参数分开一级
+                        EngineSectionTitle(R.string.cloud_tts_section_performance)
+                        if (!selectedVoice?.roles.isNullOrEmpty()) {
+                            MenuButton(stringResource(R.string.cloud_tts_role_value, editor.role.ifBlank { stringResource(R.string.cloud_tts_default) })) { roleMenu = true }
+                            RoundDropdownMenu(roleMenu, { roleMenu = false }) {
+                                RoundDropdownMenuItem(
+                                    text = stringResource(R.string.cloud_tts_default),
+                                    onClick = { roleMenu = false; update(editor.copy(role = "")) },
+                                )
+                                selectedVoice.roles.forEach { role ->
+                                    RoundDropdownMenuItem(
+                                        text = role,
+                                        onClick = { roleMenu = false; update(editor.copy(role = role)) },
+                                    )
+                                }
+                            }
+                        }
+                        Field(editor.instructions, { update(editor.copy(instructions = it)) }, stringResource(R.string.cloud_tts_instructions))
+                        TinySwitchSettingItem(
+                            title = stringResource(R.string.cloud_tts_automatic_emotion),
+                            description = stringResource(R.string.cloud_tts_automatic_emotion_summary),
+                            checked = editor.automaticEmotion,
+                            onCheckedChange = { update(editor.copy(automaticEmotion = it)) },
+                        )
+                        TinySwitchSettingItem(
+                            title = stringResource(R.string.cloud_tts_character_personality),
+                            description = stringResource(R.string.cloud_tts_character_personality_summary),
+                            checked = editor.characterPersonality,
+                            onCheckedChange = { update(editor.copy(characterPersonality = it)) },
+                        )
+                        TinySwitchSettingItem(
+                            title = stringResource(R.string.cloud_tts_thought_performance),
+                            description = stringResource(R.string.cloud_tts_thought_performance_summary),
+                            checked = editor.thoughtPerformance,
+                            onCheckedChange = { update(editor.copy(thoughtPerformance = it)) },
                         )
                     }
                     // 分类标注：三种引擎都给这一节（系统音色不声明性别，http 脚本常常不写，
@@ -1728,6 +1780,53 @@ private fun TtsVoicePresetEditorContent(
                         style = LegadoTheme.typography.labelSmall,
                         color = LegadoTheme.colorScheme.onSurfaceVariant,
                     )
+                    AppText(
+                        stringResource(R.string.voice_label_age_hint),
+                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = LegadoTheme.typography.labelSmall,
+                        color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                item {
+                    // 声音池：编辑对话框内直接勾选，保存时同步成员关系；进池的音色才会被自动配音选中
+                    EngineSectionTitle(R.string.voice_pool_section)
+                    if (editor.memberPools.isEmpty()) {
+                        AppText(
+                            stringResource(R.string.voice_pool_empty),
+                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = LegadoTheme.typography.labelSmall,
+                            color = LegadoTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    editor.memberPools.forEach { pool ->
+                        CheckboxItem(
+                            title = pool.name,
+                            checked = pool.checked,
+                            onCheckedChange = { checked ->
+                                update(
+                                    editor.copy(
+                                        memberPools = editor.memberPools.map {
+                                            if (it.poolId == pool.poolId) it.copy(checked = checked) else it
+                                        },
+                                    )
+                                )
+                            },
+                        )
+                    }
+                    if (editor.editingVoiceId != null && !editor.readonlyPreset) {
+                        MediumTonalButton(
+                            onClick = {
+                                onIntent(CloudTtsIntent.DismissVoiceEditor)
+                                onIntent(CloudTtsIntent.RequestDeleteVoice(editor.editingVoiceId.orEmpty()))
+                            },
+                            icon = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.delete),
+                            text = stringResource(R.string.voice_preset_delete),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp, bottom = 8.dp),
+                        )
+                    }
                 }
             }
     }
@@ -1783,6 +1882,41 @@ private fun MenuButton(
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         text = text,
     )
+}
+
+/**
+ * 语速/音调/音量的一行小滑块组：每项占三分之一宽，停靠在 0.5x..2x 的 0.25 档位上。
+ * 滑块产出走 [onChange] 写回编辑器（仍以字符串保存在预设里），替代手填文本框。
+ */
+@Composable
+private fun VoiceSliderGroup(
+    items: List<Triple<String, Float, (Float) -> Unit>>,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { (label, value, onChange) ->
+            Column(modifier = Modifier.weight(1f)) {
+                AppText(
+                    text = label,
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                Slider(
+                    value = value.coerceIn(0.5f, 2f),
+                    onValueChange = onChange,
+                    valueRange = 0.5f..2f,
+                    steps = 5,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
 }
 
 @Composable

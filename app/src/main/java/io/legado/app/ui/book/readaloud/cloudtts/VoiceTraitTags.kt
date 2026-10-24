@@ -124,6 +124,7 @@ fun VoiceCardItem(
     title: String,
     modifier: Modifier = Modifier,
     tags: (@Composable () -> Unit)? = null,
+    scrollableTags: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
@@ -152,6 +153,8 @@ fun VoiceCardItem(
                     color = LegadoTheme.colorScheme.onSurface,
                 )
                 tags?.invoke()
+                // 横向滑动区：内容超出宽度时左右滑看全，不与右侧按钮抢空间
+                scrollableTags?.invoke()
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,

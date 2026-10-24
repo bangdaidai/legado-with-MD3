@@ -96,12 +96,20 @@ data class TtsManagedEngineItemUi(
     val editable: Boolean,
     /** 筛选用的性别，取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
     val gender: String = "",
-    /** 结构化标签（对齐 legado_NG 音色卡）：为空时界面回退 [summary] 文本 */
+    /** 第一行的小标记：性别 / 语言 / 风格（图标化短块，不再重复进第二行） */
     val genderLabel: String = "",
     val languageLabel: String = "",
     val styleLabel: String = "",
-    val tags: List<String> = emptyList(),
+    /** 第二行横滑标签：引擎名 / 所在声音池 / 用户标注等；已滤掉与第一行重复的项 */
+    val secondaryTags: List<String> = emptyList(),
     val engineName: String = "",
+)
+
+/** 编辑音色预设对话框里的声音池勾选行 */
+@Stable data class VoicePoolCheckUi(
+    val poolId: String,
+    val name: String,
+    val checked: Boolean,
 )
 @Stable data class TtsEngineOptionUi(
     val engineType: String,
@@ -167,6 +175,13 @@ data class TtsVoicePresetEditorUi(
     val labelTags: String = "",
     /** 未标注那几栏当前实际按什么走（已本地化，只作提示，绝不写回表）。 */
     val labelFallback: String = "",
+    /**
+     * true = 目录同步的音色（managedBy 不是 user）：预设参数不可改，
+     * 只开放「分类标注」与「声音池」两区，保存走轻量路径（不重建音色行）。
+     */
+    val readonlyPreset: Boolean = false,
+    /** 该音色在哪些声音池里（编辑对话框内直接勾选，保存时同步成员关系） */
+    val memberPools: ImmutableList<VoicePoolCheckUi> = persistentListOf(),
 )
 
 sealed interface CloudTtsIntent {

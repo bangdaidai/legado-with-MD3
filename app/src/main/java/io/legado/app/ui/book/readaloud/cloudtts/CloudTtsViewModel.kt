@@ -113,6 +113,9 @@ class CloudTtsViewModel(
      * 音色行变化（增删改）都会重发流，标注跟着同一次 [pruneAndPublish] 刷，不需要单独通知。
      */
     private var labels = emptyMap<String, VoiceLabel>()
+
+    /** voiceId → 所在声音池名字列表，卡片第二行的池标签；随 [pruneAndPublish] 刷。 */
+    private var voicePoolNames = emptyMap<String, List<String>>()
     private var systemEngines = emptyList<TtsEngineDescriptor>()
     private var httpEngines = emptyList<TtsEngineDescriptor>()
     private var bookUrl: String? = null
@@ -163,6 +166,7 @@ class CloudTtsViewModel(
      * 系统引擎列表为空时不判系统音色——初始化失败不等于所有引擎都被卸载了。
      */
     private suspend fun pruneAndPublish() {
+        voicePoolNames = VoicePoolStore.poolNamesOfVoices()
         val systemEngineIds = systemEngines.flatMapTo(mutableSetOf()) {
             listOf(it.id, it.sourceId)
         }
@@ -396,9 +400,8 @@ class CloudTtsViewModel(
     }
 
     private fun editVoice(id: String) = viewModelScope.launch {
-        val voice = voices.firstOrNull {
-            it.id == id && it.managedBy == ReadAloudVoice.MANAGED_BY_USER
-        } ?: return@launch
+        // 目录同步的音色也允许点开：只开放「分类标注 + 声音池」，预设参数保持只读
+        val voice = voices.firstOrNull { it.id == id } ?: return@launch
         val engine = _uiState.value.availableEngines.firstOrNull {
             it.engineType == voice.engineType && it.engineId == voice.engineId
         } ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
@@ -462,7 +465,17 @@ class CloudTtsViewModel(
             labelAgeBand = label?.ageBand.orEmpty(),
             labelTags = VoiceLabelStore.tagsOf(label).joinToString("，"),
             labelFallback = labelFallbackSummary(voice, label),
+            readonlyPreset = voice.managedBy != ReadAloudVoice.MANAGED_BY_USER,
+            memberPools = memberPoolsFor(voice.id),
         )
+    }
+
+    /** 全部声音池 × 该音色的成员关系 → 编辑对话框里的勾选列表。 */
+    private suspend fun memberPoolsFor(voiceId: String): List<VoicePoolCheckUi> {
+        val membership = VoicePoolStore.voicePoolMap()[voiceId].orEmpty()
+        return VoicePoolStore.listPools().map { pool ->
+            VoicePoolCheckUi(poolId = pool.id, name = pool.name, checked = pool.id in membership)
+        }
     }
 
     /**
@@ -623,8 +636,15 @@ class CloudTtsViewModel(
 
     private fun saveVoice() = viewModelScope.launch {
         val editor = _uiState.value.voiceEditor
-        val voice = buildVoice() ?: return@launch
-        voiceGateway.upsertVoice(voice)
+        val voice = if (editor?.readonlyPreset == true) {
+            // 目录同步的音色：不重建音色行，标注与池照常提交
+            voices.firstOrNull { it.id == editor.editingVoiceId }
+        } else {
+            buildVoice()
+        } ?: return@launch
+        if (editor?.readonlyPreset != true) {
+            voiceGateway.upsertVoice(voice)
+        }
         // 标注跟着这一次「保存预设」一起提交：弹窗里改几栏都算一件事，不再多一个保存按钮。
         // 换了原生音色 id 等于换了一行——先按新 id 落一次，旧行删除时随行清掉，标注因此跟着搬家。
         editor?.let {
@@ -637,13 +657,26 @@ class CloudTtsViewModel(
             ) {
                 AppLog.putDebug("音色标注取值非法，本次未写入：${it.labelGender}/${it.labelAgeBand}")
             }
+            syncVoicePoolMembership(voice.id, it.memberPools)
         }
         _uiState.value.voiceEditor?.editingVoiceId
             ?.takeIf { it != voice.id }
             ?.let { oldId -> voices.firstOrNull { it.id == oldId } }
             ?.let { oldVoice -> voiceGateway.deleteVoice(oldVoice) }
+        voicePoolNames = VoicePoolStore.poolNamesOfVoices()
         _uiState.update { it.copy(voiceEditor = null, discoveredVoices = persistentListOf()) }
         toast(application.getString(R.string.cloud_tts_voice_saved))
+    }
+
+    /** 把编辑对话框里的池勾选同步成真实成员关系：新勾的进池，取消勾的出池。 */
+    private suspend fun syncVoicePoolMembership(voiceId: String, pools: List<VoicePoolCheckUi>) {
+        pools.forEach { pool ->
+            if (pool.checked) {
+                VoicePoolStore.addMembers(pool.poolId, setOf(voiceId))
+            } else {
+                VoicePoolStore.removeMembers(pool.poolId, setOf(voiceId))
+            }
+        }
     }
 
     private fun testEngine() = viewModelScope.launch {
@@ -1035,24 +1068,28 @@ class CloudTtsViewModel(
         val defaultNarrator = voice.id ==
             readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId &&
             voice.id.isNotBlank()
+        // 用户标注里与第一行（性别/风格）重复的词不再进第二行，避免同一信息出现两遍
+        val firstRow = setOfNotNull(
+            genderLabel(traits.gender),
+            traits.style.takeIf(String::isNotBlank),
+        ).map { it.lowercase() }.toSet()
+        val secondary = buildList {
+            if (!voice.available) add(application.getString(R.string.cloud_tts_unavailable_suffix))
+            if (defaultNarrator) add(application.getString(R.string.cloud_tts_default_narrator_marker))
+            addAll(voicePoolNames[voice.id].orEmpty())
+            addAll(traits.tags)
+        }.map(String::trim).filter { it.isNotEmpty() && it.lowercase() !in firstRow }.distinct()
         CloudTtsVoiceItemUi(
             voice.id,
             voice.displayName,
-            buildString {
-                // 性别/风格移到结构化标签行，这里只留异常状态与默认旁白标记
-                if (!voice.available) append(application.getString(R.string.cloud_tts_unavailable_suffix))
-                if (defaultNarrator) {
-                    if (isNotEmpty()) append(" · ")
-                    append(application.getString(R.string.cloud_tts_default_narrator_marker))
-                }
-            },
+            summary = "",
             deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
-            editable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
+            editable = true,
             gender = traits.gender,
             genderLabel = genderLabel(traits.gender).orEmpty(),
             languageLabel = traits.language.takeIf(String::isNotBlank).orEmpty(),
             styleLabel = traits.style.takeIf(String::isNotBlank).orEmpty(),
-            tags = traits.tags.take(3),
+            secondaryTags = secondary.take(6),
             engineName = engineName(voice.engineType, voice.engineId),
         )
     }.toImmutableList()

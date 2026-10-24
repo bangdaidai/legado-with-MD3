@@ -404,6 +404,12 @@
     <string name="tts_script_options_title">Engine options (options())</string>
     <string name="tts_script_badge">Script</string>
     <string name="tts_new_from_template">Import from built-in script template</string>
+    <string name="cloud_tts_section_performance">Performance (role &amp; instructions)</string>
+    <string name="voice_pool_section">Voice pools</string>
+    <string name="voice_pool_empty">No pools yet. Checked voices can be picked by auto casting.</string>
+    <string name="voice_preset_delete">Delete this voice preset</string>
+    <string name="voice_preset_readonly_hint">This voice is synced from its engine catalog. Only labels and pools are editable here.</string>
+    <string name="voice_label_age_hint">Age band is used by auto casting: character voices are matched by gender + age when no manual binding exists.</string>
     <string name="group_zg">Awaiting</string>
     <string name="group_yf">Awaiting more</string>
     <string name="bookmark">Bookmarks</string>

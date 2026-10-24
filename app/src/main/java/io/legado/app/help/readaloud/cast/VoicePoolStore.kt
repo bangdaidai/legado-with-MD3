@@ -663,6 +663,26 @@ object VoicePoolStore {
     suspend fun memberVoiceIds(poolId: String): Set<String> =
         appDb.voicePoolDao.getMembers(poolId).map { it.voiceId }.toSet()
 
+    /** 从池里移除成员；不在池里的忽略。 */
+    suspend fun removeMembers(poolId: String, voiceIds: Set<String>): Int {
+        if (voiceIds.isEmpty()) return 0
+        val existing = memberVoiceIds(poolId)
+        val removed = existing intersect voiceIds
+        if (removed.isEmpty()) return 0
+        setMembers(poolId, existing - removed)
+        return removed.size
+    }
+
+    /** 音色 id → 所在池的名字列表（列表卡片上的池标签）。 */
+    suspend fun poolNamesOfVoices(): Map<String, List<String>> {
+        val membership = voicePoolMap()
+        if (membership.isEmpty()) return emptyMap()
+        val poolNames = listPools().associate { it.id to it.name }
+        return membership.mapValues { (_, poolIds) ->
+            poolIds.mapNotNull(poolNames::get)
+        }.filterValues { it.isNotEmpty() }
+    }
+
     /**
      * 往池里追加成员，返回真正新增的条数（「朗读引擎与音色」页的添加到声音池）。
      *
