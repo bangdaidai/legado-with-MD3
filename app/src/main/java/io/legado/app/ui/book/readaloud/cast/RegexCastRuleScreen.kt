@@ -143,6 +143,8 @@ fun RegexCastRuleScreen(
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = stringResource(R.string.regex_cast_rule),
+                // 功能说明放副标题：正文区只留共享部件的排序提示，别在标题栏底下堆两段灰字
+                subtitle = stringResource(R.string.regex_cast_rule_summary),
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { TopBarNavigationButton(onClick = onBackClick) },
                 // 顶栏已经用 TopBarActionsRow 包好了，这里只放按钮本身
@@ -179,48 +181,38 @@ fun RegexCastRuleScreen(
             )
         },
     ) { paddingValues ->
-        Column(
+        PoolTreeList(
+            view = state,
+            wording = RegexCastWording,
+            actions = CastPoolActions(
+                onMove = { from, to -> onIntent(RegexCastRuleIntent.MoveItem(from, to)) },
+                onQuery = { onIntent(RegexCastRuleIntent.Query(it)) },
+                onToggleGroup = { onIntent(RegexCastRuleIntent.ToggleGroup(it)) },
+                onGroupEnabled = { id, on -> onIntent(RegexCastRuleIntent.GroupEnabled(id, on)) },
+                onRenameGroup = { onIntent(RegexCastRuleIntent.RenameGroup(it)) },
+                onCreateGroup = { onIntent(RegexCastRuleIntent.CreateGroup(it)) },
+                onMoveGroup = { onIntent(RegexCastRuleIntent.MoveGroup(it)) },
+                onDeleteGroup = { onIntent(RegexCastRuleIntent.DeleteGroup(it)) },
+                onPoolEnabled = { id, on -> onIntent(RegexCastRuleIntent.RuleEnabled(id, on)) },
+                onEditPool = { row ->
+                    row.id.toLongOrNull()?.let { onIntent(RegexCastRuleIntent.ShowEdit(it)) }
+                },
+                onDeletePool = { row ->
+                    row.id.toLongOrNull()?.let { onIntent(RegexCastRuleIntent.ShowDelete(it)) }
+                },
+                // 规则没有成员：下面这一整组回调都不会被界面调到（hasMembers = false）
+                onExpandPool = {},
+                onAddMembers = {},
+                onMemberToggle = { _, _, _ -> },
+                onMemberRemove = { _, _ -> },
+                onMemberQuery = { _, _ -> },
+            ),
+            listState = listState,
+            reorderableState = reorderableState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-        ) {
-            AppText(
-                text = stringResource(R.string.regex_cast_rule_summary),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = LegadoTheme.typography.bodySmall,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-            )
-            PoolTreeList(
-                view = state,
-                wording = RegexCastWording,
-                actions = CastPoolActions(
-                    onMove = { from, to -> onIntent(RegexCastRuleIntent.MoveItem(from, to)) },
-                    onQuery = { onIntent(RegexCastRuleIntent.Query(it)) },
-                    onToggleGroup = { onIntent(RegexCastRuleIntent.ToggleGroup(it)) },
-                    onGroupEnabled = { id, on -> onIntent(RegexCastRuleIntent.GroupEnabled(id, on)) },
-                    onRenameGroup = { onIntent(RegexCastRuleIntent.RenameGroup(it)) },
-                    onCreateGroup = { onIntent(RegexCastRuleIntent.CreateGroup(it)) },
-                    onMoveGroup = { onIntent(RegexCastRuleIntent.MoveGroup(it)) },
-                    onDeleteGroup = { onIntent(RegexCastRuleIntent.DeleteGroup(it)) },
-                    onPoolEnabled = { id, on -> onIntent(RegexCastRuleIntent.RuleEnabled(id, on)) },
-                    onEditPool = { row ->
-                        row.id.toLongOrNull()?.let { onIntent(RegexCastRuleIntent.ShowEdit(it)) }
-                    },
-                    onDeletePool = { row ->
-                        row.id.toLongOrNull()?.let { onIntent(RegexCastRuleIntent.ShowDelete(it)) }
-                    },
-                    // 规则没有成员：下面这一整组回调都不会被界面调到（hasMembers = false）
-                    onExpandPool = {},
-                    onAddMembers = {},
-                    onMemberToggle = { _, _, _ -> },
-                    onMemberRemove = { _, _ -> },
-                    onMemberQuery = { _, _ -> },
-                ),
-                listState = listState,
-                reorderableState = reorderableState,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        )
     }
 
     // 下面这批弹窗一律「常驻组合 + show/data」：miuix 的窗口靠 show 驱动退场动画，
