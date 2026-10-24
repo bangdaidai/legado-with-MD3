@@ -156,7 +156,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 134,
+    version = 133,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -300,11 +300,12 @@ val appDb by lazy {
         AutoMigration(from = 130, to = 131),
         // books 新增 disableReadRecord 列：单独为本书关闭阅读记录，默认 0 = 照常记录
         AutoMigration(from = 131, to = 132),
-        // book_sources 新增 mainJs 列：单文件 JS 书源的主脚本文本，可空，声明式书源读回 null
-        AutoMigration(from = 132, to = 133),
+        // book_sources 新增 mainJs 列：单文件 JS 书源的主脚本文本，可空，声明式书源读回 null；
         // httpTTS 新增 script / scriptOptionsJson 列：JS 朗读引擎的主脚本与 options() 配置值，
-        // 可空/默认 {}，URL 模板引擎读回 null 与 {} 不受影响
-        AutoMigration(from = 133, to = 134),
+        // 可空/默认 {}，URL 模板引擎读回 null 与 {} 不受影响。
+        // 三个 fork 特性列合并为同一次 132→133 推进：AutoMigration 要求上一版本
+        // schema JSON（132.json）已存在，133.json 由本次构建导出后随仓库提交
+        AutoMigration(from = 132, to = 133),
     ]
 )
 abstract class AppDatabase : RoomDatabase() {
