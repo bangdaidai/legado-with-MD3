@@ -37,6 +37,7 @@ import io.legado.app.help.readaloud.segment.AiSpeechAtom
 import io.legado.app.help.readaloud.segment.AiSpeechAtomizer
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.fromJsonArray
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
