@@ -25,6 +25,8 @@ data class ExploreShowUiState(
     val filterStateId: Int = 0,
     /** 顶栏溢出菜单里可选的其他发现书源（不含当前源），参考上游内容模式的换源菜单 */
     val switchableSources: ImmutableList<ExploreSourceOptionUi> = persistentListOf(),
+    /** 当前书源名：顶栏标题用它，分类名挪去副标题 */
+    val sourceName: String? = null,
 )
 
 @Stable

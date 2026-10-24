@@ -251,6 +251,8 @@ class ExploreShowViewModel(
                     switchableSources = switchableSources
                         .filter { it.url != displayState.sourceUrl }
                         .toImmutableList(),
+                    sourceName = switchableSources
+                        .firstOrNull { it.url == displayState.sourceUrl }?.name,
                 )
             }.collect { newState ->
                 _uiState.value = newState

@@ -314,7 +314,9 @@ fun ExploreShowScreen(
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 modifier = Modifier.responsiveHazeEffect(state = hazeState),
-                title = state.selectedKindTitle ?: title,
+                // 顶栏主标题用书源名（与上游发现主页一致），分类名降到副标题
+                title = state.sourceName ?: state.selectedKindTitle ?: title,
+                subtitle = if (state.sourceName != null) state.selectedKindTitle else null,
                 navigationIcon = {
                     TopBarNavigationButton(onClick = onBack)
                 },
