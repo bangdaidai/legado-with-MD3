@@ -58,7 +58,7 @@ class BookUpdateRepository(
                     name = row.book.name,
                     author = row.book.author,
                     origin = row.book.origin,
-                    coverPath = row.book.getDisplayCover().takeIf { it.isNotEmpty() },
+                    coverPath = row.book.getDisplayCover().takeIf { !it.isNullOrEmpty() },
                     updatedChapterCount = bookUpdateChapterCount(
                         row.updateBaselineChapterNum,
                         row.updateTotalChapterNum,

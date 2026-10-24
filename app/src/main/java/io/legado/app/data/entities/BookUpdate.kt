@@ -4,7 +4,6 @@ import androidx.room.Entity
 import androidx.room.Index
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toEpochDays
 import kotlinx.datetime.toLocalDateTime
 
 /**
