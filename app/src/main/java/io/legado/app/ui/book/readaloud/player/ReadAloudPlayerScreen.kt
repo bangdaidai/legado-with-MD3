@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -268,7 +270,8 @@ fun ReadAloudPlayerScreenContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AppText(
                             formatPosition(state.chapterPosition),
@@ -328,7 +331,7 @@ fun ReadAloudPlayerScreenContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 16.dp, horizontal = 24.dp),
+                            .padding(vertical = 16.dp, horizontal = 16.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
                         SmallAnimatedButton(
@@ -346,6 +349,16 @@ fun ReadAloudPlayerScreenContent(
                             text = playerBgModeLabel(state.bgMode),
                             contentDescription = playerBgModeLabel(state.bgMode),
                             onCheckedChange = { onIntent(ReadAloudPlayerIntent.CycleBgMode) },
+                        )
+                        SmallAnimatedButton(
+                            containerColor = Color.Transparent,
+                            checked = false,
+                            icon = Icons.Default.RecordVoiceOver,
+                            text = stringResource(R.string.cloud_tts_step_voice),
+                            contentDescription = stringResource(R.string.cloud_tts_step_voice),
+                            onCheckedChange = {
+                                onIntent(ReadAloudPlayerIntent.OpenSheet(ReadAloudPlayerSheet.Voice))
+                            },
                         )
                         SmallAnimatedButton(
                             containerColor = Color.Transparent,
@@ -720,7 +733,7 @@ private fun ReadAloudSpeedSheet(
                 READ_ALOUD_SPEED_MIN.toFloat(),
                 READ_ALOUD_SPEED_MAX.toFloat(),
             ),
-            valueLabel = formatReadAloudSpeedLabel(speedPreview.roundToInt()),
+            valueLabel = "${formatReadAloudSpeedLabel(speedPreview.roundToInt())}x",
             startLabel = stringResource(R.string.fast_rewind),
             endLabel = stringResource(R.string.fast_forward),
             onValueChange = { speedPreview = it },

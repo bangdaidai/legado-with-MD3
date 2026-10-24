@@ -11,7 +11,6 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.domain.model.readaloud.HttpTtsCatalogDraft
-import io.legado.app.domain.usecase.SyncHttpTtsCatalogUseCase
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
@@ -37,7 +36,6 @@ import splitties.init.appCtx
 class ImportHttpTtsViewModel(
     app: Application,
     private val repository: HttpTtsRepository,
-    private val syncHttpTtsCatalog: SyncHttpTtsCatalogUseCase,
 ) : BaseViewModel(app) {
 
     private val _uiState = MutableStateFlow<BaseImportUiState<HttpTTS>>(BaseImportUiState.Idle)
@@ -93,16 +91,13 @@ class ImportHttpTtsViewModel(
 
     private fun importSelect(items: List<HttpTTS>) {
         execute {
-            repository.insert(*items.toTypedArray())
-            // 目录落 read_aloud_voices，不写回源行；没带目录的源由 UseCase 自己跳过
-            items.forEach { source ->
-                val index = allSources.indexOf(source)
-                syncHttpTtsCatalog(
-                    engineId = source.id.toString(),
-                    draft = catalogDrafts.getOrElse(index) { HttpTtsCatalogDraft() },
-                    sourceRevision = source.lastUpdateTime,
-                )
-            }
+            // 目录落 read_aloud_voices，不写回源行；没带目录的源由 UseCase 自己跳过。
+            // 导入与目录写入同一事务：中途失败整体回滚，不会留下「有源没音色」的半截状态。
+            repository.importWithCatalogs(
+                items.map { source ->
+                    source to catalogDrafts.getOrElse(allSources.indexOf(source)) { HttpTtsCatalogDraft() }
+                }
+            )
         }.onSuccess {
             _uiState.value = BaseImportUiState.Idle
             _effects.emit(ImportHttpTtsEffect.ImportFinished)

@@ -1,7 +1,9 @@
 package io.legado.app.help.source
 
+import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BaseSource
+import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.IntentData
@@ -9,6 +11,8 @@ import io.legado.app.ui.association.VerificationCodeActivity
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.isMainThread
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
+import org.koin.core.context.GlobalContext
 import splitties.init.appCtx
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.LockSupport
@@ -34,6 +38,19 @@ object SourceVerificationHelp {
 
     /** sourceKey -> 最近一次人机验证成功的时间（纳秒），无条目表示从未成功 */
     private val lastVerifiedOkAt = ConcurrentHashMap<String, Long>()
+
+    /** 设置里的「阻止书源打开内置浏览器」开关，命中时记日志并提示后抛错 */
+    private val otherSettingsGateway by lazy {
+        GlobalContext.get().get<OtherSettingsGateway>()
+    }
+
+    private val isBrowserBlocked: Boolean
+        get() = otherSettingsGateway.currentSettings.blockSourceBrowser
+
+    private fun notifyBrowserBlocked(source: BaseSource) {
+        AppLog.putDebug("已阻止书源「${source.getTag()}」打开内置浏览器")
+        appCtx.toastOnUi(R.string.block_source_browser_error)
+    }
 
     fun isWaitingVerification(sourceKey: String): Boolean =
         pendingVerification.containsKey(sourceKey)
@@ -69,6 +86,10 @@ object SourceVerificationHelp {
             ?: throw NoStackTraceException("getVerificationResult parameter source cannot be null")
         require(url.length < 64 * 1024) { "getVerificationResult parameter url too long" }
         check(!isMainThread) { "getVerificationResult must be called on a background thread" }
+        if (useBrowser && isBrowserBlocked) {
+            notifyBrowserBlocked(source)
+            throw NoStackTraceException(appCtx.getString(R.string.block_source_browser_error))
+        }
 
         if (suppressPopup) {
             throw NoStackTraceException("搜索期间禁止弹窗，跳过验证")
@@ -147,6 +168,10 @@ object SourceVerificationHelp {
     ) {
         source ?: throw NoStackTraceException("startBrowser parameter source cannot be null")
         require(url.length < 64 * 1024) { "startBrowser parameter url too long" }
+        if (isBrowserBlocked) {
+            notifyBrowserBlocked(source)
+            return
+        }
         IntentData.put(getVerificationResultKey(source), Thread.currentThread())
         appCtx.startActivity(
             MainActivity.createWebViewIntent(

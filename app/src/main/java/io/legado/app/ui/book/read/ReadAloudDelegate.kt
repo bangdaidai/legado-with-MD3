@@ -31,8 +31,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -273,7 +273,7 @@ class ReadAloudDelegate(
      * 关闭播放弹层时不会停在半开的菜单上。
      */
     fun openPlayer() {
-        host.updateState { it.copy(menuState = ReadBookMenuState(), activeSheet = null) }
+        host.updateState { it.copy(menuState = ReadBookMenuState()).clearSheets() }
         ReadAloudPlayerOverlayBus.request()
     }
 
@@ -292,7 +292,7 @@ class ReadAloudDelegate(
 
     /** 经典朗读控制面板：阅读菜单里的一页，不遮挡正文区域之外的交互。 */
     fun openClassicControls() {
-        host.updateState { it.copy(activeSheet = null) }
+        host.updateState { it.clearSheets() }
         host.openReadMenuRoute(ReadBookMenuRoute.ReadAloud)
     }
 

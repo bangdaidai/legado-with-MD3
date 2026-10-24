@@ -50,6 +50,7 @@ import io.legado.app.feature.reader.legacy.HighlightProtagonistPatterns
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterLayoutIdentity
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterPaginationResult
 import io.legado.app.feature.reader.legacy.LegacyReaderChapterPaginator
+import io.legado.app.feature.reader.legacy.LegacyReaderImageOptionsResolver
 import io.legado.app.feature.reader.legacy.LegacyReaderPageDecorationFactory
 import io.legado.app.feature.reader.legacy.LegacyReaderPaginationBatch
 import io.legado.app.feature.reader.legacy.LegacyReaderPaginationStyleFactory
@@ -128,13 +129,15 @@ class ReadBookController(
     val viewModel: ReadBookViewModel,
     private val readerSessionViewModel: ReaderSessionViewModel,
     /**
-     * 本路由要打开的书，在首次组合时随构造传入（见 MainNavGraph 阅读页入口）。
+     * 本路由初次要打开的书，在首次组合时随构造传入（见 MainNavGraph 阅读页入口）。
      * 空表示「最后读过的那本」（朗读通知的进入方式），此时不设闸门。
      */
     private val routeBookUrl: String? = null,
 ) : ReadBookRouteHost,
     ReadBookInputHandler,
     ReadBook.ReaderRenderCallback {
+
+    private var routeInitialized = false
 
     private val readSettingsGateway get() = org.koin.core.context.GlobalContext.get().get<io.legado.app.domain.gateway.ReadSettingsGateway>()
     private val aloudSettingsGateway get() = org.koin.core.context.GlobalContext.get().get<io.legado.app.domain.gateway.ReadAloudSettingsGateway>()
@@ -756,11 +759,12 @@ class ReadBookController(
         ReaderPerfTrace.marker("viewport.published")
     }
 
-    /** 会话指向的不是本路由要开的书：画布只能出加载占位页，不能把上一本书的正文排上来。 */
-    private fun isReaderSessionStale(): Boolean {
-        val expected = routeBookUrl?.takeIf { it.isNotBlank() } ?: return false
-        return ReadBook.book?.bookUrl != expected
-    }
+    /** 开书初始化前隔离上一会话；初始化后当前会话可以因换源而改变 URL。 */
+    private fun isReaderSessionStale(): Boolean = isReaderOpeningSessionStale(
+        routeBookUrl = routeBookUrl,
+        currentBookUrl = ReadBook.book?.bookUrl,
+        isRouteInitialized = routeInitialized,
+    )
 
     private fun publishReaderPageWindow(
         paginationStyle: ReaderAndroidPaginationStyle? = null,
@@ -1192,6 +1196,18 @@ class ReadBookController(
 
     override fun readerChapterInputChanged() {
         ReaderPerfTrace.marker("input.changed")
+        // 全文搜索定位必须在章节输入发布的这一刻消费：openChapter 的 success 回调会清掉
+        // pendingSearchNavigation，而下面的页面测量是 80ms 合并的，等到那时再读就只剩 null，
+        // 表现为"跳到目标章首、不高亮搜索词"。
+        // 排版任务跑在 IO 上，而定位要碰页面窗口/选区流，所以切回主线程（Main.immediate 在
+        // 主线程调用时同步执行，行为与同章命中的 effect 分支一致）。
+        activity.lifecycleScope.launch {
+            pendingSearchNavigation?.let { navigation ->
+                ReadBook.readerChapterInputWindow.current
+                    ?.takeIf { it.chapter.index == navigation.result.chapterIndex }
+                    ?.let { resolveSearchNavigation(navigation, it) }
+            }
+        }
         // Current/previous/next chapter inputs are published independently during opening.
         // Coalesce that short burst so an arriving adjacent chapter does not repeatedly cancel
         // the expensive current-chapter measurement before its first page can be committed.
@@ -1199,11 +1215,6 @@ class ReadBookController(
         readerChapterInputPublishJob = activity.lifecycleScope.launch {
             delay(80)
             ReaderPerfTrace.marker("input.coalesced")
-            pendingSearchNavigation?.let { navigation ->
-                ReadBook.readerChapterInputWindow.current
-                    ?.takeIf { it.chapter.index == navigation.result.chapterIndex }
-                    ?.let { resolveSearchNavigation(navigation, it) }
-            }
             publishReaderPageWindow()
         }
     }
@@ -1868,6 +1879,10 @@ class ReadBookController(
     }
 
     fun onRouteInitialized() {
+        // 开书完成后由当前会话驱动正文，换源不再受初始路由 URL 限制。
+        // 用本路由的完成回调，避免上一会话的 contentLoadFinish 提前解除首帧隔离。
+        routeInitialized = true
+        publishReaderPageWindow()
         applyReadBrightness()
         upScreenTimeOut()
     }
@@ -1989,34 +2004,12 @@ class ReadBookController(
     fun oldClickImg(src: String): Boolean {
         val urlMatch = paramPattern.find(src)
         if (urlMatch != null) {
-            val urlOptionStr = src.substring(urlMatch.range.last + 1)
-            val urlOptionMap = GSON.fromJsonObject<Map<String, String>>(urlOptionStr).getOrNull()
-            val click = urlOptionMap?.get("click")
+            val click = LegacyReaderImageOptionsResolver.resolve(src, htmlParagraph = false)?.action
             if (click != null) {
-                activity.lifecycleScope.launch(IO) {
-                    try {
-                        val source = ReadBook.bookSource ?: return@launch
-                        val java = SourceLoginJsExtensions(activity, source, BookType.text)
-                        val book = ReadBook.book ?: return@launch
-                        val chapter = appDb.bookChapterDao.getChapter(
-                            book.bookUrl,
-                            ReadBook.durChapterIndex
-                        ) ?: throw Exception("no find chapter")
-                        runScriptWithContext {
-                            source.evalJS(click) {
-                                put("java", java)
-                                put("book", book)
-                                put("chapter", chapter)
-                                put("result", src)
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        AppLog.put("执行图片链接click键值出错\n${e.localizedMessage}", e, true)
-                    }
-                }
+                clickImg(click, src)
                 return true
             }
-            val jsStr = urlOptionMap?.get("js") ?: return false
+            val jsStr = LegacyReaderImageOptionsResolver.legacyScript(src) ?: return false
             activity.lifecycleScope.launch(IO) {
                 try {
                     val source = ReadBook.bookSource ?: return@launch
@@ -2042,6 +2035,10 @@ class ReadBookController(
     }
 
     fun clickImg(click: String, src: String) {
+        if (LegacyReaderImageOptionsResolver.isParagraphRuleAction(click)) {
+            activity.toastOnUi(R.string.reader_paragraph_image_action_unsupported)
+            return
+        }
         activity.lifecycleScope.launch(IO) {
             try {
                 val source = ReadBook.bookSource ?: return@launch
@@ -2640,7 +2637,9 @@ class ReadBookController(
             is ReadBookEffect.OpenReadStyleImagePicker,
             is ReadBookEffect.OpenReadStyleImagePickerForMode,
             is ReadBookEffect.OpenReadStyleImport,
+            is ReadBookEffect.OpenReadStyleImportAsNew,
             is ReadBookEffect.OpenReadStyleExport,
+            is ReadBookEffect.OpenReadStyleConfigsExport,
             is ReadBookEffect.OpenMenuCustomIconPicker,
             is ReadBookEffect.OpenTitleBarCustomIconPicker,
             is ReadBookEffect.OpenSystemTtsSettings,
@@ -3098,10 +3097,17 @@ class ReadBookController(
     ): ReaderPage? {
         val viewport = layoutController.viewport.value ?: return null
         val paginationStyle = LegacyReaderPaginationStyleFactory.create()
-        val contentTop = viewport.contentPadding.top.toFloat()
-        val contentBottom = (viewport.heightPx - viewport.contentPadding.bottom).toFloat()
-        if (contentBottom - contentTop <= 0f) return null
-        val contentWidth = viewport.contentWidthPx.toFloat()
+        // 旧 TextPage.format 与正文共用 ChapterProvider 的内容区。系统栏、阅读边距、
+        // 页眉页脚都要计入，避免当前页切到提示页时滚动视口突然变大。
+        val contentLeft = (viewport.contentPadding.left + paginationStyle.paddingLeftPx).toFloat()
+        val contentRight = (viewport.widthPx - viewport.contentPadding.right -
+                paginationStyle.paddingRightPx).toFloat()
+        val contentTop = viewport.contentPadding.top + paginationStyle.paddingTopPx +
+                LegacyReaderPageDecorationFactory.headerExtentPx()
+        val contentBottom = viewport.heightPx - viewport.contentPadding.bottom -
+                paginationStyle.paddingBottomPx - LegacyReaderPageDecorationFactory.footerExtentPx()
+        val contentWidth = contentRight - contentLeft
+        if (contentBottom <= contentTop || contentWidth < 1f) return null
         val lineHeight = paginationStyle.bodyTextHeightPx
         val layout = StaticLayout.Builder
             .obtain(
@@ -3109,7 +3115,7 @@ class ReadBookController(
                 0,
                 text.length,
                 paginationStyle.bodyPaint,
-                viewport.contentWidthPx.coerceAtLeast(1)
+                contentWidth.toInt()
             )
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(0f, 1f)
@@ -3120,7 +3126,7 @@ class ReadBookController(
         val elements = (0 until layout.lineCount).map { lineIndex ->
             val lineTop = blockTop + layout.getLineTop(lineIndex)
             val lineWidth = layout.getLineMax(lineIndex)
-            val x = viewport.contentPadding.left.toFloat() +
+            val x = contentLeft +
                     ((contentWidth - lineWidth) / 2f).coerceAtLeast(0f)
             ReaderElement.Text(
                 bounds = ReaderRect(x, lineTop, x + lineWidth, lineTop + lineHeight),
@@ -3144,8 +3150,8 @@ class ReadBookController(
             heightPx = viewport.heightPx,
             contentTopPx = contentTop,
             contentBottomPx = contentBottom,
-            contentLeftPx = viewport.contentPadding.left.toFloat(),
-            contentRightPx = (viewport.widthPx - viewport.contentPadding.right).toFloat(),
+            contentLeftPx = contentLeft,
+            contentRightPx = contentRight,
             elements = elements,
             revision = 1L,
             scrollExtentPx = contentBottom - contentTop,
@@ -3301,6 +3307,16 @@ class ReadBookController(
         }
     }
 
+}
+
+internal fun isReaderOpeningSessionStale(
+    routeBookUrl: String?,
+    currentBookUrl: String?,
+    isRouteInitialized: Boolean,
+): Boolean {
+    if (isRouteInitialized) return false
+    val expected = routeBookUrl?.takeIf { it.isNotBlank() } ?: return false
+    return currentBookUrl != expected
 }
 
 private fun ConfigUpdateAction.invalidatesDirectReaderPages(): Boolean = when (this) {

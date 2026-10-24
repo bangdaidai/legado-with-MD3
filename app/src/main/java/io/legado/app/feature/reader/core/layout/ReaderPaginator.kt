@@ -464,7 +464,10 @@ internal class ReaderPaginationSession(
                 baselinePx = element.baselinePx + deltaY,
             )
 
-            is ReaderElement.Image -> element.copy(bounds = element.bounds.offsetY(deltaY))
+            is ReaderElement.Image -> element.copy(
+                bounds = element.bounds.offsetY(deltaY),
+                touchBounds = element.touchBounds.offsetY(deltaY),
+            )
             is ReaderElement.Review -> element.copy(
                 bounds = element.bounds.offsetY(deltaY),
                 baselinePx = element.baselinePx + deltaY,
@@ -781,6 +784,7 @@ internal class ReaderPaginationSession(
         // After），且只在那一侧确实还有文字时才让，所以这里按字形宽 + 命中字距 + 外边距收紧行尾。
         // Keep a forbidden Chinese break intact even if its row has to consume the
         // remaining slack, matching the legacy punctuation priority.
+        // 谓词里「同一标点连打可断」那条例外同样作用在这里：行尾收紧时也能切在 `！！！` 中间。
         while (starts.last() < paragraph.items.size) {
             val from = starts.last()
             val lineIndent =
@@ -813,6 +817,9 @@ internal class ReaderPaginationSession(
                     candidate--
                 }
                 if (candidate == from) break
+                // 收窄行尾同样不能把词间空格推到行首：把空格留在上一行末尾，
+                // 与段内的主断行（[ChineseLineBreaker]）保持同一口径。
+                if (ChineseLineBreaker.isWordSpace(clusters[candidate])) break
                 until = candidate
             }
             starts += until
@@ -894,7 +901,18 @@ internal class ReaderPaginationSession(
                     letterSpacing * (itemCount - 1).coerceAtLeast(0) + matchSum.toFloat() +
                     marginSum.toFloat()
             val indentItems = (paragraph.leadingIndentItems - from).coerceIn(0, itemCount)
-            val stretchableGaps = (itemCount - indentItems - 1).coerceAtLeast(0)
+            // 紧贴角色/配乐胶囊的那道缝不参与两端对齐：胶囊是行内项，正文整段被它顶到下一行时，
+            // 这一行只剩「引号 + 胶囊」两个项、唯一一道缝，剩余空隙全砸在它上面，
+            // 就成了引号贴行首、胶囊贴行尾。字与字之间的缝照常拉伸。
+            fun isCapsule(item: ReaderMeasuredInlineItem) =
+                item is ReaderMeasuredInlineItem.RoleCast || item is ReaderMeasuredInlineItem.BgmScene
+
+            fun gapStretches(itemIndex: Int) = itemIndex >= indentItems &&
+                    itemIndex < itemCount - 1 &&
+                    !isCapsule(paragraph.items[from + itemIndex]) &&
+                    !isCapsule(paragraph.items[from + itemIndex + 1])
+
+            val stretchableGaps = (0 until itemCount - 1).count(::gapStretches)
             val shouldJustify =
                 paragraph.alignment == ReaderTextAlignment.JUSTIFY &&
                         lineIndex < starts.lastIndex - 1
@@ -1017,6 +1035,7 @@ internal class ReaderPaginationSession(
                             chapterPosition = item.chapterPosition,
                             // 行内图必须带标记：绘制期按位图长宽比重新算几何（旧 ImageColumn）。
                             inline = true,
+                            touchBounds = ReaderRect(x, y, x + drawnWidthPx, y + actualLineHeight),
                         )
                     }
 
@@ -1073,7 +1092,7 @@ internal class ReaderPaginationSession(
                         // 命中段末字后同样推进 marginEnd（段内为 0，见 backgroundMarginAfter）
                         backgroundMarginAfter(from + itemIndex, until) +
                         if (item is ReaderMeasuredInlineItem.Text && item.value == " ") wordSpaceExtra else 0f
-                x += if (itemIndex >= indentItems) justifyGap else 0f
+                x += if (gapStretches(itemIndex)) justifyGap else 0f
                 // 胶囊是我们自己插进去的按钮，原文里没有它，所以它对背景 run 完全透明：
                 // 不把它的 null 覆盖上去，run 才会跨过胶囊连成同一个气泡。不带背景的正文
                 // 与行内图照旧打断 run。

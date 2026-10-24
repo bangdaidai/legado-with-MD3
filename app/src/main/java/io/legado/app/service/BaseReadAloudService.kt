@@ -8,12 +8,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.AudioManager
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
@@ -24,6 +26,7 @@ import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import androidx.annotation.CallSuper
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
@@ -31,7 +34,6 @@ import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
-import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
@@ -49,13 +51,16 @@ import io.legado.app.domain.model.readaloud.ReadAloudPlaybackQueue
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechVoiceOutcome
+import io.legado.app.domain.model.readaloud.SpeechVoiceSelection
 import io.legado.app.domain.model.readaloud.SpeechVoiceStatus
 import io.legado.app.domain.model.readaloud.resolveReadAloudStartPosition
 import io.legado.app.domain.model.settings.ReadAloudContentSplitMode
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
+import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
 import io.legado.app.domain.usecase.ResolveEffectiveSpeechPlanUseCase
 import io.legado.app.feature.reader.core.cast.CastMarkers
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
+import io.legado.app.feature.reader.core.readaloud.isBlankReadAloudUnit
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.config.AppConfigStore
 import io.legado.app.help.coroutine.ActivelyCancelException
@@ -78,6 +83,7 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -470,6 +476,7 @@ abstract class BaseReadAloudService : BaseService(),
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             IntentAction.play -> {
+                startForegroundNotification()
                 if (intent.hasExtra("sessionGeneration") &&
                     intent.getLongExtra("sessionGeneration", -1) != bookSession.state.value.generation
                 ) return super.onStartCommand(intent, flags, startId)
@@ -594,11 +601,9 @@ abstract class BaseReadAloudService : BaseService(),
                 splitPolicy = splitPolicy,
             )
             if (generation != prepareReadAloudGeneration) return@execute
-            var preparedPlaybackQueue = runCatching {
-                ReadAloudPlaybackQueue.from(preparedSpeechPlan)
-            }.onFailure {
-                AppLog.put("创建多角色播放队列失败，使用原朗读方式\n${it.localizedMessage}", it)
-            }.getOrDefault(ReadAloudPlaybackQueue.Empty)
+            var preparedPlaybackQueue = buildPlaybackQueue(
+                prepared.book?.bookUrl.orEmpty(), preparedSpeechPlan,
+            )
             var preparedPlaybackCursor = preparedPlaybackQueue.cursorAt(preparedReadAloudNumber)
             var pos = startPos
             val usePreparedPlaybackQueue = useSpeechPlaybackQueue && !preparedPlaybackQueue.isEmpty
@@ -806,10 +811,29 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
+    /** 实时朗读与预下载共用：标题声线直接取配置，正文仍保留各自的正则覆盖。 */
+    protected suspend fun buildPlaybackQueue(bookUrl: String, plan: List<SpeechPlanItem>): ReadAloudPlaybackQueue {
+        if (plan.isEmpty()) return ReadAloudPlaybackQueue.Empty
+        val narration = try {
+            val buildSpeechPlan: BuildSpeechPlanUseCase = get(BuildSpeechPlanUseCase::class.java)
+            buildSpeechPlan.narrationVoice(bookUrl, useMultiSpeaker = ReadConfig.useMultiSpeaker)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLog.put("读取章标题音色失败，标题使用默认引擎\n${e.localizedMessage}", e)
+            SpeechVoiceSelection()
+        }
+        return runCatching {
+            ReadAloudPlaybackQueue.from(plan, narration)
+        }.onFailure {
+            AppLog.put("创建多角色播放队列失败，使用原朗读方式\n${it.localizedMessage}", it)
+        }.getOrDefault(ReadAloudPlaybackQueue.Empty)
+    }
+
     /**
- * 「这一章该怎么念」的唯一入口。
- *
- * 编排（分段 → 说话人 → 选音 → 分配表覆盖）搬到了 [ResolveEffectiveSpeechPlanUseCase]，
+     * 「这一章该怎么念」的唯一入口。
+     *
+     * 编排（分段 → 说话人 → 选音 → 分配表覆盖）搬到了 [ResolveEffectiveSpeechPlanUseCase]，
  * 因为分镜页必须算出同一份计划：以前它只截取中间两步，显示的音色和实际发声的音色因此
  * 长期对不上（分配表覆盖之后再切一刀更是连分段都不同）。
  */
@@ -1238,7 +1262,7 @@ protected suspend fun buildSpeechPlan(
                 readAloudNumber -= contentList[nowSpeak].length + 1 + paragraphStartPos
                 paragraphStartPos = 0
                 foundPreviousReadableParagraph =
-                    !contentList[nowSpeak].matches(AppPattern.notReadAloudRegex)
+                    !contentList[nowSpeak].isBlankReadAloudUnit()
             } while (!foundPreviousReadableParagraph && nowSpeak > 0)
             if (!foundPreviousReadableParagraph) {
                 toLast = true
@@ -1392,12 +1416,14 @@ protected suspend fun buildSpeechPlan(
      */
     private fun setTimer(minute: Int) {
         synchronized(finishChapterTimerLock) { chapterQuota = null }
+        sessionStore.updateTimerChapters(0)
         timeMinute = minute
         doDs()
     }
 
     private fun addTimer() {
         synchronized(finishChapterTimerLock) { chapterQuota = null }
+        sessionStore.updateTimerChapters(0)
         timeMinute = PlaybackTimer.addIncrement(timeMinute)
         doDs()
     }
@@ -1409,9 +1435,11 @@ protected suspend fun buildSpeechPlan(
      * 换章不算取消。用户改用分钟模式时才交给 [setTimer] 一起清。
      */
     private fun setTimerChapters(chapters: Int) {
+        val quota = PlaybackTimer.normalizeChapters(chapters).takeIf { it > 0 }
         synchronized(finishChapterTimerLock) {
-            chapterQuota = PlaybackTimer.normalizeChapters(chapters).takeIf { it > 0 }
+            chapterQuota = quota
         }
+        sessionStore.updateTimerChapters(quota ?: 0)
     }
 
     /**
@@ -1978,7 +2006,16 @@ protected suspend fun buildSpeechPlan(
     override fun startForegroundNotification() {
         try {
             val notification = createForegroundNotification()
-            startForeground(NotificationId.ReadAloudService, notification.build())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(
+                    this,
+                    NotificationId.ReadAloudService,
+                    notification.build(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                )
+            } else {
+                startForeground(NotificationId.ReadAloudService, notification.build())
+            }
         } catch (e: Exception) {
             AppLog.put("创建朗读通知出错,${e.localizedMessage}", e, true)
             //创建通知出错不结束服务就会崩溃,服务必须绑定通知
@@ -2020,6 +2057,7 @@ protected suspend fun buildSpeechPlan(
             }
             if (decision.remainingChapters != null) {
                 chapterQuota = decision.remainingChapters
+                sessionStore.updateTimerChapters(decision.remainingChapters ?: 0)
             }
             when (decision.action) {
                 ChapterCompletionAction.STOP -> {
@@ -2065,6 +2103,7 @@ protected suspend fun buildSpeechPlan(
             finishChapterAtIndex = NO_FINISH_CHAPTER
             chapterQuota = null
         }
+        sessionStore.updateTimerChapters(0)
     }
 
     private fun clearFinishChapterTimerIfChapterChanged(chapterIndex: Int) {

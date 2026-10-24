@@ -25,6 +25,7 @@ data class OtherConfigUiState(
     val allowSameNameAuthorType: Boolean = false,
     val showMangaUi: Boolean = true,
     val webServiceWakeLock: Boolean = false,
+    val blockSourceBrowser: Boolean = false,
     val sourceEditMaxLine: Int = Int.MAX_VALUE,
     val webPort: Int = 1122,
     val processText: Boolean = true,
@@ -36,6 +37,7 @@ data class OtherConfigUiState(
     val directCompress: Boolean = false,
     val directRulePresets: ImmutableList<DirectLinkRuleUi> = persistentListOf(),
     val directTestResult: String? = null,
+    val isBatteryIgnored: Boolean = false,
     val activeOverlay: OtherConfigOverlay? = null,
     val pendingMessages: ImmutableList<OtherConfigMessage> = persistentListOf(),
 )
@@ -73,9 +75,11 @@ sealed interface OtherConfigOverlay {
     data object FilePicker : OtherConfigOverlay
     data object DirectLinkUpload : OtherConfigOverlay
     data object ClearWebViewConfirmation : OtherConfigOverlay
+    data object BatteryOptimizationGuide : OtherConfigOverlay
 }
 
 sealed interface OtherConfigIntent {
+    data object RefreshBatteryStatus : OtherConfigIntent
     data class LanguageChanged(val value: String) : OtherConfigIntent
     data class UpdateToVariantChanged(val value: String) : OtherConfigIntent
     data class AutoCheckUpdateOnStartChanged(val value: Boolean) : OtherConfigIntent
@@ -94,6 +98,7 @@ sealed interface OtherConfigIntent {
     data class AllowSameNameAuthorTypeChanged(val value: Boolean) : OtherConfigIntent
     data class ShowMangaUiChanged(val value: Boolean) : OtherConfigIntent
     data class WebServiceWakeLockChanged(val value: Boolean) : OtherConfigIntent
+    data class BlockSourceBrowserChanged(val value: Boolean) : OtherConfigIntent
     data class SourceEditMaxLineChanged(val value: Int) : OtherConfigIntent
     data class WebPortChanged(val value: Int) : OtherConfigIntent
     data class ProcessTextChanged(val value: Boolean) : OtherConfigIntent

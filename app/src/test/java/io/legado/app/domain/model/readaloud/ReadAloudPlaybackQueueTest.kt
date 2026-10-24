@@ -125,11 +125,48 @@ class ReadAloudPlaybackQueueTest {
         assertEquals(true, merged.isEmpty)
     }
 
+    @Test
+    fun `chapter title uses explicit narrator configuration including fallbacks`() {
+        val narrator = ReadAloudVoice(
+            id = "narrator",
+            engineType = "http",
+            engineId = "narrator",
+            speakerId = "",
+            displayName = "旁白",
+        )
+        val titled = ReadAloudPlaybackQueue
+            .from(
+                listOf(item("角色台词", 10, 0, role = SpeechRoleType.Character)),
+                narration = SpeechVoiceSelection(narrator, listOf(narrator)),
+            )
+            .withChapterTitle("第 1 章")
+
+        assertEquals(narrator, titled.cues.first().voice)
+        assertEquals(listOf(narrator), titled.cues.first().fallbackVoices)
+        assertNull(queue.withChapterTitle("第 1 章").cues.first().voice)
+    }
+
+    @Test
+    fun `chapter title does not inherit a regex override on a narrator segment`() {
+        val regexVoice = ReadAloudVoice("regex", "http", "engine", "", "正则角色")
+        val titled = ReadAloudPlaybackQueue.from(
+            listOf(
+                item("正则命中", 0, 0, voice = regexVoice),
+                item("正常旁白", 4, 0),
+            ),
+        ).withChapterTitle("第 1 章")
+
+        assertNull(titled.cues.first().voice)
+        assertEquals(regexVoice, titled.cues[1].voice)
+    }
+
     private fun item(
         text: String,
         start: Int,
-        paragraph: Int,
+        paragraph: Int = 0,
         role: SpeechRoleType = SpeechRoleType.Narrator,
+        voice: ReadAloudVoice? = null,
+        fallback: List<ReadAloudVoice> = emptyList(),
     ): SpeechPlanItem = SpeechPlanItem(
         segment = ChapterSpeechSegment(
             id = "$start",
@@ -144,7 +181,7 @@ class ReadAloudPlaybackQueueTest {
             roleType = role,
             source = SpeechResolutionSource.Rule,
         ),
-        voice = null,
-        fallbackVoices = emptyList(),
+        voice = voice,
+        fallbackVoices = fallback,
     )
 }

@@ -176,6 +176,7 @@
     <string name="pause">暫停</string>
     <string name="resume">繼續</string>
     <string name="set_timer">定時</string>
+    <string name="timer_preset_duration">快捷預設</string>
     <string name="read_aloud_pause">朗讀暫停</string>
     <string name="read_aloud_timer">正在朗讀(還剩%d分鐘)</string>
     <string name="playing_timer">正在播放(還剩%d分鐘)</string>
@@ -1266,6 +1267,9 @@
     <string name="jump_to_another_app">跳转其它应用</string>
     <string name="clear_webview_data">清除 WebView 数据</string>
     <string name="clear_webview_data_summary">清除内置浏览器所有数据</string>
+    <string name="block_source_browser">阻止書源開啟內建瀏覽器</string>
+    <string name="block_source_browser_summary">開啟後，書源無法透過 java.startBrowser 等介面彈出內建瀏覽器，等待網頁結果的呼叫會直接報錯</string>
+    <string name="block_source_browser_error">已阻止書源開啟內建瀏覽器</string>
     <string name="source_tab_list">列表</string>
     <string name="source_tab_web_view">網頁</string>
     <string name="layout_type">布局</string>
@@ -2885,6 +2889,7 @@
     <string name="cloud_tts_loading_voices">正在取得音色…</string>
     <string name="cloud_tts_no_matching_voice">沒有符合的音色</string>
     <string name="cloud_tts_selected">已選擇</string>
+    <string name="cloud_tts_default_voice">使用該引擎的預設音色</string>
     <string name="cloud_tts_current_voice">目前音色</string>
     <string name="cloud_tts_refresh_catalog">重新整理線上音色目錄</string>
     <string name="cloud_tts_hide_manual_voice">隱藏手動輸入</string>
@@ -3120,4 +3125,9 @@
     <string name="explore_select_source">選擇發現書源</string>
     <string name="cast_bubble_menu">設定氣泡</string>
     <string name="cast_bubble_clear">不設氣泡</string>
+    <string name="background_battery_optimization_title">背景保活與電池最佳化</string>
+    <string name="background_battery_optimization_summary">設定無限制背景執行與自啟動，避免切背景或鎖定螢幕時朗讀/服務被系統終止</string>
+    <string name="battery_optimization_dialog_title">背景保活與省電策略設定指引</string>
+    <string name="battery_optimization_status_ignored">已開啟無限制（點擊可檢查廠商背景策略）</string>
+    <string name="battery_optimization_status_not_ignored">未開啟無限制，背景可能被系統終止</string>
 </resources>

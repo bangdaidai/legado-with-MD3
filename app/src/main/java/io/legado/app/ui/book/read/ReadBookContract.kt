@@ -33,6 +33,7 @@ import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.uuid.Uuid
 
 @Stable
@@ -69,6 +70,7 @@ sealed interface ReadBookMenuRoute {
     data object TypographyConfig : ReadBookMenuRoute
     data object InformationConfig : ReadBookMenuRoute
     data object PaddingConfig : ReadBookMenuRoute
+    data object ThemeList : ReadBookMenuRoute
 }
 
 @Stable
@@ -102,6 +104,8 @@ data class ReadBookStyleConfig(
     val pageAnimSpeed: Int = 2,
     // Layout
     val shareLayout: Boolean = false,
+    /** 阅读主题弹窗（背景网格）的列数，来自阅读设置 DataStore（2..6）。 */
+    val gridColumns: Int = 4,
     // 排版自带的阅读菜单配色，作为 DataStore 里 readMenu*Color 为 0（未自定义）时的回退
     val menuBgColorDay: Int = 0,
     val menuBgColorNight: Int = 0,
@@ -271,8 +275,12 @@ data class ReadBookUiState(
     val translationMode: Boolean = false,
     val translationStatus: TranslationChapterStatus = TranslationChapterStatus.Idle,
     val menuState: ReadBookMenuState = ReadBookMenuState(),
-    // Active sheet / dialog
-    val activeSheet: ReadBookSheet? = null,
+    // Ordered modal layers; opening a child retains its parent.
+    val sheetStack: ImmutableList<ReadBookSheet> = persistentListOf(),
+    /** Saved source waiting for the retained change-source sheet to repeat its search. */
+    val pendingEditedSource: String? = null,
+    // 主题列表长按进"背景文字配置"时暂时收起菜单面板，浮层全关后凭此恢复（规则见 ReadBookViewModel）
+    val menuHiddenBySheet: Boolean = false,
     val activeDialog: ReadBookDialog? = null,
     /** 书签/笔记跳转前校验不通过时的待确认目标（弹确认框）。 */
     val pendingBookmarkTarget: PendingBookmarkTarget? = null,
@@ -354,6 +362,65 @@ val showShareCard: Boolean = false,
 val shareCardData: io.legado.app.data.entities.ShareCardData? = null,
 val shareCardScene: ShareCardScene? = null,
 ) {
+    val activeSheet: ReadBookSheet?
+        get() = sheetStack.lastOrNull()
+
+    /** 分段切换替换栈顶；普通跳转保留返回路径，重复打开栈顶不会叠加。 */
+    internal fun withMenuRoute(
+        route: ReadBookMenuRoute,
+        replaceTop: Boolean = false,
+        resetStack: Boolean = false,
+    ): ReadBookUiState {
+        val stack = menuState.routeStack
+        val next = when {
+            resetStack -> persistentListOf(ReadBookMenuRoute.Main, route)
+            replaceTop && stack.size <= 1 -> persistentListOf(ReadBookMenuRoute.Main, route)
+            replaceTop -> (stack.dropLast(1) + route).toImmutableList()
+            stack.lastOrNull() == route -> stack
+            else -> (stack + route).toImmutableList()
+        }
+        return copy(
+            menuState = menuState.copy(visible = true, routeStack = next),
+            menuHiddenBySheet = false,
+        )
+    }
+
+    internal fun withMenuBack(): ReadBookUiState = copy(
+        menuState = if (menuState.canNavigateBack) {
+            menuState.copy(routeStack = menuState.routeStack.dropLast(1).toImmutableList())
+        } else {
+            ReadBookMenuState()
+        },
+    )
+
+    /** 关闭编辑浮层后，恢复长按主题时收起的菜单。 */
+    internal fun withDismissedSheet(): ReadBookUiState = withSheet(null).copy(
+        menuState = if (menuHiddenBySheet) menuState.copy(visible = true) else menuState,
+        menuHiddenBySheet = false,
+    )
+
+    /** Reuse an existing layer of the same kind rather than opening duplicate modal windows. */
+    fun withSheet(sheet: ReadBookSheet?): ReadBookUiState {
+        val next = if (sheet == null) {
+            sheetStack.dropLast(1)
+        } else {
+            val existing = sheetStack.indexOfLast { it::class == sheet::class }
+            val parents = if (existing >= 0) sheetStack.take(existing) else sheetStack
+            parents + sheet
+        }
+        return copy(
+            sheetStack = next.toImmutableList(),
+            pendingEditedSource = pendingEditedSource.takeIf {
+                next.any { it is ReadBookSheet.ChangeBookSource }
+            },
+        )
+    }
+
+    fun clearSheets(): ReadBookUiState =
+        copy(sheetStack = persistentListOf(), pendingEditedSource = null)
+
+    inline fun <reified T : ReadBookSheet> findSheet(): T? = sheetStack.lastOrNull { it is T } as? T
+
     val menuVisible: Boolean
         get() = menuState.visible
 }
@@ -539,6 +606,11 @@ sealed interface ReadBookIntent {
     data object ShowMenu : ReadBookIntent
     data object HideMenu : ReadBookIntent
     data class OpenReadMenuRoute(val route: ReadBookMenuRoute) : ReadBookIntent
+    /**
+     * Tab 切换用：**替换栈顶**而不是 push —— 主题弹窗顶部"主题/排版"分段切换走这条，
+     * 这样在排版面板按返回是回主菜单，而不是回到上一个 Tab。
+     */
+    data class SwitchReadMenuRoute(val route: ReadBookMenuRoute) : ReadBookIntent
     data object ReadMenuBack : ReadBookIntent
 
     // Search
@@ -591,7 +663,8 @@ sealed interface ReadBookIntent {
 
     // Activity result intents
     data class OpenChapterResult(val index: Int, val chapterPos: Int) : ReadBookIntent
-    data object SourceEditResult : ReadBookIntent
+    data class SourceEditResult(val sourceUrl: String) : ReadBookIntent
+    data class SourceEditHandled(val sourceUrl: String) : ReadBookIntent
     data object ReplaceRuleResult : ReadBookIntent
     data class BookInfoResult(val bookDeleted: Boolean) : ReadBookIntent
     data class FontFolderSelected(val uri: Uri) : ReadBookIntent
@@ -625,6 +698,7 @@ sealed interface ReadBookIntent {
     // Sheet / Dialog
     data class ShowSheet(val sheet: ReadBookSheet) : ReadBookIntent
     data object DismissSheet : ReadBookIntent
+    data class DismissSheetIfTop(val sheet: ReadBookSheet) : ReadBookIntent
     data class SetActiveSheet(val sheet: ReadBookSheet?) : ReadBookIntent
     data class ShowDialog(val dialog: ReadBookDialog) : ReadBookIntent
     data class ResolveReadRecordAlias(val merge: Boolean, val rememberChoice: Boolean = false) : ReadBookIntent
@@ -705,16 +779,27 @@ sealed interface ReadBookIntent {
     data object OpenReadStyleImagePicker : ReadBookIntent
     data class OpenReadStyleImagePickerForMode(val isNight: Boolean) : ReadBookIntent
     data object OpenReadStyleImport : ReadBookIntent
+    data object OpenReadStyleImportAsNew : ReadBookIntent
     data object OpenReadStyleExport : ReadBookIntent
     data class ReadStyleImageSelected(val uri: Uri) : ReadBookIntent
     data class ReadStyleImageSelectedForMode(val uri: Uri, val isNight: Boolean) : ReadBookIntent
     data class BookmarkBadgeImageSelected(val uri: Uri) : ReadBookIntent
     data object ClearBookmarkBadgeImage : ReadBookIntent
     data class ReadStyleConfigImportSelected(val uri: Uri) : ReadBookIntent
+    data class ReadStyleConfigImportAsNewSelected(val uri: Uri) : ReadBookIntent
     data class ReadStyleConfigExportSelected(val uri: Uri) : ReadBookIntent
+    data class ReadStyleConfigsExportSelected(val uri: Uri, val indices: List<Int>) : ReadBookIntent
+    data class ExportReadStyleConfigs(val indices: List<Int>) : ReadBookIntent
+    /** 打包选中的主题并直接调系统分享面板（与"导出"同一份打包逻辑，只是投放方式不同）。 */
+    data class ShareReadStyleConfigs(val indices: List<Int>) : ReadBookIntent
     data object SaveReadStyleConfig : ReadBookIntent
     data object AddReadStyleConfig : ReadBookIntent
+    /** 阅读主题弹窗（背景网格）的列数，2..6；持久化到阅读设置 DataStore。 */
+    data class SetThemeGridColumns(val columns: Int) : ReadBookIntent
     data object DeleteCurrentReadStyleConfig : ReadBookIntent
+    data class MoveReadStyleConfig(val from: Int, val to: Int) : ReadBookIntent
+    data class DeleteReadStyleConfigs(val indices: List<Int>) : ReadBookIntent
+    data class MoveReadStylesToEdge(val indices: List<Int>, val toTop: Boolean) : ReadBookIntent
     data class ApplyPresetTheme(val presetIndex: Int) : ReadBookIntent
 
     // Bookshelf
@@ -1168,7 +1253,9 @@ sealed interface ReadBookEffect {
     data object OpenReadStyleImagePicker : ReadBookEffect
     data class OpenReadStyleImagePickerForMode(val isNight: Boolean) : ReadBookEffect
     data object OpenReadStyleImport : ReadBookEffect
+    data object OpenReadStyleImportAsNew : ReadBookEffect
     data class OpenReadStyleExport(val fileName: String) : ReadBookEffect
+    data class OpenReadStyleConfigsExport(val fileName: String, val indices: List<Int>) : ReadBookEffect
     data class OpenMenuCustomIconPicker(val id: String) : ReadBookEffect
     data class OpenTitleBarCustomIconPicker(val id: String) : ReadBookEffect
 
@@ -1264,6 +1351,7 @@ sealed interface ReadBookSheet {
     data object HighlightRuleConfig : ReadBookSheet
     data object Marking : ReadBookSheet
     data object MoreConfig : ReadBookSheet
+    data object TextSelectMenuConfig : ReadBookSheet
     data object BgTextConfig : ReadBookSheet
     data object ClickActionConfig : ReadBookSheet
     data object PageKeyConfig : ReadBookSheet

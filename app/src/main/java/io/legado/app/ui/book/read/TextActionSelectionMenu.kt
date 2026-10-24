@@ -653,6 +653,10 @@ private class MoreMenuPositionProvider(
  * 浮层之外。上方放不下时才贴选区下沿展开，上下都放不下时仍贴下沿，由末尾的 clamp 兜底。
  * 阅读区最顶部 10% 以内的选区强制向下展开，避免浮层顶出阅读区。
  *
+ * [preferBelow] 是调用方的钉扎开关（`true` 钉下方、`false` 钉上方、`null` 走上面的默认）：
+ * 笔记这类会随内容/键盘变高的浮层用它把自己固定在一侧，不因空间变化翻到另一边。
+ * [availableBounds] 给出宿主可见区域（扣系统栏与输入法），clamp 用它而不是整窗。
+ *
  * [TextActionSelectionMenu] 与笔记悬浮面板（MarkingSheet 的 MarkingFloatingPanel）共用该
  * 定位器且口径一致：两者在同一次选区里互相切换，落位不同会让浮层在切换瞬间跳一下；
  * 面板贴选区上沿向上展开时底边是钉住的，键盘弹起压缩下方空间也不会把它翻到另一边。
@@ -665,6 +669,8 @@ internal class TextMenuPositionProvider(
     private val endX: Int,
     private val endBottomY: Int,
     private val shadowPadding: Int,
+    private val preferBelow: Boolean? = null,
+    private val availableBounds: (() -> IntRect)? = null,
 ) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
@@ -680,6 +686,8 @@ internal class TextMenuPositionProvider(
         val textMargin = (4 * density).toInt()
         // ReaderCanvasSurface 的选择柄圆心挂在行底下 7dp，直径再占 14dp。
         val cursorHandleClearance = (14 * density).toInt()
+        val bounds = availableBounds?.invoke() ?: IntRect(IntOffset.Zero, windowSize)
+        val right = minOf(bounds.right, windowSize.width)
 
         val cardHeight = popupContentSize.height - shadowPadding * 2
         val isSpaceEnoughBelowSelection = windowSize.height - endBottomY >
@@ -689,14 +697,18 @@ internal class TextMenuPositionProvider(
         // 观感上是浮层从屏幕顶被挤下来，不如一开始就贴选区下沿。
         val preferBelowForTopSelection = startTopY < windowSize.height / 10
 
-        if (!preferBelowForTopSelection && isSpaceEnoughAtTop) {
+        if (preferBelow == true) {
+            // 钉下方：不参与"上优先"默认，放不下由末尾 clamp 兜底
+            x = startX - shadowPadding
+            y = endBottomY + cursorHandleClearance + textMargin - shadowPadding
+        } else if (!preferBelowForTopSelection && isSpaceEnoughAtTop) {
             x = startX - shadowPadding
             y = startTopY - popupContentSize.height + shadowPadding - textMargin
         } else if (isSpaceEnoughBelowSelection) {
             x = startX - shadowPadding
             // 顶部选区没有空间放菜单时，必须避开整个选区及末端把手，不能只从首行下方弹出。
             y = endBottomY + cursorHandleClearance + textMargin - shadowPadding
-        } else if (isSpaceEnoughAtTop) {
+        } else if (preferBelow == false || isSpaceEnoughAtTop) {
             x = startX - shadowPadding
             y = startTopY - popupContentSize.height + shadowPadding - textMargin
         } else {
@@ -704,19 +716,27 @@ internal class TextMenuPositionProvider(
             y = endBottomY + cursorHandleClearance + textMargin - shadowPadding
         }
 
-        val minX = marginHorizontal - shadowPadding
-        val minY = marginVertical - shadowPadding
+        val minX = bounds.left + marginHorizontal - shadowPadding
         val finalX = x.coerceIn(
             minX,
-            (windowSize.width - popupContentSize.width - marginHorizontal + shadowPadding)
+            (right - popupContentSize.width - marginHorizontal + shadowPadding)
                 .coerceAtLeast(minX),
         )
-        val finalY = y.coerceIn(
-            minY,
-            (windowSize.height - popupContentSize.height - marginVertical + shadowPadding)
-                .coerceAtLeast(minY),
-        )
+        val finalY = constrainPositionY(y, windowSize, popupContentSize)
 
         return IntOffset(finalX, finalY)
+    }
+
+    /** 最终目标限制在可见区域内，动画期间的位置由调用方控制。 */
+    private fun constrainPositionY(y: Int, windowSize: IntSize, popupContentSize: IntSize): Int {
+        val bounds = availableBounds?.invoke() ?: IntRect(IntOffset.Zero, windowSize)
+        val margin = (12 * density).toInt()
+        val minY = bounds.top + margin - shadowPadding
+        val maxY = (minOf(
+            bounds.bottom,
+            windowSize.height
+        ) - popupContentSize.height - margin + shadowPadding)
+            .coerceAtLeast(minY)
+        return y.coerceIn(minY, maxY)
     }
 }

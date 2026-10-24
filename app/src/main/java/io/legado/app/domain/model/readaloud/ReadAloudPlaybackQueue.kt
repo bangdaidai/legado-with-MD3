@@ -89,6 +89,7 @@ data class ReadAloudPlaybackInfo(
 /** Position-based playback queue independent from reader pagination. */
 class ReadAloudPlaybackQueue private constructor(
     val cues: List<ReadAloudPlaybackCue>,
+    private val narration: SpeechVoiceSelection = SpeechVoiceSelection(),
 ) {
 
     val isEmpty: Boolean get() = cues.isEmpty()
@@ -137,19 +138,22 @@ class ReadAloudPlaybackQueue private constructor(
             chapterStart = 0,
             chapterEnd = 0,
             paragraphIndex = -1,
-            voice = null,
-            fallbackVoices = emptyList(),
+            voice = narration.voice,
+            fallbackVoices = narration.fallbackVoices,
             roleType = SpeechRoleType.Narrator,
             characterId = null,
             isChapterTitle = true,
         )
-        return ReadAloudPlaybackQueue(listOf(titleCue) + cues)
+        return ReadAloudPlaybackQueue(listOf(titleCue) + cues, narration)
     }
 
     companion object {
         val Empty = ReadAloudPlaybackQueue(emptyList())
 
-        fun from(plan: List<SpeechPlanItem>): ReadAloudPlaybackQueue {
+        fun from(
+            plan: List<SpeechPlanItem>,
+            narration: SpeechVoiceSelection = SpeechVoiceSelection(),
+        ): ReadAloudPlaybackQueue {
             if (plan.isEmpty()) return Empty
             val cues = plan.map { item ->
                 val segment = item.segment
@@ -172,7 +176,7 @@ class ReadAloudPlaybackQueue private constructor(
             require(cues.zipWithNext().none { (left, right) -> left.chapterEnd > right.chapterStart }) {
                 "Playback cues must not overlap"
             }
-            return ReadAloudPlaybackQueue(mergeSilentCues(cues))
+            return ReadAloudPlaybackQueue(mergeSilentCues(cues), narration)
         }
 
         /**

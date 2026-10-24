@@ -73,10 +73,13 @@ fun UpdateSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = title,
+        animateContentSize = false,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f, fill = false)
+                .heightIn(max = 560.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             if (mode == UpdateMode.UPDATE) {
@@ -116,13 +119,15 @@ fun UpdateSheet(
                 .replaceFirst(Regex("^#\\s*更新日志\\s*\\n?"), "")
                 .trim()
             if (updateLog.isNotBlank()) {
-                MarkdownBlock(
-                    content = updateLog,
-                    style = LegadoTheme.typography.labelLarge,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                )
+                SelectionContainer {
+                    MarkdownBlock(
+                        content = updateLog,
+                        style = LegadoTheme.typography.labelLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                    )
+                }
             }
 
             if (mode == UpdateMode.UPDATE) {
@@ -133,8 +138,16 @@ fun UpdateSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
+        if (mode == UpdateMode.UPDATE) {
             Spacer(modifier = Modifier.height(16.dp))
+            PrimaryButton(
+                onClick = onStartDownload,
+                text = stringResource(R.string.about_update_action),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

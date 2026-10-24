@@ -4,6 +4,7 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.readaloud.HttpTtsVoiceCatalog
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import java.io.File
 import java.io.FilterInputStream
@@ -85,7 +86,14 @@ class HttpTtsAudioSynthesizer(private val repository: HttpTtsRepository) {
                 speakText = text,
                 speakSpeed = (source.speed ?: 5) + 5,
                 currentToneID = tone,
-                currentSpeakerName = if (tone.isBlank()) "" else voice?.displayName.orEmpty(),
+                // 必须是裸音色名：displayName 对带多个音色的源是「引擎名 · 音色名」，
+                // 源脚本拿它匹配音色会一直失败；音色目录登记过的用目录名，没登记的退回裸名。
+                currentSpeakerName = if (tone.isBlank() || voice == null) {
+                    ""
+                } else {
+                    HttpTtsVoiceCatalog.fromVoice(voice)?.name?.takeIf { it.isNotBlank() }
+                        ?: voice.voiceLabel
+                },
                 currentEmotionName = mapped.emotionName,
                 currentEmotionTag = mapped.emotionTag,
                 source = source,

@@ -16,8 +16,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,8 +33,8 @@ import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.SearchBar
-import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +48,8 @@ fun ExploreKindSelectSheet(
     initialSelectedTitles: List<String> = emptyList(),
     initialSelectedUrls: List<String?> = emptyList(),
     repository: ExploreRepository = koinInject(),
-    useCase: ExploreKindUiUseCase = koinInject()
+    useCase: ExploreKindUiUseCase = koinInject(),
+    onKindsChanged: () -> Unit = {},
 ) {
     var kinds by remember { mutableStateOf<List<ExploreKind>>(emptyList()) }
     // 用列表下标作为唯一标识，同名（甚至同名同 url）的分类也能独立选中
@@ -54,11 +58,25 @@ fun ExploreKindSelectSheet(
     val context = LocalContext.current
     val activity = context as? AppCompatActivity
     val isMiuix = ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)
+    var refreshRequest by remember(sourceUrl) { mutableIntStateOf(0) }
+    var handledRefreshRequest by remember(sourceUrl) { mutableIntStateOf(0) }
+    var kindsRevision by remember(sourceUrl) { mutableIntStateOf(0) }
+    val currentOnKindsChanged by rememberUpdatedState(onKindsChanged)
 
-    LaunchedEffect(show, sourceUrl) {
+    LaunchedEffect(show, sourceUrl, refreshRequest) {
         if (show && !sourceUrl.isNullOrBlank()) {
-            val loadedKinds = repository.getSourceExploreKinds(sourceUrl)
+            // 缓存可能过期：普通打开读缓存，用户点过刷新就强制重拉并通知宿主
+            val refresh = refreshRequest != handledRefreshRequest
+            handledRefreshRequest = refreshRequest
+            val loadedKinds = if (refresh) {
+                runCatching { repository.refreshSourceExploreKinds(sourceUrl) }
+                    .getOrElse { repository.getSourceExploreKinds(sourceUrl) }
+            } else {
+                repository.getSourceExploreKinds(sourceUrl)
+            }
             kinds = loadedKinds
+            kindsRevision++
+            if (refresh) currentOnKindsChanged()
             // kinds 加载完后再做初始选中匹配
             val usedIndices = mutableSetOf<Int>()
             val initIndices = mutableSetOf<Int>()
@@ -172,21 +190,22 @@ fun ExploreKindSelectSheet(
                                 },
                                 backgroundColor = LegadoTheme.colorScheme.surface.copy(alpha = 0.5f),
                                 isMiuix = isMiuix,
-                                useCase = useCase
+                                useCase = useCase,
+                                onRefreshKinds = { refreshRequest++ },
                             )
-                        }
+                            }
 
-                        val totalSpan = rowItems.sumOf { it.second }
-                        if (totalSpan < 6) {
-                            Spacer(
-                                modifier = Modifier.weight((6 - totalSpan).toFloat())
-                            )
+                            val totalSpan = rowItems.sumOf { it.second }
+                            if (totalSpan < 6) {
+                                Spacer(
+                                    modifier = Modifier.weight((6 - totalSpan).toFloat())
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-    }
 }
 
 /** 分类唯一标识：同名分类靠 url 区分 */

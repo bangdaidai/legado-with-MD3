@@ -8,12 +8,43 @@ import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechRoleType
+import io.legado.app.domain.model.readaloud.SpeechVoiceSelection
 import io.legado.app.domain.model.readaloud.dialogueFallbackGender
 
 class BuildSpeechPlanUseCase(
     private val voiceGateway: ReadAloudVoiceGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
 ) {
+
+    /** 标题不经过正文的正则角色覆盖，也不要求正文中必须存在旁白片段。 */
+    suspend fun narrationVoice(
+        bookUrl: String,
+        preferredDefaultVoiceId: String? = null,
+        useMultiSpeaker: Boolean = true,
+    ): SpeechVoiceSelection {
+        val voices = voiceGateway.getEnabledVoices().associateBy(ReadAloudVoice::id)
+        val bindings = voiceGateway.getBindings(bookUrl).associateBy { it.subjectType to it.subjectId }
+        return narrationVoice(
+            bindings.voice(BookVoiceBinding.SUBJECT_NARRATOR, BookVoiceBinding.SUBJECT_NARRATOR, voices),
+            preferredDefaultVoiceId?.let(voices::get),
+            useMultiSpeaker,
+        )
+    }
+
+    private fun narrationVoice(
+        narrator: ReadAloudVoice?,
+        defaultVoice: ReadAloudVoice?,
+        useMultiSpeaker: Boolean,
+    ): SpeechVoiceSelection {
+        val primary = if (useMultiSpeaker) narrator ?: defaultVoice else defaultVoice
+        val fallback = if (useMultiSpeaker) {
+            listOfNotNull(narrator, defaultVoice).distinctBy(ReadAloudVoice::id)
+                .filterNot { it.id == primary?.id }
+        } else {
+            emptyList()
+        }
+        return SpeechVoiceSelection(primary, fallback)
+    }
 
     suspend operator fun invoke(
         bookUrl: String,
@@ -43,7 +74,7 @@ class BuildSpeechPlanUseCase(
             .takeIf { it.isNotBlank() }
             ?.let(voicesById::get)
         val defaultVoice = preferredDefaultVoiceId?.let(voicesById::get)
-            ?: narrator
+        val narration = narrationVoice(narrator, defaultVoice, useMultiSpeaker)
 
         return segments.map { segment ->
             val performance = segment.characterId?.let(characterPerformances::get)
@@ -56,7 +87,7 @@ class BuildSpeechPlanUseCase(
             val segmentGender = performance?.resolvedGender()
                 ?: dialogueFallbackGender(segment.characterName)
             val primary = if (!useMultiSpeaker) {
-                // Multi-speaker disabled — every segment uses the default voice
+                // 多角色朗读关闭：整章不接管音色，defaultVoice 为空时由 SpeechVoiceRouter 落到引擎默认
                 defaultVoice
             } else {
                 val characterVoice = segment.characterId?.let { characterId ->
@@ -89,7 +120,9 @@ class BuildSpeechPlanUseCase(
                     SpeechRoleType.Narrator -> narrator ?: globalNarrator ?: defaultVoice
                 }
             }
-            val fallbackVoices = if (!useMultiSpeaker) {
+            val fallbackVoices = if (segment.roleType == SpeechRoleType.Narrator) {
+                narration.fallbackVoices
+            } else if (!useMultiSpeaker) {
                 emptyList()
             } else {
                 buildList {

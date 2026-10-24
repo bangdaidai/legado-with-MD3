@@ -390,6 +390,7 @@ internal fun Preferences.toAppShellSettings(): AppShellSettings = AppShellSettin
     showStatusBar = compatDsBoolean(PreferKey.showStatusBar) ?: true,
     swipeAnimation = compatDsBoolean(PreferKey.swipeAnimation) ?: true,
     predictiveBackEnabled = compatDsBoolean(PreferKey.isPredictiveBackEnabled) ?: true,
+    readerSharedElementEnabled = compatDsBoolean(PreferKey.readerSharedElementEnabled) ?: true,
     showBottomView = compatDsBoolean(PreferKey.showBottomView) ?: true,
     useFloatingBottomBar = compatDsBoolean(PreferKey.useFloatingBottomBar) ?: false,
     useFloatingBottomBarLiquidGlass =
@@ -425,6 +426,7 @@ internal fun AppShellSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.showStatusBar to showStatusBar,
     PreferKey.swipeAnimation to swipeAnimation,
     PreferKey.isPredictiveBackEnabled to predictiveBackEnabled,
+    PreferKey.readerSharedElementEnabled to readerSharedElementEnabled,
     PreferKey.showBottomView to showBottomView,
     PreferKey.useFloatingBottomBar to useFloatingBottomBar,
     PreferKey.useFloatingBottomBarLiquidGlass to useFloatingBottomBarLiquidGlass,
@@ -645,6 +647,7 @@ internal fun Preferences.toOtherSettings(): OtherSettings {
         importKeepGroup = compatDsBoolean(PreferKey.importKeepGroup) ?: false,
         importKeepEnable = compatDsBoolean(PreferKey.importKeepEnable) ?: false,
         fontSort = compatDsInt(PreferKey.fontSort) ?: 0,
+        blockSourceBrowser = compatDsBoolean(PreferKey.blockSourceBrowser) ?: false,
     )
 }
 
@@ -674,6 +677,7 @@ internal fun OtherSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.importKeepGroup to importKeepGroup,
     PreferKey.importKeepEnable to importKeepEnable,
     PreferKey.fontSort to fontSort,
+    PreferKey.blockSourceBrowser to blockSourceBrowser,
 )
 
 class OtherSettingsRepository : OtherSettingsGateway {
