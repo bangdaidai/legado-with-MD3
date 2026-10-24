@@ -22,7 +22,32 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83, migration_98_99, migration_99_100, migration_100_101,
             migration_102_103, migration_123_124, migration_124_125, migration_127_128,
+            migration_133_134,
         )
+    }
+
+    /**
+     * 133 → 134：新增今日书讯表 bookUpdates。
+     * 按天（本地时区 epochDay）记录书架在线书确认到的目录增长，
+     * 与 books 按 bookUrl+origin 关联；是日抛型展示缓存，不进备份。
+     */
+    private val migration_133_134 = object : Migration(133, 134) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `bookUpdates` (
+                    `epochDay` INTEGER NOT NULL,
+                    `bookUrl` TEXT NOT NULL,
+                    `origin` TEXT NOT NULL,
+                    `latestChapterTitle` TEXT,
+                    `foundAt` INTEGER NOT NULL,
+                    `totalChapterNum` INTEGER NOT NULL,
+                    `baselineChapterNum` INTEGER,
+                    PRIMARY KEY(`epochDay`, `bookUrl`, `origin`))"""
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_bookUpdates_bookUrl_origin_epochDay` ON `bookUpdates` (`bookUrl`, `origin`, `epochDay`)"
+            )
+        }
     }
 
     /**

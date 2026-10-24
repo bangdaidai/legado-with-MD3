@@ -20,6 +20,8 @@ data class HomeUiState(
     val dailyGoalMinutes: Int = DEFAULT_DAILY_READING_GOAL_MINUTES,
     val recentBook: HomeRecentBookUi? = null,
     val recentBooks: ImmutableList<HomeRecentBookUi> = persistentListOf(),
+    val bookNews: ImmutableList<HomeBookNewsUi> = persistentListOf(),
+    val isBookNewsLoaded: Boolean = false,
     val selectedSourceSetUrl: String? = null,
     val layoutMode: HomepageLayoutMode = HomepageLayoutMode.Default,
     val visibleSections: ImmutableSet<HomeDashboardSection> =
@@ -44,6 +46,17 @@ data class HomeRecentBookUi(
 )
 
 @Stable
+data class HomeBookNewsUi(
+    val bookUrl: String,
+    val name: String,
+    val author: String,
+    val origin: String,
+    val coverPath: String?,
+    /** 基线未知时为 null，展示"已更新" */
+    val updatedChapterCount: Int?,
+)
+
+@Stable
 data class HomeBackupUi(
     val name: String,
     val lastModify: Long,
@@ -52,6 +65,8 @@ data class HomeBackupUi(
 sealed interface HomeIntent {
     data object RecentBookClick : HomeIntent
     data class RecentHistoryBookClick(val bookUrl: String) : HomeIntent
+    data class BookNewsBookClick(val bookUrl: String) : HomeIntent
+    data object BookNewsRefreshClick : HomeIntent
     data class SelectSourceSet(val sourceUrl: String) : HomeIntent
     data class SetLayoutMode(val mode: HomepageLayoutMode) : HomeIntent
     data object DashboardSettingsClick : HomeIntent

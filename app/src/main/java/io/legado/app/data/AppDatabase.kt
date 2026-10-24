@@ -20,6 +20,7 @@ import io.legado.app.data.dao.BgmSceneDao
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookContentProcessDao
 import io.legado.app.data.dao.BookDao
+import io.legado.app.data.dao.BookUpdateDao
 import io.legado.app.data.dao.BookGroupDao
 import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookMarkingDao
@@ -89,6 +90,7 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.BookCharacterRelation
 import io.legado.app.data.entities.BookContentProcess
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookUpdate
 import io.legado.app.data.entities.BookKnowledgeEntry
 import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.ReadAloudAudioDownload
@@ -156,7 +158,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 133,
+    version = 134,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -180,7 +182,7 @@ val appDb by lazy {
         BgmTrackEntity::class, BgmPoolEntity::class, BgmPoolMember::class, BgmPoolGroupEntity::class,
         BgmSceneMark::class, VoiceEffectPreset::class, BookMarking::class,
         ReadAloudAudioDownload::class, RegexCastRule::class, RegexCastGroup::class,
-        AuthorProfile::class, VoiceLabel::class],
+        AuthorProfile::class, VoiceLabel::class, BookUpdate::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -311,6 +313,7 @@ val appDb by lazy {
 abstract class AppDatabase : RoomDatabase() {
 
     abstract val bookDao: BookDao
+    abstract val bookUpdateDao: BookUpdateDao
     abstract val bookGroupDao: BookGroupDao
     abstract val bookSourceDao: BookSourceDao
     abstract val bookChapterDao: BookChapterDao

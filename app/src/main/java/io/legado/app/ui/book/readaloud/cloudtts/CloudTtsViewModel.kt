@@ -472,7 +472,7 @@ class CloudTtsViewModel(
     }
 
     /** 全部声音池 × 该音色的成员关系 → 编辑对话框里的勾选列表。 */
-    private suspend fun memberPoolsFor(voiceId: String): List<VoicePoolCheckUi> {
+    private suspend fun memberPoolsFor(voiceId: String): kotlinx.collections.immutable.ImmutableList<VoicePoolCheckUi> {
         val membership = VoicePoolStore.voicePoolMap()[voiceId].orEmpty()
         return VoicePoolStore.listPools().map { pool ->
             VoicePoolCheckUi(poolId = pool.id, name = pool.name, checked = pool.id in membership)

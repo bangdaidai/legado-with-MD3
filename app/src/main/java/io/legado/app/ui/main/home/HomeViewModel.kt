@@ -3,8 +3,10 @@ package io.legado.app.ui.main.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
+import io.legado.app.constant.EventBus
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.domain.gateway.BackupSettingsGateway
+import io.legado.app.domain.model.HomeBookNewsBook
 import io.legado.app.domain.model.HomeDashboardSection
 import io.legado.app.domain.model.HomeReadingBook
 import io.legado.app.domain.model.HomepageLayoutMode
@@ -12,6 +14,7 @@ import io.legado.app.domain.model.WebDavBackup
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.HomeDashboardUseCase
 import io.legado.app.domain.usecase.WebDavBackupUseCase
+import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.utils.isContentScheme
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,13 +50,18 @@ class HomeViewModel(
     private var backupRefreshJob: Job? = null
     private val backupActionMutex = Mutex()
 
+    private val bookNewsData = homeDashboardUseCase.observeBookNews()
+        .map<List<HomeBookNewsBook>, HomeBookNewsData> { HomeBookNewsData(loaded = true, books = it) }
+        .onStart { emit(HomeBookNewsData()) }
+
     private val dashboardData = combine(
         homeDashboardUseCase.observe(),
         homeDashboardUseCase.observeSelectedSourceSetUrl(),
         homeDashboardUseCase.observeVisibleSections(),
         homeDashboardUseCase.observeLayoutMode(),
-    ) { dashboard, selectedSourceUrl, visibleSections, layoutMode ->
-        DashboardData(dashboard, selectedSourceUrl, visibleSections, layoutMode)
+        bookNewsData,
+    ) { dashboard, selectedSourceUrl, visibleSections, layoutMode, bookNews ->
+        DashboardData(dashboard, selectedSourceUrl, visibleSections, layoutMode, bookNews)
     }
 
     val uiState = combine(
@@ -61,7 +70,7 @@ class HomeViewModel(
         _activeDialog,
         _activeSheet,
     ) { dashboardData, backup, dialog, sheet ->
-        val (dashboard, selectedSourceUrl, visibleSections, layoutMode) = dashboardData
+        val (dashboard, selectedSourceUrl, visibleSections, layoutMode, bookNews) = dashboardData
         HomeUiState(
             totalReadBooks = dashboard.totalReadBooks,
             totalReadTimeMillis = dashboard.totalReadTimeMillis,
@@ -73,6 +82,8 @@ class HomeViewModel(
                 .take(6)
                 .map { it.toUi() }
                 .toImmutableList(),
+            bookNews = bookNews.books.map { it.toUi() }.toImmutableList(),
+            isBookNewsLoaded = bookNews.loaded,
             selectedSourceSetUrl = selectedSourceUrl,
             layoutMode = layoutMode,
             visibleSections = visibleSections.toImmutableSet(),
@@ -109,6 +120,8 @@ class HomeViewModel(
         when (intent) {
             HomeIntent.RecentBookClick -> openRecentBook()
             is HomeIntent.RecentHistoryBookClick -> openBook(intent.bookUrl)
+            is HomeIntent.BookNewsBookClick -> openBook(intent.bookUrl)
+            HomeIntent.BookNewsRefreshClick -> refreshBookNews()
             is HomeIntent.SelectSourceSet -> selectSourceSet(intent.sourceUrl)
             is HomeIntent.SetLayoutMode -> setLayoutMode(intent.mode)
             HomeIntent.DashboardSettingsClick -> {
@@ -172,6 +185,11 @@ class HomeViewModel(
                 _effects.emit(HomeEffect.OpenBook(it))
             }
         }
+    }
+
+    /** 借道书架既有的全量检查队列；队列常驻（主导航 Pager 预组全部分页） */
+    private fun refreshBookNews() {
+        FlowEventBus.post(EventBus.UP_ALL_BOOK_TOC, Unit)
     }
 
     private fun updateReadingGoal(minutes: Int) {
@@ -388,10 +406,25 @@ class HomeViewModel(
         chapterProgress = chapterProgress,
     )
 
+    private fun HomeBookNewsBook.toUi() = HomeBookNewsUi(
+        bookUrl = bookUrl,
+        name = name,
+        author = author,
+        origin = origin,
+        coverPath = coverPath,
+        updatedChapterCount = updatedChapterCount,
+    )
+
+    private data class HomeBookNewsData(
+        val loaded: Boolean = false,
+        val books: List<HomeBookNewsBook> = emptyList(),
+    )
+
     private data class DashboardData(
         val dashboard: io.legado.app.domain.model.HomeDashboard,
         val selectedSourceUrl: String?,
         val visibleSections: Set<HomeDashboardSection>,
         val layoutMode: HomepageLayoutMode,
+        val bookNews: HomeBookNewsData,
     )
 }

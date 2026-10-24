@@ -11,6 +11,7 @@ import io.legado.app.data.dao.AuthorProfileDao
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookContentProcessDao
 import io.legado.app.data.dao.BookDao
+import io.legado.app.data.dao.BookUpdateDao
 import io.legado.app.data.dao.BookGroupDao
 import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookMarkingDao
@@ -57,6 +58,7 @@ val appDatabaseModule = module {
 
     // 注册所有的 DAO 接口，通过 AppDatabase 实例获取
     factory<BookDao> { get<AppDatabase>().bookDao }
+    factory<BookUpdateDao> { get<AppDatabase>().bookUpdateDao }
     factory<AiProfileDao> { get<AppDatabase>().aiProfileDao }
     factory<AiArtifactDao> { get<AppDatabase>().aiArtifactDao }
     factory<AiChatDao> { get<AppDatabase>().aiChatDao }

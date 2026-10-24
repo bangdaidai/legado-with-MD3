@@ -35,6 +35,7 @@ import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceCallbackRepository
 import io.legado.app.data.repository.BookSourceCheckRepository
 import io.legado.app.data.repository.BookSourceRepository
+import io.legado.app.data.repository.BookUpdateRepository
 import io.legado.app.data.repository.BookmarkRepository
 import io.legado.app.data.repository.BookshelfAutoGroupPromptRepository
 import io.legado.app.data.repository.BookshelfAutoGroupRepository
@@ -511,7 +512,8 @@ val appModule = module {
     singleOf(::DeleteBooksUseCase)
     singleOf(::GetReadingProgressUseCase)
     singleOf(::GetReadingMemoryDetailUseCase)
-    single { HomeDashboardUseCase(get(), Clock.System) }
+    single { HomeDashboardUseCase(get(), get(), Clock.System) }
+    singleOf(::BookUpdateRepository)
     singleOf(::RemoveBookGroupAssignmentUseCase)
     singleOf(::UpdateBooksGroupUseCase)
     singleOf(::UploadReadingProgressUseCase)

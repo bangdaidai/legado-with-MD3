@@ -18,8 +18,19 @@ data class HomeReadingBook(
     val chapterProgress: Float?,
 )
 
+/** 今日书讯条目：今天确认到目录增长的书架书；章数基线未知时 updatedChapterCount 为 null */
+data class HomeBookNewsBook(
+    val bookUrl: String,
+    val name: String,
+    val author: String,
+    val origin: String,
+    val coverPath: String?,
+    val updatedChapterCount: Int?,
+)
+
 enum class HomeDashboardSection(val storageValue: String) {
     RecentBook("recent_book"),
+    BookNews("book_news"),
     TotalReadBooks("total_read_books"),
     TotalReadTime("total_read_time"),
     RecentBooks("recent_books"),

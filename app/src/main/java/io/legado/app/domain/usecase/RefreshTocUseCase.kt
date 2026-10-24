@@ -5,6 +5,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
+import io.legado.app.data.repository.BookUpdateRepository
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.applyTagGroupRulesForBook
@@ -18,7 +19,8 @@ import kotlinx.coroutines.ensureActive
 
 class RefreshTocUseCase(
     private val bookRepository: BookRepository,
-    private val bookSourceRepository: BookSourceRepository
+    private val bookSourceRepository: BookSourceRepository,
+    private val bookUpdateRepository: BookUpdateRepository,
 ) {
     suspend fun execute(
         bookUrl: String,
@@ -54,6 +56,8 @@ class RefreshTocUseCase(
         }
         bookRepository.deleteChaptersByBook(bookUrl)
         bookRepository.insertChapters(*toc.toTypedArray())
+        // 目录提交后按天记录确认到的增长；失败只写日志，不影响刷新结果
+        bookUpdateRepository.recordDiscovery(oldBook, book)
         ReadBook.onChapterListUpdated(book)
         onSuccess(source, book)
     }.onFailure {

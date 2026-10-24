@@ -1,7 +1,9 @@
 package io.legado.app.domain.usecase
 
 import io.legado.app.domain.gateway.HomeDashboardGateway
+import io.legado.app.data.repository.BookUpdateRepository
 import io.legado.app.domain.model.DEFAULT_DAILY_READING_GOAL_MINUTES
+import io.legado.app.domain.model.HomeBookNewsBook
 import io.legado.app.domain.model.HomeDashboard
 import io.legado.app.domain.model.HomeDashboardSection
 import io.legado.app.domain.model.HomepageLayoutMode
@@ -19,10 +21,12 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.toEpochDays
 import kotlin.time.Clock
 
 class HomeDashboardUseCase(
     private val gateway: HomeDashboardGateway,
+    private val bookUpdateRepository: BookUpdateRepository,
     private val clock: Clock,
 ) {
 
@@ -77,6 +81,28 @@ class HomeDashboardUseCase(
     suspend fun updateVisibleSections(sections: Set<HomeDashboardSection>) {
         gateway.updateVisibleSections(sections)
     }
+
+    /** 今日书讯：跨零点自动换日重查，books 表频繁变化靠 distinctUntilChanged 去抖 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeBookNews(): Flow<List<HomeBookNewsBook>> = currentEpochDay()
+        .flatMapLatest(bookUpdateRepository::observeBooksForDay)
+        .distinctUntilChanged()
+
+    private fun currentEpochDay(): Flow<Long> = flow {
+        while (true) {
+            val now = clock.now()
+            val zone = TimeZone.currentSystemDefault()
+            val today = now.toLocalDateTime(zone).date
+            emit(today.toEpochDays())
+            val nextDay = today
+                .plus(DatePeriod(days = 1))
+                .atStartOfDayIn(zone)
+            delay(
+                (nextDay - now).inWholeMilliseconds
+                    .coerceAtLeast(MIN_DATE_REFRESH_DELAY_MILLIS)
+            )
+        }
+    }.distinctUntilChanged()
 
     private fun currentDate(): Flow<String> = flow {
         while (true) {
