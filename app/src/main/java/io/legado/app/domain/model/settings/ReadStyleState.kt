@@ -32,11 +32,6 @@ data class ReadStyleItem(
     val textColorEInk: Int,
 )
 
-/**
- * 列表前这么多份是内置预设：不可删、不可拖、不可插到它们前面
- * （`applyPreset(index)` 按这些下标取数据，配置缺斤少两时也靠它们补齐）。
- *
- * 放在领域模型而不是 data 层的 store：UI（主题列表的管理模式）也要用它判断"预设钉死"，
- * 而架构守卫只允许网关实现提到那个 store。
- */
-const val READ_STYLE_PRESET_COUNT = 5
+// 内置预设改为按**稳定 id**识别（资产 readConfig.json 里的 preset-N），
+// 预设可删可勾选，不再有"前 N 份钉死"的下标边界；判定与守卫在排版配置的唯一所有者（data 层 store）里。
+// `applyPreset(index)` 读的本来就是内置默认值，与列表顺序无关。

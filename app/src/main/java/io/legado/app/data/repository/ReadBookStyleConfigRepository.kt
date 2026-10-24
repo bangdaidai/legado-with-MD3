@@ -10,7 +10,6 @@ import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.gateway.ReadStyleIntKey
 import io.legado.app.domain.gateway.ReadStyleMutation
 import io.legado.app.domain.gateway.ReadStyleStringKey
-import io.legado.app.domain.model.settings.READ_STYLE_PRESET_COUNT
 import io.legado.app.domain.model.settings.ReadStyleItem
 import io.legado.app.domain.model.settings.ReadStyleState
 import io.legado.app.help.DefaultData
@@ -156,8 +155,10 @@ class ReadBookStyleConfigRepository(
 
     override fun deleteStylesAt(indices: List<Int>): Boolean {
         val snapshot = configStore.configsSnapshot()
+        // 预设与自建都可删；"正在使用"的那份除外——它必须活着，也顺带保证列表至少剩 1 份
+        val readIndex = AppConfigStore.getInt(PreferKey.readStyleSelect) ?: 0
         val targets = indices
-            .filter { it >= READ_STYLE_PRESET_COUNT && it in snapshot.indices }
+            .filter { it in snapshot.indices && it != readIndex }
             .distinct()
             .sorted()
         if (targets.isEmpty()) return false

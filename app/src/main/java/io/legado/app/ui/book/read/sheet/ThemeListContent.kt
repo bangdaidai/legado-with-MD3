@@ -76,7 +76,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.legado.app.R
-import io.legado.app.domain.model.settings.READ_STYLE_PRESET_COUNT
+import io.legado.app.help.DefaultData
 import io.legado.app.domain.model.settings.ReadStyleItem
 import io.legado.app.help.config.ReadStyleResolver
 import io.legado.app.ui.book.read.ConfigUpdate
@@ -129,7 +129,8 @@ private val GridColumnOptions = listOf(2, 3, 4, 5, 6)
  * 管理态（三点菜单「管理主题」进入）：顶行整排隐去，只留「✕ 已选中 N」；网格与流式**都支持勾选**
  * （勾选态 = 网格同款的圆底勾）与底栏（全选 / 反选 / 删除 / 导出 / 置顶置底），
  * **只有拖动排序在流式下不可用**（FlowRow 不是 lazy 容器、库不支持）。
- * 预设那 [READ_STYLE_PRESET_COUNT] 份钉死：不可拖、不可勾、不可删。
+ * 预设按稳定 id 识别（资产 readConfig.json 的 preset-N）：可勾选、可删除，但不可拖、
+ * 始终排在自建样式之前；「正在使用」的那份在删除时会被跳过。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -167,7 +168,10 @@ fun ThemeListContent(
     val themes = styleConfig.styleItems
     val selectedIndices = themes.indices.filter { themes[it].id in selectedIds }
     val themeKeys = remember(themes) { buildThemeKeys(themes) }
-    val customIndices = themes.indices.filter { it >= READ_STYLE_PRESET_COUNT }
+    // 预设按稳定 id 识别（资产 readConfig.json 的 preset-N），预设可删，边界随删随变
+    val presetIds = remember { DefaultData.readConfigs.mapNotNull { it.id }.toSet() }
+    fun isPresetAt(index: Int): Boolean = themes.getOrNull(index)?.id in presetIds
+    val customIndices = themes.indices.filter { themes[it].id !in presetIds }
     // 管理态必须全显示（筛选后拖动会让下标映射错乱）；其余情况搜索框有词就过滤
     val displayedThemes = themes.withIndex().filter { (_, config) ->
         manageMode ||
@@ -409,7 +413,7 @@ fun ThemeListContent(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             displayedThemes.forEach { (index, config) ->
-                                val isPreset = index < READ_STYLE_PRESET_COUNT
+                                val isPreset = isPresetAt(index)
                                 ThemeFlowChip(
                                     config = config,
                                     isNightTheme = isNightTheme,
@@ -419,7 +423,7 @@ fun ThemeListContent(
                                     isSelected = styleConfig.styleSelect == index,
                                     onClick = {
                                         if (manageMode) {
-                                            if (!isPreset) toggleSelection(index)
+                                            toggleSelection(index)
                                         } else {
                                             onIntent(
                                                 ReadBookIntent.UpdateConfig(
@@ -450,10 +454,10 @@ fun ThemeListContent(
                 }
             } else {
                 val reorderState = rememberReorderableLazyGridState(gridState) { from, to ->
-                    // 只在自建样式区内重排；拖进预设区就拦在这里，条目自己弹回
+                    // 只挪自建样式；拖进预设区（或拖预设）就拦在这里，条目自己弹回
                     if (manageMode &&
-                        from.index >= READ_STYLE_PRESET_COUNT &&
-                        to.index >= READ_STYLE_PRESET_COUNT
+                        !isPresetAt(from.index) &&
+                        !isPresetAt(to.index)
                     ) {
                         onIntent(ReadBookIntent.MoveReadStyleConfig(from.index, to.index))
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
@@ -486,7 +490,7 @@ fun ThemeListContent(
                     ) { _, pair ->
                         val index = pair.index
                         val config = pair.value
-                        val isPreset = index < READ_STYLE_PRESET_COUNT
+                        val isPreset = isPresetAt(index)
                         val canManage = manageMode && !isPreset
                         val isChecked = selectedIndices.contains(index)
                         // "正在使用"（与勾选无关的独立状态）：网格靠底部主色横条，流式靠外框
@@ -504,7 +508,7 @@ fun ThemeListContent(
                                         itemCount = themes.size,
                                         enabled = canManage,
                                     ) { from, to ->
-                                        if (to >= READ_STYLE_PRESET_COUNT) {
+                                        if (!isPresetAt(to)) {
                                             onIntent(ReadBookIntent.MoveReadStyleConfig(from, to))
                                         }
                                     }
@@ -550,7 +554,7 @@ fun ThemeListContent(
                                     // 不管全局覆盖/管理态/是否正在使用：管理态靠右上角勾选徽章，日常靠底部主色横条
                                     onClick = {
                                         if (manageMode) {
-                                            if (!isPreset) toggleSelection(index)
+                                            toggleSelection(index)
                                         } else {
                                             onIntent(
                                                 ReadBookIntent.UpdateConfig(
