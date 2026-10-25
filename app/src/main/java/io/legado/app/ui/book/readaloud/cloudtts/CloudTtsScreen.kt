@@ -75,7 +75,6 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FabMenuItem
 import io.legado.app.ui.widget.components.SearchBar
-import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
@@ -1751,7 +1750,7 @@ private fun TtsVoicePresetEditorContent(
                     )
                 }
                 item {
-                    // 声音池：编辑对话框内直接勾选，保存时同步成员关系；进池的音色才会被自动配音选中
+                    // 声音池：编辑对话框内选择，保存时同步成员关系；进池的音色才会被自动配音选中
                     EngineSectionTitle(R.string.voice_pool_section)
                     if (editor.memberPools.isEmpty()) {
                         AppText(
@@ -1760,21 +1759,37 @@ private fun TtsVoicePresetEditorContent(
                             style = LegadoTheme.typography.labelSmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                    editor.memberPools.forEach { pool ->
-                        CheckboxItem(
-                            title = pool.name,
-                            checked = pool.checked,
-                            onCheckedChange = { checked ->
-                                update(
-                                    editor.copy(
-                                        memberPools = editor.memberPools.map {
-                                            if (it.poolId == pool.poolId) it.copy(checked = checked) else it
-                                        }.toPersistentList(),
-                                    )
+                    } else {
+                        // 下拉多选：按钮显示已加入的池；菜单项 ✓ 前缀切换、保持展开可连续选，
+                        // 与本弹窗其它选择类控件同一形态，不再铺一排勾选行
+                        var poolMenu by remember { mutableStateOf(false) }
+                        val selectedPoolNames = editor.memberPools
+                            .filter { it.checked }
+                            .joinToString("、") { it.name }
+                        MenuButton(
+                            stringResource(
+                                R.string.voice_pool_value,
+                                selectedPoolNames.ifBlank { stringResource(R.string.voice_pool_none) },
+                            )
+                        ) { poolMenu = true }
+                        RoundDropdownMenu(poolMenu, { poolMenu = false }) {
+                            editor.memberPools.forEach { pool ->
+                                RoundDropdownMenuItem(
+                                    text = (if (pool.checked) "✓ " else "") + pool.name,
+                                    onClick = {
+                                        update(
+                                            editor.copy(
+                                                memberPools = editor.memberPools.map {
+                                                    if (it.poolId == pool.poolId) {
+                                                        it.copy(checked = !it.checked)
+                                                    } else it
+                                                }.toPersistentList(),
+                                            )
+                                        )
+                                    },
                                 )
-                            },
-                        )
+                            }
+                        }
                     }
                     if (editor.editingVoiceId != null && !editor.readonlyPreset) {
                         MediumTonalButton(

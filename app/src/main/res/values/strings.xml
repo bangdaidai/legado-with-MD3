@@ -406,6 +406,8 @@
     <string name="cloud_tts_section_performance">Performance (role &amp; instructions)</string>
     <string name="cloud_tts_section_tuning">Voice tuning</string>
     <string name="voice_pool_section">Voice pools</string>
+    <string name="voice_pool_value">Voice pools: %1$s</string>
+    <string name="voice_pool_none">none</string>
     <string name="voice_pool_empty">No pools yet. Checked voices can be picked by auto casting.</string>
     <string name="voice_preset_delete">Delete this voice preset</string>
     <string name="voice_preset_readonly_hint">This voice is synced from its engine catalog. Only labels and pools are editable here.</string>
