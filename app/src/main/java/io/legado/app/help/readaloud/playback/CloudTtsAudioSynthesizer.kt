@@ -1,7 +1,5 @@
 package io.legado.app.help.readaloud.playback
 
-import io.legado.app.data.repository.ai.AiLogEntry
-import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.model.readaloud.CloudTtsSynthesisRequest
 import io.legado.app.domain.model.readaloud.CloudTtsEngine
@@ -17,7 +15,6 @@ import kotlinx.coroutines.withContext
 
 class CloudTtsAudioSynthesizer(
     private val engineGateway: CloudTtsEngineGateway,
-    private val aiLogRepository: AiLogRepository,
 ) {
     private val registry = CloudTtsProviderRegistry()
 
@@ -25,16 +22,12 @@ class CloudTtsAudioSynthesizer(
         withContext(Dispatchers.IO) {
             val engine = engineGateway.get(engineId) ?: error("云 TTS 引擎不存在")
             require(engine.enabled) { "云 TTS 引擎已停用" }
-            return@withContext logCloudTts(engine, "cloudTtsVoices", "拉取音色列表") {
-                registry.get(engine.provider).fetchVoices(engine)
-            }.getOrThrow()
+            registry.get(engine.provider).fetchVoices(engine)
         }
 
     suspend fun fetchVoices(engine: CloudTtsEngine): List<CloudTtsVoiceDescriptor> =
         withContext(Dispatchers.IO) {
-            return@withContext logCloudTts(engine, "cloudTtsVoices", "拉取音色列表") {
-                registry.get(engine.provider).fetchVoices(engine)
-            }.getOrThrow()
+            registry.get(engine.provider).fetchVoices(engine)
         }
 
     suspend fun synthesize(
@@ -42,9 +35,7 @@ class CloudTtsAudioSynthesizer(
         request: CloudTtsSynthesisRequest,
         output: File,
     ): Boolean = withContext(Dispatchers.IO) {
-        val audio = logCloudTts(
-            engine, "cloudTts", "语音合成 ${request.text.length} 字", recordOnSuccess = false,
-        ) {
+        val audio = runCatching {
             registry.get(engine.provider).synthesize(engine, request)
         }.getOrNull() ?: return@withContext false
         output.parentFile?.mkdirs()
@@ -86,9 +77,7 @@ class CloudTtsAudioSynthesizer(
             roleInstruction.takeIf(String::isNotBlank),
             emotionControl.instruction.takeIf(String::isNotBlank),
         ).joinToString(" ")
-        val audio = logCloudTts(
-            engine, "cloudTts", "语音合成 ${text.length} 字", recordOnSuccess = false,
-        ) {
+        val audio = runCatching {
             registry.get(engine.provider).synthesize(
                 engine = engine,
                 request = CloudTtsSynthesisRequest(
@@ -109,32 +98,5 @@ class CloudTtsAudioSynthesizer(
         output.parentFile?.mkdirs()
         output.writeBytes(audio.bytes)
         output.length() > 0
-    }
-
-    private suspend inline fun <T> logCloudTts(
-        engine: CloudTtsEngine,
-        kind: String,
-        summary: String,
-        /** 逐句合成的成功记录会把 AI 日志刷成云端合成流水账：成功不记，失败保留排障 */
-        recordOnSuccess: Boolean = true,
-        block: () -> T,
-    ): Result<T> {
-        val start = System.currentTimeMillis()
-        val result = runCatching(block)
-        if (recordOnSuccess || result.isFailure) {
-            aiLogRepository.record(
-                AiLogEntry(
-                    timeMillis = start,
-                    kind = kind,
-                    providerName = engine.provider.storageValue,
-                    modelId = engine.model.takeIf { it.isNotBlank() } ?: engine.name,
-                    summary = summary,
-                    success = result.isSuccess,
-                    durationMillis = System.currentTimeMillis() - start,
-                    error = result.exceptionOrNull()?.message,
-                )
-            )
-        }
-        return result
     }
 }

@@ -2,7 +2,6 @@ package io.legado.app.help.readaloud.playback
 
 import io.legado.app.constant.AppLog
 import io.legado.app.data.repository.HttpTtsRepository
-import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SystemTtsVoiceConfig
@@ -19,9 +18,8 @@ import java.io.File
 class VoicePreviewSynthesizer(
     private val httpTtsRepository: HttpTtsRepository,
     private val cloudEngineGateway: CloudTtsEngineGateway,
-    private val aiLogRepository: AiLogRepository,
 ) {
-    private val cloudSynthesizer = CloudTtsAudioSynthesizer(cloudEngineGateway, aiLogRepository)
+    private val cloudSynthesizer = CloudTtsAudioSynthesizer(cloudEngineGateway)
 
     /** 懒加载：不试听系统音色就不去起 TextToSpeech 引擎 */
     private val systemSynthesizer by lazy { SystemTtsFileSynthesizer(appCtx) }
