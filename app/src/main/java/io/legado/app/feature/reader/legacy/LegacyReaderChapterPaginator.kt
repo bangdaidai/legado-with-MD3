@@ -251,6 +251,7 @@ object LegacyReaderChapterPaginator {
             castPlaceholderWidthPx = {
                 CastCapsuleGeometry.placeholderWidthPx(bodyPaint.textSize, placeholderCapsuleStyle)
             },
+            castLabelOf = { ordinal -> castOptions.labelOf(ordinal) },
             castHasVoiceEffect = { name, ordinal -> castOptions.hasVoiceEffect(name, ordinal) },
             bgmCapsuleWidthPx = ::bgmWidthOf,
             bgmCapsuleHeightPx =

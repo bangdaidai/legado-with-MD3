@@ -96,15 +96,6 @@ class ChapterSpeechRepository(
     }
 
     /**
-     * 只改这一行的 `userLocked`，不碰其它列（口径见
-     * [io.legado.app.domain.gateway.ChapterSpeechGateway.setSegmentUserLocked]）。
-     */
-    override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) =
-        withContext(Dispatchers.IO) {
-            dao.setUserLocked(segmentId, locked, System.currentTimeMillis())
-        }
-
-    /**
      * 定稿/放开某一段的归属（口径见
      * [io.legado.app.domain.gateway.ChapterSpeechGateway.setSegmentAttribution]）。
      *

@@ -109,22 +109,10 @@ interface ChapterSpeechDao {
     suspend fun upsertSegments(segments: List<ChapterSpeechSegmentEntity>)
 
     /**
-     * 只改「这一段是不是用户定稿的」这一个动作。
+     * 定稿这一段的归属：正文胶囊分配一句话、分镜页改一段的说话人时走行级 UPDATE。
      *
-     * 分镜页的锁定/解锁必须走行级 UPDATE，不能拿整份分段 `replaceSegments` 回写：
-     * 页面上那一行可能是分配表覆盖**切过之后**的碎片（文本、起止点都被改过），
-     * 整份写回会把库里那条分析段的正文和起止点换成碎片，等于改一句归属却弄坏了整章分段。
-     */
-    @Query(
-        "update chapter_speech_segments set userLocked = :locked, updatedAt = :now where id = :id"
-    )
-    suspend fun setUserLocked(id: String, locked: Boolean, now: Long)
-
-    /**
-     * 定稿这一段的归属：正文胶囊分配/取消一句话时走行级 UPDATE。
-     *
-     * 与 [setUserLocked] 同一个道理——界面上那一行可能是分配覆盖切过的碎片，
-     * 整份 `replaceSegments` 回写会把库里那条分析段的正文和起止点换成碎片。
+     * 必须走行级 UPDATE 而不是整份 `replaceSegments` 回写——界面上那一行可能是分配覆盖
+     * 切过的碎片，整份写回会把库里那条分析段的正文和起止点换成碎片。
      * 这里一次写齐「谁在说 + 是不是用户定的」：归属写进 `characterId/characterName/roleType`，
      * `source` 记成 user，`userLocked` 决定重跑分析时这一段跳不跳过
      * （现成的六处跳过判断见 `RefineSpeechWithAiUseCase`、`ResolveLocalSpeakersUseCase`、
@@ -159,6 +147,22 @@ interface ChapterSpeechDao {
             "where bookUrl = :bookUrl and characterId = :droppedId"
     )
     suspend fun remapCharacterId(bookUrl: String, droppedId: String, keeperId: String, now: Long)
+
+    /**
+     * 角色改名之后同步引用他的那些分段：`characterName` 是分镜页与正文「没分配过的那几句」
+     * 直接显示的那一列冗余字段（正文走
+     * [io.legado.app.help.readaloud.cast.CastSegmentFinalizer.inferredLabels]，分镜页读的就是这一行），
+     * 不跟着档案改，同一个人在正文里是新名、在分镜页与没分配过的句子上还是旧名。
+     *
+     * 只按 `characterId` 认人，**不拿旧名字去匹配**：规则与正则归因的那些段，名字是从正文里读出来的
+     * 字面称呼（"他""老者"），跟档案改名没关系，按名改会把别人的话改掉。
+     * 与 [remapCharacterId] 同一口径——正文、起止点与 `userLocked` 都不碰。
+     */
+    @Query(
+        "update chapter_speech_segments set characterName = :name, updatedAt = :now " +
+            "where bookUrl = :bookUrl and characterId = :characterId"
+    )
+    suspend fun updateCharacterName(bookUrl: String, characterId: String, name: String, now: Long)
 
     @Query("delete from chapter_speech_segments where analysisId = :analysisId")
     suspend fun deleteSegments(analysisId: String)

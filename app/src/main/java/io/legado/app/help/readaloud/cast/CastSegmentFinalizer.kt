@@ -112,6 +112,203 @@ object CastSegmentFinalizer {
         return result
     }
 
+    /** 这一句在说话人分析里的结论（正文胶囊与分配弹层都用它）。 */
+    data class InferredSpeaker(
+        val characterId: String,
+        val characterName: String,
+        val poolLabel: String = "",
+    )
+
+    /**
+     * 一章「第几个开引号 → AI 判给的说话人」。
+     *
+     * 正文胶囊以前只认分配表（用户结论），AI 在分镜里认出的角色不显示名字，正文是一排空图标；
+     * 分镜页与正文各读一张表，看起来就是"分镜有人、正文没人"。这里从**分镜同一张真相表**
+     * （`chapter_speech_segments`）倒推每个引号序号，正文与分镜从此显示同一份结论；
+     * 用户分配仍然是更高优先级（调用方先读分配表，命中就不再问这里）。
+     *
+     * 为什么不用 [bridgeOf] 量坐标：那座桥只认带标记的引号（分配表注入的），AI 认出的句子
+     * 没有标记，量不出范围；而且标记长度会让正文坐标与库里那份分段错位。这里改按**段落顺序**
+     * 数锚点：一段段把正文喂进 [CastMarkers.CastQuoteTracker]（与注入/测量同一个跟踪器、同一条
+     * maxDepth 规则），喂到哪句就是哪句的序号，完全不依赖坐标和标记。
+     *
+     * 只收角色/心声段；旁白段不产胶囊名字。声音池优先取配音角色的池，其次取人物档案的池，
+     * 都没有就只显示名字。
+     */
+    suspend fun inferredLabels(
+        bookUrl: String,
+        chapterIndex: Int,
+    ): Map<Int, InferredSpeaker> {
+        val segments = chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
+        if (segments.isEmpty()) return emptyMap()
+        val ordered = segments.sortedBy { it.chapterPosition }
+        val tracker = CastMarkers.CastQuoteTracker()
+        // 引号序号 → 说话人；只记角色/心声段覆盖到的锚点
+        val ordinalSpeakers = LinkedHashMap<Int, ChapterSpeechSegment>()
+        ordered.forEach { segment ->
+            var first = -1
+            var last = -1
+            for (ch in segment.text) {
+                if (tracker.feed(ch)) {
+                    val ordinal = tracker.lastCastOrdinal
+                    if (first < 0) first = ordinal
+                    last = ordinal
+                }
+            }
+            if (first < 0 || segment.roleType == SpeechRoleType.Narrator ||
+                segment.characterName.isBlank()
+            ) {
+                return@forEach
+            }
+            for (ordinal in first..last) ordinalSpeakers.putIfAbsent(ordinal, segment)
+        }
+        if (ordinalSpeakers.isEmpty()) return emptyMap()
+        val castRows = appDb.castCharacterDao.getByBook(bookUrl)
+        val profiles = appDb.bookKnowledgeDao
+            .getCharacterProfiles(bookUrl, 500, includeDrafts = true)
+            .associateBy { it.id }
+        val poolByCharacter = HashMap<String, String>()
+        val poolByName = HashMap<String, String>()
+        suspend fun poolOf(segment: ChapterSpeechSegment): String {
+            val id = segment.characterId.orEmpty()
+            if (id.isNotBlank()) {
+                poolByCharacter[id]?.let { return it }
+                castRows.firstOrNull { it.id == id }?.poolLabel
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let {
+                        poolByCharacter[id] = it
+                        return it
+                    }
+                profiles[id]?.let { profile ->
+                    VoicePoolStore.poolLabelOf(profile).takeIf { it.isNotBlank() }?.let {
+                        poolByCharacter[id] = it
+                        return it
+                    }
+                }
+            }
+            val name = segment.characterName
+            poolByName[name]?.let { return it }
+            val fromCast = castRows.firstOrNull { it.name == name }?.poolLabel.orEmpty()
+            val resolved = fromCast.takeIf { it.isNotBlank() }
+                ?: profiles.values.firstOrNull { it.name == name }
+                    ?.let { VoicePoolStore.poolLabelOf(it) }
+                    .orEmpty()
+            poolByName[name] = resolved
+            return resolved
+        }
+        return ordinalSpeakers.mapValues { (_, segment) ->
+            InferredSpeaker(
+                characterId = segment.characterId.orEmpty(),
+                characterName = segment.characterName,
+                poolLabel = poolOf(segment),
+            )
+        }
+    }
+
+    /** 正文第 [quoteOrdinal] 个一级对话在说话人分析里的结论；没分析过或这句是旁白时为 null。 */
+    suspend fun inferredSpeaker(
+        bookUrl: String,
+        chapterIndex: Int,
+        quoteOrdinal: Int,
+    ): InferredSpeaker? = inferredLabels(bookUrl, chapterIndex)[quoteOrdinal]
+
+    /**
+     * 库里这一段覆盖到的**开引号序号**（= 分配表的锚点）。
+     *
+     * 尺子与 [inferredLabels] 同一条：把库里那几段按章内位置顺序逐字符喂给
+     * [CastMarkers.CastQuoteTracker]，数哪些锚点落在这一段的文字里。不量坐标、不认标记，
+     * 所以那一句有没有注入角色标记都量得到——分镜页改归属时用户点的就是这一段本身。
+     */
+    suspend fun quoteOrdinalsOf(
+        bookUrl: String,
+        chapterIndex: Int,
+        segmentId: String,
+    ): Set<Int> {
+        val segments = chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
+        if (segments.isEmpty()) return emptySet()
+        val tracker = CastMarkers.CastQuoteTracker()
+        val ordinals = LinkedHashSet<Int>()
+        segments.sortedBy { it.chapterPosition }.forEach { segment ->
+            val mine = segment.id == segmentId
+            for (ch in segment.text) {
+                if (tracker.feed(ch) && mine) ordinals += tracker.lastCastOrdinal
+            }
+        }
+        return ordinals
+    }
+
+    /**
+     * 分镜页改某一段的说话人：写真相表，并把这几句**已有**的分配行一起改掉。
+     *
+     * 为什么不能只写 segments：出计划时 [replay] 会照分配表把真相表顶一遍（[pendingOf] 只认
+     * 「这一段已经是这个人」，不比谁更晚）。分镜页只写自己那一张表的话，下一次准备这一章就被
+     * 旧的那一行改回去，用户看到的就是「在这里改了等于没改」。本文件的冲突口径是**后一次用户
+     * 动作赢**（见类注释），所以这一趟以分镜页这次的点选为准。
+     *
+     * 只改已经存在的行、**不新建**：新建会给正文注入角色标记，正文一变长，库里那几段就量不到
+     * 现在这份正文（[SpeechIdentity.alignsWithParagraphs] 判不同源，覆盖层整章跳过）。
+     * 「还给旁白」则删掉这几句的行，与正文胶囊的「取消分配」同一落点：标记跟着消失，
+     * 那一句回到没有说话人的状态。
+     *
+     * 两种写法都把 `userLocked` 立成 true：那是用户当场做的决定，重跑分析不再动它。
+     * 要回 AI 那份原判断，用分镜页的「重新分析本章」（它先删掉这一章的分析行）。
+     *
+     * 真动了分配行就重排一遍正在读的这章（[BookCastStore.reloadReaderChapter]）：胶囊与角色标记
+     * 是分页时按分配行写进去的，不重排正文会一直挂着旧的那一位——与正文胶囊确认那条链同一个动作。
+     */
+    suspend fun reattribute(
+        bookUrl: String,
+        chapterIndex: Int,
+        segmentId: String,
+        roleType: SpeechRoleType,
+        characterId: String?,
+        characterName: String,
+        voicePoolLabel: String,
+    ) {
+        chapterSpeechGateway.setSegmentAttribution(
+            segmentId = segmentId,
+            roleType = roleType,
+            characterId = characterId,
+            characterName = characterName,
+            userLocked = true,
+        )
+        val ordinals = quoteOrdinalsOf(bookUrl, chapterIndex, segmentId)
+        if (ordinals.isEmpty()) return
+        val dao = appDb.chapterRoleAssignmentDao
+        val rows = dao.getForChapter(bookUrl, chapterIndex).filter { it.quoteOrdinal in ordinals }
+        if (rows.isEmpty()) return
+        val toNarration = characterId.isNullOrBlank() || characterName.isBlank()
+        if (toNarration) {
+            // 还给旁白：这几句已经没有说话人，分配行与它注入的标记一起撤掉
+            rows.forEach { dao.deleteOne(bookUrl, chapterIndex, it.quoteOrdinal) }
+        } else {
+            val now = System.currentTimeMillis()
+            rows.forEach { row ->
+                dao.upsert(
+                    row.copy(
+                        characterId = characterId,
+                        characterName = characterName,
+                        voicePoolLabel = voicePoolLabel,
+                        updatedAt = now,
+                    ),
+                )
+            }
+        }
+        // 分配行就是正文那几枚胶囊与 `<<名字（池）>>` 标记的来源：改完不重排一遍，
+        // 正文上挂着的还是旧写法（与正文胶囊确认那条链同款动作，不是本章在读时才生效）
+        BookCastStore.reloadReaderChapter(bookUrl)
+        AppLog.put(
+            if (toNarration) {
+                "分镜改归属: 第${chapterIndex + 1}章这一段还给旁白，跟着撤掉 ${rows.size} 句的分配" +
+                    "（正文里那几句的角色标记一起没了，要回来在分镜页重新点人）"
+            } else {
+                "分镜改归属: 第${chapterIndex + 1}章这一段改给「$characterName」，" +
+                    "跟着改了 ${rows.size} 句的分配（正文那几句的胶囊跟着换人，" +
+                    "要回 AI 原来的判断就重新分析这一章）"
+            }
+        )
+    }
+
     /**
      * 用户在正文胶囊点「确认／新建」的当下：把这一句的归属立刻写进库里那几段并锁住。
      *

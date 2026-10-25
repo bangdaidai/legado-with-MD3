@@ -186,12 +186,6 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         bookUrl: String,
     ): List<ChapterSpeechSummary> = emptyList()
 
-    override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) {
-        segments = segments.map {
-            if (it.id == segmentId) it.copy(userLocked = locked) else it
-        }
-    }
-
     override suspend fun setSegmentAttribution(
         segmentId: String,
         roleType: SpeechRoleType,

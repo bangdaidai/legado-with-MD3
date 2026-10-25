@@ -78,8 +78,9 @@ object CastIdentityFolder {
                 VoiceEffectStore.forgetCharacter(lost.id)
                 appDb.castCharacterDao.delete(lost.id)
             }
-            // 冗余字段跟着保留行走：分配行上记的是名字 + 池，正文胶囊与标记都读那两栏
-            appDb.chapterRoleAssignmentDao.updateForCharacter(
+            // 冗余字段跟着保留行走：分配行上记的是名字 + 池（正文胶囊与标记读那两栏），
+            // 说话人分段上记的是名字（分镜页那一行读它）
+            BookCastStore.syncRenamedReferences(
                 bookUrl, merged.id, merged.name, merged.poolLabel, now,
             )
             // 本书记忆一行一个主名，池栏跟着保留行，否则 AI 下一趟照旧池把人分回被丢的那个

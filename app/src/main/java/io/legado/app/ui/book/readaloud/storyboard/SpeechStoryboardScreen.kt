@@ -29,9 +29,8 @@ import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Sort
@@ -178,6 +177,35 @@ fun SpeechStoryboardScreen(
             }
         },
     )
+
+    /*
+     * 改归属：把这一段的说话人换成名单里那一个。
+     *
+     * 用这一页删章节时同一套标准弹窗，不再新做浮层。点名字就是「一次动作、一次写入」——
+     * 写完由 ViewModel 关掉弹窗（见 SpeechStoryboardViewModel.assignSegmentSpeaker），
+     * 所以这里不做确定/取消两步，只留一个取消。
+     */
+    val assigningItem = state.scenes.flatMap { it.items }
+        .firstOrNull { it.id == state.assigningItemId }
+    AppAlertDialog(
+        data = assigningItem,
+        onDismissRequest = { onIntent(SpeechStoryboardIntent.CloseSpeakerPicker) },
+        title = stringResource(R.string.speech_storyboard_change_speaker),
+        text = stringResource(R.string.speech_storyboard_change_speaker_hint),
+        onDismiss = { onIntent(SpeechStoryboardIntent.CloseSpeakerPicker) },
+    ) { item ->
+        Column {
+            state.speakerOptions.forEach { option ->
+                SpeakerOptionRow(
+                    option = option,
+                    selected = isCurrentSpeaker(item, option),
+                    onClick = {
+                        onIntent(SpeechStoryboardIntent.AssignSegmentSpeaker(item.id, option))
+                    },
+                )
+            }
+        }
+    }
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -512,7 +540,9 @@ private fun StoryboardList(
                             }
                         },
                         onPreview = { id -> onIntent(SpeechStoryboardIntent.PreviewSegment(id)) },
-                        onToggleLock = { id -> onIntent(SpeechStoryboardIntent.ToggleSegmentLock(id)) },
+                        onAssignSpeaker = { id ->
+                            onIntent(SpeechStoryboardIntent.OpenSpeakerPicker(id))
+                        },
                     )
                 }
             }
@@ -532,7 +562,7 @@ private fun SceneCard(
     onToggleScene: () -> Unit,
     onToggleDetails: (String) -> Unit,
     onPreview: (String) -> Unit,
-    onToggleLock: (String) -> Unit,
+    onAssignSpeaker: (String) -> Unit,
 ) {
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
@@ -559,7 +589,7 @@ private fun SceneCard(
                     detailsExpanded = item.id in expandedItems,
                     onToggleDetails = { onToggleDetails(item.id) },
                     onPreview = { onPreview(item.id) },
-                    onToggleLock = { onToggleLock(item.id) },
+                    onAssignSpeaker = { onAssignSpeaker(item.id) },
                 )
             }
         }
@@ -616,7 +646,7 @@ private fun SceneHeaderRow(
 }
 
 /**
- * 段行＝卷轴上的一节：左时间轴节点、说话人左锚、正文全展开、右上角小圆锁定+试听钮。
+ * 段行＝卷轴上的一节：左时间轴节点、说话人左锚、正文全展开、右上角小圆改归属+试听钮。
  * 整行点击展开/收起出处详情（对齐 NG 的行内节奏，卡片仍是我们的玻璃卡）。
  */
 @Composable
@@ -630,7 +660,7 @@ private fun SegmentRow(
     detailsExpanded: Boolean,
     onToggleDetails: () -> Unit,
     onPreview: () -> Unit,
-    onToggleLock: () -> Unit,
+    onAssignSpeaker: () -> Unit,
 ) {
     // 时间轴小圆点要对齐的是「角色行/音色行」这条文字线的视觉中线。
     // 行高由主题字体决定、各档不同，写死 dp 必然错位——改为量出来的中线：
@@ -730,9 +760,9 @@ private fun SegmentRow(
                 )
             }
         }
-        SegmentLockButton(
-            locked = item.locked,
-            onClick = onToggleLock,
+        SegmentCastButton(
+            item = item,
+            onClick = onAssignSpeaker,
             modifier = Modifier.padding(top = 14.dp, end = 6.dp),
         )
         PreviewButton(
@@ -745,22 +775,23 @@ private fun SegmentRow(
 }
 
 /**
- * 锁定 / 解锁这一段：钉住这一句的说话人，重新分析时跳过它。
+ * 改这一段的说话人：与试听同款角标尺寸，长在试听钮左边。
  *
- * 与试听同款角标尺寸，放在试听钮左边。未锁定时只给淡灰描不出色，避免一屏十几行
- * 全是亮按钮抢正文的注意力；锁定后转主色，配合详情里的「已被你锁定」一眼能扫出来。
+ * 有人念就点主色、没人念只给淡灰描不出色——一屏十几行全亮会抢正文的注意力，而这一点差别
+ * 正好把「AI 还没定到人」的那几行挑出来。
  */
 @Composable
-private fun SegmentLockButton(
-    locked: Boolean,
+private fun SegmentCastButton(
+    item: StoryboardItemUi,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasSpeaker = item.speakerName.isNotEmpty()
     Box(
         modifier = modifier
             .size(28.dp)
             .background(
-                if (locked) {
+                if (hasSpeaker) {
                     LegadoTheme.colorScheme.primary.copy(alpha = 0.12f)
                 } else {
                     LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.05f)
@@ -771,17 +802,82 @@ private fun SegmentLockButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = if (locked) Icons.Default.Lock else Icons.Default.LockOpen,
-            contentDescription = stringResource(
-                if (locked) R.string.speech_storyboard_unlock else R.string.speech_storyboard_lock,
-            ),
-            tint = if (locked) {
+            imageVector = Icons.Default.Person,
+            contentDescription = stringResource(R.string.speech_storyboard_change_speaker),
+            tint = if (hasSpeaker) {
                 LegadoTheme.colorScheme.primary
             } else {
                 LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
             },
             modifier = Modifier.size(16.dp),
         )
+    }
+}
+
+/** 名单里这一项是不是这一段现在的人：旁白档认「没有说话人」，其余认名字。 */
+private fun isCurrentSpeaker(item: StoryboardItemUi, option: StoryboardSpeakerUi): Boolean =
+    if (option.isNarrator) {
+        item.speakerName.isBlank()
+    } else {
+        item.speakerName == option.name
+    }
+
+/**
+ * 改归属名单里的一行：名字 +（声音池 · 临时）+ 当前那一位的勾。
+ *
+ * 不做成单选按钮那一套：这一页是核对清单，点一下即写入并收起，行本身就是按钮
+ * ——与正文胶囊下拉里的候选同一交互口径（见 CastFieldStack 的候选列表）。
+ */
+@Composable
+private fun SpeakerOptionRow(
+    option: StoryboardSpeakerUi,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val secondary = listOfNotNull(
+        option.poolLabel.takeIf { it.isNotBlank() },
+        stringResource(R.string.speech_storyboard_speaker_draft)
+            .takeIf { option.isDraft },
+    ).joinToString(" · ")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(
+            text = option.name,
+            style = LegadoTheme.typography.bodyMedium,
+            color = if (selected) {
+                LegadoTheme.colorScheme.primary
+            } else {
+                LegadoTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (secondary.isNotEmpty()) {
+            AppText(
+                text = secondary,
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        if (selected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = LegadoTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(18.dp),
+            )
+        }
     }
 }
 
@@ -1068,7 +1164,6 @@ private fun detailLabel(item: StoryboardItemUi): String {
     }
     val parts = buildList {
         add(source)
-        if (item.locked) add(stringResource(R.string.speech_storyboard_locked))
         if (item.confidence > 0f) {
             add(stringResource(R.string.speech_storyboard_confidence, (item.confidence * 100).toInt()))
         }

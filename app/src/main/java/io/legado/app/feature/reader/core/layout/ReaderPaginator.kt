@@ -103,6 +103,12 @@ data class ReaderCastProfile(
     val avatarUri: String,
 )
 
+/** 未分配句子的分析结论：正文胶囊直接显示它，与分镜页同读一张分段表。 */
+data class ReaderCastLabel(
+    val name: String,
+    val poolLabel: String,
+)
+
 /**
  * 多角色分配的分页选项：开关 + 角色档案 + 变声器状态（段级优先，其次角色全局）。
  *
@@ -117,6 +123,13 @@ data class ReaderCastOptions(
     /** 角色级（全局）：角色名 → 变声器预设名（空值不收录）。 */
     val characterEffects: Map<String, String> = emptyMap(),
     /**
+     * 本章开引号锚点序号 → AI 判给的说话人（分配表没有这一句时用）。
+     *
+     * 来源是 `chapter_speech_segments`，也就是分镜页显示的那一份；有用户分配时
+     * 正文走标记里的名字（优先级更高），这张表只补没分配过的句子。
+     */
+    val quoteLabels: Map<Int, ReaderCastLabel> = emptyMap(),
+    /**
      * 角色自己设的气泡：角色名 → 样式（只带背景图与背景色那两栏，见 `CastCharacter.bubbleRuleJson`）。
      *
      * 由平台层换算好再送进来（dp→px 与位图尺寸都在那边），core 层不碰 DB 也不碰配置。
@@ -127,6 +140,10 @@ data class ReaderCastOptions(
     fun hasVoiceEffect(characterName: String, quoteOrdinal: Int): Boolean =
         chapterEffects[quoteOrdinal]?.isNotBlank() == true ||
             (characterName.isNotBlank() && characterEffects[characterName]?.isNotBlank() == true)
+
+    /** 这一句没有用户分配时的 AI 说话人；没有这一句的分析结论就返回 null。 */
+    fun labelOf(quoteOrdinal: Int): ReaderCastLabel? =
+        if (quoteOrdinal >= 0) quoteLabels[quoteOrdinal] else null
 
     companion object {
         val Disabled = ReaderCastOptions(enabled = false, profiles = emptyMap())

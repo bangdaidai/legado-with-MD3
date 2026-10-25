@@ -48,21 +48,11 @@ interface ChapterSpeechGateway {
     suspend fun replaceSegments(analysisId: String, segments: List<ChapterSpeechSegment>)
 
     /**
-     * 分镜页「锁定 / 解锁这一段」：只改这一行的 `userLocked`。
-     *
-     * 只给一列的原因见 [io.legado.app.data.dao.ChapterSpeechDao.setUserLocked]——
-     * 界面上那一行可能是分配表覆盖切过的碎片，整份回写会盖掉库里那条分析段。
-     * 锁定后这条归属就进了现成的「跳过锁定段」名单：AI 重跑分析不再改它。
-     */
-    suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean)
-
-    /**
      * 定稿/放开某一段的归属（正文胶囊分配一句话的落点，见
      * [io.legado.app.help.readaloud.cast.CastSegmentFinalizer]）。
      *
-     * 只改这一行的归属四列 + `userLocked`，不碰正文与起止点，理由与
-     * [setSegmentUserLocked] 相同。[characterId] 传 null、[roleType] 传
-     * [SpeechRoleType.Narrator] 就是"这一段没有归属"。
+     * 只改这一行的归属四列 + `userLocked`，不碰正文与起止点：界面上那一行可能是分配表
+     * 覆盖切过之后的碎片（正文和起止点都被改过），整份回写分段会把库里那条分析段换成碎片。
      */
     suspend fun setSegmentAttribution(
         segmentId: String,

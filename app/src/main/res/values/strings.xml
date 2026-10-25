@@ -3311,11 +3311,11 @@
     <string name="speech_storyboard_source_ai">By AI</string>
     <string name="speech_storyboard_source_user">Set manually</string>
     <string name="speech_storyboard_source_fallback">Fallback guess</string>
-    <string name="speech_storyboard_locked">Locked by you</string>
-    <string name="speech_storyboard_lock">Lock this segment</string>
-    <string name="speech_storyboard_unlock">Unlock this segment</string>
-    <string name="speech_storyboard_lock_on">Locked: re-analysis will keep this segment</string>
-    <string name="speech_storyboard_lock_off">Unlocked: re-analysis may rewrite this segment</string>
+    <string name="speech_storyboard_change_speaker">Change speaker</string>
+    <string name="speech_storyboard_change_speaker_hint">Tap a name and this segment is spoken by them. Your pick counts as final: only “re-analyze this chapter” lets the AI judge it again.</string>
+    <string name="speech_storyboard_speaker_draft">Draft</string>
+    <string name="speech_storyboard_assign_to">Now spoken by %1$s</string>
+    <string name="speech_storyboard_assign_narrator">Back to narration</string>
     <string name="speech_storyboard_confidence">Confidence %1$d%%</string>
     <string name="speech_storyboard_manage">Manage</string>
     <string name="speech_storyboard_selected_count">%1$d chapters selected</string>

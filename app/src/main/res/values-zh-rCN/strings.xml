@@ -3247,11 +3247,11 @@
     <string name="speech_storyboard_source_ai">AI 判定</string>
     <string name="speech_storyboard_source_user">手动指定</string>
     <string name="speech_storyboard_source_fallback">兜底推断</string>
-    <string name="speech_storyboard_locked">已被你锁定</string>
-    <string name="speech_storyboard_lock">锁定这一段</string>
-    <string name="speech_storyboard_unlock">解锁这一段</string>
-    <string name="speech_storyboard_lock_on">已锁定：重新分析不会再改这一段</string>
-    <string name="speech_storyboard_lock_off">已解锁：重新分析时可以改写这一段</string>
+    <string name="speech_storyboard_change_speaker">改归属</string>
+    <string name="speech_storyboard_change_speaker_hint">点一个名字，这一段就归他念。改过的算你定稿，要 AI 重判就点「重新分析本章」。</string>
+    <string name="speech_storyboard_speaker_draft">临时</string>
+    <string name="speech_storyboard_assign_to">已改给「%1$s」</string>
+    <string name="speech_storyboard_assign_narrator">已还给旁白</string>
     <string name="speech_storyboard_confidence">置信度 %1$d%%</string>
     <string name="speech_storyboard_manage">管理</string>
     <string name="speech_storyboard_selected_count">已选 %1$d 章</string>

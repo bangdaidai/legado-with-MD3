@@ -183,6 +183,13 @@ class ReaderChapterBlockMeasurer(
     private val castCapsuleHeightPx: Float = 0f,
     /** 未分配占位胶囊宽度：只有一个人形图标。 */
     private val castPlaceholderWidthPx: () -> Float = { 0f },
+    /**
+     * 没有分配标记的那一句，分段表（分镜页那张真相表）判给了谁。
+     *
+     * 有名字就按正常胶囊测量并显示——正文与分镜页显示同一份结论，不用用户先点一次；
+     * 只有旁白或还没分析过才回落到人形图标占位。
+     */
+    private val castLabelOf: (quoteOrdinal: Int) -> ReaderCastLabel? = { null },
     /** 这一句最终带不带变声器（段级优先，其次角色全局）。 */
     private val castHasVoiceEffect: (name: String, quoteOrdinal: Int) -> Boolean = { _, _ -> false },
     /** 背景音乐胶囊宽度/高度：(池名, 指定曲目)；宽度含 ♪ 前缀。 */
@@ -409,14 +416,30 @@ class ReaderChapterBlockMeasurer(
                                 for (ch in cluster) if (castTracker!!.feed(ch)) anchorHere = true
                                 // 锚点恰在段尾且后面是标记 → 交给标记的已分配胶囊
                                 if (anchorHere && !(offset == pieceEnd && pieceMarker != null)) {
+                                    val ordinal = castTracker.lastCastOrdinal
+                                    // 没有用户分配时用分段表的 AI 结论（与分镜页同一份），
+                                    // 有名字就画正常胶囊；旁白 / 没分析过才是空图标占位。
+                                    val inferred = castLabelOf(ordinal)
+                                    val withEffect = inferred != null &&
+                                        castHasVoiceEffect(inferred.name, ordinal)
                                     inline += ReaderMeasuredInlineItem.RoleCast(
-                                        widthPx = castPlaceholderWidthPx(),
+                                        widthPx = if (inferred != null) {
+                                            castCapsuleWidthPx(
+                                                inferred.name,
+                                                inferred.poolLabel,
+                                                true,
+                                                withEffect,
+                                            )
+                                        } else {
+                                            castPlaceholderWidthPx()
+                                        },
                                         heightPx = castCapsuleHeightPx,
                                         chapterPosition = item.chapterPosition + offset,
                                         raw = "",
-                                        name = "",
-                                        voicePoolLabel = "",
-                                        quoteOrdinal = castTracker.lastCastOrdinal,
+                                        name = inferred?.name.orEmpty(),
+                                        voicePoolLabel = inferred?.poolLabel.orEmpty(),
+                                        quoteOrdinal = ordinal,
+                                        voiceEffectMark = withEffect,
                                     )
                                 }
                             }

@@ -5,6 +5,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.CastCharacter
 import io.legado.app.data.entities.ChapterRoleAssignment
+import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import io.legado.app.help.readaloud.effect.VoiceEffectStore
@@ -85,6 +86,10 @@ object CastAssignmentStore {
      * 停用（status=DISABLED）的档案不参与：那是从配音列表删掉的 AI 人物，
      * 人物页里资料还在，但不能再把它长回配音角色。
      *
+     * 草稿（DRAFT，AI 新识别出的临时人物）也不在这里转正：跑一次分析就把所有临时人物
+     * 加成配音角色太重了。它们由分配弹层的下拉按需转正（见 [sheetData] / [resolveCharacter]），
+     * 用户点中这个名字才代表「这个人要进配音链路」。
+     *
      * 开头先跑 [CastIdentityFolder.fold]：同名多池是历史遗留，一人一行是这张表往后的前提。
      * 折叠必须**在档案导入之前**——否则这一趟会照着档案把刚并掉的那个人再长回来。
      *
@@ -131,7 +136,7 @@ object CastAssignmentStore {
                 appDb.castCharacterDao.update(
                     character.copy(name = trimmed, poolLabel = pool, updatedAt = now),
                 )
-                appDb.chapterRoleAssignmentDao.updateForCharacter(
+                BookCastStore.syncRenamedReferences(
                     bookUrl, character.id, trimmed, pool, now,
                 )
                 renamed = true
@@ -152,9 +157,44 @@ object CastAssignmentStore {
     ): SheetData {
         CastSyntaxStore.current()
         migrateLegacyProfiles(bookUrl)
-        val characters = if (loadCharacters) {
+        val castRows = if (loadCharacters) {
             appDb.castCharacterDao.getByBook(bookUrl)
-                .map { CastCandidate(it.id, it.name, it.poolLabel, it.voiceId, it.voiceEffect) }
+        } else {
+            emptyList()
+        }
+        val characters = if (loadCharacters) {
+            // AI 在分镜里认出的新人先是**草稿档案**（见 BookVoiceCastingViewModel 的「临时角色」），
+            // 还没有 cast_characters 行，所以光读角色表这一行下拉是空的。这里把草稿并进来：
+            // 分镜里已经有人名的那一句，用户应该能在下拉里直接点到他，而不是重新打一遍名字。
+            // 选中后由 [resolveCharacter] 当场把草稿加成配音角色（id 沿用档案 id）。
+            val castIds = castRows.mapTo(HashSet()) { it.id }
+            val castNames = castRows.mapTo(HashSet()) { it.name }
+            // 默认查询会过滤草稿，这里要显式带上 includeDrafts：草稿正是我们要找的那批人
+            val drafts = appDb.bookKnowledgeDao
+                .getCharacterProfiles(bookUrl, 500, includeDrafts = true)
+                .filter {
+                    it.status == BookCharacterProfile.STATUS_DRAFT && it.name.isNotBlank()
+                }
+                .filter { it.id !in castIds && it.name !in castNames }
+                .distinctBy { it.name }
+                .map { profile ->
+                    CastCandidate(
+                        id = profile.id,
+                        name = profile.name,
+                        poolLabel = VoicePoolStore.poolLabelOf(profile),
+                        voiceId = appDb.readAloudVoiceDao
+                            .getBinding(
+                                bookUrl,
+                                BookVoiceBinding.SUBJECT_CHARACTER,
+                                profile.id,
+                            )
+                            ?.voiceId.orEmpty(),
+                        voiceEffect = "",
+                    )
+                }
+            castRows.map {
+                CastCandidate(it.id, it.name, it.poolLabel, it.voiceId, it.voiceEffect)
+            } + drafts
         } else {
             emptyList()
         }
@@ -165,16 +205,37 @@ object CastAssignmentStore {
             .map { VoiceOption(it.id, it.displayName, poolOf[it.id].orEmpty()) }
         val assignment = appDb.chapterRoleAssignmentDao.getOne(bookUrl, chapterIndex, ordinal)
         val character = assignment?.let { appDb.castCharacterDao.getById(it.characterId) }
+        // 分配表里还没有这一句时，把 AI 在分镜里判给它的说话人预填进名字/池：
+        // 分镜上写着这张三，点开胶囊却是一个空名字框，等于让用户把 AI 已经做完的事再做一遍。
+        // 只预填、不落库——按下「确认」才成为这一句的结论。
+        val inferred = if (assignment == null) {
+            CastSegmentFinalizer.inferredSpeaker(bookUrl, chapterIndex, ordinal)
+        } else {
+            null
+        }
+        val inferredCharacter = inferred?.let { speaker ->
+            characters.firstOrNull {
+                (speaker.characterId.isNotBlank() && it.id == speaker.characterId) ||
+                    it.name == speaker.characterName
+            }
+        }
         return SheetData(
             bookUrl = bookUrl,
             characters = characters,
             pools = pools,
             voices = voices,
             assigned = assignment != null,
-            initialCharacterId = character?.id.orEmpty(),
-            initialName = character?.name ?: assignment?.characterName.orEmpty(),
-            initialPool = character?.poolLabel ?: assignment?.voicePoolLabel.orEmpty(),
-            initialVoiceId = character?.voiceId.orEmpty(),
+            initialCharacterId = character?.id
+                ?: inferredCharacter?.id
+                ?: inferred?.characterId.orEmpty(),
+            initialName = character?.name
+                ?: assignment?.characterName
+                ?: inferred?.characterName.orEmpty(),
+            initialPool = character?.poolLabel
+                ?: assignment?.voicePoolLabel
+                ?: inferredCharacter?.poolLabel
+                ?: inferred?.poolLabel.orEmpty(),
+            initialVoiceId = character?.voiceId ?: inferredCharacter?.voiceId.orEmpty(),
             effects = effects,
             // 这一栏回填的是**这一句**的段级值；空着就是「跟随角色全局」，
             // 不能拿角色的全局值来填，否则确认一次就把全局值抄成这一句的固定值。
@@ -254,8 +315,9 @@ object CastAssignmentStore {
         // （AI 下一趟照记忆里的名字认人填池），只写 cast_characters 就成了「胶囊改了别处看不见」
         CastVoicePicker.bindUserVoice(updated)
         CastMemoryMirror.syncCharacterRow(bookUrl, target.name, updated.name, updated.poolLabel)
-        // 角色改名/换池后同步所有引用它的分配行冗余字段（全局胶囊与标记随之更新）
-        appDb.chapterRoleAssignmentDao.updateForCharacter(
+        // 角色改名/换池后同步所有引用他的冗余字段：分配行（正文胶囊与标记）+ 说话人分段
+        // （分镜页那一行、正文里没分配过的那几句显示的都是它），少一处就是「这里改了别处没变」
+        BookCastStore.syncRenamedReferences(
             bookUrl, updated.id, updated.name, updated.poolLabel, updated.updatedAt,
         )
         assign(
@@ -293,8 +355,14 @@ object CastAssignmentStore {
         // 折叠器进页面时已经把同名多行并成一行，所以这里命中的那一行就是这个人唯一的一行。
         // 换池不再是「再建一个同名角色」，而是在下拉里点他、由确认那一趟改他的池。
         if (appDb.castCharacterDao.getByName(bookUrl, name).isNotEmpty()) return CastResult.EXISTS
+        // AI 识别出的新人只有草稿档案、还没有配音角色：这里复用档案 id 建角色，
+        // 否则角色与档案各拿一个 id，人物页/音色绑定会和正文胶囊对不上同一个人。
+        val draftId = appDb.bookKnowledgeDao
+            .getCharacterProfiles(bookUrl, 500, includeDrafts = true)
+            .firstOrNull { it.status == BookCharacterProfile.STATUS_DRAFT && it.name == name }
+            ?.id
         val character = CastCharacter(
-            id = UUID.randomUUID().toString(),
+            id = draftId ?: UUID.randomUUID().toString(),
             bookUrl = bookUrl,
             name = name,
             poolLabel = voicePoolLabel.trim().take(12),
@@ -333,9 +401,42 @@ object CastAssignmentStore {
             appDb.castCharacterDao.getById(selectedCharacterId)
                 ?.takeIf { it.bookUrl == bookUrl }
                 ?.let { return it }
+            // 下拉里选中的是 AI 识别出的草稿人物（只有档案、还没配音角色）：
+            // 用户在**这一句**里明确点了他，就在这一刻转成配音角色（id 沿用档案 id），
+            // 由外层照常写分配行——不点就永远只是分镜里的临时人物。
+            materializeDraft(bookUrl, selectedCharacterId)?.let { return it }
         }
         val sameName = appDb.castCharacterDao.getByName(bookUrl, name)
         return sameName.firstOrNull { it.poolLabel == poolLabel } ?: sameName.singleOrNull()
+    }
+
+    /**
+     * 把一条草稿档案（AI 识别出的临时说话人）落成配音角色，id 沿用档案 id。
+     *
+     * 只给 [resolveCharacter] 用：用户在分配弹层里从下拉点中了这个名字，才代表
+     * 「这个人要进配音链路」。分镜页只读不改，不会因为跑了一次分析就把临时人物全部转正。
+     */
+    private suspend fun materializeDraft(bookUrl: String, profileId: String): CastCharacter? {
+        val profile = appDb.bookKnowledgeDao.getCharacterProfile(bookUrl, profileId)
+            ?.takeIf {
+                it.bookUrl == bookUrl && it.status == BookCharacterProfile.STATUS_DRAFT
+            }
+            ?: return null
+        val voiceId = appDb.readAloudVoiceDao
+            .getBinding(bookUrl, BookVoiceBinding.SUBJECT_CHARACTER, profile.id)
+            ?.voiceId.orEmpty()
+        appDb.castCharacterDao.insertIgnore(
+            CastCharacter(
+                id = profile.id,
+                bookUrl = bookUrl,
+                name = profile.name,
+                poolLabel = VoicePoolStore.poolLabelOf(profile),
+                voiceId = voiceId,
+                createdAt = profile.createdAt,
+                updatedAt = profile.updatedAt,
+            ),
+        )
+        return appDb.castCharacterDao.getById(profile.id)
     }
 
     /**

@@ -538,8 +538,6 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
         segments: List<ChapterSpeechSegment>,
     ) = Unit
 
-    override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) = Unit
-
     // 定稿写入是正文胶囊与分镜页那条链的事，这一组的用例只跑分析链，收到归属改写当没发生即可。
     override suspend fun setSegmentAttribution(
         segmentId: String,

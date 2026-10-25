@@ -112,6 +112,30 @@ object BookCastStore {
     }
 
     /**
+     * 角色改名 / 换池之后，把**引用他的那两张表**的冗余列一起改齐。
+     *
+     * 同一个人在库里存着几份身份：档案与配音角色行（`book_character_profiles` /
+     * `cast_characters`，同一行 id）、正文分配行的 `characterName` + `voicePoolLabel`、
+     * 说话人分段的 `characterName`。后面两处都是**给人直接看的那一栏**——只改前两处，
+     * 分镜页那一行与正文「没分配过的那几句」还挂着旧名，用户看到的就是「改了名别处没跟着变」。
+     *
+     * 所有改名/换池的写入点（配音页编辑、人物详情页改名、进配音页时的档案→角色回填、
+     * 正文胶囊弹层里改名、同名并档后按保留行对齐）都走这里，别再各处只调其中一张表。
+     */
+    suspend fun syncRenamedReferences(
+        bookUrl: String,
+        characterId: String,
+        name: String,
+        poolLabel: String,
+        now: Long,
+    ) {
+        appDb.chapterRoleAssignmentDao.updateForCharacter(
+            bookUrl, characterId, name, poolLabel, now,
+        )
+        appDb.chapterSpeechDao.updateCharacterName(bookUrl, characterId, name, now)
+    }
+
+    /**
      * 分配表内编辑角色状态（确认语义）：改名/换池/换音色/换变声器，同步所有引用行。
      * 名字非法或这本书里已经有同名角色时失败（一人一名，池只是属性，换池不是再建一个他）。
      *
@@ -156,7 +180,7 @@ object BookCastStore {
             // 朗读侧的快照按预设表版本失效，不改这里新变声要等重启才听得到
             VoiceEffectStore.invalidateCharacters()
         }
-        appDb.chapterRoleAssignmentDao.updateForCharacter(
+        syncRenamedReferences(
             bookUrl, updated.id, updated.name, updated.poolLabel, updated.updatedAt,
         )
         // 这里挑的音色与正文胶囊挑的是同一件事：写进绑定（配音页显示它、发音链路读它），
@@ -285,13 +309,17 @@ object BookCastStore {
      * 官方「人物详情」页改了名字或声音池 → 配音角色这一侧跟着改。
      *
      * 两边存的是同一份信息（档案的 voiceAgeBand 列现在装池名），不同步的话
-     * 正文胶囊、标记与朗读音色会一直用改动前的池。角色是按需从档案导进来的，
-     * 还没导过（本书没进过配音页）时这里没有可改的行，什么都不做。
+     * 正文胶囊、标记与朗读音色会一直用改动前的池。
+     *
+     * 「这本书还没进过配音页、只有档案没有配音角色行」的情形（AI 刚认出的临时人物）以前是
+     * 直接什么都不做：结果就是人物页改了名，正文与分镜页还挂着旧名。现在这一趟照旧**不**替他建
+     * 配音角色行（建行等于把没转正的人拉进配音链路、还会自动挑声线），但引用他的那两张冗余表
+     * （分配行 + 说话人分段）照样改名——用户在正文和分镜上看到的正是那两栏。
      *
      * 配音角色建档时用档案 id 作主键，所以按 id 找就行：改名后按新名找不到旧行，
      * 按新名命中的会是另一个角色（即下面要挡的撞名）。
      *
-     * 返回是否真的写了这一行：重排正文交给调用方决定，因为官方人物页那一次保存可能同时换了
+     * 返回是否真的写了引用行：重排正文交给调用方决定，因为官方人物页那一次保存可能同时换了
      * 头像，两次各自 reload 会把同一章重排两遍。
      */
     suspend fun syncFromProfile(
@@ -304,27 +332,27 @@ object BookCastStore {
         // 名字要能写进正文标记，否则注入时会被整条丢掉；这种档案改动宁可让配音侧沿用旧名
         if (trimmed.isEmpty() || !CastMarkers.isValidName(trimmed)) return false
         val pool = poolLabel.trim().take(12)
-        val character = appDb.castCharacterDao.getById(profileId) ?: return false
-        if (character.bookUrl != bookUrl ||
-            (character.name == trimmed && character.poolLabel == pool)
-        ) {
-            return false
+        val character = appDb.castCharacterDao.getById(profileId)
+        if (character != null && character.bookUrl != bookUrl) return false
+        val now = System.currentTimeMillis()
+        if (character == null) {
+            syncRenamedReferences(bookUrl, profileId, trimmed, pool, now)
+            return true
         }
+        if (character.name == trimmed && character.poolLabel == pool) return false
         // 一人一名：这个名字已经有别的角色行就什么都不改，留给用户自己合
-        if (appDb.castCharacterDao.getByName(bookUrl, trimmed)
-                .any { it.id != character.id }
-        ) {
+        if (appDb.castCharacterDao.getByName(bookUrl, trimmed).any { it.id != character.id }) {
             return false
         }
         val updated = CastVoicePicker.ensureVoice(
             character.copy(
                 name = trimmed,
                 poolLabel = pool,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = now,
             ),
         )
         appDb.castCharacterDao.update(updated)
-        appDb.chapterRoleAssignmentDao.updateForCharacter(
+        syncRenamedReferences(
             bookUrl, updated.id, updated.name, updated.poolLabel, updated.updatedAt,
         )
         return true

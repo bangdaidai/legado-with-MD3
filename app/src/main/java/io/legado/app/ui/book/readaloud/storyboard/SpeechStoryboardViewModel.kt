@@ -20,6 +20,7 @@ import io.legado.app.domain.model.readaloud.SpeechRoleType
 import io.legado.app.domain.usecase.ResolveEffectiveSpeechPlanUseCase
 import io.legado.app.feature.reader.core.readaloud.ReaderReadAloudChapter
 import io.legado.app.help.readaloud.analysis.ChapterSpeechBatchAnalyzer
+import io.legado.app.help.readaloud.cast.CastSegmentFinalizer
 import io.legado.app.help.readaloud.cast.VoicePoolStore
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.model.ReadAloud
@@ -160,7 +161,16 @@ class SpeechStoryboardViewModel(
 
             is SpeechStoryboardIntent.PreviewSegment -> previewSegment(intent.itemId)
 
-            is SpeechStoryboardIntent.ToggleSegmentLock -> toggleSegmentLock(intent.itemId)
+            is SpeechStoryboardIntent.OpenSpeakerPicker -> _uiState.update {
+                it.copy(assigningItemId = intent.itemId)
+            }
+
+            SpeechStoryboardIntent.CloseSpeakerPicker -> _uiState.update {
+                it.copy(assigningItemId = null)
+            }
+
+            is SpeechStoryboardIntent.AssignSegmentSpeaker ->
+                assignSegmentSpeaker(intent.itemId, intent.speaker)
 
             SpeechStoryboardIntent.StopPreview -> stopPreview()
 
@@ -255,6 +265,8 @@ class SpeechStoryboardViewModel(
                         scenes = persistentListOf(),
                         summary = null,
                         previewingItemId = null,
+                        assigningItemId = null,
+                        speakerOptions = persistentListOf(),
                     )
                 }
             } catch (e: CancellationException) {
@@ -310,6 +322,7 @@ class SpeechStoryboardViewModel(
                 }
                 currentPlan = plan
                 val items = plan.map(::toItemUi)
+                val speakers = speakerOptions()
                 // 配置卡这一行写的是**这一章实际**按哪一档跑出来的，不是设置里选的那一档：
                 // AI 失败回落、或者库里只有规则结果时，照抄设置会把规则结果标成 AI 补全
                 val storedAnalysis = withContext(Dispatchers.IO) {
@@ -325,6 +338,8 @@ class SpeechStoryboardViewModel(
                         isCurrentChapter = isCurrent,
                         scenes = groupIntoScenes(items).toImmutableList(),
                         summary = buildSummary(items),
+                        assigningItemId = null,
+                        speakerOptions = speakers.toImmutableList(),
                     )
                 }
                 // 缓存的详情页不会重跑 AI，也就没有回落事件可接：这一屏的提示由页面自己补。
@@ -625,6 +640,48 @@ class SpeechStoryboardViewModel(
             }
         }
 
+    /**
+     * 「改归属」弹窗的候选：旁白 + 这本书启用中的人物，外加 AI 认出来但还没进配音列表的临时人物。
+     *
+     * 来源与 [characterPerformances] 是同一份档案表（`book_character_profiles`，显式带上草稿），
+     * 所以这里点中的那一个就是选音那一步查得到音色绑定的那一个——候选与发声不会各认各的人。
+     * 停用的人物不进候选：那是从配音列表删掉的人，正文里再把他长回来只会「查无此人」。
+     *
+     * 随本章一起加载，不在点开那一下现查：这一页是核对清单，弹窗先空一帧再填会像没点开。
+     */
+    private suspend fun speakerOptions(): List<StoryboardSpeakerUi> =
+        withContext(Dispatchers.IO) {
+            val profiles = bookKnowledgeGateway.getCharacterProfiles(
+                bookUrl = bookUrl,
+                limit = 200,
+                includeDrafts = true,
+            ).filter {
+                it.status == BookCharacterProfile.STATUS_ACTIVE ||
+                    it.status == BookCharacterProfile.STATUS_DRAFT
+            }.filter { it.name.isNotBlank() }
+                .sortedWith(
+                    compareBy({ it.status != BookCharacterProfile.STATUS_ACTIVE }, { it.name })
+                )
+                .map { profile ->
+                    StoryboardSpeakerUi(
+                        characterId = profile.id,
+                        name = profile.name,
+                        isDraft = profile.status == BookCharacterProfile.STATUS_DRAFT,
+                        poolLabel = VoicePoolStore.poolLabelOf(profile),
+                    )
+                }
+            buildList {
+                add(
+                    StoryboardSpeakerUi(
+                        characterId = "",
+                        name = appCtx.getString(R.string.voice_role_narrator),
+                        isNarrator = true,
+                    ),
+                )
+                addAll(profiles)
+            }
+        }
+
     /** 正在读的这本书的当前章，换了书或新引擎章节输入还没发布就返回 null */
     private fun currentChapterIndex(): Int? = ReadBook.durChapterIndex
         .takeIf { ReadBook.book?.bookUrl == bookUrl && ReadBook.readerChapterInputWindow.current != null }
@@ -658,7 +715,6 @@ class SpeechStoryboardViewModel(
                 SpeechResolutionSource.User -> StoryboardSource.User
                 SpeechResolutionSource.Fallback -> StoryboardSource.Fallback
             },
-            locked = segment.userLocked,
             // 没绑定音色也能试听（回退引擎默认），按钮只在没有文本时才灰
             previewable = segment.text.isNotBlank(),
             sceneIndex = segment.sceneIndex,
@@ -826,56 +882,93 @@ class SpeechStoryboardViewModel(
     }
 
     /**
-     * 锁定 / 解锁这一条分镜。
+     * 改这一条分镜的说话人。
      *
-     * 锁定是"这一句的说话人我认可了"的唯一入口：现成的跳过锁定段判断会让重新分析不再动它，
-     * 正文胶囊改归属走的是另一张分配表，钉不住分析结果本身。
+     * 写的是真相表 `chapter_speech_segments` 那一行（正文胶囊那条链写的也是它，所以两边看得见
+     * 同一个结论），并顺手把这几句**已经有**的分配行改成同一个人——不改的话下一次准备这一章时
+     * [io.legado.app.help.readaloud.cast.CastSegmentFinalizer.replay] 会照分配表把刚写的这份顶回去，
+     * 用户看到的就是「在这里改了等于没改」。为什么只改已有行不新建：新建会往正文里塞角色标记，
+     * 坐标一移库里那几段就对不上现在这份正文了。
      *
-     * 写入只改 `userLocked` 那一列，**不能拿页面上这一行整份回写分段**——这一行可能是分配表
-     * 覆盖切过之后的碎片（正文和起止点都被改过），回写会把库里分析段换成碎片。
-     * 碎片与它所属的分析段共用同一个 id，所以锁定天然是"按段"生效、界面上同 id 的几行一起翻转，
-     * 与库里真正被锁住的那一行是一致的。
+     * 页面上那一行可能是分配覆盖切过的碎片，碎片与它所属的分析段共用同一个 id，所以这一刀
+     * 天然是"按段"生效，与库里真正被写的那一行一致。
      *
-     * 这里不重启朗读、不重算计划：锁定只影响下一次重新分析，当前播出的声音不受影响。
+     * 改过的段算用户定稿（`userLocked`），重新分析本章不再动它；要回 AI 那份原判断，
+     * 用「重新分析本章」（它先把这一章的分析行删掉）。这里不重启朗读：正在播的那一句的声音不受影响，
+     * 但从下一次出计划起念的是新那一位。
      */
-    private fun toggleSegmentLock(itemId: String) {
+    private fun assignSegmentSpeaker(itemId: String, speaker: StoryboardSpeakerUi) {
+        val chapterIndex = _uiState.value.selectedChapterIndex ?: return
         val item = _uiState.value.scenes.flatMap { it.items }.firstOrNull { it.id == itemId }
         if (item == null) {
             // 按钮就长在这一行上，走到这里只能是状态刚被重分析换掉、点下去的那一行已经不在了。
             // 这不属于要打扰用户的失败，留一行日志给排查用。
-            AppLog.put("分镜锁定段没有找到这一行：$itemId")
+            AppLog.put("分镜改归属没有找到这一行：$itemId")
+            _uiState.update { it.copy(assigningItemId = null) }
             return
         }
-        val locked = !item.locked
+        val narrator = speaker.isNarrator
+        // 心声（正文里单引号那一句）改完人还是心声，只有原本不是角色的段才转成对白
+        val roleType = when {
+            narrator -> SpeechRoleType.Narrator
+            item.role == StoryboardRole.Thought -> SpeechRoleType.Thought
+            else -> SpeechRoleType.Character
+        }
         viewModelScope.launch {
             try {
-                chapterSpeechGateway.setSegmentUserLocked(itemId, locked)
-                _uiState.update { state ->
-                    state.copy(
-                        scenes = state.scenes.map { scene ->
-                            if (scene.items.none { it.id == itemId }) {
-                                scene
-                            } else {
-                                scene.copy(
-                                    items = scene.items.map {
-                                        if (it.id == itemId) it.copy(locked = locked) else it
-                                    }.toImmutableList(),
-                                )
-                            }
-                        }.toImmutableList(),
-                    )
-                }
+                CastSegmentFinalizer.reattribute(
+                    bookUrl = bookUrl,
+                    chapterIndex = chapterIndex,
+                    segmentId = itemId,
+                    roleType = roleType,
+                    characterId = if (narrator) null else speaker.characterId,
+                    characterName = if (narrator) "" else speaker.name,
+                    voicePoolLabel = speaker.poolLabel,
+                )
+                _uiState.update { it.copy(assigningItemId = null) }
+                reloadChapterDetail(chapterIndex)
                 toast(
-                    appCtx.getString(
-                        if (locked) R.string.speech_storyboard_lock_on else R.string.speech_storyboard_lock_off,
-                    )
+                    if (narrator) {
+                        appCtx.getString(R.string.speech_storyboard_assign_narrator)
+                    } else {
+                        appCtx.getString(R.string.speech_storyboard_assign_to, speaker.name)
+                    }
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                AppLog.put("分镜锁定段写入失败：$itemId\n${e.localizedMessage}", e)
+                AppLog.put("分镜改归属写入失败：$itemId → ${speaker.name}\n${e.localizedMessage}", e)
+                _uiState.update { it.copy(assigningItemId = null) }
                 toast(e.localizedMessage ?: appCtx.getString(R.string.save_failed))
             }
+        }
+    }
+
+    /**
+     * 改完归属之后安静地重算这一章：读刚写好的那几段 → 按现在的音色绑定选音 → 套分配覆盖 → 换列表。
+     *
+     * 重算而不是手工改那一行：这一行的音色是新那一位的绑定算出来的（
+     * [io.legado.app.domain.usecase.BuildSpeechPlanUseCase]），概要里的人数也要跟着变。
+     * 手改只能改显示，改完页面与耳朵就不是同一份了。
+     *
+     * 与 [loadChapter] 的缓存分支同一条路，差别只在不置 isLoading——改一句话不该让整屏闪一次加载页，
+     * 也不重跑分析（库里已经有这一章的分段，一个 token 都不该再花）。
+     */
+    private suspend fun reloadChapterDetail(chapterIndex: Int) {
+        val stored = withContext(Dispatchers.IO) {
+            chapterSpeechGateway.getChapterSegments(bookUrl, chapterIndex)
+        }
+        if (stored.isEmpty()) return
+        val plan = cachedChapterPlan(chapterIndex, splitPolicy(), stored)
+        // 等结果的这段时间里用户可能已经切章或退回列表：那一屏的计划不是这一章的，不能回投
+        if (chapterIndex != _uiState.value.selectedChapterIndex) return
+        currentPlan = plan
+        val items = plan.map(::toItemUi)
+        _uiState.update {
+            it.copy(
+                scenes = groupIntoScenes(items).toImmutableList(),
+                summary = buildSummary(items),
+            )
         }
     }
 

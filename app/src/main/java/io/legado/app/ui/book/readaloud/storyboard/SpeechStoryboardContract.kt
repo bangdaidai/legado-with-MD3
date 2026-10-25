@@ -29,6 +29,16 @@ data class SpeechStoryboardUiState(
     /** 正在合成 / 试听中的片段 id */
     val previewingItemId: String? = null,
     /**
+     * 「改归属」弹窗正在改的那一段 id；null = 弹窗没开。
+     *
+     * 开合放在状态里而不是页面 `remember`，因为候选名单要经
+     * [io.legado.app.domain.gateway.BookKnowledgeGateway] 查（页面不能查库），
+     * 与 [speakerOptions] 同生同灭。
+     */
+    val assigningItemId: String? = null,
+    /** 改归属的候选：旁白 + 这本书启用/临时的人物，随本章一起加载 */
+    val speakerOptions: ImmutableList<StoryboardSpeakerUi> = persistentListOf(),
+    /**
      * 细节页正在播报的章内位置，-1 表示没在播。
      *
      * 用来高亮"当前正在念的这一条"。播放位置由朗读服务上报，与分镜条目按
@@ -95,14 +105,32 @@ data class StoryboardItemUi(
     val chapterPosition: Int = 0,
     val confidence: Float = 0f,
     val source: StoryboardSource = StoryboardSource.Rule,
-    /** 用户手动改过、不再被 AI 覆盖 */
-    val locked: Boolean = false,
     /** 能不能试听：音色解析不出来时禁用 */
     val previewable: Boolean = false,
     /** 所属场景序号，从 1 开始；0 表示没有场景数据 */
     val sceneIndex: Int = 0,
     /** 所属场景短标题，可能为空 */
     val sceneTitle: String = "",
+)
+
+/**
+ * 「改归属」弹窗里的一个候选说话人。
+ *
+ * 候选就是**这一章能选的人**：旁白那一档 + 这本书启用中的人物，外加 AI 认出来但还没进
+ * 配音列表的临时人物（[isDraft]，只在行尾标一下——他们本来就能绑音色、参与路由，
+ * 不需要先转正才能被点到）。停用的（从配音列表删掉的那批）不进候选。
+ */
+@Stable
+data class StoryboardSpeakerUi(
+    /** `book_character_profiles` 那一行的 id，也就是朗读侧查音色绑定用的主体 id */
+    val characterId: String,
+    val name: String,
+    /** 旁白那一档：选中它等于「这一段没有说话人」 */
+    val isNarrator: Boolean = false,
+    /** 临时人物（AI 识别出的草稿档案） */
+    val isDraft: Boolean = false,
+    /** 这个人所属的声音池，空 = 没归池 */
+    val poolLabel: String = "",
 )
 
 enum class StoryboardRole {
@@ -149,13 +177,28 @@ sealed interface SpeechStoryboardIntent {
     data class PreviewSegment(val itemId: String) : SpeechStoryboardIntent
 
     /**
-     * 锁定 / 解锁这一段（[itemId] 就是 `chapter_speech_segments` 那一行的 id）。
+     * 打开「改归属」（[itemId] 就是 `chapter_speech_segments` 那一行的 id）。
      *
-     * 锁定 = 用户认可这一句的说话人：现成的「跳过锁定段」判断会让重新分析不再改它，
-     * 这是正文胶囊之外唯一能把结论钉到分析表上的动作。它**不换音色、也不重启朗读**，
-     * 所以只改那一列，界面就地翻转徽标即可。
+     * 候选名单随本章一起加载（见 [SpeechStoryboardUiState.speakerOptions]），点开就是完整的，
+     * 不等查询回来再填——这一页是核对清单，弹层先空一下会像没点开。
      */
-    data class ToggleSegmentLock(val itemId: String) : SpeechStoryboardIntent
+    data class OpenSpeakerPicker(val itemId: String) : SpeechStoryboardIntent
+
+    /** 关掉「改归属」但什么都不改 */
+    data object CloseSpeakerPicker : SpeechStoryboardIntent
+
+    /**
+     * 把这一段的说话人改成 [speaker]；[StoryboardSpeakerUi.isNarrator] 那一档是「还给旁白」。
+     *
+     * 一次点选 = 一次写入：真相表那一行连同这几句**已有**的分配行一起改，否则下一次准备这一章
+     * 会被旧分配顶回去（口径见
+     * [io.legado.app.help.readaloud.cast.CastSegmentFinalizer.reattribute]）。改过的段就此算用户
+     * 定稿，重跑分析不再动它；要回 AI 那份原判断，用「重新分析本章」。
+     */
+    data class AssignSegmentSpeaker(
+        val itemId: String,
+        val speaker: StoryboardSpeakerUi,
+    ) : SpeechStoryboardIntent
 
     data object StopPreview : SpeechStoryboardIntent
 
