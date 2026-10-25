@@ -712,26 +712,29 @@ object VoicePoolStore {
         pending.forEach { voice ->
             val traits = ReadAloudVoiceTraits.of(voice.toDomain())
             val tags = traits.tags
+
+            fun join(poolId: String) {
+                val existing = joins.firstOrNull { it.poolId == poolId }
+                if (existing != null) {
+                    existing.voiceIds.add(voice.id)
+                } else {
+                    joins += Target(poolId, mutableSetOf(voice.id))
+                }
+            }
+
             // A：性别矩阵（性别未知的不进性别池）
             if (traits.gender != ReadAloudVoiceTraits.GENDER_UNKNOWN) {
                 val ageBand = ageBandFromTags(tags)
                 byGender[traits.gender]?.firstOrNull { it.ageBand == ageBand }
-                    ?.let { pool ->
-                        joins.firstOrNull { it.poolId == pool.id }
-                            ?.voiceIds?.add(voice.id)
-                            ?: joins += Target(pool.id, mutableSetOf(voice.id))
-                    }
+                    ?.let { join(it.id) }
             }
             // B：自定义池名核心词
             pools.forEach { pool ->
                 val core = pool.name.trim().trimEnd('音')
                 if (core.length >= 2 &&
-                    tags.any { it.contains(core, ignoreCase = true) } &&
-                    joins.none { it.poolId == pool.id && voice.id in it.voiceIds }
+                    tags.any { it.contains(core, ignoreCase = true) }
                 ) {
-                    joins.firstOrNull { it.poolId == pool.id }
-                        ?.voiceIds?.add(voice.id)
-                        ?: joins += Target(pool.id, mutableSetOf(voice.id))
+                    join(pool.id)
                 }
             }
         }
