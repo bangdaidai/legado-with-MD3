@@ -164,23 +164,17 @@ data class TtsVoicePresetEditorUi(
     val format: String = "mp3",
     val formatOptions: ImmutableList<String> = persistentListOf(),
     /**
-     * 用户给这条音色的分类标注（`voice_labels`）。空串 = 未标注。
-     *
-     * 这三栏与引擎自己声明的那份分开存：引擎声明在音色行的 `traitsJson` 里，同步时会被
-     * 逐字段重建；标注在旁表里，谁也不覆盖谁，读取侧按「标注 > 池分类 > 声明 > 名字推测」回落。
+     * 自定义标签（`voice_labels.tagsJson`），逗号分隔自由文本；入库前按
+     * [io.legado.app.help.readaloud.cast.VoiceLabelStore.parseTags] 拆。
+     * 性别/语言/风格不再手动标注——自动取引擎目录声明 + 池分类 + 名字推测（对齐 NG）。
      */
-    val labelGender: String = "",
-    val labelAgeBand: String = "",
-    /** 逗号分隔的自由文本；入库前按 [io.legado.app.help.readaloud.cast.VoiceLabelStore.parseTags] 拆。 */
     val labelTags: String = "",
-    /** 未标注那几栏当前实际按什么走（已本地化，只作提示，绝不写回表）。 */
-    val labelFallback: String = "",
     /**
      * true = 目录同步的音色（managedBy 不是 user）：预设参数不可改，
-     * 只开放「分类标注」与「声音池」两区，保存走轻量路径（不重建音色行）。
+     * 只开放「标签备注」与「声音池」，保存走轻量路径（不重建音色行）。
      */
     val readonlyPreset: Boolean = false,
-    /** 该音色在哪些声音池里（编辑对话框内直接勾选，保存时同步成员关系） */
+    /** 该音色在哪些声音池里（编辑对话框内选择，保存时同步成员关系） */
     val memberPools: ImmutableList<VoicePoolCheckUi> = persistentListOf(),
 )
 
