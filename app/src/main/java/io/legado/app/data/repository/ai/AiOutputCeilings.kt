@@ -55,6 +55,9 @@ internal object AiOutputCeilings {
         RegexOption.IGNORE_CASE
     )
 
+    /** 兜底用的"任意三位以上数字"，只在关键词表没覆盖到时才用它。 */
+    private val BARE_NUMBER = Regex("""\d{3,}""")
+
     /** 本机被供应商告知过的模型上限，键见 [keyFor]。 */
     private val learned = ConcurrentHashMap<String, Int>()
 
@@ -117,7 +120,7 @@ internal object AiOutputCeilings {
             .filter { it in PLAUSIBLE_MIN..PLAUSIBLE_MAX }
             .minOrNull()?.let { return it }
         // 兜底：关键词表没覆盖到的写法（"limit is 8192 tokens"），只认像 token 数的数字
-        return raw.findAll("""\d{3,}""")
+        return BARE_NUMBER.findAll(raw)
             .mapNotNull { it.value.toIntOrNull() }
             .filter { it in PLAUSIBLE_MIN..PLAUSIBLE_MAX }
             .minOrNull()
