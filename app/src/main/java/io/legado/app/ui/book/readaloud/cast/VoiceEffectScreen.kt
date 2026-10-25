@@ -159,7 +159,8 @@ fun VoiceEffectScreen(
             item {
                 AppText(
                     text = stringResource(R.string.voice_effect_summary),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    // 左右边距由 LazyColumn 的 adaptiveContentPadding 统一给，这里只补上下留白
+                    modifier = Modifier.padding(vertical = 8.dp),
                     style = LegadoTheme.typography.bodySmall,
                     color = LegadoTheme.colorScheme.onSurfaceVariant,
                 )
@@ -168,9 +169,7 @@ fun VoiceEffectScreen(
                 item {
                     AppText(
                         text = stringResource(R.string.voice_effect_session_dropped_hint),
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 8.dp),
+                        modifier = Modifier.padding(bottom = 8.dp),
                         style = LegadoTheme.typography.bodySmall,
                         color = LegadoTheme.colorScheme.tertiary,
                     )
@@ -185,7 +184,6 @@ fun VoiceEffectScreen(
                     description = row.summary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
                         .animateItem(),
                     trailingContent = {
                         TinySwitch(
