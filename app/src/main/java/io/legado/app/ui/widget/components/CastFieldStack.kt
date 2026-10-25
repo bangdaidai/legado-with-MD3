@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -289,15 +290,25 @@ fun CastFieldStack(
     // 点三角=浏览全部，打字=按输入筛选。记行 id，因为输入框是共享的、不能记在框身上。
     var browseAllId by remember { mutableStateOf<String?>(null) }
     val lineTop = remember { mutableStateMapOf<String, Float>() }
+    val lineHeight = remember { mutableStateMapOf<String, Float>() }
     var stackTop by remember { mutableFloatStateOf(0f) }
     // 浏览动作（点行/点三角）先收键盘：候选列表是给人挑的，键盘压着只会挡选项
     val hideIme = rememberImeHide()
     val active = specs.indexOfFirst { it.id == activeId }.let { if (it >= 0) it else 0 }
     val activeSpec = specs.getOrNull(active)
+    // 当前展开的那一行（调用方保证同一时刻最多一行）
+    val expandedSpec = specs.firstOrNull { it.expanded && it.hasDropdown }
+    // 收起动画期间还要继续画最后一帧：记住刚收的那一行，直到退场动画结束
+    var lastExpandedId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(expandedSpec?.id) {
+        if (expandedSpec != null) lastExpandedId = expandedSpec.id
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            // 候选列表悬浮在本组件之上，展开时必须盖过后面的按钮行
+            .zIndex(if (expandedSpec != null) 1f else 0f)
             .onGloballyPositioned { stackTop = it.localToRoot(Offset.Zero).y },
     ) {
         Column(
@@ -305,17 +316,8 @@ fun CastFieldStack(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             specs.forEach { spec ->
-                val query = spec.value.trim()
-                val visible = remember(spec.options, browseAllId, query, spec.id) {
-                    if (!spec.hasDropdown || browseAllId == spec.id || query.isEmpty()) {
-                        spec.options
-                    } else {
-                        spec.options.filter { it.label.contains(query, ignoreCase = true) }
-                    }
-                }
                 CastFieldShell(
                     spec = spec,
-                    options = visible,
                     hidden = spec === activeSpec,
                     onActivate = {
                         hideIme()
@@ -327,6 +329,7 @@ fun CastFieldStack(
                     },
                     modifier = Modifier.onGloballyPositioned {
                         lineTop[spec.id] = it.localToRoot(Offset.Zero).y
+                        lineHeight[spec.id] = it.size.height.toFloat()
                     },
                 )
             }
@@ -341,14 +344,55 @@ fun CastFieldStack(
                 },
             )
         }
+        // 候选列表**悬浮**在展开行下方，不参与父级测量。
+        //
+        // 以前它长在行内（Column 里 AnimatedVisibility），一展开整张卡片就长高
+        // 200dp、把宿主窗口顶上去——分配卡片、配音弹层这些「按内容高居中」的地方
+        // 都被撑得一跳。悬浮后卡片高度在展开前后完全一致，列表本身仍然在卡片
+        // 的滚动视口内（滚动容器负责裁剪），点外面/再点三角即可收起。
+        val overlaySpec = expandedSpec ?: specs.firstOrNull { it.id == lastExpandedId }
+        if (overlaySpec != null) {
+            val overlayTop = (lineTop[overlaySpec.id] ?: 0f) - stackTop +
+                (lineHeight[overlaySpec.id] ?: 0f)
+            Box(modifier = Modifier.matchParentSize().zIndex(1f)) {
+                AnimatedVisibility(
+                    visible = expandedSpec != null,
+                    enter = fadeIn(tween(CANDIDATE_FADE_IN_MS)) +
+                            slideInVertically(
+                                animationSpec = tween(CANDIDATE_FADE_IN_MS),
+                                initialOffsetY = { -it / 8 },
+                            ) +
+                            scaleIn(
+                                animationSpec = tween(CANDIDATE_FADE_IN_MS),
+                                initialScale = 0.96f,
+                                transformOrigin = TransformOrigin(0.5f, 0f),
+                            ),
+                    exit = fadeOut(tween(CANDIDATE_FADE_OUT_MS)),
+                ) {
+                    val query = overlaySpec.value.trim()
+                    val options = if (browseAllId == overlaySpec.id || query.isEmpty()) {
+                        overlaySpec.options
+                    } else {
+                        overlaySpec.options.filter { it.label.contains(query, ignoreCase = true) }
+                    }
+                    CastOptionList(
+                        options = options,
+                        onSelected = {
+                            overlaySpec.onSelected(it)
+                            overlaySpec.onExpand(false)
+                        },
+                        modifier = Modifier.offset { IntOffset(0, overlayTop.roundToInt()) },
+                    )
+                }
+            }
+        }
     }
 }
 
-/** 一行的外壳：长得和输入框一样的展示框（永不聚焦）+ 内嵌候选列表。 */
+/** 一行的外壳：长得和输入框一样的展示框（永不聚焦）。 */
 @Composable
 private fun CastFieldShell(
     spec: CastFieldSpec,
-    options: List<CastOption>,
     hidden: Boolean,
     onActivate: () -> Unit,
     modifier: Modifier = Modifier,
@@ -385,34 +429,6 @@ private fun CastFieldShell(
                     .pointerInput(onActivate) {
                         detectTapGestures { onActivate() }
                     },
-            )
-        }
-        // 候选列表就地展开。
-        //
-        // 进出动画只做「透明度 + 从顶部轻推/微缩」，不做高度补间：这几行下拉出现在
-        // AlertDialog、配音卡片和悬浮窗里，宿主都是「按内容高 + 居中」或 LazyColumn 里的行，
-        // 高度每帧都变会让宿主跟着重新量自己，整窗上下跳、行与行还会叠在一起。
-        // 这里高度仍然是一次性落位（与不加动画时完全一样），观感由淡入淡出和位移提供。
-        AnimatedVisibility(
-            visible = spec.hasDropdown && spec.expanded,
-            enter = fadeIn(tween(CANDIDATE_FADE_IN_MS)) +
-                    slideInVertically(
-                        animationSpec = tween(CANDIDATE_FADE_IN_MS),
-                        initialOffsetY = { -it / 8 },
-                    ) +
-                    scaleIn(
-                        animationSpec = tween(CANDIDATE_FADE_IN_MS),
-                        initialScale = 0.96f,
-                        transformOrigin = TransformOrigin(0.5f, 0f),
-                    ),
-            exit = fadeOut(tween(CANDIDATE_FADE_OUT_MS)),
-        ) {
-            CastOptionList(
-                options = options,
-                onSelected = {
-                    spec.onSelected(it)
-                    spec.onExpand(false)
-                },
             )
         }
     }
@@ -493,10 +509,11 @@ private fun CastArrow(expanded: Boolean, onClick: () -> Unit) {
 private fun CastOptionList(
     options: List<CastOption>,
     onSelected: (CastOption) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(CANDIDATE_CORNER_RADIUS)
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp)
             // 圆角容器：clip 要在 background/子项之前，滚动到边上的选项也按圆角裁掉，
