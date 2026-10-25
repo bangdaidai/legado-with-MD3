@@ -65,6 +65,7 @@ import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import androidx.compose.material3.Checkbox
 import io.legado.app.ui.book.readaloud.cloudtts.VoiceCardItem
 import io.legado.app.ui.book.readaloud.cloudtts.VoiceTraitTag
+import io.legado.app.ui.book.readaloud.cloudtts.VoiceTraitTagStrip
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
@@ -755,16 +756,16 @@ private fun CastPoolCard(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            // 池里能混着不同引擎的音色，得看清这一条是谁家的（同「朗读引擎与音色」页）
-                            if (member.engineName.isNotBlank()) {
-                                AppText(
-                                    text = member.engineName,
-                                    style = LegadoTheme.typography.labelSmall,
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+                            // 池里能混着不同引擎的音色：第二行与「朗读引擎与音色」页同款标签，
+                            // 引擎名收尾；没有任何可显示字段时整条不占高度
+                            VoiceTraitTagStrip(
+                                gender = member.gender,
+                                language = member.language,
+                                style = member.style,
+                                tags = member.tags,
+                                engineName = member.engineName,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
                         }
                         memberTrailing?.invoke(member)
                         SmallPlainButton(
@@ -823,15 +824,15 @@ private fun UnassignedVoiceRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (member.engineName.isNotBlank()) {
-                    AppText(
-                        text = member.engineName,
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                // 与池内成员行同一份标签：还不知道该归哪个池时，标签就是唯一的判断依据
+                VoiceTraitTagStrip(
+                    gender = member.gender,
+                    language = member.language,
+                    style = member.style,
+                    tags = member.tags,
+                    engineName = member.engineName,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
             memberTrailing?.invoke(member)
             SmallPlainButton(

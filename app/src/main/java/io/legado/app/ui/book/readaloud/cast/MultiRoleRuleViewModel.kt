@@ -631,14 +631,20 @@ class MultiRoleRuleViewModel(
     private suspend fun loadUnassignedVoices(): List<CastMemberUi> {
         val poolOf = VoicePoolStore.voicePoolMap()
         val engineNames = VoicePoolStore.voiceEngineNames()
+        val voiceTraits = VoicePoolStore.voiceTraits()
         return VoicePoolStore.allVoicePairs()
             .filterNot { (id, _) -> poolOf.containsKey(id) }
             .map { (id, display) ->
+                val traits = voiceTraits[id]
                 CastMemberUi(
                     voiceId = id,
                     displayName = display,
                     engineName = engineNames[id].orEmpty(),
                     checked = true,
+                    gender = traits?.gender.orEmpty(),
+                    language = traits?.language.orEmpty(),
+                    style = traits?.style.orEmpty(),
+                    tags = traits?.tags.orEmpty().take(3),
                 )
             }
     }
@@ -669,12 +675,18 @@ class MultiRoleRuleViewModel(
         execute {
             allVoices = VoicePoolStore.allVoicePairs()
             val detail = VoicePoolStore.poolDetail(poolId)
+            val voiceTraits = VoicePoolStore.voiceTraits()
             val rows = detail.members.map { m ->
+                val traits = voiceTraits[m.id]
                 CastMemberUi(
                     voiceId = m.id,
                     displayName = m.displayName,
                     engineName = m.engineName,
                     checked = m.enabled,
+                    gender = traits?.gender.orEmpty(),
+                    language = traits?.language.orEmpty(),
+                    style = traits?.style.orEmpty(),
+                    tags = traits?.tags.orEmpty().take(3),
                 )
             }
             _uiState.update { state ->

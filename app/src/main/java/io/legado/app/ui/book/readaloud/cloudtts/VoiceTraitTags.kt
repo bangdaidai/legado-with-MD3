@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.readaloud.cloudtts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -110,6 +113,77 @@ fun VoiceTraitTagRow(
                 modifier = Modifier.padding(start = 2.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * 窄行标签条：性别符号 + 语言 + 风格 + 描述标签五色轮换 + 引擎名弱色块，超宽横向滑动。
+ *
+ * 声音池成员行、未归池音色这些「一行一条音色」的地方共用；与 [VoiceTraitTagRow] 的差别
+ * 只在不吃满宽度、放不下可滑，适合塞进列表行第二行。所有字段都空时整条不画，不占行高。
+ */
+@Composable
+fun VoiceTraitTagStrip(
+    gender: String,
+    language: String,
+    style: String,
+    tags: List<String>,
+    engineName: String,
+    modifier: Modifier = Modifier,
+) {
+    val genderSymbol = when (gender) {
+        ReadAloudVoiceTraits.GENDER_MALE -> "♂"
+        ReadAloudVoiceTraits.GENDER_FEMALE -> "♀"
+        else -> null
+    }
+    val visibleTags = tags.filter(String::isNotBlank).take(3)
+    if (genderSymbol == null && language.isBlank() && style.isBlank() &&
+        visibleTags.isEmpty() && engineName.isBlank()
+    ) {
+        return
+    }
+    val colors = tagColors()
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // 性别沿用候选卡第一行的那两种颜色，两处看起来是同一套记号
+        genderSymbol?.let {
+            val male = gender == ReadAloudVoiceTraits.GENDER_MALE
+            VoiceTraitTag(
+                text = it,
+                container = if (male) {
+                    LegadoTheme.colorScheme.primaryContainer
+                } else {
+                    LegadoTheme.colorScheme.secondaryContainer
+                },
+                content = if (male) {
+                    LegadoTheme.colorScheme.onPrimaryContainer
+                } else {
+                    LegadoTheme.colorScheme.onSecondaryContainer
+                },
+            )
+        }
+        language.takeIf(String::isNotBlank)?.let {
+            VoiceTraitTag(it.take(6), colors[2].first, colors[2].second)
+        }
+        style.takeIf(String::isNotBlank)?.let {
+            VoiceTraitTag(it, colors[1].first, colors[1].second)
+        }
+        var index = 0
+        visibleTags.forEach { tag ->
+            val color = colors[index % colors.size]
+            VoiceTraitTag(tag, color.first, color.second)
+            index++
+        }
+        engineName.takeIf(String::isNotBlank)?.let {
+            VoiceTraitTag(
+                it,
+                LegadoTheme.colorScheme.surfaceVariant,
+                LegadoTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

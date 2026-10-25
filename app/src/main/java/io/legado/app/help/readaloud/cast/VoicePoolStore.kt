@@ -778,10 +778,30 @@ object VoicePoolStore {
     suspend fun allVoicePairs(): List<Pair<String, String>> =
         appDb.readAloudVoiceDao.getVoices().filter { !it.excluded }.map { it.id to it.displayName }
 
-    /** 音色 id → 性别/语言/风格/描述标签，成员选择卡展示用。 */
-    suspend fun voiceTraits(): Map<String, VoiceTraits> =
-        appDb.readAloudVoiceDao.getVoices()
-            .associate { it.id to ReadAloudVoiceTraits.of(it.toDomain()) }
+    /**
+     * 音色 id → 性别/语言/风格/描述标签，成员选择卡与池成员行展示用。
+     *
+     * 用户标注逐栏优先：[VoiceLabelStore] 里标过的性别、标签覆盖引擎声明，其余沿用声明，
+     * 与「朗读引擎与音色」页同一口径。以前只读 traitsJson，用户在音色列表里自己打的标签
+     * 在声音池候选里一条都看不见，同一音色两页两套标签。
+     */
+    suspend fun voiceTraits(): Map<String, VoiceTraits> {
+        val labels = VoiceLabelStore.all()
+        return appDb.readAloudVoiceDao.getVoices()
+            .associate { voice ->
+                val declared = ReadAloudVoiceTraits.of(voice.toDomain())
+                val label = labels[voice.id]
+                val traits = if (label == null) {
+                    declared
+                } else {
+                    declared.copy(
+                        gender = label.gender.trim().ifEmpty { declared.gender },
+                        tags = (VoiceLabelStore.tagsOf(label) + declared.tags).distinct(),
+                    )
+                }
+                voice.id to traits
+            }
+    }
 
     /** 分配表行数据（角色 → 音色/书名/句数）。 */
     data class AssignmentRowData(
