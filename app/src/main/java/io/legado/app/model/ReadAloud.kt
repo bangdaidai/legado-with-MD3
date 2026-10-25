@@ -120,6 +120,11 @@ object ReadAloud {
             val (httpVoices, systemRoutes) = runBlocking {
                 val voiceIds = appDb.readAloudVoiceDao.getBindings(bookUrl)
                     .mapTo(hashSetOf()) { it.voiceId }
+                // 全局默认旁白也是计划里真正要发声的一个人：它是 http/云端音色时必须升级文件合成，
+                // 否则系统直读会把它过滤成兜底音，表现就是「设了默认旁白，声音没变」。
+                settings.defaultNarratorVoiceId
+                    .takeIf { it.isNotBlank() }
+                    ?.let(voiceIds::add)
                 // 分配表里的角色音是直接记在角色身上的（没进过配音页就没有绑定行），
                 // 只看 book_voice_bindings 会漏掉它们：整章退回系统直读、角色音被过滤成旁白。
                 appDb.castCharacterDao.getByBook(bookUrl).forEach {

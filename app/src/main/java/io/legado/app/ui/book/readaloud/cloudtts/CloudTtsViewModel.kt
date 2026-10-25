@@ -18,6 +18,7 @@ import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
+import io.legado.app.domain.model.readaloud.BookVoiceBinding
 import io.legado.app.domain.model.readaloud.CloudTtsEngine
 import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.CloudTtsSynthesisRequest
@@ -52,7 +53,9 @@ import io.legado.app.help.readaloud.playback.SystemTtsVoiceCatalog
 import io.legado.app.help.readaloud.playback.VoicePreviewSynthesizer
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.readaloud.player.restartReadAloudPipeline
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
 import io.legado.app.ui.widget.components.importComponents.ImportStatus
@@ -69,6 +72,7 @@ import kotlinx.collections.immutable.toPersistentList
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -86,6 +90,7 @@ class CloudTtsViewModel(
     private val httpTtsEngineGateway: HttpTtsEngineGateway,
     private val voiceGateway: ReadAloudVoiceGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
+    private val readAloudSessionStore: ReadAloudSessionStore,
     private val uploadRepository: UploadRepository,
     private val httpTtsRepository: HttpTtsRepository,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
@@ -1089,6 +1094,9 @@ class CloudTtsViewModel(
      *
      * 解析槽在多角色朗读计划里（本书配音没绑旁白时兜底），不影响未开多角色的经典朗读；
      * 禁用的音色解析不到，长按直接拒绝并说明原因，避免设完听感没变化成哑谜。
+     *
+     * 正在播的这一章也要换：朗读计划是章准备时一次性建好放进播放队列的，只改偏好不会重建，
+     * 观感就是「设了默认旁白、耳朵里还是原来那个人，重开朗读才对」。与配音页改绑定共用同一条重启。
      */
     private fun toggleDefaultNarratorVoice(id: String) = viewModelScope.launch {
         val voice = voices.firstOrNull { it.id == id } ?: return@launch
@@ -1107,6 +1115,44 @@ class CloudTtsViewModel(
                 else R.string.cloud_tts_default_narrator_set
             )
         )
+        // 返回上一页会销毁本 ViewModel：重启必须跑完，否则只 stop 不 play，声音直接丢
+        withContext(NonCancellable) { restartChapterForDefaultNarrator() }
+    }
+
+    /**
+     * 默认旁白改完后让当前正在播的这一章按新配置重建计划。
+     *
+     * 不重启的情形都是「重启了声音也不会变」：多角色朗读关着时旁白根本不进计划；
+     * 本书配音页自己绑了旁白时全局默认压不过它（这一条会 toast 说明）；听书的书不是阅读页
+     * 当前这本时重启会把朗读拽到另一本书上，只能等下一章自然生效。
+     */
+    private suspend fun restartChapterForDefaultNarrator() {
+        if (!readAloudSettingsGateway.currentSettings.useMultiSpeaker) return
+        // 会话书优先；尚未建会话时按阅读页当前这本（与 ReadAloud 里解析引擎同一取法）
+        val bookUrl = (ReadAloud.bookSession.book ?: ReadBook.book)?.bookUrl ?: return
+        // 重启按「阅读页当前这本书」重放（restartReadAloudPipeline 的请求取自阅读页）。
+        // 听的不是阅读页这本时重启会把朗读拽到另一本书上，代价远大于晚一章生效。
+        if (ReadBook.book?.bookUrl != bookUrl) {
+            AppLog.putDebug("默认旁白已改：听书的书不是阅读页当前这本，等下一章自然生效")
+            return
+        }
+        val boundVoiceId = runCatching {
+            voiceGateway.getBinding(
+                bookUrl,
+                BookVoiceBinding.SUBJECT_NARRATOR,
+                BookVoiceBinding.SUBJECT_NARRATOR,
+            )
+        }.getOrNull()?.voiceId.orEmpty()
+        if (boundVoiceId.isNotBlank()) {
+            // 不说清楚的话，下一次还是「设了默认旁白却没变」——这本书的旁白在配音页单独指定过
+            AppLog.put(
+                "默认旁白已改：这本书的旁白在配音页单独绑过（$boundVoiceId），" +
+                    "按优先级压过全局默认，当前章不重启",
+                toast = true,
+            )
+            return
+        }
+        restartReadAloudPipeline(readAloudSessionStore, application)
     }
 
     /** 性别本地化 + 最多 3 条脚本声明的描述标签，再多两行也放不下 */
