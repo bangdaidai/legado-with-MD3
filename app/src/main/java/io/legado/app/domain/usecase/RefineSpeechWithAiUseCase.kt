@@ -1783,6 +1783,11 @@ class RefineSpeechWithAiUseCase(
  *
  * [decisionCount]（待决策的分段/原子数）决定输出预算：决策 JSON 逐段枚举，分段多的章
  * 输出远超固定下限，预算不足时模型在 max_tokens 处硬截断，JSON 断尾解析必炸。
+ *
+ * 但预算不能无限放大：供应商对 max_tokens 有一条硬线，越线不是"输出短一点"而是直接 400，
+ * 整章分析失败。所以夹两层——这里按模型声明的上限（没填按 [DEFAULT_OUTPUT_CEILING]）夹一次，
+ * 真被拒了由 AiTextRepositoryImpl 照供应商报的数字降档重发。夹过头导致截断也不致命：
+ * 分块本来就带"截断就对半重试"，只是多花几次请求。
  */
 internal fun speechAnalysisParams(
     preset: AiTaskPresetConfig,
@@ -1798,7 +1803,16 @@ internal fun speechAnalysisParams(
         MIN_OUTPUT_TOKENS,
         // 每条决策 JSON（hex segmentId + UUID + 枚举）按 250 tokens 留足余量
         decisionCount * 250 + 2_000,
-    ).coerceAtMost(30_000),
+    ).coerceAtMost(
+        // 模型编辑页填过「最大输出 tokens」就认它，没填用一个各家供应商普遍吃得下的保守值。
+        // 此前这里硬夹 30_000，等于假定所有供应商都允许 3 万输出：智谱 GLM-4-Flash 只到
+        // 16384，长章的决策预算一放大就 400 整章失败（2026-10-25 的日志）。再往上的口子由
+        // AiTextRepositoryImpl 的降档重试兜住，这里先让常态不撞墙。
+        preset.model.maxOutputTokens.takeIf { it > 0 } ?: DEFAULT_OUTPUT_CEILING,
+    ),
 )
 
 private const val MIN_OUTPUT_TOKENS = 8_000
+
+/** 模型没声明上限时的输出预算天花板：比常见供应商的 8192/16384 低一档以上不算保守。 */
+private const val DEFAULT_OUTPUT_CEILING = 16_000

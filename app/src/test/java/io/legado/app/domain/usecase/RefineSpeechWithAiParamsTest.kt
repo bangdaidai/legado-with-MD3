@@ -33,7 +33,51 @@ class RefineSpeechWithAiParamsTest {
         assertEquals(AiReasoningLevel.HIGH, params.reasoningLevel)
     }
 
-    private fun preset(reasoningLevel: AiReasoningLevel) = AiTaskPresetConfig(
+    @Test
+    fun `long chapters do not outbid the limit the model declares`() {
+        // 第 14 章那条 400：智谱 GLM-4-Flash 只允许 16384，预算按分段数放大到 2.7 万直接整章失败
+        val params = speechAnalysisParams(
+            preset(AiReasoningLevel.OFF, maxOutputTokens = 16_384),
+            AiReasoningLevel.OFF,
+            decisionCount = 100,
+        )
+
+        assertEquals(16_384, params.maxOutputTokens)
+    }
+
+    @Test
+    fun `an undeclared model still gets a provider-safe ceiling`() {
+        val params = speechAnalysisParams(
+            preset(AiReasoningLevel.OFF),
+            AiReasoningLevel.OFF,
+            decisionCount = 500,
+        )
+
+        assertEquals(16_000, params.maxOutputTokens)
+    }
+
+    @Test
+    fun `a small model ceiling beats the fixed floor`() {
+        // 4096 上限的模型：宁可在这里就压到 4096，也不要带着 8000 出门被拒
+        val params = speechAnalysisParams(
+            preset(AiReasoningLevel.OFF, maxOutputTokens = 4_096),
+            AiReasoningLevel.OFF,
+        )
+
+        assertEquals(4_096, params.maxOutputTokens)
+    }
+
+    @Test
+    fun `short chapters keep the thinking-sized floor`() {
+        val params = speechAnalysisParams(preset(AiReasoningLevel.OFF), AiReasoningLevel.OFF)
+
+        assertEquals(8_000, params.maxOutputTokens)
+    }
+
+    private fun preset(
+        reasoningLevel: AiReasoningLevel,
+        maxOutputTokens: Int = 0,
+    ) = AiTaskPresetConfig(
         id = "preset-chat",
         taskType = "chat",
         name = "Default Chat",
@@ -48,6 +92,7 @@ class RefineSpeechWithAiParamsTest {
             ),
             displayName = "GLM-4.7-Flash",
             modelId = "glm-4.7-flash",
+            maxOutputTokens = maxOutputTokens,
             defaultParams = AiGenerationParams(reasoningLevel = reasoningLevel)
         ),
         promptTemplate = "prompt",

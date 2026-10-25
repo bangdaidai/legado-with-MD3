@@ -1,6 +1,8 @@
 package io.legado.app.data.repository
 
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.repository.ai.AiOutputCeilings
+import io.legado.app.data.repository.ai.AiProtocolHandler
 import io.legado.app.data.repository.ai.AiProviderRegistry
 import io.legado.app.data.repository.ai.AnthropicHandler
 import io.legado.app.data.repository.ai.OpenAiChatHandler
@@ -8,6 +10,7 @@ import io.legado.app.data.repository.ai.OpenAiResponsesHandler
 import io.legado.app.domain.gateway.AiStreamEvent
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.model.AiAvailableModel
+import io.legado.app.domain.model.AiCallTrace
 import io.legado.app.domain.model.AiGenerateRequest
 import io.legado.app.domain.model.AiGenerateResponse
 import io.legado.app.domain.model.AiTaskType
@@ -68,7 +71,11 @@ class AiTextRepositoryImpl(
         try {
             response = withContext(Dispatchers.IO) {
                 withTimeout(callTimeoutMs()) {
-                    registry.handlerFor(provider.protocol).generate(request, recording).getOrThrow()
+                    generateWithinOutputCeiling(
+                        handler = registry.handlerFor(provider.protocol),
+                        request = request,
+                        trace = recording,
+                    )
                 }
             }
         } catch (e: TimeoutCancellationException) {
@@ -123,6 +130,70 @@ class AiTextRepositoryImpl(
             ?: Result.failure(failure ?: RuntimeException(error ?: "AI 生成失败"))
     }
 
+    /**
+     * 发请求前按已知上限夹住输出预算；被供应商以「max_tokens 非法」打回时，照它报出来的
+     * 数字降一档重发，最多 [MAX_OUTPUT_CEILING_FALLBACKS] 档。
+     *
+     * 为什么接在仓库层：预算是上层按「这次要判多少个分段」放大出来的（必须放大——预算不够
+     * 输出会断尾，严格 JSON 解析必炸），而那条线画在哪里只有供应商自己知道。不接这一手的
+     * 实际后果是 2026-10-25 那条日志：智谱对 GLM-4-Flash 只允许 16384，第 14 章的分镜说话人
+     * 分析带着 2 万多直接 400，整章失败。
+     */
+    private suspend fun generateWithinOutputCeiling(
+        handler: AiProtocolHandler,
+        request: AiGenerateRequest,
+        trace: AiCallTrace,
+    ): AiGenerateResponse {
+        val modelKey = AiOutputCeilings.keyFor(request.model)
+        var current = clampToKnownCeiling(request, trace)
+        var loweredTo: Int? = null
+        var fallbacks = 0
+        while (true) {
+            val outcome = runCatching { handler.generate(current, trace).getOrThrow() }
+            val error = outcome.exceptionOrNull()
+            if (error == null) {
+                // 学到的上限要等重发真的跑通才留下：万一读错数字，把 16384 记成 4096
+                // 会让这个模型之后每次都被小预算卡住
+                loweredTo?.let { AiOutputCeilings.remember(modelKey, it) }
+                return outcome.getOrThrow()
+            }
+            // 取消不是失败，交给外层按「调用被取消」落日志
+            if (error is CancellationException) throw error
+            if (fallbacks >= MAX_OUTPUT_CEILING_FALLBACKS ||
+                !AiOutputCeilings.isMaxTokensRejection(error)
+            ) {
+                throw error
+            }
+            val budget = current.params.maxOutputTokens ?: 0
+            val target = AiOutputCeilings.lowerAfterRejection(
+                current = budget,
+                rejectionText = AiOutputCeilings.rejectionText(error),
+            ) ?: throw error
+            trace.mark("供应商不接受 $budget 的输出预算，降到 $target 重发")
+            current = current.copy(params = current.params.copy(maxOutputTokens = target))
+            loweredTo = target
+            fallbacks++
+        }
+    }
+
+    /**
+     * 知道这个模型允许输出多少（用户在模型编辑页填的「最大输出 tokens」优先，其次本机
+     * 上一次学到的）就把预算夹进去，并在过程日志留一行，免得用户以为预算真的按上面算的发出去了。
+     */
+    private fun clampToKnownCeiling(
+        request: AiGenerateRequest,
+        trace: AiCallTrace,
+    ): AiGenerateRequest {
+        val budget = request.params.maxOutputTokens ?: return request
+        val ceiling = AiOutputCeilings.ceilingOf(
+            key = AiOutputCeilings.keyFor(request.model),
+            declaredLimit = request.model.maxOutputTokens,
+        ) ?: return request
+        if (budget <= ceiling) return request
+        trace.mark("输出预算 $budget 超过模型上限 $ceiling，已按 $ceiling 发")
+        return AiOutputCeilings.clampTo(request, ceiling)
+    }
+
     override fun generateStream(
         request: AiGenerateRequest
     ): Flow<AiStreamEvent> {
@@ -131,11 +202,14 @@ class AiTextRepositoryImpl(
         val model = request.model
         val recording = RecordingTrace(start)
         val suppressLog = request.suppressLog
+        // 流式这条路只做「发之前夹住」，不做被拒后降档重发：重发要把 emit 包进 try，
+        // 连协程取消一起判，代价大于收益。上限一旦由非流式调用学到，这里下次自然受益。
+        val preparedRequest = clampToKnownCeiling(request, recording)
         // 事件在发给上层的同时留一份聚合，调用结束后写进 AI 日志
         val reasoningBuilder = StringBuilder()
         val outputBuilder = StringBuilder()
         return flow {
-            registry.handlerFor(provider.protocol).stream(request, { event ->
+            registry.handlerFor(provider.protocol).stream(preparedRequest, { event ->
                 when (event) {
                     is AiStreamEvent.Reasoning -> reasoningBuilder.append(event.text)
                     is AiStreamEvent.Content -> outputBuilder.append(event.text)
@@ -264,3 +338,9 @@ class AiTextRepositoryImpl(
         }
     }
 }
+
+/**
+ * 输出预算被供应商拒绝后最多降几档。三档够对半砍过 30000→15000→7500→3750，
+ * 再多就是在浪费用户的请求配额，直接报原始失败让人换模型。
+ */
+private const val MAX_OUTPUT_CEILING_FALLBACKS = 3
