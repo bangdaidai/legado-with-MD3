@@ -197,9 +197,10 @@ class RefineSpeechWithAiUseCaseTest {
 
     @Test
     fun `scenes are assigned when the AI covers every segment`() = runBlocking {
+        // 新契约：只给每场的起点（1-based），覆盖范围由相邻切点算出来
         val ai = StubAiTextGateway(
-            """{"scenes":[{"title":"桥头对峙","segmentIds":["segment-1","segment-2"]}""" +
-                """,{"title":"雨夜离场","segmentIds":["segment-3"]}]}"""
+            """{"scenes":[{"title":"桥头对峙","from":1}""" +
+                """,{"title":"雨夜离场","from":3}]}"""
         )
         val useCase = refineUseCase(ai, MemoryChapterSpeechGateway())
 
@@ -213,8 +214,21 @@ class RefineSpeechWithAiUseCaseTest {
     }
 
     @Test
+    fun `a missing first cut still covers the opening segments`() = runBlocking {
+        // 模型从第二段起切：第一份标题扩到 1，开头那段不能没有场景
+        val ai = StubAiTextGateway(
+            """{"scenes":[{"title":"桥头对峙","from":2},{"title":"雨夜离场","from":3}]}"""
+        )
+        val useCase = refineUseCase(ai, MemoryChapterSpeechGateway())
+
+        val enriched = useCase.assignScenes(threeSegments())
+
+        assertEquals(listOf(1, 1, 2), enriched.map { it.sceneIndex })
+    }
+
+    @Test
     fun `an incomplete scene split leaves the segments untouched`() = runBlocking {
-        // 少返回 segment-3：整块校验不过，不能把半截分组写进去
+        // 没有可用切点（旧契约的 segmentIds 不算数）：整块不能写半截分组
         val ai = StubAiTextGateway(
             """{"scenes":[{"title":"桥头对峙","segmentIds":["segment-1","segment-2"]}]}"""
         )
@@ -526,7 +540,7 @@ private class MemoryChapterSpeechGateway : ChapterSpeechGateway {
 
     override suspend fun setSegmentUserLocked(segmentId: String, locked: Boolean) = Unit
 
-    // 定稿写入是正文胶囊那条链的事，这一组的用例只跑分析链，收到归属改写当没发生即可。
+    // 定稿写入是正文胶囊与分镜页那条链的事，这一组的用例只跑分析链，收到归属改写当没发生即可。
     override suspend fun setSegmentAttribution(
         segmentId: String,
         roleType: SpeechRoleType,

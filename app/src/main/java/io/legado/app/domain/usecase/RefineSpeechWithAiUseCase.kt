@@ -153,25 +153,41 @@ class RefineSpeechWithAiUseCase(
         var nextSceneIndex = 1
         // chunkByTextLength 保序，块内下标 + 块起始偏移 = 全量列表位置
         var chunkOffset = 0
-        segments.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }.forEach { chunk ->
-            val ids = chunk.map(ChapterSpeechSegment::id)
+        val chunks = segments.chunkByTextLength(MAX_CHUNK_CHARS) { it.text }
+        chunks.forEachIndexed { chunkIndex, chunk ->
             val scenes = runCatching {
                 parseScenes(
                     text = generateScenes(preset, chunk, reasoningLevel, source),
-                    expectedIds = ids,
+                    expectedCount = chunk.size,
                 )
+            }.onFailure { error ->
+                // 这里以前吞得干干净净：AI 日志写着「生成成功」，分镜页却一个场景都没有，
+                // 没人知道是 JSON 没按契约返回。按块留痕，下一次能直接看到原因。
+                // runCatching 包一层：这条日志只是给人看的，纯 JVM 单测里没有 android.util.Log，
+                // 不能因为记日志把这一轮已经跑完的场景分析整个顶掉。
+                runCatching {
+                    AppLog.put(
+                        "分镜场景拆分失败：第${chunk.first().chapterIndex + 1}章（$source）" +
+                            "第 ${chunkIndex + 1}/${chunks.size} 块（${chunk.size} 段）" +
+                            "本轮这块没有场景分组，" +
+                                (error.localizedMessage ?: error.javaClass.simpleName),
+                    )
+                }
             }.getOrNull()
             if (scenes == null) {
                 chunkOffset += chunk.size
-                return@forEach
+                return@forEachIndexed
             }
-            val idPositions = chunk.withIndex().associate { (pos, seg) -> seg.id to chunkOffset + pos }
-            scenes.forEach { scene ->
+            // 场景边界是块内 1-based 起点，覆盖范围在这里算死（相邻切点之间），
+            // 不依赖模型把每一段的 id 回抄一遍。
+            scenes.forEachIndexed { index, scene ->
                 val current = nextSceneIndex
                 val title = scene.title
-                scene.segmentIds.forEach { id ->
-                    val pos = idPositions[id] ?: return@forEach
-                    val segment = result[pos]
+                val start = scene.from - 1
+                val endExclusive = scenes.getOrNull(index + 1)?.from?.minus(1) ?: chunk.size
+                for (local in start until endExclusive) {
+                    val pos = chunkOffset + local
+                    val segment = result.getOrNull(pos) ?: continue
                     result[pos] = segment.copy(
                         sceneIndex = current,
                         sceneTitle = title,
@@ -1225,9 +1241,9 @@ class RefineSpeechWithAiUseCase(
                     AiMessageRole.USER,
                     GSON.toJson(
                         mapOf(
-                            "segments" to chunk.map { segment ->
+                            "segments" to chunk.mapIndexed { index, segment ->
                                 mapOf(
-                                    "segmentId" to segment.id,
+                                    "index" to index + 1,
                                     "text" to segment.text,
                                     "roleType" to segment.roleType.storageValue,
                                     "speakerName" to segment.characterName.takeIf { it.isNotBlank() },
@@ -1246,25 +1262,44 @@ class RefineSpeechWithAiUseCase(
         )
     ).getOrThrow().text
 
-    /** 场景拆分结果：扁平后的 segmentIds 必须与输入完全一致（同序、不重不漏），否则视为失败 */
-    private fun parseScenes(text: String, expectedIds: List<String>): List<ParsedScene> {
+    /**
+     * 场景拆分结果：只认 1-based 的切点 [ParsedScene.from]。
+     *
+     * 旧契约让模型逐段回抄 47 字符的 segmentId 再做全等比对，长章节里回抄漏一个、
+     * 改一个字符就整块丢弃（客户端只看到「生成成功」）；现在覆盖范围由相邻切点算出来，
+     * 模型只需要给出每一场的起点。数组为空 / 没有一个合法切点才算失败。
+     */
+    private fun parseScenes(text: String, expectedCount: Int): List<ParsedScene> {
         val array = parseRoot(text).getAsJsonArray("scenes")
-        val scenes = array.map { element ->
+        val cuts = array.mapNotNull { element ->
             val item = element.asJsonObject
+            // 小模型偶尔把字段名写成 start/startIndex：只要语义是「这场从第几段开始」就认，
+            // 数量与顺序仍由客户端归一化
+            var from: Int? = null
+            for (key in SCENE_START_KEYS) {
+                val value = item.get(key)?.takeIf { it.isJsonPrimitive } ?: continue
+                from = runCatching { value.asInt }.getOrNull()
+                if (from != null) break
+            }
+            if (from == null || from !in 1..expectedCount) return@mapNotNull null
             ParsedScene(
                 title = item.optionalString("title").orEmpty()
                     .replace(Regex("\\s+"), " ").trim().take(MAX_SCENE_TITLE_CHARS),
-                segmentIds = item.getAsJsonArray("segmentIds").map { it.asString },
+                from = from,
             )
+        }.sortedBy { it.from }
+        require(cuts.isNotEmpty()) { "AI returned no scenes" }
+        // 模型偶尔从第二段起切（把开头的旁白漏掉）：第一份标题扩到 1，
+        // 覆盖仍在客户端算死，不因为这一刀就把整章场景丢掉。
+        val normalized = cuts.distinctBy { it.from }.toMutableList()
+        if (normalized.first().from != 1) {
+            normalized[0] = normalized[0].copy(from = 1)
         }
-        require(scenes.isNotEmpty()) { "AI returned no scenes" }
-        require(scenes.flatMap(ParsedScene::segmentIds) == expectedIds) {
-            "AI scene coverage is incomplete, duplicated, or out of order"
-        }
-        return scenes
+        return normalized
     }
 
-    private data class ParsedScene(val title: String, val segmentIds: List<String>)
+    /** 一场戏：标题 + 该场第一段在块内的 1-based 下标。 */
+    private data class ParsedScene(val title: String, val from: Int)
 
     private suspend fun resolvePreset(): AiTaskPresetConfig =
         aiProfileGateway.getTaskPreset(AiTaskType.ANALYZE_SPEECH)
@@ -1570,6 +1605,9 @@ class RefineSpeechWithAiUseCase(
         /** 场景短标题的展示上限，和说话人名一致由 UI 单行截断兜底 */
         private const val MAX_SCENE_TITLE_CHARS = 24
 
+        /** 场景起点字段的候选写法：契约是 from，小模型偶尔写成 start/startIndex */
+        private val SCENE_START_KEYS = listOf("from", "start", "startIndex")
+
         /**
          * 场景拆分提示词。刻意不并入 [systemPrompt]：promptHash 是分析缓存身份的一部分，
          * 场景词改动不该让全书说话人分析重来。
@@ -1577,11 +1615,13 @@ class RefineSpeechWithAiUseCase(
         private const val SCENE_PROMPT =
             "Split the consecutive speech segments of one fiction chapter into a few storyboard " +
                 "scenes for TTS review. Cut only at real scene changes (place, time, cast or " +
-                "topic). Scenes must be contiguous, cover every segment exactly once in input " +
-                "order, and never be empty. Give each scene a short title in the language of the " +
-                "text. Return only one JSON object: " +
-                "{\"scenes\":[{\"title\":string,\"segmentIds\":[string]}]}. " +
-                "Never rewrite text and never invent IDs."
+                "topic). Every input segment carries a 1-based \"index\" in order. Scenes must be " +
+                "contiguous, cover every segment exactly once, and never be empty. Give each " +
+                "scene a short title in the language of the text. Return only one JSON object: " +
+                "{\"scenes\":[{\"title\":string,\"from\":int}]}. " +
+                "\"from\" is the index of the first segment of that scene; the first scene " +
+                "starts at 1, every later \"from\" is larger than the previous one, and the " +
+                "last scene runs to the final segment. Never rewrite text and never invent indices."
 
         /**
          * 归因提示词主体，对齐 legado_NG 的 base-routing/protocol 提示词（中文、面向中文网文）。
