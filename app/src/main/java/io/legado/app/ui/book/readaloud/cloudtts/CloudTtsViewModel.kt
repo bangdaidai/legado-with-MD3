@@ -250,7 +250,6 @@ class CloudTtsViewModel(
             CloudTtsIntent.ApplyDefaultEngineGlobally -> applyPendingDefaultEngine(forBook = false)
             CloudTtsIntent.ApplyDefaultEngineForBook -> applyPendingDefaultEngine(forBook = true)
             is CloudTtsIntent.EditHttpTts -> editHttpTts(intent.engineId)
-            is CloudTtsIntent.NewScriptTtsFromTemplate -> newScriptTtsFromTemplate(intent.asset)
             is CloudTtsIntent.SaveHttpTts -> saveHttpTts(intent.value)
             is CloudTtsIntent.DeleteHttpTts -> deleteHttpTts(intent.engineId)
             is CloudTtsIntent.OpenHttpTtsLogin -> intent.engineId.toLongOrNull()?.let {
@@ -1343,20 +1342,6 @@ class CloudTtsViewModel(
             engineId?.toLongOrNull()?.let { httpTtsRepository.findById(it) } ?: HttpTTS()
         }
         _uiState.update { it.copy(httpTtsEditor = value) }
-    }
-
-    /** 从内置脚本模板新建 JS 朗读引擎：读 assets 脚本，直接进编辑器预填，不落库。 */
-    private fun newScriptTtsFromTemplate(asset: String) = viewModelScope.launch {
-        runCatching {
-            val script = withContext(Dispatchers.IO) {
-                application.assets.open(asset).use { it.readBytes().toString(Charsets.UTF_8) }
-            }
-            parseJsTtsScript(script)
-        }.onSuccess { source ->
-            _uiState.update { it.copy(httpTtsEditor = source) }
-        }.onFailure {
-            toast(it.localizedMessage ?: application.getString(R.string.wrong_format))
-        }
     }
 
     private fun saveHttpTts(value: HttpTTS) = viewModelScope.launch {

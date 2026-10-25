@@ -86,6 +86,9 @@ private fun typesOfExtensions(allowExtensions: Array<String>?): Array<String> {
             when (it) {
                 "*" -> types.add("*/*")
                 "txt", "xml" -> types.add("text/*")
+                // js 在多数设备的 MimeTypeMap 查不到 MIME（octet-stream 会让选择器
+                // 直接不显示 .js 文件），干脆放开成 */*，选完后由解析层识别内容
+                "js" -> types.add("*/*")
                 else -> {
                     val mime = MimeTypeMap.getSingleton()
                         .getMimeTypeFromExtension(it)

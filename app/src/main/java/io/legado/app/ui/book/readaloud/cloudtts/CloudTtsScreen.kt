@@ -109,12 +109,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 内置 JS 朗读引擎脚本模板（assets/defaultData/tts/，取自 legado_NG）。 */
-private val TTS_SCRIPT_TEMPLATES = listOf(
-    "defaultData/tts/mimo_v25_tts.js" to "Xiaomi MiMo V2.5 TTS",
-    "defaultData/tts/microsoft_translator.js" to "Microsoft Translator TTS",
-)
-
 @Composable
 fun CloudTtsScreen(
     state: CloudTtsUiState,
@@ -134,7 +128,6 @@ fun CloudTtsScreen(
         },
     )
     var showAddEngineSheet by remember { mutableStateOf(false) }
-    var showTtsTemplateSheet by remember { mutableStateOf(false) }
     var showHttpTtsImportSheet by remember { mutableStateOf(false) }
     var showHttpTtsUrlInput by remember { mutableStateOf(false) }
     // 行尾试听按钮长按：弹出试听文本悬浮窗（改默认文本 / 直接试听草稿）
@@ -218,10 +211,6 @@ fun CloudTtsScreen(
                                 RoundDropdownMenuItem(
                                     text = stringResource(R.string.import_tts),
                                     onClick = { expanded = false; showHttpTtsImportSheet = true },
-                                )
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.tts_new_from_template),
-                                    onClick = { expanded = false; showTtsTemplateSheet = true },
                                 )
                                 RoundDropdownMenuItem(
                                     text = stringResource(R.string.export),
@@ -381,7 +370,7 @@ fun CloudTtsScreen(
                         // 第一行：紧跟名字的性别/语言/风格小图标
                         tags = {
                             Row(
-                                modifier = Modifier.padding(top = 2.dp),
+                                modifier = Modifier,
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
@@ -608,22 +597,6 @@ fun CloudTtsScreen(
                 onIntent(CloudTtsIntent.EditHttpTts())
             },
         )
-    }
-    OptionSheet(
-        show = showTtsTemplateSheet,
-        onDismissRequest = { showTtsTemplateSheet = false },
-        title = stringResource(R.string.tts_new_from_template),
-    ) {
-        TTS_SCRIPT_TEMPLATES.forEach { (asset, name) ->
-            OptionCard(
-                icon = Icons.Default.RecordVoiceOver,
-                text = name,
-                onClick = {
-                    showTtsTemplateSheet = false
-                    onIntent(CloudTtsIntent.NewScriptTtsFromTemplate(asset))
-                },
-            )
-        }
     }
     CloudTtsEngineEditorSheet(state, state.engineEditor, onIntent)
     VoiceEnginePickerSheet(state.showVoiceEnginePicker, state, onIntent)
@@ -1468,15 +1441,32 @@ private fun TtsVoicePresetEditorContent(
                     items(filteredVoices, key = { "${it.id}|${it.locale}" }) { voice ->
                         VoiceCardItem(
                             title = voice.label.substringBefore(" · "),
+                            // 第一行：名字 + 语言/风格小标记
                             tags = {
-                                VoiceTraitTagRow(
-                                    genderLabel = null,
-                                    languageLabel = voice.locale.takeIf(String::isNotBlank),
-                                    styleLabel = null,
-                                    tags = (voice.styles + voice.roles).distinct().take(4),
-                                    engineName = null,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    voice.locale.takeIf(String::isNotBlank)?.let {
+                                        VoiceTraitTag(
+                                            text = it.take(6),
+                                            container = LegadoTheme.colorScheme.tertiaryContainer,
+                                            content = LegadoTheme.colorScheme.onTertiaryContainer,
+                                        )
+                                    }
+                                    (voice.styles + voice.roles).distinct()
+                                        .take(2)
+                                        .forEach { tag ->
+                                            VoiceTraitTag(
+                                                text = tag,
+                                                container = LegadoTheme.colorScheme.surfaceVariant,
+                                                content = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                }
+                            },
+                            // 第二行：音色 id + 选中标记
+                            scrollableTags = {
                                 AppText(
                                     text = buildString {
                                         append(voice.id)

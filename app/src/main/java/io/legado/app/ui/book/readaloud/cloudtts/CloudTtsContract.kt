@@ -196,7 +196,6 @@ sealed interface CloudTtsIntent {
     data object ApplyDefaultEngineGlobally : CloudTtsIntent
     data object ApplyDefaultEngineForBook : CloudTtsIntent
     data class EditHttpTts(val engineId: String? = null) : CloudTtsIntent
-    data class NewScriptTtsFromTemplate(val asset: String) : CloudTtsIntent
     data class SaveHttpTts(val value: HttpTTS) : CloudTtsIntent
     data class DeleteHttpTts(val engineId: String) : CloudTtsIntent
     data class OpenHttpTtsLogin(val engineId: String) : CloudTtsIntent
