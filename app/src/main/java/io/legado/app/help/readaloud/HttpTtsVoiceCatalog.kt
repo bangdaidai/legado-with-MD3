@@ -66,7 +66,9 @@ object HttpTtsVoiceCatalog {
                         engineType = ReadAloudVoice.ENGINE_HTTP,
                         engineId = httpTts.id.toString(),
                         speakerId = voice.id,
-                        displayName = "${httpTts.name} · ${voice.name}",
+                        // 直接用音色名（对齐 NG）：引擎名在卡片第二行作弱色标签，
+                        // 不再拼进标题；合成用的裸名取自 traitsJson，与此无关
+                        displayName = voice.name,
                         traitsJson = GSON.toJson(voice),
                         sourceRevision = httpTts.lastUpdateTime,
                     )

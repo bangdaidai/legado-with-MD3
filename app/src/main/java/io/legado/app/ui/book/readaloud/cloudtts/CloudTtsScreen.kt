@@ -1657,8 +1657,7 @@ private fun TtsVoicePresetEditorContent(
                     }
                 }
                 item {
-                    // 声音池：编辑对话框内选择，保存时同步成员关系；进池的音色才会被自动配音选中
-                    EngineSectionTitle(R.string.voice_pool_section)
+                    // 声音池：下拉按钮自带「声音池：xxx」文案，不再单放分区标题
                     if (editor.memberPools.isEmpty()) {
                         AppText(
                             stringResource(R.string.voice_pool_empty),
