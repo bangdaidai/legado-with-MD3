@@ -75,7 +75,6 @@ import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FabMenuItem
 import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -195,6 +194,34 @@ fun CloudTtsScreen(
                                 }
                             ),
                         )
+                    }
+                    if (state.selectedTab == CloudTtsTab.Voices) {
+                        // 性别筛选：列表顶部那排 chips 挪进这里的溢出菜单，✓ 标当前项
+                        var expanded by remember { mutableStateOf(false) }
+                        Box {
+                            TopBarActionButton(
+                                onClick = { expanded = true },
+                                imageVector = AppIcons.MoreVert,
+                                contentDescription = stringResource(R.string.more_menu),
+                            )
+                            RoundDropdownMenu(expanded, { expanded = false }) {
+                                listOf(
+                                    "" to R.string.voice_gender_all,
+                                    ReadAloudVoiceTraits.GENDER_MALE to R.string.voice_gender_male,
+                                    ReadAloudVoiceTraits.GENDER_FEMALE to R.string.voice_gender_female,
+                                    ReadAloudVoiceTraits.GENDER_UNKNOWN to R.string.voice_gender_unknown,
+                                ).forEach { (gender, labelRes) ->
+                                    RoundDropdownMenuItem(
+                                        text = (if (state.voiceGenderFilter == gender) "✓ " else "") +
+                                            stringResource(labelRes),
+                                        onClick = {
+                                            expanded = false
+                                            onIntent(CloudTtsIntent.SetVoiceGenderFilter(gender))
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                     if (state.selectedTab == CloudTtsTab.Engines) {
                         var expanded by remember { mutableStateOf(false) }
@@ -331,33 +358,7 @@ fun CloudTtsScreen(
                 ),
             ) {
                 if (page == CloudTtsTab.Voices.ordinal) {
-                item {
-                    Row(
-                        // 上方 contentPadding 已经给了 8dp, 这里给同样的 8dp, 上下留白一致
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        VoiceGenderFilterChip("", R.string.voice_gender_all, state, onIntent)
-                        VoiceGenderFilterChip(
-                            ReadAloudVoiceTraits.GENDER_MALE,
-                            R.string.voice_gender_male,
-                            state,
-                            onIntent,
-                        )
-                        VoiceGenderFilterChip(
-                            ReadAloudVoiceTraits.GENDER_FEMALE,
-                            R.string.voice_gender_female,
-                            state,
-                            onIntent,
-                        )
-                        VoiceGenderFilterChip(
-                            ReadAloudVoiceTraits.GENDER_UNKNOWN,
-                            R.string.voice_gender_unknown,
-                            state,
-                            onIntent,
-                        )
-                    }
-                }
+                // 性别筛选挪进了顶栏溢出菜单（下拉选择），列表顶上不再铺一排 chips
                 if (state.voices.isEmpty() && !state.loading) {
                     item { AppText(stringResource(R.string.cloud_tts_no_saved_voices), Modifier.padding(24.dp)) }
                 }
@@ -781,22 +782,6 @@ private fun EngineSectionTitle(titleRes: Int) {
         text = stringResource(titleRes),
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
         style = LegadoTheme.typography.labelMediumEmphasized
-    )
-}
-
-/** 空字符串代表不筛选; 再点一次已选中的性别也会回到不筛选 */
-@Composable
-private fun VoiceGenderFilterChip(
-    gender: String,
-    labelRes: Int,
-    state: CloudTtsUiState,
-    onIntent: (CloudTtsIntent) -> Unit,
-) {
-    ToggleChip(
-        label = stringResource(labelRes),
-        selected = state.voiceGenderFilter == gender,
-        onToggle = { onIntent(CloudTtsIntent.SetVoiceGenderFilter(gender)) },
-        compact = true,
     )
 }
 
