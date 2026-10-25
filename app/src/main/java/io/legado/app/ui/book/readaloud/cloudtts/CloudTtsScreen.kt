@@ -410,29 +410,40 @@ fun CloudTtsScreen(
                                 }
                             }
                         },
-                        // 第二行：引擎名/池/用户标注，横向滑动看全，不与右侧按钮抢宽度
+                        // 第二行：池/用户标注等彩色小标签 + 引擎名弱色标签，横向滑动看全
                         scrollableTags = {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .padding(top = 2.dp)
                                     .horizontalScroll(rememberScrollState()),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                voice.secondaryTags.forEach { tag ->
-                                    AppText(
+                                voice.secondaryTags.forEachIndexed { index, tag ->
+                                    // 五色轮换，与第一行风格块区分
+                                    val colors = listOf(
+                                        LegadoTheme.colorScheme.secondaryContainer to
+                                            LegadoTheme.colorScheme.onSecondaryContainer,
+                                        LegadoTheme.colorScheme.tertiaryContainer to
+                                            LegadoTheme.colorScheme.onTertiaryContainer,
+                                        LegadoTheme.colorScheme.primaryContainer to
+                                            LegadoTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                    val color = colors[index % colors.size]
+                                    VoiceTraitTag(
                                         text = tag,
-                                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
+                                        container = color.first,
+                                        content = color.second,
                                     )
                                 }
-                                AppText(
-                                    text = voice.engineName,
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                )
+                                voice.engineName.takeIf(String::isNotBlank)?.let {
+                                    VoiceTraitTag(
+                                        text = it,
+                                        container = LegadoTheme.colorScheme.surfaceVariant,
+                                        content = LegadoTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         },
                         trailingContent = {
@@ -1514,25 +1525,17 @@ private fun TtsVoicePresetEditorContent(
                         )
                     }
                     EngineSectionTitle(R.string.cloud_tts_step_preset)
-                    if (editor.readonlyPreset) {
-                        // 目录同步的音色：预设参数由引擎目录管理，这里只开放标注与声音池
-                        AppText(
-                            stringResource(R.string.voice_preset_readonly_hint),
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    // 自定义标签备注：两种模式都可改（目录同步音色的唯一可编辑项之一）
+                    // 名称与标签对所有音色开放：目录同步音色改名走 MANAGED_BY_USER_NAMED，
+                    // 引擎目录同步时保留用户起的名字
+                    Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
+                    // 自定义标签备注：两种模式都可改
                     Field(
                         editor.labelTags,
                         { update(editor.copy(labelTags = it)) },
                         stringResource(R.string.voice_label_tags),
                     )
                     if (!editor.readonlyPreset) {
-                        // 预设基础：名称（文本框）+ 风格（下拉）；性别不在这里——
-                        // 性别/语言/风格自动来自引擎目录声明与名字推测（对齐 NG，不再手动标注）
-                        Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
+                        // 预设风格（下拉）：性别/语言自动来自引擎目录声明（对齐 NG，不再手动标注）
                         if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD &&
                             !selectedVoice?.styles.isNullOrEmpty()
                         ) {
@@ -1587,12 +1590,6 @@ private fun TtsVoicePresetEditorContent(
                             }
 
                             ReadAloudVoice.ENGINE_SYSTEM -> {
-                                AppText(
-                                    stringResource(R.string.cloud_tts_system_defaults_hint),
-                                    Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    style = LegadoTheme.typography.labelSmall,
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                )
                                 TinySliderSettingItem(
                                     title = stringResource(R.string.cloud_tts_speed_multiplier),
                                     value = editor.speed.toFloatOrNull() ?: 1f,
@@ -1609,12 +1606,8 @@ private fun TtsVoicePresetEditorContent(
                                 )
                             }
 
-                            else -> AppText(
-                                stringResource(R.string.cloud_tts_http_voice_hint),
-                                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                style = LegadoTheme.typography.labelSmall,
-                                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                            )
+                            // HTTP 脚本引擎：参数由脚本自理，只留试听
+                            else -> Unit
                         }
                         // 试听：所有引擎同一位置、整行按钮，不再混在参数行里
                         MediumTonalButton(

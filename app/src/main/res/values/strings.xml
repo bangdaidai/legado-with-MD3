@@ -410,7 +410,6 @@
     <string name="voice_pool_none">none</string>
     <string name="voice_pool_empty">No pools yet. Checked voices can be picked by auto casting.</string>
     <string name="voice_preset_delete">Delete this voice preset</string>
-    <string name="voice_preset_readonly_hint">This voice is synced from its engine catalog. Only labels and pools are editable here.</string>
     <string name="voice_label_age_hint">Age band is used by auto casting: character voices are matched by gender + age when no manual binding exists.</string>
     <string name="group_zg">Awaiting</string>
     <string name="group_yf">Awaiting more</string>

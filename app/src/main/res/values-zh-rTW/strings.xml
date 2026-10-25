@@ -3136,4 +3136,13 @@
     <string name="battery_optimization_dialog_title">背景保活與省電策略設定指引</string>
     <string name="battery_optimization_status_ignored">已開啟無限制（點擊可檢查廠商背景策略）</string>
     <string name="battery_optimization_status_not_ignored">未開啟無限制，背景可能被系統終止</string>
+    <string name="regenerate">重新產生</string>
+    <string name="tts_script_options_title">引擎配置 (options())</string>
+    <string name="tts_script_badge">腳本</string>
+    <string name="cloud_tts_section_performance">朗讀表演（角色與指令）</string>
+    <string name="cloud_tts_section_tuning">聲音調節</string>
+    <string name="voice_pool_value">聲音池：%1$s</string>
+    <string name="voice_pool_none">未加入</string>
+    <string name="voice_pool_empty">還沒有聲音池。加入池的音色才會被自動配音選中。</string>
+    <string name="voice_preset_delete">刪除此音色預設</string>
 </resources>

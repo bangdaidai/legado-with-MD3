@@ -26,7 +26,7 @@ import io.legado.app.ui.widget.components.card.NormalCard
  * 取代「女 · 温柔 · 活泼」式的纯文本拼接。
  */
 
-/** 彩色圆角小标签；过长文本截断，避免一行标签把卡片撑爆。 */
+/** 彩色圆角小标签；压扁贴行（10sp/1dp 上下内边距）避免把标题行撑高，长文本截断。 */
 @Composable
 fun VoiceTraitTag(
     text: String,
@@ -37,11 +37,11 @@ fun VoiceTraitTag(
     AppText(
         text = text,
         modifier = modifier
-            .widthIn(max = 116.dp)
-            .background(container, RoundedCornerShape(10.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .widthIn(max = 112.dp)
+            .background(container, RoundedCornerShape(8.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
         color = content,
-        fontSize = 11.sp,
+        fontSize = 10.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )

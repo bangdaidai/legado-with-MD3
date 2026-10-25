@@ -4169,4 +4169,13 @@
     <string name="battery_optimization_status_ignored">已开启无限制（点击可检查厂商后台策略）</string>
     <string name="battery_optimization_status_not_ignored">未开启无限制，后台可能被系统终止</string>
     <string name="reader_paragraph_image_action_unsupported">此图片使用段落规则动作，当前版本尚不支持。</string>
+    <string name="regenerate">重新生成</string>
+    <string name="tts_script_options_title">引擎配置 (options())</string>
+    <string name="tts_script_badge">脚本</string>
+    <string name="cloud_tts_section_performance">朗读表演（角色与指令）</string>
+    <string name="cloud_tts_section_tuning">声音调节</string>
+    <string name="voice_pool_value">声音池：%1$s</string>
+    <string name="voice_pool_none">未加入</string>
+    <string name="voice_pool_empty">还没有声音池。加入池的音色才会被自动配音选中。</string>
+    <string name="voice_preset_delete">删除此音色预设</string>
 </resources>

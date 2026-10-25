@@ -598,12 +598,24 @@ class CloudTtsViewModel(
     private fun saveVoice() = viewModelScope.launch {
         val editor = _uiState.value.voiceEditor
         val voice = if (editor?.readonlyPreset == true) {
-            // 目录同步的音色：不重建音色行，标注与池照常提交
-            voices.firstOrNull { it.id == editor.editingVoiceId }
+            // 目录同步的音色：不重建音色行；改名则轻量更新并置 MANAGED_BY_USER_NAMED，
+            // 引擎目录后续同步时保留用户起的名字
+            val current = voices.firstOrNull { it.id == editor.editingVoiceId }
+            current?.let {
+                val newName = editor.voiceName.trim()
+                if (newName.isNotBlank() && newName != it.displayName) {
+                    it.copy(
+                        displayName = newName,
+                        managedBy = ReadAloudVoice.MANAGED_BY_USER_NAMED,
+                    )
+                } else {
+                    it
+                }
+            }
         } else {
             buildVoice()
         } ?: return@launch
-        if (editor?.readonlyPreset != true) {
+        if (editor?.readonlyPreset != true || voice.managedBy == ReadAloudVoice.MANAGED_BY_USER_NAMED) {
             voiceGateway.upsertVoice(voice)
         }
         // 自定义标签跟着这一次「保存预设」一起提交。性别/年龄段不再有编辑入口：
