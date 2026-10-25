@@ -1711,18 +1711,6 @@ private fun TtsVoicePresetEditorContent(
                                     },
                                 )
                             }
-                            // 标签联动：目录声明的标签尚无同名池时，一键建池并入
-                            editor.voiceTags
-                                .filter { tag -> editor.memberPools.none { it.name == tag } }
-                                .forEach { tag ->
-                                    RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_pool_create_from_tag, tag),
-                                        onClick = {
-                                            poolMenu = false
-                                            onIntent(CloudTtsIntent.CreatePoolFromTag(tag))
-                                        },
-                                    )
-                                }
                         }
                     }
                     if (editor.editingVoiceId != null) {

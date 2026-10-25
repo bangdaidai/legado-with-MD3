@@ -3680,7 +3680,6 @@
     <string name="cloud_tts_no_excluded_voices">没有已排除的音色</string>
     <string name="cloud_tts_restored_voices">已恢复 %1$d 个音色</string>
     <string name="cloud_tts_engine_default_voice">引擎默认音色</string>
-    <string name="cloud_tts_voice_count">已获取 %1$d 个音色</string>
     <string name="cloud_tts_cannot_change_native_voice">编辑预设时不能更换原生音色，请新建音色预设</string>
     <string name="cloud_tts_select_provider">请选择云 TTS 厂商</string>
     <string name="cloud_tts_engine_name_required">引擎名称不能为空</string>
@@ -4185,6 +4184,4 @@
     <string name="voice_preset_delete">删除此音色预设</string>
     <string name="voice_preset_exclude">不再显示此音色（列表底部可恢复）</string>
     <string name="voice_preset_excluded">已隐藏该音色，可在列表底部恢复</string>
-    <string name="voice_pool_created">已创建声音池：%1$s</string>
-    <string name="voice_pool_create_from_tag">＋ 用标签建池「%1$s」</string>
 </resources>

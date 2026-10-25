@@ -3746,7 +3746,6 @@
     <string name="cloud_tts_no_excluded_voices">No excluded voices</string>
     <string name="cloud_tts_restored_voices">Restored %1$d voices</string>
     <string name="cloud_tts_engine_default_voice">Engine default voice</string>
-    <string name="cloud_tts_voice_count">Loaded %1$d voices</string>
     <string name="cloud_tts_cannot_change_native_voice">The native voice cannot be changed while editing. Create a new voice preset instead.</string>
     <string name="cloud_tts_select_provider">Select a cloud TTS provider</string>
     <string name="cloud_tts_engine_name_required">Engine name cannot be empty</string>
@@ -4223,6 +4222,4 @@
     <string name="reader_paragraph_image_action_unsupported">This image uses a paragraph-rule action that this version does not support.</string>
     <string name="voice_preset_exclude">Hide this voice (restorable from list)</string>
     <string name="voice_preset_excluded">Voice hidden. Restore it from the list footer.</string>
-    <string name="voice_pool_created">Pool created: %1$s</string>
-    <string name="voice_pool_create_from_tag">＋ Create pool "%1$s"</string>
 </resources>

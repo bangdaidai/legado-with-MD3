@@ -2915,7 +2915,6 @@
     <string name="cloud_tts_voice_engine_unavailable">此音色使用的引擎目前不可用</string>
     <string name="cloud_tts_cannot_change_engine">編輯預設時不能更換引擎，請新增音色預設</string>
     <string name="cloud_tts_engine_default_voice">引擎預設音色</string>
-    <string name="cloud_tts_voice_count">已取得 %1$d 個音色</string>
     <string name="cloud_tts_cannot_change_native_voice">編輯預設時不能更換原生音色，請新增音色預設</string>
     <string name="cloud_tts_select_provider">請選擇雲端 TTS 廠商</string>
     <string name="cloud_tts_engine_name_required">引擎名稱不能留空</string>
@@ -3132,6 +3131,4 @@
     <string name="voice_preset_delete">刪除此音色預設</string>
     <string name="voice_preset_exclude">不再顯示此音色（列表底部可恢復）</string>
     <string name="voice_preset_excluded">已隱藏該音色，可在列表底部恢復</string>
-    <string name="voice_pool_created">已建立聲音池：%1$s</string>
-    <string name="voice_pool_create_from_tag">＋ 用標籤建池「%1$s」</string>
 </resources>

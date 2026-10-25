@@ -713,28 +713,25 @@ object VoicePoolStore {
             val traits = ReadAloudVoiceTraits.of(voice.toDomain())
             val tags = traits.tags
 
-            fun join(poolId: String) {
-                val existing = joins.firstOrNull { it.poolId == poolId }
+            // 「一音色一组」是池的既有语义（入池即移出其它池），自动归类同样每条
+            // 音色只定一个目标池：性别矩阵优先，没命中再看自定义池核心词
+            val target = run {
+                if (traits.gender != ReadAloudVoiceTraits.GENDER_UNKNOWN) {
+                    val ageBand = ageBandFromTags(tags)
+                    byGender[traits.gender]?.firstOrNull { it.ageBand == ageBand }
+                        ?.let { return@run it }
+                }
+                pools.firstOrNull { pool ->
+                    val core = pool.name.trim().trimEnd('音')
+                    core.length >= 2 && tags.any { it.contains(core, ignoreCase = true) }
+                }
+            }
+            target?.let { pool ->
+                val existing = joins.firstOrNull { it.poolId == pool.id }
                 if (existing != null) {
                     existing.voiceIds.add(voice.id)
                 } else {
-                    joins += Target(poolId, mutableSetOf(voice.id))
-                }
-            }
-
-            // A：性别矩阵（性别未知的不进性别池）
-            if (traits.gender != ReadAloudVoiceTraits.GENDER_UNKNOWN) {
-                val ageBand = ageBandFromTags(tags)
-                byGender[traits.gender]?.firstOrNull { it.ageBand == ageBand }
-                    ?.let { join(it.id) }
-            }
-            // B：自定义池名核心词
-            pools.forEach { pool ->
-                val core = pool.name.trim().trimEnd('音')
-                if (core.length >= 2 &&
-                    tags.any { it.contains(core, ignoreCase = true) }
-                ) {
-                    join(pool.id)
+                    joins += Target(pool.id, mutableSetOf(voice.id))
                 }
             }
         }
