@@ -3130,4 +3130,8 @@
     <string name="voice_pool_none">未加入</string>
     <string name="voice_pool_empty">還沒有聲音池。加入池的音色才會被自動配音選中。</string>
     <string name="voice_preset_delete">刪除此音色預設</string>
+    <string name="voice_preset_exclude">不再顯示此音色（列表底部可恢復）</string>
+    <string name="voice_preset_excluded">已隱藏該音色，可在列表底部恢復</string>
+    <string name="voice_pool_created">已建立聲音池：%1$s</string>
+    <string name="voice_pool_create_from_tag">＋ 用標籤建池「%1$s」</string>
 </resources>

@@ -4178,4 +4178,8 @@
     <string name="voice_pool_none">未加入</string>
     <string name="voice_pool_empty">还没有声音池。加入池的音色才会被自动配音选中。</string>
     <string name="voice_preset_delete">删除此音色预设</string>
+    <string name="voice_preset_exclude">不再显示此音色（列表底部可恢复）</string>
+    <string name="voice_preset_excluded">已隐藏该音色，可在列表底部恢复</string>
+    <string name="voice_pool_created">已创建声音池：%1$s</string>
+    <string name="voice_pool_create_from_tag">＋ 用标签建池「%1$s」</string>
 </resources>

@@ -125,6 +125,7 @@ data class TtsManagedEngineItemUi(
     val locale: String,
     val styles: ImmutableList<String>,
     val roles: ImmutableList<String>,
+    val tags: ImmutableList<String> = persistentListOf(),
 )
 
 @Stable
@@ -169,6 +170,8 @@ data class TtsVoicePresetEditorUi(
      * 性别/语言/风格不再手动标注——自动取引擎目录声明 + 池分类 + 名字推测（对齐 NG）。
      */
     val labelTags: String = "",
+    /** 引擎目录声明的标签（voices() 的 tags），池下拉里可按标签一键建池 */
+    val voiceTags: ImmutableList<String> = persistentListOf(),
     /**
      * true = 目录同步的音色（managedBy 不是 user）：预设参数不可改，
      * 只开放「标签备注」与「声音池」，保存走轻量路径（不重建音色行）。
@@ -207,6 +210,10 @@ sealed interface CloudTtsIntent {
     data object ExportHttpTtsUrl : CloudTtsIntent
     data object ClearTtsCache : CloudTtsIntent
        data class RequestDeleteVoice(val id: String) : CloudTtsIntent
+    /** 目录同步音色的「不再显示」：置 excluded，可从列表「恢复已排除音色」找回 */
+    data class RequestExcludeVoice(val id: String) : CloudTtsIntent
+    /** 用该音色的目录标签建同名声音池并入池（标签与池联动） */
+    data class CreatePoolFromTag(val tag: String) : CloudTtsIntent
     data object ConfirmDeleteVoice : CloudTtsIntent
     /** 进入/退出音色批量选择模式（退出会清空已勾选的）。 */
     data object ToggleVoiceBatchMode : CloudTtsIntent

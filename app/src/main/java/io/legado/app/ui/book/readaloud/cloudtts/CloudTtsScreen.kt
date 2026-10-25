@@ -1455,22 +1455,38 @@ private fun TtsVoicePresetEditorContent(
                                         }
                                 }
                             },
-                            // 第二行：音色 id + 选中标记
+                            // 第二行：目录标签彩块 + id 弱色块 + 选中标记，横向滑动
                             scrollableTags = {
-                                AppText(
-                                    text = buildString {
-                                        append(voice.id)
-                                        if (voice.id == editor.voiceId) {
-                                            append(" · ")
-                                            append(stringResource(R.string.cloud_tts_selected))
+                                Row(
+                                    modifier = Modifier
+                                        .padding(top = 2.dp)
+                                        .horizontalScroll(rememberScrollState()),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    (voice.styles + voice.roles + voice.tags)
+                                        .distinct()
+                                        .take(5)
+                                        .forEach { tag ->
+                                            VoiceTraitTag(
+                                                text = tag,
+                                                container = LegadoTheme.colorScheme.secondaryContainer,
+                                                content = LegadoTheme.colorScheme.onSecondaryContainer,
+                                            )
                                         }
-                                    },
-                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
+                                    VoiceTraitTag(
+                                        text = voice.id,
+                                        container = LegadoTheme.colorScheme.surfaceVariant,
+                                        content = LegadoTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    if (voice.id == editor.voiceId) {
+                                        VoiceTraitTag(
+                                            text = stringResource(R.string.cloud_tts_selected),
+                                            container = LegadoTheme.colorScheme.primaryContainer,
+                                            content = LegadoTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                    }
+                                }
                             },
                             trailingContent = {
                                 MediumTonalButton(
@@ -1695,17 +1711,38 @@ private fun TtsVoicePresetEditorContent(
                                     },
                                 )
                             }
+                            // 标签联动：目录声明的标签尚无同名池时，一键建池并入
+                            editor.voiceTags
+                                .filter { tag -> editor.memberPools.none { it.name == tag } }
+                                .forEach { tag ->
+                                    RoundDropdownMenuItem(
+                                        text = stringResource(R.string.voice_pool_create_from_tag, tag),
+                                        onClick = {
+                                            poolMenu = false
+                                            onIntent(CloudTtsIntent.CreatePoolFromTag(tag))
+                                        },
+                                    )
+                                }
                         }
                     }
-                    if (editor.editingVoiceId != null && !editor.readonlyPreset) {
+                    if (editor.editingVoiceId != null) {
+                        // 自建预设＝删除；目录同步音色＝「不再显示」（置 excluded，列表可恢复）
                         MediumTonalButton(
                             onClick = {
+                                val voiceId = editor.editingVoiceId.orEmpty()
                                 onIntent(CloudTtsIntent.DismissVoiceEditor)
-                                onIntent(CloudTtsIntent.RequestDeleteVoice(editor.editingVoiceId.orEmpty()))
+                                if (editor.readonlyPreset) {
+                                    onIntent(CloudTtsIntent.RequestExcludeVoice(voiceId))
+                                } else {
+                                    onIntent(CloudTtsIntent.RequestDeleteVoice(voiceId))
+                                }
                             },
                             icon = Icons.Default.Delete,
                             contentDescription = stringResource(R.string.delete),
-                            text = stringResource(R.string.voice_preset_delete),
+                            text = stringResource(
+                                if (editor.readonlyPreset) R.string.voice_preset_exclude
+                                else R.string.voice_preset_delete
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp, bottom = 8.dp),

@@ -277,6 +277,8 @@ class CloudTtsViewModel(
             }
 
             is CloudTtsIntent.RequestDeleteVoice -> requestDeleteVoice(intent.id)
+            is CloudTtsIntent.RequestExcludeVoice -> excludeVoice(intent.id)
+            is CloudTtsIntent.CreatePoolFromTag -> createPoolFromTag(intent.tag)
             CloudTtsIntent.ConfirmDeleteVoice -> confirmDeleteVoice()
             CloudTtsIntent.ToggleVoiceBatchMode -> _uiState.update {
                 it.copy(
@@ -461,6 +463,7 @@ class CloudTtsViewModel(
             format = cloudConfig?.format ?: defaultFormat(voice.engineType, voice.engineId),
             formatOptions = formatOptions(voice.engineType, voice.engineId),
             labelTags = VoiceLabelStore.tagsOf(label).joinToString("，"),
+            voiceTags = traitsOf(voice).tags.toImmutableList(),
             readonlyPreset = voice.managedBy != ReadAloudVoice.MANAGED_BY_USER,
             memberPools = memberPoolsFor(voice.id),
         )
@@ -530,19 +533,25 @@ class CloudTtsViewModel(
                     )
                 }
             } else {
-                // jsLib 里定义了 voices() 的引擎，音色由 syncConfiguredTtsVoices 同步进音色表；
-                // 没定义就只有引擎自己的默认音色
+                // 脚本/jsLib 定义了 voices() 的引擎，音色由目录同步进音色表；
+                // 展示字段从 traitsJson 还原（裸名/语言/性别/标签），不依赖 displayName
                 voices.filter {
                     it.engineType == ReadAloudVoice.ENGINE_HTTP &&
                             it.engineId == editor.engineId &&
                             it.speakerId.isNotBlank()
                 }.map { voice ->
+                    val traits = HttpTtsVoiceCatalog.fromVoice(voice)
                     CloudTtsDiscoveredVoiceUi(
                         id = voice.speakerId,
-                        label = voice.displayName,
-                        locale = "",
+                        label = listOfNotNull(
+                            traits?.name?.takeIf(String::isNotBlank) ?: voice.displayName,
+                            traits?.language?.takeIf(String::isNotBlank),
+                            traits?.gender?.takeIf(String::isNotBlank),
+                        ).joinToString(" · "),
+                        locale = traits?.language.orEmpty(),
                         styles = persistentListOf(),
                         roles = persistentListOf(),
+                        tags = (traits?.tags ?: emptyList()).toImmutableList(),
                     )
                 }.ifEmpty {
                     listOf(CloudTtsDiscoveredVoiceUi(
@@ -1538,8 +1547,55 @@ class CloudTtsViewModel(
         }
     }
 
-    private fun requestDeleteVoice(id: String) {
-        val voice = voices.firstOrNull { it.id == id && isRemovable(it) } ?: return
+    /** 目录同步音色「不再显示」：置 excluded（列表可恢复），目录行本身保留。 */
+    private fun excludeVoice(id: String) = viewModelScope.launch {
+        val voice = voices.firstOrNull { it.id == id } ?: return@launch
+        voiceGateway.upsertVoice(
+            voice.copy(excluded = true, updatedAt = System.currentTimeMillis())
+        )
+        _uiState.update { it.copy(voiceEditor = null) }
+        toast(application.getString(R.string.voice_preset_excluded))
+    }
+
+    /** 标签与声音池联动：按该音色的目录标签建同名池（性别跟音色，年龄段未知）并入池。 */
+    private fun createPoolFromTag(tag: String) = viewModelScope.launch {
+        val editor = _uiState.value.voiceEditor ?: return@launch
+        val voiceId = editor.editingVoiceId ?: return@launch
+        val voice = voices.firstOrNull { it.id == voiceId } ?: return@launch
+        withContext(Dispatchers.IO) {
+            val gender = ReadAloudVoiceTraits.of(voice).gender.let {
+                if (it in setOf("male", "female")) it else "unknown"
+            }
+            // 同名池已存在就直接复用（等价联动），没有才建
+            val pool = VoicePoolStore.poolByName(tag)
+                ?: if (VoicePoolStore.createPool(
+                        name = tag,
+                        groupId = "",
+                        gender = gender,
+                        ageBand = "unknown",
+                    )
+                ) {
+                    VoicePoolStore.poolByName(tag)
+                } else {
+                    null
+                }
+            pool?.let { VoicePoolStore.addMembers(it.id, setOf(voiceId)) }
+        }
+        // 刷新编辑器勾选态与列表池标签
+        val updated = _uiState.value.voiceEditor
+        if (updated != null) {
+            _uiState.update {
+                it.copy(
+                    voiceEditor = updated.copy(memberPools = memberPoolsFor(voiceId)),
+                )
+            }
+        }
+        voicePoolNames = VoicePoolStore.poolNamesOfVoices()
+        _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter)) }
+        toast(application.getString(R.string.voice_pool_created, tag))
+    }
+
+    private fun requestDeleteVoice(id: String) {        val voice = voices.firstOrNull { it.id == id && isRemovable(it) } ?: return
         _uiState.update {
             it.copy(
                 activeDialog = CloudTtsDialog.DeleteVoice(
