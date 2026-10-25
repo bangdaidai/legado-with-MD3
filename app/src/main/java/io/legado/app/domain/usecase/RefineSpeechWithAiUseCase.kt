@@ -619,7 +619,24 @@ class RefineSpeechWithAiUseCase(
                     )
                 )
         }
-        if (candidates.isEmpty()) return analysisResult.segments
+        if (candidates.isEmpty()) {
+            // 整段/按页划分下规则分段器把每个段落整段标成旁白（置信度 0.95），既没有低置信段、
+            // 也没有待定对白，这里一个请求都不会发。分镜页写着「AI 补全」却整章旁白，
+            // 原因只能从日志里查，所以空候选也必须留一行。
+            val allNarrator = analysisResult.segments.isNotEmpty() &&
+                analysisResult.segments.none { it.roleType != SpeechRoleType.Narrator }
+            val hint = if (allNarrator) {
+                "（本章规则没有识别出对白，整章按旁白朗读；确认原文有引号对白时可把「内容划分方式」" +
+                    "改成「按符号」再试）"
+            } else {
+                "（规则已高置信判定，或所有段都已由 AI/用户定过）"
+            }
+            AppLog.put(
+                "AI 语音复核：第${analysisResult.analysis.chapterIndex + 1}章没有可判定的候选段，" +
+                    "本次没有发出 AI 请求$hint"
+            )
+            return analysisResult.segments
+        }
         val updates = linkedMapOf<String, AiSegmentDecision>()
         // 整章成败账：真实发出并被解析的分块都失败（请求炸/解析炸）时按整轮失败上抛，
         // 不让块级静默回落把整章包装成成功——否则库里是「全规则判定 + Success」，
@@ -627,6 +644,8 @@ class RefineSpeechWithAiUseCase(
         // 由递归出的叶子块各自记。
         var attemptedChunks = 0
         var failedChunks = 0
+        // 输出被 max_tokens 截断、拆到单段仍放不下的块：段保留规则结果，单独计数进日志
+        var truncatedChunks = 0
         var lastFailure: Throwable? = null
 
         /**
@@ -681,6 +700,7 @@ class RefineSpeechWithAiUseCase(
             }
             if (response.finishReason == "length") {
                 if (chunk.size < 2) {
+                    truncatedChunks++
                     AppLog.putDebug(
                         "AI 语音复核单段输出仍被 max_tokens 截断，保留规则结果：" +
                             chunk.firstOrNull()?.id.orEmpty()
@@ -737,6 +757,27 @@ class RefineSpeechWithAiUseCase(
             val reason = lastFailure?.let { it.localizedMessage ?: it.javaClass.simpleName }
                 ?: "未知原因"
             throw IllegalStateException("AI 复核的 $attemptedChunks 个分块全部失败：$reason")
+        }
+        // 部分分块失败或模型一条判定都没给时，整轮不算失败（其余块照样生效），
+        // 但结果里已经有段落退回了规则，必须留下可查的一行——分镜页写着 AI 补全、
+        // 实际却是规则结果，过去只有 Debug 日志，正式日志里查不到
+        if (failedChunks > 0) {
+            AppLog.put(
+                "AI 语音复核：第${analysisResult.analysis.chapterIndex + 1}章 " +
+                    "$failedChunks/$attemptedChunks 个分块失败，这些块的段落保留规则结果（$source）"
+            )
+        }
+        if (truncatedChunks > 0) {
+            AppLog.put(
+                "AI 语音复核：第${analysisResult.analysis.chapterIndex + 1}章有 $truncatedChunks 段" +
+                    "因输出被 max_tokens 截断，保留规则结果（$source）"
+            )
+        }
+        if (updates.isEmpty()) {
+            AppLog.put(
+                "AI 语音复核没有返回可用的说话人判定，第${analysisResult.analysis.chapterIndex + 1}章" +
+                    "保持规则结果（$source）"
+            )
         }
         val allProfiles = ensureDraftProfiles(
             bookUrl = analysisResult.analysis.bookUrl,
@@ -891,6 +932,8 @@ class RefineSpeechWithAiUseCase(
         // 不能落一份「全未识别 + Success」的库还一声不吭
         var attemptedChunks = 0
         var failedChunks = 0
+        // 拆到单原子仍被 max_tokens 截断的块：按未识别朗读，单独计数进日志
+        var truncatedChunks = 0
         var lastFailure: Throwable? = null
         suspend fun processAtomChunk(chunk: List<AiSpeechAtom>) {
             val paragraphsById = paragraphs.associateBy(CanonicalSpeechParagraph::index)
@@ -944,6 +987,7 @@ class RefineSpeechWithAiUseCase(
             // 按 legado_NG 的做法对半拆成两块分别请求——每半输出随之减半，递归到单原子
             if (response.finishReason == "length") {
                 if (chunk.size < 2) {
+                    truncatedChunks++
                     AppLog.putDebug("AI 理解单原子输出仍被 max_tokens 截断，按未识别朗读")
                 } else {
                     AppLog.putDebug("AI 理解输出被 max_tokens 截断，块（${chunk.size} 原子）对半重试")
@@ -1084,6 +1128,20 @@ class RefineSpeechWithAiUseCase(
             val reason = lastFailure?.let { it.localizedMessage ?: it.javaClass.simpleName }
                 ?: "未知原因"
             throw IllegalStateException("AI 理解的 $attemptedChunks 个分块全部失败：$reason")
+        }
+        // 部分块失败时其余块照常生效，但失败块已退回未识别——留一行正式日志，
+        // 否则分镜页看着像 AI 全跑过了
+        if (failedChunks > 0) {
+            AppLog.put(
+                "AI 理解：第${analysisResult.analysis.chapterIndex + 1}章 " +
+                    "$failedChunks/$attemptedChunks 个分块失败，这些块按未识别朗读（$source）"
+            )
+        }
+        if (truncatedChunks > 0) {
+            AppLog.put(
+                "AI 理解：第${analysisResult.analysis.chapterIndex + 1}章有 $truncatedChunks 段" +
+                    "因输出被 max_tokens 截断，按未识别朗读（$source）"
+            )
         }
         return result.sortedWith(compareBy(ChapterSpeechSegment::paragraphIndex, ChapterSpeechSegment::start))
     }

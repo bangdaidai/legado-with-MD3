@@ -91,6 +91,10 @@ class PrepareChapterSpeechPlanUseCase(
             paragraphs = paragraphs,
             resolverVersion = resolverVersion,
             policy = policy,
+            // AI 档才需要把段内对白拆出来：整段/按页划分下规则把整段标成旁白，
+            // AI 连候选段都没有。只放开引号/说话提示处的拆分，句号处仍不切，
+            // 保住「整段不按句停顿」；纯规则档不动，避免多出朗读单元。
+            splitDialogueInsideUnit = effectiveMode != SpeechAnalysisMode.Rule && useMultiSpeaker,
         )
         val locallyResolved = resolveLocalSpeakers(
             analysisResult = analysis,

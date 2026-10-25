@@ -3222,6 +3222,7 @@
     <string name="speech_storyboard">分镜结果</string>
     <string name="speech_storyboard_reanalyze">重新分析</string>
     <string name="speech_storyboard_label_analysis_mode">分析模式</string>
+    <string name="speech_storyboard_analysis_fallback_toast">本章是规则结果，不是 AI 补全；详情见日志</string>
     <string name="speech_storyboard_status_on">已开启</string>
     <string name="speech_storyboard_status_off">未开启</string>
     <string name="speech_storyboard_empty">这一章没有分出任何段落。</string>

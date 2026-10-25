@@ -27,6 +27,14 @@ class AnalyzeChapterSpeechUseCase(
         paragraphs: List<CanonicalSpeechParagraph>,
         resolverVersion: String = RuleBasedSpeechSegmenter.VERSION,
         policy: ContentSplitPolicy,
+        /**
+         * 是否允许在「一个划分单元」内部按引号/说话提示再拆出对白段（AI 档才需要）。
+         *
+         * 整段/按页划分下策略本身不许拆，规则会把整段标成旁白，AI 没有候选段可判。
+         * 这里只放开「谁在说话」的边界：句号处仍不切，所以不会制造句末停顿。
+         * 纯规则档保持 false：结果直接拿来选音，多拆只会多出朗读单元。
+         */
+        splitDialogueInsideUnit: Boolean = false,
         now: Long = System.currentTimeMillis(),
     ): ChapterSpeechAnalysisResult {
         val contentHash = SpeechIdentity.chapterContentHash(paragraphs)
@@ -65,7 +73,15 @@ class AnalyzeChapterSpeechUseCase(
             contentHash = contentHash,
             resolverVersion = resolverVersion,
         )
-        val drafts = RuleBasedSpeechSegmenter.segment(paragraphs, policy)
+        // 只对 AI 档、且策略本身禁止段内拆分（整段/按页）时放开引号与说话提示的拆分。
+        // 这一步只影响落库的分段粒度：段落还是那个段落，句号处不切，段内停顿节奏不变；
+        // 切出来的对白段才进 AI 候选，旁白段（0.9/0.95）不进。
+        val segmentPolicy = if (splitDialogueInsideUnit && !policy.allowRoleSplits) {
+            policy.copy(allowRoleSplits = true)
+        } else {
+            policy
+        }
+        val drafts = RuleBasedSpeechSegmenter.segment(paragraphs, segmentPolicy)
         val segments = drafts.map { draft ->
             ChapterSpeechSegment(
                 id = SpeechIdentity.segmentId(

@@ -3288,6 +3288,7 @@
     <string name="speech_storyboard">Storyboard</string>
     <string name="speech_storyboard_reanalyze">Re-analyze</string>
     <string name="speech_storyboard_label_analysis_mode">Analysis mode</string>
+    <string name="speech_storyboard_analysis_fallback_toast">This chapter shows rule output, not AI completion. See logs for details.</string>
     <string name="speech_storyboard_status_on">On</string>
     <string name="speech_storyboard_status_off">Off</string>
     <string name="speech_storyboard_empty">No segments were produced for this chapter.</string>

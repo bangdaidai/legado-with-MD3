@@ -7,10 +7,12 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.domain.gateway.BookKnowledgeGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
+import io.legado.app.domain.model.readaloud.ChapterSpeechAnalysis
 import io.legado.app.domain.model.readaloud.CharacterPerformanceProfile
 import io.legado.app.domain.model.readaloud.ContentSplitPolicy
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.domain.model.readaloud.SpeechAnalysisMode
+import io.legado.app.domain.model.readaloud.SpeechAnalysisStatus
 import io.legado.app.domain.model.readaloud.SpeechIdentity
 import io.legado.app.domain.model.readaloud.SpeechPlanItem
 import io.legado.app.domain.model.readaloud.SpeechResolutionSource
@@ -80,6 +82,13 @@ class SpeechStoryboardViewModel(
 
     /** 详情页当前加载的完整计划，试听按 id 找回音色；离开详情页清空 */
     private var currentPlan: List<SpeechPlanItem> = emptyList()
+
+    /**
+     * 本次进页已经写进日志的分析说明（章号 + 分析行时间戳），避免来回切章重复记。
+     *
+     * 回落原因同时进 AppLog：分镜页看到的结果与设置不是一档时，日志里要能查到是哪一步退的。
+     */
+    private val notifiedAnalysisNotes = mutableSetOf<String>()
 
     /**
      * 章节列表上「往后补分析 / 重新分析选中章」这一批跑批任务。
@@ -266,7 +275,13 @@ class SpeechStoryboardViewModel(
             ?: fallbackTitle(chapterIndex)
         loadJob = viewModelScope.launch {
             _uiState.update {
-                it.copy(isLoading = true, selectedChapterIndex = chapterIndex, chapterTitle = title)
+                it.copy(
+                    isLoading = true,
+                    selectedChapterIndex = chapterIndex,
+                    chapterTitle = title,
+                    // 加载期间先按设置那一档占位，算完再换成这一章的实际口径
+                    analysisMode = ReadConfig.speechAnalysisMode,
+                )
             }
             try {
                 val isCurrent = chapterIndex == currentChapterIndex()
@@ -295,17 +310,31 @@ class SpeechStoryboardViewModel(
                 }
                 currentPlan = plan
                 val items = plan.map(::toItemUi)
+                // 配置卡这一行写的是**这一章实际**按哪一档跑出来的，不是设置里选的那一档：
+                // AI 失败回落、或者库里只有规则结果时，照抄设置会把规则结果标成 AI 补全
+                val storedAnalysis = withContext(Dispatchers.IO) {
+                    chapterSpeechGateway.getStoredAnalysis(bookUrl, chapterIndex)
+                }
+                val display = resolveAnalysisDisplay(chapterIndex, storedAnalysis)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         multiSpeakerEnabled = ReadConfig.useMultiSpeaker,
-                        analysisMode = ReadConfig.speechAnalysisMode,
+                        analysisMode = display.mode.storageValue,
                         chapterTitle = title,
                         isCurrentChapter = isCurrent,
                         scenes = groupIntoScenes(items).toImmutableList(),
                         summary = buildSummary(items),
                     )
                 }
+                // 缓存的详情页不会重跑 AI，也就没有回落事件可接：这一屏的提示由页面自己补。
+                // 重新分析/首次分析由 PrepareChapterSpeechPlanUseCase 发事件，这里只记日志，免得弹两次
+                reportAnalysisFallback(
+                    chapterIndex = chapterIndex,
+                    analysis = storedAnalysis,
+                    display = display,
+                    showToast = !reanalyze && stored.isNotEmpty(),
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -322,6 +351,101 @@ class SpeechStoryboardViewModel(
      * 新补出来的那一份就和耳朵里那一份对不上。已经跑过的章不在这个话题里——那一屏照用旧的那份。
      */
     private fun splitPolicy(): ContentSplitPolicy = ChapterSpeechBatchAnalyzer.splitPolicy()
+
+    /** 详情页「分析模式」要展示的实际口径，以及进 AppLog 的回落说明。 */
+    private data class AnalysisDisplay(
+        val mode: SpeechAnalysisMode,
+        /** 进 AppLog 的完整说明；空串不记 */
+        val logMessage: String = "",
+    )
+
+    /**
+     * 还原这一章**实际**是哪一档跑出来的。
+     *
+     * 标签只认库里记的那一档：版本串里没有 AI 标记 = 规则；AI 复核失败并回落（status=Failed）
+     * = 规则；其余按版本串里记的那一档原样显示。AI 有没有真的落下说话人结论只写日志、
+     * 不改标签——AI 跑过但判「全旁白」也是 AI 的结果，拿结论有无当判据会把跑过的 AI 档说成规则。
+     *
+     * 认 AI 版本看版本串里的 `ai-speech-analysis-` 标记，不拿当前划分方式去比：库里那一份
+     * 可能是别的划分方式下跑的，按策略比会把旧规则结果误认成 AI 版本。
+     */
+    private suspend fun resolveAnalysisDisplay(
+        chapterIndex: Int,
+        analysis: ChapterSpeechAnalysis?,
+    ): AnalysisDisplay {
+        val requested = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode)
+        if (analysis == null) return AnalysisDisplay(requested)
+        if (!analysis.resolverVersion.contains(AI_RESOLVER_MARKER)) {
+            if (requested == SpeechAnalysisMode.Rule) return AnalysisDisplay(requested)
+            return AnalysisDisplay(
+                mode = SpeechAnalysisMode.Rule,
+                logMessage = "分镜页第${chapterIndex + 1}章展示的是规则结果：库里那一份按规则分析，" +
+                    "当前设置是 AI 补全；要按 AI 重跑请点「重新分析」",
+            )
+        }
+        if (analysis.status == SpeechAnalysisStatus.Failed) {
+            // 用户已经切回纯规则：实际结果就是规则，不必再拿上一轮的 AI 失败提醒他
+            if (requested == SpeechAnalysisMode.Rule) return AnalysisDisplay(SpeechAnalysisMode.Rule)
+            return AnalysisDisplay(
+                mode = SpeechAnalysisMode.Rule,
+                logMessage = "分镜页第${chapterIndex + 1}章展示的是规则结果：AI 分析失败" +
+                    analysis.error.takeIf { it.isNotBlank() }?.let { "（$it）" }.orEmpty() +
+                    "；要重跑请点「重新分析」",
+            )
+        }
+        val storedMode = aiModeOf(analysis.resolverVersion)
+        val segments = withContext(Dispatchers.IO) { chapterSpeechGateway.getSegments(analysis.id) }
+        // 标签不改：这一章按哪一档跑的就写哪一档。下面这行只回答「为什么看不到 AI 改过的段」
+        if (segments.none { it.source == SpeechResolutionSource.Ai }) {
+            val unresolvedDialogue = segments.any {
+                it.source == SpeechResolutionSource.Rule &&
+                    it.characterId == null &&
+                    (it.roleType == SpeechRoleType.Character || it.roleType == SpeechRoleType.Thought)
+            }
+            val reason = if (unresolvedDialogue) {
+                "AI 没有返回可用的说话人结论，这些段仍是规则结果；要重跑请点「重新分析」"
+            } else {
+                "库里这一份没有任何 AI 结论（整章仍是旁白）；若是整段/按页划分且这一章分析得早，" +
+                    "点「重新分析」会先按引号拆出对白再交给 AI"
+            }
+            val logKey = "ai-empty:$chapterIndex:${analysis.updatedAt}"
+            if (notifiedAnalysisNotes.add(logKey)) {
+                AppLog.put("分镜页第${chapterIndex + 1}章这一份记的是「${storedMode.logLabel()}」档，但$reason")
+            }
+        }
+        return AnalysisDisplay(storedMode)
+    }
+
+    /** 日志里用的档位短名（界面文案带「（推荐）」等后缀，写进日志太啰嗦）。 */
+    private fun SpeechAnalysisMode.logLabel(): String = when (this) {
+        SpeechAnalysisMode.Rule -> "规则"
+        SpeechAnalysisMode.RuleWithAi -> "AI 补全"
+        SpeechAnalysisMode.AiUnderstanding -> "AI 理解"
+    }
+
+    /** 从 AI 解析版本串里认出当时那一档（纯规则版本不会走到这里）。 */
+    private fun aiModeOf(resolverVersion: String): SpeechAnalysisMode = when {
+        resolverVersion.contains(":${SpeechAnalysisMode.AiUnderstanding.storageValue}") ->
+            SpeechAnalysisMode.AiUnderstanding
+        resolverVersion.contains(":${SpeechAnalysisMode.RuleWithAi.storageValue}") ->
+            SpeechAnalysisMode.RuleWithAi
+        else -> SpeechAnalysisMode.Rule
+    }
+
+    private fun reportAnalysisFallback(
+        chapterIndex: Int,
+        analysis: ChapterSpeechAnalysis?,
+        display: AnalysisDisplay,
+        showToast: Boolean,
+    ) {
+        if (display.logMessage.isBlank()) return
+        val key = "$chapterIndex:${analysis?.updatedAt ?: 0L}:${display.logMessage}"
+        if (!notifiedAnalysisNotes.add(key)) return
+        AppLog.put(display.logMessage)
+        if (showToast) {
+            toast(appCtx.getString(R.string.speech_storyboard_analysis_fallback_toast))
+        }
+    }
 
     /**
      * 现跑一次完整分析链：先拿到这一章的朗读段落，再交给 [ResolveEffectiveSpeechPlanUseCase]。
@@ -768,5 +892,10 @@ class SpeechStoryboardViewModel(
 
     private fun toast(message: String) {
         _effects.tryEmit(SpeechStoryboardEffect.ShowToast(message))
+    }
+
+    private companion object {
+        /** AI 分析版本串里的固定标记；纯规则版本只有规则段，没有这一段 */
+        const val AI_RESOLVER_MARKER = "ai-speech-analysis-"
     }
 }

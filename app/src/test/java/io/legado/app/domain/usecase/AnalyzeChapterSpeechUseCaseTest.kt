@@ -97,6 +97,33 @@ class AnalyzeChapterSpeechUseCaseTest {
         assertEquals(SpeechRoleType.Narrator, result.segments.single().roleType)
         assertEquals(paragraphs.single().text, result.segments.single().text)
     }
+
+    @Test
+    fun `ai split pulls dialogue out of a paragraph without cutting sentences`() = runBlocking {
+        val gateway = MemoryChapterSpeechGateway()
+        val useCase = AnalyzeChapterSpeechUseCase(gateway)
+        val paragraphs = listOf(CanonicalSpeechParagraph(0, "他笑道：“你来了。”然后走了。", 0))
+
+        val result = useCase(
+            "book",
+            0,
+            paragraphs,
+            policy = ContentSplitPolicies.forMode(ReadAloudContentSplitMode.Paragraph),
+            splitDialogueInsideUnit = true,
+            now = 100,
+        )
+
+        // 只按「谁在说话」切：引号内容是独立对白段，段内句号不拆
+        assertEquals(
+            listOf("他笑道：", "“你来了。”", "然后走了。"),
+            result.segments.map { it.text },
+        )
+        assertEquals(SpeechRoleType.Narrator, result.segments[0].roleType)
+        assertEquals(SpeechRoleType.Character, result.segments[1].roleType)
+        assertEquals(SpeechRoleType.Narrator, result.segments[2].roleType)
+        // 切完仍然首尾相接、不丢字
+        assertEquals(paragraphs.single().text, result.segments.joinToString("") { it.text })
+    }
 }
 
 private class MemoryChapterSpeechGateway : ChapterSpeechGateway {

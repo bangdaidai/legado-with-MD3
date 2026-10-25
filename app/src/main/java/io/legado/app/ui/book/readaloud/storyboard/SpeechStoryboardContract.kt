@@ -11,6 +11,7 @@ data class SpeechStoryboardUiState(
     val bookUrl: String,
     val isLoading: Boolean = true,
     val multiSpeakerEnabled: Boolean = true,
+    /** 这一章**实际**用的分析档（storageValue）；空 = 还没加载出章节。不是设置里那一档。 */
     val analysisMode: String = "",
     /** 已经分析过的章节，另外总会带上正在读的那一章 */
     val chapters: ImmutableList<StoryboardChapterUi> = persistentListOf(),
