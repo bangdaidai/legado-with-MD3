@@ -409,9 +409,14 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
     不加判据套覆盖会把胶囊安到错的人身上。跳过时写 AppLog 说明原因。
     （**S8 之后这一层只做效果**——正则音色与那一句的变声器，不再改"谁说话"，所以分镜页与耳朵里的
     归属从"两份结论"变成"同一份"。）
-    ②**分镜页「锁定/解锁这一段」**：`ToggleSegmentLock` Intent → `ChapterSpeechGateway.setSegmentUserLocked`
-    → DAO 行级 `UPDATE userLocked`（不整份回写分段），行右侧角标按钮与试听钮同款尺寸，
-    锁定态转主色；不重启朗读、不重算计划。这一列一写 true，现成的 6 处"跳过锁定段"立即生效。
+    ②**分镜页「改归属」**（2026-10-25 由「锁定/解锁这一段」改判而来，锁被判定为多余入口已删净）：
+    `OpenSpeakerPicker` / `AssignSegmentSpeaker` Intent → `CastSegmentFinalizer.reattribute`，
+    一次点人 = 一次写入：走行级 `setAttribution`（只改归属四列 + `userLocked`，不整份回写分段，
+    避免把库里的分析段换成覆盖切过的碎片），**同时**按 `CastQuoteTracker` 顺序量出这一段占的
+    开引号序号，把本章已存在的分配行一起改名（改回旁白则删行）。为什么不新建分配行：注入标记会
+    让正文坐标整体位移，见 `SpeechIdentity.alignsWithParagraphs`。改过的段 `userLocked = true`，
+    现成的"跳过锁定段"判断让重新分析不再动它，归零动作是「重新分析本章」。不重启朗读、不重算当前
+    播出声音，下一次出计划起用新的那一位；行右侧角标按钮与试听钮同款尺寸，有人时转主色。
     ③**场景拆分回写不再拿碎片顶掉分析段**：`withScenes` 过去把 `plan.map(SpeechPlanItem::segment)`
     整份 `replaceSegments`，而 plan 里可能是覆盖切过的碎片（正文/起止点被改过），先删后插等于
     用碎片换掉库里那条分析段；改成 `getSegments(analysisId)` 取回库自己的行、只搬场景两列再回写。
@@ -512,6 +517,20 @@ L5 由场景拆分挂在分析收尾满足；L6/L7 由"正文与分镜页读写 
     删除（记忆文本不再有 AI 产出方，权威在人物档案表）。保留**档案 → 记忆**（`applyProfileToMemory`，
     人物详情页保存时整行替换）与改名/改池的随行同步（`syncCharacterRow`，配音页与正文胶囊两个入口）。
     `UserEdits` / `diffUserEdits` 这对纯文本函数暂时留着给测试盯解析口径，随 S9 一并清。
+  - **改名 / 换池的随行同步扩到说话人分段表**（2026-10-25）：库里存着角色名的冗余列只有两处
+    （`chapter_role_assignments.characterName` + `voicePoolLabel`、`chapter_speech_segments.characterName`），
+    四个写入点以前只同步前者。自 S5① 与分镜页「改归属」起，分镜页那一行与正文「没分配过的那几句」
+    显示的就是后者（走 `CastSegmentFinalizer.inferredLabels`），不同步就成了
+    「人物页改了名，分镜页和部分句子还是旧名」。现收成 `BookCastStore.syncRenamedReferences` 一处
+    （分配行 + 分段行两个 `UPDATE`），配音页编辑、人物详情页改名、进配音页时的档案→角色回填、
+    正文胶囊弹层改名四个入口与同名折叠器都改走它。分段行**只按 `characterId` 认人**：规则/正则归因那些段
+    的名字是从正文读出来的字面称呼（"他""老者"），按旧名去改会把别人的话改掉。
+    顺带补一个真洞：`syncFromProfile` 过去在「只有档案、还没有配音角色行」时（AI 刚认出的临时人物、
+    这本书没进过配音页）直接 `return false` 什么都不做。现在仍**不**替他建配音行（建行等于把没转正的人
+    拉进配音链路并自动挑声线），但两张引用表照样改名。
+    口径确认（维护者拍板）：**知识图谱与人物列表继续只列转正的人物**——
+    `BookKnowledgeDao.getCharacterProfiles` 里 `includeDrafts` 默认 false 那条注释是有意口径，不动；
+    配音页 / 分镜候选 / 正文候选能看到临时人物，属于"配音链路内部"，不算四处不同名。
   - **⑤ 吸收清单逐项打勾（本轮验收）**：推理强度＝朗读设置那一份，旧弹窗值首次打开即搬走并删键；
     范围＝朗读侧档位「顺带往后分析几章」+ 分镜结果页显式动作（切片C），配乐这一趟自己仍带范围控件；
     续跑/重试＝`ChapterSpeechBatchAnalyzer` + `AiCastRunState`；逐句归属＝朗读链路产出，手工改走
