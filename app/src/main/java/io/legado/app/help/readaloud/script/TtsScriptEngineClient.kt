@@ -645,8 +645,12 @@ object TtsScriptEngineClient {
     }
 
     /**
-     * 解析选中风格：显式 styleId > cue 情绪（匹配 extra.styles 的 id/name）> 音色默认 style。
-     * 匹配不到时不编造 style，脚本按无风格处理。
+     * 解析选中风格（对齐 NG 语义）：
+     * - 显式 styleId：优先匹配 extra.styles（id/name/value 忽略大小写），匹配不到原样传，
+     *   由脚本校验（用户显式选择，报错是合理反馈）；
+     * - 无显式选择但 cue 带情绪：只有能映射进 extra.styles 才传，映射不到不硬塞；
+     * - 都没有：返回 null——音色声明的 style 只作显示名（voice.style_value 保持 null），
+     *   脚本侧走默认分支不做校验。把声明值包成选中风格会被微软这类严格校验的脚本拒绝。
      */
     internal fun resolveSelectedStyle(
         voice: HttpTtsVoice?,
@@ -654,17 +658,18 @@ object TtsScriptEngineClient {
         emotion: String,
     ): TtsScriptVoiceStyle? {
         val styles = parseVoiceStyles(voice?.extraJson)
-        val wanted = styleId?.takeIf { it.isNotBlank() }
-            ?: emotion.takeIf { it.isNotBlank() }
-            ?: voice?.style?.takeIf { it.isNotBlank() }
-        if (wanted.isNullOrBlank()) return null
-        val matched = styles.firstOrNull {
-            it.id.equals(wanted, ignoreCase = true) || it.name == wanted || it.value == wanted
+        val explicit = styleId?.takeIf { it.isNotBlank() }
+        if (explicit != null) {
+            return styles.firstOrNull {
+                it.id.equals(explicit, ignoreCase = true) ||
+                    it.name == explicit || it.value == explicit
+            } ?: TtsScriptVoiceStyle(id = explicit, name = explicit, value = explicit, tag = null)
         }
-        if (matched != null) return matched
-        // 音色默认 style 或显式 styleId 不在目录里：原样传给脚本自行处理
-        return TtsScriptVoiceStyle(id = wanted, name = wanted, value = wanted, tag = null)
-            .takeIf { styleId != null || emotion.isBlank() }
+        val wanted = emotion.takeIf { it.isNotBlank() } ?: return null
+        return styles.firstOrNull {
+            it.id.equals(wanted, ignoreCase = true) ||
+                it.name == wanted || it.value == wanted
+        }
     }
 
     private fun parseVoiceStyles(extraJson: String?): List<TtsScriptVoiceStyle> {
