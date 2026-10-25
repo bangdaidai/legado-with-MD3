@@ -56,6 +56,11 @@ class PrepareChapterSpeechPlanUseCase(
         source: String = "朗读",
         /** 归因口径：决定发给模型的口径文本，也写进这一轮**新落下**的那份版本号；已经判过的章不看它。 */
         attributionStrictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
+        /**
+         * 分镜页「重新分析」：用户显式要求重跑，不受本书 AI 失败冷却影响，也不等同章在飞的那一轮。
+         * 只由手动入口传 true；朗读/预合成永远走冷却，免得一次失败把整本书的 token 反复烧。
+         */
+        ignoreAiCooldown: Boolean = false,
     ): List<SpeechPlanItem> {
         if (paragraphs.isEmpty()) return emptyList()
         val requestedMode = analysisMode
@@ -119,6 +124,7 @@ class PrepareChapterSpeechPlanUseCase(
                     policy = policy,
                     source = source,
                     strictness = attributionStrictness,
+                    ignoreCooldown = ignoreAiCooldown,
                 )
             }.onSuccess {
                 lastNotifiedFallback = null

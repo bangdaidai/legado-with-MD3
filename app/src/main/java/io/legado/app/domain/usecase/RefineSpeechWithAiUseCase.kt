@@ -66,7 +66,8 @@ class RefineSpeechWithAiUseCase(
      * 于是预加载 10 章会各发一次慢 AI 请求。改成本书级后，第一章失败即整本书进入冷却。
      *
      * 注意：换模型/改 prompt 会因 resolverVersion 变化落到新分析记录，但本书冷却仍按 bookUrl 计；
-     * 分镜页「重新分析」会调用 [clearAiCooldown] 主动解除，避免被冷却挡住。
+     * 分镜页「重新分析」走 [invoke] 的 `ignoreCooldown`，在锁内解除本书冷却后照常发请求，
+     * 用户显式点的重跑不归自动流程的冷却管。
      */
     private val bookAiCooldownUntil = ConcurrentHashMap<String, Long>()
 
@@ -234,8 +235,23 @@ class RefineSpeechWithAiUseCase(
         source: String = "朗读",
         /** 归因口径：拿不准时硬给一个人（必答）还是留空走默认音（宁缺毋滥）。 */
         strictness: SpeechAttributionStrictness = SpeechAttributionStrictness.MustAnswer,
+        /**
+         * 手动重新分析（分镜页那颗按钮）：不受本书 AI 失败冷却影响，也不去等同一章正在飞的那一轮。
+         *
+         * 两个让步都必须绕过：冷却期内直接返回规则结果是"上一轮失败"的冻结；而单飞等待拿到的
+         * 可能是被冷却挡下、只算了规则的那一份——用户明明点了重跑，屏幕上还是规则结果。
+         * 用户显式点了就不该被自动冷却挡着，冷却是给自动流程省 token 的。
+         */
+        ignoreCooldown: Boolean = false,
     ): ChapterSpeechAnalysisResult {
         if (mode == SpeechAnalysisMode.Rule) return analysisResult
+        // 手动重跑不参与单飞：等别人那一轮可能等来"被冷却挡下的规则结果"，等于白点
+        if (ignoreCooldown) {
+            return analyzeExclusive(
+                analysisResult, paragraphs, mode, reasoningLevel, policy, now, source, strictness,
+                ignoreCooldown = true,
+            )
+        }
         // 单飞：键就是 analysis.id（书+章+contentHash+resolverVersion 的确定性身份），
         // 文本、模型或模式变了自动各飞各的，等待方不会错拿到"不是自己要的那份"结果。
         val key = analysisResult.analysis.id
@@ -284,6 +300,7 @@ class RefineSpeechWithAiUseCase(
         now: Long,
         source: String,
         strictness: SpeechAttributionStrictness,
+        ignoreCooldown: Boolean = false,
     ): ChapterSpeechAnalysisResult {
         val bookUrl = analysisResult.analysis.bookUrl
         // 同一本书串行化：冷却判断、AI 调用、冷却写入都在锁内，
@@ -292,10 +309,22 @@ class RefineSpeechWithAiUseCase(
         // （用户实测等 72 秒）；同章仍互斥（防朗读与分镜页并发重复分析）
         val guard = bookLocks.getOrPut("$bookUrl#${analysisResult.analysis.chapterIndex}") { Mutex() }
         return guard.withLock {
-            val cooldownUntil = bookAiCooldownUntil[bookUrl]
-            if (cooldownUntil != null && now < cooldownUntil) {
-                notifyCooldownSkip(bookUrl, analysisResult.analysis.chapterIndex, cooldownUntil, now)
-                return@withLock analysisResult
+            if (ignoreCooldown) {
+                // 在锁内解冷却：锁外可能还有上一轮自动分析刚失败、把冷却重新置上，
+                // 只有拿到这把章级锁之后解，才保证紧接着的请求真的会发出去。
+                // 只在真的解除过时留一行，否则每次手动重分析都会多一条无意义的日志
+                if (bookAiCooldownUntil.remove(bookUrl) != null) {
+                    AppLog.put(
+                        "分镜页手动重新分析，跳过本书 AI 失败冷却：" +
+                            "第${analysisResult.analysis.chapterIndex + 1}章（$source）"
+                    )
+                }
+            } else {
+                val cooldownUntil = bookAiCooldownUntil[bookUrl]
+                if (cooldownUntil != null && now < cooldownUntil) {
+                    notifyCooldownSkip(bookUrl, analysisResult.analysis.chapterIndex, cooldownUntil, now)
+                    return@withLock analysisResult
+                }
             }
             // 等锁期间（上一轮的分析在 NonCancellable 里还在跑）可能已把本章 AI 结果
             // 落库：直接复用最新缓存，否则补发轮会拿着进锁前的规则快照再发一次 AI
@@ -311,7 +340,10 @@ class RefineSpeechWithAiUseCase(
                 latest.id == analysisResult.analysis.id &&
                 latest.updatedAt > analysisResult.analysis.updatedAt &&
                 latest.status != SpeechAnalysisStatus.Pending &&
-                latest.status != SpeechAnalysisStatus.Running
+                latest.status != SpeechAnalysisStatus.Running &&
+                // 手动重跑时，等锁期间别人写进来的"失败回落"也不能当结果收下——那正是用户
+                // 点重新分析想摆脱的那一份；成功/部分成功的 AI 结论才值得复用
+                (!ignoreCooldown || latest.status != SpeechAnalysisStatus.Failed)
             ) {
                 val latestSegments = runCatching {
                     chapterSpeechGateway.getSegments(latest.id)

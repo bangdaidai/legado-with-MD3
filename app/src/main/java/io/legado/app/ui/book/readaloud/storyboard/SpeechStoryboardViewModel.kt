@@ -466,7 +466,6 @@ class SpeechStoryboardViewModel(
             withContext(Dispatchers.IO) {
                 chapterSpeechGateway.deleteChapter(bookUrl, chapterIndex)
             }
-            resolveEffectiveSpeechPlan.clearAiCooldown(bookUrl)
         }
         return resolveEffectiveSpeechPlan(
             bookUrl = bookUrl,
@@ -476,6 +475,9 @@ class SpeechStoryboardViewModel(
             analysisMode = SpeechAnalysisMode.fromStorage(ReadConfig.speechAnalysisMode),
             // 分镜页触发的分析在 AI 日志里要能看出出处，不混进"朗读"
             source = "分镜",
+            // 「重新分析」是用户显式点的那一下：跳过本书 AI 失败冷却，也不去等同章在飞的那一轮。
+            // 冷却是给自动流程省 token 的，不该把用户主动重跑也一起冻住；首次分析（非重跑）照旧受冷却管。
+            ignoreAiCooldown = resetCache,
         )
     }
 

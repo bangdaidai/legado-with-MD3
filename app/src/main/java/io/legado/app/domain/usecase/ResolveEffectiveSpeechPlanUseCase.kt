@@ -48,6 +48,11 @@ class ResolveEffectiveSpeechPlanUseCase(
         source: String = "朗读",
         /** 归因口径覆盖；null 表示读设置里那一份。 */
         attributionStrictness: SpeechAttributionStrictness? = null,
+        /**
+         * 分镜页「重新分析」：用户显式要求重跑，跳过本书 AI 失败冷却。
+         * 朗读与预合成不传，冷却照旧管住自动流程。
+         */
+        ignoreAiCooldown: Boolean = false,
     ): List<SpeechPlanItem> {
         if (bookUrl.isEmpty() || paragraphs.isEmpty()) return emptyList()
         val settings = readAloudSettingsGateway.currentSettings
@@ -81,6 +86,7 @@ class ResolveEffectiveSpeechPlanUseCase(
                 source = source,
                 attributionStrictness = attributionStrictness
                     ?: SpeechAttributionStrictness.fromStorage(settings.speechAttributionStrictness),
+                ignoreAiCooldown = ignoreAiCooldown,
             )
         }.onFailure {
             // 新一轮起播掐旧轮时也走到这里：取消不是失败，不得记"生成失败"再拿空计划继续——
