@@ -310,6 +310,13 @@ fun MarkingSheet(
         }
     }
 
+    // 宿主会把刚关闭的弹层再保留约 600ms 播退场动画，这期间 show 仍是 true，
+    // 而关闭瞬间 delegate 已清空会话（选区、编辑中的标记、悬浮锚点全没了）。
+    // 此时底部形态的 title/startAction/body 都是空的，只剩标题行右侧的调色按钮，
+    // 会在底部闪出一块「空壳」。没有会话就不渲染底部弹层。
+    // 注意不能连 show=false 的情况一起跳过：那次组合仍是底部弹层自己播放收起
+    // 动画的机会（Miuix 的 WindowBottomSheet 靠 show 翻转动画，不是靠移除组合）。
+    val hasSession = selection != null || editing != null || state.loading
     val floatingAnchor = if (show) state.floatingAnchor else null
     if (floatingAnchor != null) {
         // 阅读页入口：面板悬浮在笔记/选区旁，改样式时正文预览不被挡住
@@ -321,7 +328,7 @@ fun MarkingSheet(
             onDismissRequest = requestClose,
             content = body,
         )
-    } else {
+    } else if (hasSession || !show) {
         AppModalBottomSheet(
             show = show,
             onDismissRequest = requestClose,
