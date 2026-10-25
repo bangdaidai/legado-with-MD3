@@ -684,35 +684,77 @@ object VoicePoolStore {
     }
 
     /**
-     * 标签自动入池：目录声明的标签（如「少女-清亮情绪」）匹配到已有池时自动归入。
+     * 目录音色自动入池，两条规则并行：
      *
-     * 匹配规则：池名核心词（去掉结尾的「音」字，如「少女音」→「少女」）出现在
-     * 音色任一标签里即命中；只处理**尚不属于任何池**的音色——用户已经手动
-     * 分过池（或手动清空过归属）的不碰，避免同步一次就覆盖一次手工整理。
-     * 池不存在时不自动建池（要建用编辑器里的「用标签建池」）。
+     * A. 池分类字段匹配（预置的性别×年龄段矩阵）：池 gender 等于音色性别，且池
+     *    ageBand 等于由目录标签推断的年龄段（「少女-清亮情绪」→teen→「女少女」池）；
+     *    标签推不出年龄段时落同性别 ageBand=unknown 的池（「失配女」语义恰好对）。
+     * B. 标签核心词匹配：自定义池名去掉结尾「音」后的核心词出现在音色标签里。
+     *
+     * 只处理**尚不属于任何池**的音色——用户已经手动分过池（或清空过归属）的
+     * 不碰，避免每次同步覆盖一次手工整理；池不存在不自动建。
      */
     suspend fun autoAssignByTags(): Int {
-        val pools = listPools().filter { it.enabled && it.groupEnabled }
+        val pools = appDb.voicePoolDao.getAll().filter { it.enabled }
         if (pools.isEmpty()) return 0
         val membership = voicePoolMap()
-        val joins = mutableListOf<Pair<String, Set<String>>>()
-
         val pending = appDb.readAloudVoiceDao.getVoices()
             .filter { !it.excluded && membership[it.id].orEmpty().isEmpty() }
         if (pending.isEmpty()) return 0
 
-        pools.forEach { pool ->
-            val core = pool.name.trim().trimEnd('音')
-            if (core.length < 2) return@forEach
-            val matched = pending.filter { voice ->
-                ReadAloudVoiceTraits.of(voice.toDomain()).tags.any {
-                    it.contains(core, ignoreCase = true)
+        data class Target(val poolId: String, val voiceIds: MutableSet<String>)
+
+        val byGender = pools.filter {
+            it.gender != VoicePoolEntity.VOICE_POOL_GENDER_UNKNOWN
+        }.groupBy { it.gender }
+        val joins = mutableListOf<Target>()
+
+        pending.forEach { voice ->
+            val traits = ReadAloudVoiceTraits.of(voice.toDomain())
+            val tags = traits.tags
+            // A：性别矩阵（性别未知的不进性别池）
+            if (traits.gender != ReadAloudVoiceTraits.GENDER_UNKNOWN) {
+                val ageBand = ageBandFromTags(tags)
+                byGender[traits.gender]?.firstOrNull { it.ageBand == ageBand }
+                    ?.let { pool ->
+                        joins.firstOrNull { it.poolId == pool.id }
+                            ?.voiceIds?.add(voice.id)
+                            ?: joins += Target(pool.id, mutableSetOf(voice.id))
+                    }
+            }
+            // B：自定义池名核心词
+            pools.forEach { pool ->
+                val core = pool.name.trim().trimEnd('音')
+                if (core.length >= 2 &&
+                    tags.any { it.contains(core, ignoreCase = true) } &&
+                    joins.none { it.poolId == pool.id && voice.id in it.voiceIds }
+                ) {
+                    joins.firstOrNull { it.poolId == pool.id }
+                        ?.voiceIds?.add(voice.id)
+                        ?: joins += Target(pool.id, mutableSetOf(voice.id))
                 }
-            }.mapTo(mutableSetOf()) { it.id }
-            if (matched.isNotEmpty()) joins += pool.id to matched
+            }
         }
-        joins.forEach { (poolId, voiceIds) -> addMembers(poolId, voiceIds) }
-        return joins.sumOf { it.second.size }
+        joins.forEach { addMembers(it.poolId, it.voiceIds) }
+        return joins.sumOf { it.voiceIds.size }
+    }
+
+    /** 目录标签 → 年龄段；无年龄线索返回 unknown（落「失配男/女」池）。 */
+    private fun ageBandFromTags(tags: List<String>): String {
+        val text = tags.joinToString(" ").lowercase()
+        return when {
+            listOf("童", "娃娃", "儿童", "正太", "萝莉").any { it in text } ->
+                VoicePoolEntity.VOICE_POOL_AGE_CHILD
+            listOf("少女", "少年", "学生", "青涩", "花季").any { it in text } ->
+                VoicePoolEntity.VOICE_POOL_AGE_TEEN
+            listOf("青年", "轻熟", "御姐", "青女").any { it in text } ->
+                VoicePoolEntity.VOICE_POOL_AGE_YOUNG_ADULT
+            listOf("中年", "成熟", "大叔", "阿姨", "贵妇").any { it in text } ->
+                VoicePoolEntity.VOICE_POOL_AGE_ADULT
+            listOf("老年", "奶奶", "爷爷", "苍老").any { it in text } ->
+                VoicePoolEntity.VOICE_POOL_AGE_ELDERLY
+            else -> VoicePoolEntity.VOICE_POOL_AGE_UNKNOWN
+        }
     }
 
     /**
