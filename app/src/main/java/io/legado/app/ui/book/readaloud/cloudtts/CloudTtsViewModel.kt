@@ -154,6 +154,13 @@ class CloudTtsViewModel(
             }
             pruneAndPublish()
         }
+        viewModelScope.launch {
+            // 存量目录音色按标签自动入池（幂等：只归尚无池归属的，覆盖已导入引擎），
+            // 归到池后重发列表让卡片带上池标签
+            if (VoicePoolStore.autoAssignByTags() > 0) {
+                pruneAndPublish()
+            }
+        }
     }
 
     /**
@@ -1342,6 +1349,13 @@ class CloudTtsViewModel(
             // 这里只同步 http，系统音色不在本次条目里，别被判成失效
             managedScope = { it.engineType == ReadAloudVoice.ENGINE_HTTP },
         )
+        // 目录落库后按标签自动入池（「少女-清亮情绪」→「少女音」池），
+        // 只归尚无池归属的音色，不覆盖手工整理
+        val autoJoined = VoicePoolStore.autoAssignByTags()
+        if (autoJoined > 0) {
+            voicePoolNames = VoicePoolStore.poolNamesOfVoices()
+            _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter)) }
+        }
     }
 
     private fun deleteHttpTts(engineId: String) = viewModelScope.launch {

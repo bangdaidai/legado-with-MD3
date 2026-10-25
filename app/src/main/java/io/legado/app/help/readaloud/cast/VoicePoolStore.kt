@@ -684,6 +684,38 @@ object VoicePoolStore {
     }
 
     /**
+     * 标签自动入池：目录声明的标签（如「少女-清亮情绪」）匹配到已有池时自动归入。
+     *
+     * 匹配规则：池名核心词（去掉结尾的「音」字，如「少女音」→「少女」）出现在
+     * 音色任一标签里即命中；只处理**尚不属于任何池**的音色——用户已经手动
+     * 分过池（或手动清空过归属）的不碰，避免同步一次就覆盖一次手工整理。
+     * 池不存在时不自动建池（要建用编辑器里的「用标签建池」）。
+     */
+    suspend fun autoAssignByTags(): Int {
+        val pools = listPools().filter { it.enabled && it.groupEnabled }
+        if (pools.isEmpty()) return 0
+        val membership = voicePoolMap()
+        val joins = mutableListOf<Pair<String, Set<String>>>()
+
+        val pending = appDb.readAloudVoiceDao.getVoices()
+            .filter { !it.excluded && membership[it.id].orEmpty().isEmpty() }
+        if (pending.isEmpty()) return 0
+
+        pools.forEach { pool ->
+            val core = pool.name.trim().trimEnd('音')
+            if (core.length < 2) return@forEach
+            val matched = pending.filter { voice ->
+                ReadAloudVoiceTraits.of(voice.toDomain()).tags.any {
+                    it.contains(core, ignoreCase = true)
+                }
+            }.mapTo(mutableSetOf()) { it.id }
+            if (matched.isNotEmpty()) joins += pool.id to matched
+        }
+        joins.forEach { (poolId, voiceIds) -> addMembers(poolId, voiceIds) }
+        return joins.sumOf { it.second.size }
+    }
+
+    /**
      * 往池里追加成员，返回真正新增的条数（「朗读引擎与音色」页的添加到声音池）。
      *
      * [setMembers] 是全量替换语义，从引擎页那边过来时手上只有被选中的那几条，
