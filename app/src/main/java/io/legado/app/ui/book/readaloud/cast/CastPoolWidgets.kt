@@ -154,6 +154,13 @@ interface CastPoolView {
 
     /** 展开中的池（行内显示成员列表），每个池自带成员与筛选词，所以能同时展开多个。 */
     val expandedPools: List<ExpandedPoolUi>
+
+    /**
+     * 未归池音色的**全量**。段头计数必须取这里而不是 [rows]：[rows] 在收起或搜索时
+     * 只剩可见行，拿它数会让收起的段头显示 0。不涉及这一段的页面沿用默认空表。
+     */
+    val unassignedVoices: List<CastMemberUi>
+        get() = emptyList()
 }
 
 /**
@@ -280,12 +287,13 @@ fun PoolTreeList(
                         )
                     when {
                         row.isUnassignedHeader -> {
-                            val count = rows.count { it.unassignedVoice != null }
+                            // 计数取全量：收起时 rows 里没有音色行，数 rows 会变成 0
+                            val count = view.unassignedVoices.size
                             GroupHeader(
                                 title = stringResource(R.string.cast_pool_unassigned_section, count),
-                                enabledCount = count,
-                                total = count,
                                 collapsed = view.collapsedGroups.contains(CastPoolTree.UNASSIGNED_VOICES_ID),
+                                // 这一段没有开关，也就没有「开着的/总数」可言；总数已经写在标题里
+                                showCount = false,
                                 dragModifier = dragModifier,
                                 onToggle = { actions.onToggleGroup(CastPoolTree.UNASSIGNED_VOICES_ID) },
                                 onRename = null,
@@ -426,8 +434,10 @@ private fun DragOutcomeBar(view: CastPoolView) {
 private fun GroupHeader(
     title: String,
     collapsed: Boolean,
-    enabledCount: Int,
-    total: Int,
+    enabledCount: Int = 0,
+    total: Int = 0,
+    /** 尾部「(开着的/总数)」。没有开关的段头（未归池音色）关掉它，总数在标题里。 */
+    showCount: Boolean = true,
     dragModifier: Modifier,
     onToggle: () -> Unit,
     onRename: (() -> Unit)?,
@@ -500,13 +510,15 @@ private fun GroupHeader(
                 // 分组头这层卡片还要留着描边高亮与拖拽抬升，所以外壳不用 TinySettingItem
                 TinySwitch(checked = enabled, onCheckedChange = change)
             }
-            AppText(
-                text = "($enabledCount/$total)",
-                style = LegadoTheme.typography.labelMedium,
-                color = LegadoTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 10.dp),
-            )
+            if (showCount) {
+                AppText(
+                    text = "($enabledCount/$total)",
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                )
+            }
             if (onRename != null || onDelete != null) {
                 Box {
                     SmallPlainButton(

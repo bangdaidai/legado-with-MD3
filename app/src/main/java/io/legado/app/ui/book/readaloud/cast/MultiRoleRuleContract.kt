@@ -127,7 +127,7 @@ data class MultiRoleRuleUiState(
     val pickerQuery: String = "",
     val pickerCandidates: ImmutableList<CastMemberUi> = persistentListOf(),
     /** 不属于任何声音池的音色（池页顶部的「未归池」段，随池数据一起刷新）。 */
-    val unassignedVoices: ImmutableList<CastMemberUi> = persistentListOf(),
+    override val unassignedVoices: ImmutableList<CastMemberUi> = persistentListOf(),
     /** 「归入声音池」对话框（非空 = 打开中，值 = 要归池的那条音色）。 */
     val assignVoiceTarget: CastMemberUi? = null,
     /** 归池对话框的候选池（全部池，含停用的——归池不改池的启用状态）。 */
