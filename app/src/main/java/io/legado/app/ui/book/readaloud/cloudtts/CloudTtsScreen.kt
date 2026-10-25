@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Slider
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -58,7 +57,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.domain.model.readaloud.CloudTtsProviderType
 import io.legado.app.domain.model.readaloud.ReadAloudVoice
@@ -76,9 +74,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.FabMenuItem
 import io.legado.app.ui.widget.components.SearchBar
-import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.ToggleChip
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
 import io.legado.app.ui.widget.components.icon.AppIcons
@@ -109,12 +105,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 内置 JS 朗读引擎脚本模板（assets/defaultData/tts/，取自 legado_NG）。 */
-private val TTS_SCRIPT_TEMPLATES = listOf(
-    "defaultData/tts/mimo_v25_tts.js" to "Xiaomi MiMo V2.5 TTS",
-    "defaultData/tts/microsoft_translator.js" to "Microsoft Translator TTS",
-)
-
 @Composable
 fun CloudTtsScreen(
     state: CloudTtsUiState,
@@ -134,7 +124,6 @@ fun CloudTtsScreen(
         },
     )
     var showAddEngineSheet by remember { mutableStateOf(false) }
-    var showTtsTemplateSheet by remember { mutableStateOf(false) }
     var showHttpTtsImportSheet by remember { mutableStateOf(false) }
     var showHttpTtsUrlInput by remember { mutableStateOf(false) }
     // 行尾试听按钮长按：弹出试听文本悬浮窗（改默认文本 / 直接试听草稿）
@@ -206,6 +195,34 @@ fun CloudTtsScreen(
                             ),
                         )
                     }
+                    if (state.selectedTab == CloudTtsTab.Voices) {
+                        // 性别筛选：列表顶部那排 chips 挪进这里的溢出菜单，✓ 标当前项
+                        var expanded by remember { mutableStateOf(false) }
+                        Box {
+                            TopBarActionButton(
+                                onClick = { expanded = true },
+                                imageVector = AppIcons.MoreVert,
+                                contentDescription = stringResource(R.string.more_menu),
+                            )
+                            RoundDropdownMenu(expanded, { expanded = false }) {
+                                listOf(
+                                    "" to R.string.voice_gender_all,
+                                    ReadAloudVoiceTraits.GENDER_MALE to R.string.voice_gender_male,
+                                    ReadAloudVoiceTraits.GENDER_FEMALE to R.string.voice_gender_female,
+                                    ReadAloudVoiceTraits.GENDER_UNKNOWN to R.string.voice_gender_unknown,
+                                ).forEach { (gender, labelRes) ->
+                                    RoundDropdownMenuItem(
+                                        text = (if (state.voiceGenderFilter == gender) "✓ " else "") +
+                                            stringResource(labelRes),
+                                        onClick = {
+                                            expanded = false
+                                            onIntent(CloudTtsIntent.SetVoiceGenderFilter(gender))
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
                     if (state.selectedTab == CloudTtsTab.Engines) {
                         var expanded by remember { mutableStateOf(false) }
                         Box {
@@ -218,10 +235,6 @@ fun CloudTtsScreen(
                                 RoundDropdownMenuItem(
                                     text = stringResource(R.string.import_tts),
                                     onClick = { expanded = false; showHttpTtsImportSheet = true },
-                                )
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.tts_new_from_template),
-                                    onClick = { expanded = false; showTtsTemplateSheet = true },
                                 )
                                 RoundDropdownMenuItem(
                                     text = stringResource(R.string.export),
@@ -345,33 +358,7 @@ fun CloudTtsScreen(
                 ),
             ) {
                 if (page == CloudTtsTab.Voices.ordinal) {
-                item {
-                    Row(
-                        // 上方 contentPadding 已经给了 8dp, 这里给同样的 8dp, 上下留白一致
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        VoiceGenderFilterChip("", R.string.voice_gender_all, state, onIntent)
-                        VoiceGenderFilterChip(
-                            ReadAloudVoiceTraits.GENDER_MALE,
-                            R.string.voice_gender_male,
-                            state,
-                            onIntent,
-                        )
-                        VoiceGenderFilterChip(
-                            ReadAloudVoiceTraits.GENDER_FEMALE,
-                            R.string.voice_gender_female,
-                            state,
-                            onIntent,
-                        )
-                        VoiceGenderFilterChip(
-                            ReadAloudVoiceTraits.GENDER_UNKNOWN,
-                            R.string.voice_gender_unknown,
-                            state,
-                            onIntent,
-                        )
-                    }
-                }
+                // 性别筛选挪进了顶栏溢出菜单（下拉选择），列表顶上不再铺一排 chips
                 if (state.voices.isEmpty() && !state.loading) {
                     item { AppText(stringResource(R.string.cloud_tts_no_saved_voices), Modifier.padding(24.dp)) }
                 }
@@ -381,7 +368,7 @@ fun CloudTtsScreen(
                         // 第一行：紧跟名字的性别/语言/风格小图标
                         tags = {
                             Row(
-                                modifier = Modifier.padding(top = 2.dp),
+                                modifier = Modifier,
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
@@ -609,22 +596,6 @@ fun CloudTtsScreen(
             },
         )
     }
-    OptionSheet(
-        show = showTtsTemplateSheet,
-        onDismissRequest = { showTtsTemplateSheet = false },
-        title = stringResource(R.string.tts_new_from_template),
-    ) {
-        TTS_SCRIPT_TEMPLATES.forEach { (asset, name) ->
-            OptionCard(
-                icon = Icons.Default.RecordVoiceOver,
-                text = name,
-                onClick = {
-                    showTtsTemplateSheet = false
-                    onIntent(CloudTtsIntent.NewScriptTtsFromTemplate(asset))
-                },
-            )
-        }
-    }
     CloudTtsEngineEditorSheet(state, state.engineEditor, onIntent)
     VoiceEnginePickerSheet(state.showVoiceEnginePicker, state, onIntent)
     TtsVoicePresetEditorSheet(state, state.voiceEditor, onIntent)
@@ -811,22 +782,6 @@ private fun EngineSectionTitle(titleRes: Int) {
         text = stringResource(titleRes),
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
         style = LegadoTheme.typography.labelMediumEmphasized
-    )
-}
-
-/** 空字符串代表不筛选; 再点一次已选中的性别也会回到不筛选 */
-@Composable
-private fun VoiceGenderFilterChip(
-    gender: String,
-    labelRes: Int,
-    state: CloudTtsUiState,
-    onIntent: (CloudTtsIntent) -> Unit,
-) {
-    ToggleChip(
-        label = stringResource(labelRes),
-        selected = state.voiceGenderFilter == gender,
-        onToggle = { onIntent(CloudTtsIntent.SetVoiceGenderFilter(gender)) },
-        compact = true,
     )
 }
 
@@ -1420,12 +1375,9 @@ private fun TtsVoicePresetEditorContent(
     editor: TtsVoicePresetEditorUi,
     onIntent: (CloudTtsIntent) -> Unit,
 ) {
-    var genderMenu by remember { mutableStateOf(false) }
     var styleMenu by remember { mutableStateOf(false) }
     var roleMenu by remember { mutableStateOf(false) }
     var formatMenu by remember { mutableStateOf(false) }
-    var labelGenderMenu by remember { mutableStateOf(false) }
-    var labelAgeMenu by remember { mutableStateOf(false) }
     var voiceQuery by remember { mutableStateOf("") }
     var manualVoiceIdVisible by remember(editor.engineId) { mutableStateOf(false) }
     val selectedVoice = state.discoveredVoices.firstOrNull { it.id == editor.voiceId }
@@ -1468,15 +1420,32 @@ private fun TtsVoicePresetEditorContent(
                     items(filteredVoices, key = { "${it.id}|${it.locale}" }) { voice ->
                         VoiceCardItem(
                             title = voice.label.substringBefore(" · "),
+                            // 第一行：名字 + 语言/风格小标记
                             tags = {
-                                VoiceTraitTagRow(
-                                    genderLabel = null,
-                                    languageLabel = voice.locale.takeIf(String::isNotBlank),
-                                    styleLabel = null,
-                                    tags = (voice.styles + voice.roles).distinct().take(4),
-                                    engineName = null,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    voice.locale.takeIf(String::isNotBlank)?.let {
+                                        VoiceTraitTag(
+                                            text = it.take(6),
+                                            container = LegadoTheme.colorScheme.tertiaryContainer,
+                                            content = LegadoTheme.colorScheme.onTertiaryContainer,
+                                        )
+                                    }
+                                    (voice.styles + voice.roles).distinct()
+                                        .take(2)
+                                        .forEach { tag ->
+                                            VoiceTraitTag(
+                                                text = tag,
+                                                container = LegadoTheme.colorScheme.surfaceVariant,
+                                                content = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                }
+                            },
+                            // 第二行：音色 id + 选中标记
+                            scrollableTags = {
                                 AppText(
                                     text = buildString {
                                         append(voice.id)
@@ -1554,73 +1523,58 @@ private fun TtsVoicePresetEditorContent(
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // 自定义标签备注：两种模式都可改（目录同步音色的唯一可编辑项之一）
+                    Field(
+                        editor.labelTags,
+                        { update(editor.copy(labelTags = it)) },
+                        stringResource(R.string.voice_label_tags),
+                    )
                     if (!editor.readonlyPreset) {
+                        // 预设基础：名称（文本框）+ 风格（下拉）；性别不在这里——
+                        // 性别/语言/风格自动来自引擎目录声明与名字推测（对齐 NG，不再手动标注）
                         Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
-                    }
-                    if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD && !editor.readonlyPreset) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD &&
+                            !selectedVoice?.styles.isNullOrEmpty()
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                MenuButton(
-                                    stringResource(
-                                        R.string.cloud_tts_gender_value,
-                                        editor.gender.toGenderLabel()
-                                    )
-                                ) { genderMenu = true }
-                                RoundDropdownMenu(genderMenu, { genderMenu = false }) {
+                            MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
+                            RoundDropdownMenu(styleMenu, { styleMenu = false }) {
+                                RoundDropdownMenuItem(
+                                    text = stringResource(R.string.cloud_tts_default),
+                                    onClick = { styleMenu = false; update(editor.copy(style = "")) },
+                                )
+                                selectedVoice.styles.forEach { style ->
                                     RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_gender_male),
-                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_MALE)) },
+                                        text = style,
+                                        onClick = { styleMenu = false; update(editor.copy(style = style)) },
                                     )
-                                    RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_gender_female),
-                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_FEMALE)) },
-                                    )
-                                    RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_gender_unknown),
-                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_UNKNOWN)) },
-                                    )
-                                }
-                            }
-                            if (!selectedVoice?.styles.isNullOrEmpty()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
-                                    RoundDropdownMenu(styleMenu, { styleMenu = false }) {
-                                        RoundDropdownMenuItem(
-                                            text = stringResource(R.string.cloud_tts_default),
-                                            onClick = { styleMenu = false; update(editor.copy(style = "")) },
-                                        )
-                                        selectedVoice.styles.forEach { style ->
-                                            RoundDropdownMenuItem(
-                                                text = style,
-                                                onClick = { styleMenu = false; update(editor.copy(style = style)) },
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
-                        // 语速/音调/音量一行小滑块（0.5x..2x，默认 1.0），替代手填文本框
-                        VoiceSliderGroup(
-                            listOf(
-                                Triple(stringResource(R.string.cloud_tts_speed), editor.speed.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(speed = it.toString()))
-                                },
-                                Triple(stringResource(R.string.cloud_tts_pitch), editor.pitch.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(pitch = it.toString()))
-                                },
-                                Triple(stringResource(R.string.cloud_tts_volume), editor.volume.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(volume = it.toString()))
-                                },
-                            )
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                        // 声音调节：数值统一用一行一个滑块（0.5x..2x，0.25 档），不再三个挤一行
+                        EngineSectionTitle(R.string.cloud_tts_section_tuning)
+                        when (editor.engineType) {
+                            ReadAloudVoice.ENGINE_CLOUD -> {
+                                listOf(
+                                    stringResource(R.string.cloud_tts_speed) to editor.speed,
+                                    stringResource(R.string.cloud_tts_pitch) to editor.pitch,
+                                    stringResource(R.string.cloud_tts_volume) to editor.volume,
+                                ).forEachIndexed { index, (label, raw) ->
+                                    TinySliderSettingItem(
+                                        title = label,
+                                        value = raw.toFloatOrNull() ?: 1f,
+                                        valueRange = 0.5f..2f,
+                                        steps = 5,
+                                        onValueChange = { value ->
+                                            update(
+                                                when (index) {
+                                                    0 -> editor.copy(speed = value.toString())
+                                                    1 -> editor.copy(pitch = value.toString())
+                                                    else -> editor.copy(volume = value.toString())
+                                                }
+                                            )
+                                        },
+                                    )
+                                }
                                 MenuButton(stringResource(R.string.cloud_tts_audio_format, editor.format)) { formatMenu = true }
                                 RoundDropdownMenu(formatMenu, { formatMenu = false }) {
                                     editor.formatOptions.forEach { format ->
@@ -1631,43 +1585,38 @@ private fun TtsVoicePresetEditorContent(
                                     }
                                 }
                             }
-                            MediumTonalButton(
-                                onClick = { onIntent(CloudTtsIntent.Preview) },
-                                enabled = editor.voiceId.isNotBlank() && !state.testing,
-                                modifier = Modifier.weight(1f).padding(bottom = 4.dp),
-                                text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+
+                            ReadAloudVoice.ENGINE_SYSTEM -> {
+                                AppText(
+                                    stringResource(R.string.cloud_tts_system_defaults_hint),
+                                    Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    style = LegadoTheme.typography.labelSmall,
+                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.cloud_tts_speed_multiplier),
+                                    value = editor.speed.toFloatOrNull() ?: 1f,
+                                    valueRange = 0.5f..2f,
+                                    steps = 5,
+                                    onValueChange = { update(editor.copy(speed = it.toString())) },
+                                )
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.cloud_tts_pitch_multiplier),
+                                    value = editor.pitch.toFloatOrNull() ?: 1f,
+                                    valueRange = 0.5f..2f,
+                                    steps = 5,
+                                    onValueChange = { update(editor.copy(pitch = it.toString())) },
+                                )
+                            }
+
+                            else -> AppText(
+                                stringResource(R.string.cloud_tts_http_voice_hint),
+                                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                style = LegadoTheme.typography.labelSmall,
+                                color = LegadoTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    } else if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM && !editor.readonlyPreset) {
-                        AppText(
-                            stringResource(R.string.cloud_tts_system_defaults_hint),
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                        VoiceSliderGroup(
-                            listOf(
-                                Triple(stringResource(R.string.cloud_tts_speed_multiplier), editor.speed.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(speed = it.toString()))
-                                },
-                                Triple(stringResource(R.string.cloud_tts_pitch_multiplier), editor.pitch.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(pitch = it.toString()))
-                                },
-                            )
-                        )
-                        MediumTonalButton(
-                            onClick = { onIntent(CloudTtsIntent.Preview) },
-                            enabled = editor.voiceId.isNotBlank() && !state.testing,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
-                        )
-                    } else if (editor.engineType == ReadAloudVoice.ENGINE_HTTP && !editor.readonlyPreset) {
-                        AppText(
-                            stringResource(R.string.cloud_tts_http_voice_hint),
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
+                        // 试听：所有引擎同一位置、整行按钮，不再混在参数行里
                         MediumTonalButton(
                             onClick = { onIntent(CloudTtsIntent.Preview) },
                             enabled = editor.voiceId.isNotBlank() && !state.testing,
@@ -1713,83 +1662,9 @@ private fun TtsVoicePresetEditorContent(
                             onCheckedChange = { update(editor.copy(thoughtPerformance = it)) },
                         )
                     }
-                    // 分类标注：三种引擎都给这一节（系统音色不声明性别，http 脚本常常不写，
-                    // 而自动选音只认这一份）。它写在旁表 voice_labels 里，引擎同步逐字段重建
-                    // traitsJson 也动不到；和本页「保存」同一批提交，弹窗里改几栏都算一件事。
-                    EngineSectionTitle(R.string.voice_label_section)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            MenuButton(
-                                stringResource(
-                                    R.string.voice_label_gender_value,
-                                    labelOptionText(voiceLabelGenderOptions(), editor.labelGender),
-                                )
-                            ) { labelGenderMenu = true }
-                            RoundDropdownMenu(labelGenderMenu, { labelGenderMenu = false }) {
-                                voiceLabelGenderOptions().forEach { option ->
-                                    RoundDropdownMenuItem(
-                                        text = option.second,
-                                        onClick = {
-                                            labelGenderMenu = false
-                                            update(editor.copy(labelGender = option.first))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            MenuButton(
-                                stringResource(
-                                    R.string.voice_label_age_value,
-                                    labelOptionText(voiceLabelAgeOptions(), editor.labelAgeBand),
-                                )
-                            ) { labelAgeMenu = true }
-                            RoundDropdownMenu(labelAgeMenu, { labelAgeMenu = false }) {
-                                voiceLabelAgeOptions().forEach { option ->
-                                    RoundDropdownMenuItem(
-                                        text = option.second,
-                                        onClick = {
-                                            labelAgeMenu = false
-                                            update(editor.copy(labelAgeBand = option.first))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Field(
-                        editor.labelTags,
-                        { update(editor.copy(labelTags = it)) },
-                        stringResource(R.string.voice_label_tags),
-                    )
-                    // 没标注的栏告诉他"现在按什么"，但那只是提示、不是取值：
-                    // 推测值不写回表，也不算用户标的（实字/灰字的分界就在这两行小字上）
-                    editor.labelFallback.takeIf(String::isNotBlank)?.let {
-                        AppText(
-                            stringResource(R.string.voice_label_fallback, it),
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    AppText(
-                        stringResource(R.string.voice_label_hint),
-                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                    AppText(
-                        stringResource(R.string.voice_label_age_hint),
-                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        style = LegadoTheme.typography.labelSmall,
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
                 item {
-                    // 声音池：编辑对话框内直接勾选，保存时同步成员关系；进池的音色才会被自动配音选中
+                    // 声音池：编辑对话框内选择，保存时同步成员关系；进池的音色才会被自动配音选中
                     EngineSectionTitle(R.string.voice_pool_section)
                     if (editor.memberPools.isEmpty()) {
                         AppText(
@@ -1798,21 +1673,37 @@ private fun TtsVoicePresetEditorContent(
                             style = LegadoTheme.typography.labelSmall,
                             color = LegadoTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                    editor.memberPools.forEach { pool ->
-                        CheckboxItem(
-                            title = pool.name,
-                            checked = pool.checked,
-                            onCheckedChange = { checked ->
-                                update(
-                                    editor.copy(
-                                        memberPools = editor.memberPools.map {
-                                            if (it.poolId == pool.poolId) it.copy(checked = checked) else it
-                                        }.toPersistentList(),
-                                    )
+                    } else {
+                        // 下拉多选：按钮显示已加入的池；菜单项 ✓ 前缀切换、保持展开可连续选，
+                        // 与本弹窗其它选择类控件同一形态，不再铺一排勾选行
+                        var poolMenu by remember { mutableStateOf(false) }
+                        val selectedPoolNames = editor.memberPools
+                            .filter { it.checked }
+                            .joinToString("、") { it.name }
+                        MenuButton(
+                            stringResource(
+                                R.string.voice_pool_value,
+                                selectedPoolNames.ifBlank { stringResource(R.string.voice_pool_none) },
+                            )
+                        ) { poolMenu = true }
+                        RoundDropdownMenu(poolMenu, { poolMenu = false }) {
+                            editor.memberPools.forEach { pool ->
+                                RoundDropdownMenuItem(
+                                    text = (if (pool.checked) "✓ " else "") + pool.name,
+                                    onClick = {
+                                        update(
+                                            editor.copy(
+                                                memberPools = editor.memberPools.map {
+                                                    if (it.poolId == pool.poolId) {
+                                                        it.copy(checked = !it.checked)
+                                                    } else it
+                                                }.toPersistentList(),
+                                            )
+                                        )
+                                    },
                                 )
-                            },
-                        )
+                            }
+                        }
                     }
                     if (editor.editingVoiceId != null && !editor.readonlyPreset) {
                         MediumTonalButton(
@@ -1831,35 +1722,6 @@ private fun TtsVoicePresetEditorContent(
                 }
             }
     }
-}
-
-/** 标注下拉的选项：first 是 voice_labels 里存的取值，空串 = 未标注（读取侧继续回落）。 */
-@Composable
-private fun voiceLabelGenderOptions(): List<Pair<String, String>> = listOf(
-    "" to stringResource(R.string.voice_label_unlabeled),
-    ReadAloudVoiceTraits.GENDER_MALE to stringResource(R.string.voice_gender_male),
-    ReadAloudVoiceTraits.GENDER_FEMALE to stringResource(R.string.voice_gender_female),
-)
-
-@Composable
-private fun voiceLabelAgeOptions(): List<Pair<String, String>> = listOf(
-    "" to stringResource(R.string.voice_label_unlabeled),
-    BookCharacterProfile.VOICE_AGE_CHILD to stringResource(R.string.voice_age_child),
-    BookCharacterProfile.VOICE_AGE_TEEN to stringResource(R.string.voice_age_teen),
-    BookCharacterProfile.VOICE_AGE_YOUNG_ADULT to stringResource(R.string.voice_age_young_adult),
-    BookCharacterProfile.VOICE_AGE_ADULT to stringResource(R.string.voice_age_adult),
-    BookCharacterProfile.VOICE_AGE_ELDERLY to stringResource(R.string.voice_age_elderly),
-    BookCharacterProfile.VOICE_AGE_UNKNOWN to stringResource(R.string.voice_age_unknown),
-)
-
-/** 按钮上显示当前选中项；库里存的值认不出来时按「未标注」显示，不让按钮空着。 */
-private fun labelOptionText(options: List<Pair<String, String>>, value: String): String =
-    options.firstOrNull { it.first == value }?.second ?: options.first().second
-
-private fun String.toGenderLabel(): String = when (this) {
-    ReadAloudVoiceTraits.GENDER_MALE -> "男"
-    ReadAloudVoiceTraits.GENDER_FEMALE -> "女"
-    else -> "未知"
 }
 
 @Composable
@@ -1883,41 +1745,6 @@ private fun MenuButton(
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         text = text,
     )
-}
-
-/**
- * 语速/音调/音量的一行小滑块组：每项占三分之一宽，停靠在 0.5x..2x 的 0.25 档位上。
- * 滑块产出走 [onChange] 写回编辑器（仍以字符串保存在预设里），替代手填文本框。
- */
-@Composable
-private fun VoiceSliderGroup(
-    items: List<Triple<String, Float, (Float) -> Unit>>,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items.forEach { (label, value, onChange) ->
-            Column(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = label,
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-                Slider(
-                    value = value.coerceIn(0.5f, 2f),
-                    onValueChange = onChange,
-                    valueRange = 0.5f..2f,
-                    steps = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    }
 }
 
 @Composable

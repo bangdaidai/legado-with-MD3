@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.data.entities.VoicePoolEntity
 import io.legado.app.help.readaloud.cast.CastGroupRow
@@ -62,7 +64,7 @@ import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import androidx.compose.material3.Checkbox
 import io.legado.app.ui.book.readaloud.cloudtts.VoiceCardItem
-import io.legado.app.ui.book.readaloud.cloudtts.VoiceTraitTagRow
+import io.legado.app.ui.book.readaloud.cloudtts.VoiceTraitTag
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
@@ -1229,27 +1231,63 @@ fun MemberPickerDialog(
                         candidates.forEach { cand ->
                             VoiceCardItem(
                                 title = cand.displayName,
+                                // 第一行：名字 + 性别/语言/风格小标记
                                 tags = {
-                                    val genderLabel = when (cand.gender) {
-                                        io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_MALE ->
-                                            stringResource(R.string.voice_gender_male)
-                                        io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_FEMALE ->
-                                            stringResource(R.string.voice_gender_female)
-                                        else -> null
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        when (cand.gender) {
+                                            io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_MALE ->
+                                                VoiceTraitTag(
+                                                    text = "♂",
+                                                    container = LegadoTheme.colorScheme.primaryContainer,
+                                                    content = LegadoTheme.colorScheme.onPrimaryContainer,
+                                                )
+                                            io.legado.app.help.readaloud.ReadAloudVoiceTraits.GENDER_FEMALE ->
+                                                VoiceTraitTag(
+                                                    text = "♀",
+                                                    container = LegadoTheme.colorScheme.secondaryContainer,
+                                                    content = LegadoTheme.colorScheme.onSecondaryContainer,
+                                                )
+                                            else -> Unit
+                                        }
+                                        cand.language.takeIf(String::isNotBlank)?.let {
+                                            VoiceTraitTag(
+                                                text = it.take(6),
+                                                container = LegadoTheme.colorScheme.tertiaryContainer,
+                                                content = LegadoTheme.colorScheme.onTertiaryContainer,
+                                            )
+                                        }
+                                        cand.style.takeIf(String::isNotBlank)?.let {
+                                            VoiceTraitTag(
+                                                text = it,
+                                                container = LegadoTheme.colorScheme.surfaceVariant,
+                                                content = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
                                     }
-                                    val hasTags = genderLabel != null ||
-                                        cand.language.isNotBlank() ||
-                                        cand.style.isNotBlank() ||
-                                        cand.tags.isNotEmpty() ||
-                                        cand.engineName.isNotBlank()
-                                    if (hasTags) {
-                                        VoiceTraitTagRow(
-                                            genderLabel = genderLabel,
-                                            languageLabel = cand.language.takeIf(String::isNotBlank),
-                                            styleLabel = cand.style.takeIf(String::isNotBlank),
-                                            tags = cand.tags,
-                                            engineName = cand.engineName.takeIf(String::isNotBlank),
-                                        )
+                                },
+                                // 第二行：描述标签 + 引擎名，横向滑动
+                                scrollableTags = {
+                                    val labels =
+                                        (cand.tags + listOfNotNull(cand.engineName.takeIf(String::isNotBlank)))
+                                            .filter(String::isNotBlank)
+                                    if (labels.isNotEmpty()) {
+                                        Row(
+                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            labels.forEach { label ->
+                                                AppText(
+                                                    text = label,
+                                                    fontSize = 11.sp,
+                                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                )
+                                            }
+                                        }
                                     }
                                 },
                                 trailingContent = {

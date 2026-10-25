@@ -147,13 +147,23 @@ fun VoiceCardItem(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = title,
-                    style = LegadoTheme.typography.titleSmallEmphasized,
-                    color = LegadoTheme.colorScheme.onSurface,
-                )
-                tags?.invoke()
-                // 横向滑动区：内容超出宽度时左右滑看全，不与右侧按钮抢空间
+                // 第一行：名字 + 紧跟的性别/语言/风格小图标；名字 weight(fill=false)，
+                // 短名不满宽、图标贴上去，长名收缩省略不挤图标
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    AppText(
+                        text = title,
+                        style = LegadoTheme.typography.titleSmallEmphasized,
+                        color = LegadoTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    tags?.invoke()
+                }
+                // 第二行：引擎名/池/标签等横向滑动区，内容超出宽度时左右滑看全
                 scrollableTags?.invoke()
             }
             Row(

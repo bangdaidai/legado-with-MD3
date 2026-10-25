@@ -10,7 +10,6 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
-import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.VoiceLabel
 import io.legado.app.data.repository.HttpTtsRepository
@@ -250,7 +249,6 @@ class CloudTtsViewModel(
             CloudTtsIntent.ApplyDefaultEngineGlobally -> applyPendingDefaultEngine(forBook = false)
             CloudTtsIntent.ApplyDefaultEngineForBook -> applyPendingDefaultEngine(forBook = true)
             is CloudTtsIntent.EditHttpTts -> editHttpTts(intent.engineId)
-            is CloudTtsIntent.NewScriptTtsFromTemplate -> newScriptTtsFromTemplate(intent.asset)
             is CloudTtsIntent.SaveHttpTts -> saveHttpTts(intent.value)
             is CloudTtsIntent.DeleteHttpTts -> deleteHttpTts(intent.engineId)
             is CloudTtsIntent.OpenHttpTtsLogin -> intent.engineId.toLongOrNull()?.let {
@@ -462,10 +460,7 @@ class CloudTtsViewModel(
             volume = cloudConfig?.volume?.toString() ?: "1.0",
             format = cloudConfig?.format ?: defaultFormat(voice.engineType, voice.engineId),
             formatOptions = formatOptions(voice.engineType, voice.engineId),
-            labelGender = label?.gender.orEmpty(),
-            labelAgeBand = label?.ageBand.orEmpty(),
             labelTags = VoiceLabelStore.tagsOf(label).joinToString("，"),
-            labelFallback = labelFallbackSummary(voice, label),
             readonlyPreset = voice.managedBy != ReadAloudVoice.MANAGED_BY_USER,
             memberPools = memberPoolsFor(voice.id),
         )
@@ -477,41 +472,6 @@ class CloudTtsViewModel(
         return VoicePoolStore.listPools().map { pool ->
             VoicePoolCheckUi(poolId = pool.id, name = pool.name, checked = pool.id in membership)
         }.toPersistentList()
-    }
-
-    /**
-     * 「没标注的这一栏现在按什么」——只作提示，绝不把推测值当成用户的选择写回表。
-     *
-     * 回落顺序与选音那条链一致（池分类 > 引擎声明 / 名字推测）。两栏都查不出来时返回空串，
-     * 界面不显示这一行，免得在一句没有信息量的话旁边浪费一行。
-     */
-    private suspend fun labelFallbackSummary(
-        voice: ReadAloudVoice,
-        label: VoiceLabel?,
-    ): String {
-        // 挂起取数放在 buildString 外面：那个 lambda 不是 suspend，在里面查库编译不过
-        val fromPools = VoicePoolStore.voiceClassificationMap()[voice.id]
-        val traits = ReadAloudVoiceTraits.of(voice)
-        return buildString {
-            if (label?.gender.isNullOrBlank()) {
-                val gender = fromPools?.first?.takeIf(String::isNotBlank) ?: traits.gender
-                genderLabel(gender)?.let {
-                    append(application.getString(R.string.voice_gender_label))
-                    append(' ')
-                    append(it)
-                }
-            }
-            if (label?.ageBand.isNullOrBlank()) {
-                fromPools?.second?.takeIf(String::isNotBlank)?.let { band ->
-                    ageBandLabel(band)?.let {
-                        if (isNotEmpty()) append(" · ")
-                        append(application.getString(R.string.voice_age_label))
-                        append(' ')
-                        append(it)
-                    }
-                }
-            }
-        }
     }
 
     private fun selectEngine(engineType: String, engineId: String) {
@@ -646,17 +606,18 @@ class CloudTtsViewModel(
         if (editor?.readonlyPreset != true) {
             voiceGateway.upsertVoice(voice)
         }
-        // 标注跟着这一次「保存预设」一起提交：弹窗里改几栏都算一件事，不再多一个保存按钮。
-        // 换了原生音色 id 等于换了一行——先按新 id 落一次，旧行删除时随行清掉，标注因此跟着搬家。
+        // 自定义标签跟着这一次「保存预设」一起提交。性别/年龄段不再有编辑入口：
+        // 读回旧标注原样带回（老数据继续生效），本次只更新 tags。
         editor?.let {
+            val existing = VoiceLabelStore.get(voice.id)
             if (!VoiceLabelStore.save(
                     voice.id,
-                    it.labelGender,
-                    it.labelAgeBand,
+                    existing?.gender.orEmpty(),
+                    existing?.ageBand.orEmpty(),
                     VoiceLabelStore.parseTags(it.labelTags),
                 )
             ) {
-                AppLog.putDebug("音色标注取值非法，本次未写入：${it.labelGender}/${it.labelAgeBand}")
+                AppLog.putDebug("音色标注取值非法，本次未写入")
             }
             syncVoicePoolMembership(voice.id, it.memberPools)
         }
@@ -970,6 +931,7 @@ class CloudTtsViewModel(
             speakerId = speakerId.trim(),
             displayName = editor.voiceName.trim().ifBlank { engineName(editor.engineType, editor.engineId) },
             traitsJson = request?.let { value -> GSON.toJson(CloudTtsVoiceConfig(
+                // 存档性别维持引擎声明/推测值；用户侧不再单独标注（对齐 NG：目录自带）
                 gender = editor.gender,
                 notes = editor.notes,
                 locale = value.locale,
@@ -1137,16 +1099,6 @@ class CloudTtsViewModel(
             gender = label.gender.ifBlank { declared.gender },
             tags = (VoiceLabelStore.tagsOf(label) + declared.tags).distinct(),
         )
-    }
-
-    private fun ageBandLabel(ageBand: String): String? = when (ageBand) {
-        BookCharacterProfile.VOICE_AGE_CHILD -> application.getString(R.string.voice_age_child)
-        BookCharacterProfile.VOICE_AGE_TEEN -> application.getString(R.string.voice_age_teen)
-        BookCharacterProfile.VOICE_AGE_YOUNG_ADULT ->
-            application.getString(R.string.voice_age_young_adult)
-        BookCharacterProfile.VOICE_AGE_ADULT -> application.getString(R.string.voice_age_adult)
-        BookCharacterProfile.VOICE_AGE_ELDERLY -> application.getString(R.string.voice_age_elderly)
-        else -> null
     }
 
     private fun genderLabel(gender: String): String? = when (gender) {
@@ -1343,20 +1295,6 @@ class CloudTtsViewModel(
             engineId?.toLongOrNull()?.let { httpTtsRepository.findById(it) } ?: HttpTTS()
         }
         _uiState.update { it.copy(httpTtsEditor = value) }
-    }
-
-    /** 从内置脚本模板新建 JS 朗读引擎：读 assets 脚本，直接进编辑器预填，不落库。 */
-    private fun newScriptTtsFromTemplate(asset: String) = viewModelScope.launch {
-        runCatching {
-            val script = withContext(Dispatchers.IO) {
-                application.assets.open(asset).use { it.readBytes().toString(Charsets.UTF_8) }
-            }
-            parseJsTtsScript(script)
-        }.onSuccess { source ->
-            _uiState.update { it.copy(httpTtsEditor = source) }
-        }.onFailure {
-            toast(it.localizedMessage ?: application.getString(R.string.wrong_format))
-        }
     }
 
     private fun saveHttpTts(value: HttpTTS) = viewModelScope.launch {
