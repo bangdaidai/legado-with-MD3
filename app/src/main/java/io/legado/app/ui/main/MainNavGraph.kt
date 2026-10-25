@@ -1684,7 +1684,10 @@ fun MainActivity.mainEntryProvider(
             viewModel.effects.collectLatest { effect ->
                 when (effect) {
                     CloudTtsEffect.OpenHttpTtsImportPicker -> importLauncher.launch(
-                        arrayOf("application/json", "text/plain")
+                        // .js 的 MIME 各家文件管理器判定不一（application/javascript、
+                        // text/javascript、octet-stream 都有），枚举过滤会漏掉文件；
+                        // 放开 */* 让用户直接选，json/js 由解析层按内容识别
+                        arrayOf("*/*")
                     )
 
                     CloudTtsEffect.OpenHttpTtsExportPicker -> exportLauncher.launch("httpTTS.json")
