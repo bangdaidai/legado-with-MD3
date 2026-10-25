@@ -19,7 +19,7 @@ import io.legado.app.domain.model.AiWebSearchResult
  */
 interface AiWebSearchGateway {
 
-    /** 用户已显式开启且填了 API key。 */
+    /** 用户已显式开启；Tavily 还需要 API key，AnySearch 允许匿名调用。 */
     val isConfigured: Boolean
 
     suspend fun search(query: AiWebSearchQuery): Result<AiWebSearchResult>

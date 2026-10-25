@@ -107,7 +107,7 @@ import io.legado.app.data.repository.WebDavBackupRepository
 import io.legado.app.data.repository.WebDavReadingProgressRepository
 import io.legado.app.data.repository.WebSearchSettingsRepository
 import io.legado.app.data.repository.ai.AiLogRepository
-import io.legado.app.data.repository.ai.TavilySearchRepository
+import io.legado.app.data.repository.ai.WebSearchRepository
 import io.legado.app.data.repository.manga.DefaultMangaReaderSession
 import io.legado.app.data.repository.manga.MangaReaderActionRepository
 import io.legado.app.data.repository.manga.MangaReaderDataRepository
@@ -539,7 +539,7 @@ val appModule = module {
     single<AiPromptPresetGateway> { AiPromptPresetRepository(get()) }
     single { AiLogRepository() }
     single<AiTextGateway> { AiTextRepositoryImpl(get()) }
-    single<AiWebSearchGateway> { TavilySearchRepository(get(), get()) }
+    single<AiWebSearchGateway> { WebSearchRepository(get(), get()) }
     single<AiToolGateway> {
         AiToolRepository(
             get(),

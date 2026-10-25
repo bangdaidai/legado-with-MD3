@@ -535,8 +535,9 @@ object PreferKey {
     const val aiLogEnabled = "aiLogEnabled"
     const val aiCallTimeout = "aiCallTimeout"
 
-    // AI web search (Tavily)
+    // AI web search (Tavily / AnySearch)
     const val aiWebSearchEnabled = "aiWebSearchEnabled"
+    const val aiWebSearchProvider = "aiWebSearchProvider"
     const val aiWebSearchApiKey = "aiWebSearchApiKey"
     const val aiWebSearchBaseUrl = "aiWebSearchBaseUrl"
     const val aiWebSearchTopic = "aiWebSearchTopic"

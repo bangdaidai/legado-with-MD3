@@ -12,6 +12,7 @@ data class AiWebSearchConfigUiState(
 
 sealed interface AiWebSearchConfigIntent {
     data class SetEnabled(val enabled: Boolean) : AiWebSearchConfigIntent
+    data class SetProvider(val provider: String) : AiWebSearchConfigIntent
     data class SetApiKey(val apiKey: String) : AiWebSearchConfigIntent
     data class SetBaseUrl(val baseUrl: String) : AiWebSearchConfigIntent
     data class SetTopic(val topic: String) : AiWebSearchConfigIntent

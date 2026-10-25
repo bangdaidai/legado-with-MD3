@@ -2419,7 +2419,10 @@
     <string name="ai_toc_rule_hits">Matches %1$d of %2$d chapters</string>
     <string name="ai_toc_rule_adopt_selected">Adopt selected (%1$d)</string>
     <string name="ai_web_search_service">Search Service</string>
-    <string name="ai_web_search_desc">Tavily search, used for models without built-in web search</string>
+    <string name="ai_web_search_desc">Tavily / AnySearch search, used for models without built-in web search</string>
+    <string name="ai_web_search_provider">Provider</string>
+    <string name="ai_web_search_provider_tavily">Tavily</string>
+    <string name="ai_web_search_provider_anysearch">AnySearch</string>
 
     <string name="fail">Failed</string>
     <string name="ai_log">AI Log</string>
@@ -2443,8 +2446,10 @@
     <string name="ai_generate_timeout">AI generation timed out. Check your network or try again later</string>
     <string name="ai_web_search_enable">Enable web search</string>
     <string name="ai_web_search_enable_desc">Author names, book titles and questions will be sent to Tavily</string>
+    <string name="ai_web_search_enable_desc_anysearch">Author names, book titles and questions will be sent to AnySearch</string>
     <string name="ai_web_search_api_key">API key</string>
     <string name="ai_web_search_api_key_hint">Get one at tavily.com</string>
+    <string name="ai_web_search_api_key_hint_anysearch">Optional; anonymous requests are rate-limited</string>
     <string name="ai_web_search_api_key_set">Configured</string>
     <string name="ai_web_search_base_url">API address</string>
     <string name="ai_web_search_topic">Topic</string>

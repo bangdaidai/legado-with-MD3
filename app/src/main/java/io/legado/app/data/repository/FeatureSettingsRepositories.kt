@@ -322,28 +322,35 @@ internal fun TranslationSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.llmRetryCount to retryCount,
 )
 
-internal fun Preferences.toWebSearchSettings(): WebSearchSettings = WebSearchSettings(
-    enabled = compatDsBoolean(PreferKey.aiWebSearchEnabled) ?: false,
-    apiKey = compatDsString(PreferKey.aiWebSearchApiKey).orEmpty(),
-    baseUrl = compatDsString(PreferKey.aiWebSearchBaseUrl)
-        ?.takeIf { it.isNotBlank() }
-        ?: WebSearchSettings.DEFAULT_BASE_URL,
-    topic = compatDsString(PreferKey.aiWebSearchTopic)
-        ?.takeIf { it in WebSearchSettings.topics }
-        ?: WebSearchSettings.TOPIC_GENERAL,
-    searchDepth = compatDsString(PreferKey.aiWebSearchDepth)
-        ?.takeIf { it in WebSearchSettings.depths }
-        ?: WebSearchSettings.DEPTH_BASIC,
-    maxResults = (compatDsInt(PreferKey.aiWebSearchMaxResults) ?: 5)
-        .coerceIn(WebSearchSettings.MIN_RESULTS, WebSearchSettings.MAX_RESULTS),
-    nativeWebSearchDisabledIds = compatDsString(PreferKey.aiNativeWebSearchDisabledIds)
-        ?.takeIf { it.isNotBlank() }
-        ?.let { json -> GSON.fromJsonArray<String>(json).getOrNull().orEmpty().toSet() }
-        ?: emptySet(),
-)
+internal fun Preferences.toWebSearchSettings(): WebSearchSettings {
+    val provider = compatDsString(PreferKey.aiWebSearchProvider)
+        ?.takeIf { it in WebSearchSettings.providers }
+        ?: WebSearchSettings.PROVIDER_TAVILY
+    return WebSearchSettings(
+        enabled = compatDsBoolean(PreferKey.aiWebSearchEnabled) ?: false,
+        provider = provider,
+        apiKey = compatDsString(PreferKey.aiWebSearchApiKey).orEmpty(),
+        baseUrl = compatDsString(PreferKey.aiWebSearchBaseUrl)
+            ?.takeIf { it.isNotBlank() }
+            ?: WebSearchSettings.defaultBaseUrlFor(provider),
+        topic = compatDsString(PreferKey.aiWebSearchTopic)
+            ?.takeIf { it in WebSearchSettings.topics }
+            ?: WebSearchSettings.TOPIC_GENERAL,
+        searchDepth = compatDsString(PreferKey.aiWebSearchDepth)
+            ?.takeIf { it in WebSearchSettings.depths }
+            ?: WebSearchSettings.DEPTH_BASIC,
+        maxResults = (compatDsInt(PreferKey.aiWebSearchMaxResults) ?: 5)
+            .coerceIn(WebSearchSettings.MIN_RESULTS, WebSearchSettings.MAX_RESULTS),
+        nativeWebSearchDisabledIds = compatDsString(PreferKey.aiNativeWebSearchDisabledIds)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { json -> GSON.fromJsonArray<String>(json).getOrNull().orEmpty().toSet() }
+            ?: emptySet(),
+    )
+}
 
 internal fun WebSearchSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.aiWebSearchEnabled to enabled,
+    PreferKey.aiWebSearchProvider to provider,
     PreferKey.aiWebSearchApiKey to apiKey,
     PreferKey.aiWebSearchBaseUrl to baseUrl,
     PreferKey.aiWebSearchTopic to topic,

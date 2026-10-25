@@ -84,6 +84,13 @@ fun AiWebSearchConfigScreen(
     }
 
     val settings = state.settings
+    val isAnySearch = settings.provider == WebSearchSettings.PROVIDER_ANYSEARCH
+    val providerValues = WebSearchSettings.providers.toTypedArray()
+    // 显示名顺序必须与 WebSearchSettings.providers 一致
+    val providerEntries = arrayOf(
+        stringResource(R.string.ai_web_search_provider_tavily),
+        stringResource(R.string.ai_web_search_provider_anysearch)
+    )
     val topicValues = WebSearchSettings.topics.toTypedArray()
     val topicEntries = arrayOf(
         stringResource(R.string.ai_web_search_topic_general),
@@ -120,16 +127,35 @@ fun AiWebSearchConfigScreen(
         ) {
             item {
                 SplicedColumnGroup(title = stringResource(R.string.ai_web_search_service)) {
+                    DropdownListSettingItem(
+                        title = stringResource(R.string.ai_web_search_provider),
+                        selectedValue = settings.provider,
+                        displayEntries = providerEntries,
+                        entryValues = providerValues,
+                        onValueChange = { onIntent(AiWebSearchConfigIntent.SetProvider(it)) }
+                    )
                     SwitchSettingItem(
                         title = stringResource(R.string.ai_web_search_enable),
-                        description = stringResource(R.string.ai_web_search_enable_desc),
+                        description = stringResource(
+                            if (isAnySearch) {
+                                R.string.ai_web_search_enable_desc_anysearch
+                            } else {
+                                R.string.ai_web_search_enable_desc
+                            }
+                        ),
                         checked = settings.enabled,
                         onCheckedChange = { onIntent(AiWebSearchConfigIntent.SetEnabled(it)) }
                     )
                     ClickableSettingItem(
                         title = stringResource(R.string.ai_web_search_api_key),
                         description = if (settings.apiKey.isBlank()) {
-                            stringResource(R.string.ai_web_search_api_key_hint)
+                            stringResource(
+                                if (isAnySearch) {
+                                    R.string.ai_web_search_api_key_hint_anysearch
+                                } else {
+                                    R.string.ai_web_search_api_key_hint
+                                }
+                            )
                         } else {
                             stringResource(R.string.ai_web_search_api_key_set)
                         },
@@ -142,7 +168,7 @@ fun AiWebSearchConfigScreen(
                     InputSettingItem(
                         title = stringResource(R.string.ai_web_search_base_url),
                         value = settings.baseUrl,
-                        defaultValue = WebSearchSettings.DEFAULT_BASE_URL,
+                        defaultValue = WebSearchSettings.defaultBaseUrlFor(settings.provider),
                         onConfirm = { onIntent(AiWebSearchConfigIntent.SetBaseUrl(it)) }
                     )
                 }
@@ -150,20 +176,24 @@ fun AiWebSearchConfigScreen(
 
             item {
                 SplicedColumnGroup(title = stringResource(R.string.ai_param_setting)) {
-                    DropdownListSettingItem(
-                        title = stringResource(R.string.ai_web_search_topic),
-                        selectedValue = settings.topic,
-                        displayEntries = topicEntries,
-                        entryValues = topicValues,
-                        onValueChange = { onIntent(AiWebSearchConfigIntent.SetTopic(it)) }
-                    )
-                    DropdownListSettingItem(
-                        title = stringResource(R.string.ai_web_search_depth),
-                        selectedValue = settings.searchDepth,
-                        displayEntries = depthEntries,
-                        entryValues = depthValues,
-                        onValueChange = { onIntent(AiWebSearchConfigIntent.SetSearchDepth(it)) }
-                    )
+                    if (!isAnySearch) {
+                        DropdownListSettingItem(
+                            title = stringResource(R.string.ai_web_search_topic),
+                            selectedValue = settings.topic,
+                            displayEntries = topicEntries,
+                            entryValues = topicValues,
+                            onValueChange = { onIntent(AiWebSearchConfigIntent.SetTopic(it)) }
+                        )
+                        DropdownListSettingItem(
+                            title = stringResource(R.string.ai_web_search_depth),
+                            selectedValue = settings.searchDepth,
+                            displayEntries = depthEntries,
+                            entryValues = depthValues,
+                            onValueChange = {
+                                onIntent(AiWebSearchConfigIntent.SetSearchDepth(it))
+                            }
+                        )
+                    }
                     SliderSettingItem(
                         title = stringResource(R.string.ai_web_search_max_results),
                         value = settings.maxResults.toFloat(),

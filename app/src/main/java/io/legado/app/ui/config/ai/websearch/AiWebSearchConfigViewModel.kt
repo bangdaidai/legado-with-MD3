@@ -41,13 +41,32 @@ class AiWebSearchConfigViewModel(
             is AiWebSearchConfigIntent.SetEnabled ->
                 update { it.copy(enabled = intent.enabled) }
 
+            is AiWebSearchConfigIntent.SetProvider -> update { current ->
+                val provider = intent.provider
+                    .takeIf { it in WebSearchSettings.providers }
+                    ?: WebSearchSettings.PROVIDER_TAVILY
+                // 只替换内置默认地址；用户手填的代理地址切换服务商时保留
+                val currentDefault = WebSearchSettings.defaultBaseUrlFor(current.provider)
+                val keepCustomUrl = current.baseUrl.isNotBlank() &&
+                    !current.baseUrl.trimEnd('/').equals(currentDefault, ignoreCase = true)
+                current.copy(
+                    provider = provider,
+                    baseUrl = if (keepCustomUrl) {
+                        current.baseUrl
+                    } else {
+                        WebSearchSettings.defaultBaseUrlFor(provider)
+                    },
+                )
+            }
+
             is AiWebSearchConfigIntent.SetApiKey ->
                 update { it.copy(apiKey = intent.apiKey.trim()) }
 
-            is AiWebSearchConfigIntent.SetBaseUrl -> {
-                // 清空视为恢复默认，否则 URL 变空会让每次检索都失败。
-                val url = intent.baseUrl.trim().ifBlank { WebSearchSettings.DEFAULT_BASE_URL }
-                update { it.copy(baseUrl = url) }
+            is AiWebSearchConfigIntent.SetBaseUrl -> update { current ->
+                // 清空视为恢复当前服务商的默认地址，否则 URL 变空会让每次检索都失败。
+                val url = intent.baseUrl.trim()
+                    .ifBlank { WebSearchSettings.defaultBaseUrlFor(current.provider) }
+                current.copy(baseUrl = url)
             }
 
             is AiWebSearchConfigIntent.SetTopic ->
