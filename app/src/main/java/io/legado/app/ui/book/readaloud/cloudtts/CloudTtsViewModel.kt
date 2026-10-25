@@ -969,7 +969,9 @@ class CloudTtsViewModel(
             speakerId = speakerId.trim(),
             displayName = editor.voiceName.trim().ifBlank { engineName(editor.engineType, editor.engineId) },
             traitsJson = request?.let { value -> GSON.toJson(CloudTtsVoiceConfig(
-                gender = editor.gender,
+                // 性别只保留「分类标注」一个入口；这里用标注回填存档（合成链路不消费，
+                // 读取侧 traitsJson.gender 只作标注缺省时的声明值），没标就维持原值
+                gender = editor.labelGender.ifBlank { editor.gender },
                 notes = editor.notes,
                 locale = value.locale,
                 style = value.style,

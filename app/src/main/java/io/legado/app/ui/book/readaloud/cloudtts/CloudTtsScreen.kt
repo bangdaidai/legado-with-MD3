@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Slider
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1393,7 +1392,6 @@ private fun TtsVoicePresetEditorContent(
     editor: TtsVoicePresetEditorUi,
     onIntent: (CloudTtsIntent) -> Unit,
 ) {
-    var genderMenu by remember { mutableStateOf(false) }
     var styleMenu by remember { mutableStateOf(false) }
     var roleMenu by remember { mutableStateOf(false) }
     var formatMenu by remember { mutableStateOf(false) }
@@ -1545,72 +1543,51 @@ private fun TtsVoicePresetEditorContent(
                         )
                     }
                     if (!editor.readonlyPreset) {
+                        // 预设基础：名称（文本框）+ 风格（下拉）；性别不在这里——
+                        // 合成链路不消费这个参数，真正的性别入口在下方「分类标注」
                         Field(editor.voiceName, { update(editor.copy(voiceName = it)) }, stringResource(R.string.cloud_tts_preset_name))
-                    }
-                    if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD && !editor.readonlyPreset) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD &&
+                            !selectedVoice?.styles.isNullOrEmpty()
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                MenuButton(
-                                    stringResource(
-                                        R.string.cloud_tts_gender_value,
-                                        editor.gender.toGenderLabel()
-                                    )
-                                ) { genderMenu = true }
-                                RoundDropdownMenu(genderMenu, { genderMenu = false }) {
+                            MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
+                            RoundDropdownMenu(styleMenu, { styleMenu = false }) {
+                                RoundDropdownMenuItem(
+                                    text = stringResource(R.string.cloud_tts_default),
+                                    onClick = { styleMenu = false; update(editor.copy(style = "")) },
+                                )
+                                selectedVoice.styles.forEach { style ->
                                     RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_gender_male),
-                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_MALE)) },
+                                        text = style,
+                                        onClick = { styleMenu = false; update(editor.copy(style = style)) },
                                     )
-                                    RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_gender_female),
-                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_FEMALE)) },
-                                    )
-                                    RoundDropdownMenuItem(
-                                        text = stringResource(R.string.voice_gender_unknown),
-                                        onClick = { genderMenu = false; update(editor.copy(gender = ReadAloudVoiceTraits.GENDER_UNKNOWN)) },
-                                    )
-                                }
-                            }
-                            if (!selectedVoice?.styles.isNullOrEmpty()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
-                                    RoundDropdownMenu(styleMenu, { styleMenu = false }) {
-                                        RoundDropdownMenuItem(
-                                            text = stringResource(R.string.cloud_tts_default),
-                                            onClick = { styleMenu = false; update(editor.copy(style = "")) },
-                                        )
-                                        selectedVoice.styles.forEach { style ->
-                                            RoundDropdownMenuItem(
-                                                text = style,
-                                                onClick = { styleMenu = false; update(editor.copy(style = style)) },
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
-                        // 语速/音调/音量一行小滑块（0.5x..2x，默认 1.0），替代手填文本框
-                        VoiceSliderGroup(
-                            listOf(
-                                Triple(stringResource(R.string.cloud_tts_speed), editor.speed.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(speed = it.toString()))
-                                },
-                                Triple(stringResource(R.string.cloud_tts_pitch), editor.pitch.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(pitch = it.toString()))
-                                },
-                                Triple(stringResource(R.string.cloud_tts_volume), editor.volume.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(volume = it.toString()))
-                                },
-                            )
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                        // 声音调节：数值统一用一行一个滑块（0.5x..2x，0.25 档），不再三个挤一行
+                        EngineSectionTitle(R.string.cloud_tts_section_tuning)
+                        when (editor.engineType) {
+                            ReadAloudVoice.ENGINE_CLOUD -> {
+                                listOf(
+                                    stringResource(R.string.cloud_tts_speed) to editor.speed,
+                                    stringResource(R.string.cloud_tts_pitch) to editor.pitch,
+                                    stringResource(R.string.cloud_tts_volume) to editor.volume,
+                                ).forEachIndexed { index, (label, raw) ->
+                                    TinySliderSettingItem(
+                                        title = label,
+                                        value = raw.toFloatOrNull() ?: 1f,
+                                        valueRange = 0.5f..2f,
+                                        steps = 5,
+                                        onValueChange = { value ->
+                                            update(
+                                                when (index) {
+                                                    0 -> editor.copy(speed = value.toString())
+                                                    1 -> editor.copy(pitch = value.toString())
+                                                    else -> editor.copy(volume = value.toString())
+                                                }
+                                            )
+                                        },
+                                    )
+                                }
                                 MenuButton(stringResource(R.string.cloud_tts_audio_format, editor.format)) { formatMenu = true }
                                 RoundDropdownMenu(formatMenu, { formatMenu = false }) {
                                     editor.formatOptions.forEach { format ->
@@ -1621,43 +1598,38 @@ private fun TtsVoicePresetEditorContent(
                                     }
                                 }
                             }
-                            MediumTonalButton(
-                                onClick = { onIntent(CloudTtsIntent.Preview) },
-                                enabled = editor.voiceId.isNotBlank() && !state.testing,
-                                modifier = Modifier.weight(1f).padding(bottom = 4.dp),
-                                text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
+
+                            ReadAloudVoice.ENGINE_SYSTEM -> {
+                                AppText(
+                                    stringResource(R.string.cloud_tts_system_defaults_hint),
+                                    Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    style = LegadoTheme.typography.labelSmall,
+                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.cloud_tts_speed_multiplier),
+                                    value = editor.speed.toFloatOrNull() ?: 1f,
+                                    valueRange = 0.5f..2f,
+                                    steps = 5,
+                                    onValueChange = { update(editor.copy(speed = it.toString())) },
+                                )
+                                TinySliderSettingItem(
+                                    title = stringResource(R.string.cloud_tts_pitch_multiplier),
+                                    value = editor.pitch.toFloatOrNull() ?: 1f,
+                                    valueRange = 0.5f..2f,
+                                    steps = 5,
+                                    onValueChange = { update(editor.copy(pitch = it.toString())) },
+                                )
+                            }
+
+                            else -> AppText(
+                                stringResource(R.string.cloud_tts_http_voice_hint),
+                                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                style = LegadoTheme.typography.labelSmall,
+                                color = LegadoTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    } else if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM && !editor.readonlyPreset) {
-                        AppText(
-                            stringResource(R.string.cloud_tts_system_defaults_hint),
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
-                        VoiceSliderGroup(
-                            listOf(
-                                Triple(stringResource(R.string.cloud_tts_speed_multiplier), editor.speed.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(speed = it.toString()))
-                                },
-                                Triple(stringResource(R.string.cloud_tts_pitch_multiplier), editor.pitch.toFloatOrNull() ?: 1f) {
-                                    update(editor.copy(pitch = it.toString()))
-                                },
-                            )
-                        )
-                        MediumTonalButton(
-                            onClick = { onIntent(CloudTtsIntent.Preview) },
-                            enabled = editor.voiceId.isNotBlank() && !state.testing,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            text = stringResource(if (state.testing) R.string.cloud_tts_preview_generating else R.string.cloud_tts_preview),
-                        )
-                    } else if (editor.engineType == ReadAloudVoice.ENGINE_HTTP && !editor.readonlyPreset) {
-                        AppText(
-                            stringResource(R.string.cloud_tts_http_voice_hint),
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = LegadoTheme.typography.labelSmall,
-                            color = LegadoTheme.colorScheme.onSurfaceVariant,
-                        )
+                        // 试听：所有引擎同一位置、整行按钮，不再混在参数行里
                         MediumTonalButton(
                             onClick = { onIntent(CloudTtsIntent.Preview) },
                             enabled = editor.voiceId.isNotBlank() && !state.testing,
@@ -1846,12 +1818,6 @@ private fun voiceLabelAgeOptions(): List<Pair<String, String>> = listOf(
 private fun labelOptionText(options: List<Pair<String, String>>, value: String): String =
     options.firstOrNull { it.first == value }?.second ?: options.first().second
 
-private fun String.toGenderLabel(): String = when (this) {
-    ReadAloudVoiceTraits.GENDER_MALE -> "男"
-    ReadAloudVoiceTraits.GENDER_FEMALE -> "女"
-    else -> "未知"
-}
-
 @Composable
 private fun Field(value: String, onValueChange: (String) -> Unit, label: String) {
     AppTextField(
@@ -1873,41 +1839,6 @@ private fun MenuButton(
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         text = text,
     )
-}
-
-/**
- * 语速/音调/音量的一行小滑块组：每项占三分之一宽，停靠在 0.5x..2x 的 0.25 档位上。
- * 滑块产出走 [onChange] 写回编辑器（仍以字符串保存在预设里），替代手填文本框。
- */
-@Composable
-private fun VoiceSliderGroup(
-    items: List<Triple<String, Float, (Float) -> Unit>>,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items.forEach { (label, value, onChange) ->
-            Column(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = label,
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-                Slider(
-                    value = value.coerceIn(0.5f, 2f),
-                    onValueChange = onChange,
-                    valueRange = 0.5f..2f,
-                    steps = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    }
 }
 
 @Composable
