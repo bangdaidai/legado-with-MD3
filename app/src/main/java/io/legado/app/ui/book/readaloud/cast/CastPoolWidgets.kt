@@ -1280,25 +1280,38 @@ fun MemberPickerDialog(
                                         }
                                     }
                                 },
-                                // 第二行：描述标签 + 引擎名，横向滑动
+                                // 第二行：目录标签（少女-清亮情绪等）彩色小标签 + 引擎名弱色块
                                 scrollableTags = {
-                                    val labels =
-                                        (cand.tags + listOfNotNull(cand.engineName.takeIf(String::isNotBlank)))
-                                            .filter(String::isNotBlank)
-                                    if (labels.isNotEmpty()) {
-                                        Row(
-                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
-                                            labels.forEach { label ->
-                                                AppText(
-                                                    text = label,
-                                                    fontSize = 11.sp,
-                                                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
+                                    val tagColors = listOf(
+                                        LegadoTheme.colorScheme.secondaryContainer to
+                                            LegadoTheme.colorScheme.onSecondaryContainer,
+                                        LegadoTheme.colorScheme.tertiaryContainer to
+                                            LegadoTheme.colorScheme.onTertiaryContainer,
+                                        LegadoTheme.colorScheme.primaryContainer to
+                                            LegadoTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(top = 2.dp)
+                                            .horizontalScroll(rememberScrollState()),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        cand.tags.filter(String::isNotBlank)
+                                            .forEachIndexed { index, tag ->
+                                                val color = tagColors[index % tagColors.size]
+                                                VoiceTraitTag(
+                                                    text = tag,
+                                                    container = color.first,
+                                                    content = color.second,
                                                 )
                                             }
+                                        cand.engineName.takeIf(String::isNotBlank)?.let {
+                                            VoiceTraitTag(
+                                                text = it,
+                                                container = LegadoTheme.colorScheme.surfaceVariant,
+                                                content = LegadoTheme.colorScheme.onSurfaceVariant,
+                                            )
                                         }
                                     }
                                 },

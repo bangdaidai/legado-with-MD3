@@ -14,7 +14,6 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.VoiceLabel
 import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.UploadRepository
-import io.legado.app.data.repository.ai.AiLogRepository
 import io.legado.app.domain.gateway.CloudTtsEngineGateway
 import io.legado.app.domain.gateway.HttpTtsEngineGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
@@ -91,7 +90,6 @@ class CloudTtsViewModel(
     private val httpTtsRepository: HttpTtsRepository,
     private val syncReadAloudVoicesUseCase: SyncReadAloudVoicesUseCase,
     private val previewSynthesizer: VoicePreviewSynthesizer,
-    private val aiLogRepository: AiLogRepository,
 ) : ViewModel() {
 
     /** 最近一次解析出的源 → 源自带目录，按源 id 索引，保存导入时取用。 */
@@ -100,7 +98,7 @@ class CloudTtsViewModel(
     val uiState = _uiState.asStateFlow()
     private val _effects = MutableSharedFlow<CloudTtsEffect>(extraBufferCapacity = 16)
     val effects = _effects.asSharedFlow()
-    private val synthesizer = CloudTtsAudioSynthesizer(engineGateway, aiLogRepository)
+    private val synthesizer = CloudTtsAudioSynthesizer(engineGateway)
     private val httpSynthesizer = HttpTtsAudioSynthesizer(httpTtsRepository)
     private val systemCatalog = SystemTtsVoiceCatalog(application)
     private val systemSynthesizer = SystemTtsFileSynthesizer(application)
@@ -476,9 +474,11 @@ class CloudTtsViewModel(
 
     /** 全部声音池 × 该音色的成员关系 → 编辑对话框里的勾选列表。 */
     private suspend fun memberPoolsFor(voiceId: String): kotlinx.collections.immutable.ImmutableList<VoicePoolCheckUi> {
-        val membership = VoicePoolStore.voicePoolMap()[voiceId].orEmpty()
+        // voicePoolMap 的值是**池名**集合（不是池 id），比对必须按名字；
+        // 之前拿 pool.id(UUID) 去 in 池名集合恒为 false，编辑器永远显示「未加入」
+        val memberPoolNames = VoicePoolStore.voicePoolMap()[voiceId].orEmpty()
         return VoicePoolStore.listPools().map { pool ->
-            VoicePoolCheckUi(poolId = pool.id, name = pool.name, checked = pool.id in membership)
+            VoicePoolCheckUi(poolId = pool.id, name = pool.name, checked = pool.name in memberPoolNames)
         }.toPersistentList()
     }
 
