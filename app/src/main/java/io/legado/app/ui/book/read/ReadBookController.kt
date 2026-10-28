@@ -71,6 +71,7 @@ import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadSessionState
+import io.legado.app.model.ReaderMarkingNoteState
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
@@ -930,6 +931,7 @@ class ReadBookController(
                     contentPaddingTopPx = contentPadding.top,
                     contentPaddingRightPx = contentPadding.right,
                     contentPaddingBottomPx = contentPadding.bottom,
+                    markingNotes = markingNotesForCurrentBook(),
                 ),
                 revision = source.revision xor viewModel.pageTime.hashCode().toLong()
                     xor viewModel.pageBatteryPercent.toLong(),
@@ -1014,6 +1016,12 @@ class ReadBookController(
             startPos = page.startPosition,
             endPos = page.endPosition,
         )
+    }
+
+    /** 当前书的划线备注快照；未开书时为空，工厂据此决定哪些划线出笔记角标。 */
+    private fun markingNotesForCurrentBook(): Map<String, String> {
+        val book = ReadBook.book ?: return emptyMap()
+        return ReaderMarkingNoteState.notesFor(book.name, book.author)
     }
 
     /** 同步平移页窗口并发布；返回发布的窗口，供滚动渲染层当帧折算使用。 */
@@ -3171,6 +3179,7 @@ class ReadBookController(
                 contentPaddingTopPx = viewport.contentPadding.top,
                 contentPaddingRightPx = viewport.contentPadding.right,
                 contentPaddingBottomPx = viewport.contentPadding.bottom,
+                markingNotes = markingNotesForCurrentBook(),
             ),
         )
     }
