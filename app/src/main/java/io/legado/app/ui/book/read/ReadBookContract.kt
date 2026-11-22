@@ -238,6 +238,11 @@ data class ReadBookUiState(
     val chapterName: String = "",
     val chapterUrl: String = "",
     val chapterSize: Int = 0,
+    /**
+     * 当前章是否可以走书源付费：书源配了 payAction，且本章是 VIP 未购买章。
+     * 顶栏胶囊、顶栏「章名 + 书源」行、书籍抽屉三处共用这一个判定。
+     */
+    val chapterPayable: Boolean = false,
     val durChapterIndex: Int = 0,
     val durChapterPos: Int = 0,
     val isLocalBook: Boolean = true,
@@ -528,6 +533,7 @@ data class ReadBookButtonConfigItem(
 /** 共享图标池：顶栏、浮动图标、底栏共用的那批通用按钮。完整池见 `ReadMenuActionIds`。 */
 internal val ReadBookButtonIds = listOf(
     "ai_recap",
+    "ai_chat",
     "ai_summary",
     "ai_rewrite",
     "more_actions",
@@ -552,8 +558,9 @@ internal val ReadBookButtonIds = listOf(
 )
 
 internal val MoreActionIds = listOf(
-    "source_custom_button", "change_source", "refresh", "download", "audio_download",
-    "edit_content", "add_bookmark",
+    "source_custom_button", "source_login", "source_pay", "edit_source", "disable_source",
+    "change_source", "refresh", "download", "audio_download",
+    "ai_chat", "edit_content", "add_bookmark",
     "text_processing", "reverse_content", "re_segment",
     "del_ruby", "del_h", "toc_rule", "charset", "image_style", "page_anim",
     "simulated_reading", "get_progress", "cover_progress", "highlight_rule", "read_style",
@@ -646,6 +653,7 @@ sealed interface ReadBookIntent {
         ReadBookIntent
     data object ToggleTranslation : ReadBookIntent
     data object OpenChapterRecap : ReadBookIntent
+    data object OpenAiChat : ReadBookIntent
     data object OpenChapterSummary : ReadBookIntent
     data object OpenAiCurrentChapterRewrite : ReadBookIntent
     data object RetryChapterSummary : ReadBookIntent
@@ -1271,6 +1279,13 @@ sealed interface ReadBookEffect {
     /** 音频缓存清理完成，宿主弹 toast（[message] 由触发侧按语言资源生成）。 */
     data class TtsCacheCleared(val message: String) : ReadBookEffect
     data class OpenBookVoiceCasting(val bookUrl: String) : ReadBookEffect
+    data class OpenAiChat(
+        val bookUrl: String?,
+        val bookName: String?,
+        val bookAuthor: String?,
+        val chapterIndex: Int?,
+        val chapterTitle: String?,
+    ) : ReadBookEffect
     data class OpenReadAloudSubPage(val page: ReadAloudSubPage) : ReadBookEffect
     data object OpenHighlightRuleImportPicker : ReadBookEffect
     data object OpenHighlightRuleExportPicker : ReadBookEffect

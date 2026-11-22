@@ -136,8 +136,13 @@ object MainNavigator {
                 }
             }
 
-            MainRouteAiChat -> {
-                if (currentRoute == MainRouteSettingsAi || currentRoute == MainRouteHome) {
+            is MainRouteAiChat -> {
+                if (
+                    currentRoute == MainRouteSettingsAi ||
+                    currentRoute == MainRouteHome ||
+                    currentRoute is MainRouteReadBook ||
+                    currentRoute is MainRouteReadManga
+                ) {
                     backStack.add(route)
                 } else {
                     backStack.clear()
@@ -246,7 +251,8 @@ object MainNavigator {
                     currentRoute is MainRouteAuthorDetail ||
                     currentRoute is MainRouteCache ||
                     currentRoute is MainRouteReadBook ||
-                    currentRoute is MainRouteReadManga
+                    currentRoute is MainRouteReadManga ||
+                    currentRoute is MainRouteAiChat
                 ) {
                     backStack.add(route)
                 } else {
@@ -617,7 +623,7 @@ object MainNavigator {
             MainRouteConst.ROUTE_SETTINGS_THEME -> MainRouteSettingsTheme
             MainRouteConst.ROUTE_SETTINGS_BACKUP -> MainRouteSettingsBackup
             MainRouteConst.ROUTE_SETTINGS_AI -> MainRouteSettingsAi
-            MainRouteConst.ROUTE_AI_CHAT -> MainRouteAiChat
+            MainRouteConst.ROUTE_AI_CHAT -> MainRouteAiChat()
             MainRouteConst.ROUTE_SETTINGS_CUSTOM_THEME -> MainRouteSettingsCustomTheme
             MainRouteConst.ROUTE_SETTINGS_PRIVATE -> MainRouteSettingsPrivate
             MainRouteConst.ROUTE_SETTINGS_LAB_CONFIG -> MainRouteSettingsLabConfig

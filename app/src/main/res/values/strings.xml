@@ -993,6 +993,9 @@
     <string name="preview_effect">Preview</string>
     <string name="highlight_preview_no_match">The current pattern does not match any text in the sample</string>
     <string name="sample_text">Sample Text</string>
+    <string name="highlight_border">Border</string>
+    <string name="highlight_border_width">Border Width</string>
+    <string name="highlight_border_radius">Corner Radius</string>
     <string name="highlight_match_typography">Match Typography</string>
     <string name="highlight_match_typography_hint">Everything below applies to the text your regex matches, and to nothing else.</string>
     <string name="highlight_spacing_before">Spacing Before Match</string>
@@ -1887,6 +1890,9 @@
     <string name="book_info_follow_cover_color_summary">Applied only while a background cover is visible</string>
     <string name="book_info_network_cover_background">Network cover background</string>
     <string name="book_info_default_cover_background">Default cover background</string>
+    <string name="book_info_author_search_fallback">Search by author when no related-books rule</string>
+    <string name="book_info_author_search_fallback_summary">When the book source has no relatedBooks rule, search the author name on the current source and show other works by the same author as related books</string>
+    <string name="book_other_works">Other works by the author</string>
     <string name="book_info_background_blur_off">Show cover without blur</string>
     <string name="book_info_background_blur_on">Show blurred cover</string>
     <string name="book_info_background_blur_off_for_default">Hide background cover</string>
@@ -2155,6 +2161,8 @@
     <string name="cover_show_shadow">Show Font Shadow</string>
     <string name="cover_show_stroke">Show Font Stroke</string>
     <string name="default_color">Use Default Font Color</string>
+    <string name="cover_restrict_ratio">Restrict Cover Ratio</string>
+    <string name="cover_restrict_ratio_summary">When on, covers are fixed to 5:7; turn off to let search, explore and book info covers follow the original image aspect ratio</string>
     <string name="enable_slider_vibrator">Vibrate While Sliding Progress Bar</string>
     <string name="use_new_toc_sheet">Use New TOC Sheet</string>
     <string name="no_toc_split_length_title">Chapter Split Length (No Rule Match)</string>

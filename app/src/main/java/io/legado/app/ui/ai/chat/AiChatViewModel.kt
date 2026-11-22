@@ -75,6 +75,7 @@ class AiChatViewModel(
             AiChatIntent.ShowModelPicker -> _uiState.update { it.copy(showModelPicker = true) }
             AiChatIntent.DismissModelPicker -> _uiState.update { it.copy(showModelPicker = false) }
             is AiChatIntent.SelectModel -> selectModel(intent.modelProfileId)
+            is AiChatIntent.SetReadingContext -> _uiState.update { it.copy(readingContext = intent.context) }
         }
     }
 
@@ -471,7 +472,8 @@ class AiChatViewModel(
                     userContent = parentUserMsg.content,
                     history = historyBeforeParent,
                     reasoningLevel = state.reasoningLevel,
-                    conversationId = conversationId
+                    conversationId = conversationId,
+                    readingContext = state.readingContext
                 )
                 setStreamingPlaceholder()
                 try {
@@ -575,7 +577,8 @@ class AiChatViewModel(
                     userContent = content,
                     history = historySnapshot,
                     reasoningLevel = state.reasoningLevel,
-                    conversationId = conversationIdForMsg
+                    conversationId = conversationIdForMsg,
+                    readingContext = state.readingContext
                 )
                 setStreamingPlaceholder()
                 try {

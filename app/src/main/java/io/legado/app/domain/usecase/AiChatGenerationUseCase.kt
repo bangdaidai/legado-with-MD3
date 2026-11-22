@@ -20,6 +20,7 @@ import io.legado.app.domain.model.nativeWebSearchSupport
 import io.legado.app.domain.model.toolParts
 import io.legado.app.ui.ai.chat.AiChatBookResultUi
 import io.legado.app.ui.ai.chat.AiChatMessageUi
+import io.legado.app.ui.ai.chat.AiReadingContext
 import io.legado.app.utils.GSON
 import kotlinx.coroutines.CancellationException
 
@@ -41,7 +42,8 @@ class AiChatGenerationUseCase(
         userContent: String,
         history: List<AiChatMessageUi>,
         reasoningLevel: AiReasoningLevel,
-        conversationId: String? = null
+        conversationId: String? = null,
+        readingContext: AiReadingContext? = null
     ): AiGenerateRequest {
         val preset = aiProfileGateway.getTaskPreset(AiTaskType.CHAT)
             ?: aiProfileGateway.getTaskPreset(AiTaskType.TRANSLATE_CHAPTER)
@@ -62,7 +64,7 @@ class AiChatGenerationUseCase(
         return AiGenerateRequest(
             model = preset.model,
             messages = buildList {
-                addAll(buildRequestMessages(userContent, history, conversationId))
+                addAll(buildRequestMessages(userContent, history, conversationId, readingContext))
                 webSearchContext?.let {
                     add(
                         AiMessage(
@@ -181,9 +183,10 @@ class AiChatGenerationUseCase(
     private suspend fun buildRequestMessages(
         newContent: String,
         history: List<AiChatMessageUi>,
-        conversationId: String? = null
+        conversationId: String? = null,
+        readingContext: AiReadingContext? = null
     ): List<AiMessage> {
-        val system = buildSystemPrompt(conversationId)
+        val system = buildSystemPrompt(conversationId, readingContext)
         val trimmedHistory = history.trimForRequest(MAX_HISTORY_MESSAGES)
         val messages = trimmedHistory.flatMap {
             when (it.role) {
@@ -237,7 +240,10 @@ class AiChatGenerationUseCase(
         ) + toolResults
     }
 
-    private suspend fun buildSystemPrompt(conversationId: String? = null): String {
+    private suspend fun buildSystemPrompt(
+        conversationId: String? = null,
+        readingContext: AiReadingContext? = null
+    ): String {
         val base = """
             你是一个阅读应用内的 AI 助手。
             当结构有助于理解时，使用完整的 Markdown 渲染答案。
@@ -248,13 +254,34 @@ class AiChatGenerationUseCase(
             不要透露隐藏的思考链。如果推理有用，提供简要的推理摘要。
         """.trimIndent()
 
-        if (conversationId == null) return base
+        val contextBlock = readingContext?.let { ctx ->
+            buildString {
+                append("\n\n## Current Reading Context\n")
+                append("The user opened AI chat while reading:\n")
+                append("- Book: ").append(ctx.bookName.ifBlank { "Unknown" })
+                if (ctx.bookAuthor.isNotBlank()) {
+                    append(" (Author: ").append(ctx.bookAuthor).append(")")
+                }
+                append("\n- bookUrl: ").append(ctx.bookUrl)
+                if (ctx.chapterIndex != null || ctx.chapterTitle.isNotBlank()) {
+                    append("\n- Current Chapter: ")
+                    if (ctx.chapterTitle.isNotBlank()) append(ctx.chapterTitle)
+                    if (ctx.chapterIndex != null) {
+                        append(" (0-based chapterIndex: ").append(ctx.chapterIndex).append(")")
+                    }
+                }
+                append("\nWhen the user refers to the current book or chapter without naming another book, use this exact bookUrl and chapterIndex with local reading tools.")
+            }
+        }.orEmpty()
+
+        val promptWithContext = base + contextBlock
+        if (conversationId == null) return promptWithContext
 
         val memories = aiMemoryGateway.getForPrompt(conversationId)
-        if (memories.isEmpty()) return base
+        if (memories.isEmpty()) return promptWithContext
 
         val memoryBlock = memories.joinToString("\n") { "- ${it.key}: ${it.value}" }
-        return "$base\n\n## User Memory\nThe following facts about the user have been remembered from prior conversations:\n$memoryBlock"
+        return "$promptWithContext\n\n## User Memory\nThe following facts about the user have been remembered from prior conversations:\n$memoryBlock"
     }
 
     private fun AiReasoningLevel.resolveModelDefault(default: AiReasoningLevel): AiReasoningLevel {

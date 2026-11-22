@@ -155,6 +155,15 @@ fun CoverConfigScreen(
                     }
                 )
 
+                SwitchSettingItem(
+                    title = stringResource(R.string.cover_restrict_ratio),
+                    description = stringResource(R.string.cover_restrict_ratio_summary),
+                    checked = settings.restrictCoverRatio,
+                    onCheckedChange = { value ->
+                        onIntent(CoverConfigIntent.SetRestrictCoverRatio(value))
+                    }
+                )
+
                 DropdownListSettingItem(
                     title = stringResource(R.string.cover_info_orientation),
                     selectedValue = settings.infoOrientation,

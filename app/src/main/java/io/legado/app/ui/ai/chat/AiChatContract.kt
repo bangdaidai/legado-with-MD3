@@ -16,7 +16,17 @@ data class AiChatUiState(
     val streamingMessage: AiChatMessageUi? = null,
     val pendingToolConfirmation: AiToolConfirmationUi? = null,
     val showModelPicker: Boolean = false,
-    val availableModels: ImmutableList<AiChatModelItemUi> = persistentListOf()
+    val availableModels: ImmutableList<AiChatModelItemUi> = persistentListOf(),
+    val readingContext: AiReadingContext? = null
+)
+
+@Stable
+data class AiReadingContext(
+    val bookUrl: String,
+    val bookName: String,
+    val bookAuthor: String = "",
+    val chapterIndex: Int? = null,
+    val chapterTitle: String = ""
 )
 
 @Stable
@@ -88,6 +98,7 @@ sealed interface AiChatIntent {
     data object ShowModelPicker : AiChatIntent
     data object DismissModelPicker : AiChatIntent
     data class SelectModel(val modelProfileId: String) : AiChatIntent
+    data class SetReadingContext(val context: AiReadingContext?) : AiChatIntent
 }
 
 sealed interface AiChatEffect {

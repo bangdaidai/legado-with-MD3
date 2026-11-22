@@ -45,6 +45,10 @@ class ThemePackageSettingsRepository : ThemePackageSettingsGateway {
         bookInfoDefaultCoverBackground = AppConfigStore.getString(
             PreferKey.bookInfoDefaultCoverBackground
         ),
+        bookInfoAuthorSearchFallback = boolean(
+            PreferKey.bookInfoAuthorSearchFallback,
+            false,
+        ),
         containerOpacity = int(PreferKey.containerOpacity, 100),
         overrideBaseCardCornerRadius = boolean(PreferKey.overrideBaseCardCornerRadius, false),
         baseCardCornerRadius = float(PreferKey.baseCardCornerRadius, 16f),
@@ -202,6 +206,7 @@ internal fun ThemeExportData.toPreferenceValues(): Map<String, Any?> {
                     (data.bookInfoNetworkCoverBackground ?: bookInfoBackground),
                 PreferKey.bookInfoDefaultCoverBackground to
                     (data.bookInfoDefaultCoverBackground ?: bookInfoBackground),
+                PreferKey.bookInfoAuthorSearchFallback to data.bookInfoAuthorSearchFallback,
                 PreferKey.containerOpacity to data.containerOpacity,
                 PreferKey.overrideBaseCardCornerRadius to data.overrideBaseCardCornerRadius,
                 PreferKey.baseCardCornerRadius to data.baseCardCornerRadius,

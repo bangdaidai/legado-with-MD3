@@ -27,12 +27,18 @@ object DatabaseMigrations {
     }
 
     /**
-     * 132 → 133：fork 三特性合并推进（手写迁移，不走 AutoMigration）。
+     * 132 → 133：fork 三特性 + 上游高亮边框合并推进（手写迁移，不走 AutoMigration）。
      *
      * AutoMigration 要求 from/to 两端的 schema JSON 都在 app/schemas 里；版本已推进到
      * 134 后 133.json 不会再被导出，中间版本只能手写。内容：
      * - book_sources.mainJs：单文件 JS 书源主脚本，可空
      * - httpTTS.script / scriptOptionsJson：JS 朗读引擎主脚本与 options() 配置值
+     * - highlightRules 边框三列：上游 `AutoMigration(132,133)` 的那三列。本 fork 的 133
+     *   已被上面两批列占用，不能再让上游占一次，所以并入同一跳、不另起版本号。
+     *   borderColor 可空（null = 不描边），粗细默认 1、圆角默认 4，老规则读回来等价于旧行为。
+     *
+     * **已发到 133/134 的设备不会重跑这一跳**，覆盖安装会因表结构与实体不符而崩；
+     * 本 fork 的处置口径是卸载重装（备份是 JSON，恢复路径可用）。
      *
      * 纯加列，不触碰 book_sources_part 视图（Room 校验视图 SQL 形态敏感，
      * 手写重建容易对不上；JS 徽章投影等真需要时再随上游版本一起演进）。
@@ -43,6 +49,13 @@ object DatabaseMigrations {
             db.execSQL("ALTER TABLE `httpTTS` ADD COLUMN `script` TEXT")
             db.execSQL(
                 "ALTER TABLE `httpTTS` ADD COLUMN `scriptOptionsJson` TEXT NOT NULL DEFAULT '{}'"
+            )
+            db.execSQL("ALTER TABLE `highlightRules` ADD COLUMN `borderColor` INTEGER")
+            db.execSQL(
+                "ALTER TABLE `highlightRules` ADD COLUMN `borderWidth` REAL NOT NULL DEFAULT 1"
+            )
+            db.execSQL(
+                "ALTER TABLE `highlightRules` ADD COLUMN `borderRadius` REAL NOT NULL DEFAULT 4"
             )
         }
     }

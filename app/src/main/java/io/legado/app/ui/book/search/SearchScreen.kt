@@ -581,6 +581,7 @@ fun SearchScreen(
                                                 sharedCoverKey = sharedCoverKey,
                                                 sourceCount = item.book.origins.size,
                                                 qualityMasked = qualityMasked,
+                                                adaptCoverAspectRatio = true,
                                             )
                                         }
 
@@ -1159,6 +1160,7 @@ private fun ExpandedSourceSheet(
                     shelfState = BookShelfState.NOT_IN_SHELF,
                     onClick = { onBookClick(book, null) },
                     onLongClick = onBookLongClick,
+                    adaptCoverAspectRatio = true,
                 )
             }
 

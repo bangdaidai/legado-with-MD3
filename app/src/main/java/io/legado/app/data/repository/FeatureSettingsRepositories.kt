@@ -219,6 +219,7 @@ internal fun DownloadCacheSettings.toPrefMap(): Map<String, Any?> = mapOf(
 internal fun Preferences.toCoverSettings(): CoverSettings = CoverSettings(
     loadOnlyOnWifi = compatDsBoolean(PreferKey.loadCoverOnlyWifi) ?: false,
     useDefaultCover = compatDsBoolean(PreferKey.useDefaultCover) ?: false,
+    restrictCoverRatio = compatDsBoolean(PreferKey.coverRestrictRatio) ?: true,
     showShadow = compatDsBoolean(PreferKey.coverShowShadow) ?: false,
     showStroke = compatDsBoolean(PreferKey.coverShowStroke) ?: true,
     useDefaultColor = compatDsBoolean(PreferKey.coverDefaultColor) ?: true,
@@ -240,6 +241,7 @@ internal fun Preferences.toCoverSettings(): CoverSettings = CoverSettings(
 internal fun CoverSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.loadCoverOnlyWifi to loadOnlyOnWifi,
     PreferKey.useDefaultCover to useDefaultCover,
+    PreferKey.coverRestrictRatio to restrictCoverRatio,
     PreferKey.coverShowShadow to showShadow,
     PreferKey.coverShowStroke to showStroke,
     PreferKey.coverDefaultColor to useDefaultColor,
@@ -509,6 +511,8 @@ internal fun Preferences.toThemeSettings(): ThemeSettings = ThemeSettings(
         compatDsString(PreferKey.bookInfoNetworkCoverBackground) ?: "on",
     bookInfoDefaultCoverBackground =
         compatDsString(PreferKey.bookInfoDefaultCoverBackground) ?: "on",
+    bookInfoAuthorSearchFallback =
+        compatDsBoolean(PreferKey.bookInfoAuthorSearchFallback) ?: false,
     bookInfoInputColor = compatDsInt(PreferKey.bookInfoInputColor) ?: 0,
     backgroundImageLight = compatDsString(PreferKey.bgImage),
     backgroundImageDark = compatDsString(PreferKey.bgImageN),
@@ -594,6 +598,7 @@ internal fun ThemeSettings.toGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookInfoFollowCoverColor to bookInfoFollowCoverColor,
     PreferKey.bookInfoNetworkCoverBackground to bookInfoNetworkCoverBackground,
     PreferKey.bookInfoDefaultCoverBackground to bookInfoDefaultCoverBackground,
+    PreferKey.bookInfoAuthorSearchFallback to bookInfoAuthorSearchFallback,
     PreferKey.bgImage to backgroundImageLight,
     PreferKey.bgImageN to backgroundImageDark,
     PreferKey.bgImageBlurring to backgroundImageBlurring,

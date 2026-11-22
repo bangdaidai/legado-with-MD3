@@ -56,6 +56,7 @@ import io.legado.app.ui.about.AboutEffect
 import io.legado.app.ui.about.AboutScreen
 import io.legado.app.ui.about.AboutViewModel
 import io.legado.app.ui.ai.chat.AiChatRouteScreen
+import io.legado.app.ui.ai.chat.AiReadingContext
 import io.legado.app.ui.book.audio.AudioPlayEffect
 import io.legado.app.ui.book.audio.AudioPlayIntent
 import io.legado.app.ui.book.audio.AudioPlayScreenContent
@@ -542,7 +543,7 @@ fun MainActivity.mainEntryProvider(
                 onNavigateToRoute(MainRouteSettings)
             },
             onNavigateToChat = {
-                onNavigateToRoute(MainRouteAiChat)
+                onNavigateToRoute(MainRouteAiChat())
             },
             onNavigateToSearch = { key ->
                 onNavigateToRoute(
@@ -791,8 +792,20 @@ fun MainActivity.mainEntryProvider(
         )
     }
 
-    entry<MainRouteAiChat> {
+    entry<MainRouteAiChat> { route ->
+        val readingContext = remember(route) {
+            route.bookUrl?.takeIf { it.isNotBlank() }?.let { bookUrl ->
+                AiReadingContext(
+                    bookUrl = bookUrl,
+                    bookName = route.bookName.orEmpty(),
+                    bookAuthor = route.bookAuthor.orEmpty(),
+                    chapterIndex = route.chapterIndex,
+                    chapterTitle = route.chapterTitle.orEmpty()
+                )
+            }
+        }
         AiChatRouteScreen(
+            readingContext = readingContext,
             onBackClick = { onNavigateBack() },
             onOpenBookInfo = { book ->
                 onNavigateToRoute(
@@ -1050,6 +1063,17 @@ fun MainActivity.mainEntryProvider(
                 },
                 onOpenVoiceCasting = { bookUrl ->
                     onNavigateToRoute(MainRouteBookVoiceCasting(bookUrl))
+                },
+                onOpenAiChat = { bookUrl, bookName, bookAuthor, chapterIndex, chapterTitle ->
+                    onNavigateToRoute(
+                        MainRouteAiChat(
+                            bookUrl = bookUrl,
+                            bookName = bookName,
+                            bookAuthor = bookAuthor,
+                            chapterIndex = chapterIndex,
+                            chapterTitle = chapterTitle,
+                        )
+                    )
                 },
                 onOpenReadAloudSubPage = { page ->
                     onNavigateToRoute(page.toMainRoute())

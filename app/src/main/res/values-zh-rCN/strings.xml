@@ -958,6 +958,9 @@
     <string name="preview_effect">预览效果</string>
     <string name="highlight_preview_no_match">当前正则未匹配到示例文本中的内容</string>
     <string name="sample_text">示例文本</string>
+    <string name="highlight_border">边框</string>
+    <string name="highlight_border_width">边框粗细</string>
+    <string name="highlight_border_radius">边框圆角</string>
     <string name="highlight_match_typography">命中排版</string>
     <string name="highlight_match_typography_hint">下面这些调整只作用在正则命中的那一段文字上，命中之外的一个字都不动。</string>
     <string name="highlight_spacing_before">命中字距（前）</string>
@@ -1824,6 +1827,9 @@
     <string name="book_info_follow_cover_color_summary">仅在显示背景封面时生效</string>
     <string name="book_info_network_cover_background">网络封面背景设置</string>
     <string name="book_info_default_cover_background">默认封面背景设置</string>
+    <string name="book_info_author_search_fallback">无关联规则时按作者搜索</string>
+    <string name="book_info_author_search_fallback_summary">书源未配置关联书籍（relatedBooks）规则时，用当前书源搜索作者名，把作者的其它作品显示为关联书籍</string>
+    <string name="book_other_works">作者其它作品</string>
     <string name="book_info_background_blur_off">关闭模糊封面</string>
     <string name="book_info_background_blur_on">开启模糊封面</string>
     <string name="book_info_background_blur_off_for_default">不显示背景封面</string>
@@ -2094,6 +2100,8 @@
     <string name="cover_show_shadow">显示字体阴影</string>
     <string name="cover_show_stroke">显示字体描边</string>
     <string name="default_color">使用默认字体颜色</string>
+    <string name="cover_restrict_ratio">限制封面比例</string>
+    <string name="cover_restrict_ratio_summary">开启时封面固定 5:7 显示；关闭后搜索、发现与书籍详情页封面按原图宽高比自适应</string>
     <string name="enable_slider_vibrator">滑动进度条时震动</string>
     <string name="use_new_toc_sheet">使用新版目录</string>
     <string name="no_toc_split_length_title">无规则匹配时章节分割字数</string>

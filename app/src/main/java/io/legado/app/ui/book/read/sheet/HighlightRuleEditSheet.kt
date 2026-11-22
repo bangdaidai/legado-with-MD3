@@ -86,9 +86,32 @@ import io.legado.app.data.entities.BookCharacterProfile
 import io.legado.app.data.repository.ReadSettingsRepository
 import io.legado.app.data.repository.configNames
 import io.legado.app.data.repository.toJsonArray
+import io.legado.app.feature.reader.core.layout.ReaderChapterBlockMeasurer
+import io.legado.app.feature.reader.core.layout.ReaderChapterMeasureResult
+import io.legado.app.feature.reader.core.layout.ReaderChapterMeasureStyle
+import io.legado.app.feature.reader.core.layout.ReaderImageDimensionsResolver
+import io.legado.app.feature.reader.core.layout.ReaderPaginationConfig
+import io.legado.app.feature.reader.core.layout.ReaderPaginator
+import io.legado.app.feature.reader.core.layout.ReaderTextAlignment
+import io.legado.app.feature.reader.core.layout.ReaderTextShaperFactory
+import io.legado.app.feature.reader.core.model.ReaderElement
+import io.legado.app.feature.reader.core.model.ReaderPage
+import io.legado.app.feature.reader.core.model.ReaderTextBackgroundRun
+import io.legado.app.feature.reader.core.model.ReaderTextStyle
+import io.legado.app.feature.reader.core.model.contentClipRect
+import io.legado.app.feature.reader.core.model.textBackgroundRuns
+import io.legado.app.feature.reader.core.source.ReaderChapterSource
+import io.legado.app.feature.reader.core.source.ReaderChapterSourceBlock
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
+import io.legado.app.feature.reader.core.style.ReaderStyleTarget
+import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
 import io.legado.app.feature.reader.core.style.underlineControlSupport
+import io.legado.app.feature.reader.drawTextBackground
+import io.legado.app.feature.reader.drawBackgroundBand
+import io.legado.app.feature.reader.legacy.LegacyReaderPaginationStyleFactory
+import io.legado.app.feature.reader.legacy.LegacyReaderStyleRangeMapper
+import io.legado.app.feature.reader.platform.AndroidReaderTextShaper
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.help.config.ReadBookConfig
@@ -193,6 +216,14 @@ fun HighlightRuleEditSheet(
     var bgBorderScale by remember(show, rule) { mutableFloatStateOf(initial.bgBorderScale.coerceIn(0.1f, 3f)) }
     var hasBgImage by remember(show, rule) { mutableStateOf(initial.bgImage?.isNotBlank() == true) }
 
+    // Border state — 颜色为 null 就当没开；粗细与圆角只在颜色非空时参与绘制与保存。
+    var hasBorder by remember(show, rule) { mutableStateOf(initial.borderColor != null) }
+    var borderColor by remember(show, rule) {
+        mutableIntStateOf(initial.borderColor ?: 0xFF63C37D.toInt())
+    }
+    var borderWidth by remember(show, rule) { mutableFloatStateOf(initial.borderWidth) }
+    var borderRadius by remember(show, rule) { mutableFloatStateOf(initial.borderRadius) }
+
     // Font weight state
     var fontWeight by remember(show, rule) { mutableIntStateOf(initial.fontWeight) }
     var isItalic by remember(show, rule) { mutableStateOf(initial.isItalic) }
@@ -246,6 +277,7 @@ fun HighlightRuleEditSheet(
     var showBgColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showUnderlineColorPicker by remember(show, rule) { mutableStateOf(false) }
     var showUnderlineColorNightPicker by remember(show, rule) { mutableStateOf(false) }
+    var showBorderColorPicker by remember(show, rule) { mutableStateOf(false) }
     var showFontSelect by remember(show, rule) { mutableStateOf(false) }
 
     // Validation
@@ -302,6 +334,49 @@ fun HighlightRuleEditSheet(
             }
         }
     }
+
+    /**
+     * 预览与保存共用这一份数据：预览看到的就是按下保存会写进库的那条规则，
+     * 不存在「预览一套、正文一套」的第二套口径。
+     */
+    val previewRule = HighlightRule(
+        id = initial.id,
+        name = name,
+        pattern = pattern,
+        sampleText = sampleText,
+        targetScope = targetScope,
+        enabled = enabled,
+        position = initial.position,
+        textColor = if (hasTextColor) textColor else null,
+        bgColor = if (hasBgColor) bgColor else null,
+        borderColor = if (hasBorder) borderColor else null,
+        borderWidth = borderWidth,
+        borderRadius = borderRadius,
+        underlineMode = if (hasUnderline) underlineMode else 0,
+        underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
+        underlineWidth = underlineWidth,
+        underlineOffset = underlineOffset,
+        underlineSvgPath = underlineSvgPath.ifBlank { null },
+        bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
+        bgImageFit = bgImageFit,
+        bgImageScale = bgImageScale,
+        configName = if (configNames.isEmpty()) null else configNames.toList().toJsonArray(),
+        fontPath = if (hasFont) fontPath.ifBlank { null } else null,
+        fontWeight = fontWeight,
+        isItalic = isItalic,
+        fontSizeOffset = fontSizeOffset,
+        npLeft = npLeft,
+        npRight = npRight,
+        npTop = npTop,
+        npBottom = npBottom,
+        manualNineSlice = manualNineSlice,
+        letterSpacingBefore = matchSpacingBefore,
+        letterSpacingAfter = matchSpacingAfter,
+        lineSpacingTop = hitLineSpacingTop,
+        lineSpacingBottom = hitLineSpacingBottom,
+        bgLengthOffsetLeft = bgLengthOffsetLeft,
+        bgLengthOffsetRight = bgLengthOffsetRight,
+    )
 
     val titleRes = if (isNew) R.string.new_rule else R.string.edit_rule
 
@@ -908,6 +983,89 @@ fun HighlightRuleEditSheet(
                     }
                 }
 
+                // Border
+                TinySwitchSettingItem(
+                    title = stringResource(R.string.highlight_border),
+                    checked = hasBorder,
+                    onCheckedChange = { hasBorder = it },
+                )
+                AnimatedVisibility(visible = hasBorder) {
+                    Column {
+                        TinyColorSettingItem(
+                            title = stringResource(R.string.select_color),
+                            colorValue = borderColor,
+                            onClick = { showBorderColorPicker = true },
+                        )
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.highlight_border_width),
+                            value = borderWidth,
+                            valueRange = 0.5f..10f,
+                            description = String.format("%.1f dp", borderWidth),
+                            onValueChange = { borderWidth = (it * 10).toInt() / 10f },
+                        )
+                        TinySliderSettingItem(
+                            title = stringResource(R.string.highlight_border_radius),
+                            value = borderRadius,
+                            valueRange = 0f..24f,
+                            description = String.format("%.1f dp", borderRadius),
+                            onValueChange = { borderRadius = it },
+                        )
+                    }
+                }
+
+                // === Section 2b: Match typography ===
+                SectionTitle(stringResource(R.string.highlight_match_typography))
+                AppText(
+                    stringResource(R.string.highlight_match_typography_hint),
+                    style = LegadoTheme.typography.labelMedium,
+                    color = LegadoTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_spacing_before),
+                    value = matchSpacingBefore,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", matchSpacingBefore),
+                    onValueChange = { matchSpacingBefore = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_spacing_after),
+                    value = matchSpacingAfter,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", matchSpacingAfter),
+                    onValueChange = { matchSpacingAfter = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_line_spacing_above),
+                    value = hitLineSpacingTop,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", hitLineSpacingTop),
+                    onValueChange = { hitLineSpacingTop = (it * 2).roundToInt() / 2f },
+                )
+                TinySliderSettingItem(
+                    title = stringResource(R.string.highlight_line_spacing_below),
+                    value = hitLineSpacingBottom,
+                    valueRange = 0f..40f,
+                    steps = 79,
+                    stepSize = 0.5f,
+                    showDecimal = true,
+                    valueFormat = { String.format("%.1f", it) },
+                    description = String.format("%.1f dp", hitLineSpacingBottom),
+                    onValueChange = { hitLineSpacingBottom = (it * 2).roundToInt() / 2f },
+                )
+
                 // === Section 3: Config Binding ===
                 if (allConfigNames.isNotEmpty()) {
                     SectionTitle("应用排版")
@@ -1215,6 +1373,15 @@ fun HighlightRuleEditSheet(
             showUnderlineColorNightPicker = false
         },
     )
+    ColorPickerSheet(
+        show = showBorderColorPicker,
+        initialColor = borderColor,
+        onDismissRequest = { showBorderColorPicker = false },
+        onColorSelected = { color ->
+            borderColor = color
+            showBorderColorPicker = false
+        },
+    )
 
     // Nine-patch editor
     NinePatchEditorDialog(
@@ -1287,6 +1454,45 @@ private data class PreviewLineSegment(
     val b: Float,
 )
 
+/** 预览卡：正文卡与悬浮卡共用同一份内容，浮起来的那张多一行标题和阴影。 */
+/** 角色气泡弹层复用同一张预览卡：它跑的就是正文那条管线，不留第二套口径。 */
+@Composable
+internal fun HighlightPreviewCard(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    modifier: Modifier = Modifier,
+    floating: Boolean = false,
+) {
+    NormalCard(
+        modifier = modifier,
+        cornerRadius = 16.dp,
+        containerColor = if (floating) {
+            LegadoTheme.colorScheme.surfaceContainerHigh
+        } else {
+            LegadoTheme.colorScheme.surfaceContainerLow
+        },
+        elevation = if (floating) 6.dp else 0.dp,
+    ) {
+        if (floating) {
+            AppText(
+                stringResource(R.string.preview_effect),
+                style = LegadoTheme.typography.labelMedium,
+                color = LegadoTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, top = 8.dp),
+            )
+        }
+        HighlightRulePreview(
+            rule = rule,
+            config = config,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (floating) 144.dp else 168.dp)
+                .clipToBounds()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
 /**
  * 预览文本与外边距留白的分段结果。
  *
@@ -1335,6 +1541,222 @@ private fun buildPreviewAnnotated(
             range.first,
             (range.last + 1).coerceAtMost(text.length),
         )
+    }
+}
+
+/**
+ * 规则预览：整块走正文那一条管线，示例句按**正文那一栏的宽度、字号与页边距**排版，再把整页等比缩进卡片。
+ *
+ * 规则→样式用 [LegacyReaderStyleRangeMapper]（命中字距、命中行行距、背景图切线都在那里换算），
+ * 测量用 [ReaderChapterBlockMeasurer]，分页用 [ReaderPaginator]，绘制用正文同一份
+ * [drawTextBackground] 与 [ReaderPageDecorationDrawCache]。正文怎么断行、气泡多大、字落在哪，
+ * 预览就是那个结果——包括「命中字距只在段外留白，不许把图拉长」这一条。
+ *
+ * 缩放只放在最后一步：整页视口（含左右页边距）等比映射到卡片宽，预览里文字两侧留的边就是
+ * 正文那一圈页边距按比例缩小的结果——调页边距参数时预览跟着变，边距不再是「贴边的一栏」。
+ * 顶部只裁掉内容以上的空白，留一小圈余量，描边与圆角色带的四角不贴边；底边的裁切线吸附到
+ * 放得下的最后一整行的行盒底，落在行与行之间，不会把一行字拦腰截成上下两半。
+ */
+@Composable
+private fun HighlightRulePreview(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    modifier: Modifier = Modifier,
+) {
+    // 正文分页读的就是窗口宽：视口取同一份，断行才会与正文一致。
+    val bodyViewportWidthPx = LocalWindowInfo.current.containerSize.width
+    val baseTextSizePx = config.textSize.toFloat().spToPx()
+    val layout = rememberReaderPreviewLayout(
+        rule = rule,
+        config = config,
+        sample = rule.normalizedSampleText(),
+        viewportWidthPx = bodyViewportWidthPx,
+        // 视口给高：示例句必须全落在第一页，不然一拉「命中行行距」就把最后一行挤到丢掉的第二页，
+        // 预览里就看不到规则生效。超出的部分由裁切线吸行底处理。
+        viewportHeightPx = (baseTextSizePx * 60f).toInt(),
+    )
+    val decorations = remember(layout) { layout?.let { ReaderPageDecorationDrawCache.create(it.page) } }
+    val backgroundPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val stylePaints = remember { mutableMapOf<ReaderTextStyle, Paint>() }
+    Canvas(modifier) {
+        val page = layout?.page
+        if (page != null && decorations != null && bodyViewportWidthPx > 0 && size.width > 0f) {
+            val runs = page.textBackgroundRuns()
+            // 顶部裁切基准：内容外接框（含阴影/斜体/气泡外扩），从这里往下展示。
+            val clip = page.contentClipRect(runs)
+            val previewScale = size.width / bodyViewportWidthPx
+            // 顶部余量（页面坐标系）：描边、圆角色带越出行盒的部分不贴边。
+            val topBleedPagePx = PreviewTopBleedDp.toPx() / previewScale
+            // 底边吸行：比可见底边再高一个小余量之内结束的行不算「放得下」，
+            // 免得行盒底正好压在画布边上时描边还是被削掉半根。
+            val lineSnapPadPagePx = PreviewLineSnapDp.toPx() / previewScale
+            val visibleBottomPagePx = clip.top - topBleedPagePx + size.height / previewScale
+            val lastFullBottom = page.elements
+                .filterIsInstance<ReaderElement.Text>()
+                .map { it.bounds.bottom }
+                .filter { it <= visibleBottomPagePx - lineSnapPadPagePx }
+                .maxOrNull()
+            val clipBottomPx = if (lastFullBottom != null) {
+                (lastFullBottom - clip.top + topBleedPagePx + lineSnapPadPagePx) * previewScale
+            } else {
+                // 一整行都放不下（画布过矮）：退回画满画布高，切在哪儿都比空白强。
+                size.height
+            }
+            clipRect(0f, 0f, size.width, clipBottomPx) {
+                // pivot 必须钉在原点：scale 默认拿画布中心当原点，坐标映射会整体偏移
+                // 画布尺寸的 (1-scale)/2，裁切线跟着错位约一个行高，最后一行整行被裁、
+                // 上一行被拦腰切开。钉在原点后页面坐标才严格按上面的推导落位。
+                scale(previewScale, pivot = Offset.Zero) {
+                    // 只平移掉内容以上的部分：左右页边距原样留在卡片里，就是正文的边距。
+                    translate(0f, topBleedPagePx - clip.top) {
+                        drawReaderPreviewPage(layout, runs, decorations, backgroundPaint, stylePaints)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 预览内容顶部与卡片边缘之间留的余量：给描边、圆角色带这些越出行盒的装饰让位。 */
+private val PreviewTopBleedDp = 4.dp
+
+/** 底边吸行的安全余量：行盒底离裁切边不足这个数就整行下移到下一屏。 */
+private val PreviewLineSnapDp = 2.dp
+
+/** 排版好的一页 + 背景图位图：几何全部已经在 [ReaderPage] 里按正文口径算完。 */
+private data class ReaderPreviewLayout(val page: ReaderPage, val background: Bitmap?)
+
+/**
+ * 算一页要读一次图片尺寸与字体度量，放后台线程；示例句最长三行，代价可以忽略。
+ * 重算期间沿用上一次的页，滑杆拖动时不会闪白。
+ */
+@Composable
+private fun rememberReaderPreviewLayout(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    sample: String,
+    viewportWidthPx: Int,
+    viewportHeightPx: Int,
+): ReaderPreviewLayout? {
+    var layout by remember { mutableStateOf<ReaderPreviewLayout?>(null) }
+    LaunchedEffect(rule, config, sample, viewportWidthPx, viewportHeightPx) {
+        if (viewportWidthPx <= 1 || viewportHeightPx <= 1) return@LaunchedEffect
+        layout = withContext(Dispatchers.Default) {
+            buildReaderPreviewLayout(
+                rule = rule,
+                config = config,
+                sample = sample,
+                viewportWidthPx = viewportWidthPx,
+                viewportHeightPx = viewportHeightPx,
+            )
+        }
+    }
+    return layout
+}
+
+private suspend fun buildReaderPreviewLayout(
+    rule: HighlightRule,
+    config: ReadSheetConfigUiState,
+    sample: String,
+    viewportWidthPx: Int,
+    viewportHeightPx: Int,
+): ReaderPreviewLayout? {
+    // 基础样式与页边距照抄正文那一份装配（见 LegacyReaderPaginationStyleFactory.create）：
+    // 字号、字重、斜体、字色、字距、行距、段首缩进、四边页距，一项都不另算。
+    val baseStyle = ReaderTextStyle(
+        colorArgb = config.textColor,
+        fontSizePx = config.textSize.toFloat().spToPx(),
+        fontWeight = LegacyReaderPaginationStyleFactory.resolveWeight(config.textBold),
+        italic = config.textItalic,
+    )
+    val lineSpacingMultiplier = config.lineSpacing / 10f
+    val baseShaper = AndroidReaderTextShaper(ReaderAndroidPaintFactory.createTextPaint(baseStyle))
+    val lineMetrics = baseShaper.fontLineMetrics
+    val source = ReaderChapterSource(
+        chapterIndex = 0,
+        title = "",
+        blocks = listOf(ReaderChapterSourceBlock.Text(value = sample, chapterPosition = 0)),
+        characterCount = sample.length,
+        semanticContent = sample,
+    )
+    val measured = ReaderChapterBlockMeasurer(
+        bodyShaper = baseShaper,
+        titleShaper = baseShaper,
+        imageDimensionsResolver = ReaderImageDimensionsResolver { null },
+        // 命中段可以改字号：宽度得用放大后的那支笔量，和正文一样按样式各建一支。
+        textShaperFactory = ReaderTextShaperFactory {
+            AndroidReaderTextShaper(ReaderAndroidPaintFactory.createTextPaint(it))
+        },
+    ).measure(
+        source = source,
+        style = ReaderChapterMeasureStyle(
+            bodyStyle = baseStyle,
+            titleStyle = baseStyle,
+            bodyIndentCharacters = config.paragraphIndentCount,
+            bodyAlignment = if (config.textFullJustify) {
+                ReaderTextAlignment.JUSTIFY
+            } else {
+                ReaderTextAlignment.START
+            },
+            titleAlignment = ReaderTextAlignment.START,
+            bodyLineHeightPx = lineMetrics.heightPx,
+            bodyBaselineOffsetPx = lineMetrics.baselineOffsetPx,
+            bodyLineSpacingMultiplier = lineSpacingMultiplier,
+            letterSpacingEm = config.letterSpacing,
+            // 每一项改动都必须落在「我是李四。」上：区间钉死，不看用户填的正则命没命中——
+            // 命不中时整块预览是死的，调字色/背景图/命中字距全都看不出差别。
+            // 只有用户把示例句改成不含那一段的内容时，才退回按正则命中。
+            // （停用或只作用于标题的规则照样看得见效果：字面区间这两样都不参与。）
+            styleRanges = rule.previewHitRange()?.let { (hitStart, hitEnd) ->
+                LegacyReaderStyleRangeMapper.rangesForLiteralRange(
+                    rule = rule,
+                    start = hitStart,
+                    endExclusive = hitEnd,
+                    target = ReaderStyleTarget.BODY,
+                    priority = 0,
+                )
+            } ?: LegacyReaderStyleRangeMapper.map(
+                source = source,
+                rules = listOf(rule.copy(enabled = true, targetScope = HighlightRule.TARGET_ALL)),
+                processes = emptyList(),
+            ),
+        ),
+    ) as? ReaderChapterMeasureResult.Success ?: return null
+    val page = ReaderPaginator.paginateBlocks(
+        measured.blocks,
+        ReaderPaginationConfig(
+            chapterIndex = 0,
+            chapterTitle = "",
+            viewportWidthPx = viewportWidthPx,
+            viewportHeightPx = viewportHeightPx,
+            paddingLeftPx = config.paddingLeft.toFloat().dpToPx(),
+            paddingTopPx = config.paddingTop.toFloat().dpToPx(),
+            paddingRightPx = config.paddingRight.toFloat().dpToPx(),
+            paddingBottomPx = config.paddingBottom.toFloat().dpToPx(),
+            lineHeightPx = lineMetrics.heightPx,
+            baselineOffsetPx = lineMetrics.baselineOffsetPx,
+            lineSpacingMultiplier = lineSpacingMultiplier,
+            letterSpacingPx = config.letterSpacing * baseStyle.fontSizePx,
+            paragraphSpacingPx = lineMetrics.heightPx * config.paragraphSpacing / 10f,
+        ),
+    ).firstOrNull() ?: return null
+    val background = rule.bgImage?.takeIf { it.isNotBlank() }
+        ?.let(ReaderTextBackgroundLoader::load)
+    return ReaderPreviewLayout(page, background)
+}
+
+/** 与 `ReaderCanvasSurface` 同一顺序：背景色条 → 背景图 → 半截高亮 → 字 → 线。 */
+private fun DrawScope.drawReaderPreviewPage(
+    layout: ReaderPreviewLayout,
+    backgroundRuns: List<ReaderTextBackgroundRun>,
+    decorations: ReaderPageDecorationDrawCache,
+    backgroundPaint: Paint,
+    stylePaints: MutableMap<ReaderTextStyle, Paint>,
+) {
+    val native = drawContext.canvas.nativeCanvas
+    val textElements = layout.page.elements.filterIsInstance<ReaderElement.Text>()
+    textElements.mergeBackgroundBounds().forEach { band ->
+        drawBackgroundBand(band)
     }
 }
 

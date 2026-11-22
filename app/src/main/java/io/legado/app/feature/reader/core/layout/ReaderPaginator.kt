@@ -153,7 +153,7 @@ data class ReaderCastOptions(
 data class ReaderMeasuredParagraph(
     val text: String,
     val clusters: List<String>,
-    val clusterWidthsPx: List<Float>,
+    val clusterWidthsPx: FloatArray,
     val style: ReaderTextStyle,
     val chapterPosition: Int,
     val indentCharacters: Int = 0,
@@ -545,7 +545,8 @@ internal class ReaderPaginationSession(
             y = config.paddingTopPx
             columnIndex = 0
             columnElementStart = 0
-            columnRows = mutableListOf()
+            // Reuse the row list; rows were consumed by justifyColumnBottom above.
+            columnRows.clear()
         }
 
     private fun advanceColumn() {
@@ -554,7 +555,7 @@ internal class ReaderPaginationSession(
             justifyColumnBottom()
             columnIndex++
             columnElementStart = elements.size
-            columnRows = mutableListOf()
+            columnRows.clear()
             y = config.paddingTopPx
         } else finishPage()
     }
@@ -571,11 +572,14 @@ internal class ReaderPaginationSession(
         val baselineOffset = paragraph.baselineOffsetPx ?: config.baselineOffsetPx
         val ideographWidth = paragraph.clusterWidthsPx.firstOrNull { it > 0f }
             ?: paragraph.style.fontSizePx
+        // The shared breaker expects advances including spacing; its width limit
+        // compensates for the final, undrawn trailing gap (also used by legacy ZhLayout).
+        val breakerWidthsPx = FloatArray(paragraph.clusterWidthsPx.size) { index ->
+            paragraph.clusterWidthsPx[index] + letterSpacing
+        }
         val breaker = ChineseLineBreaker(
             clusters = paragraph.clusters,
-            // The shared breaker expects advances including spacing; its width limit
-            // compensates for the final, undrawn trailing gap (also used by legacy ZhLayout).
-            widthsPx = paragraph.clusterWidthsPx.map { it + letterSpacing },
+            widthsPx = breakerWidthsPx,
             indentCharacters = 0,
             widthPx = config.contentWidthPx.toInt(),
             ideographWidthPx = ideographWidth + letterSpacing,
@@ -588,7 +592,7 @@ internal class ReaderPaginationSession(
             if (y + lineHeight > config.contentBottomPx && columnHasContent()) advanceColumn()
             val from = starts[lineIndex]
             val until = starts[lineIndex + 1]
-            val widths = paragraph.clusterWidthsPx.subList(from, until)
+            val widths = paragraph.clusterWidthsPx.copyOfRange(from, until)
             val naturalWidth = widths.sum() + letterSpacing * (widths.size - 1).coerceAtLeast(0)
             val indent = if (lineIndex == 0) indentWidth else 0f
             val available = (config.contentWidthPx - indent).coerceAtLeast(0f)
@@ -779,11 +783,12 @@ internal class ReaderPaginationSession(
             } else 0f
         }
 
+        val breakerWidthsPx = FloatArray(paragraph.items.size) { index ->
+            paragraph.items[index].widthPx + letterSpacing + matchSpacingPx[index]
+        }
         val breaker = ChineseLineBreaker(
             clusters = clusters,
-            widthsPx = paragraph.items.mapIndexed { index, item ->
-                item.widthPx + letterSpacing + matchSpacingPx[index]
-            },
+            widthsPx = breakerWidthsPx,
             indentCharacters = 0,
             widthPx = (config.contentWidthPx - paragraph.restLineIndentWidthPx)
                 .coerceAtLeast(0f).toInt(),
@@ -1200,6 +1205,8 @@ internal class ReaderPaginationSession(
     /** 页成型即沉淀成 [ReaderPage] 并流出；非章末页在下一张页成型时流出（延迟一页）。 */
     private fun emitPage(pageIndex: Int, isLastPage: Boolean) {
         val page = buildPage(pageIndex, isLastPage)
+        // Text already copied into the page; release the builder buffer.
+        pageTexts[pageIndex].apply { setLength(0); trimToSize() }
         resultPages += page
         onPage?.invoke(page)
     }

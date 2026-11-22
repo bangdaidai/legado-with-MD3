@@ -161,6 +161,13 @@ fun ReadBookRouteScreen(
     onOpenTocRulePreview: (bookUrl: String, tocRegex: String?) -> Unit = { _, _ -> },
     onOpenReplaceRule: (bookUrl: String?, editor: ReplaceEditRoute?) -> Unit,
     onOpenVoiceCasting: (bookUrl: String) -> Unit = {},
+    onOpenAiChat: (
+        bookUrl: String?,
+        bookName: String?,
+        bookAuthor: String?,
+        chapterIndex: Int?,
+        chapterTitle: String?,
+    ) -> Unit = { _, _, _, _, _ -> },
     onOpenReadAloudSubPage: (ReadAloudSubPage) -> Unit = {},
     onOpenTtsEnginesAndVoices: () -> Unit = {},
     onOpenTtsCache: () -> Unit = {},
@@ -401,6 +408,15 @@ fun ReadBookRouteScreen(
                             }
                             is ReadBookEffect.OpenReadAloudConfig -> {
                                 onOpenReadAloudConfig(effect.bookUrl)
+                            }
+                            is ReadBookEffect.OpenAiChat -> {
+                                onOpenAiChat(
+                                    effect.bookUrl,
+                                    effect.bookName,
+                                    effect.bookAuthor,
+                                    effect.chapterIndex,
+                                    effect.chapterTitle,
+                                )
                             }
                             is ReadBookEffect.OpenReadAloudSubPage -> {
                                 onOpenReadAloudSubPage(effect.page)
@@ -916,6 +932,7 @@ fun ReadBookRouteScreen(
                                             onEdit = { viewModel.onIntent(ReadBookIntent.OpenSourceEdit) },
                                             onDisable = { viewModel.onIntent(ReadBookIntent.DisableSource) },
                                         ),
+                                        chapterPayable = state.chapterPayable,
                                     )
                                 }
 

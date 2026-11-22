@@ -167,6 +167,20 @@ class ReadAiDelegate(
         openChapterInsight(AiChapterInsightMode.RECAP)
     }
 
+    fun openAiChat(emitEffect: (ReadBookEffect) -> Unit) {
+        val book = ReadBook.book
+        host.closeReadMenu()
+        emitEffect(
+            ReadBookEffect.OpenAiChat(
+                bookUrl = book?.bookUrl,
+                bookName = book?.name,
+                bookAuthor = book?.author,
+                chapterIndex = ReadBook.durChapterIndex.takeIf { book != null },
+                chapterTitle = host.chapterName,
+            )
+        )
+    }
+
     fun openChapterSummary() {
         openChapterInsight(AiChapterInsightMode.SUMMARY)
     }
