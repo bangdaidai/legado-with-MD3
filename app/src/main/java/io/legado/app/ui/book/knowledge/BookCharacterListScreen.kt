@@ -53,7 +53,7 @@ import io.legado.app.ui.ai.AiModelSwitchSheet
 import io.legado.app.ui.ai.AiReasoningModeButton
 import io.legado.app.ui.ai.AiTaskResultSheet
 import io.legado.app.ui.ai.chat.AiThinkingStepsCard
-import io.legado.app.ui.about.MarkdownSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.MarkdownSheet
 import io.legado.app.ui.ai.chat.ReasoningCard
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding

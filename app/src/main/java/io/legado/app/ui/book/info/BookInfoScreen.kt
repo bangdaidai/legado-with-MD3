@@ -141,6 +141,7 @@ import io.legado.app.ui.book.search.ScopeSelectSheet
 import io.legado.app.ui.main.homepage.modules.BannerModule
 import androidx.compose.material.icons.filled.Search
 import io.legado.app.ui.theme.AppThemeMode
+import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.ComposeEngine
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration

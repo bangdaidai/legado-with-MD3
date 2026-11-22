@@ -52,3 +52,36 @@ class AddToBookshelfUseCase(
         return b
     }
 }
+
+sealed interface AddToBookshelfResult {
+    /** 已直接加入书架。 */
+    data object Added : AddToBookshelfResult
+
+    /** 发现疑似同一作品，需要用户先选择共存还是迁移。 */
+    data class Conflict(val conflict: BookshelfConflict) : AddToBookshelfResult
+}
+
+class AddToBookshelfUseCase(
+    private val bookRepository: BookRepository,
+    private val findBookshelfConflictUseCase: FindBookshelfConflictUseCase,
+) {
+
+    suspend fun execute(book: SearchBook): AddToBookshelfResult {
+        val b = book.toBook()
+        b.removeType(BookType.notShelf)
+        val conflict = findBookshelfConflictUseCase.execute(b)
+        if (conflict != null) {
+            return AddToBookshelfResult.Conflict(conflict)
+        }
+        if (b.order == 0) {
+            b.order = bookRepository.getMinOrder() - 1
+        }
+        bookRepository.insert(b)
+        if (b.isVideo) {
+            // 视频书加入书架后先把详情/目录补齐，播放页打开时就不必再等
+            VideoBookPreloader.preload(b.bookUrl)
+        }
+        return AddToBookshelfResult.Added
+    }
+}
+

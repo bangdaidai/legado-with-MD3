@@ -736,7 +736,7 @@ private fun HighlightRule.toProcessStyle(): TextProcessStyle = TextProcessStyle(
 )
 
 /** 自定义模式的预设颜色（色板入口之外的自定义色用取色器）。 */
-private val MarkingPresetColors = listOf(
+internal val MarkingPresetColors = listOf(
     0xFFFF5252.toInt(),
     0xFFFF9800.toInt(),
     0xFFFFEB3B.toInt(),

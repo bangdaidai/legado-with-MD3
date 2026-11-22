@@ -10,9 +10,35 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.ShelfBookSummary
 import io.legado.app.ui.main.bookshelf.BookShelfItem
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+
+internal const val SHELF_INVALIDATE_DEBOUNCE_MS = 200L
+
+/**
+ * 首个信号立即放行（首查不延迟），后续信号合并到 [debounceMillis] 窗口内。
+ * 配合失效信号流（invalidationTrackerFlow）实现「查询前防抖」：debounce 在
+ * 查询执行之前，批量写入期间不再产生中间查询结果与分配。
+ */
+@OptIn(FlowPreview::class)
+internal fun <T> Flow<T>.debounceSkippingFirst(debounceMillis: Long): Flow<T> = flow {
+    var first = true
+    emitAll(
+        this@debounceSkippingFirst.debounce {
+            if (first) {
+                first = false
+                0L
+            } else {
+                debounceMillis
+            }
+        }
+    )
+}
 
 class BookRepository(
     private val bookDao: BookDao,
@@ -236,13 +262,42 @@ class BookRepository(
         }
     }
 
-    suspend fun replaceChaptersAndUpdateBook(book: Book, chapters: List<BookChapter>) {
+    suspend fun replaceChaptersAndUpdateBook(
+        book: Book,
+        chapters: List<BookChapter>,
+        oldBookUrl: String = book.bookUrl,
+    ) {
         withContext(Dispatchers.IO) {
             appDb.runInTransaction {
+                // 目录重建会整表重插，先把已统计好的章节字数按 url 保留下来，
+                // 否则每次重载目录都会把 EPUB/MOBI 的章节字数清空。
+                val oldWordCounts = bookChapterDao.getChapterWordCounts(oldBookUrl)
+                    .associate { it.url to it.wordCount }
+                if (oldBookUrl != book.bookUrl) {
+                    bookChapterDao.delByBook(oldBookUrl)
+                }
                 bookChapterDao.delByBook(book.bookUrl)
+                chapters.forEach { ch ->
+                    if (ch.wordCount.isNullOrEmpty()) {
+                        oldWordCounts[ch.url]?.let { ch.wordCount = it }
+                    }
+                }
                 bookChapterDao.insert(*chapters.toTypedArray())
                 bookDao.update(book)
             }
+        }
+    }
+
+
+    suspend fun upVideoPlayProgress(
+        bookUrl: String,
+        index: Int,
+        position: Int,
+        chapterTitle: String?,
+        time: Long,
+    ) {
+        withContext(Dispatchers.IO) {
+            bookDao.upVideoPlayProgress(bookUrl, index, position, chapterTitle, time)
         }
     }
 
