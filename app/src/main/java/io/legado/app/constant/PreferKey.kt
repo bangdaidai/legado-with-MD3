@@ -576,6 +576,29 @@ object PreferKey {
     const val eyeProtectionSchedule = "eyeProtectionSchedule"
     const val eyeProtectionStartTime = "eyeProtectionStartTime"
     const val eyeProtectionEndTime = "eyeProtectionEndTime"
+
+    const val mangaExportFormat = "mangaExportFormat"
+    const val videoAutoPlay = "videoAutoPlay"
+    const val videoStartFull = "videoStartFull"
+    const val videoLongPressSpeed = "videoLongPressSpeed"
+    const val videoPlaySpeed = "videoPlaySpeed"
+    const val videoDanmakuShow = "videoDanmakuShow"
+    const val videoFloatingEnabled = "videoFloatingEnabled"
+    const val updateEndpoint = "updateEndpoint"
+    const val mochiTopBarLiquidGlass = "mochiTopBarLiquidGlass"
+    const val mochiScrollEdgeBlurEnabled = "mochiScrollEdgeBlurEnabled"
+    const val miuixTopBarLiquidGlass = "miuixTopBarLiquidGlass"
+    const val useHyperOs4Components = "useHyperOs4Components"
+    const val readAloudChapterTitle = "readAloudChapterTitle"
+    const val usePagerTopBar = "usePagerTopBar"
+    const val bookshelfGridFixedColumns = "bookshelfGridFixedColumns"
+    const val bookshelfGridFixedCoverWidth = "bookshelfGridFixedCoverWidth"
+    const val navigationAnimationStyle = "navigationAnimationStyle"
+    const val textAnimationLevel = "textAnimationLevel"
+    const val paragraphBubblePackage = "paragraphBubblePackage"
+    const val forceSoftwareParagraphBubble = "forceSoftwareParagraphBubble"
+    const val paragraphCommentHeightPercent = "paragraphCommentHeightPercent"
+    const val customTagColors = "customTagColors"
 }
 
 object ReadMenuBlurMode {
@@ -601,27 +624,5 @@ object CoverRatio {
     const val Circle = 1
     const val Book = 2
     const val Unrestricted = 3
-    const val mangaExportFormat = "mangaExportFormat"
-    const val videoAutoPlay = "videoAutoPlay"
-    const val videoStartFull = "videoStartFull"
-    const val videoLongPressSpeed = "videoLongPressSpeed"
-    const val videoPlaySpeed = "videoPlaySpeed"
-    const val videoDanmakuShow = "videoDanmakuShow"
-    const val videoFloatingEnabled = "videoFloatingEnabled"
-    const val updateEndpoint = "updateEndpoint"
-    const val mochiTopBarLiquidGlass = "mochiTopBarLiquidGlass"
-    const val mochiScrollEdgeBlurEnabled = "mochiScrollEdgeBlurEnabled"
-    const val miuixTopBarLiquidGlass = "miuixTopBarLiquidGlass"
-    const val useHyperOs4Components = "useHyperOs4Components"
-    const val readAloudChapterTitle = "readAloudChapterTitle"
-    const val usePagerTopBar = "usePagerTopBar"
-    const val bookshelfGridFixedColumns = "bookshelfGridFixedColumns"
-    const val bookshelfGridFixedCoverWidth = "bookshelfGridFixedCoverWidth"
-    const val navigationAnimationStyle = "navigationAnimationStyle"
-    const val textAnimationLevel = "textAnimationLevel"
-    const val paragraphBubblePackage = "paragraphBubblePackage"
-    const val forceSoftwareParagraphBubble = "forceSoftwareParagraphBubble"
-    const val paragraphCommentHeightPercent = "paragraphCommentHeightPercent"
-    const val customTagColors = "customTagColors"
 
 }

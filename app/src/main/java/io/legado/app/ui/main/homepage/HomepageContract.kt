@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.domain.model.BookShelfState
+import io.legado.app.domain.model.BookshelfConflict
 import io.legado.app.domain.model.HomepageModuleType
 import io.legado.app.domain.model.ModuleDef
 import kotlinx.collections.immutable.ImmutableList
@@ -20,7 +21,9 @@ data class HomepageUiState(
     val modules: ImmutableList<HomepageModuleUi> = persistentListOf(),
     val isManageMode: Boolean = false,
     val isRefreshing: Boolean = false,
-    val manageState: HomepageManageUiState = HomepageManageUiState()
+    val manageState: HomepageManageUiState = HomepageManageUiState(),
+    val bookshelfConflict: BookshelfConflict? = null,
+    val isResolvingBookshelfConflict: Boolean = false,
 )
 
 @Stable
@@ -40,8 +43,8 @@ data class HomepageManageActions(
     val onJoinModule: (String, String?, ModuleDef) -> Unit = { _, _, _ -> },
     val onAddCustomModule: (String, String?, ModuleDef) -> Unit = { _, _, _ -> },
     val onAddButtonGroupFromKinds: (String, String?, String, List<String>) -> Unit = { _, _, _, _ -> },
-    val onAddRankingFromKinds: (String, String?, String, String, List<String>, List<String?>) -> Unit =
-        { _, _, _, _, _, _ -> },
+    val onAddRankingFromKinds: (String, String?, String, String, List<String>) -> Unit =
+        { _, _, _, _, _ -> },
     val onGetExploreKinds: (String) -> List<Pair<String, String>> = { emptyList() },
     val onUpdateModule: (String, ModuleDef) -> Unit = { _, _ -> },
     val onDeleteModule: (String) -> Unit = {},
@@ -62,8 +65,6 @@ data class HomepageFeedActions(
     val onBookClick: (SearchBook, String?) -> Unit,
     val onKindUrlClick: (String, String, String) -> Unit,
     val onRefreshButtonGroup: (String) -> Unit,
-    /** 长按标题栏"更多"按钮, 直接打开该模块的编辑对话框 */
-    val onModuleHeaderLongClick: (String) -> Unit = {},
 )
 
 @Stable

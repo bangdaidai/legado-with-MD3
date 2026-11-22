@@ -390,6 +390,42 @@ fun ReadAloudSubPage.toMainRoute(): MainRoute = when (this) {
     ReadAloudSubPage.BgmPool -> MainRouteBgmPool
     ReadAloudSubPage.CapsuleStyle -> MainRouteCastCapsuleStyle
 }
+@Serializable
+data object MainRouteAuthorManagement : MainRoute
+
+@Serializable
+data class MainRouteAuthorDetail(
+    val name: String,
+) : MainRoute
+
+@Serializable
+data object MainRouteExcludedTag : MainRoute
+
+@Serializable
+data class MainRouteReadAloudConfig(val bookUrl: String? = null) : MainRoute
+
+@Serializable
+data object MainRouteShareCardManage : MainRoute
+
+@Serializable
+data class MainRouteSpeechStoryboard(
+    val bookUrl: String,
+) : MainRoute
+
+@Serializable
+data class MainRouteTagDetail(val tagId: Long) : MainRoute
+
+@Serializable
+data object MainRouteTagManagement : MainRoute
+
+@Serializable
+data object MainRouteAuthorManagement : MainRoute
+
+@Serializable
+data class MainRouteAuthorDetail(
+    val name: String,
+) : MainRoute
+
 
 object MainRouteConst {
     const val ROUTE_MAIN = "main"
@@ -446,4 +482,6 @@ object MainRouteConst {
     const val ROUTE_READ_RECORD_OVERVIEW = "read_record_overview"
     const val ROUTE_ABOUT = "about"
     const val ROUTE_TTS_CACHE = "tts_cache"
+    const val ROUTE_READING_MEMORY_DETAIL = "reading_memory/detail"
+    const val ROUTE_AUTHOR_DETAIL = "author/detail"
 }

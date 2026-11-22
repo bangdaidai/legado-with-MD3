@@ -1,6 +1,7 @@
 package io.legado.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.chrisbanes.haze.HazeInput

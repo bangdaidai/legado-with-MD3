@@ -1453,6 +1453,7 @@ private fun HomeDashboardSection.labelRes(): Int = when (this) {
     HomeDashboardSection.RecentBooks -> R.string.home_recent_books
     HomeDashboardSection.DailyGoal -> R.string.home_today_reading_goal
     HomeDashboardSection.WebDavBackup -> R.string.home_webdav_backup
+    HomeDashboardSection.BookNews -> R.string.home_book_news
 }
 
 private fun bookAccessibilityLabel(

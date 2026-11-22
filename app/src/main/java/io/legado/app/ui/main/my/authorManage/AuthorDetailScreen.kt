@@ -469,8 +469,8 @@ private fun BioEditDialog(
         show = true,
         onDismissRequest = onDismiss,
         title = stringResource(R.string.author_edit_bio),
-        // AI 生成放标题栏操作槽，跟其它 AI 入口一致；生成中把按钮换成进度圈
-        titleAction = {
+        // 上游 AppAlertDialog 没有 titleAction 槽：AI 生成入口放到内容区顶部
+        content = {
             if (generating) {
                 AppCircularProgressIndicator(
                     modifier = Modifier.size(24.dp),

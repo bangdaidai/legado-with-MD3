@@ -12,6 +12,10 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import io.legado.app.ui.theme.LocalAppUiConfiguration
+import io.legado.app.ui.theme.ThemeResolver
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.disabled
@@ -34,9 +38,14 @@ fun ToggleChip(
     selected: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    cornerRadius: Dp? = null,
+    compact: Boolean = false,
+    light: Boolean = false,
     enabled: Boolean = true,
     checkedContentDescription: String = "已选择",
-    uncheckedContentDescription: String = "未选择"
+    uncheckedContentDescription: String = "未选择",
+    textStyle: TextStyle? = null,
+    horizontalPadding: Dp? = null
 ) {
     when (composeEngine) {
         ComposeEngine.Oxygen -> {
@@ -54,11 +63,11 @@ fun ToggleChip(
             }
         }
         ComposeEngine.Miuix -> {
-            val contentColor = MiuixTheme.colorScheme.onSurface
-                .copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
+            val verticalPad = if (compact) 6.dp else 8.dp
+            val horizontalPad = horizontalPadding ?: if (compact) 8.dp else 12.dp
             NormalCard (
                 modifier = modifier
-                    .padding(vertical = 2.dp)
+                    .padding(vertical = if (compact) 0.dp else 2.dp)
                     .semantics {
                         toggleableState = if (selected) {
                             ToggleableState.On
@@ -72,30 +81,32 @@ fun ToggleChip(
                         }
                         if (!enabled) disabled()
                     },
-                cornerRadius = 12.dp,
+                cornerRadius = cornerRadius ?: 12.dp,
                 // 不给 onClick 就是不可点：BaseCard 不再挂 combinedClickable，禁用态也不会有水波纹
                 onClick = if (enabled) onToggle else null,
                 containerColor = if (selected) {
-                    MiuixTheme.colorScheme.secondaryContainer
+                    MiuixTheme.colorScheme.primaryContainer
+                } else if (light) {
+                    Color.Transparent
                 } else {
                     MiuixTheme.colorScheme.surfaceContainer
                 }
             ) {
                 Row(
                     modifier = Modifier
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = horizontalPad),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     AnimatedVisibility(
-                        visible = selected
+                        visible = selected && !compact
                     ) {
                         MiuixIcon(
                             imageVector = Icons.Default.Check,
                             contentDescription = checkedContentDescription,
                             modifier = Modifier
-                                .padding(end = 8.dp)
-                                .size(16.dp),
+                                .padding(end = if (compact) 4.dp else 8.dp)
+                                .size(if (compact) 14.dp else 16.dp),
                             tint = (if (selected) MiuixTheme.colorScheme.primary
                             else MiuixTheme.colorScheme.onSurface)
                                 .copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
@@ -104,12 +115,16 @@ fun ToggleChip(
 
                     MiuixText(
                         modifier = Modifier
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = verticalPad),
                         text = label,
-                        style = LegadoTheme.typography.labelMediumEmphasized,
+                        style = textStyle ?: LegadoTheme.typography.labelMediumEmphasized,
                         maxLines = 1,
                         softWrap = false,
-                        color = contentColor
+                        color = when {
+                            selected -> MiuixTheme.colorScheme.onPrimaryContainer
+                            light -> LegadoTheme.colorScheme.onSurfaceVariant
+                            else -> MiuixTheme.colorScheme.onSurface
+                        }.copy(alpha = if (enabled) 1f else DISABLED_ALPHA)
                     )
                 }
             }
