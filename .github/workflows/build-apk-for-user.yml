@@ -37,18 +37,23 @@ jobs:
         run: |
           echo "key=ui-forks-$(git submodule status | awk '{print $1$2}' | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v4
-        id: uiforks_cache
+      # restore 与 save 拆开（cache/save 显式执行，job 失败也能落库；
+      # cache@v4 的 save-always 输入已弃用且"does not work as intended"）
+      - uses: actions/cache/restore@v4
+        id: uiforks_restore
         with:
           path: build/ui-forks/maven
           key: ${{ steps.uiforks_key.outputs.key }}
-          # 编译错误收敛期间 job 会失败：失败也要保存产物，否则缓存永远 miss，
-          # Prepare 每次白跑 5 分钟
-          save-always: true
 
       - name: Prepare pinned UI forks
-        if: steps.uiforks_cache.outputs.cache-hit != 'true'
+        if: steps.uiforks_restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/prepare-ui-forks
+
+      - uses: actions/cache/save@v4
+        if: steps.uiforks_restore.outputs.cache-hit != 'true'
+        with:
+          path: build/ui-forks/maven
+          key: ${{ steps.uiforks_key.outputs.key }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
