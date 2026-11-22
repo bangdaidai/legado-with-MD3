@@ -1030,6 +1030,10 @@ FROM books
     )
     fun upWordCount(bookUrl: String, wordCount: String): Int
 
+    /** [flowLocal] 的一次性查询（失效信号防抖后由 mapLatest 调用）。 */
+    @Query("SELECT * FROM books WHERE type & ${BookType.local} > 0")
+    suspend fun getLocal(): List<Book>
+
     @Delete
     fun delete(vararg book: Book)
 
