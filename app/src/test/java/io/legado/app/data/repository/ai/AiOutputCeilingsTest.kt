@@ -60,6 +60,17 @@ class AiOutputCeilingsTest {
     }
 
     @Test
+    fun aLimitWrittenWithoutAnyKeywordIsStillReadFromTheBareNumber() {
+        // "limit is 8192 tokens" 没进关键词表，兜底得能从裸数字里把上限读出来
+        val rejection = AiHttpException(400, null, "max_tokens exceeds limit is 8192 tokens")
+
+        assertEquals(
+            8_192,
+            AiOutputCeilings.lowerAfterRejection(22_000, AiOutputCeilings.rejectionText(rejection))
+        )
+    }
+
+    @Test
     fun doesNotRaiseTheBudgetWhenTheStatedBoundIsLargerThanOurs() {
         // 撞的不是预算（比如思考预算超限），降档重发只会白白发一次请求
         val rejection = AiHttpException(
