@@ -5,6 +5,9 @@ import io.legado.app.data.dao.ReplaceRuleDao
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.utils.splitNotBlank
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -23,8 +26,19 @@ class ReplaceRuleRepository(
      *
      * 只分组名变化的操作不调用：`group` 不参与匹配和作用范围判断。
      */
+    private val _ruleChanges = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val ruleChanges: SharedFlow<Unit> = _ruleChanges.asSharedFlow()
+
+    private fun notifyRulesChanged() {
+        ContentProcessor.upReplaceRules()
+        _ruleChanges.tryEmit(Unit)
+    }
+
     private fun invalidateProcessors() {
-        runCatching { ContentProcessor.upReplaceRules() }
+        notifyRulesChanged()
     }
 
 

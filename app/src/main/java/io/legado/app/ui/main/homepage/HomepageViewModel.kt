@@ -2,6 +2,10 @@ package io.legado.app.ui.main.homepage
 
 import android.app.Application
 import androidx.lifecycle.viewModelScope
+import io.legado.app.ui.book.changesource.ChangeSourceMigrationOptions
+import io.legado.app.domain.model.ConflictBookSummary
+import io.legado.app.ui.book.conflict.BookshelfConflictController
+import io.legado.app.domain.usecase.ResolveBookshelfConflictUseCase
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.entities.BookSource
@@ -57,6 +61,7 @@ class HomepageViewModel(
     private val saveSearchBooksUseCase: SaveSearchBooksUseCase,
     private val resolveBookShelfStateUseCase: ResolveBookShelfStateUseCase,
     private val addToBookshelfUseCase: AddToBookshelfUseCase,
+    private val resolveBookshelfConflictUseCase: ResolveBookshelfConflictUseCase,
 ) : BaseViewModel(application) {
 
     private val _bookshelf = MutableStateFlow<Set<BookShelfKey>>(emptySet())
@@ -96,6 +101,49 @@ class HomepageViewModel(
 
     private val _effects = MutableSharedFlow<HomepageEffect>(extraBufferCapacity = 8)
     val effects = _effects.asSharedFlow()
+
+    // 冲突状态通过 uiFlagsFlow 汇入 uiState，与其它 ViewModel 的写法保持一致。
+    private val conflictController = BookshelfConflictController(
+        scope = viewModelScope,
+        addToBookshelfUseCase = addToBookshelfUseCase,
+        resolveBookshelfConflictUseCase = resolveBookshelfConflictUseCase,
+    )
+
+    fun dismissBookshelfConflict() {
+        conflictController.dismiss()
+    }
+
+    fun openBookshelfConflictBook(summary: ConflictBookSummary) {
+        // 先收起 Sheet 再导航，否则返回本页时 Sheet 会重新显示并吃掉一次返回键。
+        conflictController.dismiss()
+        viewModelScope.launch {
+            _effects.emit(
+                HomepageEffect.NavigateToBookInfo(
+                    name = summary.name,
+                    author = summary.author,
+                    bookUrl = summary.bookUrl,
+                    origin = summary.origin,
+                    coverPath = summary.displayCover,
+                    sharedCoverKey = null,
+                )
+            )
+        }
+    }
+
+    fun coexistWithBookshelfConflict(
+        existingBookUrl: String,
+        options: ChangeSourceMigrationOptions,
+    ) {
+        conflictController.coexist(existingBookUrl, options)
+    }
+
+    fun migrateBookshelfConflict(
+        existingBookUrl: String,
+        options: ChangeSourceMigrationOptions,
+    ) {
+        conflictController.migrate(existingBookUrl, options)
+    }
+
 
     private val loadJobs = ConcurrentHashMap<String, Job>()
     private val exploreSourcePartsFlow = bookSourceRepository.flowExploreSourceParts()

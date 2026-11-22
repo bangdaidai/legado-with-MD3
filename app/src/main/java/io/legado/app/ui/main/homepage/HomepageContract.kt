@@ -45,6 +45,8 @@ data class HomepageManageActions(
     val onAddButtonGroupFromKinds: (String, String?, String, List<String>) -> Unit = { _, _, _, _ -> },
     val onAddRankingFromKinds: (String, String?, String, String, List<String>) -> Unit =
         { _, _, _, _, _ -> },
+    /** 长按标题栏"更多"按钮, 直接打开该模块的编辑对话框 */
+    val onModuleHeaderLongClick: (String) -> Unit = {},
     val onGetExploreKinds: (String) -> List<Pair<String, String>> = { emptyList() },
     val onUpdateModule: (String, ModuleDef) -> Unit = { _, _ -> },
     val onDeleteModule: (String) -> Unit = {},
@@ -65,6 +67,8 @@ data class HomepageFeedActions(
     val onBookClick: (SearchBook, String?) -> Unit,
     val onKindUrlClick: (String, String, String) -> Unit,
     val onRefreshButtonGroup: (String) -> Unit,
+    /** 长按标题栏"更多"按钮, 直接打开该模块的编辑对话框 */
+    val onModuleHeaderLongClick: (String) -> Unit = {},
 )
 
 @Stable

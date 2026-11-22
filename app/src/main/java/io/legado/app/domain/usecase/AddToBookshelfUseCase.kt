@@ -9,6 +9,7 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.model.BookshelfConflict
 import io.legado.app.domain.usecase.ChangeBookSourceUseCase
 import io.legado.app.help.book.TagManager
+import io.legado.app.help.book.formTypeMask
 import io.legado.app.help.book.VideoBookPreloader
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.removeType
