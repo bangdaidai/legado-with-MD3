@@ -482,6 +482,14 @@ class ReadAloudDelegate(
      * 胶囊：开着不换音色，关着又停在配音页选的旁白音上回不去默认引擎。
      * 重排当前章让胶囊即时出现/消失，重启前记住页内位置，等旧服务真的 Idle 再重放，避免叠音。
      */
+    /** 朗读章节标题开关：只决定章首标题 cue 是否进朗读队列，改后下次章节准备生效。 */
+    fun setReadChapterTitle(value: Boolean) {
+        scope.launch {
+            readAloudSettingsRepository.update { it.copy(readChapterTitle = value) }
+            host.updateState { it.copy(readChapterTitle = value) }
+        }
+    }
+
     fun setMultiRoleCast(value: Boolean) {
         scope.launch {
             readAloudSettingsRepository.update { it.copy(multiRoleCast = value) }
@@ -569,3 +577,9 @@ class ReadAloudDelegate(
         }
     }
 }
+
+/**
+ * 上游的朗读会话进度快照。fork 的朗读管线尚未迁移到 bookSession 会话体系，
+ * 返回 null 保持调用方（书架返程预排位/胶囊进度）的既有行为，待后续切片吸收。
+ */
+internal fun currentReadAloudProgress(): io.legado.app.domain.model.readaloud.ReadAloudProgress? = null

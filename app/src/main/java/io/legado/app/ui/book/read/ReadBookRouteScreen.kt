@@ -771,6 +771,9 @@ fun ReadBookRouteScreen(
                 noAnimationScrollPage = readPreferences.noAnimScrollPage,
                 externalPageTurns = controller.composePageTurns,
                 externalSelectionCancels = controller.composeSelectionCancels,
+                externalSelectionExtensions = controller.composeSelectionExtensions,
+                externalSelections = controller.composeSelections,
+                onTurnToSelectionPage = { controller.completeComposePageTurn(PageDirection.NEXT, it) },
                 onVisibleBodyTextPositionProvider = controller::setComposeVisibleBodyTextPositionProvider,
                 )
                 ReaderPerfTrace.marker("compose.canvas.end")

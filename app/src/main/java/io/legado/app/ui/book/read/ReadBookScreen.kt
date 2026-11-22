@@ -275,6 +275,9 @@ fun ReadBookScreen(
                 is BookmarkTargetVerdict.SourceChanged ->
                     R.string.bookmark_target_source_changed
 
+                BookmarkTargetVerdict.ContentMismatch ->
+                    R.string.bookmark_target_content_mismatch
+
                 BookmarkTargetVerdict.TitleMismatch ->
                     R.string.bookmark_target_title_mismatch
 
@@ -723,6 +726,10 @@ private fun ReadBookSheetContent(
 
                 is ReadBookSheet.Download -> {
                     DownloadSheet(
+                        preview = state.cacheRangePreview,
+                        onScanRange = { start, end ->
+                            onIntent(ReadBookIntent.ScanCacheRange(start, end))
+                        },
                         onDismissRequest = dismissSheet,
                         onDownload = { start, end ->
                             onIntent(ReadBookIntent.DismissSheet)

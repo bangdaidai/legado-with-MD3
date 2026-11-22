@@ -1,6 +1,8 @@
 package io.legado.app.base
 
 import android.app.ForegroundServiceStartNotAllowedException
+import android.app.NotificationManager
+import android.app.Notification
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder

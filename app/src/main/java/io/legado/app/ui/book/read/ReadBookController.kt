@@ -357,6 +357,14 @@ class ReadBookController(
     private val _composeSelectionCancels = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     val composeSelectionCancels = _composeSelectionCancels.asSharedFlow()
 
+    /** 宿主要求把当前选区延伸到下一页（跨页长文选区）。 */
+    private val _composeSelectionExtensions = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 1)
+    val composeSelectionExtensions = _composeSelectionExtensions.asSharedFlow()
+
+    /** 宿主要求画布建立选区（全文搜索命中），对照旧 View 的"搜索结果即真选区"。 */
+    private val _composeSelections = MutableSharedFlow<ReaderSelection>(extraBufferCapacity = 4)
+    val composeSelections = _composeSelections.asSharedFlow()
+
     /** 触边界提示文案（由阅读页 SnackbarHost 呈现）。 */
     private val _composeBoundaryMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val composeBoundaryMessages = _composeBoundaryMessages.asSharedFlow()
@@ -2898,7 +2906,11 @@ class ReadBookController(
      * 返回翻页后发布的页窗口（同步）；null 表示翻页被拒绝（边界/无内容）。
      * 滚动模式依赖这个同步返回在跨页帧内完成窗口替换与偏移折算，不走 StateFlow 往返。
      */
-    fun completeComposePageTurn(direction: PageDirection): ReaderPageWindow? {
+    fun completeComposePageTurn(
+        direction: PageDirection,
+        // 上游：翻页后把选区跟随定位到目标页（全文搜索命中翻页场景）。fork 暂不消费。
+        selectionTarget: ReaderPageId? = null,
+    ): ReaderPageWindow? {
         if (directReaderPages.isEmpty()) return null
         val currentIndex = directReaderPageIndex ?: 0
         val delta = when (direction) {
