@@ -860,6 +860,7 @@ FROM books
             bookUrl,
             type & ${BookType.local} > 0 AS isLocal,
             type & ${BookType.audio} > 0 AS isAudio,
+            type & ${BookType.video} > 0 AS isVideo,
             durChapterIndex,
             totalChapterNum - 1 AS lastChapterIndex
         FROM books

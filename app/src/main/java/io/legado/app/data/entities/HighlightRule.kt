@@ -126,20 +126,8 @@ data class HighlightRule(
     /** 边框圆角（dp）：0 = 直角。色块填充跟随同一个圆角，色块与描边才对得上。 */
     @ColumnInfo(defaultValue = "4")
     var borderRadius: Float = 4f,
-    /**
-     * 深色模式（夜间）颜色：为 null 表示跟随同名的浅色那一栏。
-     *
-     * 阅读背景本来就是白天/夜间/墨水屏三套（`bgStr` / `bgStrNight` / `bgStrEInk`），
-     * 高亮规则按同一口径给深浅两套颜色：白天与夜间各自取一套，墨水屏是白底、用浅色那一套。
-     * 解析口径统一在 [colorsFor] 里，各渲染点不要再各写一遍 `?: textColor`。
-     */
-    var textColorNight: Int? = null,
-    /** 深色模式背景色：null = 跟随 [bgColor]。 */
-    var bgColorNight: Int? = null,
-    /** 深色模式边框颜色：null = 跟随 [borderColor]。 */
+    /** 深色模式边框颜色：null = 跟随 [borderColor]（本 fork 的编辑页不设夜间边框，列保留为空即回落日间值）。 */
     var borderColorNight: Int? = null,
-    /** 深色模式下划线/删除线颜色：null = 跟随 [underlineColor]。 */
-    var underlineColorNight: Int? = null,
 ) {
 
     /**
