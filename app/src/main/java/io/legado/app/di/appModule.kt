@@ -491,7 +491,8 @@ val appModule = module {
     singleOf(::CoverAlbumUseCase)
     singleOf(::DeleteBooksUseCase)
     singleOf(::GetReadingProgressUseCase)
-    single { HomeDashboardUseCase(get(), Clock.System) }
+    // fork 版 HomeDashboardUseCase 多一个 bookUpdateRepository（今日书讯的目录增长记账）
+    single { HomeDashboardUseCase(get(), get(), Clock.System) }
     singleOf(::RemoveBookGroupAssignmentUseCase)
     singleOf(::UpdateBooksGroupUseCase)
     singleOf(::UploadReadingProgressUseCase)

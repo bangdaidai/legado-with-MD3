@@ -1,6 +1,7 @@
 package io.legado.app.data.repository
 
 import io.legado.app.data.appDb
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.data.dao.SearchContentHistoryDao
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -252,8 +253,13 @@ class SearchContentRepository(
                 contentProcessor = contentProcessor,
                 replaceEnabled = false,
                 regexReplace = false,
-                chineseConverterType = chineseConverterType,
-                defaultReplaceEnabled = false,
+                settings = ContentProcessor.SettingsSnapshot(
+                    chineseConverterType = chineseConverterType,
+                    adaptSpecialStyle = false,
+                    replaceEnableDefault = false,
+                ),
+                titleMode = ReadBookConfig.titleMode,
+                paragraphIndent = "",
             )
             if (results.isNotEmpty()) {
                 return@withContext results.first()
@@ -285,8 +291,13 @@ class SearchContentRepository(
                 contentProcessor = contentProcessor,
                 replaceEnabled = false,
                 regexReplace = false,
-                chineseConverterType = chineseConverterType,
-                defaultReplaceEnabled = false,
+                settings = ContentProcessor.SettingsSnapshot(
+                    chineseConverterType = chineseConverterType,
+                    adaptSpecialStyle = false,
+                    replaceEnableDefault = false,
+                ),
+                titleMode = ReadBookConfig.titleMode,
+                paragraphIndent = "",
             )
             if (results.isNotEmpty()) {
                 return@withContext results.first()
