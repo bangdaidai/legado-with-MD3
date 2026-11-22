@@ -42,6 +42,9 @@ jobs:
         with:
           path: build/ui-forks/maven
           key: ${{ steps.uiforks_key.outputs.key }}
+        # 编译错误收敛期间 job 会失败：失败也要保存产物，否则缓存永远 miss，
+        # Prepare 每次白跑 5 分钟
+        save-always: true
 
       - name: Prepare pinned UI forks
         if: steps.uiforks_cache.outputs.cache-hit != 'true'
