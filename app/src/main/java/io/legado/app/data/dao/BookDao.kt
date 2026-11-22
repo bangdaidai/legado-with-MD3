@@ -1071,6 +1071,17 @@ FROM books
     @Query("UPDATE books SET syncTime = :syncTime WHERE bookUrl = :bookUrl AND syncTime < :syncTime")
     fun upSyncTime(bookUrl: String, syncTime: Long)
 
+    @Query("""UPDATE books SET lastCheckCount = 0, durChapterIndex = :index, durChapterPos = :pos,
+        durChapterTitle = :chapterTitle, durChapterTime = :time
+        WHERE bookUrl = :bookUrl""")
+    suspend fun upVideoPlayProgress(
+        bookUrl: String,
+        index: Int,
+        pos: Int,
+        chapterTitle: String?,
+        time: Long,
+    )
+
     @Query("update books set `group` = :newGroupId where `group` = :oldGroupId")
     fun upGroup(oldGroupId: Long, newGroupId: Long)
 
