@@ -3,6 +3,7 @@ package io.legado.app.ui.book.read
 import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import io.legado.app.domain.model.readaloud.ReadAloudProgress
 import io.legado.app.constant.ReadMenuBlurMode
 import io.legado.app.constant.ReadMenuBlurStyle
 import io.legado.app.data.entities.Book
@@ -149,6 +150,9 @@ data class ReadSheetConfigUiState(
     val titleColorNight: Int = 0,
     val textColorDay: Int = 0,
     val textColorNight: Int = 0,
+    /** 预览底色：白天/夜间那两套阅读背景（背景是图时为 0，预览回落到主题表面）。 */
+    val bgColorDay: Int = 0,
+    val bgColorNight: Int = 0,
     val textShadow: Boolean = false,
     val textShadowColor: Int = 0,
     val shadowRadius: Float = 0f,
@@ -206,6 +210,22 @@ data class ReadSheetConfigUiState(
     val textFullJustify: Boolean = true,
     val textBottomJustify: Boolean = true,
     val configNames: ImmutableList<String> = persistentListOf(),
+)
+
+/**
+ * 离线缓存弹窗的范围预览。
+ *
+ * [pendingChapters] 只按「正文是否已存在」统计（与目录的已缓存判定一致），
+ * 严格的图片完整性判定留到派发时逐章进行，避免打开弹窗就扫全书的图片索引。
+ */
+@Stable
+data class CacheRangePreview(
+    val bookUrl: String,
+    val start: Int,
+    val end: Int,
+    val totalChapters: Int,
+    val cachedChapters: Int,
+    val pendingChapters: Int,
 )
 
 /** 书签/笔记跳转前校验未通过的目标，弹「仍跳转」确认框。 */
@@ -289,6 +309,8 @@ data class ReadBookUiState(
     val activeDialog: ReadBookDialog? = null,
     /** 书签/笔记跳转前校验不通过时的待确认目标（弹确认框）。 */
     val pendingBookmarkTarget: PendingBookmarkTarget? = null,
+    /** 离线缓存弹窗的范围预览，由输入防抖后回填。 */
+    val cacheRangePreview: CacheRangePreview? = null,
     // Menu state (for overflow menu)
     val isLocalTxt: Boolean = false,
     val isEpub: Boolean = false,
@@ -343,6 +365,8 @@ data class ReadBookUiState(
     val multiRoleCast: Boolean = false,
     /** 背景音乐分配开关（正文段首配乐胶囊 + 朗读时的独立配乐轨）。 */
     val bgmAssign: Boolean = false,
+    /** 每章开头是否朗读章节标题；与正文标题是否显示（`titleMode`）无关。 */
+    val readChapterTitle: Boolean = true,
     /** 背景音乐总音量（0f–1f），与曲目自身音量、段内音量相乘。 */
     val bgmVolume: Float = 1f,
     val defaultReadAloudInterface: String = ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC,
@@ -555,6 +579,7 @@ internal val ReadBookButtonIds = listOf(
     "multi_role_cast",
     "cast_table",
     "ai_cast",
+    "bubble_style",
 )
 
 internal val MoreActionIds = listOf(
@@ -564,7 +589,7 @@ internal val MoreActionIds = listOf(
     "text_processing", "reverse_content", "re_segment",
     "del_ruby", "del_h", "toc_rule", "charset", "image_style", "page_anim",
     "simulated_reading", "get_progress", "cover_progress", "highlight_rule", "read_style",
-    "bottom_button_config", "log",
+    "bubble_style", "bottom_button_config", "log",
 )
 
 @Immutable
@@ -974,7 +999,7 @@ sealed interface ReadBookIntent {
 
     // Media / TTS
     data class MediaButtonPressed(val play: Boolean) : ReadBookIntent
-    data class TtsProgress(val chapterStart: Int) : ReadBookIntent
+    data class TtsProgress(val progress: ReadAloudProgress) : ReadBookIntent
 
     // Dialog callback bridge
     data object ReadAloudAction : ReadBookIntent
@@ -1012,6 +1037,9 @@ sealed interface ReadBookIntent {
 
     /** 背景音乐分配开关：正文段首渲染配乐胶囊，朗读时按场景换 BGM。 */
     data class SetBgmAssign(val value: Boolean) : ReadBookIntent
+
+    /** 朗读章节标题开关：只影响朗读队列，不改正文渲染（正文标题仍由 `titleMode` 决定）。 */
+    data class SetReadChapterTitle(val value: Boolean) : ReadBookIntent
 
     /** 背景音乐总音量（0f–1f）：与曲目音量、段内音量相乘，朗读设置里那根滑杆。 */
     data class SetBgmVolume(val value: Float) : ReadBookIntent
@@ -1143,6 +1171,9 @@ sealed interface ReadBookIntent {
 
     // Download chapters
     data class DownloadChapters(val start: Int, val end: Int) : ReadBookIntent
+
+    // 预览离线缓存范围：弹窗输入防抖后触发，只回填计数
+    data class ScanCacheRange(val start: Int, val end: Int) : ReadBookIntent
 
     // Save chapter content (from chapter source change)
     data class SaveChapterContent(val content: String, val chapterIndex: Int) : ReadBookIntent
@@ -1298,8 +1329,8 @@ sealed interface ReadBookEffect {
     data class InvalidateReaderImage(val source: String) : ReadBookEffect
     data class InvalidateReaderImages(val sources: Set<String>) : ReadBookEffect
 
-    // Download chapters — Activity calls CacheBook.start()
-    data class DownloadChapters(val start: Int, val end: Int) : ReadBookEffect
+    // Download chapters — Activity calls CacheBook.start()；只带真正需要下载的章节（已剔除卷与已缓存）
+    data class DownloadChapters(val indices: List<Int>) : ReadBookEffect
 
     // Other route-level Activity operations
     data object SetOrientation : ReadBookEffect
@@ -1366,6 +1397,10 @@ sealed interface ReadBookSheet {
     data object HighlightRuleConfig : ReadBookSheet
     data object Marking : ReadBookSheet
     data object MoreConfig : ReadBookSheet
+
+    /** 段评气泡快速切换。 */
+    data object BubbleStyle : ReadBookSheet
+
     data object TextSelectMenuConfig : ReadBookSheet
     data object BgTextConfig : ReadBookSheet
     data object ClickActionConfig : ReadBookSheet
@@ -1397,6 +1432,8 @@ sealed interface ReadBookDialog {
     data object ConfirmSkipToChapter : ReadBookDialog
     data class ConfirmChapterPay(val chapterTitle: String) : ReadBookDialog
     data class ConfirmAddToBookshelf(val bookName: String) : ReadBookDialog
+    data class ConfirmOpenExternalUrl(val url: String) : ReadBookDialog
+    data object ConfirmRetranslate : ReadBookDialog
 }
 
 /**
@@ -2038,6 +2075,9 @@ sealed interface ConfigUpdate {
     }
 
     data class BookmarkBadgeSize(val value: Int) : ConfigUpdate {
+        override val actions = emptySet<ConfigUpdateAction>()
+    }
+    data class ParagraphCommentHeight(val percent: Int) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }
     data class SliderVibrator(val value: Boolean) : ConfigUpdate {

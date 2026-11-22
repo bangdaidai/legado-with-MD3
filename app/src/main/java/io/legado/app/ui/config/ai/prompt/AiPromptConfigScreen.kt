@@ -1,9 +1,10 @@
 package io.legado.app.ui.config.ai.prompt
 
+import io.legado.app.feature.settings.search.SearchableSetting
+import io.legado.app.feature.settings.search.SearchableSettingsList
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,7 +84,7 @@ fun AiPromptConfigScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
-        LazyColumn(
+        SearchableSettingsList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = adaptiveContentPadding(
                 top = paddingValues.calculateTopPadding(),
@@ -122,11 +123,13 @@ fun AiPromptConfigScreen(
             }
             item {
                 SplicedColumnGroup {
-                    ClickableSettingItem(
-                        title = stringResource(R.string.ai_prompt_restore_all),
-                        description = stringResource(R.string.ai_prompt_restore_all_desc),
-                        onClick = { onIntent(AiPromptConfigIntent.OpenRestoreAllDialog) }
-                    )
+                    SearchableSetting("prompt.ai_prompt_restore_all") {
+                        ClickableSettingItem(
+                            title = stringResource(R.string.ai_prompt_restore_all),
+                            description = stringResource(R.string.ai_prompt_restore_all_desc),
+                            onClick = { onIntent(AiPromptConfigIntent.OpenRestoreAllDialog) }
+                        )
+                    }
                 }
             }
         }

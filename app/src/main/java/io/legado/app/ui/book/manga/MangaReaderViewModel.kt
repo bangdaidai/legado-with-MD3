@@ -240,10 +240,22 @@ class MangaReaderViewModel(
             MangaReaderIntent.CloseReader -> closeReader()
             MangaReaderIntent.ToggleMenu -> setMenuVisible(!_uiState.value.menuVisible)
             MangaReaderIntent.HideMenu -> setMenuVisible(false)
-            MangaReaderIntent.Retry -> launchAction {
-                showLoading()
-                invalidateCurrentChapter()
-                executeSession(MangaSessionCommand.RetryChapter(readerSession.state.value.chapterIndex))
+            MangaReaderIntent.Retry -> {
+                val session = readerSession.state.value
+                if (session.openError != null) {
+                    initializationRequest?.let(::openSession)
+                } else {
+                    launchAction {
+                        showLoading()
+                        // Reauthorizing a local folder only needs to retry listing it.
+                        if ((session.currentChapter as? MangaChapterState.Failed)
+                                ?.canReselectBookDirectory != true
+                        ) {
+                            invalidateCurrentChapter()
+                        }
+                        executeSession(MangaSessionCommand.RetryChapter(session.chapterIndex))
+                    }
+                }
             }
             MangaReaderIntent.PreviousChapter -> openRelativeChapter(-1)
             MangaReaderIntent.NextChapter -> openRelativeChapter(1)
@@ -275,6 +287,10 @@ class MangaReaderViewModel(
             MangaReaderIntent.CloseSettings -> closeSettings()
             MangaReaderIntent.OpenSourceActions -> showSheet(MangaReaderSheet.SourceActions)
             MangaReaderIntent.OpenCacheActions -> showSheet(MangaReaderSheet.CacheActions)
+            // 点击区域从设置面板「全局」页进入：保留菜单与当前分类，关闭 sheet 后回到同一页
+            MangaReaderIntent.OpenClickActions -> _uiState.update {
+                it.copy(activeSheet = MangaReaderSheet.ClickActions)
+            }
             is MangaReaderIntent.CacheChapters -> cacheChapters(intent.selection)
             MangaReaderIntent.ToggleAutoRead -> _uiState.update {
                 it.copy(
@@ -283,8 +299,9 @@ class MangaReaderViewModel(
                     menuVisible = it.settingsCategory == MangaReaderSettingsCategory.AUTO_READ,
                 )
             }
+            // 只关闭 sheet：从设置面板内打开的 sheet 关闭后应回到原分类，而不是收起整个面板
             MangaReaderIntent.DismissSheet -> _uiState.update {
-                it.copy(activeSheet = null, changeSourceBook = null, settingsCategory = null)
+                it.copy(activeSheet = null, changeSourceBook = null)
             }
             is MangaReaderIntent.UpdateSetting -> updateSetting(intent.key, intent.value)
             is MangaReaderIntent.UpdateMenuPaletteStyle -> updateMangaPreference {
@@ -300,6 +317,13 @@ class MangaReaderViewModel(
                 intent.requestId,
                 MangaPageLoadState.Ready,
             )
+
+            is MangaReaderIntent.PageSourceLoaded -> _uiState.update { state ->
+                val pages = state.pages.map { page ->
+                    if (page is MangaReaderItemUi.Page) page.reduceSourceLoaded(intent.requestId) else page
+                }.toImmutableList()
+                if (pages == state.pages) state else state.copy(pages = pages)
+            }
 
             is MangaReaderIntent.PageLoadFailed -> updatePageLoadState(
                 intent.requestId,
@@ -342,6 +366,7 @@ class MangaReaderViewModel(
                 }
             }
 
+            is MangaReaderIntent.SaveTranslatedImage -> saveImage(intent.url)
             is MangaReaderIntent.ExecutePageAction -> executePageAction(intent.action)
             is MangaReaderIntent.MessageShown -> _uiState.update { state ->
                 state.copy(
@@ -358,6 +383,10 @@ class MangaReaderViewModel(
         // already owns the session, including a pending chapter result or open command.
         if (initializationRequest == intent) return
         initializationRequest = intent
+        openSession(intent)
+    }
+
+    private fun openSession(intent: MangaReaderIntent.Initialize) {
         showLoading()
         viewModelScope.launch {
             readerSession.execute(
@@ -443,12 +472,18 @@ class MangaReaderViewModel(
         if (book == null) {
             session.openError?.let {
                 showError(it, fallbackRes = R.string.manga_reader_init_failed)
+                _uiState.update { state ->
+                    state.copy(canReselectBookDirectory = session.canReselectBookDirectory)
+                }
             }
             return
         }
         val current = session.currentChapter
         if (current !is MangaChapterState.Ready) {
-            if (pendingExplicitChapterIndex == session.chapterIndex) {
+            if (current is MangaChapterState.Failed && current.canReselectBookDirectory) {
+                pendingExplicitChapterIndex = null
+                showError(current.message, canReselectBookDirectory = true)
+            } else if (pendingExplicitChapterIndex == session.chapterIndex) {
                 // 显式跳章失败后立即放开门闩：否则目标页一直不可见时，
                 // 之后对该章的目录/上一章点击会被 openChapter 静默吞掉。
                 if (current is MangaChapterState.Failed) pendingExplicitChapterIndex = null
@@ -497,6 +532,7 @@ class MangaReaderViewModel(
                         chapterSubject = chapter.chapterSubject,
                         loadState = existing?.loadState ?: MangaPageLoadState.Queued,
                         retryRevision = existing?.retryRevision ?: 0,
+                        sourceReady = existing?.sourceReady ?: false,
                     )
                 }
             }
@@ -718,6 +754,7 @@ class MangaReaderViewModel(
             it.copy(
                 isLoading = true,
                 errorMessage = null,
+                canReselectBookDirectory = false,
                 pages = persistentListOf(),
                 currentItemIndex = 0,
                 scrollRequest = null,
@@ -725,9 +762,13 @@ class MangaReaderViewModel(
         }
     }
 
-    fun showError(message: String) {
+    fun showError(message: String, canReselectBookDirectory: Boolean = false) {
         _uiState.update {
-            it.copy(isLoading = false, errorMessage = MangaReaderText.Dynamic(message))
+            it.copy(
+                isLoading = false,
+                errorMessage = MangaReaderText.Dynamic(message),
+                canReselectBookDirectory = canReselectBookDirectory,
+            )
         }
     }
 
@@ -769,7 +810,6 @@ class MangaReaderViewModel(
 
     override fun onCleared() {
         readerSession.close()
-        super.onCleared()
     }
 
     private fun executeSession(command: MangaSessionCommand) {
@@ -1384,6 +1424,7 @@ class MangaReaderViewModel(
                 pages = state.pages.mapIndexed { itemIndex, item ->
                     if (itemIndex == index) page.copy(
                         loadState = MangaPageLoadState.Queued,
+                        sourceReady = false,
                         retryRevision = page.retryRevision + 1,
                     ) else item
                 }.toImmutableList(),
@@ -1401,6 +1442,7 @@ class MangaReaderViewModel(
                     item.loadState is MangaPageLoadState.Failed
                 ) item.copy(
                     loadState = MangaPageLoadState.Queued,
+                    sourceReady = false,
                     retryRevision = item.retryRevision + 1
                 )
                 else item

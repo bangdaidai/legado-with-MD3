@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -34,21 +35,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
+import io.legado.app.ui.widget.components.coui.appVerticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TrackChanges
-import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.OutlinedTextField
@@ -76,10 +74,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -91,22 +87,22 @@ import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.HomeDashboardSection
-import io.legado.app.domain.model.HomepageLayoutMode
 import io.legado.app.domain.model.MAX_DAILY_READING_GOAL_MINUTES
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.ui.config.backupConfig.BackupOptionSheet
 import io.legado.app.ui.config.backupConfig.RestoreOptionSheet
+import io.legado.app.ui.main.LocalMainPageIndex
+import io.legado.app.ui.main.LocalMainPagerTopBarHost
+import io.legado.app.ui.main.MainPagerPageChromeEffect
 import io.legado.app.ui.main.homepage.HomepageFeedActions
 import io.legado.app.ui.main.homepage.HomepageManageActions
 import io.legado.app.ui.main.homepage.HomepageModuleFeed
 import io.legado.app.ui.main.homepage.HomepageModuleManageSheet
 import io.legado.app.ui.main.homepage.HomepageUiState
 import io.legado.app.ui.main.homepage.HomepageViewModel
-import io.legado.app.ui.main.homepage.manage.AddCustomModuleDialog
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppPullToRefresh
-import io.legado.app.ui.widget.components.button.AppIconButton
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
@@ -114,12 +110,13 @@ import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
-import io.legado.app.ui.widget.components.divider.PillDivider
+import io.legado.app.ui.widget.components.conflict.BookshelfConflictSheet
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.image.cover.BookshelfCover
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
+import io.legado.app.ui.widget.components.menu.AppAction
+import io.legado.app.ui.widget.components.menu.AppActionGroup
+import io.legado.app.ui.widget.components.menu.AppActionMenu
 import io.legado.app.ui.widget.components.progressIndicator.AppContainedLoadingIndicator
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
 import io.legado.app.ui.widget.components.text.AppText
@@ -127,6 +124,8 @@ import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.utils.isContentScheme
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.takePersistablePermissionSafely
 import io.legado.app.utils.toastOnUi
@@ -167,8 +166,6 @@ fun HomeRouteScreen(
     val homepageState by homepageViewModel.uiState.collectAsStateWithLifecycle()
     var previewBook by remember { mutableStateOf<SearchBook?>(null) }
     var previewSharedCoverKey by remember { mutableStateOf<String?>(null) }
-    // 长按模块标题栏的"更多"按钮时要编辑的模块 id
-    var editingModuleId by remember { mutableStateOf<String?>(null) }
 
     val feedActions = remember(homepageViewModel, onNavigateToBookInfo, onOpenExploreShow) {
         HomepageFeedActions(
@@ -189,7 +186,6 @@ fun HomeRouteScreen(
             },
             onKindUrlClick = homepageViewModel::onKindUrlClick,
             onRefreshButtonGroup = homepageViewModel::refreshButtonGroup,
-            onModuleHeaderLongClick = { globalId -> editingModuleId = globalId },
         )
     }
     val manageActions = remember(homepageViewModel) {
@@ -213,14 +209,13 @@ fun HomeRouteScreen(
             onAddButtonGroupFromKinds = { sourceUrl, targetSetId, title, kinds ->
                 homepageViewModel.addButtonGroupFromKinds(sourceUrl, targetSetId, title, kinds)
             },
-            onAddRankingFromKinds = { sourceUrl, targetSetId, title, type, kinds, kindUrls ->
+            onAddRankingFromKinds = { sourceUrl, targetSetId, title, type, kinds ->
                 homepageViewModel.addRankingFromKinds(
                     sourceUrl,
                     targetSetId,
                     title,
                     type,
-                    kinds,
-                    kindUrls
+                    kinds
                 )
             },
             onGetExploreKinds = { homepageViewModel.getSourceExploreKinds(it) },
@@ -336,8 +331,7 @@ fun HomeRouteScreen(
                 is io.legado.app.ui.main.homepage.HomepageEffect.NavigateToExploreShow ->
                     onOpenExploreShow(effect.title, effect.sourceUrl, effect.exploreUrl)
 
-                is io.legado.app.ui.main.homepage.HomepageEffect.ShowSnackbar ->
-                    context.toastOnUi(effect.message)
+                is io.legado.app.ui.main.homepage.HomepageEffect.ShowSnackbar -> {}
             }
         }
     }
@@ -381,26 +375,13 @@ fun HomeRouteScreen(
         },
     )
 
-    // 长按模块"更多"按钮打开的编辑对话框, 复用管理面板里的同一个对话框
-    val editingModule = remember(editingModuleId, homepageState.manageState.allJoinedModules) {
-        editingModuleId?.let { id ->
-            homepageState.manageState.allJoinedModules.firstOrNull { it.id == id }
-        }
-    }
-    AddCustomModuleDialog(
-        data = editingModule,
-        sourceUrl = editingModule?.sourceUrl ?: "",
-        targetSetId = editingModule?.customSetId ?: "",
-        prefillTitle = editingModule?.title ?: "",
-        prefillUrl = editingModule?.url ?: "",
-        prefillType = editingModule?.type ?: "card",
-        prefillArgs = editingModule?.args ?: "",
-        prefillLayoutConfig = editingModule?.layoutConfig ?: "",
-        onDismissRequest = { editingModuleId = null },
-        onConfirm = { def ->
-            editingModule?.let { manageActions.onUpdateModule(it.id, def) }
-            editingModuleId = null
-        }
+    BookshelfConflictSheet(
+        conflict = homepageState.bookshelfConflict,
+        isResolving = homepageState.isResolvingBookshelfConflict,
+        onDismissRequest = homepageViewModel::dismissBookshelfConflict,
+        onOpenExistingBook = homepageViewModel::openBookshelfConflictBook,
+        onCoexist = homepageViewModel::coexistWithBookshelfConflict,
+        onMigrate = homepageViewModel::migrateBookshelfConflict,
     )
 }
 
@@ -425,6 +406,8 @@ fun HomeScreen(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    val pagerTopBarHost = LocalMainPagerTopBarHost.current
+    val mainPageIndex = LocalMainPageIndex.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -434,17 +417,14 @@ fun HomeScreen(
     val pagerState = rememberPagerState(pageCount = {
         selectedSets.size.coerceAtLeast(1)
     })
-    val isMixedMode = state.layoutMode == HomepageLayoutMode.Mixed
 
-    var showPageMenu by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val currentPageSourceName by remember(selectedSets, pagerState) {
         derivedStateOf { selectedSets.getOrNull(pagerState.currentPage)?.sourceName }
     }
 
-    LaunchedEffect(pagerState, isMixedMode) {
-        if (isMixedMode) return@LaunchedEffect
+    LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { page ->
@@ -453,8 +433,7 @@ fun HomeScreen(
             }
     }
 
-    LaunchedEffect(state.selectedSourceSetUrl, pagerState, isMixedMode) {
-        if (isMixedMode) return@LaunchedEffect
+    LaunchedEffect(state.selectedSourceSetUrl, pagerState) {
         val targetUrl = state.selectedSourceSetUrl ?: return@LaunchedEffect
         val targetIndex = selectedSets.indexOfFirst { it.sourceUrl == targetUrl }
         if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
@@ -462,83 +441,91 @@ fun HomeScreen(
         }
     }
 
-    AppScaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            GlassMediumFlexibleTopAppBar(
-                title = stringResource(R.string.home),
-                subtitle = if (isMixedMode) null else currentPageSourceName,
-                scrollBehavior = scrollBehavior,
-                actions = {
-                    TopBarActionButton(
-                        onClick = {
-                            val newMode = if (isMixedMode) HomepageLayoutMode.Paged else HomepageLayoutMode.Mixed
-                            onIntent(HomeIntent.SetLayoutMode(newMode))
-                        },
-                        imageVector = if (isMixedMode) Icons.Default.Dashboard else Icons.Default.DashboardCustomize,
-                        contentDescription = stringResource(
-                            if (isMixedMode) R.string.homepage_layout_paged else R.string.homepage_layout_mixed
+    val homeTopBarActions: @Composable RowScope.() -> Unit = {
+        TopBarActionButton(
+            onClick = onToggleHomepageManage,
+            imageVector = AppIcons.Settings,
+            contentDescription = stringResource(R.string.homepage_module_manage),
+        )
+        AppActionMenu(
+            groups = persistentListOf(
+                AppActionGroup(
+                    id = "home_settings",
+                    actions = persistentListOf(
+                        AppAction(
+                            "dashboard_settings",
+                            stringResource(R.string.home_dashboard_settings),
                         ),
-                    )
-                    TopBarActionButton(
-                        onClick = onToggleHomepageManage,
-                        imageVector = AppIcons.Settings,
-                        contentDescription = stringResource(R.string.homepage_module_manage),
-                    )
-                    Box {
-                        TopBarActionButton(
-                            onClick = { showPageMenu = true },
-                            imageVector = AppIcons.MoreVert,
-                            contentDescription = stringResource(R.string.more_menu),
+                    ),
+                ),
+                AppActionGroup(
+                    id = "home_pages",
+                    actions = selectedSets.mapIndexed { index, source ->
+                        AppAction(
+                            id = "page:$index",
+                            label = source.sourceName,
+                            selected = index == pagerState.currentPage,
                         )
-                        RoundDropdownMenu(
-                            expanded = showPageMenu,
-                            onDismissRequest = { showPageMenu = false },
-                        ) {
-                            RoundDropdownMenuItem(
-                                text = stringResource(R.string.home_dashboard_settings),
-                                onClick = {
-                                    showPageMenu = false
-                                    onIntent(HomeIntent.DashboardSettingsClick)
-                                },
-                            )
-                            PillDivider()
-                            selectedSets.forEachIndexed { index, source ->
-                                RoundDropdownMenuItem(
-                                    text = source.sourceName,
-                                    isSelected = !isMixedMode && index == pagerState.currentPage,
-                                    onClick = {
-                                        showPageMenu = false
-                                        if (isMixedMode) {
-                                            onIntent(HomeIntent.SetLayoutMode(HomepageLayoutMode.Paged))
-                                        }
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(index)
-                                        }
-                                    },
-                                )
-                            }
+                    }.toImmutableList(),
+                ),
+            ),
+            onAction = { id ->
+                when {
+                    id == "dashboard_settings" ->
+                        onIntent(HomeIntent.DashboardSettingsClick)
+                    id.startsWith("page:") -> {
+                        val index = id.removePrefix("page:").toIntOrNull()
+                        if (index != null && index in selectedSets.indices) {
+                            scope.launch { pagerState.animateScrollToPage(index) }
                         }
                     }
-                },
+                }
+            },
+        ) {
+            AppIcon(
+                imageVector = AppIcons.MoreVert,
+                contentDescription = stringResource(R.string.more_menu),
+                modifier = this.modifier,
             )
+        }
+    }
+
+    if (pagerTopBarHost != null) {
+        MainPagerPageChromeEffect(
+            host = pagerTopBarHost,
+            pageIndex = mainPageIndex,
+            subtitle = currentPageSourceName,
+            actions = homeTopBarActions,
+        )
+    }
+
+    AppScaffold(
+        modifier = if (pagerTopBarHost != null) {
+            Modifier
+        } else {
+            Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+        },
+        contentWindowInsets = WindowInsets(0),
+        topBar = {
+            if (pagerTopBarHost == null) {
+                GlassMediumFlexibleTopAppBar(
+                    title = stringResource(R.string.home),
+                    subtitle = currentPageSourceName,
+                    scrollBehavior = scrollBehavior,
+                    actions = homeTopBarActions,
+                )
+            }
         },
     ) { paddingValues ->
         AppPullToRefresh(
             isRefreshing = homepageState.isRefreshing,
             onRefresh = onRefreshHomepage,
             modifier = Modifier.fillMaxSize(),
-            scrollBehavior = scrollBehavior,
+            // 横划顶栏由 OxygenX 自己处理收拢，宿主不再把旧顶栏的收拢进度交给刷新门控。
+            scrollBehavior = if (pagerTopBarHost != null) null else scrollBehavior,
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val dashboardScrollState = rememberScrollState()
-                // 切换混合/分页会把内容区换成一个全新的 LazyColumn（内部滚动归零），
-                // 但顶栏的 heightOffset 仍是切换前的折叠值，导致标题停在半透明过渡态。
-                // 只复位顶栏，不动 dashboardScrollState，避免整页跳回顶部。
-                LaunchedEffect(isMixedMode) {
-                    scrollBehavior.reset()
-                }
                 val moduleNestedScrollConnection = remember(dashboardScrollState) {
                     object : NestedScrollConnection {
                         override fun onPreScroll(
@@ -573,7 +560,7 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(dashboardScrollState),
+                        .appVerticalScroll(dashboardScrollState),
                 ) {
                     Spacer(
                         modifier = Modifier
@@ -595,8 +582,7 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(viewportHeight)
-                            .padding(top = 4.dp),
+                            .height(viewportHeight),
                     ) {
                         if (selectedSets.isEmpty()) {
                             Box(
@@ -605,26 +591,6 @@ fun HomeScreen(
                             ) {
                                 AppText(stringResource(R.string.homepage_no_source_sets_selected))
                             }
-                        } else if (isMixedMode) {
-                            // 混合模式：所有选中集合的模块合并为一个流
-                            val allModules = remember(homepageState.modules, selectedSets) {
-                                val selectedSetUrls = selectedSets.map { it.sourceUrl }.toSet()
-                                homepageState.modules.filter { module ->
-                                    val setUrl = HomepageViewModel.customSetUrl(module.customSetId ?: "")
-                                    module.sourceUrl in selectedSetUrls || setUrl in selectedSetUrls
-                                }
-                            }
-                            HomepageModuleFeed(
-                                modules = allModules,
-                                actions = homepageFeedActions,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .nestedScroll(moduleNestedScrollConnection),
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                onBookLongClick = onHomepageBookLongClick,
-                                onErrorClick = { errorMessage = it },
-                            )
                         } else {
                             HorizontalPager(
                                 state = pagerState,
@@ -699,7 +665,7 @@ fun HomeScreen(
                         style = LegadoTheme.typography.bodyMedium,
                         modifier = Modifier
                             .heightIn(max = 400.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .appVerticalScroll(rememberScrollState()),
                     )
                 }
             },
@@ -725,17 +691,6 @@ private fun HomeDashboardContent(
             RecentBookCard(
                 book = state.recentBook,
                 onClick = { onIntent(HomeIntent.RecentBookClick) },
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-            )
-        }
-
-        if (HomeDashboardSection.BookNews in state.visibleSections) {
-            BookNewsCard(
-                books = state.bookNews,
-                isLoaded = state.isBookNewsLoaded,
-                onBookClick = { onIntent(HomeIntent.BookNewsBookClick(it)) },
-                onRefresh = { onIntent(HomeIntent.BookNewsRefreshClick) },
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
             )
@@ -1121,150 +1076,6 @@ private fun RecentHistoryBookCard(
 }
 
 @Composable
-private fun BookNewsCard(
-    books: List<HomeBookNewsUi>,
-    isLoaded: Boolean,
-    onBookClick: (String) -> Unit,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier,
-    sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null,
-) {
-    GlassCard(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 14.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                AppIcon(
-                    imageVector = Icons.Default.Update,
-                    contentDescription = null,
-                    tint = LegadoTheme.colorScheme.primary,
-                )
-                AppText(
-                    text = stringResource(R.string.home_book_news),
-                    style = LegadoTheme.typography.titleMediumEmphasized,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                AppIconButton(
-                    onClick = onRefresh,
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    AppIcon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.home_book_news_check),
-                        tint = LegadoTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            when {
-                !isLoaded -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(96.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppText(
-                        text = stringResource(R.string.home_book_news_loading),
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                books.isEmpty() -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(96.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppText(
-                        text = stringResource(R.string.home_book_news_empty),
-                        color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                else -> LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    itemsIndexed(books, key = { _, book -> book.bookUrl }) { _, book ->
-                        BookNewsCell(
-                            book = book,
-                            onClick = { onBookClick(book.bookUrl) },
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BookNewsCell(
-    book: HomeBookNewsUi,
-    onClick: () -> Unit,
-    sharedTransitionScope: SharedTransitionScope?,
-    animatedVisibilityScope: AnimatedVisibilityScope?,
-) {
-    val countText = book.updatedChapterCount
-        ?.let { stringResource(R.string.home_book_news_chapter_count, it) }
-        ?: stringResource(R.string.home_book_news_updated)
-    Column(
-        modifier = Modifier
-            .width(64.dp)
-            .clickable(
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .semantics {
-                contentDescription = "${book.name}，$countText"
-                role = Role.Button
-            },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        BookshelfCover(
-            name = book.name,
-            author = book.author,
-            path = book.coverPath,
-            sourceOrigin = book.origin,
-            bookUrl = book.bookUrl,
-            modifier = Modifier
-                .width(64.dp)
-                .aspectRatio(5f / 7f),
-            coverModifier = Modifier.fillMaxSize(),
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope,
-            sharedCoverKey = "home_book_news_${book.bookUrl}",
-        )
-        AppText(
-            text = book.name,
-            style = LegadoTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        AppText(
-            text = countText,
-            style = LegadoTheme.typography.labelSmall,
-            color = LegadoTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 private fun ReadingGoalCard(
     todayReadTimeMillis: Long,
     goalMinutes: Int,
@@ -1351,12 +1162,10 @@ private fun SemiCircleProgress(
     val progressColor = LegadoTheme.colorScheme.primary
 
     Box(
-        modifier = modifier.semantics {
-            progressBarRangeInfo = ProgressBarRangeInfo(
-                current = animatedProgress.coerceIn(0f, 1f),
-                range = 0f..1f,
-            )
-        },
+        // 装饰性进度环不暴露 progressBarRangeInfo：裸的进度语义会在 TalkBack 里
+        // 形成一个朗读“进度条”却无任何交互的空焦点；进度已由环内文本表达，
+        // 合并成一个节点即可。
+        modifier = modifier.semantics(mergeDescendants = true) {},
         contentAlignment = Alignment.BottomCenter,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1639,7 +1448,6 @@ private fun AppModalBottomSheet(
 @StringRes
 private fun HomeDashboardSection.labelRes(): Int = when (this) {
     HomeDashboardSection.RecentBook -> R.string.home_recent_reading
-    HomeDashboardSection.BookNews -> R.string.home_book_news
     HomeDashboardSection.TotalReadBooks -> R.string.home_total_read_books
     HomeDashboardSection.TotalReadTime -> R.string.home_total_reading_time
     HomeDashboardSection.RecentBooks -> R.string.home_recent_books

@@ -73,12 +73,18 @@ object LocalPreferencesKeys {
     val CHANGE_SOURCE_FILTER_LOW_WORD_COUNT = booleanPreferencesKey("changeSourceFilterLowWordCount")
     val CHANGE_SOURCE_WORD_COUNT_THRESHOLD = intPreferencesKey("changeSourceWordCountThreshold")
     val CHANGE_SOURCE_SEARCH_SCOPE = stringPreferencesKey("changeSourceSearchScope")
+    // 封面换源的书源范围，独立于换源 searchScope，两者互不联动
+    val CHANGE_COVER_SEARCH_SCOPE = stringPreferencesKey("changeCoverSearchScope")
 
     // 作者页「其他作品」的搜索范围，和全局搜索页的 SEARCH_SCOPE 分开存
     val AUTHOR_WORKS_SEARCH_SCOPE = stringPreferencesKey("authorWorksSearchScope")
 
     // Book source check options
     val CHECK_SOURCE_TIMEOUT = longPreferencesKey("checkSourceTimeout")
+    val CHECK_SOURCE_THREAD_COUNT = intPreferencesKey("checkSourceThreadCount")
+    val CHECK_SOURCE_WRITE_COMMENT = booleanPreferencesKey("writeSourceComment")
+    val CHECK_SOURCE_QUICK_MODE = booleanPreferencesKey("checkSourceQuickMode")
+    val CHECK_SOURCE_DOMAIN = booleanPreferencesKey("checkDomain")
     val CHECK_SOURCE_SEARCH = booleanPreferencesKey("checkSearch")
     val CHECK_SOURCE_DISCOVERY = booleanPreferencesKey("checkDiscovery")
     val CHECK_SOURCE_INFO = booleanPreferencesKey("checkInfo")

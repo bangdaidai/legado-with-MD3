@@ -15,6 +15,7 @@ import io.legado.app.help.AppWebDav
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfigStore
+import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfigStore
@@ -64,6 +65,12 @@ object Backup {
     val zipFilePath = "${appCtx.externalFiles.absolutePath}${File.separator}tmp_backup.zip"
 
     private const val TAG = "Backup"
+
+    /** 段评气泡包在备份里的目录名：整棵 `bubblePackages/` 树跟着备份走（与 Legado-Arc 对齐）。 */
+    const val bubblePackagesDirName = "bubblePackages"
+
+    /** 旧版备份把全部气泡包打成一个 zip；仅用于恢复旧备份。 */
+    const val legacyBubblePackagesFileName = "bubblePackages.zip"
 
     private val backupFileNames by lazy {
         arrayOf(
@@ -521,10 +528,13 @@ object Backup {
             .writeText(xmlBuilder.toString())
 
         currentCoroutineContext().ensureActive()
+        backupBubblePackages(backupPath)
         val zipFileName = getNowZipFileName()
-        val paths = backupFileNames
-            .map { File(backupPath, it) }
-            .filter(File::isFile)
+        val paths = (
+            backupFileNames.map { File(backupPath, it) } +
+                listOfNotNull(File(backupPath, bubblePackagesDirName).takeIf { it.isDirectory })
+            )
+            .filter { it.isFile || it.isDirectory }
             .map(File::getAbsolutePath)
             .toMutableList()
         // 资源实体目录直接从原位打包（zipFile 递归目录，条目以目录名为前缀）。
@@ -586,6 +596,29 @@ object Backup {
             }
         }.let {
             AppWebDav.upBgs(it.toTypedArray())
+        }
+    }
+
+    /**
+     * 段评气泡包不在 [backupFileNames] 那批 json/xml 里，备份里保留整棵 `bubblePackages/` 目录
+     * （与 Legado-Arc 的备份布局一致；旧版 `bubblePackages.zip` 仍可恢复）。
+     * 只装本地包：内置的、temp、remote_cache 一律不进。
+     */
+    private suspend fun backupBubblePackages(backupPath: String) = withContext(IO) {
+        val target = File(backupPath, bubblePackagesDirName)
+        runCatching {
+            FileUtils.delete(target)
+            val dirs = BubblePackageManager.localPackageDirs()
+            if (dirs.isEmpty()) return@withContext
+            target.mkdirs()
+            dirs.forEach { dir ->
+                check(dir.copyRecursively(File(target, dir.name), overwrite = true)) {
+                    "failed to copy ${dir.name}"
+                }
+            }
+        }.onFailure { error ->
+            AppLog.put("备份段评气泡出错\n${error.localizedMessage}", error)
+            FileUtils.delete(target)
         }
     }
 

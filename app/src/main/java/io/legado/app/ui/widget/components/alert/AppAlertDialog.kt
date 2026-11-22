@@ -13,6 +13,7 @@ import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,12 +21,38 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import com.itos.coui.dialog.CouiDialogAction
+import com.itos.coui.dialog.CouiDialogActionStyle
+import com.itos.coui.dialog.CouiDialogDefaults
+import com.itos.coui.dialog.CouiDialogPlacement
+import com.itos.coui.dialog.Dialog as CouiDialog
+import com.itos.coui.menu.rememberCouiWindowBackdrop
+import com.itos.coui.theme.CouiTheme
+import io.legado.app.ui.theme.ComposeEngine
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LegadoTheme.composeEngine
-import io.legado.app.ui.theme.ProvideAppDensity
+import io.legado.app.ui.theme.LocalAppUiConfiguration
+import io.legado.app.ui.theme.LocalHasMiuixPopupHost
 import io.legado.app.ui.theme.ThemeResolver
+import io.legado.app.ui.theme.LocalMiuixBarBackdrop
+import io.legado.app.ui.theme.ProvideAppDensity
+import io.legado.app.ui.theme.ProvidePopupThemeOverride
+import io.legado.app.ui.theme.rememberMochiOverlayBackdrop
+import io.legado.app.ui.theme.rememberPopupThemeOverride
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiDialog
+import ui.feice.mochi.effect.glass.LocalMochiBackdrop
+import io.legado.app.ui.widget.components.mochi.MochiOverlayAccessibility
+import io.legado.app.ui.widget.components.mochi.mochiOverlayContentModifier
+import io.legado.app.ui.widget.components.LocalAppGlassOverlay
 import io.legado.app.ui.widget.components.button.PrimaryButton
 import io.legado.app.ui.widget.components.button.SecondaryButton
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.glass.GlassDialog
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -37,172 +64,298 @@ fun AppAlertDialog(
     title: String? = null,
     text: String? = null,
     content: (@Composable () -> Unit)? = null,
-    /** 标题栏尾部操作槽（如 ⋮ 溢出菜单）。Miuix 引擎的标题不支持自定义槽，退化到内容区右上角。 */
-    titleAction: (@Composable () -> Unit)? = null,
     confirmText: String = "确定", // 默认文字
     onConfirm: (() -> Unit)? = null,
     /** 确定按钮是否可点：表单类弹窗里输入还不合法时置 false，而不是点了才弹一句提示。 */
     confirmEnabled: Boolean = true,
     dismissText: String = "取消",
     onDismiss: (() -> Unit)? = null,
-    /**
-     * 底部动作条最左的附加动作（如「试听」）：取消在它右边，样式与取消同档。
-     * 两个槽只够放取消/确定，表单弹窗常有的第三个动作（试听、撤销）从这进，
-     * 让动作条整体仍由本组件排布，而不是调用方自己在 content 里画一排按钮。
-     */
-    startActionText: String? = null,
-    onStartAction: (() -> Unit)? = null,
-    startActionEnabled: Boolean = true,
 ) {
-    if (ThemeResolver.isMiuixEngine(composeEngine)) {
-        WindowDialog(
-            show = show,
-            modifier = modifier,
-            title = title,
-            summary = text,
-            onDismissRequest = onDismissRequest,
-            content = {
-                ProvideAppDensity {
-                    if (titleAction != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            titleAction()
-                        }
-                    }
-                    if (content != null) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            content()
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (onStartAction != null && startActionText != null) {
-                            SecondaryButton(
-                                text = startActionText,
-                                modifier = Modifier.weight(1f),
-                                enabled = startActionEnabled,
-                                onClick = {
-                                    onStartAction()
+    when (composeEngine) {
+        ComposeEngine.Oxygen -> {
+            io.oxygenx.material3.ProvideMaterial3Content {
+                if (show) {
+                    io.oxygenx.ui.basic.AlertDialog(
+                        onDismissRequest = onDismissRequest,
+                        modifier = modifier,
+                        title = title?.let { value -> { io.legado.app.ui.widget.components.text.AppText(value) } },
+                        text = if (text != null || content != null) {
+                            {
+                                ProvideAppDensity {
+                                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                                        text?.let { value -> SelectionContainer { io.legado.app.ui.widget.components.text.AppText(value) } }
+                                        content?.invoke()
+                                    }
                                 }
-                            )
+                            }
+                        } else null,
+                        confirmButton = {
+                            onConfirm?.let { action ->
+                                io.oxygenx.ui.basic.TextButton(action, enabled = confirmEnabled) {
+                                    io.legado.app.ui.widget.components.text.AppText(confirmText)
+                                }
+                            }
+                        },
+                        dismissButton = onDismiss?.let { action ->
+                            { io.oxygenx.ui.basic.TextButton(action) { io.legado.app.ui.widget.components.text.AppText(dismissText) } }
+                        },
+                    )
+                }
+            }
+        }
+        ComposeEngine.Miuix -> {
+            val themeSettings = LocalAppUiConfiguration.current.theme
+            // 开关打开后只走玻璃；无玻璃设施的独立窗口（如朗读悬浮窗）才退回窗口弹窗。
+            val useGlassContainer = themeSettings.useHyperOs4Components &&
+                ThemeResolver.isBlurSupported() &&
+                LocalAppGlassOverlay.current != null
+            val backdrop = LocalMiuixBarBackdrop.current
+            val glassOverlay = LocalAppGlassOverlay.current
+            val themeOverride = rememberPopupThemeOverride()
+            val rawDialogBody: @Composable () -> Unit = {
+                // WindowDialog has no popup host; its content must not inherit the Scaffold's
+                // host signal. A glass dialog shares the root host with its dropdowns.
+                CompositionLocalProvider(
+                    LocalHasMiuixPopupHost provides useGlassContainer,
+                    LocalAppGlassOverlay provides glassOverlay.takeIf { useGlassContainer },
+                    LocalMiuixBarBackdrop provides backdrop.takeIf { useGlassContainer },
+                ) {
+                    ProvideAppDensity {
+                        if (content != null) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                content()
+                            }
                         }
 
-                        if (onDismiss != null) {
-                            SecondaryButton(
-                                text = dismissText,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    onDismiss()
+                        if (onDismiss != null || onConfirm != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 24.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (onDismiss != null) {
+                                    if (useGlassContainer) {
+                                        GlassDialogButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                                            MiuixText(dismissText, style = MiuixTheme.textStyles.button)
+                                        }
+                                    } else {
+                                        SecondaryButton(
+                                            text = dismissText,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = onDismiss,
+                                        )
+                                    }
                                 }
-                            )
-                        }
 
-                        if (onConfirm != null) {
-                            PrimaryButton(
-                                text = confirmText,
-                                modifier = Modifier.weight(1f),
-                                enabled = confirmEnabled,
-                                onClick = {
-                                    onConfirm()
+                                if (onConfirm != null) {
+                                    if (useGlassContainer) {
+                                        GlassDialogButton(
+                                            onClick = onConfirm,
+                                            modifier = Modifier.weight(1f),
+                                            enabled = confirmEnabled,
+                                            role = GlassDialogButtonRole.Primary,
+                                        ) {
+                                            MiuixText(confirmText, style = MiuixTheme.textStyles.button)
+                                        }
+                                    } else {
+                                        PrimaryButton(
+                                            text = confirmText,
+                                            modifier = Modifier.weight(1f),
+                                            enabled = confirmEnabled,
+                                            onClick = onConfirm,
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
             }
-        )
-    } else {
-        if (show) {
-            AlertDialog(
-                onDismissRequest = onDismissRequest,
-                modifier = modifier,
-                containerColor = LegadoTheme.colorScheme.surfaceContainer,
-                iconContentColor = LegadoTheme.colorScheme.primary,
-                titleContentColor = LegadoTheme.colorScheme.onSurface,
-                textContentColor = LegadoTheme.colorScheme.onSurfaceVariant,
-                tonalElevation = AlertDialogDefaults.TonalElevation,
-                title = title?.let {
-                    {
-                        ProvideAppDensity {
-                            if (titleAction != null) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(text = it, modifier = Modifier.weight(1f))
-                                    titleAction()
-                                }
-                            } else {
-                                Text(text = it)
-                            }
-                        }
-                    }
-                },
-                text = {
+            // 玻璃 dialog 的内容由 root popup host 的独立 composition 执行，只继承全局
+            // 色板；在这里重放宿主侧捕获的页面级覆盖，窗口分支重复提供同值幂等。
+            val dialogBody: @Composable () -> Unit = {
+                ProvidePopupThemeOverride(themeOverride) {
+                    rawDialogBody()
+                }
+            }
+            if (useGlassContainer) {
+                GlassDialog(
+                    onDismissRequest = onDismissRequest,
+                    show = show,
+                    backdrop = backdrop,
+                    modifier = modifier,
+                    title = title,
+                    summary = text,
+                    content = dialogBody,
+                )
+            } else {
+                WindowDialog(
+                    show = show,
+                    modifier = modifier,
+                    title = title,
+                    summary = text,
+                    onDismissRequest = onDismissRequest,
+                    content = dialogBody,
+                )
+            }
+        }
+        ComposeEngine.Mochi -> {
+            MochiOverlayAccessibility(show)
+            val backdrop = rememberMochiOverlayBackdrop(show)
+            CompositionLocalProvider(LocalMochiBackdrop provides backdrop) {
+                MochiDialog(
+                    visible = show,
+                    onDismissRequest = onDismissRequest,
+                    title = title.orEmpty(),
+                    modifier = modifier,
+                    dismissOnOutsideTap = true,
+                    // Native actions auto-dismiss. Forms keep ownership of their asynchronous
+                    // confirmation and validation, so render the app buttons in the content slot.
+                    actions = persistentListOf(),
+                ) {
                     ProvideAppDensity {
-                        Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState())
-                        ) {
-                            if (text != null) {
-                                SelectionContainer {
-                                    Text(
-                                        text = text,
-                                        modifier = Modifier.padding(bottom = if (content != null) 16.dp else 0.dp)
+                        Column(mochiOverlayContentModifier(onDismissRequest, title).verticalScroll(rememberScrollState())) {
+                            if (text != null) SelectionContainer {
+                                Text(text, Modifier.padding(bottom = if (content != null) 16.dp else 0.dp))
+                            }
+                            content?.invoke()
+                            if (onDismiss != null || onConfirm != null) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(top = 20.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    if (onDismiss != null) SecondaryButton(
+                                        text = dismissText, modifier = Modifier.weight(1f), onClick = onDismiss,
+                                    )
+                                    if (onConfirm != null) PrimaryButton(
+                                        text = confirmText, modifier = Modifier.weight(1f),
+                                        enabled = confirmEnabled, onClick = onConfirm,
                                     )
                                 }
                             }
-                            if (content != null) {
-                                content()
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    if (onConfirm != null) {
-                        ProvideAppDensity {
-                            PrimaryButton(
-                                onClick = onConfirm,
-                                enabled = confirmEnabled,
-                                text = confirmText
-                            )
-                        }
-                    }
-                },
-                dismissButton = {
-                    ProvideAppDensity {
-                        // M3 只给确认/取消两个槽：附加动作并入取消这侧，
-                        // flow row 会把它与确认排进同一排（右对齐，按内容宽）
-                        if (onStartAction != null && startActionText != null) {
-                            SecondaryButton(
-                                onClick = { onStartAction() },
-                                enabled = startActionEnabled,
-                                text = startActionText
-                            )
-                        }
-                        if (onDismiss != null) {
-                            SecondaryButton(
-                                onClick = {
-                                    onDismiss()
-                                },
-                                text = dismissText
-                            )
                         }
                     }
                 }
-            )
+            }
+        }
+        ComposeEngine.Material -> {
+            if (show) {
+                AlertDialog(
+                    onDismissRequest = onDismissRequest,
+                    modifier = modifier,
+                    containerColor = LegadoTheme.colorScheme.surfaceContainer,
+                    iconContentColor = LegadoTheme.colorScheme.primary,
+                    titleContentColor = LegadoTheme.colorScheme.onSurface,
+                    textContentColor = LegadoTheme.colorScheme.onSurfaceVariant,
+                    tonalElevation = AlertDialogDefaults.TonalElevation,
+                    title = title?.let { { ProvideAppDensity { Text(text = it) } } },
+                    text = {
+                        ProvideAppDensity {
+                            Column(
+                                modifier = Modifier.verticalScroll(rememberScrollState())
+                            ) {
+                                if (text != null) {
+                                    SelectionContainer {
+                                        Text(
+                                            text = text,
+                                            modifier = Modifier.padding(bottom = if (content != null) 16.dp else 0.dp)
+                                        )
+                                    }
+                                }
+                                if (content != null) {
+                                    content()
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        if (onConfirm != null) {
+                            ProvideAppDensity {
+                                PrimaryButton(
+                                    onClick = onConfirm,
+                                    enabled = confirmEnabled,
+                                    text = confirmText
+                                )
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        if (onDismiss != null) {
+                            ProvideAppDensity {
+                                SecondaryButton(
+                                    onClick = {
+                                        onDismiss()
+                                    },
+                                    text = dismissText
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        ComposeEngine.Coui -> {
+            val windowBackdrop = rememberCouiWindowBackdrop()
+            // COUI 弹窗只有材质形态；AppTheme 在 COUI 引擎下必定提供页面背景源。
+            val useMaterial = windowBackdrop != null && CouiDialogDefaults.isMaterialSupported()
+            val dark = CouiTheme.isDark
+            CouiDialog(
+                modifier = modifier,
+                onDismissRequest = onDismissRequest,
+                title = title,
+                message = text,
+                dark = dark,
+                confirmAction = onConfirm?.let {
+                    CouiDialogAction(
+                        text = confirmText,
+                        onClick = it,
+                        enabled = confirmEnabled,
+                        style = CouiDialogActionStyle.Primary,
+                        colors = CouiDialogDefaults.primaryActionColors(CouiTheme.colorScheme.accent),
+                    )
+                },
+                dismissAction = onDismiss?.let { CouiDialogAction(text = dismissText, onClick = it) },
+                placement = CouiDialogPlacement.Bottom,
+                material = if (useMaterial) CouiDialogDefaults.material(dark) else null,
+                backdrop = windowBackdrop.takeIf { useMaterial },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    windowTitle = title.orEmpty(),
+                ),
+                visible = show,
+            ) {
+                if (content != null) {
+                    ProvideAppDensity {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = CouiDialogDefaults.contentPadding,
+                                    end = CouiDialogDefaults.contentPadding,
+                                    top = if (title.isNullOrEmpty() && text.isNullOrEmpty()) {
+                                        CouiDialogDefaults.contentPadding
+                                    } else {
+                                        16.dp
+                                    },
+                                    bottom = if (onConfirm == null && onDismiss == null) {
+                                        CouiDialogDefaults.messageBottom
+                                    } else {
+                                        0.dp
+                                    },
+                                )
+                        ) {
+                            content()
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -223,11 +376,8 @@ fun <T> AppAlertDialog(
     confirmEnabled: Boolean = true,
     dismissText: String = "取消",
     onDismiss: (() -> Unit)? = null,
-    startActionText: String? = null,
-    onStartAction: (() -> Unit)? = null,
-    startActionEnabled: Boolean = true,
     modifier: Modifier = Modifier,
-    content: (@Composable (T) -> Unit)? = null
+    content: (@Composable (T) -> Unit)? = null,
 ) {
     var cachedData by remember { mutableStateOf(data) }
 
@@ -255,10 +405,7 @@ fun <T> AppAlertDialog(
             confirmEnabled = confirmEnabled,
             dismissText = dismissText,
             onDismiss = onDismiss,
-            startActionText = startActionText,
-            onStartAction = onStartAction,
-            startActionEnabled = startActionEnabled,
-            content = content?.let { { it(currentData) } }
+            content = content?.let { { it(currentData) } },
         )
     }
 }

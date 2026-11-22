@@ -94,6 +94,8 @@ object LegacyReaderStyleRangeMapper {
                     ?: return@forEachIndexed
                 val range = BookContentProcessEngine.resolveRange(markingText, anchor)
                     ?: return@forEachIndexed
+                if (!ReaderSemanticLocation.isValidOffset(markingText, range.first) ||
+                    !ReaderSemanticLocation.isValidOffset(markingText, range.last + 1)) return@forEachIndexed
                 result += ReaderStyleRange(
                     start = range.first,
                     endExclusive = range.last + 1,

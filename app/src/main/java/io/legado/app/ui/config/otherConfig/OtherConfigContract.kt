@@ -9,7 +9,8 @@ import kotlinx.collections.immutable.persistentListOf
 data class OtherConfigUiState(
     val language: String = "auto",
     val updateToVariant: String = "official_version",
-    val autoCheckUpdateOnStart: Boolean = false,
+    val updateEndpoint: String = "auto",
+    val autoCheckUpdateOnStart: Boolean = true,
     val webServiceAutoStart: Boolean = false,
     val autoRefresh: Boolean = false,
     val defaultToRead: Boolean = false,
@@ -23,7 +24,6 @@ data class OtherConfigUiState(
     val autoClearExpired: Boolean = true,
     val showAddToShelfAlert: Boolean = true,
     val allowSameNameAuthorType: Boolean = false,
-    val showMangaUi: Boolean = true,
     val webServiceWakeLock: Boolean = false,
     val blockSourceBrowser: Boolean = false,
     val sourceEditMaxLine: Int = Int.MAX_VALUE,
@@ -82,6 +82,7 @@ sealed interface OtherConfigIntent {
     data object RefreshBatteryStatus : OtherConfigIntent
     data class LanguageChanged(val value: String) : OtherConfigIntent
     data class UpdateToVariantChanged(val value: String) : OtherConfigIntent
+    data class UpdateEndpointChanged(val value: String) : OtherConfigIntent
     data class AutoCheckUpdateOnStartChanged(val value: Boolean) : OtherConfigIntent
     data class WebServiceAutoStartChanged(val value: Boolean) : OtherConfigIntent
     data class AutoRefreshChanged(val value: Boolean) : OtherConfigIntent
@@ -96,7 +97,6 @@ sealed interface OtherConfigIntent {
     data class AutoClearExpiredChanged(val value: Boolean) : OtherConfigIntent
     data class ShowAddToShelfAlertChanged(val value: Boolean) : OtherConfigIntent
     data class AllowSameNameAuthorTypeChanged(val value: Boolean) : OtherConfigIntent
-    data class ShowMangaUiChanged(val value: Boolean) : OtherConfigIntent
     data class WebServiceWakeLockChanged(val value: Boolean) : OtherConfigIntent
     data class BlockSourceBrowserChanged(val value: Boolean) : OtherConfigIntent
     data class SourceEditMaxLineChanged(val value: Int) : OtherConfigIntent

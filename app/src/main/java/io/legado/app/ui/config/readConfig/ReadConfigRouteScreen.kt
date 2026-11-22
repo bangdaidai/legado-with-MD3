@@ -13,6 +13,7 @@ fun ReadConfigRouteScreen(
     onBackClick: () -> Unit,
     viewModel: ReadConfigViewModel = koinViewModel(),
     onNavigateToProtagonistExtraction: () -> Unit = {},
+    focusSettingId: String? = null,
 ) {
     val context = LocalContext.current
     val state = viewModel.uiState.collectAsStateWithLifecycle().value
@@ -32,5 +33,6 @@ fun ReadConfigRouteScreen(
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
         onNavigateToProtagonistExtraction = onNavigateToProtagonistExtraction,
+        focusSettingId = focusSettingId,
     )
 }

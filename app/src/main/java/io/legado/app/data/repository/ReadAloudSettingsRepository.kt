@@ -125,6 +125,7 @@ internal fun Preferences.toReadAloudSettings(): ReadAloudSettings = ReadAloudSet
     defaultNarratorVoiceId = compatDsValue(ReadAloudKeys.DefaultNarratorVoiceId, ""),
     multiRoleCast = compatDsValue(ReadAloudKeys.MultiRoleCast, false),
     bgmAssign = compatDsValue(ReadAloudKeys.BgmAssign, false),
+    readChapterTitle = compatDsValue(ReadAloudKeys.ReadChapterTitle, true),
     defaultInterface = compatDsValue(
         ReadAloudKeys.DefaultInterface,
         ReadAloudSettingsRepository.DEFAULT_INTERFACE_CLASSIC,
@@ -195,6 +196,7 @@ internal fun ReadAloudSettings.toPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.defaultNarratorVoiceId to defaultNarratorVoiceId,
     PreferKey.multiRoleCast to multiRoleCast,
     PreferKey.bgmAssign to bgmAssign,
+    PreferKey.readAloudChapterTitle to readChapterTitle,
     PreferKey.defaultReadAloudInterface to defaultInterface,
     PreferKey.contentSelectSpeakMod to contentSelectSpeakMode,
     PreferKey.audioPreDownloadNum to audioPreDownloadNum,
@@ -246,6 +248,7 @@ private object ReadAloudKeys {
     val DefaultNarratorVoiceId = stringPreferencesKey(PreferKey.defaultNarratorVoiceId)
     val MultiRoleCast = booleanPreferencesKey(PreferKey.multiRoleCast)
     val BgmAssign = booleanPreferencesKey(PreferKey.bgmAssign)
+    val ReadChapterTitle = booleanPreferencesKey(PreferKey.readAloudChapterTitle)
     val DefaultInterface = stringPreferencesKey(PreferKey.defaultReadAloudInterface)
     val ContentSelectSpeakMode = intPreferencesKey(PreferKey.contentSelectSpeakMod)
     val AudioPreDownloadNum = intPreferencesKey(PreferKey.audioPreDownloadNum)

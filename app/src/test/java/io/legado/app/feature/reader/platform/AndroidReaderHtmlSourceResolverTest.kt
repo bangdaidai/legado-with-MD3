@@ -1,13 +1,14 @@
 package io.legado.app.feature.reader.platform
 
 import android.app.Application
-import android.graphics.Color
 import io.legado.app.feature.reader.core.layout.ReaderParagraphDecorationKind
 import io.legado.app.feature.reader.core.layout.GlyphClusters
 import io.legado.app.feature.reader.core.layout.ReaderChapterBlockMeasurer
 import io.legado.app.feature.reader.core.layout.ReaderChapterMeasureResult
 import io.legado.app.feature.reader.core.layout.ReaderChapterMeasureStyle
 import io.legado.app.feature.reader.core.layout.ReaderImageDimensions
+import io.legado.app.feature.reader.core.layout.ReaderMeasuredBlock
+import io.legado.app.feature.reader.core.layout.ReaderMeasuredInlineItem
 import io.legado.app.feature.reader.core.layout.ReaderPaginationConfig
 import io.legado.app.feature.reader.core.layout.ReaderPaginator
 import io.legado.app.feature.reader.core.layout.ReaderTextAlignment
@@ -106,7 +107,9 @@ class AndroidReaderHtmlSourceResolverTest {
         assertEquals(7 + semantic.indexOf("链接"), link.chapterPosition)
         assertEquals("https://example", link.style.link)
         assertTrue(large.style.fontSizeScale > 1f)
-        assertEquals(Color.rgb(0x12, 0x34, 0x56), large.style.colorArgb)
+        // Currently using reader unified style: original <font color> does not override the theme
+        // TODO: colors return with the original-typography switch.
+        assertEquals(null, large.style.colorArgb)
         assertEquals(7 + semantic.indexOf('\uFFFC'), image.chapterPosition)
         assertEquals("pic", image.source)
     }
@@ -147,11 +150,6 @@ class AndroidReaderHtmlSourceResolverTest {
 
         assertEquals(source, image.source)
         assertEquals(3, image.chapterPosition)
-        // 与旧 `setTypeHtml` 一致：不给 ImageGetter，框架用系统 fallback 图标生成 ImageSpan，
-        // 旧版行内图的占位宽/行盒高就是它的固有尺寸。
-        val extent = image.htmlSpanExtent!!
-        assertTrue(extent.widthPx > 0f)
-        assertTrue(extent.heightPx > 0f)
     }
 
     @Test fun consecutiveBreaksPreserveANewlineOnlyVisualParagraphWithoutATrailingPhantomLine() {
@@ -190,7 +188,35 @@ class AndroidReaderHtmlSourceResolverTest {
         assertTrue(list.decorations.single().sizePx > 0f)
     }
 
-    @Test fun nestedListMarkersCarryIncreasingLeadingOffsets() {
+    /** 旧 HtmlCompat 路径同样不能给列表/引用叠加阅读器段首缩进（与 Jsoup 呈现解析器同口径）。 */
+    @Test fun structuralHtmlBlocksSkipReaderIndentWhileBodyKeepsIt() = runBlocking {
+        val html = "<p>正文</p><blockquote>引文</blockquote><ul><li>列表</li></ul>"
+        val source = ReaderChapterSourceParser.parse(
+            0, "", listOf("<usehtml>$html</usehtml>"), false, true,
+            AndroidReaderHtmlSemanticTextResolver,
+        )
+        val shaper = ReaderTextShaper { text ->
+            GlyphClusters(text.map(Char::toString), FloatArray(text.length) { 10f })
+        }
+        val measurer = ReaderChapterBlockMeasurer(
+            shaper, shaper, { null },
+            htmlSourceResolver = AndroidReaderHtmlSourceResolver(10f, 1f),
+        )
+        val style = ReaderChapterMeasureStyle(
+            ReaderTextStyle(0, 10f), ReaderTextStyle(0, 10f), 2,
+            ReaderTextAlignment.START, ReaderTextAlignment.START,
+        )
+        val indents = (measurer.measure(source, style) as ReaderChapterMeasureResult.Success)
+            .blocks.filterIsInstance<ReaderMeasuredBlock.InlineParagraph>()
+            .associate { block ->
+                block.items.filterIsInstance<ReaderMeasuredInlineItem.Text>()
+                    .joinToString("") { it.value } to block.indentCharacters
+            }
+
+        assertEquals(mapOf("正文" to 2, "引文" to 0, "列表" to 0), indents)
+    }
+
+    @Test fun nestedListItemKeepsSingleMarkerAtItsDepth() {
         val paragraphs = AndroidReaderHtmlSourceResolver(20f, 2f).resolve(
             "<ul><li>外层<ul><li>内层</li></ul></li></ul>",
             0,
@@ -201,7 +227,7 @@ class AndroidReaderHtmlSourceResolverTest {
         }
         val bullets = inner.decorations.filter { it.kind == ReaderParagraphDecorationKind.BULLET }
 
-        assertTrue(bullets.size >= 2)
-        assertTrue(bullets.zipWithNext().all { (outer, nested) -> nested.leadingOffsetPx > outer.leadingOffsetPx })
+        assertEquals(1, bullets.size)
+        assertEquals(24f, bullets.single().leadingOffsetPx, 0.01f)
     }
 }

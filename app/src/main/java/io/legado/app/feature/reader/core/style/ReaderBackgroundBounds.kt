@@ -13,7 +13,11 @@ data class ReaderBackgroundBand(
     val borderColorArgb: Int? = null,
     val borderWidthPx: Float = 0f,
     val borderRadiusPx: Float = 0f,
-)
+    val marked: Boolean = false,
+) {
+    fun resolvedFillColorArgb(markColorArgb: Int?): Int? =
+        fillColorArgb ?: markColorArgb.takeIf { marked }
+}
 
 /**
  * Joins sequential same-color background boxes on the same visual line into one continuous
@@ -33,20 +37,26 @@ fun List<ReaderElement.Text>.mergeBackgroundBounds(
 ): List<ReaderBackgroundBand> {
     if (isEmpty()) return emptyList()
     val bands = ArrayList<ReaderBackgroundBand>(size)
+    var broken = false
+    // fork：跟踪紧邻的上一文本元素——背景色带不得跨过未匹配字符延伸（见下方 continues 注释）
     var previousText: ReaderElement.Text? = null
-    var brokenByImage = false
     forEach { element ->
         if (element.style.backgroundImage != null) {
-            brokenByImage = true
+            broken = true
             return@forEach
         }
         val colorArgb = element.style.backgroundArgb
+        val marked = element.style.marked && colorArgb == null
         val border = element.style.takeIf { it.borderWidthPx > 0f }
             ?.let { it.borderColorArgb?.let { color -> Triple(color, it.borderWidthPx, it.borderRadiusPx) } }
-        if (colorArgb == null && border == null) return@forEach
+        if (colorArgb == null && border == null && !marked) {
+            // Marked runs must not bridge unmarked text; keep legacy explicit-color merging.
+            broken = broken || bands.lastOrNull()?.marked == true
+            return@forEach
+        }
         val rect = element.bounds
-        val previous = bands.lastOrNull()?.takeUnless { brokenByImage }
-        brokenByImage = false
+        val previous = bands.lastOrNull()?.takeUnless { broken }
+        broken = false
         val verticalOverlap = previous?.let {
             (minOf(it.bounds.bottom, rect.bottom) - maxOf(it.bounds.top, rect.top)).coerceAtLeast(0f)
         } ?: 0f
@@ -58,12 +68,14 @@ fun List<ReaderElement.Text>.mergeBackgroundBounds(
         } ?: Float.POSITIVE_INFINITY
         // 对照旧 `drawBgColors`（bfa3c1c92）：紧邻的上一元素没有该背景色就打断连续性，
         // 背景色带不得跨过未匹配字符延伸；字距/两端对齐的小间隙仍按容差连接。
-        // 上游允许「只描边不铺色」的两段相接，那条不涉及颜色跨越，照旧放行。
+        // marked 上游允许「只描边不铺色」的两段相接，那条不涉及颜色跨越，照旧放行。
         val continues = sameLine &&
             previous.fillColorArgb == colorArgb &&
+            previous.marked == marked &&
             previous.border == border &&
             horizontalGap <= joinGapPx &&
-            (colorArgb == null || previousText?.style?.backgroundArgb == colorArgb)
+            (previous.marked || colorArgb == null ||
+                previousText?.style?.backgroundArgb == colorArgb)
         if (continues) {
             bands[bands.lastIndex] = previous.copy(
                 bounds = ReaderRect(
@@ -76,6 +88,7 @@ fun List<ReaderElement.Text>.mergeBackgroundBounds(
         } else {
             bands += ReaderBackgroundBand(
                 fillColorArgb = colorArgb,
+                marked = marked,
                 bounds = rect,
                 borderColorArgb = border?.first,
                 borderWidthPx = border?.second ?: 0f,

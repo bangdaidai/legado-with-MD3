@@ -1,5 +1,6 @@
 package io.legado.app.help.coil
 
+import androidx.core.net.toUri
 import coil3.BitmapImage
 import coil3.decode.DataSource
 import coil3.intercept.Interceptor
@@ -22,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.io.File
+import java.io.IOException
 
 class CoverInterceptor(
     private val acquireMangaFile: suspend (ImageRequest, String) -> Pair<File, Closeable> = { request, data ->
@@ -72,6 +74,31 @@ class CoverInterceptor(
         val data = request.data
 
         val fileOwner = request.extras[CoverExtras.MangaFileOwner]
+        val localUri = (data as? String)
+            ?.takeIf { it.startsWith("file:", true) || it.startsWith("content:", true) }
+            ?.toUri()
+        // Read local and translated pages' original proportions before Coil publishes a preview.
+        if (fileOwner != null && (data is File || localUri != null)) {
+            val ratio = withContext(Dispatchers.IO) {
+                try {
+                    when {
+                        data is File -> MangaImageDimensions.read(data)
+                        localUri?.scheme == "file" ->
+                            localUri.path?.let { MangaImageDimensions.read(File(it)) }
+                        localUri != null ->
+                            MangaImageDimensions.read(request.context.contentResolver, localUri)
+                        else -> null
+                    }
+                } catch (_: IOException) {
+                    null
+                } catch (_: SecurityException) {
+                    null
+                }
+            }
+            fileOwner.setAspectRatio(ratio)
+            ratio?.let { request.extras[CoverExtras.MangaAspectRatio]?.invoke(it) }
+            return boundedChain.proceed()
+        }
         // 分页与条漫在线页复用同一原图；本地漫画与 content/file URI 保持平台加载器。
         if (fileOwner != null && data is String &&
             (data.isAbsUrl() || data.startsWith("data:", true)) &&
@@ -129,6 +156,21 @@ class CoverInterceptor(
         }
 
         if (data is String && data.isNotBlank()) {
+            // 图集图片 / 编辑页本地选图得到的文件路径不是网络地址：交给平台加载器，
+            // 不走 AnalyzeUrl 与持久封面缓存。否则 preferCache 的书架请求会被本书别名
+            // 命中，把上次的网络封面错误地盖在刚选定的本地封面上。
+            if (isLocalCoverPath(data)) {
+                val localData: Any = if (
+                    data.startsWith("content:", true) || data.startsWith("file:", true)
+                ) {
+                    data.toUri()
+                } else {
+                    File(data)
+                }
+                return boundedChain.withRequest(
+                    request.newBuilder().data(localData).build()
+                ).proceed()
+            }
             // 本地封面缓存快速路径：命中就改写为本地文件，跳过 AnalyzeUrl 的书源规则调用
             // （部分书源的 headerRule/coverUrl 会执行 JS/Java 检查脚本，冷启动或重载封面时
             // 会弹“未登录/版本检测”提示）与网络请求。
@@ -206,4 +248,12 @@ class CoverInterceptor(
         }
         return boundedChain.proceed()
     }
+}
+
+/** 本地封面（图集图片 / 编辑页本地选图 / content URI）走平台加载器，不经过 AnalyzeUrl 与持久封面缓存。 */
+internal fun isLocalCoverPath(data: String): Boolean {
+    if (data.startsWith("content:", true) || data.startsWith("file:", true)) return true
+    if (data.isAbsUrl() || data.startsWith("data:", true)) return false
+    val file = File(data)
+    return file.isAbsolute && file.isFile
 }

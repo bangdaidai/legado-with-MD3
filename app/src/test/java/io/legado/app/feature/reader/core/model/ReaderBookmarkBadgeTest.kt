@@ -6,19 +6,14 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ReaderBookmarkBadgeTest {
-    private fun badge(
-        bookmarked: Boolean = true,
-        scroll: Boolean = false,
-        size: Int = 10,
-        rightTipWidthPx: Float = 0f,
-    ) = ReaderBookmarkBadge.create(
-        bookmarked, scroll, 600, 100f, 30f, 2f, size, rightTipWidthPx = rightTipWidthPx
-    )
+    private fun badge(bookmarked: Boolean = true, scroll: Boolean = false, size: Int = 10) =
+        ReaderBookmarkBadge.create(bookmarked, scroll, 600, 100f, 30, 2f, size)
 
     @Test
-    fun topRightCornerAnchorsToHeaderAndPreservesRibbonRatio() {
-        assertEquals(ReaderBookmarkBadge(550f, 100f, 20, 40), badge())
-        assertEquals(ReaderBookmarkBadge(530f, 100f, 40, 80), badge(size = 20))
+    fun topEdgeAnchorsToHeaderBottomAndPreservesRibbonRatio() {
+        // headerBottom = 100f -> topPx = 100
+        assertEquals(ReaderBookmarkBadge(538f, 100f, 20, 40), badge())
+        assertEquals(ReaderBookmarkBadge(518f, 100f, 40, 80), badge(size = 20))
     }
 
     @Test
@@ -26,25 +21,6 @@ class ReaderBookmarkBadgeTest {
         assertNull(badge(bookmarked = false))
         assertNull(badge(scroll = true))
         assertNull(badge(size = 0))
-    }
-
-    @Test
-    fun badgeShiftsLeftOnlyWhenRightHeaderTipPresent() {
-        val shifted = ReaderBookmarkBadge.create(
-            hasBookmark = true,
-            isScroll = false,
-            pageWidthPx = 600,
-            headerTopPx = 100f,
-            headerRightPaddingPx = 30f,
-            density = 2f,
-            sizeDp = 10,
-            rightTipWidthPx = 60f,
-            rightTipGapPx = 8f,
-        )
-        // 600 - 30 - (60 + 8) - 20：有右页眉文字时整体左移留出间距。
-        assertEquals(482f, shifted!!.leftPx)
-        // 页眉右槽为空时保持原位。
-        assertEquals(550f, badge(rightTipWidthPx = 0f)?.leftPx)
     }
 
     @Test

@@ -28,6 +28,7 @@ enum class ReadAloudConfigOption {
     UseMultiSpeaker,
     MultiRoleCast,
     BgmAssign,
+    ReadChapterTitle,
     ContentSplit,
     PreDownloadNum,
     /** 在线朗读引擎的音频预取章数（系统 TTS 不适用）。 */
@@ -62,6 +63,8 @@ data class ReadAloudSettingsUiState(
     val useMultiSpeaker: Boolean = true,
     val multiRoleCast: Boolean = false,
     val bgmAssign: Boolean = false,
+    /** 每章开头是否朗读章节标题；与正文标题是否显示无关。 */
+    val readChapterTitle: Boolean = true,
     val readAloudContentSplitMode: String = "default",
     val readAloudContentSplitSymbols: Set<String> = emptySet(),
     val preDownloadNum: Int = 10,

@@ -22,7 +22,7 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_82_83, migration_98_99, migration_99_100, migration_100_101,
             migration_102_103, migration_123_124, migration_124_125, migration_127_128,
-            migration_132_133, migration_133_134,
+            migration_132_133, migration_133_134, migration_134_135,
         )
     }
 
@@ -56,6 +56,26 @@ object DatabaseMigrations {
             )
             db.execSQL(
                 "ALTER TABLE `highlightRules` ADD COLUMN `borderRadius` REAL NOT NULL DEFAULT 4"
+            )
+        }
+    }
+
+    /**
+     * 134 → 135：对齐上游 #2601 高亮夜间边框色与有声书下载完成度两列（手写迁移）。
+     *
+     * - highlightRules.borderColorNight：上游 AutoMigration(134,135) 的夜间边框色列。
+     *   本 fork 的编辑页不提供夜间边框色 UI（夜间边框走渲染侧派生），列保留为 null
+     *   即回落日间值，与上游备份互导时 schema 一致。
+     * - read_aloud_audio_downloads.expectedSentenceCount：上游「区分整章下载和部分完成」
+     *   的应下载句数，null = 旧数据未记录。
+     *
+     * 纯加列，已发到 134 的设备覆盖安装需卸载重装（备份是 JSON，恢复路径可用）。
+     */
+    private val migration_134_135 = object : Migration(134, 135) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `highlightRules` ADD COLUMN `borderColorNight` INTEGER")
+            db.execSQL(
+                "ALTER TABLE `read_aloud_audio_downloads` ADD COLUMN `expectedSentenceCount` INTEGER"
             )
         }
     }

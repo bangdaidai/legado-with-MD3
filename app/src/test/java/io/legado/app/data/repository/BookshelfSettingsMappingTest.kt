@@ -9,8 +9,7 @@ import org.junit.Test
 class BookshelfSettingsMappingTest {
 
     @Test
-    @Test
-    fun `可访问 ID 可读取与写入使用对象键`() {
+    fun `旧分组 ID 可读取但写入使用独立键`() {
         val legacy = mapOf(PreferKey.saveTabPosition to 987654321L).toTestPreferences()
         val settings = legacy.toBookshelfSettings()
 
@@ -24,8 +23,8 @@ class BookshelfSettingsMappingTest {
     }
 
     @Test
-    fun `Bookshelf 61 读写映射字段对应`() {
-        assertEquals(61, BookshelfSettings().toPrefMap().size)
+    fun `Bookshelf 53 键写读映射逐字段对应`() {
+        assertEquals(53, BookshelfSettings().toPrefMap().size)
         bookshelfMappingSamples().forEach { expected ->
             assertEquals(expected.expectedPrefMap(), expected.toPrefMap())
             assertEquals(
@@ -130,6 +129,8 @@ private fun bookshelfMappingSamples(): List<BookshelfSettings> {
         bookshelfGroupCoverCount = 123,
         bookshelfListCoverWidth = 124,
         bookshelfGridCoverWidth = 125,
+        bookshelfGridFixedColumns = false,
+        bookshelfGridFixedCoverWidth = false,
         bookshelfSearchActionDirectToSearch = false,
         autoRefreshBook = false,
         saveTabPosition = 987654321L,
@@ -159,6 +160,8 @@ private fun bookshelfMappingSamples(): List<BookshelfSettings> {
         base.copy(bookshelfTitleSmallFont = true),
         base.copy(bookshelfTitleCenter = true),
         base.copy(bookshelfCoverShadow = true),
+        base.copy(bookshelfGridFixedColumns = true),
+        base.copy(bookshelfGridFixedCoverWidth = true),
         base.copy(bookshelfSearchActionDirectToSearch = true),
         base.copy(autoRefreshBook = true),
     )
@@ -171,14 +174,15 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfSortOrder to bookshelfSortOrder,
     PreferKey.showUnread to showUnread,
     PreferKey.showUnreadNew to showUnreadNew,
-    PreferKey.showReadingProgress to showReadingProgress,
     PreferKey.showTip to showTip,
     PreferKey.showBookCount to showBookCount,
     PreferKey.showLastUpdateTime to showLastUpdateTime,
     PreferKey.showBookIntro to showBookIntro,
     PreferKey.bookshelfShowIntro to bookshelfShowIntro,
     PreferKey.bookshelfShowTag to bookshelfShowTag,
-    PreferKey.bookshelfTagBorder to bookshelfTagBorder,
+    PreferKey.bookshelfShowCustomTags to bookshelfShowCustomTags,
+    PreferKey.bookshelfShowSourceTags to bookshelfShowSourceTags,
+    PreferKey.bookshelfShowWordCount to bookshelfShowWordCount,
     PreferKey.bookshelfShowLatestChapter to bookshelfShowLatestChapter,
     PreferKey.bookshelfIntroMaxLines to bookshelfIntroMaxLines,
     PreferKey.showWaitUpCount to showWaitUpCount,
@@ -201,8 +205,6 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfLayoutCompact to bookshelfLayoutCompact,
     PreferKey.bookshelfListCoverCenter to bookshelfListCoverCenter,
     PreferKey.bookshelfListIntroBelowContent to bookshelfListIntroBelowContent,
-    PreferKey.bookshelfTicketStyle to bookshelfTicketStyle,
-    PreferKey.bookshelfTicketDotted to bookshelfTicketDotted,
     PreferKey.bookshelfShowDivider to bookshelfShowDivider,
     PreferKey.bookshelfTitleSmallFont to bookshelfTitleSmallFont,
     PreferKey.bookshelfTitleCenter to bookshelfTitleCenter,
@@ -214,11 +216,9 @@ private fun BookshelfSettings.expectedPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.bookshelfGroupCoverCount to bookshelfGroupCoverCount,
     PreferKey.bookshelfListCoverWidth to bookshelfListCoverWidth,
     PreferKey.bookshelfGridCoverWidth to bookshelfGridCoverWidth,
+    PreferKey.bookshelfGridFixedColumns to bookshelfGridFixedColumns,
+    PreferKey.bookshelfGridFixedCoverWidth to bookshelfGridFixedCoverWidth,
     PreferKey.bookshelfSearchActionDirectToSearch to bookshelfSearchActionDirectToSearch,
-    PreferKey.allowSameNameAuthorType to allowSameNameAuthorType,
     PreferKey.autoRefresh to autoRefreshBook,
     PreferKey.bookshelfSelectedGroupId to saveTabPosition,
-    PreferKey.showBookshelfTagFilter to showBookshelfTagFilter,
-    PreferKey.selectedBookshelfTagIds to selectedBookshelfTagIds.mapTo(mutableSetOf()) { it.toString() },
-    PreferKey.bookshelfTagFilterExpanded to bookshelfTagFilterExpanded,
 )

@@ -158,7 +158,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 134,
+    version = 135,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -302,7 +302,7 @@ val appDb by lazy {
         AutoMigration(from = 130, to = 131),
         // books 新增 disableReadRecord 列：单独为本书关闭阅读记录，默认 0 = 照常记录
         AutoMigration(from = 131, to = 132),
-        // 132→133 与 133→134 都走 DatabaseMigrations 的手写迁移（mainJs / script /
+        // 132→133、133→134 与 134→135 都走 DatabaseMigrations 的手写迁移（mainJs / script /
         // scriptOptionsJson 三列 + highlight_rules 边框三列 + bookUpdates 新表）：
         // AutoMigration 要求两端 schema JSON 齐备，133.json 在版本越过 133 后无法再导出，
         // 中间版本只能手写。上游把边框三列单独提成 AutoMigration(132,133)，本 fork 的 133

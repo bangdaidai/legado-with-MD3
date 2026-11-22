@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Message
 import android.view.MotionEvent
 import android.view.View
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -29,8 +30,11 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -99,6 +103,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -128,6 +133,7 @@ import io.legado.app.domain.usecase.ResolveBookShelfStateUseCase
 import io.legado.app.domain.model.BookSearchScope
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.coil.CoverExtras
+import io.legado.app.help.http.handleRenderProcessGone
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.book.search.ScopeSelection
@@ -137,6 +143,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.filled.Search
 import io.legado.app.ui.theme.AppThemeMode
+import io.legado.app.ui.theme.ComposeEngine
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
 import io.legado.app.ui.theme.LocalHazeState
@@ -144,13 +151,14 @@ import io.legado.app.ui.theme.LocalLegadoThemeColors
 import io.legado.app.ui.theme.ProvideColorSchemeOverride
 import io.legado.app.ui.theme.ThemeEngine
 import io.legado.app.ui.theme.ThemeOverrideState
-import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.theme.animateColorSchemeAsState
 import io.legado.app.ui.theme.fadingEdge
+import io.legado.app.ui.theme.isMiuixHyperOs4Enabled
 import io.legado.app.ui.theme.rememberImageSeedColor
 import io.legado.app.ui.theme.rememberThemeOverride
 import io.legado.app.ui.theme.responsiveHazeEffectFixedStyle
 import io.legado.app.ui.theme.responsiveHazeEffectStatusBar
+import io.legado.app.ui.theme.MiuixBlurredTopBar
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
@@ -185,16 +193,22 @@ import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarScrollBehavior
 import io.legado.app.ui.widget.components.topbar.M3GlassScrollBehavior
 import io.legado.app.ui.widget.components.topbar.MiuixGlassScrollBehavior
+import io.legado.app.ui.widget.components.topbar.MiuixNativeTopBar
 import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import io.legado.app.ui.widget.components.topbar.TopBarActionsRow
+import io.legado.app.ui.widget.components.mochi.ProvideMochiScrollBlurProgress
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
-import io.legado.app.ui.widget.components.topbar.miuixTopBarActionsEndPadding
-import io.legado.app.ui.widget.components.topbar.miuixTopBarSlotPadding
+import ui.feice.mochi.basic.MochiButtonDefaults
 import io.legado.app.ui.widget.components.variable.VariableEditorSheet
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.HtmlFormatter
 import io.legado.app.utils.openUrl
 import kotlinx.collections.immutable.ImmutableList
+import io.legado.app.ui.widget.components.menu.AppAction
+import io.legado.app.ui.widget.components.menu.AppActionGroup
+import io.legado.app.ui.widget.components.menu.AppActionMenu
+import io.legado.app.ui.widget.components.topbar.TopBarActionMenu
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -340,7 +354,9 @@ private fun BookInfoScreenContent(
     usesDefaultCover: Boolean,
     onNetworkCoverLoadError: (String?) -> Unit,
 ) {
-    val isMiuix = ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)
+    val isMiuix = LegadoTheme.composeEngine == ComposeEngine.Miuix
+    val intro = state.book?.intro
+    val hasWebIntro = remember(intro) { parseBookInfoIntro(intro) is BookInfoIntroContent.Web }
     val scrollBehavior = if (isMiuix) {
         MiuixGlassScrollBehavior(MiuixScrollBehavior())
     } else {
@@ -358,6 +374,7 @@ private fun BookInfoScreenContent(
     // 语言/字体缩放切换后可能拿到过期值（LocalContextGetResourceValueCall）。
     val jumpToAnotherAppMessage = stringResource(R.string.jump_to_another_app)
     val confirmLabel = stringResource(R.string.confirm)
+    val readingLabel = stringResource(R.string.reading)
     val jumpToAnotherApp: (Uri) -> Unit = { uri ->
         scope.launch {
             val result = snackbarHostState.showSnackbar(
@@ -402,6 +419,9 @@ private fun BookInfoScreenContent(
             if (!state.privateLocked) {
                 ExtendedFloatingActionButton(
                     onClick = { onIntent(BookInfoIntent.ReadClick) },
+                    modifier = Modifier.semantics {
+                        contentDescription = readingLabel
+                    },
                     containerColor = LegadoTheme.colorScheme.primaryContainer,
                     contentColor = LegadoTheme.colorScheme.onPrimaryContainer,
                     icon = { AppIcon(Icons.Default.Book, null) },
@@ -410,6 +430,8 @@ private fun BookInfoScreenContent(
             }
         },
         alwaysDrawBehindBars = true,
+        // 详情简介的 WebView 不能被录进 HyperOS 4 的背景图层（#2610）。
+        disableContentSampling = isMiuixHyperOs4Enabled() && hasWebIntro,
     ) { paddingValues ->
         val book = state.book
         if (state.privateLocked) {
@@ -796,7 +818,10 @@ private fun BookInfoTransparentTopAppBar(
     scrollBehavior: GlassTopAppBarScrollBehavior,
 ) {
     val hazeState = LocalHazeState.current
-    val isMiuix = ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)
+    val isMiuix = LegadoTheme.composeEngine == ComposeEngine.Miuix
+    val isMochi = LegadoTheme.composeEngine == ComposeEngine.Mochi
+    // The M3 host supplies 4dp inside each slot. Complete the engine's outer margin.
+    val slotEdgePadding = if (isMochi) MochiButtonDefaults.BarHorizontalPadding - 4.dp else 12.dp
     val collapsedColor = if (isMiuix) {
         GlassTopAppBarDefaults.getMiuixAppBarColor()
     } else {
@@ -810,39 +835,44 @@ private fun BookInfoTransparentTopAppBar(
     )
 
     if (isMiuix) {
-        MiuixTopAppBar(
-            modifier = hazeState?.let { Modifier.responsiveHazeEffectFixedStyle(it) } ?: Modifier,
+        val miuixBehavior = (scrollBehavior as? MiuixGlassScrollBehavior)?.miuixBehavior
+        val navigationIcon: @Composable () -> Unit = { TopBarNavigationButton(onClick = onBackPressed) }
+        val actions: @Composable RowScope.() -> Unit = {
+            BookInfoTopBarActions(state = state, onMenuAction = onMenuAction)
+        }
+        MiuixNativeTopBar(
             title = "",
-            subtitle = "",
-            navigationIcon = {
-                TopBarNavigationButton(onClick = onBackPressed)
-            },
-            actions = {
-                TopBarActionsRow(
-                    modifier = Modifier.padding(
-                        end = miuixTopBarActionsEndPadding()
-                    )
-                ) {
-                    BookInfoTopBarActions(
-                        state = state,
-                        onMenuAction = onMenuAction,
-                    )
-                }
-            },
-            color = resolvedColor,
-            navigationIconPadding = miuixTopBarSlotPadding(),
-            actionIconPadding = miuixTopBarSlotPadding(),
-            scrollBehavior = (scrollBehavior as? MiuixGlassScrollBehavior)?.miuixBehavior,
-        )
+            scrollBehavior = miuixBehavior,
+            defaultWindowInsetsPadding = true,
+            navigationIcon = navigationIcon,
+            actions = actions,
+        ) {
+            MiuixBlurredTopBar(scrollBehavior = miuixBehavior, fixedStyle = true) {
+                MiuixTopAppBar(
+                    title = "",
+                    navigationIcon = navigationIcon,
+                    actions = actions,
+                    color = resolvedColor,
+                    scrollBehavior = miuixBehavior,
+                )
+            }
+        }
     } else {
+        if (isMochi) ProvideMochiScrollBlurProgress { scrollBehavior.collapsedFraction }
         MediumFlexibleTopAppBar(
             modifier = hazeState?.let { Modifier.responsiveHazeEffectFixedStyle(it) } ?: Modifier,
             title = { AppText(text = "", maxLines = 1) },
             navigationIcon = {
-                TopBarNavigationButton(onClick = onBackPressed)
+                // This M3 slot contributes 4dp itself. Complete Mochi's 16dp edge margin.
+                TopBarNavigationButton(
+                    onClick = onBackPressed,
+                    modifier = if (isMochi) {
+                        Modifier.padding(start = slotEdgePadding)
+                    } else Modifier,
+                )
             },
             actions = {
-                Box(modifier = Modifier.padding(end = 12.dp)) {
+                Box(modifier = Modifier.padding(end = slotEdgePadding)) {
                     TopBarActionsRow {
                         BookInfoTopBarActions(
                             state = state,
@@ -928,6 +958,9 @@ private fun resolveBookInfoBackdropStyle(
     return resolveBookInfoBackdropStyle(backgroundMode)
 }
 
+/** 详情页更多菜单的稳定 ID 前缀：`book_` + `BookInfoMenuAction.name`。 */
+private const val MENU_PREFIX = "book_"
+
 @Composable
 private fun BookInfoTopBarActions(
     state: BookInfoUiState,
@@ -962,24 +995,164 @@ private fun BookInfoOverflowAction(
     state: BookInfoUiState,
     onMenuAction: (BookInfoMenuAction) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        TopBarActionButton(
-            onClick = { expanded = true },
-            imageVector = AppIcons.MoreVert,
-            contentDescription = stringResource(R.string.more_actions),
-        )
-        BookInfoOverflowMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            state = state,
-            onMenuAction = {
-                expanded = false
-                onMenuAction(it)
-            },
-        )
-    }
+    val book = state.book
+    val source = state.bookSourceUi
+    // 条件项保留原有顺序与可见性；ID = 前缀 + 枚举名，分派时无歧义还原成动作。
+    TopBarActionMenu(
+        groups = persistentListOf(
+            AppActionGroup(
+                id = "book_info_menu",
+                actions = buildList {
+                    if (source?.hasCustomButton == true) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.CustomButton.name}",
+                                label = stringResource(R.string.custom_button),
+                            )
+                        )
+                    }
+                    if (state.inBookshelf) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.Edit.name}",
+                                label = stringResource(R.string.edit),
+                            )
+                        )
+                    }
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.Refresh.name}",
+                            label = stringResource(R.string.refresh),
+                        )
+                    )
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.ReadRecord.name}",
+                            label = stringResource(R.string.read_record),
+                        )
+                    )
+                    if (state.inBookshelf && book != null) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.ToggleReadRecordDisabled.name}",
+                                label = stringResource(R.string.book_disable_read_record),
+                                checked = book.disableReadRecord,
+                            )
+                        )
+                    }
+                    if (book?.isLocal == true) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.SyncRemote.name}",
+                                label = stringResource(R.string.re_sync_webdav),
+                            )
+                        )
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.Upload.name}",
+                                label = stringResource(R.string.upload_to_remote),
+                            )
+                        )
+                    }
+                    if (source?.hasLogin == true) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.Login.name}",
+                                label = stringResource(R.string.login),
+                            )
+                        )
+                    }
+                    if (source != null) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.SetSourceVariable.name}",
+                                label = stringResource(R.string.set_source_variable),
+                            )
+                        )
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.SetBookVariable.name}",
+                                label = stringResource(R.string.set_book_variable),
+                            )
+                        )
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.CopyBookUrl.name}",
+                                label = stringResource(R.string.copy_book_url),
+                            )
+                        )
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.CopyTocUrl.name}",
+                                label = stringResource(R.string.copy_toc_url),
+                            )
+                        )
+                    }
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.Top.name}",
+                            label = stringResource(R.string.to_top),
+                        )
+                    )
+                    if (book?.isLocal == false) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.ToggleCanUpdate.name}",
+                                label = stringResource(R.string.allow_update),
+                                checked = book.canUpdate,
+                            )
+                        )
+                    }
+                    if (book?.isLocal == true && book.type and BookType.text > 0) {
+                        add(
+                            AppAction(
+                                id = "$MENU_PREFIX${BookInfoMenuAction.ToggleSplitLongChapter.name}",
+                                label = stringResource(R.string.split_long_chapter),
+                                checked = book.splitLongChapter,
+                            )
+                        )
+                    }
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.ToggleDeleteAlert.name}",
+                            label = stringResource(R.string.delete_alert),
+                            checked = state.deleteAlertEnabled,
+                        )
+                    )
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.ClearCache.name}",
+                            label = stringResource(R.string.clear_cache),
+                        )
+                    )
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.ShowLog.name}",
+                            label = stringResource(R.string.log),
+                        )
+                    )
+                    add(
+                        AppAction(
+                            id = "$MENU_PREFIX${BookInfoMenuAction.TogglePrivate.name}",
+                            label = stringResource(
+                                if (state.bookPrivate) {
+                                    R.string.private_unmark_book
+                                } else {
+                                    R.string.private_mark_book
+                                }
+                            ),
+                            checked = state.bookPrivate,
+                        )
+                    )
+                }.toImmutableList(),
+            ),
+        ),
+        onAction = { id ->
+            BookInfoMenuAction.entries
+                .firstOrNull { id == "$MENU_PREFIX${it.name}" }
+                ?.let(onMenuAction)
+        },
+    )
 }
 
 @Composable
@@ -1218,6 +1391,24 @@ private fun BookInfoOverflowMenu(
 }
 
 @Composable
+private fun bookInfoTitleMenuGroups(isTitleExpanded: Boolean): ImmutableList<AppActionGroup> =
+    persistentListOf(
+        AppActionGroup(
+            id = "book_info_title_menu",
+            actions = persistentListOf(
+                AppAction(id = TITLE_MENU_SEARCH, label = stringResource(R.string.search)),
+                AppAction(
+                    id = TITLE_MENU_TOGGLE_EXPAND,
+                    label = stringResource(
+                        if (isTitleExpanded) R.string.collapse else R.string.expand
+                    ),
+                ),
+            ),
+        ),
+    )
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun BookInfoHeader(
     book: BookInfoBookUi,
     highlightedTags: List<HighlightedTag>,
@@ -1228,7 +1419,7 @@ private fun BookInfoHeader(
     tagBorder: Boolean,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
-    onAuthorClick: (Boolean) -> Unit,
+    onAuthorClick: (Boolean, String?) -> Unit,
     onBookNameClick: (Boolean) -> Unit,
     onOriginClick: () -> Unit,
     onNetworkCoverLoadError: () -> Unit,
@@ -1525,7 +1716,9 @@ private fun BookInfoActionCard(
     GlassCard(
         modifier = modifier.semantics(mergeDescendants = true) {
             role = Role.Button
-            contentDescription = label
+            // 描述与可见文案一致时交给文本节点朗读，避免同一名称念两遍；
+            // 仅冲突提示等补充信息才覆盖。
+            if (contentDescription != label) this.contentDescription = contentDescription
         },
         onLongClick = onLongClick,
         onClick = onClick,
@@ -1851,12 +2044,9 @@ private fun parseBookInfoIntro(intro: String?): BookInfoIntroContent? {
  * （WebCacheManager 缓存、书源对象、WebJsExtensions），
  * 并处理 legado/yuedu scheme（导入）与其他 scheme（确认后跳转）。
  *
- * WebView 经 [WebViewContainerCompose] 的 FrameLayout 间接挂载：直接作为
- * AndroidView 子 View 时，加载后改高度会触发 Vulkan functor 重绘路径，
- * 在 Android 16 HWUI Vulkan 后端上引发 drawVk SIGTRAP 原生崩溃（issue #2468）。
+ * WebView 经 [WebViewContainerCompose] 的 FrameLayout 间接挂载（#2468）。
  */
 @Composable
-@SuppressLint("SetJavaScriptEnabled")
 private fun BookInfoWebIntro(
     html: String,
     baseUrl: String?,
@@ -1865,7 +2055,10 @@ private fun BookInfoWebIntro(
 ) {
     val context = LocalContext.current
     // 初始高度先给一屏，否则 WebView 在 0 高度下不会被布局，也就无法测量内容高度
-    val pageHeight = LocalConfiguration.current.screenHeightDp.dp.coerceAtLeast(320.dp)
+    // 分屏/折叠屏下物理屏高不等于容器高，初始占位高度按窗口容器算
+    val pageHeight = with(LocalDensity.current) {
+        LocalWindowInfo.current.containerSize.height.toDp()
+    }.coerceAtLeast(320.dp)
     val textColor = LegadoTheme.colorScheme.onSurface
     val textColorHex = remember(textColor) {
         ColorUtils.intToString(textColor.toArgb())
@@ -1944,6 +2137,7 @@ private fun BookInfoWebIntro(
  * 详情页 `<useweb>` 简介的 WebView：实例级配置（settings、JS 桥接、ChromeClient），
  * 随 [WebViewContainerCompose] 的 factory 创建。
  */
+@SuppressLint("SetJavaScriptEnabled")
 private fun createBookInfoWebIntroWebView(context: Context, bookSource: BookSource?): WebView =
     WebView(context).apply {
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -2006,6 +2200,8 @@ private fun buildBookInfoWebIntroHtml(html: String, textColorHex: String): Strin
     </html>
 """.trimIndent()
 
+// MissingOnRenderProcessGone：该规则按 Java PSI 查构造调用，看不到 Kotlin 匿名对象里的 override。
+@SuppressLint("MissingOnRenderProcessGone")
 private fun buildBookInfoWebIntroClient(
     context: Context,
     isCurrentLoad: () -> Boolean,
@@ -2038,6 +2234,10 @@ private fun buildBookInfoWebIntroClient(
         }
     }
 
+    // 渲染进程被系统回收时默认会连带杀掉宿主进程
+    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean =
+        view.handleRenderProcessGone()
+
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         super.onPageStarted(view, url, favicon)
         view?.let { runCatching { it.evaluateJavascript(injectionString, null) } }
@@ -2056,7 +2256,9 @@ private fun buildBookInfoWebIntroClient(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+// MissingOnRenderProcessGone：onCreateWindow 里的弹窗 WebViewClient 已实现该回调，
+// 但规则按 Java PSI 查构造调用，看不到 Kotlin 匿名对象里的 override。
+@SuppressLint("SetJavaScriptEnabled", "MissingOnRenderProcessGone")
 private fun buildBookInfoWebChromeClient(): WebChromeClient = object : WebChromeClient() {
 
     override fun onCreateWindow(
@@ -2070,6 +2272,11 @@ private fun buildBookInfoWebChromeClient(): WebChromeClient = object : WebChrome
         val popup = WebView(host.context).apply {
             settings.javaScriptEnabled = true
             webViewClient = object : WebViewClient() {
+                override fun onRenderProcessGone(
+                    view: WebView,
+                    detail: RenderProcessGoneDetail,
+                ): Boolean = view.handleRenderProcessGone()
+
                 override fun shouldOverrideUrlLoading(
                     popupView: WebView?,
                     request: WebResourceRequest?,

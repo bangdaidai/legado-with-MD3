@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.domain.gateway.AppLocaleGateway
-import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.DirectLinkRule
 import io.legado.app.domain.gateway.DirectLinkSettingsGateway
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
@@ -14,7 +13,6 @@ import io.legado.app.domain.gateway.OtherConfigSystemGateway
 import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.model.settings.OtherSettings
-import io.legado.app.domain.model.settings.BookshelfSettings
 import io.legado.app.domain.model.settings.ReadAloudSettings
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
@@ -29,7 +27,6 @@ class OtherConfigViewModel(
     private val appLocaleGateway: AppLocaleGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val otherSettingsGateway: OtherSettingsGateway,
-    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
     private val downloadCacheSettingsGateway: DownloadCacheSettingsGateway,
     private val directLinkSettingsGateway: DirectLinkSettingsGateway,
     private val systemGateway: OtherConfigSystemGateway,
@@ -46,8 +43,6 @@ class OtherConfigViewModel(
             readAloudByMediaButton =
                 readAloudSettingsGateway.currentSettings.readAloudByMediaButton,
             ignoreAudioFocus = readAloudSettingsGateway.currentSettings.ignoreAudioFocus,
-            allowSameNameAuthorType =
-                bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType,
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -78,13 +73,6 @@ class OtherConfigViewModel(
                 }
             }
         }
-        viewModelScope.launch {
-            bookshelfSettingsGateway.settings.collect { settings ->
-                _uiState.update {
-                    it.copy(allowSameNameAuthorType = settings.allowSameNameAuthorType)
-                }
-            }
-        }
         loadDirectLinkConfiguration()
     }
 
@@ -96,6 +84,8 @@ class OtherConfigViewModel(
             is OtherConfigIntent.LanguageChanged -> appLocaleGateway.setLanguage(intent.value)
             is OtherConfigIntent.UpdateToVariantChanged ->
                 updateOtherSetting { it.copy(updateToVariant = intent.value) }
+            is OtherConfigIntent.UpdateEndpointChanged ->
+                updateOtherSetting { it.copy(updateEndpoint = intent.value) }
             is OtherConfigIntent.AutoCheckUpdateOnStartChanged ->
                 updateOtherSetting { it.copy(autoCheckUpdateOnStart = intent.value) }
             is OtherConfigIntent.WebServiceAutoStartChanged ->
@@ -120,10 +110,6 @@ class OtherConfigViewModel(
                 updateOtherSetting { it.copy(autoClearExpired = intent.value) }
             is OtherConfigIntent.ShowAddToShelfAlertChanged ->
                 updateOtherSetting { it.copy(showAddToShelfAlert = intent.value) }
-            is OtherConfigIntent.AllowSameNameAuthorTypeChanged ->
-                updateBookshelfSetting { it.copy(allowSameNameAuthorType = intent.value) }
-            is OtherConfigIntent.ShowMangaUiChanged ->
-                updateOtherSetting { it.copy(showMangaUi = intent.value) }
             is OtherConfigIntent.WebServiceWakeLockChanged ->
                 updateOtherSetting { it.copy(webServiceWakeLock = intent.value) }
             is OtherConfigIntent.BlockSourceBrowserChanged ->
@@ -210,15 +196,6 @@ class OtherConfigViewModel(
     ) {
         viewModelScope.launch {
             runCatching { readAloudSettingsGateway.update(transform) }
-                .onFailure { showMessage(it.localizedMessage ?: "设置失败") }
-        }
-    }
-
-    private fun updateBookshelfSetting(
-        transform: (BookshelfSettings) -> BookshelfSettings,
-    ) {
-        viewModelScope.launch {
-            runCatching { bookshelfSettingsGateway.update(transform) }
                 .onFailure { showMessage(it.localizedMessage ?: "设置失败") }
         }
     }
@@ -367,6 +344,7 @@ private fun DirectLinkRule.toUi() = DirectLinkRuleUi(
 private fun OtherSettings.toUiState(current: OtherConfigUiState): OtherConfigUiState =
     current.copy(
         updateToVariant = updateToVariant,
+        updateEndpoint = updateEndpoint,
         autoCheckUpdateOnStart = autoCheckUpdateOnStart,
         webServiceAutoStart = webServiceAutoStart,
         autoRefresh = autoRefresh,
@@ -377,7 +355,6 @@ private fun OtherSettings.toUiState(current: OtherConfigUiState): OtherConfigUiS
         replaceEnableDefault = replaceEnableDefault,
         autoClearExpired = autoClearExpired,
         showAddToShelfAlert = showAddToShelfAlert,
-        showMangaUi = showMangaUi,
         webServiceWakeLock = webServiceWakeLock,
         blockSourceBrowser = blockSourceBrowser,
         sourceEditMaxLine = sourceEditMaxLine,

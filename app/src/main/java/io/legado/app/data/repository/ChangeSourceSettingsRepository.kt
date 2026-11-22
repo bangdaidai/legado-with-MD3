@@ -49,6 +49,7 @@ class ChangeSourceSettingsRepository : ChangeSourceSettingsGateway {
 
 internal fun Preferences.toChangeSourceSettings() = ChangeSourceSettings(
     searchScope = compatDsString(LocalPreferencesKeys.CHANGE_SOURCE_SEARCH_SCOPE.name).orEmpty(),
+    coverSearchScope = compatDsString(LocalPreferencesKeys.CHANGE_COVER_SEARCH_SCOPE.name).orEmpty(),
     checkAuthor = compatDsBoolean(LocalPreferencesKeys.CHANGE_SOURCE_CHECK_AUTHOR.name) ?: false,
     suppressPopup = compatDsBoolean(LocalPreferencesKeys.CHANGE_SOURCE_SUPPRESS_POPUP.name) ?: false,
     loadInfo = compatDsBoolean(LocalPreferencesKeys.CHANGE_SOURCE_LOAD_INFO.name) ?: false,
@@ -71,6 +72,7 @@ internal fun Preferences.toChangeSourceSettings() = ChangeSourceSettings(
 
 internal fun ChangeSourceSettings.toPrefMap(): Map<String, Any?> = mapOf(
     LocalPreferencesKeys.CHANGE_SOURCE_SEARCH_SCOPE.name to searchScope,
+    LocalPreferencesKeys.CHANGE_COVER_SEARCH_SCOPE.name to coverSearchScope,
     LocalPreferencesKeys.CHANGE_SOURCE_CHECK_AUTHOR.name to checkAuthor,
     LocalPreferencesKeys.CHANGE_SOURCE_SUPPRESS_POPUP.name to suppressPopup,
     LocalPreferencesKeys.CHANGE_SOURCE_LOAD_INFO.name to loadInfo,

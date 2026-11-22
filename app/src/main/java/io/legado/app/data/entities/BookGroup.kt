@@ -34,8 +34,9 @@ data class BookGroup(
         const val IdAudio = -3L
         const val IdNetNone = -4L
         const val IdLocalNone = -5L
-        const val IdVideo = -6L
         const val IdManga = -7L
+        // 与上游（legado-E / Archive）保持一致：视频分组是 -6，避免备份互导时分组对不上
+        const val IdVideo = -6L
         const val IdText = -8L
         const val IdError = -11L
         const val IdReading = -20L
@@ -60,7 +61,7 @@ data class BookGroup(
             IdLocalNone -> GroupNameInfo(groupName, context.getString(R.string.local_no_group))
             IdManga -> GroupNameInfo(groupName, context.getString(R.string.manga))
             IdText -> GroupNameInfo(groupName, context.getString(R.string.noval))
-            IdVideo -> GroupNameInfo(groupName, context.getString(R.string.book_type_video))
+            IdVideo -> GroupNameInfo(groupName, context.getString(R.string.video))
             IdError -> GroupNameInfo(groupName, context.getString(R.string.update_book_fail))
             IdReading -> GroupNameInfo(groupName, context.getString(R.string.is_reading))
             IdUnread -> GroupNameInfo(groupName, context.getString(R.string.is_unread))

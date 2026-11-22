@@ -27,18 +27,18 @@ class ThemeSettingsMappingTest {
     }
 
     @Test
-    fun `Theme gateway 持久化边界固定为 76 键`() {
+    fun `Theme gateway 持久化边界固定为 74 键`() {
         val actualKeys = ThemeSettings().toGatewayPrefMap().keys
         val expectedKeys = ThemeSettings().expectedGatewayPrefMap().keys
 
-        assertEquals(76, actualKeys.size)
+        assertEquals(74, actualKeys.size)
         assertEquals(expectedKeys, actualKeys)
         assertFalse(PreferKey.customMode in actualKeys)
         assertFalse(PreferKey.bookInfoInputColor in actualKeys)
     }
 
     @Test
-    fun `Theme gateway 76 键写读映射逐字段对应`() {
+    fun `Theme gateway 74 键写读映射逐字段对应`() {
         themeMappingSamples().forEach { expected ->
             assertEquals(expected.expectedGatewayPrefMap(), expected.toGatewayPrefMap())
             assertEquals(
@@ -188,6 +188,10 @@ private fun themeMappingSamples(): List<ThemeSettings> {
         useFlexibleTopAppBar = false,
         topBarButtonStyle = "glass",
         mergeTopBarActions = true,
+        mochiTopBarLiquidGlass = false,
+        mochiScrollEdgeBlurEnabled = false,
+        miuixTopBarLiquidGlass = true,
+        useHyperOs4Components = true,
         bookInfoFollowCoverColor = false,
         bookInfoNetworkCoverBackground = "network-background",
         bookInfoDefaultCoverBackground = "default-background",
@@ -201,12 +205,6 @@ private fun themeMappingSamples(): List<ThemeSettings> {
         largeContainerBackgroundImageDark = "large-container-dark",
         itemBackgroundImageLight = "item-light",
         itemBackgroundImageDark = "item-dark",
-        largeContainerNineSliceLight = "0.1,0.2,0.3,0.4",
-        largeContainerNineSliceDark = "0.15,0.25,0.35,0.45",
-        itemNineSliceLight = "0.05,0.06,0.07,0.08",
-        itemNineSliceDark = "0.2,0.3,0.4,0.5",
-        largeContainerNineSliceScale = 1.5f,
-        itemNineSliceScale = 0.75f,
         enableContainerBackgroundImage = true,
         appColumnBackgroundOpacity = 127,
         glassCardBackgroundOpacity = 128,
@@ -222,6 +220,7 @@ private fun themeMappingSamples(): List<ThemeSettings> {
         eyeProtectionEndTime = "end-time",
         showRefactorTip = false,
         enableCustomTagColors = false,
+        customTagColorsJson = "tag-colors",
     )
     return listOf(
         base,
@@ -233,6 +232,7 @@ private fun themeMappingSamples(): List<ThemeSettings> {
         base.copy(disableSplicedColumnGroupCornerRadius = true),
         base.copy(enableBlur = true),
         base.copy(enableProgressiveBlur = true),
+        base.copy(useHyperOs4Components = false),
         base.copy(useFlexibleTopAppBar = true),
         base.copy(bookInfoFollowCoverColor = true),
         base.copy(enableItemDivider = true),
@@ -287,6 +287,10 @@ private fun ThemeSettings.expectedGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.useFlexibleTopAppBar to useFlexibleTopAppBar,
     PreferKey.topBarButtonStyle to topBarButtonStyle,
     PreferKey.mergeTopBarActions to mergeTopBarActions,
+    PreferKey.mochiTopBarLiquidGlass to mochiTopBarLiquidGlass,
+    PreferKey.mochiScrollEdgeBlurEnabled to mochiScrollEdgeBlurEnabled,
+    PreferKey.miuixTopBarLiquidGlass to miuixTopBarLiquidGlass,
+    PreferKey.useHyperOs4Components to useHyperOs4Components,
     PreferKey.bookInfoFollowCoverColor to bookInfoFollowCoverColor,
     PreferKey.bookInfoNetworkCoverBackground to bookInfoNetworkCoverBackground,
     PreferKey.bookInfoDefaultCoverBackground to bookInfoDefaultCoverBackground,
@@ -299,12 +303,6 @@ private fun ThemeSettings.expectedGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.largeContainerBackgroundImageDark to largeContainerBackgroundImageDark,
     PreferKey.itemBackgroundImageLight to itemBackgroundImageLight,
     PreferKey.itemBackgroundImageDark to itemBackgroundImageDark,
-    PreferKey.largeContainerNineSliceLight to largeContainerNineSliceLight,
-    PreferKey.largeContainerNineSliceDark to largeContainerNineSliceDark,
-    PreferKey.itemNineSliceLight to itemNineSliceLight,
-    PreferKey.itemNineSliceDark to itemNineSliceDark,
-    PreferKey.largeContainerNineSliceScale to largeContainerNineSliceScale,
-    PreferKey.itemNineSliceScale to itemNineSliceScale,
     PreferKey.enableContainerBackgroundImage to enableContainerBackgroundImage,
     PreferKey.appColumnBackgroundOpacity to appColumnBackgroundOpacity,
     PreferKey.glassCardBackgroundOpacity to glassCardBackgroundOpacity,
@@ -320,5 +318,5 @@ private fun ThemeSettings.expectedGatewayPrefMap(): Map<String, Any?> = mapOf(
     PreferKey.eyeProtectionEndTime to eyeProtectionEndTime,
     LocalPreferencesKeys.SHOW_THEME_REFACTOR_TIP.name to showRefactorTip,
     PreferKey.enableCustomTagColors to enableCustomTagColors,
-    PreferKey.enableStatusBarBlur to enableStatusBarBlur,
+    PreferKey.customTagColors to customTagColorsJson,
 )

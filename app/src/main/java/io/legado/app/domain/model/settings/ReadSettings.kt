@@ -57,6 +57,10 @@ data class ReadSettings(
     val showReadTitleAddition: Boolean = true,
     val autoReadSpeed: Int = 10,
     val systemTypefaces: Int = 0,
+    /** 当前生效的段评气泡包目录名（`bubblePackages/<dirName>`）。 */
+    val paragraphBubblePackage: String = "builtin_default",
+    /** 正文里图片形式的段评入口是否强制改用软件气泡渲染。 */
+    val forceSoftwareParagraphBubble: Boolean = false,
     val preDownloadNum: Int = 10,
     val preDownloadNumPrev: Int = 0,
     val prevKeys: String = "",
@@ -121,4 +125,10 @@ data class ReadSettings(
     val showMenuIcon: Boolean = false,
     val titleBarCompact: Boolean = false,
     val moreActionsConfig: String = "",
-)
+    /** 0 表示使用书源提供的弹窗高度。 */
+    val paragraphCommentHeightPercent: Int = 0,
+) {
+    companion object {
+        internal val paragraphCommentHeightOptions = listOf(0, 30, 50, 70, 90, 100)
+    }
+}

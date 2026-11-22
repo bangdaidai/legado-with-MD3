@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onSizeChanged
 import android.content.ClipData
@@ -1162,6 +1163,7 @@ private fun ChatInputBar(
                 textStyle = LegadoTheme.typography.bodyMedium.copy(
                     color = LegadoTheme.colorScheme.onSurface
                 ),
+                cursorBrush = SolidColor(LegadoTheme.colorScheme.primary),
                 decorationBox = { innerTextField ->
                     Box(
                         modifier = Modifier

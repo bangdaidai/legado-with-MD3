@@ -7,6 +7,9 @@ import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.JsonParser
+import com.google.gson.Strictness
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.BookSource
@@ -24,22 +27,18 @@ import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
-import io.legado.app.help.http.text
 import io.legado.app.help.source.SourceHelp
-import io.legado.app.model.jsSource.JsSourceConfig
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import io.legado.app.ui.widget.components.importComponents.ImportItemWrapper
 import io.legado.app.ui.widget.components.importComponents.ImportStatus
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
-import io.legado.app.utils.fromJsonArray
-import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.inputStream
 import io.legado.app.utils.isAbsUrl
-import io.legado.app.utils.isJsonArray
-import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
 import io.legado.app.utils.splitNotBlank
+import java.io.Reader
+import java.io.StringReader
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.Dispatchers
@@ -235,6 +234,10 @@ class BookSourceViewModel(
             ) else null,
             checkOptions = BookSourceCheckOptionsUi(
                 timeoutSeconds = settings.timeoutMillis / 1000,
+                threadCount = settings.threadCount,
+                writeSourceComment = settings.writeSourceComment,
+                quickMode = settings.quickMode,
+                checkDomain = settings.checkDomain,
                 checkSearch = settings.checkSearch,
                 checkDiscovery = settings.checkDiscovery,
                 checkInfo = settings.checkInfo,
@@ -313,7 +316,7 @@ class BookSourceViewModel(
             }
 
             BookSourceIntent.CancelCheck -> _effects.tryEmit(BookSourceEffect.CancelCheck)
-            is BookSourceIntent.Import -> importSources(intent.text)
+            is BookSourceIntent.Import -> importSources(intent.input)
             is BookSourceIntent.Export -> exportSources(intent.uri, intent.ids)
             is BookSourceIntent.Upload -> uploadSources(intent.ids)
             is BookSourceIntent.ToggleImportItem -> updateImportItems { items ->
@@ -434,16 +437,20 @@ class BookSourceViewModel(
         }
     }
 
+    /**
+     * 提交拖动后的顺序。
+     *
+     * 被拖动的这一批书源放回它们原本占的位次（所以带分组/搜索过滤时不会把可见项挤到最前面），
+     * 然后把全表的 customOrder 归一化成唯一值：`customOrder` 会因为导入、合并出现重复，
+     * 重复的序号无法表达交换后的顺序，不能直接沿用它们分配槽位。
+     *
+     * 升序列表里越靠前 customOrder 越小，降序列表里越靠前 customOrder 越大，否则保存后
+     * 重新排序会把列表整体反转。
+     */
     private fun commitSortOrder(ids: List<String>, ascending: Boolean) = launch {
-        val sourcesById = repository.getAllPart().associateBy { it.bookSourceUrl }
-        val orderSlots = ids.mapNotNull { sourcesById[it]?.customOrder }
-            .let { if (ascending) it.sorted() else it.sortedDescending() }
-        val ordered = ids.mapIndexedNotNull { index, id ->
-            sourcesById[id]?.copy(
-                customOrder = orderSlots.getOrNull(index) ?: return@mapIndexedNotNull null
-            )
-        }
-        repository.updateOrder(ordered)
+        if (ids.isEmpty()) return@launch
+        val ordered = reorderBookSources(repository.getAllPart(), ids, ascending)
+        if (ordered.isNotEmpty()) repository.updateOrder(ordered)
     }
 
     private fun checkInterval(ids: Set<String>) {
@@ -457,26 +464,42 @@ class BookSourceViewModel(
         importState.value = BaseImportUiState.Loading
         launch {
             runCatching {
-                val text = if (input.isAbsUrl()) {
-                    okHttpClient.newCallResponseBody {
-                        if (input.endsWith("#requestWithoutUA")) {
-                            url(input.substringBeforeLast("#requestWithoutUA")); header(
-                                AppConst.UA_NAME,
-                                "null"
-                            )
-                        } else url(input)
-                    }.decompressed().text("utf-8")
-                } else if (input.isUri()) {
-                    input.toUri().inputStream(application).getOrThrow()
-                        .bufferedReader()
-                        .use { it.readText() }
-                } else input
-                val sources = parseImportSources(text)
+                val sources = when {
+                    input.isAbsUrl() -> {
+                        okHttpClient.newCallResponseBody {
+                            if (input.endsWith("#requestWithoutUA")) {
+                                url(input.substringBeforeLast("#requestWithoutUA"))
+                                header(AppConst.UA_NAME, "null")
+                            } else {
+                                url(input)
+                            }
+                        }.decompressed().byteStream().bufferedReader().use { reader ->
+                            parseImportSources(reader)
+                        }
+                    }
+
+                    input.isUri() -> {
+                        input.toUri().inputStream(application).getOrThrow()
+                            .bufferedReader()
+                            .use { reader ->
+                                parseImportSources(reader)
+                            }
+                    }
+
+                    else -> StringReader(input).use { reader ->
+                        parseImportSources(reader)
+                    }
+                }
+                val existingSources = if (sources.size <= 1) {
+                    sources.associate { it.bookSourceUrl to repository.getBookSource(it.bookSourceUrl) }
+                } else {
+                    repository.getAll().associateBy { it.bookSourceUrl }
+                }
                 val settings = otherSettingsGateway.currentSettings
                 BaseImportUiState.Success(
                     source = input,
                     items = sources.map { source ->
-                        val old = repository.getBookSource(source.bookSourceUrl)
+                        val old = existingSources[source.bookSourceUrl]
                         val status = when {
                             old == null -> ImportStatus.New
                             source.lastUpdateTime > old.lastUpdateTime -> ImportStatus.Update
@@ -503,42 +526,39 @@ class BookSourceViewModel(
         }
     }
 
-    private suspend fun parseImportSources(text: String): List<BookSource> {
-        val sources = when {
-            text.isJsonArray() -> GSON.fromJsonArray<BookSource>(text).getOrThrow()
-            text.isJsonObject() -> {
-                val objectValue = JsonParser.parseString(text).asJsonObject
-                val sourceUrls = objectValue.getAsJsonArray("sourceUrls")
-                if (sourceUrls != null) {
-                    sourceUrls.flatMap { element ->
-                        val url = element.asString
-                        val sourceText = okHttpClient.newCallResponseBody {
-                            if (url.endsWith("#requestWithoutUA")) {
-                                url(url.substringBeforeLast("#requestWithoutUA")); header(
-                                    AppConst.UA_NAME,
-                                    "null"
-                                )
-                            } else url(url)
-                        }.decompressed().text("utf-8")
-                        parseImportSources(sourceText)
-                    }
-                } else listOf(GSON.fromJsonObject<BookSource>(text).getOrThrow())
-            }
-
-            else -> {
-                // 非 JSON 开头的文本按单文件 JS 书源解析（对齐 legado_NG 约定）
-                val script = text.trimStart('\uFEFF').trim()
-                if (script.isEmpty() || script.startsWith("{") || script.startsWith("[")) {
-                    error(application.getString(io.legado.app.R.string.invalid_format))
-                }
-                listOf(JsSourceConfig.extract(script))
-            }
+    /**
+     * 读取一份导入数据。`reader` 由调用方负责关闭；`sourceUrls` 清单会继续远程拉取并递归解析。
+     */
+    private suspend fun parseImportSources(reader: Reader): List<BookSource> {
+        val document = try {
+            parseBookSourceImport(reader)
+        } catch (e: BookSourceImportFormatException) {
+            // 解析异常来自 Gson，原文是英文；统一换成可本地化的格式错误提示。
+            throw IllegalStateException(
+                application.getString(io.legado.app.R.string.invalid_format), e
+            )
+        }
+        val sources = when (document) {
+            is BookSourceImportDocument.Sources -> document.sources
+            is BookSourceImportDocument.RemoteUrls -> document.urls.flatMap { readRemoteSources(it) }
         }
         require(sources.all { it.bookSourceUrl.isNotBlank() }) {
             application.getString(io.legado.app.R.string.book_source_invalid_source)
         }
         return sources
     }
+
+    private suspend fun readRemoteSources(sourceUrl: String): List<BookSource> =
+        okHttpClient.newCallResponseBody {
+            if (sourceUrl.endsWith("#requestWithoutUA")) {
+                url(sourceUrl.substringBeforeLast("#requestWithoutUA"))
+                header(AppConst.UA_NAME, "null")
+            } else {
+                url(sourceUrl)
+            }
+        }.decompressed().byteStream().bufferedReader().use { streamReader ->
+            parseImportSources(streamReader)
+        }
 
     private fun updateImportItems(transform: (List<ImportItemWrapper<BookSource>>) -> List<ImportItemWrapper<BookSource>>) {
         val state = importState.value as? BaseImportUiState.Success<BookSource> ?: return
@@ -662,14 +682,112 @@ class BookSourceViewModel(
 
 }
 
+/** 导入数据的顶层形态。 */
+internal sealed interface BookSourceImportDocument {
+    /** 顶层就是书源数据：书源数组，或单个书源对象。 */
+    data class Sources(val sources: List<BookSource>) : BookSourceImportDocument
+
+    /** 顶层对象只声明了要远程拉取的地址清单。 */
+    data class RemoteUrls(val urls: List<String>) : BookSourceImportDocument
+}
+
+/** 导入数据不是可识别的书源 JSON，调用方负责翻译成本地化文案。 */
+internal class BookSourceImportFormatException(cause: Throwable? = null) :
+    Exception(cause?.message, cause)
+
+/**
+ * 流式读取一份导入 JSON。
+ *
+ * 顶层数组逐元素反序列化：既不保留整份文本，也不建整棵 JsonElement 树，只留下解析出的书源对象。
+ * 顶层对象（单个书源 / `sourceUrls` 清单）体积很小，直接建树判断形态。
+ */
+internal fun parseBookSourceImport(reader: Reader): BookSourceImportDocument {
+    val jsonReader = JsonReader(reader).apply {
+        strictness = Strictness.LENIENT
+    }
+    return try {
+        when (jsonReader.peek()) {
+            JsonToken.BEGIN_ARRAY -> BookSourceImportDocument.Sources(
+                readSourceArray(jsonReader)
+            )
+
+            JsonToken.BEGIN_OBJECT -> readSourceObject(jsonReader)
+            else -> throw BookSourceImportFormatException()
+        }
+    } catch (e: BookSourceImportFormatException) {
+        throw e
+    } catch (e: Exception) {
+        // EOF、语法错误、字段类型不符都属于「文件本身不可用」。
+        throw BookSourceImportFormatException(e)
+    }
+}
+
+private fun readSourceArray(jsonReader: JsonReader): List<BookSource> {
+    val sources = ArrayList<BookSource>()
+    jsonReader.beginArray()
+    while (jsonReader.hasNext()) {
+        // reader 版的 fromJson 只消费一个值，不校验其后的文档内容；
+        // 数组后面残留其他内容会被忽略，用于兼容手工拼接的导入文件。
+        val source: BookSource? = GSON.fromJson(jsonReader, BookSource::class.java)
+        if (source != null) sources.add(source)
+    }
+    jsonReader.endArray()
+    return sources
+}
+
+private fun readSourceObject(jsonReader: JsonReader): BookSourceImportDocument {
+    val objectValue = JsonParser.parseReader(jsonReader).asJsonObject
+    val sourceUrls = objectValue.get("sourceUrls")
+    if (sourceUrls == null) {
+        return BookSourceImportDocument.Sources(
+            listOfNotNull(GSON.fromJson(objectValue, BookSource::class.java))
+        )
+    }
+    if (!sourceUrls.isJsonArray) throw BookSourceImportFormatException()
+    return BookSourceImportDocument.RemoteUrls(
+        sourceUrls.asJsonArray.map { element ->
+            if (!element.isJsonPrimitive) throw BookSourceImportFormatException()
+            element.asString
+        }
+    )
+}
+
+internal fun reorderBookSources(
+    stored: List<BookSourcePart>,
+    ids: List<String>,
+    ascending: Boolean,
+): List<BookSourcePart> {
+    if (ids.isEmpty() || stored.isEmpty()) return emptyList()
+    // 与界面的手动排序保持一致，重复序号的条目也保留原相对顺序。
+    val uiOrder = stored.sortFor(BookSourceSort.Default, ascending, byDomain = false)
+    val byId = uiOrder.associateBy { it.bookSourceUrl }
+    val dragged = ids.mapNotNull { byId[it] }
+    if (dragged.isEmpty()) return emptyList()
+    val draggedIds = dragged.map { it.bookSourceUrl }.toSet()
+    val positions = uiOrder.withIndex()
+        .filter { it.value.bookSourceUrl in draggedIds }
+        .map { it.index }
+    val reordered = uiOrder.toMutableList()
+    positions.forEachIndexed { index, position ->
+        reordered[position] = dragged[index]
+    }
+    return reordered.mapIndexed { index, part ->
+        part.copy(customOrder = if (ascending) index + 1 else reordered.size - index)
+    }
+}
+
 private fun BookSourceCheckOptionsUi.toSettings() = CheckSourceSettings(
     timeoutMillis = timeoutSeconds * 1000,
+    threadCount = threadCount,
+    writeSourceComment = writeSourceComment,
+    quickMode = quickMode,
+    checkDomain = checkDomain,
     checkSearch = checkSearch,
     checkDiscovery = checkDiscovery,
     checkInfo = checkInfo,
     checkCategory = checkCategory,
     checkContent = checkContent,
-)
+).normalized()
 
 private fun BookSourceCheckResult.displayMessage(application: Application): String {
     val errorDetail = detail ?: application.getString(io.legado.app.R.string.unknown_error)
