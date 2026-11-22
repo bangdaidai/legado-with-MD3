@@ -1,11 +1,18 @@
 package io.legado.app.ui.book.read.sheet
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Paint
+import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.background
@@ -34,6 +41,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,8 +59,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.isSpecified
@@ -59,7 +71,9 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -113,6 +127,7 @@ import io.legado.app.feature.reader.legacy.LegacyReaderPaginationStyleFactory
 import io.legado.app.feature.reader.legacy.LegacyReaderStyleRangeMapper
 import io.legado.app.feature.reader.platform.AndroidReaderTextShaper
 import io.legado.app.feature.reader.platform.ReaderAndroidPaintFactory
+import io.legado.app.feature.reader.platform.ReaderPageDecorationDrawCache
 import io.legado.app.feature.reader.platform.ReaderTextBackgroundLoader
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadStyleResolver
@@ -124,6 +139,7 @@ import io.legado.app.ui.book.read.ReadSheetConfigUiState
 import io.legado.app.ui.widget.components.NinePatchEditorDialog
 import io.legado.app.ui.widget.components.SectionTitle
 import io.legado.app.ui.widget.components.ValueStepper
+import io.legado.app.ui.widget.components.settingItem.TinyColorSettingItem
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
@@ -134,6 +150,8 @@ import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
 import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.dpToPx
+import io.legado.app.utils.spToPx
 import io.legado.app.utils.SelectImageContract
 import io.legado.app.utils.launch
 import io.legado.app.utils.textHeight
@@ -147,6 +165,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -223,6 +243,22 @@ fun HighlightRuleEditSheet(
     }
     var borderWidth by remember(show, rule) { mutableFloatStateOf(initial.borderWidth) }
     var borderRadius by remember(show, rule) { mutableFloatStateOf(initial.borderRadius) }
+
+    // 命中排版 state：只作用在正则命中的那一段上，没设（0）就一个浮点差异都不引入。
+    var matchSpacingBefore by remember(show, rule) {
+        mutableFloatStateOf(initial.letterSpacingBefore)
+    }
+    var matchSpacingAfter by remember(show, rule) { mutableFloatStateOf(initial.letterSpacingAfter) }
+    var hitLineSpacingTop by remember(show, rule) { mutableFloatStateOf(initial.lineSpacingTop) }
+    var hitLineSpacingBottom by remember(show, rule) {
+        mutableFloatStateOf(initial.lineSpacingBottom)
+    }
+    var bgLengthOffsetLeft by remember(show, rule) {
+        mutableFloatStateOf(initial.bgLengthOffsetLeft)
+    }
+    var bgLengthOffsetRight by remember(show, rule) {
+        mutableFloatStateOf(initial.bgLengthOffsetRight)
+    }
 
     // Font weight state
     var fontWeight by remember(show, rule) { mutableIntStateOf(initial.fontWeight) }
@@ -347,13 +383,14 @@ fun HighlightRuleEditSheet(
         targetScope = targetScope,
         enabled = enabled,
         position = initial.position,
-        textColor = if (hasTextColor) textColor else null,
-        bgColor = if (hasBgColor) bgColor else null,
+        // fork 的颜色状态本身可空：null = 自动派生，与保存构建同一口径
+        textColor = textColor,
+        bgColor = bgColor,
         borderColor = if (hasBorder) borderColor else null,
         borderWidth = borderWidth,
         borderRadius = borderRadius,
-        underlineMode = if (hasUnderline) underlineMode else 0,
-        underlineColor = if (hasUnderlineColor && hasUnderline) underlineColor else null,
+        underlineMode = underlineMode,
+        underlineColor = if (underlineMode > 0) underlineColor else null,
         underlineWidth = underlineWidth,
         underlineOffset = underlineOffset,
         underlineSvgPath = underlineSvgPath.ifBlank { null },
@@ -1719,6 +1756,8 @@ private suspend fun buildReaderPreviewLayout(
                 source = source,
                 rules = listOf(rule.copy(enabled = true, targetScope = HighlightRule.TARGET_ALL)),
                 processes = emptyList(),
+                // 预览没有真实书：书级角色气泡按空表走
+                bookUrl = "",
             ),
         ),
     ) as? ReaderChapterMeasureResult.Success ?: return null

@@ -11,6 +11,7 @@ import coil3.request.SuccessResult
 import coil3.toBitmap
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import com.google.gson.annotations.SerializedName
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType

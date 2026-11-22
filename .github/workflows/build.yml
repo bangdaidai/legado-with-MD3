@@ -259,6 +259,8 @@ jobs:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
           chmod +x gradlew
+          # pipefail 让 gradle 的失败不被 tee 吞掉——否则构建步骤假成功，到 Rename 才炸
+          set -o pipefail
           ./gradlew assembleAppRelease -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log
 
 
