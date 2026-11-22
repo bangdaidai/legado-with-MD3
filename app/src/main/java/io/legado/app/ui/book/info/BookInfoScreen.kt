@@ -1401,7 +1401,7 @@ private fun BookInfoHeader(
     tagBorder: Boolean,
     onCoverClick: () -> Unit,
     onCoverLongClick: () -> Unit,
-    onAuthorClick: (Boolean, String?) -> Unit,
+    onAuthorClick: (Boolean) -> Unit,
     onBookNameClick: (Boolean) -> Unit,
     onOriginClick: () -> Unit,
     onNetworkCoverLoadError: () -> Unit,

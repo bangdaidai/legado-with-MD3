@@ -37,6 +37,9 @@ abstract class BaseService : LifecycleService() {
     private val simpleName = this::class.simpleName.toString()
     @Volatile
     private var isForeground = false
+    private val notificationManager: NotificationManager by lazy {
+        getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+    }
 
     fun <T> execute(
         scope: CoroutineScope = lifecycleScope,
