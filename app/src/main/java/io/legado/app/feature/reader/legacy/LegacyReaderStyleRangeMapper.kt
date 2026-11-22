@@ -242,7 +242,8 @@ object LegacyReaderStyleRangeMapper {
      * [toReaderStyle] 里（它按字拆段时才落到首字/末字上），这里补带过去，
      * 好让 [overriddenBy] 与正文的 [matchRanges] 用同一份口径。
      */
-    fun styleOf(rule: HighlightRule): ReaderCharacterStyle = rule.toReaderStyle().copy(
+    // 上游调用方会传 isNightTheme（按阅读模式选色）；fork 的夜间色走 toReaderStyle 自动派生，参数保留兼容
+    fun styleOf(rule: HighlightRule, isNightTheme: Boolean = false): ReaderCharacterStyle = rule.toReaderStyle().copy(
         matchSpacingBeforePx = rule.letterSpacingBefore.dpToPx().takeIf { it > 0f } ?: 0f,
         matchSpacingAfterPx = rule.letterSpacingAfter.dpToPx().takeIf { it > 0f } ?: 0f,
     )
