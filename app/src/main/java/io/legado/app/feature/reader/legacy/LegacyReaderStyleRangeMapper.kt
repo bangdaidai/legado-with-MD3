@@ -1,6 +1,7 @@
 package io.legado.app.feature.reader.legacy
 
 import io.legado.app.data.entities.BookContentProcess
+import io.legado.app.feature.reader.core.semantic.ReaderSemanticLocation
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.domain.model.BookContentProcessEngine
 import io.legado.app.domain.model.TextProcessAnchor

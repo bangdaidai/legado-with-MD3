@@ -517,9 +517,10 @@ val appModule = module {
     single<AiChatGateway> { AiChatRepository(get()) }
     single<AiMemoryGateway> { AiMemoryRepository(get()) }
     single<AiPromptPresetGateway> { AiPromptPresetRepository(get()) }
-    single<AiTextGateway> { AiTextRepositoryImpl() }
+    single<AiTextGateway> { AiTextRepositoryImpl(aiLogRepository = get()) }
     single<AiToolGateway> {
         AiToolRepository(
+            get(),
             get(),
             get(),
             get(),
@@ -544,10 +545,10 @@ val appModule = module {
     single<WebDavBackupGateway> { WebDavBackupRepository() }
     single<ReadingProgressGateway> { WebDavReadingProgressRepository() }
     single<HomepageModulesGateway> { HomepageModulesRepository(get(), get()) }
-    single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get()) }
+    single<BookDomainRepository> { BookDomainRepositoryImpl(get(), get(), get()) }
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
     single<BookMarkingGateway> { BookMarkingRepository(get()) }
-    single<BookKnowledgeGateway> { BookKnowledgeRepository(get()) }
+    single<BookKnowledgeGateway> { BookKnowledgeRepository(get(), get()) }
     single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get(), get()) }
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }
@@ -651,6 +652,8 @@ val appModule = module {
             app = get(),
             bookRepository = get(),
             repository = get(),
+            replaceRuleRepository = get(),
+            generateTocRuleUseCase = get(),
         )
     }
     viewModel {
@@ -686,7 +689,8 @@ val appModule = module {
         AiProviderEditViewModel(
             initialProviderId = providerId,
             aiProfileGateway = get(),
-            aiTextGateway = get()
+            aiTextGateway = get(),
+            webSearchSettingsGateway = get(),
         )
     }
     viewModel { (providerId: String?, modelProfileId: String?) ->
@@ -723,6 +727,7 @@ val appModule = module {
             otherSettingsGateway = get(),
             readAloudSettingsGateway = get(),
             readSettingsGateway = get(),
+            addToBookshelfUseCase = get(),
         )
     }
     singleOf(::AudioPlayCoordinator)
@@ -768,6 +773,8 @@ val appModule = module {
             bookUrl = bookUrl,
             bookKnowledgeGateway = get(),
             voiceGateway = get(),
+            previewSynthesizer = get(),
+            readAloudSessionStore = get(),
             styleGateway = get(),
         )
     }
@@ -781,7 +788,7 @@ val appModule = module {
      * 若各自持有实例，`activeSheet` 之类的瞬态状态与设置快照就会各改各的。
      * 播放状态本身在 `ReadAloudSessionStore`/服务里，这里只是界面投影。
      */
-    single { ReadAloudPlayerViewModel(get(), get(), get()) }
+    single { ReadAloudPlayerViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { (bookUrl: String, entryId: String?) ->
         BookKnowledgeDetailViewModel(
             bookUrl = bookUrl,
@@ -814,8 +821,11 @@ val appModule = module {
             readSettingsRepository = get(),
             readBookStyleConfigRepository = get(),
             readAloudSettingsRepository = get(),
-            aiCastAssignUseCase = get(),
             aiSceneAssignUseCase = get(),
+            addToBookshelfUseCase = get(),
+            bookMarkingGateway = get(),
+            generateChapterRecapUseCase = get(),
+            readingMemoryRepository = get(),
             localPreferencesRepository = get(),
             highlightRuleRepository = get(),
             uploadRepository = get(),
@@ -872,6 +882,7 @@ val appModule = module {
             clearBookCacheUseCase = get(),
             deleteBooksUseCase = get(),
             updateBooksGroupUseCase = get(),
+            readingMemoryRepository = get(),
             downloadCacheSettingsGateway = get()
         )
     }

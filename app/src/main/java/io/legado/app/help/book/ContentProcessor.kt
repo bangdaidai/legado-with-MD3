@@ -166,7 +166,7 @@ class ContentProcessor private constructor(
         // 签名对齐上游（EPUB/MOBI/Markdown 富文本呈现）。fork 管道暂按旧口径处理正文，
         // 呈现注入待后续切片吸收；参数保留以兼容上游调用方。
         includePresentation: Boolean = false,
-        localPresentationProvider: (() -> io.legado.app.model.localBook.ReaderLocalPresentation?)? = null,
+        localPresentationProvider: (() -> io.legado.app.feature.reader.core.source.ReaderLocalPresentation?)? = null,
     ): BookContent {
         var mContent = content
         var sameTitleRemoved = false
