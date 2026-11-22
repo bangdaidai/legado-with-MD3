@@ -221,6 +221,8 @@ fun PoolTreeList(
     listState: LazyListState,
     reorderableState: ReorderableLazyListState,
     modifier: Modifier = Modifier,
+    /** HyperOS 4 引擎下搜索框常驻（不随 searchActive 折叠）。 */
+    alwaysShowSearch: Boolean = false,
     /** 成员行尾部的业务按钮（背景音乐那边放播放/停止）。 */
     memberTrailing: (@Composable (CastMemberUi) -> Unit)? = null,
 ) {

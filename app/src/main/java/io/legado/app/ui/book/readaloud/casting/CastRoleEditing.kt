@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.runtime.Composable
@@ -246,9 +247,15 @@ fun CastRoleEditorDialog(
         show = item != null,
         onDismissRequest = onDismiss,
         title = current.name.ifBlank { stringResource(R.string.edit) },
-        startActionText = stringResource(R.string.cloud_tts_preview),
-        onStartAction = audition.toggle,
-        startActionEnabled = audition.enabled,
+        content = {
+            // 上游 AppAlertDialog 无 startAction 槽：试听入口移到内容区顶部
+            SmallTonalButton(
+                onClick = audition.toggle,
+                enabled = audition.enabled,
+                icon = Icons.Default.PlayArrow,
+                text = stringResource(R.string.cloud_tts_preview),
+            )
+        },
         confirmText = stringResource(R.string.save),
         onConfirm = {
             scope.launch(Dispatchers.IO) {
@@ -363,9 +370,15 @@ fun CastVoiceRowEditorDialog(
         title = subjectTitle(current.kind, current.name).ifBlank {
             stringResource(R.string.edit)
         },
-        startActionText = stringResource(R.string.cloud_tts_preview),
-        onStartAction = audition.toggle,
-        startActionEnabled = audition.enabled,
+        content = {
+            // 上游 AppAlertDialog 无 startAction 槽：试听入口移到内容区顶部
+            SmallTonalButton(
+                onClick = audition.toggle,
+                enabled = audition.enabled,
+                icon = Icons.Default.PlayArrow,
+                text = stringResource(R.string.cloud_tts_preview),
+            )
+        },
         confirmText = stringResource(R.string.save),
         onConfirm = { onSave(voiceId) },
         dismissText = stringResource(R.string.cancel),
