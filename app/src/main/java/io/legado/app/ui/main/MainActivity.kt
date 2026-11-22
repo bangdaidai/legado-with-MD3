@@ -134,6 +134,8 @@ import kotlin.coroutines.suspendCoroutine
  */
 open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
 
+    var isInPip by mutableStateOf(false)
+
     private data class RouteEvent(
         val route: NavKey,
         val resetToHome: Boolean,
