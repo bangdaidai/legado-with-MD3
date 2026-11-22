@@ -56,13 +56,13 @@ jobs:
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleAppDebug -PenableAbiSplits=false --no-daemon --no-configuration-cache
+          ./gradlew assembleAppCoreDebug -PenableAbiSplits=false --no-daemon --no-configuration-cache
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
 
       - name: Check Build Output
         run: |
-          APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/debug"
+          APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/core/debug"
           echo "检查 APK 输出目录: $APK_PATH"
           ls -la "$APK_PATH" || true
           APK_COUNT=$(find "$APK_PATH" -maxdepth 1 -name "*.apk" | wc -l | tr -d ' ')
@@ -75,7 +75,7 @@ jobs:
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
-          APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/debug"
+          APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/core/debug"
           cd "$APK_PATH"
           mv -- *.apk "legado-debug-${APP_VERSION_NAME}-universal.apk"
           ls -la
@@ -84,7 +84,7 @@ jobs:
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
-          APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/debug"
+          APK_PATH="$GITHUB_WORKSPACE/app/build/outputs/apk/app/core/debug"
           ZIP_NAME="legado-debug-apks-${APP_VERSION_NAME}.zip"
           cd "$APK_PATH"
           zip "$GITHUB_WORKSPACE/$ZIP_NAME" *.apk
@@ -95,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: legado-apks-${{ steps.appversion.outputs.name }}
-          path: app/build/outputs/apk/app/debug/*.apk
+          path: app/build/outputs/apk/app/core/debug/*.apk
 
       - name: Upload ZIP Artifact
         uses: actions/upload-artifact@v4

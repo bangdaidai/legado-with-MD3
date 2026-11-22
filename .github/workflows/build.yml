@@ -262,7 +262,7 @@ jobs:
           chmod +x gradlew
           # pipefail 让 gradle 的失败不被 tee 吞掉——否则构建步骤假成功，到 Rename 才炸
           set -o pipefail
-          ./gradlew assembleAppRelease -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log
+          ./gradlew assembleAppCoreRelease -PabiSplits=arm64-v8a -PuniversalApk=false --no-daemon -x lint 2>&1 | tee build.log
 
 
       - name: Check Build Log for Signing Info
@@ -295,7 +295,7 @@ jobs:
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
-          APK_DIR=app/build/outputs/apk/app/release
+          APK_DIR=app/build/outputs/apk/app/core/release
           # 只构建 arm64 单一 ABI，不再往文件名追加 -arm64-v8a 后缀
           for f in "$APK_DIR"/*.apk; do
             mv -- "$f" "$APK_DIR/legado-${APP_VERSION_NAME}.apk"
@@ -392,13 +392,13 @@ jobs:
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleAppDebug -PabiSplits=arm64-v8a -PuniversalApk=false -x lint --no-daemon
+          ./gradlew assembleAppCoreDebug -PabiSplits=arm64-v8a -PuniversalApk=false -x lint --no-daemon
 
       - name: Rename Debug APK
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
-          APK_DIR=app/build/outputs/apk/app/debug
+          APK_DIR=app/build/outputs/apk/app/core/debug
           # 同上：debug 包也去掉 ABI 后缀
           for f in "$APK_DIR"/*.apk; do
             mv -- "$f" "$APK_DIR/legado-debug-${APP_VERSION_NAME}.apk"
@@ -409,7 +409,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: legado-debug-apk
-          path: app/build/outputs/apk/app/debug/*.apk
+          path: app/build/outputs/apk/app/core/debug/*.apk
           retention-days: 7
 
   release:
