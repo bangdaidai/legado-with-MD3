@@ -2648,7 +2648,7 @@ class ReadBookController(
             is ReadBookEffect.DownloadChapters -> {
                 ReadBook.book?.let { book ->
                     activity.lifecycleScope.launch {
-                        CacheBook.start(activity, book, effect.start, effect.end)
+                        CacheBook.start(activity, book, effect.indices)
                     }
                 }
             }
