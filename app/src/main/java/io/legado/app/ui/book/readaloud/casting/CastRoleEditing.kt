@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.runtime.Composable
@@ -247,15 +248,6 @@ fun CastRoleEditorDialog(
         show = item != null,
         onDismissRequest = onDismiss,
         title = current.name.ifBlank { stringResource(R.string.edit) },
-        content = {
-            // 上游 AppAlertDialog 无 startAction 槽：试听入口移到内容区顶部
-            SmallTonalButton(
-                onClick = audition.toggle,
-                enabled = audition.enabled,
-                icon = Icons.Default.PlayArrow,
-                text = stringResource(R.string.cloud_tts_preview),
-            )
-        },
         confirmText = stringResource(R.string.save),
         onConfirm = {
             scope.launch(Dispatchers.IO) {
@@ -278,6 +270,13 @@ fun CastRoleEditorDialog(
         onDismiss = onDismiss,
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 上游 AppAlertDialog 无 startAction 槽：试听入口放表单顶部
+                SmallTonalButton(
+                    onClick = audition.toggle,
+                    enabled = audition.enabled,
+                    icon = Icons.Default.PlayArrow,
+                    text = stringResource(R.string.cloud_tts_preview),
+                )
                 OptionDropdownCard(
                     label = stringResource(R.string.cast_voice_pool),
                     text = pool.ifBlank { unspecified },
