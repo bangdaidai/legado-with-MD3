@@ -14,6 +14,14 @@ import io.legado.app.ui.widget.components.GlassDefaults
 /**
  * 自动感知全局配置的 HazeEffect
  */
+/**
+ * 自动感知全局配置的 HazeSource
+ */
+@Composable
+fun Modifier.responsiveHazeSource(state: HazeState): Modifier = this.then(
+    if (LocalAppUiConfiguration.current.theme.enableBlur) Modifier.hazeSource(state) else Modifier
+)
+
 @Composable
 fun Modifier.responsiveHazeEffect(
     state: HazeState

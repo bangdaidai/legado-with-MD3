@@ -139,8 +139,6 @@ import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.book.search.ScopeSelection
 import io.legado.app.ui.book.search.ScopeSelectSheet
 import io.legado.app.ui.main.homepage.modules.BannerModule
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.filled.Search
 import io.legado.app.ui.theme.AppThemeMode
 import io.legado.app.ui.theme.ComposeEngine
@@ -1389,23 +1387,6 @@ private fun BookInfoOverflowMenu(
         )
     }
 }
-
-@Composable
-private fun bookInfoTitleMenuGroups(isTitleExpanded: Boolean): ImmutableList<AppActionGroup> =
-    persistentListOf(
-        AppActionGroup(
-            id = "book_info_title_menu",
-            actions = persistentListOf(
-                AppAction(id = TITLE_MENU_SEARCH, label = stringResource(R.string.search)),
-                AppAction(
-                    id = TITLE_MENU_TOGGLE_EXPAND,
-                    label = stringResource(
-                        if (isTitleExpanded) R.string.collapse else R.string.expand
-                    ),
-                ),
-            ),
-        ),
-    )
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

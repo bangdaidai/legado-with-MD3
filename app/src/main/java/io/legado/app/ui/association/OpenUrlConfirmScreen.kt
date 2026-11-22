@@ -41,7 +41,8 @@ fun OpenUrlConfirmScreen(
         onDismissRequest = { onIntent(OpenUrlConfirmIntent.Cancel) },
         title = stringResource(R.string.open_url_confirm_title),
         text = stringResource(R.string.open_url_confirm_message, state.sourceName),
-        titleAction = { SourceOverflowMenu(onIntent) },
+        // 上游 AppAlertDialog 无 titleAction 槽：源管理溢出菜单移到内容区
+        content = { SourceOverflowMenu(onIntent) },
         confirmText = stringResource(R.string.ok),
         onConfirm = { onIntent(OpenUrlConfirmIntent.ConfirmOpen) },
         dismissText = stringResource(R.string.cancel),
