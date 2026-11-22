@@ -2,9 +2,10 @@ package io.legado.app.ui.config.ai
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.legado.app.constant.PreferKey
 import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.model.AiTaskType
-import io.legado.app.domain.model.AiImageModels
+import io.legado.app.help.config.AppConfigStore
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,16 @@ class AiConfigViewModel(
 
     init {
         viewModelScope.launch {
+            AppConfigStore.observeBoolean(PreferKey.aiLogEnabled).collect { enabled ->
+                _uiState.update { it.copy(aiLogEnabled = enabled ?: false) }
+            }
+        }
+        viewModelScope.launch {
+            AppConfigStore.observeInt(PreferKey.aiCallTimeout).collect { seconds ->
+                _uiState.update { it.copy(aiCallTimeout = seconds ?: 180) }
+            }
+        }
+        viewModelScope.launch {
             combine(
                 aiProfileGateway.observeProviders(),
                 aiProfileGateway.observeModels(),
@@ -38,8 +49,7 @@ class AiConfigViewModel(
                     it.taskType == AiTaskType.TRANSLATE_CHAPTER && it.isDefault
                 }
                 val currentModelProfileId = defaultTranslatePreset?.modelProfileId
-                    ?.takeIf { id -> models.any { model -> model.id == id && providerMap[model.providerId]?.let { AiImageModels.isTextModel(it.protocol, model.modelId, model.capabilities) } == true } }
-                    ?: models.firstOrNull { model -> providerMap[model.providerId]?.let { AiImageModels.isTextModel(it.protocol, model.modelId, model.capabilities) } == true }?.id
+                    ?: models.firstOrNull()?.id
                 val modelItems = models.mapNotNull { model ->
                     val provider = providerMap[model.providerId] ?: return@mapNotNull null
                     AiModelListItemUi(
@@ -53,8 +63,7 @@ class AiConfigViewModel(
                         contextWindow = model.contextWindow,
                         maxOutputTokens = model.maxOutputTokens,
                         enabled = provider.enabled && model.enabled,
-                        isCurrent = model.id == currentModelProfileId,
-                        text = AiImageModels.isTextModel(provider.protocol, model.modelId, model.capabilities),
+                        isCurrent = model.id == currentModelProfileId
                     )
                 }
                 val modelItemsByProvider = modelItems.groupBy { it.providerId }
@@ -93,7 +102,17 @@ class AiConfigViewModel(
     fun onIntent(intent: AiConfigIntent) {
         when (intent) {
             is AiConfigIntent.SetDefaultModel -> setDefaultModel(intent.modelProfileId)
+            is AiConfigIntent.SetAiLogEnabled -> setAiLogEnabled(intent.enabled)
+            is AiConfigIntent.SetAiCallTimeout -> setAiCallTimeout(intent.seconds)
         }
+    }
+
+    private fun setAiLogEnabled(enabled: Boolean) {
+        AppConfigStore.putBoolean(PreferKey.aiLogEnabled, enabled)
+    }
+
+    private fun setAiCallTimeout(seconds: Int) {
+        AppConfigStore.putInt(PreferKey.aiCallTimeout, seconds.coerceIn(5, 600))
     }
 
     private fun setDefaultModel(modelProfileId: String) {

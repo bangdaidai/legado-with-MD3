@@ -25,6 +25,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,10 +43,9 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
-import io.legado.app.domain.model.BookshelfConflict
+import io.legado.app.domain.model.settings.WordCountThresholdSuggestions
 import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
-import io.legado.app.domain.usecase.copyMigratableFieldsTo
-import io.legado.app.help.book.isNotShelf
+import io.legado.app.model.localBook.LocalBook
 import io.legado.app.ui.book.changesource.ChangeBookSourceComposeViewModel
 import io.legado.app.ui.book.changesource.ChangeBookSourceEffect
 import io.legado.app.ui.book.changesource.ChangeSourceMigrationOptionsSheet
@@ -58,36 +58,29 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumPlainButton
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.SelectionItemCard
-import io.legado.app.ui.widget.components.conflict.BookshelfConflictSheet
-import io.legado.app.ui.widget.components.icon.AppIcon
-import io.legado.app.ui.widget.components.menu.AppAction
-import io.legado.app.ui.widget.components.menu.AppActionGroup
-import io.legado.app.ui.widget.components.menu.AppActionMenu
+import io.legado.app.ui.widget.components.dialog.TextListInputDialog
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.utils.takePersistablePermissionSafely
 import io.legado.app.utils.toastOnUi
-import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
 @Stable
 private data class PendingShelfConflict(
-    val conflict: BookshelfConflict,
+    val existingBook: Book,
     val source: BookSource,
     val newBook: Book,
     val toc: List<BookChapter>,
 )
 
-/**
- * 换源 Sheet。
- *
- * @param oldBook 要换源的书。**调用方必须如实带上「未上架」标记**（[io.legado.app.constant.BookType.notShelf]）：
- *   未上架的书换源不存在「新增还是替换」的歧义，本组件据此跳过该询问。
- *   详情页这类从书源解析出来的 Book 不带该标记，需要由调用方按自己的在架状态补上。
- */
 @Composable
 fun ChangeSourceSheet(
     show: Boolean,
@@ -99,6 +92,7 @@ fun ChangeSourceSheet(
     onReplace: (BookSource, Book, List<BookChapter>, ChangeSourceMigrationOptions) -> Unit,
     onReplaceBook: ((Book) -> Unit)? = null,
     onAddAsNew: (Book, List<BookChapter>) -> Unit,
+    onReplaceLocal: ((Book, List<BookChapter>, ChangeSourceMigrationOptions) -> Unit)? = null,
     onReplaceConflict: ((
         Book,
         BookSource,
@@ -121,26 +115,54 @@ fun ChangeSourceSheet(
     val scopeState by viewModel.scopeUiState.collectAsStateWithLifecycle()
     val emptyScopeName by viewModel.emptyScopeName.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val allowSameNameAuthorType by viewModel.allowSameNameAuthorType.collectAsStateWithLifecycle()
+    // 书架不允许同名同作者同形态时，换源只有「替换本书」一条路，选源后直接执行，不弹任何确认
+    val canAddAsNew = allowAddAsNew && allowSameNameAuthorType
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val checkAuthor = settings.checkAuthor
     val loadInfo = settings.loadInfo
     val loadToc = settings.loadToc
     val loadWordCount = settings.loadWordCount
+    val filterLowWordCount = settings.filterLowWordCount
+    val wordCountThreshold = settings.wordCountThreshold
+    var showWordCountThresholdDialog by rememberSaveable { mutableStateOf(false) }
     var actionBook by remember { mutableStateOf<SearchBook?>(null) }
     var mismatchBook by remember { mutableStateOf<SearchBook?>(null) }
     var shelfConflict by remember { mutableStateOf<PendingShelfConflict?>(null) }
     var showMigrationOptions by remember { mutableStateOf(false) }
     var loadingAction by remember { mutableStateOf(false) }
+    var showOptionsMenu by rememberSaveable { mutableStateOf(false) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     val bookAddedToShelfText = stringResource(R.string.book_added_to_shelf)
-    // 不在书架的书换源，只是给这本还没上架的书换个源，不存在「新增还是替换」的歧义，直接替换即可。
-    val canAddAsNew = allowAddAsNew && !oldBook.isNotShelf
 
     val editSourceResult =
         rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
         val origin = it.data?.getStringExtra("origin") ?: return@rememberLauncherForActivityResult
         viewModel.startSearch(origin)
     }
+
+    val scope = rememberCoroutineScope()
+    val pickLocalFileResult =
+        rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            // bookUrl 就是这个 uri，不持久化授权重启后就读不到文件了
+            uri.takePersistablePermissionSafely(context)
+            loadingAction = true
+            scope.launch {
+                try {
+                    val (localBook, toc) = withContext(Dispatchers.IO) {
+                        LocalBook.importFileForChangeSource(uri)
+                    }
+                    loadingAction = false
+                    onReplaceLocal?.invoke(localBook, toc, settings.migrationOptions())
+                    onDismissRequest()
+                } catch (e: Exception) {
+                    loadingAction = false
+                    AppLog.put("导入本地文件出错\n${e.localizedMessage}", e)
+                    context.toastOnUi("导入本地文件出错\n${e.localizedMessage}")
+                }
+            }
+        }
 
     LaunchedEffect(oldBook.bookUrl, fromReadBookActivity) {
         // A returned editor result targets the retained search session. Reinitializing it here
@@ -211,14 +233,14 @@ fun ChangeSourceSheet(
                         onDismissRequest()
                     }
                 } else if (onReplaceConflict != null) {
-                    viewModel.findShelfConflict(book) { conflict ->
+                    viewModel.findShelfConflict(book) { existingBook ->
                         loadingAction = false
-                        if (conflict == null) {
+                        if (existingBook == null) {
                             onAddAsNew(book, toc)
                             context.toastOnUi(bookAddedToShelfText)
                         } else {
                             shelfConflict = PendingShelfConflict(
-                                conflict = conflict,
+                                existingBook = existingBook,
                                 source = source,
                                 newBook = book,
                                 toc = toc,
@@ -247,36 +269,84 @@ fun ChangeSourceSheet(
         title = stringResource(R.string.change_origin),
         startAction = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppActionMenu(
-                    groups = persistentListOf(
-                        AppActionGroup(
-                            id = "change_source_toggles",
-                            actions = persistentListOf(
-                                AppAction("check_author", "校验作者", checked = checkAuthor),
-                                AppAction("load_info", "加载详情", checked = loadInfo),
-                                AppAction("load_toc", "加载目录", checked = loadToc),
-                                AppAction("load_word_count", "显示更多信息", checked = loadWordCount),
-                                AppAction("open_source_manage", stringResource(R.string.book_source_manage)),
-                            ),
-                        ),
-                    ),
-                    onAction = { id ->
-                        when (id) {
-                            "check_author" -> viewModel.onCheckAuthorChange(!checkAuthor)
-                            "load_info" -> viewModel.onLoadInfoChange(!loadInfo)
-                            "load_toc" -> viewModel.onLoadTocChange(!loadToc)
-                            "load_word_count" -> viewModel.onLoadWordCountChange(!loadWordCount)
-                            "open_source_manage" -> context.startActivity(
-                                MainActivity.createBookSourceManageIntent(context)
+                Box {
+                    MediumTonalButton(
+                        onClick = { showOptionsMenu = true },
+                icon = Icons.Default.MoreVert,
+                contentDescription = stringResource(R.string.more_menu)
+                    )
+                    RoundDropdownMenu(
+                        expanded = showOptionsMenu,
+                        onDismissRequest = { showOptionsMenu = false }
+                    ) { dismiss ->
+                        RoundDropdownMenuItem(
+                            text = "校验作者",
+                            isSelected = checkAuthor,
+                            onClick = {
+                                viewModel.onCheckAuthorChange(!checkAuthor)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "加载详情",
+                            isSelected = loadInfo,
+                            onClick = {
+                                viewModel.onLoadInfoChange(!loadInfo)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "加载目录",
+                            isSelected = loadToc,
+                            onClick = {
+                                viewModel.onLoadTocChange(!loadToc)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "显示更多信息",
+                            isSelected = loadWordCount,
+                            onClick = {
+                                viewModel.onLoadWordCountChange(!loadWordCount)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "过滤少于${wordCountThreshold}字",
+                            isSelected = filterLowWordCount,
+                            onClick = {
+                                viewModel.onFilterLowWordCountChange(!filterLowWordCount)
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = "设置过滤字数…",
+                            onClick = {
+                                showWordCountThresholdDialog = true
+                                dismiss()
+                            }
+                        )
+                        RoundDropdownMenuItem(
+                            text = stringResource(R.string.book_source_manage),
+                            onClick = {
+                                context.startActivity(
+                                    MainActivity.createBookSourceManageIntent(
+                                        context
+                                    )
+                                )
+                                dismiss()
+                            }
+                        )
+                        if (onReplaceLocal != null) {
+                            RoundDropdownMenuItem(
+                                text = stringResource(R.string.add_local_file),
+                                onClick = {
+                                    dismiss()
+                                    pickLocalFileResult.launch(arrayOf("*/*"))
+                                }
                             )
                         }
-                    },
-                ) {
-                    AppIcon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = stringResource(R.string.more_menu),
-                        modifier = this.modifier,
-                    )
+                    }
                 }
                 MediumTonalButton(
                     onClick = { showMigrationOptions = true },
@@ -478,52 +548,74 @@ fun ChangeSourceSheet(
             onConfirm = { performAction(it, true) }
         )
     }
-    BookshelfConflictSheet(
-        conflict = shelfConflict?.conflict,
+    AppAlertDialog(
+        data = shelfConflict,
         onDismissRequest = { shelfConflict = null },
-        onOpenExistingBook = { summary ->
-            // 先收起冲突 Sheet 再跳转，否则返回本页时它会重新显示并吃掉一次返回键。
+        title = stringResource(R.string.bookshelf_book_conflict_title),
+        text = stringResource(R.string.bookshelf_book_conflict_message),
+        confirmText = stringResource(R.string.replace_current_book),
+        onConfirm = { conflict ->
             shelfConflict = null
-            context.startActivity(
-                MainActivity.createBookInfoIntent(
-                    context = context,
-                    name = summary.name,
-                    author = summary.author,
-                    bookUrl = summary.bookUrl,
-                    origin = summary.origin,
-                    coverPath = summary.displayCover,
-                )
+            onReplaceConflict?.invoke(
+                conflict.existingBook,
+                conflict.source,
+                conflict.newBook,
+                conflict.toc,
+                settings.migrationOptions(),
             )
+            onDismissRequest()
         },
-        onCoexist = { existingBookUrl, options ->
-            val pending = shelfConflict
-            shelfConflict = null
-            if (pending != null) {
-                // 共存也必须兑现 Sheet 上勾选的数据项，否则同一个交互在换源入口与其它入口
-                // 语义不一致。这里只按选项把已有作品的字段复制到新书，不碰阅读记录。
-                viewModel.loadShelfBook(existingBookUrl) { existingBook ->
-                    existingBook?.copyMigratableFieldsTo(pending.newBook, options)
-                    onAddAsNew(pending.newBook, pending.toc)
-                    context.toastOnUi(bookAddedToShelfText)
-                }
+        dismissText = stringResource(R.string.add_as_new_book),
+        onDismiss = {
+            shelfConflict?.let { conflict ->
+                onAddAsNew(conflict.newBook, conflict.toc)
+                context.toastOnUi(bookAddedToShelfText)
             }
-        },
-        onMigrate = { existingBookUrl, options ->
-            val pending = shelfConflict
             shelfConflict = null
-            if (pending != null) {
-                viewModel.loadShelfBook(existingBookUrl) { oldBook ->
-                    if (oldBook != null) {
-                        onReplaceConflict?.invoke(
-                            oldBook,
-                            pending.source,
-                            pending.newBook,
-                            pending.toc,
-                            options,
-                        )
-                    }
-                    onDismissRequest()
-                }
+        },
+        content = { conflict ->
+            val existingSource = conflict.existingBook.originName.ifBlank {
+                conflict.existingBook.origin
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AppText(
+                    text = "${stringResource(R.string.book_name)}：${conflict.existingBook.name}",
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+                AppText(
+                    text = "${stringResource(R.string.author)}：${conflict.existingBook.author}",
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+                AppText(
+                    text = stringResource(R.string.existing_book_source, existingSource),
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+                AppText(
+                    text = stringResource(
+                        R.string.all_chapter_num,
+                        conflict.existingBook.totalChapterNum,
+                    ),
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+                AppText(
+                    text = stringResource(
+                        R.string.latest_chapter_info,
+                        conflict.existingBook.latestChapterTitle
+                            ?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.no_last_chapter),
+                    ),
+                    style = LegadoTheme.typography.bodyMedium,
+                )
+                AppText(
+                    text = stringResource(
+                        R.string.new_book_source,
+                        conflict.source.bookSourceName.ifBlank {
+                            conflict.source.bookSourceUrl
+                        },
+                    ),
+                    style = LegadoTheme.typography.bodyMedium,
+                    color = LegadoTheme.colorScheme.primary,
+                )
             }
         },
     )
@@ -577,6 +669,19 @@ fun ChangeSourceSheet(
         onApplyScope = { selection ->
             viewModel.applyScopeSelection(selection)
             showFilterSheet = false
+        }
+    )
+
+    TextListInputDialog(
+        show = showWordCountThresholdDialog,
+        title = "过滤字数",
+        hint = "少于该字数的结果不显示",
+        initialValue = wordCountThreshold.toString(),
+        suggestions = WordCountThresholdSuggestions,
+        onDismissRequest = { showWordCountThresholdDialog = false },
+        onConfirm = { input ->
+            input.trim().toIntOrNull()?.let { viewModel.onWordCountThresholdChange(it) }
+            showWordCountThresholdDialog = false
         }
     )
 }

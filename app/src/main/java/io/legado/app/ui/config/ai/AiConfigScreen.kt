@@ -1,9 +1,6 @@
 package io.legado.app.ui.config.ai
 
 import androidx.compose.foundation.lazy.LazyColumn
-
-import io.legado.app.feature.settings.search.SearchableSetting
-import io.legado.app.feature.settings.search.SearchableSettingsList
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -25,6 +22,8 @@ import io.legado.app.ui.widget.components.SplicedColumnGroup
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.ClickableSettingItem
+import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
+import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
@@ -40,6 +39,8 @@ fun AiConfigRouteScreen(
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
     onNavigateToAiPrompt: () -> Unit,
+    onNavigateToAiWebSearch: () -> Unit,
+    onNavigateToAiLog: () -> Unit,
     viewModel: AiConfigViewModel = koinViewModel()
 ) {
     AiConfigScreen(
@@ -51,7 +52,9 @@ fun AiConfigRouteScreen(
         onNavigateToModelEdit = onNavigateToModelEdit,
         onNavigateToTranslation = onNavigateToTranslation,
         onNavigateToAiSummary = onNavigateToAiSummary,
-        onNavigateToAiPrompt = onNavigateToAiPrompt
+        onNavigateToAiPrompt = onNavigateToAiPrompt,
+        onNavigateToAiWebSearch = onNavigateToAiWebSearch,
+        onNavigateToAiLog = onNavigateToAiLog
     )
 }
 
@@ -66,7 +69,9 @@ fun AiConfigScreen(
     onNavigateToModelEdit: (providerId: String?, modelProfileId: String?) -> Unit,
     onNavigateToTranslation: () -> Unit,
     onNavigateToAiSummary: () -> Unit,
-    onNavigateToAiPrompt: () -> Unit
+    onNavigateToAiPrompt: () -> Unit,
+    onNavigateToAiWebSearch: () -> Unit,
+    onNavigateToAiLog: () -> Unit
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -93,7 +98,7 @@ fun AiConfigScreen(
             )
         }
     ) { paddingValues ->
-        SearchableSettingsList(
+        LazyColumn(
             contentPadding = adaptiveContentPadding(
                 top = paddingValues.calculateTopPadding(),
                 bottom = 120.dp
@@ -101,7 +106,7 @@ fun AiConfigScreen(
         ) {
             item {
                 SplicedColumnGroup(title = stringResource(R.string.ai_provider_database)) {
-            state.providers.forEach { provider ->
+                    state.providers.forEach { provider ->
                         ClickableSettingItem(
                             title = provider.providerName,
                             description = provider.baseUrl,
@@ -109,54 +114,72 @@ fun AiConfigScreen(
                             onClick = { onNavigateToProviderEdit(provider.providerId) }
                         )
                     }
-                    SearchableSetting("ai.ai_new_provider") {
-                        ClickableSettingItem(
-                            title = stringResource(R.string.ai_new_provider),
-                            onClick = { onNavigateToProviderEdit(null) }
-                        )
-                    }
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_new_provider),
+                        onClick = { onNavigateToProviderEdit(null) }
+                    )
                 }
             }
 
             item {
                 SplicedColumnGroup(title = stringResource(R.string.ai_model_database)) {
-                    SearchableSetting("ai.ai_current_model") {
-                        ClickableSettingItem(
-                            title = stringResource(R.string.ai_current_model),
-                            description = state.currentModelName.ifBlank { stringResource(R.string.ai_model_not_configured) },
-                            onClick = {
-                                if (state.models.none { it.text && it.enabled }) {
-                                    onNavigateToProviderEdit(null)
-                                } else {
-                                    showModelSheet = true
-                                }
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_current_model),
+                        description = state.currentModelName.ifBlank { stringResource(R.string.ai_model_not_configured) },
+                        onClick = {
+                            if (state.models.isEmpty()) {
+                                onNavigateToProviderEdit(null)
+                            } else {
+                                showModelSheet = true
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
 
             item {
                 SplicedColumnGroup(title = stringResource(R.string.ai_tasks)) {
-                    SearchableSetting("ai.translation_config") {
-                        ClickableSettingItem(
-                            title = stringResource(R.string.translation_config),
-                            onClick = onNavigateToTranslation
-                        )
-                    }
-                    SearchableSetting("ai.ai_chapter_summary") {
-                        ClickableSettingItem(
-                            title = stringResource(R.string.ai_chapter_summary),
-                            onClick = onNavigateToAiSummary
-                        )
-                    }
-                    SearchableSetting("ai.ai_prompt_config") {
-                        ClickableSettingItem(
-                            title = stringResource(R.string.ai_prompt_config),
-                            description = stringResource(R.string.ai_prompt_config_desc),
-                            onClick = onNavigateToAiPrompt
-                        )
-                    }
+                    ClickableSettingItem(
+                        title = stringResource(R.string.translation_config),
+                        onClick = onNavigateToTranslation
+                    )
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_prompt_config),
+                        description = stringResource(R.string.ai_prompt_config_desc),
+                        onClick = onNavigateToAiPrompt
+                    )
+                }
+            }
+
+            item {
+                SplicedColumnGroup(title = stringResource(R.string.ai_web_search)) {
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_web_search),
+                        description = stringResource(R.string.ai_web_search_desc),
+                        onClick = onNavigateToAiWebSearch
+                    )
+                }
+            }
+
+            item {
+                SplicedColumnGroup(title = stringResource(R.string.ai_log)) {
+                    SwitchSettingItem(
+                        title = stringResource(R.string.ai_log),
+                        checked = state.aiLogEnabled,
+                        onCheckedChange = { onIntent(AiConfigIntent.SetAiLogEnabled(it)) }
+                    )
+                    SliderSettingItem(
+                        title = stringResource(R.string.ai_call_timeout),
+                        value = state.aiCallTimeout.toFloat(),
+                        defaultValue = 180f,
+                        valueRange = 5f..600f,
+                        valueLabel = { "${it.toInt()}s" },
+                        onValueChange = { onIntent(AiConfigIntent.SetAiCallTimeout(it.toInt())) }
+                    )
+                    ClickableSettingItem(
+                        title = stringResource(R.string.ai_view_log),
+                        onClick = onNavigateToAiLog
+                    )
                 }
             }
 
@@ -177,7 +200,7 @@ fun AiConfigScreen(
         title = stringResource(R.string.ai_select_model)
     ) {
         LazyColumn {
-            state.providers.filter { it.models.any { model -> model.text && model.enabled } }.forEach { provider ->
+            state.providers.forEach { provider ->
                 item {
                     SplicedColumnGroup(title = provider.providerName) {
                         if (provider.models.isEmpty()) {
@@ -190,7 +213,7 @@ fun AiConfigScreen(
                                 }
                             )
                         } else {
-                            provider.models.filter { it.text && it.enabled }.forEach { model ->
+                            provider.models.forEach { model ->
                                 ClickableSettingItem(
                                     title = model.modelName,
                                     description = model.modelId,
