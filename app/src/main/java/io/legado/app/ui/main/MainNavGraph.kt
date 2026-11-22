@@ -682,6 +682,18 @@ fun MainActivity.mainEntryProvider(
                 onNavigateToRoute(MainRouteAbout)
             },
             sharedTransitionScope = sharedTransitionScope,
+onNavigateToReadingMemoryList = {
+                onNavigateToRoute(MainRouteReadingMemory)
+            },
+onNavigateToShareCardManage = {
+                onNavigateToRoute(MainRouteShareCardManage)
+            },
+onNavigateToTagManagement = {
+                onNavigateToRoute(MainRouteTagManagement)
+            },
+onNavigateToAuthorManagement = {
+                onNavigateToRoute(MainRouteAuthorManagement)
+            },
             animatedVisibilityScope = LocalNavAnimatedContentScope.current,
         )
     }
