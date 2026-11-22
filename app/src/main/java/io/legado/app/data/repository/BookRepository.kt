@@ -12,7 +12,32 @@ import io.legado.app.data.entities.ShelfBookSummary
 import io.legado.app.ui.main.bookshelf.BookShelfItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.withContext
+
+internal const val SHELF_INVALIDATE_DEBOUNCE_MS = 200L
+
+/**
+ * 首个信号立即放行（首查不延迟），后续信号合并到 [debounceMillis] 窗口内。
+ * 配合失效信号流（invalidationTrackerFlow）实现「查询前防抖」：debounce 在
+ * 查询执行之前，批量写入期间不再产生中间查询结果与分配。
+ */
+@OptIn(FlowPreview::class)
+internal fun <T> Flow<T>.debounceSkippingFirst(debounceMillis: Long): Flow<T> = flow {
+    var first = true
+    emitAll(
+        this@debounceSkippingFirst.debounce {
+            if (first) {
+                first = false
+                0L
+            } else {
+                debounceMillis
+            }
+        }
+    )
+}
 
 class BookRepository(
     private val bookDao: BookDao,

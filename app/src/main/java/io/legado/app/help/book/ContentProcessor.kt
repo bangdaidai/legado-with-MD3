@@ -28,6 +28,8 @@ import kotlinx.coroutines.CancellationException
 import org.koin.core.context.GlobalContext
 import splitties.init.appCtx
 import java.lang.ref.WeakReference
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 class ContentProcessor private constructor(
     private val bookName: String,
@@ -37,6 +39,33 @@ class ContentProcessor private constructor(
     companion object {
         private val processors = hashMapOf<String, WeakReference<ContentProcessor>>()
         private val isAndroid8 = Build.VERSION.SDK_INT in 26..27
+        // ── 语义内容修订计数（上游同步）：缓存失效按书/章递增，见 invalidateSemanticContent。
+        private val revision = AtomicLong()
+        private val ruleRevision = AtomicLong()
+        private val bookRevisions = ConcurrentHashMap<String, Long>()
+        private val wholeBookRevisions = ConcurrentHashMap<String, Long>()
+        private val chapterRevisions = ConcurrentHashMap<Pair<String, Int>, Long>()
+        val rulesRevision: Long get() = ruleRevision.get()
+
+        fun semanticRevision(bookUrl: String): Long = bookRevisions[bookUrl] ?: 0
+
+        fun chapterRevision(bookUrl: String, chapterIndex: Int): Long = maxOf(
+            wholeBookRevisions[bookUrl] ?: 0,
+            chapterRevisions[bookUrl to chapterIndex] ?: 0,
+        )
+
+        fun invalidateSemanticContent(bookUrl: String, chapterIndex: Int? = null) {
+            val next = revision.incrementAndGet()
+            if (chapterIndex == null) {
+                wholeBookRevisions.merge(bookUrl, next) { a, b -> maxOf(a, b) }
+                // The whole-book revision supersedes per-chapter entries; drop them so the maps do
+                // not grow with every chapter the user has ever opened.
+                chapterRevisions.keys.removeIf { it.first == bookUrl }
+            } else {
+                chapterRevisions.merge(bookUrl to chapterIndex, next) { a, b -> maxOf(a, b) }
+            }
+            bookRevisions.merge(bookUrl, next) { a, b -> maxOf(a, b) }
+        }
 
         fun get(book: Book) = get(book.name, book.origin)
 
@@ -134,6 +163,10 @@ class ContentProcessor private constructor(
         paragraphIndent: String?,
         /** 请求开始时捕获的设置快照：同一请求内口径一致（Web API 与正文处理共用）。 */
         settings: SettingsSnapshot = captureSettings(),
+        // 签名对齐上游（EPUB/MOBI/Markdown 富文本呈现）。fork 管道暂按旧口径处理正文，
+        // 呈现注入待后续切片吸收；参数保留以兼容上游调用方。
+        includePresentation: Boolean = false,
+        localPresentationProvider: (() -> io.legado.app.model.localBook.ReaderLocalPresentation?)? = null,
     ): BookContent {
         var mContent = content
         var sameTitleRemoved = false

@@ -360,6 +360,30 @@ data object MainRouteAbout : MainRoute
 @Serializable
 data object MainRouteThirdPartyLicenses : MainRoute
 
+// ── fork 路由（上游同步保留）─────────────────────────────────────
+
+@Serializable
+data object MainRouteReadingMemory : MainRoute
+
+@Serializable
+data class MainRouteReadingMemoryDetail(
+    val bookUrl: String,
+) : MainRoute
+
+@Serializable
+data class MainRouteAuthorDetail(
+    val name: String,
+) : MainRoute
+
+@Serializable
+data object MainRouteProtagonistExtractionConfig : MainRoute
+
+@Serializable
+data object MainRouteSettingsAiWebSearch : MainRoute
+
+@Serializable
+data object MainRouteSettingsAiLog : MainRoute
+
 /** 朗读设置卡片里的子页跳转：把 [ReadAloudSubPage] 映射到对应整屏路由。 */
 fun ReadAloudSubPage.toMainRoute(): MainRoute = when (this) {
     ReadAloudSubPage.VoicePool -> MainRouteVoicePool

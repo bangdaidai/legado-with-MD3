@@ -98,6 +98,11 @@ object ThemeResolver {
         }
     }
 
+    /** fork：判断当前引擎是否 Miuix（容器背景图等 fork 视觉按此切换）。 */
+    fun isMiuixEngine(composeEngine: String): Boolean {
+        return composeEngine.equals(COMPOSE_ENGINE_MIUIX, ignoreCase = true)
+    }
+
     fun resolveComposeEngine(value: String): ComposeEngine {
         return when {
             value.equals("oxygen", ignoreCase = true) -> ComposeEngine.Oxygen

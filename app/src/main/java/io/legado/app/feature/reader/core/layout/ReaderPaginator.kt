@@ -686,6 +686,10 @@ internal class ReaderPaginationSession(
             } else 0f
         }
 
+        val rubyGroupIds = if (hasRubyGroups) IntArray(paragraph.items.size) { index ->
+            (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)?.rubyGroupId ?: 0
+        } else null
+
         val breakerWidthsPx = FloatArray(paragraph.items.size) { index ->
             paragraph.items[index].widthPx + letterSpacing + matchSpacingPx[index]
         }
