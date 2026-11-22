@@ -110,6 +110,19 @@ class ContentProcessor private constructor(
     ): BookContent = getContent(book, chapter, content, includeTitle, useReplace, chineseConvert,
         reSegment, paragraphIndent = null)
 
+    data class SettingsSnapshot(
+        val chineseConverterType: Int,
+        val adaptSpecialStyle: Boolean,
+        val replaceEnableDefault: Boolean,
+    )
+
+    /** 请求开始时捕获一次设置：请求中途用户改设置不影响本次正文的处理口径。 */
+    fun captureSettings(): SettingsSnapshot {
+        val read = readGateway.currentSettings
+        return SettingsSnapshot(read.chineseConverterType, read.adaptSpecialStyle,
+            otherGateway.currentSettings.replaceEnableDefault)
+    }
+
     fun getContent(
         book: Book,
         chapter: BookChapter,
@@ -119,6 +132,8 @@ class ContentProcessor private constructor(
         chineseConvert: Boolean = true,
         reSegment: Boolean = true,
         paragraphIndent: String?,
+        /** 请求开始时捕获的设置快照：同一请求内口径一致（Web API 与正文处理共用）。 */
+        settings: SettingsSnapshot = captureSettings(),
     ): BookContent {
         var mContent = content
         var sameTitleRemoved = false
@@ -135,12 +150,12 @@ class ContentProcessor private constructor(
                 if (match != null) {
                     mContent = mContent.substring(match.range.last + 1)
                     sameTitleRemoved = true
-                } else if (useReplace && book.getUseReplaceRuleToc(otherGateway.currentSettings.replaceEnableDefault)) {
+                } else if (useReplace && book.getUseReplaceRuleToc(settings.replaceEnableDefault)) {
                     title = Regex.escape(
                         chapter.getDisplayTitle(
                             contentReplaceRules,
                             chineseConvert = false,
-                            chineseConverterType = readGateway.currentSettings.chineseConverterType,
+                            chineseConverterType = settings.chineseConverterType,
                         )
                     )
                     match = Regex("^(\\s|\\p{P}|${name})*${title}(\\s)*")
@@ -160,7 +175,7 @@ class ContentProcessor private constructor(
             if (chineseConvert) {
                 //简繁转换
                 try {
-                    when (readGateway.currentSettings.chineseConverterType) {
+                    when (settings.chineseConverterType) {
                         1 -> mContent = ChineseUtils.t2s(mContent)
                         2 -> mContent = ChineseUtils.s2t(mContent)
                     }
@@ -169,14 +184,14 @@ class ContentProcessor private constructor(
                 }
             }
             val useHtmlMap = mutableMapOf<String, String>()
-            if (readGateway.currentSettings.adaptSpecialStyle) { //html处理
+            if (settings.adaptSpecialStyle) { //html处理
                 mContent = AppPattern.useHtmlRegex.replace(mContent) { matchResult ->
                     val placeholder = "特殊格式的占位不应该被看见${useHtmlMap.size}。"
                     useHtmlMap[placeholder] = "\n${matchResult.value.replace("\n", "")}\n"
                     placeholder
                 }
             }
-            if (useReplace && book.getUseReplaceRule(otherGateway.currentSettings.replaceEnableDefault)) {
+            if (useReplace && book.getUseReplaceRule(settings.replaceEnableDefault)) {
                 val replaceBook = book.toSearchBook()
                 //替换
                 effectiveReplaceRules = arrayListOf()
