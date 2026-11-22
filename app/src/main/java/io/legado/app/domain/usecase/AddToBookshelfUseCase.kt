@@ -1,9 +1,14 @@
 package io.legado.app.domain.usecase
 
 import io.legado.app.constant.BookType
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.repository.BookRepository
+import io.legado.app.data.repository.ReadingMemoryRepository
+import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.model.BookshelfConflict
+import io.legado.app.domain.usecase.ChangeBookSourceUseCase
+import io.legado.app.help.book.TagManager
 import io.legado.app.help.book.VideoBookPreloader
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.removeType
@@ -20,9 +25,9 @@ class AddToBookshelfUseCase(
     private val bookRepository: BookRepository,
     private val findBookshelfConflictUseCase: FindBookshelfConflictUseCase,
     // fork 的加架链路依赖：同名替换冲突判断 + 标签/记忆改绑
-    private val bookshelfSettingsGateway: io.legado.app.domain.gateway.BookshelfSettingsGateway,
-    private val changeBookSourceUseCase: io.legado.app.domain.usecase.ChangeBookSourceUseCase,
-    private val readingMemoryRepository: io.legado.app.data.repository.ReadingMemoryRepository,
+    private val bookshelfSettingsGateway: BookshelfSettingsGateway,
+    private val changeBookSourceUseCase: ChangeBookSourceUseCase,
+    private val readingMemoryRepository: ReadingMemoryRepository,
 ) {
 
     suspend fun execute(book: SearchBook): AddToBookshelfResult {
@@ -42,8 +47,8 @@ class AddToBookshelfUseCase(
         }
         return AddToBookshelfResult.Added
     }
-}
 
+    /** fork：在架书籍（Book 类型）的加架/替换链路，AudioPlay 与详情页 ViewModel 在用。 */
     suspend fun execute(book: Book): Book = addToShelf(book)
 
     private suspend fun addToShelf(b: Book): Book {
@@ -70,3 +75,4 @@ class AddToBookshelfUseCase(
         readingMemoryRepository.ensureMemory(b.bookUrl)
         return b
     }
+}

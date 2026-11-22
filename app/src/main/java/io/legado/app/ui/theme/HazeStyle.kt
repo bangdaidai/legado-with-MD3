@@ -8,6 +8,7 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.hazeSource
 import io.legado.app.ui.theme.hazeStyle.HazeLegado
 import io.legado.app.ui.widget.components.GlassDefaults
 

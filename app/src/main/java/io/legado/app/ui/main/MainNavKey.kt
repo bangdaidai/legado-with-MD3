@@ -21,10 +21,112 @@ data class MainRouteReplaceRules(val bookUrl: String? = null) : MainRoute
 @Serializable
 data class MainRouteReplaceEdit(val editor: ReplaceEditRoute) : MainRoute
 
+/** 只兼容旧版本保存的导航栈，新入口使用 Activity 播放浮层。 */
+
+@Serializable
+data class MainRouteBookSourceEdit(val sourceUrl: String? = null) : MainRoute
+
+@Serializable
+data class MainRouteRssSourceEdit(val sourceUrl: String? = null) : MainRoute
+
+@Serializable
+data class MainRouteBookSourceDebug(val sourceUrl: String? = null) : MainRoute
+
+@Serializable
+data class MainRouteRssSourceDebug(val sourceUrl: String? = null) : MainRoute
+
+@Serializable
+data class MainRouteSettingsTarget(val settingId: String) : MainRoute
+
+/** A separate key keeps saved stacks and legacy reading-settings entries compatible. */
+@Serializable
+data class MainRouteSettingsReadTarget(val settingId: String) : MainRoute
+
+@Serializable
+data class MainRouteSettingsManga(val openTranslation: Boolean = false) : MainRoute
+
+@Serializable
+data class MainRouteCache(val groupId: Long) : MainRoute
+
+@Serializable
+data class MainRouteReadBook(
+    val bookUrl: String? = null,
+    val readAloud: Boolean = false,
+    val inBookshelf: Boolean = true,
+    val chapterChanged: Boolean = false,
+    /** 一次性定位参数（书签/笔记跳转）：>=0 时开书后直接跳到该章节位置 */
+    val chapterIndex: Int = -1,
+    val chapterPos: Int = -1,
+    val sharedCoverKey: String? = null,
+) : MainRoute
+
+@Serializable
+data class MainRouteReadManga(
+    val bookUrl: String? = null,
+    val inBookshelf: Boolean = true,
+    val chapterChanged: Boolean = false,
+    /** Distinguishes repeated open requests for the same book after an external TOC selection. */
+    val openRequestId: Long = 0L,
+    val sharedCoverKey: String? = null,
+) : MainRoute
+
+@Serializable
+data class MainRouteVideoPlay(
+    val bookUrl: String? = null,
+    val inBookshelf: Boolean = true,
+    /** RSS 文章里的视频：从阅读页进入时只带定位信息，正文由会话按规则重新解析。 */
+    val rssOrigin: String? = null,
+    val rssLink: String? = null,
+    val rssSort: String? = null,
+    val rssTitle: String? = null,
+) : MainRoute
+
+@Serializable
+data class MainRouteCloudTtsEngines(val bookUrl: String? = null) : MainRoute
+
+@Serializable
+data class MainRouteExploreShow(
+    val title: String?,
+    val sourceUrl: String,
+    val exploreUrl: String?,
+    /** 仅详情页标签跳转的运行时地址启用；书源规则入口保持原有解析。 */
+    val usePageParamFallback: Boolean = false,
+) : MainRoute
+
+/** TXT 目录规则预览：把一条规则套到 [bookUrl] 这本书上，可应用，也可跳到规则列表。 */
+
+/** 朗读设置 hub（设置 → 朗读设置）：变声器 / 引擎 / 识别 / 正则角色。 */
+
+/** 角色声音池：池与池内音色管理。 */
+
+/** 背景音乐池：导入的配乐文件管理，朗读时可作背景音。 */
+
+/** 多角色识别：标记包裹符号与声音池分隔符号配置。 */
+
+/** 变声器：音高/混响预设管理，角色配音时可选。 */
+
+/** 朗读胶囊设置：三类胶囊的圆角、背景与头像形状位置。 */
+
+/** 正则角色管理：命中正文文字换音色 / 不念改放音效。 */
+
+// ── fork 路由（上游同步保留）─────────────────────────────────────
+
+/** 朗读设置卡片里的子页跳转：把 [ReadAloudSubPage] 映射到对应整屏路由。 */
+fun ReadAloudSubPage.toMainRoute(): MainRoute = when (this) {
+    ReadAloudSubPage.VoicePool -> MainRouteVoicePool
+    ReadAloudSubPage.BgmPool -> MainRouteBgmPool
+    ReadAloudSubPage.CapsuleStyle -> MainRouteCastCapsuleStyle
+}
+
+@Serializable
+data class MainRouteReadAloudConfig(val bookUrl: String? = null) : MainRoute
+
+@Serializable
+data class MainRouteTagDetail(val tagId: Long) : MainRoute
+
 @Serializable
 data object MainRouteHome : MainRoute
 
-/** 只兼容旧版本保存的导航栈，新入口使用 Activity 播放浮层。 */
 @Serializable
 data object MainRouteReadAloudPlayer : MainRoute
 
@@ -53,19 +155,7 @@ data class MainRouteBookSourceManage(
 ) : MainRoute
 
 @Serializable
-data class MainRouteBookSourceEdit(val sourceUrl: String? = null) : MainRoute
-
-@Serializable
 data object MainRouteRssSourceManage : MainRoute
-
-@Serializable
-data class MainRouteRssSourceEdit(val sourceUrl: String? = null) : MainRoute
-
-@Serializable
-data class MainRouteBookSourceDebug(val sourceUrl: String? = null) : MainRoute
-
-@Serializable
-data class MainRouteRssSourceDebug(val sourceUrl: String? = null) : MainRoute
 
 @Serializable
 data object MainRouteSettings : MainRoute
@@ -74,20 +164,10 @@ data object MainRouteSettings : MainRoute
 data object MainRouteSettingsSearch : MainRoute
 
 @Serializable
-data class MainRouteSettingsTarget(val settingId: String) : MainRoute
-
-/** A separate key keeps saved stacks and legacy reading-settings entries compatible. */
-@Serializable
-data class MainRouteSettingsReadTarget(val settingId: String) : MainRoute
-
-@Serializable
 data object MainRouteSettingsOther : MainRoute
 
 @Serializable
 data object MainRouteSettingsRead : MainRoute
-
-@Serializable
-data class MainRouteSettingsManga(val openTranslation: Boolean = false) : MainRoute
 
 @Serializable
 data object MainRouteSettingsCover : MainRoute
@@ -164,52 +244,16 @@ data object MainRouteReadRecord : MainRoute
 data object MainRouteReadRecordOverview : MainRoute
 
 @Serializable
-data class MainRouteCache(val groupId: Long) : MainRoute
-
-@Serializable
 data object MainRouteBookCacheManage : MainRoute
 
 @Serializable
 data object MainRouteCacheMaintenance : MainRoute
 
 @Serializable
-data class MainRouteReadBook(
-    val bookUrl: String? = null,
-    val readAloud: Boolean = false,
-    val inBookshelf: Boolean = true,
-    val chapterChanged: Boolean = false,
-    /** 一次性定位参数（书签/笔记跳转）：>=0 时开书后直接跳到该章节位置 */
-    val chapterIndex: Int = -1,
-    val chapterPos: Int = -1,
-    val sharedCoverKey: String? = null,
-) : MainRoute
-
-@Serializable
-data class MainRouteReadManga(
-    val bookUrl: String? = null,
-    val inBookshelf: Boolean = true,
-    val chapterChanged: Boolean = false,
-    /** Distinguishes repeated open requests for the same book after an external TOC selection. */
-    val openRequestId: Long = 0L,
-    val sharedCoverKey: String? = null,
-) : MainRoute
-
-@Serializable
 data class MainRouteAudioPlay(
     val bookUrl: String? = null,
     val inBookshelf: Boolean = true,
     val sharedCoverKey: String? = null,
-) : MainRoute
-
-@Serializable
-data class MainRouteVideoPlay(
-    val bookUrl: String? = null,
-    val inBookshelf: Boolean = true,
-    /** RSS 文章里的视频：从阅读页进入时只带定位信息，正文由会话按规则重新解析。 */
-    val rssOrigin: String? = null,
-    val rssLink: String? = null,
-    val rssSort: String? = null,
-    val rssTitle: String? = null,
 ) : MainRoute
 
 @Serializable
@@ -251,9 +295,6 @@ data class MainRouteBookVoiceCasting(
 ) : MainRoute
 
 @Serializable
-data class MainRouteCloudTtsEngines(val bookUrl: String? = null) : MainRoute
-
-@Serializable
 data object MainRouteTtsCache : MainRoute
 
 @Serializable
@@ -285,15 +326,6 @@ data object MainRouteRssFavorites : MainRoute
 data object MainRouteRuleSub : MainRoute
 
 @Serializable
-data class MainRouteExploreShow(
-    val title: String?,
-    val sourceUrl: String,
-    val exploreUrl: String?,
-    /** 仅详情页标签跳转的运行时地址启用；书源规则入口保持原有解析。 */
-    val usePageParamFallback: Boolean = false,
-) : MainRoute
-
-@Serializable
 data class MainRouteSearchContent(
     val bookUrl: String,
     val searchWord: String? = null,
@@ -319,7 +351,6 @@ data class MainRouteTxtTocRule(
     val pickForBookUrl: String? = null,
 ) : MainRoute
 
-/** TXT 目录规则预览：把一条规则套到 [bookUrl] 这本书上，可应用，也可跳到规则列表。 */
 @Serializable
 data class MainRouteTxtTocRulePreview(
     val bookUrl: String,
@@ -329,31 +360,24 @@ data class MainRouteTxtTocRulePreview(
 @Serializable
 data object MainRouteAllBookmark : MainRoute
 
-/** 朗读设置 hub（设置 → 朗读设置）：变声器 / 引擎 / 识别 / 正则角色。 */
 @Serializable
 data object MainRouteMultiRoleRule : MainRoute
 
-/** 角色声音池：池与池内音色管理。 */
 @Serializable
 data object MainRouteVoicePool : MainRoute
 
-/** 背景音乐池：导入的配乐文件管理，朗读时可作背景音。 */
 @Serializable
 data object MainRouteBgmPool : MainRoute
 
-/** 多角色识别：标记包裹符号与声音池分隔符号配置。 */
 @Serializable
 data object MainRouteMultiRoleRecognition : MainRoute
 
-/** 变声器：音高/混响预设管理，角色配音时可选。 */
 @Serializable
 data object MainRouteVoiceEffect : MainRoute
 
-/** 朗读胶囊设置：三类胶囊的圆角、背景与头像形状位置。 */
 @Serializable
 data object MainRouteCastCapsuleStyle : MainRoute
 
-/** 正则角色管理：命中正文文字换音色 / 不念改放音效。 */
 @Serializable
 data object MainRouteRegexCastRule : MainRoute
 
@@ -362,8 +386,6 @@ data object MainRouteAbout : MainRoute
 
 @Serializable
 data object MainRouteThirdPartyLicenses : MainRoute
-
-// ── fork 路由（上游同步保留）─────────────────────────────────────
 
 @Serializable
 data object MainRouteReadingMemory : MainRoute
@@ -387,25 +409,11 @@ data object MainRouteSettingsAiWebSearch : MainRoute
 @Serializable
 data object MainRouteSettingsAiLog : MainRoute
 
-/** 朗读设置卡片里的子页跳转：把 [ReadAloudSubPage] 映射到对应整屏路由。 */
-fun ReadAloudSubPage.toMainRoute(): MainRoute = when (this) {
-    ReadAloudSubPage.VoicePool -> MainRouteVoicePool
-    ReadAloudSubPage.BgmPool -> MainRouteBgmPool
-    ReadAloudSubPage.CapsuleStyle -> MainRouteCastCapsuleStyle
-}
 @Serializable
 data object MainRouteAuthorManagement : MainRoute
 
 @Serializable
-data class MainRouteAuthorDetail(
-    val name: String,
-) : MainRoute
-
-@Serializable
 data object MainRouteExcludedTag : MainRoute
-
-@Serializable
-data class MainRouteReadAloudConfig(val bookUrl: String? = null) : MainRoute
 
 @Serializable
 data object MainRouteShareCardManage : MainRoute
@@ -416,75 +424,7 @@ data class MainRouteSpeechStoryboard(
 ) : MainRoute
 
 @Serializable
-data class MainRouteTagDetail(val tagId: Long) : MainRoute
-
-@Serializable
 data object MainRouteTagManagement : MainRoute
 
-@Serializable
-data object MainRouteAuthorManagement : MainRoute
-
-@Serializable
-data class MainRouteAuthorDetail(
-    val name: String,
-) : MainRoute
-
-
 object MainRouteConst {
-    const val ROUTE_MAIN = "main"
-    const val ROUTE_SOURCE_LOGIN = "source/login"
-    const val ROUTE_WEB_VIEW = "web/view"
-    const val ROUTE_BOOK_SOURCE_MANAGE = "source/book/manage"
-    const val ROUTE_BOOK_SOURCE_EDIT = "source/book/edit"
-    const val ROUTE_RSS_SOURCE_MANAGE = "source/rss/manage"
-    const val ROUTE_RSS_SOURCE_EDIT = "source/rss/edit"
-    const val ROUTE_BOOK_SOURCE_DEBUG = "source/book/debug"
-    const val ROUTE_RSS_SOURCE_DEBUG = "source/rss/debug"
-    const val ROUTE_SETTINGS = "settings"
-    const val ROUTE_SETTINGS_OTHER = "settings/other"
-    const val ROUTE_SETTINGS_READ = "settings/read"
-    const val ROUTE_SETTINGS_MANGA = "settings/manga"
-    const val ROUTE_SETTINGS_COVER = "settings/cover"
-    const val ROUTE_SETTINGS_COVER_ALBUMS = "settings/cover/albums"
-    const val ROUTE_SETTINGS_THEME = "settings/theme"
-    const val ROUTE_SETTINGS_BACKUP = "settings/backup"
-    const val ROUTE_SETTINGS_AI = "settings/ai"
-    const val ROUTE_SETTINGS_AI_SUMMARY = "settings/ai/summary"
-    const val ROUTE_SETTINGS_AI_PROMPT = "settings/ai/prompt"
-    const val ROUTE_AI_CHAT = "ai/chat"
-    const val ROUTE_SETTINGS_CUSTOM_THEME = "settings/custom_theme"
-    const val ROUTE_SETTINGS_BUBBLE = "settings/bubble"
-    const val ROUTE_SETTINGS_PRIVATE = "settings/private"
-    const val ROUTE_SETTINGS_LAB_CONFIG = "settings/lab_config"
-    const val ROUTE_SETTINGS_DOWNLOAD_CACHE = "settings/download_cache"
-    const val ROUTE_SETTINGS_TRANSLATION = "settings/translation"
-    const val ROUTE_IMPORT_LOCAL = "import/local"
-    const val ROUTE_IMPORT_REMOTE = "import/remote"
-    const val ROUTE_CACHE = "cache"
-    const val ROUTE_BOOK_CACHE_MANAGE = "book/cache/manage"
-    const val ROUTE_READ_BOOK = "book/read"
-    const val ROUTE_READ_MANGA = "book/read/manga"
-    const val ROUTE_AUDIO_PLAY = "book/read/audio"
-    const val ROUTE_VIDEO_PLAY = "book/read/video"
-    const val ROUTE_SEARCH = "search"
-    const val ROUTE_SEARCH_CONTENT = "book/searchContent"
-    const val ROUTE_BOOK_INFO = "book/info"
-    const val ROUTE_BOOK_CHARACTER_DETAIL = "book/character/detail"
-    const val ROUTE_BOOK_CHARACTER_NETWORK = "book/character/network"
-    const val ROUTE_BOOK_CHARACTER_LIST = "book/character/list"
-    const val ROUTE_BOOK_KNOWLEDGE_LIST = "book/knowledge/list"
-    const val ROUTE_BOOK_KNOWLEDGE_DETAIL = "book/knowledge/detail"
-    const val ROUTE_BOOK_EVENT_LIST = "book/event/list"
-    const val ROUTE_BOOK_EVENT_DETAIL = "book/event/detail"
-    const val ROUTE_EXPLORE_SHOW = "explore/show"
-    const val ROUTE_RSS_SORT = "rss/sort"
-    const val ROUTE_RSS_READ = "rss/read"
-    const val ROUTE_RSS_FAVORITES = "rss/favorites"
-    const val ROUTE_RULE_SUB = "rss/rule_sub"
-    const val ROUTE_READ_RECORD = "read_record"
-    const val ROUTE_READ_RECORD_OVERVIEW = "read_record_overview"
-    const val ROUTE_ABOUT = "about"
-    const val ROUTE_TTS_CACHE = "tts_cache"
-    const val ROUTE_READING_MEMORY_DETAIL = "reading_memory/detail"
-    const val ROUTE_AUTHOR_DETAIL = "author/detail"
 }
