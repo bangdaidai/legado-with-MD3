@@ -18,6 +18,8 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Prepare pinned UI forks
+        uses: ./.github/actions/prepare-ui-forks
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -369,6 +371,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
+
+      - name: Prepare pinned UI forks
+        uses: ./.github/actions/prepare-ui-forks
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
