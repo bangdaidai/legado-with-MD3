@@ -48,6 +48,22 @@ object BgmSceneStore {
     fun positionsToOrdinals(source: io.legado.app.feature.reader.core.source.ReaderChapterSource): List<Pair<Int, Int>> =
         source.paragraphs.filter { it.endExclusive > it.start }.map { it.start to it.ordinal }
 
+    /** fork：朗读服务手里只有章节字符坐标时按语义文本行解析（与 [ordinals] 同口径）。 */
+    fun positionsToOrdinals(semanticContent: String): List<Pair<Int, Int>> {
+        var position = 0
+        var count = 0
+        val result = ArrayList<Pair<Int, Int>>()
+        for (line in semanticContent.split('
+')) {
+            if (line.isNotBlank()) {
+                result += position to count
+                count++
+            }
+            position += line.length + 1
+        }
+        return result
+    }
+
     /** 本章全部标记（按段落序号升序）。 */
     suspend fun marks(bookUrl: String, chapterIndex: Int): List<BgmSceneMark> =
         appDb.bgmSceneDao.getChapter(bookUrl, chapterIndex)

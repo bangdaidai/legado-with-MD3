@@ -695,7 +695,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             }.awaitAll().filterNotNull().let(files::addAll)
             base = end
         }
-        ReadAloudAudioStore.record(bookUrl, chapterIndex, prepared.chapterTitle, files)
+        ReadAloudAudioStore.record(bookUrl, chapterIndex, prepared.chapterTitle, files, prepared.contentList.size)
         ReadAloudAudioStore.updateProgress {
             it.copy(chapterDone = chapterDone, failed = audioDownloadFailed.get())
         }
