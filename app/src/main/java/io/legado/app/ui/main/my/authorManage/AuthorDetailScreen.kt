@@ -470,6 +470,10 @@ private fun BioEditDialog(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.author_edit_bio),
         // 上游 AppAlertDialog 没有 titleAction 槽：AI 生成入口放到内容区顶部
+        confirmText = stringResource(R.string.ok),
+        onConfirm = { onSave(bio.trim()) },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = onDismiss,
         content = {
             if (generating) {
                 AppCircularProgressIndicator(
@@ -483,12 +487,6 @@ private fun BioEditDialog(
                     text = stringResource(R.string.author_bio_generate),
                 )
             }
-        },
-        confirmText = stringResource(R.string.ok),
-        onConfirm = { onSave(bio.trim()) },
-        dismissText = stringResource(R.string.cancel),
-        onDismiss = onDismiss,
-        content = {
             AppTextField(
                 value = bio,
                 onValueChange = onBioChange,

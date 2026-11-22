@@ -999,7 +999,7 @@ sealed interface ReadBookIntent {
 
     // Media / TTS
     data class MediaButtonPressed(val play: Boolean) : ReadBookIntent
-    data class TtsProgress(val progress: ReadAloudProgress) : ReadBookIntent
+    data class TtsProgress(val chapterStart: Int) : ReadBookIntent
 
     // Dialog callback bridge
     data object ReadAloudAction : ReadBookIntent

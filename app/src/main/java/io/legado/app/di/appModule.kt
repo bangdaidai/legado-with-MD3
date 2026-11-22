@@ -661,6 +661,7 @@ val appModule = module {
             appLocaleGateway = get(),
             readAloudSettingsGateway = get(),
             otherSettingsGateway = get(),
+            bookshelfSettingsGateway = get(),
             downloadCacheSettingsGateway = get(),
             directLinkSettingsGateway = get(),
             systemGateway = get(),

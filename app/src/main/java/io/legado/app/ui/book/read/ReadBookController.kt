@@ -2707,6 +2707,11 @@ class ReadBookController(
         }
     }
 
+    /** 上游兼容重载：bookSession 快照。fork 朗读管线未迁移，从快照取章内位置走既有锚点更新。 */
+    fun updateReadAloudProgress(progress: io.legado.app.domain.model.readaloud.ReadAloudProgress) {
+        updateReadAloudProgress(progress.chapterPosition)
+    }
+
     fun updateReadAloudProgress(chapterStart: Int) {
         if (!ReadBook.isCurrentBookReadAloud || !BaseReadAloudService.isPlay()) return
         // 只更新朗读高亮锚点。可见页的移动由朗读服务驱动（moveToReadAloudPage →

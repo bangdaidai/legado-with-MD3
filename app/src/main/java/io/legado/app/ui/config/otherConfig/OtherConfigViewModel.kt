@@ -27,6 +27,7 @@ class OtherConfigViewModel(
     private val appLocaleGateway: AppLocaleGateway,
     private val readAloudSettingsGateway: ReadAloudSettingsGateway,
     private val otherSettingsGateway: OtherSettingsGateway,
+    private val bookshelfSettingsGateway: io.legado.app.domain.gateway.BookshelfSettingsGateway,
     private val downloadCacheSettingsGateway: DownloadCacheSettingsGateway,
     private val directLinkSettingsGateway: DirectLinkSettingsGateway,
     private val systemGateway: OtherConfigSystemGateway,

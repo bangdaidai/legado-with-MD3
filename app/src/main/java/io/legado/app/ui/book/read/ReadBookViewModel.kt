@@ -194,7 +194,7 @@ class ReadBookViewModel(
     @Volatile private var composePageContext: ReaderPageContext? = null
     private var composeProgressJob: Job? = null
     private var readBookSyncJob: Job? = null
-    private val _readAloudProgress = MutableStateFlow(currentReadAloudProgress())
+    private val _readAloudProgress = MutableStateFlow(-1)
     val readAloudProgress = _readAloudProgress.asStateFlow()
 
     private suspend fun emitEffectWhenSubscribed(effect: ReadBookEffect) {
@@ -682,8 +682,8 @@ class ReadBookViewModel(
                 this@ReadBookViewModel.openReadMenuRoute(route)
             }
 
-            override fun publishReadAloudProgress(progress: ReadAloudProgress) {
-                _readAloudProgress.value = progress
+            override fun publishReadAloudProgress(chapterStart: Int) {
+                _readAloudProgress.value = chapterStart
             }
         },
         readAloudSettingsRepository = readAloudSettingsRepository,
@@ -1460,7 +1460,7 @@ class ReadBookViewModel(
                 }
             }
 
-            is ReadBookIntent.TtsProgress -> readAloudDelegate.updateProgress(intent.progress)
+            is ReadBookIntent.TtsProgress -> readAloudDelegate.updateProgress(intent.chapterStart)
             is ReadBookIntent.ReadAloudAction -> readAloudDelegate.openDefaultInterface()
             is ReadBookIntent.ConfirmAddCurrentBookToBookshelf -> addCurrentBookToBookshelfAndFinish()
             is ReadBookIntent.ExitWithoutAddingCurrentBookToBookshelf -> removeCurrentNotShelfBookAndFinish()
@@ -2003,8 +2003,8 @@ class ReadBookViewModel(
             }
         }
         viewModelScope.launch {
-            eventFlowSticky<ReadAloudProgress>(EventBus.TTS_PROGRESS).collect { progress ->
-                readAloudDelegate.updateProgress(progress)
+            eventFlowSticky<Int>(EventBus.TTS_PROGRESS).collect { chapterStart ->
+                readAloudDelegate.updateProgress(chapterStart)
             }
         }
         viewModelScope.launch {

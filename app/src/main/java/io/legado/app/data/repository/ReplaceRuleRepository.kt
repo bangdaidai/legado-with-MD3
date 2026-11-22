@@ -7,6 +7,7 @@ import io.legado.app.help.book.ContentProcessor
 import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
