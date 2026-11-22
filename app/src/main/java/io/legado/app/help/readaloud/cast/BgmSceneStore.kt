@@ -23,6 +23,18 @@ private const val PREVIEW_CHARS = 48
  */
 object BgmSceneStore {
 
+    /**
+     * 正文段落序号 = 非空段落的编号，从 0 开始（-1 = 空白行，不算一段）。
+     *
+     * 胶囊渲染、AI 分配场景、朗读取乐三处必须用同一个编号，否则点开的段和实际播的不是
+     * 同一段。标题段由 `getContent(includeTitle = false)` 事先排除。
+     */
+    fun ordinals(paragraphs: List<String>): List<Int> {
+        var count = 0
+        return paragraphs.map { if (it.isBlank()) -1 else count++ }
+    }
+
+
     /** One row per input paragraph; visual HTML lines never create new stored ordinals. */
     internal fun paragraphTexts(paragraphs: List<String>, adaptSpecialStyle: Boolean): Map<Int, String> {
         val source = ReaderChapterSourceParser.parse(0, "", paragraphs, false, adaptSpecialStyle,

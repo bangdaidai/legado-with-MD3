@@ -285,6 +285,8 @@ data class ReaderUnderline(
     val svgPath: String = "",
     val dashOnPx: Float = 8f,
     val dashOffPx: Float = 5f,
+    /** 波浪振幅（峰高，px）。fork 的波浪下划线渲染按它算上冲。 */
+    val waveAmplitudePx: Float = 3f,
     /** 波浪控制点竖直偏移。注意实际峰高是它的一半（quad 中点只到控制点的 50%）。 */
     val waveControlOffsetPx: Float = 3f,
     /** 波浪半波长：一次 `quadTo` 覆盖的宽度，整波长是它的两倍。 */

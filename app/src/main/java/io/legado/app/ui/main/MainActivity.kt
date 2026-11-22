@@ -86,7 +86,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.Download
 import io.legado.app.service.WebService
-import io.legado.app.ui.about.MarkdownSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.MarkdownSheet
 import io.legado.app.ui.about.UpdateMode
 import io.legado.app.ui.about.UpdateSheet
 import io.legado.app.ui.book.audio.AudioPlayViewModel

@@ -47,6 +47,8 @@ object LegacyReaderStyleRangeMapper {
         bookUrl: String,
         /** 角色名 → 该角色自己设的气泡样式；空表 = 本书没人设气泡。 */
         castBubbles: Map<String, ReaderCharacterStyle> = emptyMap(),
+        // 上游按阅读模式选夜间色；fork 的夜间色走 resolveModeColor 自动派生，参数保留兼容调用方
+        isNightTheme: Boolean = false,
     ): List<ReaderStyleRange> {
         val result = mutableListOf<ReaderStyleRange>()
         val bodyText = semanticBodyText(source)
