@@ -271,6 +271,7 @@ import io.legado.app.ui.ai.chat.AiChatViewModel
 import io.legado.app.ui.association.ImportDictRuleViewModel
 import io.legado.app.ui.association.ImportHttpTtsViewModel
 import io.legado.app.ui.association.ImportReplaceRuleViewModel
+import io.legado.app.ui.association.ImportRssSourceViewModel
 import io.legado.app.feature.rss.source.RssSourceImportViewModel
 import io.legado.app.ui.association.ImportTxtTocRuleViewModel
 import io.legado.app.ui.book.audio.AudioPlayCoordinator
@@ -669,6 +670,7 @@ val appModule = module {
     viewModelOf(::ImportHttpTtsViewModel)
     viewModelOf(::ImportReplaceRuleViewModel)
     viewModelOf(::RssSourceImportViewModel)
+    viewModelOf(::ImportRssSourceViewModel)
     viewModelOf(::ImportTxtTocRuleViewModel)
     viewModelOf(::HighlightTagRuleViewModel)
     viewModelOf(::MultiRoleRuleViewModel)

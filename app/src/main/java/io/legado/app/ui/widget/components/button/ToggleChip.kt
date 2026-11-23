@@ -1,24 +1,30 @@
 package io.legado.app.ui.widget.components.button
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import io.legado.app.ui.theme.LocalAppUiConfiguration
-import io.legado.app.ui.theme.ThemeResolver
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -130,7 +136,88 @@ fun ToggleChip(
                 }
             }
         }
-        ComposeEngine.Material, ComposeEngine.Mochi, ComposeEngine.Coui -> {
+        ComposeEngine.Material -> {
+            if (compact) {
+                // fork：紧凑胶囊标签保持同步前的手绘样式（圆角/透明/无勾选图标），
+                // 发现页分组标签、书源分类和书架标签筛选都依赖它保持原来的观感。
+                val themeSettings = LocalAppUiConfiguration.current.theme
+                val resolvedShape = if (themeSettings.overrideBaseCardCornerRadius) {
+                    RoundedCornerShape(themeSettings.baseCardCornerRadius.dp)
+                } else {
+                    cornerRadius?.let { RoundedCornerShape(it) } ?: RoundedCornerShape(50)
+                }
+                val borderModifier = if (themeSettings.overrideBaseCardBorder) {
+                    val configuredColor = if (LegadoTheme.isDark) {
+                        themeSettings.baseCardBorderColorNight
+                    } else {
+                        themeSettings.baseCardBorderColor
+                    }
+                    val borderColor = configuredColor.takeIf { it != 0 }?.let(::Color)
+                        ?: LegadoTheme.colorScheme.outlineVariant
+                    Modifier.border(
+                        BorderStroke(themeSettings.baseCardBorderWidth.dp, borderColor),
+                        resolvedShape
+                    )
+                } else {
+                    Modifier
+                }
+                Row(
+                    modifier = modifier
+                        .clip(resolvedShape)
+                        .background(
+                            when {
+                                selected -> MaterialTheme.colorScheme.primaryContainer
+                                light -> Color.Transparent
+                                else -> MaterialTheme.colorScheme.surfaceContainer
+                            }
+                        )
+                        .then(borderModifier)
+                        .clickable(onClick = onToggle)
+                        .padding(horizontal = horizontalPadding ?: 6.dp, vertical = 4.dp)
+                        .semantics {
+                            toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
+                            stateDescription = if (selected) {
+                                checkedContentDescription
+                            } else {
+                                uncheckedContentDescription
+                            }
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = textStyle ?: MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = when {
+                            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+                            light -> LegadoTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                }
+            } else {
+                FilterChip(
+                    selected = selected,
+                    onClick = onToggle,
+                    modifier = modifier,
+                    shape = cornerRadius?.let { RoundedCornerShape(it) } ?: FilterChipDefaults.shape,
+                    enabled = enabled,
+                    label = { Text(label) },
+                    leadingIcon = if (selected) {
+                        {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = checkedContentDescription,
+                                Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else null
+                )
+            }
+        }
+        ComposeEngine.Mochi, ComposeEngine.Coui -> {
             FilterChip(
                 selected = selected,
                 onClick = onToggle,
