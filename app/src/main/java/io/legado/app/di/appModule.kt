@@ -219,6 +219,7 @@ import io.legado.app.domain.usecase.CleanSelectedTextUseCase
 import io.legado.app.domain.usecase.ClearBookCacheUseCase
 import io.legado.app.domain.usecase.CoverAlbumUseCase
 import io.legado.app.domain.usecase.DeleteBooksUseCase
+import io.legado.app.domain.usecase.ExplainBookCharacterUseCase
 import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
@@ -292,6 +293,7 @@ import io.legado.app.ui.book.knowledge.BookCharacterDetailViewModel
 import io.legado.app.ui.book.knowledge.BookCharacterListViewModel
 import io.legado.app.ui.book.knowledge.BookCharacterNetworkViewModel
 import io.legado.app.ui.book.knowledge.BookEventDetailViewModel
+import io.legado.app.ui.book.knowledge.CharacterQueryViewModel
 import io.legado.app.ui.book.knowledge.BookEventListViewModel
 import io.legado.app.ui.book.knowledge.BookKnowledgeDetailViewModel
 import io.legado.app.ui.book.knowledge.BookKnowledgeListViewModel
@@ -622,6 +624,7 @@ val appModule = module {
     singleOf(::GetChapterContentUseCase)
     singleOf(::CheckBookContentQualityUseCase)
     singleOf(::AiToolAwareGenerationUseCase)
+    singleOf(::ExplainBookCharacterUseCase)
     singleOf(::AiTaskManager)
     singleOf(::ResolveEffectiveSpeechPlanUseCase)
     singleOf(::IdentifyBookCharactersUseCase)
@@ -673,6 +676,7 @@ val appModule = module {
     viewModelOf(::RegexCastRuleViewModel)
     viewModelOf(::VoiceEffectViewModel)
     viewModelOf(::MultiRoleRecognitionViewModel)
+    viewModelOf(::CharacterQueryViewModel)
     singleOf(::AiSceneAssignUseCase)
     viewModelOf(::TagGroupRuleViewModel)
     viewModelOf(::TagManagementViewModel)

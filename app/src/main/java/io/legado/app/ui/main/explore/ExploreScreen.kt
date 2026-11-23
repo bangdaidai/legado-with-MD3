@@ -1,6 +1,5 @@
 package io.legado.app.ui.main.explore
 
-import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -30,6 +29,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.help.source.getExploreInfoMap
 import io.legado.app.ui.book.search.SearchScope
@@ -72,18 +73,17 @@ import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
+import io.legado.app.ui.widget.components.divider.PillHeaderDivider
 import io.legado.app.ui.widget.components.explore.ExploreKindMultiTypeItem
 import io.legado.app.ui.widget.components.lazylist.FastScrollLazyColumn
 import io.legado.app.ui.widget.components.list.ListScaffold
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
-import io.legado.app.ui.widget.components.menu.AppAction
-import io.legado.app.ui.widget.components.menu.AppActionGroup
-import io.legado.app.ui.widget.components.menu.AppActionMenu
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.toImmutableList
+import io.legado.app.ui.widget.components.menuItem.MenuItemIcon
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
+import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.progressIndicator.AppContainedLoadingIndicator
 import io.legado.app.ui.widget.components.text.AppText
+import io.legado.app.ui.widget.components.topbar.TopBarActionButton
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -311,32 +311,41 @@ fun ExploreScreen(
             onSearchQueryChange = { onIntent(ExploreIntent.Search(it)) },
             onSearchToggle = { onIntent(ExploreIntent.ToggleSearch(it)) },
             searchPlaceholder = stringResource(R.string.search),
-            menuGroups = persistentListOf(
-                AppActionGroup(
-                    id = "explore_groups",
-                    actions = buildList {
-                        add(
-                            AppAction(
-                                "group:",
-                                stringResource(R.string.all),
-                                icon = Icons.Default.Group,
-                            )
-                        )
-                        state.groups.forEach { group ->
-                            add(
-                                AppAction(
-                                    "group:$group",
-                                    group,
-                                    icon = Icons.AutoMirrored.Outlined.Label,
-                                )
-                            )
+            topBarActions = {
+                // 参考上游的发现内容直达入口：跳过分类网格，直接落在具体列表页——
+                // 优先当前展开的书源，其次第一个书源；取它的第一个可切换分类，
+                // 没有可切换分类时退回该源的默认发现页。列表页右上角可再换其他书源。
+                TopBarActionButton(
+                    onClick = {
+                        val source = state.items.firstOrNull {
+                            it.bookSourceUrl == state.expandedId
+                        } ?: state.items.firstOrNull()
+                        if (source == null) return@TopBarActionButton
+                        val kind = state.exploreKinds.firstOrNull {
+                            it.type == ExploreKind.Type.url && !it.url.isNullOrBlank()
                         }
-                    }.toImmutableList(),
-                ),
-            ),
-            onMenuAction = { id ->
-                if (id.startsWith("group:")) {
-                    onIntent(ExploreIntent.SetGroup(id.removePrefix("group:")))
+                        if (kind != null) {
+                            onOpenExploreShow(kind.title, source.bookSourceUrl, kind.url)
+                        } else {
+                            onOpenExploreShow(null, source.bookSourceUrl, null)
+                        }
+                    },
+                    imageVector = Icons.Filled.SwapHoriz,
+                    contentDescription = stringResource(R.string.explore_main_content),
+                )
+            },
+            dropDownMenuContent = { dismiss ->
+                RoundDropdownMenuItem(
+                    leadingIcon = { MenuItemIcon(Icons.Default.Group) },
+                    text = stringResource(R.string.all),
+                    onClick = { onIntent(ExploreIntent.SetGroup("")); dismiss() }
+                )
+                state.groups.forEach { group ->
+                    RoundDropdownMenuItem(
+                        leadingIcon = { MenuItemIcon(Icons.AutoMirrored.Outlined.Label) },
+                        text = group,
+                        onClick = { onIntent(ExploreIntent.SetGroup(group)); dismiss() }
+                    )
                 }
             },
             contentWindowInsets = WindowInsets(0)
@@ -360,58 +369,6 @@ fun ExploreScreen(
     )
 }
 
-
-/** 发现页源长按菜单的稳定 ID：声明与分派共用，避免字面量漂移。 */
-private enum class ExploreSourceMenuAction(val id: String, @StringRes val labelRes: Int) {
-    ToTop("to_top", R.string.to_top),
-    Edit("edit", R.string.edit),
-    Search("search", R.string.search),
-    Login("login", R.string.login),
-    Refresh("refresh", R.string.refresh),
-    Delete("delete", R.string.delete),
-}
-
-@Composable
-private fun exploreSourceMenuGroups(hasLogin: Boolean): ImmutableList<AppActionGroup> {
-    val actions = ExploreSourceMenuAction.entries.mapNotNull { action ->
-        if (action == ExploreSourceMenuAction.Login && !hasLogin) return@mapNotNull null
-        AppAction(
-            id = action.id,
-            label = stringResource(action.labelRes),
-            icon = when (action) {
-                ExploreSourceMenuAction.ToTop -> Icons.Default.VerticalAlignTop
-                ExploreSourceMenuAction.Edit -> Icons.Default.Edit
-                ExploreSourceMenuAction.Search -> Icons.Default.Search
-                ExploreSourceMenuAction.Login -> Icons.AutoMirrored.Filled.Login
-                ExploreSourceMenuAction.Refresh -> Icons.Default.Refresh
-                ExploreSourceMenuAction.Delete -> Icons.Default.Delete
-            },
-            destructive = action == ExploreSourceMenuAction.Delete,
-        )
-    }
-    return persistentListOf(
-        AppActionGroup(id = "explore_source_item", actions = actions.toImmutableList()),
-    )
-}
-
-private fun exploreSourceMenuActionFor(
-    id: String,
-    onTop: () -> Unit,
-    onEdit: () -> Unit,
-    onSearch: () -> Unit,
-    onLogin: () -> Unit,
-    onRefresh: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    when (id) {
-        ExploreSourceMenuAction.ToTop.id -> onTop()
-        ExploreSourceMenuAction.Edit.id -> onEdit()
-        ExploreSourceMenuAction.Search.id -> onSearch()
-        ExploreSourceMenuAction.Login.id -> onLogin()
-        ExploreSourceMenuAction.Refresh.id -> onRefresh()
-        ExploreSourceMenuAction.Delete.id -> onDelete()
-    }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -500,39 +457,45 @@ fun ExploreSourceHeader(
                         )
                     }
                 }
-                // 源名不再放进菜单：原生菜单不渲染分组标题文字，条目正文已有源名，
-                // 长按菜单只保留命令项；删除项走 destructive 落色。锚点取这层 Box（尾部区域）。
-                Box {
-                    AnimatedContent(
-                        targetState = loadingKinds,
-                        label = "LoadingSwitch"
-                    ) { loading ->
-                        if (loading) {
-                            AppContainedLoadingIndicator(
-                                modifier = Modifier.size(18.dp)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .rotate(rotation)
-                                    .size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                RoundDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    PillHeaderDivider(title = item.bookSourceName)
+                    RoundDropdownMenuItem(
+                        leadingIcon = { MenuItemIcon(Icons.Default.VerticalAlignTop) },
+                        text = stringResource(R.string.to_top),
+                        onClick = { onTop(); showMenu = false }
+                    )
+                    RoundDropdownMenuItem(
+                        leadingIcon = { MenuItemIcon(Icons.Default.Edit) },
+                        text = stringResource(R.string.edit),
+                        onClick = { onEdit(); showMenu = false }
+                    )
+                    RoundDropdownMenuItem(
+                        leadingIcon = { MenuItemIcon(Icons.Default.Search) },
+                        text = stringResource(R.string.search),
+                        onClick = { onSearch(); showMenu = false }
+                    )
+                    if (item.hasLoginUrl) {
+                        RoundDropdownMenuItem(
+                            leadingIcon = { MenuItemIcon(Icons.AutoMirrored.Filled.Login) },
+                            text = stringResource(R.string.login),
+                            onClick = { onLogin(); showMenu = false }
+                        )
                     }
-                    AppActionMenu(
-                        groups = exploreSourceMenuGroups(hasLogin = item.hasLoginUrl),
-                        onAction = { id ->
-                            exploreSourceMenuActionFor(
-                                id, onTop, onEdit, onSearch, onLogin, onRefresh, onDelete,
+                    RoundDropdownMenuItem(
+                        leadingIcon = { MenuItemIcon(Icons.Default.Refresh) },
+                        text = stringResource(R.string.refresh),
+                        onClick = { onRefresh(); showMenu = false }
+                    )
+                    RoundDropdownMenuItem(
+                        leadingIcon = {
+                            MenuItemIcon(
+                                Icons.Default.Delete,
+                                tint = MaterialTheme.colorScheme.error
                             )
                         },
-                        modifier = Modifier.matchParentSize(),
-                        embeddedExpanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        trigger = {},
+                        text = stringResource(R.string.delete),
+                        color = LegadoTheme.colorScheme.error,
+                        onClick = { onDelete(); showMenu = false }
                     )
                 }
             },
