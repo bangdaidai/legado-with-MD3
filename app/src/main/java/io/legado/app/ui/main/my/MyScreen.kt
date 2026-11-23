@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
@@ -55,6 +56,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.ui.book.marking.AllMarkingActivity
 import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.main.LocalMainPageIndex
 import io.legado.app.ui.main.LocalMainPagerTopBarHost
@@ -248,6 +250,13 @@ fun MyScreen(
                     title = stringResource(R.string.bookmark),
                     imageVector = AppIcons.leadingOrNull(Icons.Default.Bookmark),
                     onClick = { onNavigate(PrefClickEvent.OpenAllBookmark) }
+                )
+                ClickableSettingItem(
+                    title = stringResource(R.string.all_marking),
+                    imageVector = AppIcons.leadingOrNull(Icons.Default.EditNote),
+                    onClick = {
+                        onNavigate(PrefClickEvent.StartActivity(AllMarkingActivity::class.java))
+                    }
                 )
                 ClickableSettingItem(
                     title = stringResource(R.string.read_record),
