@@ -118,6 +118,10 @@ import io.legado.app.help.security.BiometricUnlockLauncher
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.group.GroupEditSheet
 import io.legado.app.ui.book.info.GroupSelectSheet
+import io.legado.app.ui.main.LocalMainPageIndex
+import io.legado.app.ui.main.LocalMainPagerTopBarHost
+import io.legado.app.ui.main.MainPagerPageChromeEffect
+import io.legado.app.ui.main.MainPagerTopBarHost
 import io.legado.app.ui.main.bookCoverSharedElementKey
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ProvideAppDensity
@@ -547,6 +551,8 @@ fun BookshelfScreen(
     }
 
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    val pagerTopBarHost = LocalMainPagerTopBarHost.current
+    val mainPageIndex = LocalMainPageIndex.current
     var showTopBarMenu by remember { mutableStateOf(false) }
     val toggleShelfFilter = {
         toggleBookshelfFilter(
@@ -572,7 +578,11 @@ fun BookshelfScreen(
     }
 
     AppScaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = if (pagerTopBarHost != null) {
+            Modifier
+        } else {
+            Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+        },
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
             SnackbarHost(
@@ -585,6 +595,8 @@ fun BookshelfScreen(
         topBar = {
             BookshelfTopBar(
                 uiState = uiState,
+                pagerTopBarHost = pagerTopBarHost,
+                pageIndex = mainPageIndex,
                 scrollBehavior = scrollBehavior,
                 onSearchClick = onSearchClick,
                 onSearchLongClick = onSearchLongClick,
@@ -968,7 +980,7 @@ fun BookshelfScreen(
                 onRefresh = { onIntent(BookshelfIntent.RefreshBooks(uiState.items)) },
                 enabled = pullToRefreshEnabled,
                 topPadding = paddingValues.calculateTopPadding(),
-                scrollBehavior = scrollBehavior
+                scrollBehavior = if (pagerTopBarHost != null) null else scrollBehavior
             ) {
                 folderTransition.AnimatedContent(
                 transitionSpec = {
@@ -1416,6 +1428,8 @@ internal fun toggleBookshelfFilter(
 @Composable
 private fun BookshelfTopBar(
     uiState: BookshelfUiState,
+    pagerTopBarHost: MainPagerTopBarHost?,
+    pageIndex: Int,
     scrollBehavior: GlassTopAppBarScrollBehavior,
     onSearchClick: () -> Unit,
     onSearchLongClick: () -> Unit,
@@ -1430,6 +1444,57 @@ private fun BookshelfTopBar(
     val filterContentDescription = stringResource(R.string.bookshelf_filter)
     val searchFirst = uiState.settings.bookshelfSearchActionDirectToSearch
     val exitEditModeDescription = stringResource(R.string.cancel_select)
+    // 横划顶栏接管后，本页不再画自己的顶栏，只把标题、操作区和下方内容注册给主壳顶栏。
+    if (pagerTopBarHost != null) {
+        MainPagerPageChromeEffect(
+            host = pagerTopBarHost,
+            pageIndex = pageIndex,
+            subtitle = uiState.subtitle,
+            actions = {
+                if (uiState.isEditMode) {
+                    TopBarActionButton(
+                        onClick = onExitEditMode,
+                        imageVector = AppIcons.Close,
+                        contentDescription = exitEditModeDescription,
+                    )
+                }
+                TopBarActionButton(
+                    onClick = onSearchClick,
+                    onLongClick = onSearchLongClick,
+                    onLongClickLabel = if (searchFirst) filterContentDescription else searchContentDescription,
+                    imageVector = AppIcons.Search,
+                    contentDescription = if (searchFirst) searchContentDescription else filterContentDescription,
+                )
+                actions()
+            },
+            bottomContent = {
+                AnimatedVisibility(
+                    modifier = Modifier.adaptiveHorizontalPadding(),
+                    visible = uiState.isSearch,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    SearchBar(
+                        query = uiState.searchKey,
+                        onQueryChange = onSearchQueryChange,
+                        onSearch = onSearchSubmit,
+                        trailingIcon = {
+                            if (uiState.searchKey.isNotEmpty()) {
+                                SmallPlainButton(
+                                    modifier = Modifier.padding(horizontal = 4.dp),
+                                    onClick = onClearSearch,
+                                    icon = AppIcons.Close,
+                                    contentDescription = stringResource(R.string.clear)
+                                )
+                            }
+                        }
+                    )
+                }
+                bottomContent()
+            },
+        )
+        return
+    }
     GlassMediumFlexibleTopAppBar(
         modifier = Modifier.fillMaxWidth(),
         navigationIcon = {

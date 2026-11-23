@@ -130,6 +130,7 @@ object SettingsSearchCatalog {
         SettingsSearchItem("other.ignore_audio_focus_title", SettingsSearchPage.Other, R.string.ignore_audio_focus_title, groupIndex = 0, groupTitleRes = R.string.read, descriptionRes = R.string.ignore_audio_focus_summary),
         SettingsSearchItem("other.auto_clear_expired", SettingsSearchPage.Other, R.string.auto_clear_expired, groupIndex = 0, groupTitleRes = R.string.read, descriptionRes = R.string.auto_clear_expired_summary),
         SettingsSearchItem("other.show_add_to_shelf_alert_title", SettingsSearchPage.Other, R.string.show_add_to_shelf_alert_title, groupIndex = 0, groupTitleRes = R.string.read, descriptionRes = R.string.show_add_to_shelf_alert_summary),
+        SettingsSearchItem("other.allow_same_name_author_type", SettingsSearchPage.Other, R.string.allow_same_name_author_type, groupIndex = 0, groupTitleRes = R.string.read, descriptionRes = R.string.allow_same_name_author_type_summary),
         SettingsSearchItem("other.background_battery_optimization_title", SettingsSearchPage.Other, R.string.background_battery_optimization_title, groupIndex = 0, groupTitleRes = R.string.other_setting),
         SettingsSearchItem("other.web_service_wake_lock", SettingsSearchPage.Other, R.string.web_service_wake_lock, groupIndex = 0, groupTitleRes = R.string.other_setting, descriptionRes = R.string.web_service_wake_lock_summary),
         SettingsSearchItem("other.source_edit_text_max_line", SettingsSearchPage.Other, R.string.source_edit_text_max_line, groupIndex = 0, groupTitleRes = R.string.other_setting),

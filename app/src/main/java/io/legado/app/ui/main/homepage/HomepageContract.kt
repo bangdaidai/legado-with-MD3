@@ -43,8 +43,9 @@ data class HomepageManageActions(
     val onJoinModule: (String, String?, ModuleDef) -> Unit = { _, _, _ -> },
     val onAddCustomModule: (String, String?, ModuleDef) -> Unit = { _, _, _ -> },
     val onAddButtonGroupFromKinds: (String, String?, String, List<String>) -> Unit = { _, _, _, _ -> },
-    val onAddRankingFromKinds: (String, String?, String, String, List<String>) -> Unit =
-        { _, _, _, _, _ -> },
+    val onAddRankingFromKinds:
+        (String, String?, String, String, List<String>, List<String?>) -> Unit =
+        { _, _, _, _, _, _ -> },
     /** 长按标题栏"更多"按钮, 直接打开该模块的编辑对话框 */
     val onModuleHeaderLongClick: (String) -> Unit = {},
     val onGetExploreKinds: (String) -> List<Pair<String, String>> = { emptyList() },

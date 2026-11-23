@@ -44,6 +44,8 @@ class OtherConfigViewModel(
             readAloudByMediaButton =
                 readAloudSettingsGateway.currentSettings.readAloudByMediaButton,
             ignoreAudioFocus = readAloudSettingsGateway.currentSettings.ignoreAudioFocus,
+            allowSameNameAuthorType =
+                bookshelfSettingsGateway.currentSettings.allowSameNameAuthorType,
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -71,6 +73,13 @@ class OtherConfigViewModel(
                         readAloudByMediaButton = preferences.readAloudByMediaButton,
                         ignoreAudioFocus = preferences.ignoreAudioFocus,
                     )
+                }
+            }
+        }
+        viewModelScope.launch {
+            bookshelfSettingsGateway.settings.collect { settings ->
+                _uiState.update {
+                    it.copy(allowSameNameAuthorType = settings.allowSameNameAuthorType)
                 }
             }
         }

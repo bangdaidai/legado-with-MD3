@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.dropUnlessResumed
 import io.legado.app.R
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.PreloadContainerBackgrounds
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.SplicedColumnGroup
 import io.legado.app.ui.widget.components.settingItem.ClickableSettingItem
@@ -40,6 +41,8 @@ fun ConfigNavScreen(
     onSearchSettings: () -> Unit,
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    // 预热容器背景图内存缓存，避免返回设置页时背景图一块一块卡出来
+    PreloadContainerBackgrounds()
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

@@ -54,6 +54,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.settingItem.ClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.DropdownListSettingItem
 import io.legado.app.ui.widget.components.settingItem.InputSettingItem
+import io.legado.app.ui.widget.components.settingItem.SwitchSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
@@ -216,6 +217,15 @@ fun AiProviderEditScreen(
                             if (!state.isTesting && !state.isSaving && !state.isFetchingModels) {
                                 onIntent(AiProviderEditIntent.TestConnection)
                             }
+                        }
+                    )
+                    SwitchSettingItem(
+                        title = stringResource(R.string.ai_provider_web_search),
+                        description = stringResource(R.string.ai_provider_web_search_desc),
+                        checked = state.webSearchEnabled,
+                        enabled = !state.isSaving,
+                        onCheckedChange = {
+                            onIntent(AiProviderEditIntent.SetWebSearchEnabled(it))
                         }
                     )
                 }

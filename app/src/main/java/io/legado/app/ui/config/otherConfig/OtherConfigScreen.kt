@@ -196,6 +196,17 @@ fun OtherConfigScreen(
                     )
                 }
 
+                SearchableSetting("other.allow_same_name_author_type") {
+                    SwitchSettingItem(
+                        title = stringResource(R.string.allow_same_name_author_type),
+                        description = stringResource(R.string.allow_same_name_author_type_summary),
+                        checked = state.allowSameNameAuthorType,
+                        onCheckedChange = {
+                            onIntent(OtherConfigIntent.AllowSameNameAuthorTypeChanged(it))
+                        }
+                    )
+                }
+
             }
 
                 SplicedColumnGroup(title = stringResource(R.string.other_setting)) {

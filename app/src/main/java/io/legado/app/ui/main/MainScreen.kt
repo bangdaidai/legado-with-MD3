@@ -18,11 +18,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -58,9 +61,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -69,6 +76,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
@@ -96,8 +104,10 @@ import io.legado.app.ui.main.home.HomeRouteScreen
 import io.legado.app.ui.main.my.MyRouteScreen
 import io.legado.app.ui.main.my.PrefClickEvent
 import io.legado.app.ui.main.rss.RssRouteScreen
+import io.legado.app.ui.theme.ComposeEngine
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.LocalAppUiConfiguration
+import io.legado.app.ui.theme.LocalBottomOverlayPadding
 import io.legado.app.ui.theme.ThemeResolver
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.FloatingBottomBar
@@ -115,6 +125,7 @@ import io.legado.app.ui.widget.components.modalBottomSheet.MarkdownSheet
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.startActivityForBook
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -250,16 +261,42 @@ fun MainScreen(
     val pagerState = rememberPagerState(initialPage = initialPage) { destinations.size }
     var lastSettledMainPage by remember(pagerState) { mutableIntStateOf(pagerState.settledPage) }
     val currentOnMainDestinationChanged by rememberUpdatedState(onMainDestinationChanged)
+    val mainPagerBottomBarState = remember { MainPagerBottomBarState() }
     LaunchedEffect(pagerState.settledPage) {
         if (lastSettledMainPage != pagerState.settledPage) {
             lastSettledMainPage = pagerState.settledPage
             currentOnMainDestinationChanged()
+            mainPagerBottomBarState.reveal()
         }
     }
     val pagerNestedScrollConnection = rememberPagerFlingPassThroughConnection(
         state = pagerState,
         orientation = Orientation.Horizontal,
     )
+    // 只旁听页面滚动的纵向位移，仍把事件原样交给 pager 自己的 fling 连接。
+    val bottomBarScrollConnection = remember(pagerNestedScrollConnection, mainPagerBottomBarState) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                mainPagerBottomBarState.onScroll(available.y)
+                return pagerNestedScrollConnection.onPreScroll(available, source)
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                mainPagerBottomBarState.onScroll(available.y)
+                return pagerNestedScrollConnection.onPostScroll(consumed, available, source)
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity =
+                pagerNestedScrollConnection.onPreFling(available)
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+                pagerNestedScrollConnection.onPostFling(consumed, available)
+        }
+    }
     var bookshelfScrollToTopRequest by remember { mutableLongStateOf(0L) }
     fun requestBookshelfScrollToTop() {
         bookshelfScrollToTopRequest++
@@ -285,9 +322,39 @@ fun MainScreen(
     }
     val labelVisibilityMode = mainUiState.labelVisibilityMode
     val isUnlabeled = labelVisibilityMode == "unlabeled"
+    // 横划顶栏只在 Oxygen 引擎下接管：它取 OxygenX 的配色、排版与收拢动画。
+    val usePagerTopBar =
+        LegadoTheme.composeEngine == ComposeEngine.Oxygen && mainUiState.usePagerTopBar
+    val mainPagerTopBarHost = remember { MainPagerTopBarHost() }
+    // 页面自行注册顶栏槽位；没注册的页面（如发现页）保留自己的顶栏和底栏导航。
+    val pagerTopBarActive =
+        usePagerTopBar && mainPagerTopBarHost.pages.containsKey(pagerState.currentPage)
+    val showMainBottomNavigation = mainUiState.showBottomView && !pagerTopBarActive
+    val pagerTopBarTitles = destinations.map { stringResource(it.labelId) }
+        .let { labels -> remember(labels) { labels.toImmutableList() } }
+    val mainPagerTopBarAppBarState = rememberMainPagerTopBarAppBarState(usePagerTopBar)
+    // 横划顶栏隐藏底栏后内容要自己延伸到导航栏后面，底部的可滚动留白由各页补。
+    val navigationBarsBottom = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    // 只有当前页注册了顶栏槽位才渲染横划顶栏；其它引擎完全不传 topBar，
+    // 避免给 Coui/Mochi/Material 建出空顶栏宿主。
+    val mainPagerTopBarContent: (@Composable () -> Unit)? =
+        if (pagerTopBarActive && mainPagerTopBarAppBarState != null) {
+            {
+                MainPagerTopBar(
+                    pagerState = pagerState,
+                    titles = pagerTopBarTitles,
+                    host = mainPagerTopBarHost,
+                    appBarState = mainPagerTopBarAppBarState,
+                )
+            }
+        } else {
+            null
+        }
     val useFloatingBottomBar =
         shouldUseHomePlaybackCapsule(
-            onMainRoute = true, showBottomView = mainUiState.showBottomView,
+            onMainRoute = true, showBottomView = showMainBottomNavigation,
             useFloatingBottomBar = mainUiState.useFloatingBottomBar, useRail = useRail,
         )
     val useLiquidGlass = useFloatingBottomBar &&
@@ -308,7 +375,7 @@ fun MainScreen(
             .fillMaxSize()
             .windowInsetsPadding(mainAdaptiveInsets.only(WindowInsetsSides.Horizontal))
     ) {
-        if (useRail && mainUiState.showBottomView) {
+        if (useRail && showMainBottomNavigation) {
             if (ThemeResolver.isMiuixEngine(LegadoTheme.composeEngine)) {
                 val miuixNavState = rememberNavigationRailState(
                     initialValue = if (mainUiState.navExtended) {
@@ -487,9 +554,16 @@ fun MainScreen(
         }
 
         AppScaffold(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    mainPagerTopBarAppBarState?.let { state ->
+                        Modifier.nestedScroll(state.nestedScrollConnection)
+                    } ?: Modifier
+                ),
+            topBar = mainPagerTopBarContent,
             bottomBar = {
-                if (!useRail && mainUiState.showBottomView && !useFloatingBottomBar) {
+                if (!useRail && showMainBottomNavigation && !useFloatingBottomBar) {
                     AppNavigationBar(
                         showLabel = showLabel,
                         alwaysShowLabel = alwaysShowLabel
@@ -533,7 +607,12 @@ fun MainScreen(
                 }
             },
             // The row owns side cutouts, child pages own top bars, and this scaffold owns the bottom.
-            contentWindowInsets = mainAdaptiveInsets.only(WindowInsetsSides.Bottom)
+            // 横划顶栏接管后由顶栏自己消费状态栏，内容一直延伸到底部导航栏后面。
+            contentWindowInsets = if (pagerTopBarActive) {
+                WindowInsets(0)
+            } else {
+                mainAdaptiveInsets.only(WindowInsetsSides.Bottom)
+            }
         ) { padding ->
             Box(
                 modifier = Modifier
@@ -554,7 +633,7 @@ fun MainScreen(
                 ) {
                     HorizontalPager(
                         state = pagerState,
-                        pageNestedScrollConnection = pagerNestedScrollConnection,
+                        pageNestedScrollConnection = bottomBarScrollConnection,
                         modifier = Modifier
                             .fillMaxSize()
                             .then(
@@ -569,7 +648,18 @@ fun MainScreen(
                         val pageLifecycleOwner = rememberMainPageLifecycleOwner(
                             isActive = page == pagerState.currentPage
                         )
-                        CompositionLocalProvider(LocalLifecycleOwner provides pageLifecycleOwner) {
+                        CompositionLocalProvider(
+                            LocalLifecycleOwner provides pageLifecycleOwner,
+                            LocalMainPageIndex provides page,
+                            LocalMainPagerTopBarHost provides
+                                if (usePagerTopBar) mainPagerTopBarHost else null,
+                            LocalMainPagerBottomBarState provides mainPagerBottomBarState,
+                            LocalBottomOverlayPadding provides if (pagerTopBarActive) {
+                                navigationBarsBottom
+                            } else {
+                                LocalBottomOverlayPadding.current
+                            },
+                        ) {
                             when (destination) {
                             MainDestination.Home -> HomeRouteScreen(
                                 onOpenBook = { book ->

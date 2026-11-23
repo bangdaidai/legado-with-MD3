@@ -505,7 +505,8 @@ fun <T> HomepageModuleManageSheet(
                         effectiveTargetSetId,
                         tempKindGroupTitle,
                         browseModuleType,
-                        selectedKindTitles.toList()
+                        selectedKindTitles.toList(),
+                        selectedKindUrls.toList()
                     )
                 }
                 selectedKindTitles = emptyList()

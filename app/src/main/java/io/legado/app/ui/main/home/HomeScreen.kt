@@ -42,6 +42,8 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Refresh
@@ -88,6 +90,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.domain.model.HomeDashboardSection
+import io.legado.app.domain.model.HomepageLayoutMode
 import io.legado.app.domain.model.MAX_DAILY_READING_GOAL_MINUTES
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
@@ -102,6 +105,7 @@ import io.legado.app.ui.main.homepage.HomepageModuleFeed
 import io.legado.app.ui.main.homepage.HomepageModuleManageSheet
 import io.legado.app.ui.main.homepage.HomepageUiState
 import io.legado.app.ui.main.homepage.HomepageViewModel
+import io.legado.app.ui.main.homepage.manage.AddCustomModuleDialog
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppPullToRefresh
 import io.legado.app.ui.widget.components.AppScaffold
@@ -168,6 +172,8 @@ fun HomeRouteScreen(
     val homepageState by homepageViewModel.uiState.collectAsStateWithLifecycle()
     var previewBook by remember { mutableStateOf<SearchBook?>(null) }
     var previewSharedCoverKey by remember { mutableStateOf<String?>(null) }
+    // 长按模块标题栏的"更多"按钮时要编辑的模块 id
+    var editingModuleId by remember { mutableStateOf<String?>(null) }
 
     val feedActions = remember(homepageViewModel, onNavigateToBookInfo, onOpenExploreShow) {
         HomepageFeedActions(
@@ -188,6 +194,7 @@ fun HomeRouteScreen(
             },
             onKindUrlClick = homepageViewModel::onKindUrlClick,
             onRefreshButtonGroup = homepageViewModel::refreshButtonGroup,
+            onModuleHeaderLongClick = { globalId -> editingModuleId = globalId },
         )
     }
     val manageActions = remember(homepageViewModel) {
@@ -211,13 +218,14 @@ fun HomeRouteScreen(
             onAddButtonGroupFromKinds = { sourceUrl, targetSetId, title, kinds ->
                 homepageViewModel.addButtonGroupFromKinds(sourceUrl, targetSetId, title, kinds)
             },
-            onAddRankingFromKinds = { sourceUrl, targetSetId, title, type, kinds ->
+            onAddRankingFromKinds = { sourceUrl, targetSetId, title, type, kinds, kindUrls ->
                 homepageViewModel.addRankingFromKinds(
                     sourceUrl,
                     targetSetId,
                     title,
                     type,
-                    kinds
+                    kinds,
+                    kindUrls
                 )
             },
             onGetExploreKinds = { homepageViewModel.getSourceExploreKinds(it) },
@@ -333,7 +341,8 @@ fun HomeRouteScreen(
                 is io.legado.app.ui.main.homepage.HomepageEffect.NavigateToExploreShow ->
                     onOpenExploreShow(effect.title, effect.sourceUrl, effect.exploreUrl)
 
-                is io.legado.app.ui.main.homepage.HomepageEffect.ShowSnackbar -> {}
+                is io.legado.app.ui.main.homepage.HomepageEffect.ShowSnackbar ->
+                    context.toastOnUi(effect.message)
             }
         }
     }
@@ -385,6 +394,28 @@ fun HomeRouteScreen(
         onCoexist = homepageViewModel::coexistWithBookshelfConflict,
         onMigrate = homepageViewModel::migrateBookshelfConflict,
     )
+
+    // 长按模块"更多"按钮打开的编辑对话框，复用管理面板里的同一个对话框
+    val editingModule = remember(editingModuleId, homepageState.manageState.allJoinedModules) {
+        editingModuleId?.let { id ->
+            homepageState.manageState.allJoinedModules.firstOrNull { it.id == id }
+        }
+    }
+    AddCustomModuleDialog(
+        data = editingModule,
+        sourceUrl = editingModule?.sourceUrl ?: "",
+        targetSetId = editingModule?.customSetId ?: "",
+        prefillTitle = editingModule?.title ?: "",
+        prefillUrl = editingModule?.url ?: "",
+        prefillType = editingModule?.type ?: "card",
+        prefillArgs = editingModule?.args ?: "",
+        prefillLayoutConfig = editingModule?.layoutConfig ?: "",
+        onDismissRequest = { editingModuleId = null },
+        onConfirm = { def ->
+            editingModule?.let { manageActions.onUpdateModule(it.id, def) }
+            editingModuleId = null
+        }
+    )
 }
 
 @OptIn(
@@ -419,6 +450,7 @@ fun HomeScreen(
     val pagerState = rememberPagerState(pageCount = {
         selectedSets.size.coerceAtLeast(1)
     })
+    val isMixedMode = state.layoutMode == HomepageLayoutMode.Mixed
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -426,7 +458,8 @@ fun HomeScreen(
         derivedStateOf { selectedSets.getOrNull(pagerState.currentPage)?.sourceName }
     }
 
-    LaunchedEffect(pagerState) {
+    LaunchedEffect(pagerState, isMixedMode) {
+        if (isMixedMode) return@LaunchedEffect
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { page ->
@@ -435,7 +468,8 @@ fun HomeScreen(
             }
     }
 
-    LaunchedEffect(state.selectedSourceSetUrl, pagerState) {
+    LaunchedEffect(state.selectedSourceSetUrl, pagerState, isMixedMode) {
+        if (isMixedMode) return@LaunchedEffect
         val targetUrl = state.selectedSourceSetUrl ?: return@LaunchedEffect
         val targetIndex = selectedSets.indexOfFirst { it.sourceUrl == targetUrl }
         if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
@@ -444,6 +478,17 @@ fun HomeScreen(
     }
 
     val homeTopBarActions: @Composable RowScope.() -> Unit = {
+        TopBarActionButton(
+            onClick = {
+                val newMode =
+                    if (isMixedMode) HomepageLayoutMode.Paged else HomepageLayoutMode.Mixed
+                onIntent(HomeIntent.SetLayoutMode(newMode))
+            },
+            imageVector = if (isMixedMode) Icons.Default.Dashboard else Icons.Default.DashboardCustomize,
+            contentDescription = stringResource(
+                if (isMixedMode) R.string.homepage_layout_paged else R.string.homepage_layout_mixed
+            ),
+        )
         TopBarActionButton(
             onClick = onToggleHomepageManage,
             imageVector = AppIcons.Settings,
@@ -466,7 +511,7 @@ fun HomeScreen(
                         AppAction(
                             id = "page:$index",
                             label = source.sourceName,
-                            selected = index == pagerState.currentPage,
+                            selected = !isMixedMode && index == pagerState.currentPage,
                         )
                     }.toImmutableList(),
                 ),
@@ -478,6 +523,9 @@ fun HomeScreen(
                     id.startsWith("page:") -> {
                         val index = id.removePrefix("page:").toIntOrNull()
                         if (index != null && index in selectedSets.indices) {
+                            if (isMixedMode) {
+                                onIntent(HomeIntent.SetLayoutMode(HomepageLayoutMode.Paged))
+                            }
                             scope.launch { pagerState.animateScrollToPage(index) }
                         }
                     }
@@ -496,7 +544,7 @@ fun HomeScreen(
         MainPagerPageChromeEffect(
             host = pagerTopBarHost,
             pageIndex = mainPageIndex,
-            subtitle = currentPageSourceName,
+            subtitle = if (isMixedMode) null else currentPageSourceName,
             actions = homeTopBarActions,
         )
     }
@@ -512,7 +560,7 @@ fun HomeScreen(
             if (pagerTopBarHost == null) {
                 GlassMediumFlexibleTopAppBar(
                     title = stringResource(R.string.home),
-                    subtitle = currentPageSourceName,
+                    subtitle = if (isMixedMode) null else currentPageSourceName,
                     scrollBehavior = scrollBehavior,
                     actions = homeTopBarActions,
                 )
@@ -528,6 +576,11 @@ fun HomeScreen(
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val dashboardScrollState = rememberScrollState()
+                // 切换混合/分页会把内容区换成新的滚动容器，顶栏的收拢进度仍是切换前的值，
+                // 只复位顶栏，避免标题停在半透明过渡态。
+                LaunchedEffect(isMixedMode) {
+                    scrollBehavior.reset()
+                }
                 val moduleNestedScrollConnection = remember(dashboardScrollState) {
                     object : NestedScrollConnection {
                         override fun onPreScroll(
@@ -593,6 +646,27 @@ fun HomeScreen(
                             ) {
                                 AppText(stringResource(R.string.homepage_no_source_sets_selected))
                             }
+                        } else if (isMixedMode) {
+                            // 混合模式：所有选中集合的模块合并为一个流
+                            val allModules = remember(homepageState.modules, selectedSets) {
+                                val selectedSetUrls = selectedSets.map { it.sourceUrl }.toSet()
+                                homepageState.modules.filter { module ->
+                                    val setUrl =
+                                        HomepageViewModel.customSetUrl(module.customSetId ?: "")
+                                    module.sourceUrl in selectedSetUrls || setUrl in selectedSetUrls
+                                }
+                            }
+                            HomepageModuleFeed(
+                                modules = allModules,
+                                actions = homepageFeedActions,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .nestedScroll(moduleNestedScrollConnection),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                onBookLongClick = onHomepageBookLongClick,
+                                onErrorClick = { errorMessage = it },
+                            )
                         } else {
                             HorizontalPager(
                                 state = pagerState,
