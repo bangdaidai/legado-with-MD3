@@ -172,6 +172,7 @@ fun ReadBookRouteScreen(
     onOpenTtsEnginesAndVoices: () -> Unit = {},
     onOpenTtsCache: () -> Unit = {},
     onOpenSourceEdit: (sourceUrl: String) -> Unit,
+    onOpenBubbleManage: () -> Unit = {},
     onNavigateBack: () -> Boolean = { true },
 ) {
     // 归因定界：与末尾 compose.screen.end 成对。若首帧 `Compose:recompose` 里出现
@@ -988,6 +989,7 @@ fun ReadBookRouteScreen(
                         onResetBookmarkBadge = {
                             viewModel.onIntent(ReadBookIntent.ClearBookmarkBadgeImage)
                         },
+                        onOpenBubbleManage = onOpenBubbleManage,
                     )
                 }
             }

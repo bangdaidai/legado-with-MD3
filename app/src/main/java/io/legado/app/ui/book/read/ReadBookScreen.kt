@@ -31,6 +31,7 @@ import io.legado.app.ui.book.read.sheet.ContentEditSheet
 import io.legado.app.ui.book.read.sheet.DownloadSheet
 import io.legado.app.ui.book.read.sheet.EyeProtectionConfigSheet
 import io.legado.app.ui.book.read.sheet.FloatingBarIconConfigSheet
+import io.legado.app.ui.book.read.sheet.BubbleStyleSheet
 import io.legado.app.ui.book.read.sheet.HighlightRuleConfigSheet
 import io.legado.app.ui.book.read.sheet.MarkingSheet
 import io.legado.app.ui.book.read.sheet.MarkingNotePopup
@@ -71,6 +72,7 @@ fun ReadBookOverlayRoute(
     onOpenTextSelectMenuConfig: () -> Unit,
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
+    onOpenBubbleManage: () -> Unit = {},
     sheetsVisible: Boolean = true,
     additionalSheetContent: @Composable (ReadBookSheet, Boolean, () -> Unit) -> Unit = { _, _, _ -> },
 ) {
@@ -121,6 +123,7 @@ fun ReadBookOverlayRoute(
         onOpenTextSelectMenuConfig = onOpenTextSelectMenuConfig,
         onPickBookmarkBadgeImage = onPickBookmarkBadgeImage,
         onResetBookmarkBadge = onResetBookmarkBadge,
+        onOpenBubbleManage = onOpenBubbleManage,
     )
 }
 
@@ -149,6 +152,7 @@ fun ReadBookScreen(
     onOpenTextSelectMenuConfig: () -> Unit,
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
+    onOpenBubbleManage: () -> Unit = {},
 ) {
     // Dialogs driven by activeDialog state
     val restoreDialog = state.activeDialog as? ReadBookDialog.ConfirmRestoreProgress
@@ -349,6 +353,7 @@ fun ReadBookScreen(
                     onOpenTextSelectMenuConfig = onOpenTextSelectMenuConfig,
                     onPickBookmarkBadgeImage = onPickBookmarkBadgeImage,
                     onResetBookmarkBadge = onResetBookmarkBadge,
+                    onOpenBubbleManage = onOpenBubbleManage,
                     markingNotePreview = markingNotePreview,
                 )
                 additionalSheetContent(layer.sheet, visible) {
@@ -382,6 +387,7 @@ private fun ReadBookSheetContent(
     onOpenTextSelectMenuConfig: () -> Unit,
     onPickBookmarkBadgeImage: () -> Unit,
     onResetBookmarkBadge: () -> Unit,
+    onOpenBubbleManage: () -> Unit = {},
     markingNotePreview: MarkingNotePreview?,
 ) {
     val visibleState =
@@ -547,6 +553,11 @@ private fun ReadBookSheetContent(
         config = state.sheetConfig,
         onDismissRequest = dismissSheet(),
         onIntent = onIntent,
+    )
+    BubbleStyleSheet(
+        show = state.activeSheet is ReadBookSheet.BubbleStyle,
+        onDismissRequest = dismissSheet(),
+        onOpenManage = onOpenBubbleManage,
     )
     MarkingSheet(
         show = state.activeSheet is ReadBookSheet.Marking,

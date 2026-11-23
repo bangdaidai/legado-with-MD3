@@ -3,6 +3,7 @@ package io.legado.app.ui.book.searchContent
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -185,7 +186,11 @@ fun SearchContentScreen(
     }
 
     AppScaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            // 本页是叠在阅读页上的浮层：AppScaffold 在开启背景图时会给透明容器，
+            // 不补底色就会直接透出下面的正文。
+            .background(LegadoTheme.colorScheme.background),
         topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = if (searchQuery.isNotBlank() && searchResults.isNotEmpty()) {

@@ -1135,6 +1135,9 @@ onNavigateToAuthorManagement = {
                 onOpenSourceEdit = { sourceUrl ->
                     onNavigateToRoute(MainRouteBookSourceEdit(sourceUrl))
                 },
+                onOpenBubbleManage = {
+                    onNavigateToRoute(MainRouteSettingsBubble)
+                },
                 onNavigateBack = {
                     MainNavigator.navigateBack(
                         this@mainEntryProvider,
