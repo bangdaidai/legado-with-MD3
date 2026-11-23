@@ -41,6 +41,7 @@ fun ReadConfigScreen(
     onIntent: (ReadConfigIntent) -> Unit,
     onBackClick: () -> Unit,
     focusSettingId: String? = null,
+    onNavigateToProtagonistExtraction: () -> Unit = {},
 ) {
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     val settings = state
@@ -561,6 +562,11 @@ fun ReadConfigScreen(
                             }
                         )
                     }
+
+                    ClickableSettingItem(
+                        title = stringResource(R.string.protagonist_extraction_config),
+                        onClick = onNavigateToProtagonistExtraction,
+                    )
 
                 }
             }

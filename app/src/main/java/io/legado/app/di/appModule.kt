@@ -8,6 +8,8 @@ import io.legado.app.feature.settings.manga.MangaConfigViewModel
 import io.legado.app.feature.settings.search.SettingsSearchViewModel
 import io.legado.app.domain.gateway.AiImageGateway
 import io.legado.app.data.repository.ai.AiImageRepository
+import io.legado.app.data.repository.ai.AiLogRepository
+import io.legado.app.data.repository.ai.WebSearchRepository
 import io.legado.app.data.repository.manga.translation.MangaImageEditor
 import coil3.ImageLoader
 import coil3.gif.AnimatedImageDecoder
@@ -40,6 +42,8 @@ import io.legado.app.data.repository.BookImportRepository
 import io.legado.app.data.repository.BookKnowledgeRepository
 import io.legado.app.data.repository.BookMarkingRepository
 import io.legado.app.data.repository.BookRepository
+import io.legado.app.data.repository.ShareCardRepository
+import io.legado.app.data.repository.WebSearchSettingsRepository
 import io.legado.app.data.repository.BookSourceCallbackRepository
 import io.legado.app.data.repository.BookSourceCheckRepository
 import io.legado.app.data.repository.BookSourceRepository
@@ -121,6 +125,8 @@ import io.legado.app.domain.gateway.AiProfileGateway
 import io.legado.app.domain.gateway.AiPromptPresetGateway
 import io.legado.app.domain.gateway.AiTextGateway
 import io.legado.app.domain.gateway.AiToolGateway
+import io.legado.app.domain.gateway.AiWebSearchGateway
+import io.legado.app.domain.gateway.WebSearchSettingsGateway
 import io.legado.app.domain.gateway.AppLocaleGateway
 import io.legado.app.domain.gateway.AppShellSettingsGateway
 import io.legado.app.domain.gateway.AppStartupGateway
@@ -289,6 +295,7 @@ import io.legado.app.ui.book.searchContent.SearchContentViewModel
 import io.legado.app.ui.book.source.debug.BookSourceDebugViewModel
 import io.legado.app.ui.book.source.edit.BookSourceEditViewModel
 import io.legado.app.ui.book.source.manage.BookSourceViewModel
+import io.legado.app.ui.book.shareCard.ShareCardManageViewModel
 import io.legado.app.ui.book.toc.TocViewModel
 import io.legado.app.ui.book.toc.rule.TxtTocRuleViewModel
 import io.legado.app.ui.book.toc.rule.preview.TxtTocRulePreviewViewModel
@@ -297,6 +304,8 @@ import io.legado.app.ui.browser.WebViewModel
 import io.legado.app.ui.config.ai.AiConfigViewModel
 import io.legado.app.ui.config.ai.AiModelEditViewModel
 import io.legado.app.ui.config.ai.AiProviderEditViewModel
+import io.legado.app.ui.config.ai.log.AiLogViewModel
+import io.legado.app.ui.config.ai.websearch.AiWebSearchConfigViewModel
 import io.legado.app.ui.config.ai.prompt.AiPromptConfigViewModel
 import io.legado.app.ui.config.ai.summary.AiSummaryConfigViewModel
 import io.legado.app.ui.config.backupConfig.BackupConfigViewModel
@@ -372,6 +381,7 @@ val appModule = module {
     singleOf(::ReadRecordRepository)
     single<HomeDashboardGateway> { HomeDashboardRepository(get(), get()) }
     singleOf(::BookRepository)
+    singleOf(::ShareCardRepository)
     singleOf(::VideoContentRepository)
     singleOf(::BookImportRepository)
     singleOf(::BookGroupRepository)
@@ -517,6 +527,9 @@ val appModule = module {
     single<AiChatGateway> { AiChatRepository(get()) }
     single<AiMemoryGateway> { AiMemoryRepository(get()) }
     single<AiPromptPresetGateway> { AiPromptPresetRepository(get()) }
+    single { AiLogRepository() }
+    single<WebSearchSettingsGateway> { WebSearchSettingsRepository() }
+    single<AiWebSearchGateway> { WebSearchRepository(get(), get()) }
     single<AiTextGateway> { AiTextRepositoryImpl(aiLogRepository = get()) }
     single<AiToolGateway> {
         AiToolRepository(
@@ -685,7 +698,10 @@ val appModule = module {
     viewModelOf(::AiConfigViewModel)
     viewModelOf(::AiSummaryConfigViewModel)
     viewModelOf(::AiPromptConfigViewModel)
+    viewModelOf(::AiWebSearchConfigViewModel)
+    viewModelOf(::AiLogViewModel)
     viewModelOf(::AiChatViewModel)
+    viewModelOf(::ShareCardManageViewModel)
     viewModel { (providerId: String?) ->
         AiProviderEditViewModel(
             initialProviderId = providerId,

@@ -46,6 +46,8 @@ import io.legado.app.domain.model.PlaybackCapsuleSource
 import io.legado.app.domain.model.PlaybackCapsuleState
 import io.legado.app.domain.model.settings.AppUiConfiguration
 import io.legado.app.feature.reader.platform.ReaderPerfTrace
+import io.legado.app.help.book.isVideo
+import io.legado.app.help.book.shouldOpenMangaReader
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.Download
 import io.legado.app.model.ReadAloudSessionStore
@@ -73,6 +75,8 @@ import io.legado.app.ui.book.import.local.ImportBookRouteScreen
 import io.legado.app.ui.book.import.remote.RemoteBookRouteScreen
 import io.legado.app.ui.book.info.BookInfoRouteScreen
 import io.legado.app.ui.book.info.BookInfoViewModel
+import io.legado.app.ui.book.shareCard.ShareCardManageScreen
+import io.legado.app.ui.book.shareCard.ShareCardManageViewModel
 import io.legado.app.ui.book.info.edit.BookInfoEditScreen
 import io.legado.app.ui.book.info.edit.BookInfoEditViewModel
 import io.legado.app.ui.book.knowledge.BookCharacterDetailScreen
@@ -152,6 +156,8 @@ import io.legado.app.feature.manga.translation.MangaTranslationGlobalSettingsCon
 import io.legado.app.feature.manga.translation.MangaTranslationIntent
 import io.legado.app.feature.manga.translation.MangaTranslationViewModel
 import io.legado.app.ui.config.ai.AiConfigRouteScreen
+import io.legado.app.ui.config.ai.log.AiLogRouteScreen
+import io.legado.app.ui.config.ai.websearch.AiWebSearchConfigRouteScreen
 import io.legado.app.ui.config.ai.AiModelEditRouteScreen
 import io.legado.app.ui.config.ai.AiProviderEditRouteScreen
 import io.legado.app.ui.config.ai.prompt.AiPromptConfigRouteScreen
@@ -164,6 +170,7 @@ import io.legado.app.ui.config.customTheme.CustomThemeRouteScreen
 import io.legado.app.ui.config.downloadCacheConfig.DownloadCacheConfigRouteScreen
 import io.legado.app.ui.config.labConfig.LabConfigRouteScreen
 import io.legado.app.ui.config.otherConfig.OtherConfigRouteScreen
+import io.legado.app.ui.config.protagonistExtractionConfig.ProtagonistExtractionConfigRouteScreen
 import io.legado.app.ui.config.privateConfig.PrivateConfigRouteScreen
 import io.legado.app.ui.config.readConfig.ReadConfigRouteScreen
 import io.legado.app.ui.config.themeConfig.ThemeConfigRouteScreen
@@ -749,6 +756,9 @@ onNavigateToAuthorManagement = {
         ReadConfigRouteScreen(
             onBackClick = { onNavigateBack() },
             focusSettingId = route.settingId,
+            onNavigateToProtagonistExtraction = {
+                pushRoute(MainRouteProtagonistExtractionConfig)
+            },
         )
     }
 
@@ -758,6 +768,10 @@ onNavigateToAuthorManagement = {
 
     entry<MainRouteSettingsRead> {
         SettingsDestinationContent(SettingsSearchPage.Reading, onNavigateBack)
+    }
+
+    entry<MainRouteProtagonistExtractionConfig> {
+        ProtagonistExtractionConfigRouteScreen(onBackClick = { onNavigateBack() })
     }
 
     entry<MainRouteSettingsManga> { route ->
@@ -794,6 +808,14 @@ onNavigateToAuthorManagement = {
 
     entry<MainRouteSettingsAiPrompt> {
         SettingsDestinationContent(SettingsSearchPage.AiPrompt, onNavigateBack)
+    }
+
+    entry<MainRouteSettingsAiWebSearch> {
+        AiWebSearchConfigRouteScreen(onBackClick = { onNavigateBack() })
+    }
+
+    entry<MainRouteSettingsAiLog> {
+        AiLogRouteScreen(onBackClick = { onNavigateBack() })
     }
 
     entry<MainRouteSettingsAiProviderEdit> { route ->
@@ -1898,6 +1920,17 @@ onNavigateToAuthorManagement = {
         DictRuleRouteScreen(onBackClick = { onNavigateBack() })
     }
 
+    entry<MainRouteShareCardManage> {
+        val viewModel = koinViewModel<ShareCardManageViewModel>()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        ShareCardManageScreen(
+            state = state,
+            onIntent = viewModel::onIntent,
+            effects = viewModel.effects,
+            onBack = { onNavigateBack() },
+        )
+    }
+
     entry<MainRouteTxtTocRule> { route ->
         TxtRuleRouteScreen(
             initialRule = route.initialRule,
@@ -2196,7 +2229,12 @@ private fun MainEntryNavigation.SettingsDestinationContent(
 ) {
     when (page) {
         SettingsSearchPage.Reading -> {
-            ReadConfigRouteScreen(onBackClick = { onNavigateBack() })
+            ReadConfigRouteScreen(
+                onBackClick = { onNavigateBack() },
+                onNavigateToProtagonistExtraction = {
+                    pushRoute(MainRouteProtagonistExtractionConfig)
+                },
+            )
         }
         SettingsSearchPage.Theme -> {
             ThemeConfigRouteScreen(
