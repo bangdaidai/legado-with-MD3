@@ -1652,6 +1652,9 @@ onNavigateToAuthorManagement = {
             onNavigateToExploreShow = { title, sourceUrl, exploreUrl ->
                 onNavigateToRoute(MainRouteExploreShow(title, sourceUrl, exploreUrl))
             },
+            onNavigateToReadingMemory = { bookUrl ->
+                onNavigateToRoute(MainRouteReadingMemoryDetail(bookUrl = bookUrl))
+            },
             onOpenCharacterDetail = { bookUrl, characterId ->
                 onNavigateToRoute(MainRouteBookCharacterDetail(bookUrl, characterId))
             },
