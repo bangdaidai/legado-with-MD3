@@ -369,20 +369,18 @@ fun CastVoiceRowEditorDialog(
         title = subjectTitle(current.kind, current.name).ifBlank {
             stringResource(R.string.edit)
         },
+        confirmText = stringResource(R.string.save),
+        onConfirm = { onSave(voiceId) },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = onDismiss,
         content = {
-            // 上游 AppAlertDialog 无 startAction 槽：试听入口移到内容区顶部
+            // 上游 AppAlertDialog 无 startAction 槽：试听入口并入内容区顶部
             SmallTonalButton(
                 onClick = audition.toggle,
                 enabled = audition.enabled,
                 icon = Icons.Default.PlayArrow,
                 text = stringResource(R.string.cloud_tts_preview),
             )
-        },
-        confirmText = stringResource(R.string.save),
-        onConfirm = { onSave(voiceId) },
-        dismissText = stringResource(R.string.cancel),
-        onDismiss = onDismiss,
-        content = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OptionDropdownCard(
                     label = stringResource(R.string.cast_voice),

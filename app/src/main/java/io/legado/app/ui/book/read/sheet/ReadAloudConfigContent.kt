@@ -30,7 +30,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.constant.ReadAloudBgMode
 import io.legado.app.domain.model.AiReasoningLevel
 import io.legado.app.domain.model.readaloud.ReadAloudContentSplitSetting
@@ -141,7 +140,7 @@ fun ReadAloudConfigContent(
                         description = stringResource(R.string.read_aloud_chapter_title_summary),
                         checked = state.readChapterTitle,
                         onCheckedChange = {
-                            onIntent(ReadBookIntent.SetReadChapterTitle(it))
+                            onIntent(ReadAloudConfigIntent.SetReadChapterTitle(it))
                         },
                     )
                     TinySwitchSettingItem(

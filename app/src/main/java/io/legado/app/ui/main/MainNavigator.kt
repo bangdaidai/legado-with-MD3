@@ -3,7 +3,9 @@ package io.legado.app.ui.main
 import android.app.Activity
 import android.content.Intent
 import androidx.navigation3.runtime.NavKey
+import io.legado.app.data.entities.Book
 import io.legado.app.feature.reader.platform.ReaderPerfTrace
+import io.legado.app.help.book.isLocalManga
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.rss.article.MainRouteRssSort
 import io.legado.app.ui.rss.read.MainRouteRssRead
@@ -51,6 +53,34 @@ object MainNavigator {
         resetToHome: Boolean = false,
     ) {
         navigateToRouteInternal(backStack, route, tracker, resetToHome)
+    }
+
+    /**
+     * 外部阅读 Intent 可能以文本路由起本地漫画书；进入阅读器前替换成漫画路由。
+     * 返回 true 表示已经改写路由，调用方应停止组合文本阅读页。
+     */
+    internal fun redirectLocalManga(
+        backStack: MutableList<NavKey>,
+        route: MainRouteReadBook,
+        book: Book?,
+        tracker: MainNavRouteTracker? = null,
+    ): Boolean {
+        if (book == null || !book.isLocalManga || backStack.lastOrNull() != route) return false
+        val mangaRoute = MainRouteReadManga(
+            bookUrl = book.bookUrl,
+            inBookshelf = route.inBookshelf,
+            chapterChanged = route.chapterChanged,
+            openRequestId = System.nanoTime(),
+            sharedCoverKey = route.sharedCoverKey,
+        )
+        if (backStack.any { it is MainRouteReadManga }) {
+            backStack.removeAt(backStack.lastIndex)
+            navigateToRoute(backStack, mangaRoute, tracker)
+        } else {
+            backStack[backStack.lastIndex] = mangaRoute
+            tracker?.onBackStackChanged(backStack)
+        }
+        return true
     }
 
     private fun navigateToRouteInternal(

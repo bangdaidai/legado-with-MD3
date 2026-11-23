@@ -48,6 +48,7 @@ import io.legado.app.domain.gateway.BookshelfSettingsGateway
 import io.legado.app.domain.gateway.MangaSettingsGateway
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.main.bookshelf.BookShelfItem
+import io.legado.app.ui.main.bookshelf.toLightBook
 import kotlinx.coroutines.runBlocking
 import org.koin.core.context.GlobalContext
 import splitties.systemservices.clipboardManager
@@ -95,9 +96,11 @@ fun Context.startActivityForBook(
     book: BookShelfItem,
     configIntent: Intent.() -> Unit = {},
 ) {
-    val openMangaReader = book.shouldOpenMangaReader(mangaSettingsGateway.currentSettings.showMangaUi)
+    // 这两个谓词定义在 Book 上，BookShelfItem 只有 type 位；先投影成 Book 再判断
+    val lightBook = book.toLightBook()
+    val openMangaReader = lightBook.shouldOpenMangaReader(mangaSettingsGateway.currentSettings.showMangaUi)
     val intent = when {
-        book.isVideo -> MainActivity.createVideoPlayIntent(this, book.bookUrl)
+        lightBook.isVideo -> MainActivity.createVideoPlayIntent(this, book.bookUrl)
         book.isAudio -> MainActivity.createAudioPlayIntent(this, book.bookUrl)
         openMangaReader ->
             MainActivity.createReadMangaIntent(this, book.bookUrl)

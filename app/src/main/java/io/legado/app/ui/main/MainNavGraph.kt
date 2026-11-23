@@ -56,6 +56,7 @@ import io.legado.app.service.AudioPlayService
 import io.legado.app.ui.about.AboutEffect
 import io.legado.app.ui.about.AboutScreen
 import io.legado.app.ui.about.AboutViewModel
+import io.legado.app.ui.main.bookshelf.toLightBook
 import io.legado.app.ui.ai.chat.AiChatRouteScreen
 import io.legado.app.ui.ai.chat.AiReadingContext
 import io.legado.app.ui.book.audio.AudioPlayEffect
@@ -566,7 +567,9 @@ fun MainActivity.mainEntryProvider(
                 onNavigateToRoute(MainRouteBookCacheManage)
             },
             onOpenBookshelfBook = { book, sharedCoverKey ->
-                if (book.isVideo) {
+                // isVideo / shouldOpenMangaReader 定义在 Book 上，先投影再判断
+                val lightBook = book.toLightBook()
+                if (lightBook.isVideo) {
                     onNavigateToRoute(
                         // 播放页是全屏画面，没有可共享的封面元素
                         MainRouteVideoPlay(bookUrl = book.bookUrl)
@@ -578,7 +581,7 @@ fun MainActivity.mainEntryProvider(
                             sharedCoverKey = sharedCoverKey
                         )
                     )
-                } else if (book.shouldOpenMangaReader(showMangaUi)) {
+                } else if (lightBook.shouldOpenMangaReader(showMangaUi)) {
                     onNavigateToRoute(
                         MainRouteReadManga(
                             bookUrl = book.bookUrl,
@@ -815,6 +818,7 @@ onNavigateToAuthorManagement = {
         AiChatRouteScreen(
             readingContext = readingContext,
             onBackClick = { onNavigateBack() },
+            onSearchBook = { keyword -> onNavigateToRoute(MainRouteSearch(key = keyword)) },
             onOpenBookInfo = { book ->
                 onNavigateToRoute(
                     MainRouteBookInfo(
@@ -910,12 +914,13 @@ onNavigateToAuthorManagement = {
     ) { route ->
         // A legacy reading intent can carry a book URL or request the last-read book.
         // Resolve it before composing the text reader so it never starts a manga as text.
+        val bookRepository = org.koin.compose.koinInject<io.legado.app.data.repository.BookRepository>()
         var routeChecked by remember(route) { mutableStateOf(false) }
         val isTopRoute = backStack.lastOrNull() == route
         LaunchedEffect(route, isTopRoute) {
             if (!isTopRoute || routeChecked) return@LaunchedEffect
             val book = if (route.bookUrl.isNullOrEmpty()) {
-                bookRepository.getLastReadBookForReader()
+                bookRepository.getLastReadBook()
             } else {
                 bookRepository.getBook(route.bookUrl)
             }
@@ -1088,10 +1093,6 @@ onNavigateToAuthorManagement = {
                 },
                 onOpenSourceEdit = { sourceUrl ->
                     onNavigateToRoute(MainRouteBookSourceEdit(sourceUrl))
-                },
-                // 阅读页里的「气泡管理」：push 设置子页，返回回到阅读界面（不要用 startActivity）
-                onOpenBubbleManage = {
-                    onNavigateToRoute(MainRouteSettingsBubble)
                 },
                 onNavigateBack = {
                     MainNavigator.navigateBack(
@@ -1568,18 +1569,20 @@ onNavigateToAuthorManagement = {
             onOpenSettings = {
                 onNavigateToRoute(MainRouteSettingsPrivate)
             },
-            onOpenReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenReader = { bookUrl, inBookshelf, chapterChanged, chapterIndex, chapterPos ->
                 onNavigateToRoute(
                     MainRouteReadBook(
                         bookUrl = bookUrl,
                         inBookshelf = inBookshelf,
                         chapterChanged = chapterChanged,
+                        chapterIndex = chapterIndex,
+                        chapterPos = chapterPos,
                         // 与详情页封面登记在同一个 key 上，封面才能从详情页继续飞进阅读页。
                         sharedCoverKey = route.sharedCoverKey ?: bookCoverSharedElementKey(bookUrl),
                     )
                 )
             },
-            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged ->
+            onOpenMangaReader = { bookUrl, inBookshelf, chapterChanged, _, _ ->
                 onNavigateToRoute(
                     MainRouteReadManga(
                         bookUrl = bookUrl,
@@ -1602,19 +1605,11 @@ onNavigateToAuthorManagement = {
                     )
                 )
             },
-            onOpenVideoPlayer = { bookUrl, inBookshelf ->
-                onNavigateToRoute(
-                    MainRouteVideoPlay(
-                        bookUrl = bookUrl,
-                        inBookshelf = inBookshelf,
-                    )
-                )
-            },
             onNavigateToBookInfo = { name, author, bookUrl, origin, coverPath ->
                 onNavigateToRoute(MainRouteBookInfo(name, author, bookUrl, origin, coverPath))
             },
-            onNavigateToExploreShow = { title, sourceUrl, exploreUrl, usePageParamFallback ->
-                onNavigateToRoute(MainRouteExploreShow(title, sourceUrl, exploreUrl, usePageParamFallback))
+            onNavigateToExploreShow = { title, sourceUrl, exploreUrl ->
+                onNavigateToRoute(MainRouteExploreShow(title, sourceUrl, exploreUrl))
             },
             onOpenCharacterDetail = { bookUrl, characterId ->
                 onNavigateToRoute(MainRouteBookCharacterDetail(bookUrl, characterId))
@@ -1925,6 +1920,12 @@ onNavigateToAuthorManagement = {
                 closeBookPage(backStack, route, BookPageResult.TxtTocRuleChosen(rule))
             },
             onOpenManagePage = { onNavigateToRoute(MainRouteTxtTocRule()) },
+            onOpenReplaceRule = { editor ->
+                onNavigateToRoute(
+                    editor?.let { MainRouteReplaceEdit(it) }
+                        ?: MainRouteReplaceRules(route.bookUrl)
+                )
+            },
         )
     }
 
@@ -2265,7 +2266,9 @@ private fun MainEntryNavigation.SettingsDestinationContent(
                 },
                 onNavigateToTranslation = { pushRoute(MainRouteSettingsTranslation) },
                 onNavigateToAiSummary = { pushRoute(MainRouteSettingsAiSummary) },
-                onNavigateToAiPrompt = { pushRoute(MainRouteSettingsAiPrompt) }
+                onNavigateToAiPrompt = { pushRoute(MainRouteSettingsAiPrompt) },
+                onNavigateToAiWebSearch = { pushRoute(MainRouteSettingsAiWebSearch) },
+                onNavigateToAiLog = { pushRoute(MainRouteSettingsAiLog) },
             )
         }
         SettingsSearchPage.Translation -> {

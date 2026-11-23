@@ -21,6 +21,7 @@ sealed interface ReadAloudConfigIntent {
     data class PauseOnPhoneCall(val value: Boolean) : ReadAloudConfigIntent
     data class WakeLock(val value: Boolean) : ReadAloudConfigIntent
     data class KeepOnExit(val value: Boolean) : ReadAloudConfigIntent
+    data class SetReadChapterTitle(val value: Boolean) : ReadAloudConfigIntent
     data class MediaButtonPerNext(val value: Boolean) : ReadAloudConfigIntent
     data class AndroidMediaControl(val value: Boolean) : ReadAloudConfigIntent
     data class SystemMediaCompat(val value: Boolean) : ReadAloudConfigIntent

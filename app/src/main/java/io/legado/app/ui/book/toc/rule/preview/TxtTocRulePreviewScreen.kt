@@ -240,7 +240,7 @@ fun TxtTocRulePreviewScreen(
 
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { _ ->
+        topBar = {
             GlassMediumFlexibleTopAppBar(
                 title = if (state.isTxt) stringResource(R.string.select_toc_rule)
                 else stringResource(R.string.toc_rule_preview),

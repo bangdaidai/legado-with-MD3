@@ -47,6 +47,9 @@ internal fun ReadAloudPlayerViewModel.applyReadAloudConfigIntent(intent: ReadAlo
         is ReadAloudConfigIntent.KeepOnExit ->
             onConfigIntent(ReadAloudConfigOption.KeepOnExit, selected = intent.value)
 
+        is ReadAloudConfigIntent.SetReadChapterTitle ->
+            onConfigIntent(ReadAloudConfigOption.ReadChapterTitle, selected = intent.value)
+
         is ReadAloudConfigIntent.MediaButtonPerNext ->
             onConfigIntent(ReadAloudConfigOption.MediaButtonPerNext, selected = intent.value)
 

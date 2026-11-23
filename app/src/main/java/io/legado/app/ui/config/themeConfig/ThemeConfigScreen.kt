@@ -1030,7 +1030,7 @@ fun ThemeConfigScreen(
             BackgroundImageTarget.Item -> theme.itemBackgroundImageDark
             null -> null
         },
-        extraOption = when (backgroundImageTarget) {
+        extraOptions = listOfNotNull(when (backgroundImageTarget) {
             BackgroundImageTarget.App -> BackgroundImageExtraOption.Blur(
                 lightTitle = "日间背景图片虚化",
                 darkTitle = "夜间背景图片虚化",
@@ -1053,7 +1053,7 @@ fun ThemeConfigScreen(
             )
 
             null -> null
-        },
+        }),
         onSelectLight = { requestImage(false) },
         onSelectDark = { requestImage(true) },
         onRemoveLight = { removeImage(false) },
@@ -1066,6 +1066,7 @@ fun ThemeConfigScreen(
         onDismissRequest = { onIntent(ThemeConfigIntent.DismissSheet) },
         onSelectIcon = { onIntent(ThemeConfigIntent.RequestNavigationIcon(it)) },
         onClearIcon = { onIntent(ThemeConfigIntent.SelectNavigationIcon(it, "")) },
+        onSetIconSize = { onIntent(ThemeConfigIntent.SetNavIconSize(it)) },
     )
 
 

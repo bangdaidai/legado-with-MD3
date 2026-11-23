@@ -2,7 +2,7 @@ package io.legado.app.ui.main.homepage
 
 import android.app.Application
 import androidx.lifecycle.viewModelScope
-import io.legado.app.ui.book.changesource.ChangeSourceMigrationOptions
+import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.domain.model.ConflictBookSummary
 import io.legado.app.ui.book.conflict.BookshelfConflictController
 import io.legado.app.domain.usecase.ResolveBookshelfConflictUseCase

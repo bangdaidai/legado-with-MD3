@@ -112,7 +112,9 @@ class OtherConfigViewModel(
             is OtherConfigIntent.ShowAddToShelfAlertChanged ->
                 updateOtherSetting { it.copy(showAddToShelfAlert = intent.value) }
             is OtherConfigIntent.AllowSameNameAuthorTypeChanged ->
-                bookshelfSettingsGateway.update { it.copy(allowSameNameAuthorType = intent.value) }
+                viewModelScope.launch {
+                    bookshelfSettingsGateway.update { it.copy(allowSameNameAuthorType = intent.value) }
+                }
             is OtherConfigIntent.WebServiceWakeLockChanged ->
                 updateOtherSetting { it.copy(webServiceWakeLock = intent.value) }
             is OtherConfigIntent.BlockSourceBrowserChanged ->

@@ -37,10 +37,12 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -1181,19 +1183,20 @@ fun HighlightRuleEditSheet(
                             letterSpacing = ReadBookConfig.letterSpacing.em,
                         )
                     }
-                    AppTextField(
-                        value = sampleText,
-                        onValueChange = { sampleText = it },
-                        placeholder = {
-                            AppText(
-                                text = stringResource(R.string.sample_text),
-                                style = sampleTextStyle,
-                            )
-                        },
-                        maxLines = 4,
-                        textStyle = sampleTextStyle,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    CompositionLocalProvider(LocalTextStyle provides sampleTextStyle) {
+                        AppTextField(
+                            value = sampleText,
+                            onValueChange = { sampleText = it },
+                            placeholder = {
+                                AppText(
+                                    text = stringResource(R.string.sample_text),
+                                    style = sampleTextStyle,
+                                )
+                            },
+                            maxLines = 4,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     // 预览页面底色跟随「应用排版」绑定的排版；「全局」没绑定具体排版，用当前正在用的那份
                     val previewConfig = remember(configNames) {

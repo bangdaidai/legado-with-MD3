@@ -12,7 +12,6 @@ import org.koin.androidx.compose.koinViewModel
 fun ReadConfigRouteScreen(
     onBackClick: () -> Unit,
     viewModel: ReadConfigViewModel = koinViewModel(),
-    onNavigateToProtagonistExtraction: () -> Unit = {},
     focusSettingId: String? = null,
 ) {
     val context = LocalContext.current
@@ -32,7 +31,6 @@ fun ReadConfigRouteScreen(
         state = state,
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
-        onNavigateToProtagonistExtraction = onNavigateToProtagonistExtraction,
         focusSettingId = focusSettingId,
     )
 }

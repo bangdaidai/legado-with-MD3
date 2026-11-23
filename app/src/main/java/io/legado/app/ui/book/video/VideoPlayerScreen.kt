@@ -304,7 +304,7 @@ fun VideoPlayerScreen(
     }
 
     // 画中画由 MainActivity 上报：进 PiP 只留画面，浮层与信息区全撤
-    val inPip = MainActivity.isInPip
+    val inPip = (activity as? MainActivity)?.isInPip == true
     LaunchedEffect(inPip) {
         if (inPip) controlsVisible = false
     }
