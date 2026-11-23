@@ -187,6 +187,7 @@ object SettingsSearchCatalog {
         SettingsSearchItem("cover.default_color", SettingsSearchPage.Cover, R.string.default_color, groupIndex = 0),
         SettingsSearchItem("cover.cover_restrict_ratio", SettingsSearchPage.Cover, R.string.cover_restrict_ratio, groupIndex = 0, descriptionRes = R.string.cover_restrict_ratio_summary),
         SettingsSearchItem("cover.cover_info_orientation", SettingsSearchPage.Cover, R.string.cover_info_orientation, groupIndex = 0),
+        SettingsSearchItem("cover.cover_center_info", SettingsSearchPage.Cover, R.string.cover_center_info, groupIndex = 0, descriptionRes = R.string.cover_center_info_summary),
         SettingsSearchItem("cover.network_book_badge_setting", SettingsSearchPage.Cover, R.string.network_book_badge_setting, groupIndex = 0, groupTitleRes = R.string.network_book_badge_setting),
         SettingsSearchItem("cover.text_color.day", SettingsSearchPage.Cover, R.string.text_color, groupIndex = 0, groupTitleRes = R.string.day),
         SettingsSearchItem("cover.text_shadow_color.day", SettingsSearchPage.Cover, R.string.text_shadow_color, groupIndex = 0, groupTitleRes = R.string.day),

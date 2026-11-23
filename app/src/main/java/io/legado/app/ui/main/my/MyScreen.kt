@@ -34,9 +34,13 @@ import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -213,6 +217,16 @@ fun MyScreen(
                     imageVector = AppIcons.leadingOrNull(Icons.Default.Sell),
                     onClick = { onNavigate(PrefClickEvent.OpenHighlightTagRule) }
                 )
+                ClickableSettingItem(
+                    title = stringResource(R.string.tag_management),
+                    imageVector = AppIcons.leadingOrNull(Icons.Default.Label),
+                    onClick = { onNavigate(PrefClickEvent.OpenTagManagement) }
+                )
+                ClickableSettingItem(
+                    title = stringResource(R.string.author_management),
+                    imageVector = AppIcons.leadingOrNull(Icons.Default.Person),
+                    onClick = { onNavigate(PrefClickEvent.OpenAuthorManagement) }
+                )
             }
 
             SplicedColumnGroup(
@@ -241,6 +255,16 @@ fun MyScreen(
                     onClick = {
                         onNavigate(PrefClickEvent.OpenReadRecord)
                     }
+                )
+                ClickableSettingItem(
+                    title = stringResource(R.string.reading_memory),
+                    imageVector = AppIcons.leadingOrNull(Icons.Default.Psychology),
+                    onClick = { onNavigate(PrefClickEvent.OpenReadingMemoryList) }
+                )
+                ClickableSettingItem(
+                    title = stringResource(R.string.share_card_template),
+                    imageVector = AppIcons.leadingOrNull(Icons.Default.Share),
+                    onClick = { onNavigate(PrefClickEvent.OpenShareCardManage) }
                 )
                 ClickableSettingItem(
                     title = stringResource(R.string.cache_management),

@@ -1698,9 +1698,8 @@ private fun BookInfoActionCard(
     GlassCard(
         modifier = modifier.semantics(mergeDescendants = true) {
             role = Role.Button
-            // 描述与可见文案一致时交给文本节点朗读，避免同一名称念两遍；
-            // 仅冲突提示等补充信息才覆盖。
-            if (contentDescription != label) this.contentDescription = contentDescription
+            // 可见文案由文本节点朗读，这里不覆盖 contentDescription；
+            // 在语义块内读取 contentDescription 会直接抛 UnsupportedOperationException。
         },
         onLongClick = onLongClick,
         onClick = onClick,
