@@ -326,10 +326,7 @@ fun MainScreen(
     val usePagerTopBar =
         LegadoTheme.composeEngine == ComposeEngine.Oxygen && mainUiState.usePagerTopBar
     val mainPagerTopBarHost = remember { MainPagerTopBarHost() }
-    // 页面自行注册顶栏槽位；没注册的页面（如发现页）保留自己的顶栏和底栏导航。
-    val pagerTopBarActive =
-        usePagerTopBar && mainPagerTopBarHost.pages.containsKey(pagerState.currentPage)
-    val showMainBottomNavigation = mainUiState.showBottomView && !pagerTopBarActive
+    val showMainBottomNavigation = mainUiState.showBottomView && !usePagerTopBar
     val pagerTopBarTitles = destinations.map { stringResource(it.labelId) }
         .let { labels -> remember(labels) { labels.toImmutableList() } }
     val mainPagerTopBarAppBarState = rememberMainPagerTopBarAppBarState(usePagerTopBar)
@@ -337,10 +334,9 @@ fun MainScreen(
     val navigationBarsBottom = WindowInsets.navigationBars
         .asPaddingValues()
         .calculateBottomPadding()
-    // 只有当前页注册了顶栏槽位才渲染横划顶栏；其它引擎完全不传 topBar，
-    // 避免给 Coui/Mochi/Material 建出空顶栏宿主。
+    // 只有启用横划顶栏时才传 topBar；其它引擎/配置完全不传，避免建出空顶栏宿主。
     val mainPagerTopBarContent: (@Composable () -> Unit)? =
-        if (pagerTopBarActive && mainPagerTopBarAppBarState != null) {
+        if (usePagerTopBar && mainPagerTopBarAppBarState != null) {
             {
                 MainPagerTopBar(
                     pagerState = pagerState,
@@ -608,7 +604,7 @@ fun MainScreen(
             },
             // The row owns side cutouts, child pages own top bars, and this scaffold owns the bottom.
             // 横划顶栏接管后由顶栏自己消费状态栏，内容一直延伸到底部导航栏后面。
-            contentWindowInsets = if (pagerTopBarActive) {
+            contentWindowInsets = if (usePagerTopBar) {
                 WindowInsets(0)
             } else {
                 mainAdaptiveInsets.only(WindowInsetsSides.Bottom)
@@ -653,8 +649,9 @@ fun MainScreen(
                             LocalMainPageIndex provides page,
                             LocalMainPagerTopBarHost provides
                                 if (usePagerTopBar) mainPagerTopBarHost else null,
-                            LocalMainPagerBottomBarState provides mainPagerBottomBarState,
-                            LocalBottomOverlayPadding provides if (pagerTopBarActive) {
+                            LocalMainPagerBottomBarState provides
+                                if (usePagerTopBar) mainPagerBottomBarState else null,
+                            LocalBottomOverlayPadding provides if (usePagerTopBar) {
                                 navigationBarsBottom
                             } else {
                                 LocalBottomOverlayPadding.current
