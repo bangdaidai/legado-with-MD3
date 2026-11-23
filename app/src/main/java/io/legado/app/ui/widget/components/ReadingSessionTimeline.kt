@@ -84,8 +84,8 @@ private fun TimelineSessionRow(
     session: ReadRecordSession,
     showChapterInfo: Boolean,
 ) {
-    // 线色用 outline：容器色在透明主题下是半透明白，线会淡到看不见。
-    val lineColor = LegadoTheme.colorScheme.outline
+    // 线取主题主色的半透明：既跟主题色一致，又比容器色更明显。
+    val lineColor = LegadoTheme.colorScheme.primary.copy(alpha = 0.45f)
     val nodeColor = LegadoTheme.colorScheme.primary
     val duration = (session.endTime - session.startTime).coerceAtLeast(0L)
     Row(
