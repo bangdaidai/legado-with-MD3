@@ -119,6 +119,9 @@ import kotlinx.coroutines.withContext
 
 private const val READER_SYNC_MIN_INTERVAL_MS = 250L
 
+/** 笔记弹层退场动画时长：分享预览要等它走完再开门，见 [ReadBookViewModel.generateShareCardFromMarking]。 */
+private const val MARKING_SHEET_EXIT_DELAY_MS = 320L
+
 /**
  * 阅读界面 ViewModel — MVI/UDF 架构
  *
@@ -318,6 +321,10 @@ class ReadBookViewModel(
      */
     private fun generateShareCardFromMarking() {
         val marking = markingState.value.editing ?: return
+        // 笔记弹层与分享弹层共用同一套 modal 宿主，不能同时存在：清栈后要等笔记弹层
+        // 退场动画结束再开分享，否则两个窗口交替时会被一起注销，表现就是分享弹窗
+        // 出现后自己消失、状态却还留着 true。
+        val closingMarkingSheet = _uiState.value.activeSheet is ReadBookSheet.Marking
         // 先生成数据，再开门：开门时 shareCardData 已就绪，预览页开门即渲染、不再空白/转圈。
         _uiState.update {
             it.copy(
@@ -332,6 +339,7 @@ class ReadBookViewModel(
             )
             val book = bookRepository.getBook(marking.bookUrl)
             val data = ShareCardDataBuilder.buildFromMarking(marking, memory, book)
+            if (closingMarkingSheet) delay(MARKING_SHEET_EXIT_DELAY_MS)
             _uiState.update {
                 it.copy(
                     showShareCard = true,
@@ -1603,6 +1611,16 @@ class ReadBookViewModel(
             }
 
             is ReadBookIntent.EditMarking -> {
+                // 分享预览若还开着，先收起：两个 modal 抢同一套宿主时会被一起注销。
+                if (_uiState.value.showShareCard) {
+                    _uiState.update {
+                        it.copy(
+                            showShareCard = false,
+                            shareCardData = null,
+                            shareCardScene = null,
+                        )
+                    }
+                }
                 // 从目录 Sheet 进入：记住原 sheet，保存/删除/取消后返回
                 markingReturnSheet = _uiState.value.activeSheet
                 markingDelegate.openForEdit(intent.id, intent.anchor)
