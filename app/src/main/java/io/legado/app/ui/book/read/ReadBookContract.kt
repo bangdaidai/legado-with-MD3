@@ -3,7 +3,6 @@ package io.legado.app.ui.book.read
 import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
-import io.legado.app.domain.model.readaloud.ReadAloudProgress
 import io.legado.app.constant.ReadMenuBlurMode
 import io.legado.app.constant.ReadMenuBlurStyle
 import io.legado.app.data.entities.Book

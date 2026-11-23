@@ -2427,7 +2427,7 @@ class ReadBookController(
     override fun contentLoadFinish() {
         viewModel.markInitFinished()
         handler.post {
-            viewModel.readAloudProgress.value?.let(::updateReadAloudProgress)
+            viewModel.readAloudProgress.value.takeIf { it >= 0 }?.let(::updateReadAloudProgress)
             onStartContentLoadFinish?.invoke()
         }
     }

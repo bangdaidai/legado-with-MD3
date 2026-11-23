@@ -261,7 +261,8 @@ fun ReadBookRouteScreen(
     LaunchedEffect(viewModel, controller, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.readAloudProgress.collect { chapterStart ->
-                chapterStart?.let(controller::updateReadAloudProgress)
+                // -1 是 fork 的「无进度」哨兵，不能当真实位置下发
+                if (chapterStart >= 0) controller.updateReadAloudProgress(chapterStart)
             }
         }
     }

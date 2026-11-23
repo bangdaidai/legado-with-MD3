@@ -43,7 +43,6 @@ import io.legado.app.domain.gateway.ReadStyleGateway
 import io.legado.app.domain.gateway.ThemeSettingsGateway
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.domain.model.readaloud.ReadAloudSessionStatus
-import io.legado.app.domain.model.readaloud.ReadAloudProgress
 import io.legado.app.domain.model.settings.ReadAloudTimerMode
 import io.legado.app.domain.usecase.AddToBookshelfUseCase
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
@@ -1965,7 +1964,8 @@ class ReadBookViewModel(
                     (status == ReadAloudSessionStatus.Idle ||
                         status == ReadAloudSessionStatus.Paused)
                 ) {
-                    _readAloudProgress.value = null
+                    // fork 的朗读进度是 Int 口径，-1 表示「无有效进度」，消费侧需过滤
+                    _readAloudProgress.value = -1
                     _effects.tryEmit(ReadBookEffect.UpAloudState)
                 }
                 previousStatus = status
