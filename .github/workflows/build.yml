@@ -314,17 +314,20 @@ jobs:
           
           find app/build/outputs -name "*.apk" -type f
           echo ""
-          ls -la app/build/outputs/apk/app/*/ || echo "Release 目录不存在"
+          ls -la app/build/outputs/apk/appCore/release/ || echo "Release 目录不存在"
 
       - name: Rename APK Files
         env:
           APP_VERSION_NAME: ${{ steps.appversion.outputs.name }}
         run: |
-          APK_DIR=app/build/outputs/apk/app/core/release
-          # 只构建 arm64 单一 ABI，不再往文件名追加 -arm64-v8a 后缀
-          for f in "$APK_DIR"/*.apk; do
-            mv -- "$f" "$APK_DIR/legado-${APP_VERSION_NAME}.apk"
-          done
+          # Gradle 维度 mode=app + engine=core → 变体目录 appCore；文件名含 -arm64-v8a-release 后缀
+          APK_DIR=app/build/outputs/apk/appCore/release
+          APK_FILE=$(find "$APK_DIR" -maxdepth 1 -name "*.apk" -type f | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "❌ 未找到 core Release APK: $APK_DIR"
+            exit 1
+          fi
+          mv -- "$APK_FILE" "$APK_DIR/legado-core-${APP_VERSION_NAME}.apk"
           ls -la "$APK_DIR"
 
       - name: Verify APK Signature
@@ -369,7 +372,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: legado_release_signed_apk
-          path: app/build/outputs/apk/app/**/*.apk
+          path: app/build/outputs/apk/appCore/release/*.apk
           retention-days: 30
 
       - name: Upload Release Notes
@@ -383,7 +386,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mapping
-          path: app/build/outputs/mapping/appRelease/mapping.txt
+          path: app/build/outputs/mapping/appCoreRelease/mapping.txt
           retention-days: 30
           compression-level: 9
 
