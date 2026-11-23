@@ -55,7 +55,10 @@ import io.legado.app.data.repository.BookshelfAutoGroupPromptRepository
 import io.legado.app.data.repository.BookshelfAutoGroupRepository
 import io.legado.app.data.repository.BookshelfRepository
 import io.legado.app.data.repository.BookshelfSettingsRepository
+import io.legado.app.data.repository.BookshelfTagRepository
+import io.legado.app.data.repository.BookUpdateRepository
 import io.legado.app.data.repository.CacheBookDownloadRepository
+import io.legado.app.data.repository.CastSpeechRepository
 import io.legado.app.data.repository.ChangeSourceSettingsRepository
 import io.legado.app.data.repository.ChapterSpeechRepository
 import io.legado.app.data.repository.CheckSourceSettingsRepository
@@ -86,6 +89,7 @@ import io.legado.app.data.repository.OtherConfigSystemRepository
 import io.legado.app.data.repository.OtherSettingsRepository
 import io.legado.app.data.repository.PrivateAccessRepository
 import io.legado.app.data.repository.PrivateContentRepository
+import io.legado.app.data.repository.ProtagonistExtractionSettingsRepository
 import io.legado.app.data.repository.ReadAloudSettingsRepository
 import io.legado.app.data.repository.ReadAloudVoiceRepository
 import io.legado.app.data.repository.ReadBookStyleConfigRepository
@@ -149,6 +153,8 @@ import io.legado.app.domain.gateway.BookSourceCheckGateway
 import io.legado.app.domain.gateway.BookshelfAutoGroupGateway
 import io.legado.app.domain.gateway.BookshelfAutoGroupPromptGateway
 import io.legado.app.domain.gateway.BookshelfSettingsGateway
+import io.legado.app.domain.gateway.BookshelfTagGateway
+import io.legado.app.domain.gateway.CastSpeechGateway
 import io.legado.app.domain.gateway.ChangeSourceSettingsGateway
 import io.legado.app.domain.gateway.ChapterSpeechGateway
 import io.legado.app.domain.gateway.CheckSourceSettingsGateway
@@ -177,6 +183,7 @@ import io.legado.app.domain.gateway.OtherSettingsGateway
 import io.legado.app.domain.gateway.PlaybackCapsuleGateway
 import io.legado.app.domain.gateway.PrivateAccessGateway
 import io.legado.app.domain.gateway.PrivateContentGateway
+import io.legado.app.domain.gateway.ProtagonistExtractionSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudSettingsGateway
 import io.legado.app.domain.gateway.ReadAloudVoiceGateway
 import io.legado.app.domain.gateway.ReadSettingsGateway
@@ -194,9 +201,11 @@ import io.legado.app.domain.usecase.AiChatGenerationUseCase
 import io.legado.app.domain.usecase.AiTaskManager
 import io.legado.app.domain.usecase.AiTextFactoryUseCase
 import io.legado.app.domain.usecase.AiToolAwareGenerationUseCase
+import io.legado.app.domain.usecase.AiWebSearchPrefetchUseCase
 import io.legado.app.domain.usecase.AnalyzeChapterSpeechUseCase
 import io.legado.app.domain.usecase.AppStartupMaintenanceUseCase
 import io.legado.app.domain.usecase.ApplyBookshelfAutoGroupPlanUseCase
+import io.legado.app.domain.usecase.AutoAssignVoiceBindingsUseCase
 import io.legado.app.domain.usecase.BackupRestoreUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.BuildSpeechPlanUseCase
@@ -214,8 +223,11 @@ import io.legado.app.domain.usecase.ExploreBooksUseCase
 import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
 import io.legado.app.domain.usecase.FindBookshelfConflictUseCase
+import io.legado.app.domain.usecase.FindShelfDuplicatesUseCase
 import io.legado.app.domain.usecase.GenerateBookshelfAutoGroupPlanUseCase
+import io.legado.app.domain.usecase.GenerateChapterRecapUseCase
 import io.legado.app.domain.usecase.GenerateChapterSummaryUseCase
+import io.legado.app.domain.usecase.GenerateTocRuleUseCase
 import io.legado.app.domain.usecase.GetChapterContentUseCase
 import io.legado.app.domain.usecase.GetReadingProgressUseCase
 import io.legado.app.domain.usecase.HomeDashboardUseCase
@@ -328,6 +340,7 @@ import io.legado.app.ui.config.downloadCacheConfig.DownloadCacheConfigViewModel
 import io.legado.app.ui.config.labConfig.LabConfigViewModel
 import io.legado.app.ui.config.otherConfig.OtherConfigViewModel
 import io.legado.app.ui.config.privateConfig.PrivateConfigViewModel
+import io.legado.app.ui.config.protagonistExtractionConfig.ProtagonistExtractionConfigViewModel
 import io.legado.app.ui.config.readConfig.ApplyReadSettingUseCase
 import io.legado.app.ui.config.readConfig.ReadConfigViewModel
 import io.legado.app.ui.config.themeConfig.ThemeConfigViewModel
@@ -506,6 +519,7 @@ val appModule = module {
     singleOf(::AnalyzeChapterSpeechUseCase)
     singleOf(::ResolveLocalSpeakersUseCase)
     singleOf(::PrepareChapterSpeechPlanUseCase)
+    singleOf(::AutoAssignVoiceBindingsUseCase)
     singleOf(::RefineSpeechWithAiUseCase)
     singleOf(::SyncReadAloudVoicesUseCase)
     singleOf(::SyncHttpTtsCatalogUseCase)
@@ -525,6 +539,7 @@ val appModule = module {
     singleOf(::AddBookUseCase)
     singleOf(::AddToBookshelfUseCase)
     singleOf(::FindBookshelfConflictUseCase)
+    singleOf(::FindShelfDuplicatesUseCase)
     singleOf(::ResolveBookshelfConflictUseCase)
     singleOf(::ImportBookshelfUseCase)
     singleOf(::ExportBookshelfUseCase)
@@ -576,12 +591,16 @@ val appModule = module {
     single<BookContentProcessGateway> { BookContentProcessRepository(get()) }
     single<BookMarkingGateway> { BookMarkingRepository(get()) }
     single<BookKnowledgeGateway> { BookKnowledgeRepository(get(), get()) }
+    singleOf(::BookUpdateRepository)
     singleOf(::ReadingMemoryRepository)
     singleOf(::AuthorProfileRepository)
     single<ReadAloudVoiceGateway> { ReadAloudVoiceRepository(get(), get()) }
     singleOf(::CloudTtsCredentialCipher)
     single<CloudTtsEngineGateway> { CloudTtsEngineRepository(get(), get()) }
     single<ChapterSpeechGateway> { ChapterSpeechRepository(get()) }
+    single<BookshelfTagGateway> { BookshelfTagRepository() }
+    single<CastSpeechGateway> { CastSpeechRepository() }
+    single<ProtagonistExtractionSettingsGateway> { ProtagonistExtractionSettingsRepository() }
     singleOf(::VoicePreviewSynthesizer)
     single { ExploreRepositoryImpl(get()) }
     single<ExploreRepository> { get<ExploreRepositoryImpl>() }
@@ -606,7 +625,9 @@ val appModule = module {
     singleOf(::AiTaskManager)
     singleOf(::ResolveEffectiveSpeechPlanUseCase)
     singleOf(::IdentifyBookCharactersUseCase)
+    singleOf(::GenerateChapterRecapUseCase)
     singleOf(::GenerateChapterSummaryUseCase)
+    singleOf(::GenerateTocRuleUseCase)
     singleOf(::AiTextFactoryUseCase)
     singleOf(::GenerateBookshelfAutoGroupPlanUseCase)
     singleOf(::GenerateAuthorBioUseCase)
@@ -619,6 +640,7 @@ val appModule = module {
     singleOf(::ReplaceRuleRepository)
     single<DictionaryGateway> { DictionaryRepositoryImpl() }
     singleOf(::TranslateChapterUseCase)
+    singleOf(::AiWebSearchPrefetchUseCase)
     singleOf(::AiChatGenerationUseCase)
 
     single<ImageLoader> {
@@ -731,6 +753,7 @@ val appModule = module {
         )
     }
     viewModelOf(::PrivateConfigViewModel)
+    viewModelOf(::ProtagonistExtractionConfigViewModel)
     // 阅读器入口的私密闸门：阅读记录 / 通知栏 / 深链等直开阅读器的路径都收在这里
     viewModelOf(::PrivateReadGateViewModel)
     viewModelOf(::CustomThemeViewModel)
