@@ -4120,7 +4120,6 @@
     <string name="ai_web_search_topic_news">News</string>
     <string name="author_bio_generate">Generate with AI</string>
     <string name="author_bio_generate_cancel">Cancel</string>
-    <string name="author_bio_generate_cancelled">Generation cancelled</string>
     <string name="author_bio_generate_done">Generated bios for %1$d authors, %2$d failed</string>
     <string name="author_bio_generate_missing">Generate missing bios</string>
     <string name="author_bio_generate_rate_limited">Stopped after repeated rate limits (%1$d succeeded, %2$d failed). Try again later</string>
