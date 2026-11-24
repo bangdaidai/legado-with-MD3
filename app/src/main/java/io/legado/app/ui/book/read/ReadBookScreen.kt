@@ -364,6 +364,14 @@ fun ReadBookScreen(
             }
         }
     }
+    // 分享弹窗独立于 Sheet 退场宿主，关闭上层后才显式关闭笔记层。
+    ShareCardPreviewSheet(
+        show = state.showShareCard,
+        data = state.shareCardData,
+        loading = state.shareCardLoading,
+        onDismissRequest = { onIntent(ReadBookIntent.DismissShareCard) },
+        scene = state.shareCardScene,
+    )
 }
 
 @androidx.compose.runtime.Stable
@@ -652,14 +660,6 @@ private fun ReadBookSheetContent(
         onExportConfig = { onIntent(ReadBookIntent.OpenReadStyleExport) },
         styleConfig = state.styleConfig,
     )
-    ShareCardPreviewSheet(
-        show = state.showShareCard,
-        data = state.shareCardData,
-        loading = state.shareCardLoading,
-        onDismissRequest = { onIntent(ReadBookIntent.DismissShareCard) },
-        scene = state.shareCardScene,
-    )
-
     // 朗读设置已改为 Navigation 3 整页（ReadAloudConfigScreen），阅读页不再挂弹层宿主；
     // 听书播放浮层的设置弹窗由 ReadAloudPlayerMorphHost 自己承载。
 

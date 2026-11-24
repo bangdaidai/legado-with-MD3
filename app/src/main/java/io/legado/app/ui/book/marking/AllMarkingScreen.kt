@@ -371,7 +371,6 @@ fun AllMarkingScreen(
             },
             showStyleConfig = false,
             onGenerateShareCard = {
-                onIntent(AllMarkingIntent.CloseEdit)
                 onIntent(AllMarkingIntent.GenerateShareCard(marking))
             },
         )

@@ -243,6 +243,7 @@ fun ReadBookRouteScreen(
 
     BackHandler(enabled = canHandleBack) {
         when {
+            state.showShareCard -> viewModel.onIntent(ReadBookIntent.DismissShareCard)
             state.activeSheet != null -> viewModel.onIntent(ReadBookIntent.DismissSheet)
             state.isShowingSearchResult -> viewModel.onIntent(ReadBookIntent.ExitSearch)
             state.isAutoPage -> viewModel.onIntent(ReadBookIntent.StopAutoPage)

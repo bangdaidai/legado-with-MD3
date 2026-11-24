@@ -192,7 +192,6 @@ fun ReadingMemoryDetailScreen(
             },
             showStyleConfig = false,
             onGenerateShareCard = {
-                editingMarking = null
                 onIntent(ReadingMemoryDetailIntent.GenerateShareCardFromMarking(marking))
             },
         )
