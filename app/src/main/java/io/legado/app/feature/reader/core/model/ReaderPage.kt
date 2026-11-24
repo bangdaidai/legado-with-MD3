@@ -36,11 +36,11 @@ data class ReaderTextStyle(
     /** Font-native underline used by HTML UnderlineSpan; custom reader underlines stay separate. */
     val nativeUnderline: Boolean = false,
     /**
-     * 命中字距（px）：这一格是命中段的首字时要在它左边让出的空白。段内的字恒为 0——
-     * 留白属于命中段与相邻字之间，不属于段内。见 [io.legado.app.feature.reader.legacy.LegacyReaderStyleRangeMapper]。
+     * 命中字距候选值（px）：首字左侧的留白，只有同一行前侧仍有可见字时才生效。
+     * 段内的字恒为 0，行首与纯空白邻侧由分页清零。见 [io.legado.app.feature.reader.legacy.LegacyReaderStyleRangeMapper]。
      */
     val matchSpacingBeforePx: Float = 0f,
-    /** 命中字距（px）：这一格是命中段的末字时要在它右边让出的空白。 */
+    /** 命中字距候选值（px）：末字右侧的留白，只有同一行后侧仍有可见字时才生效。 */
     val matchSpacingAfterPx: Float = 0f,
     /** 命中行行距（px）：包含命中的那一行整行往下抬这一截，行盒本身高度不变。 */
     val linePadTopPx: Float = 0f,

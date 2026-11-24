@@ -76,6 +76,4 @@ private fun bodyTypography() = ReadSheetConfigUiState(
 internal fun HighlightRule.setsNothing(): Boolean = bgImage.isNullOrBlank() &&
     bgColor == null && borderColor == null && borderColorNight == null &&
     textColor == null && underlineMode == 0 && fontPath.isNullOrBlank() &&
-    fontWeight == 400 && !isItalic && fontSizeOffset == 0 &&
-    letterSpacingBefore == 0f && letterSpacingAfter == 0f &&
-    lineSpacingTop == 0f && lineSpacingBottom == 0f
+    fontWeight == 400 && !isItalic && fontSizeOffset == 0 && !hasMatchSpacing()

@@ -613,19 +613,11 @@ internal class ReaderPaginationSession(
         var hasBackgroundImages = false
         var hasRubyGroups = false
         val clusters = ArrayList<String>(paragraph.items.size)
-        /**
-         * 每个字要在左右两侧让出的命中字距（段内恒为 0，只有命中段首字/末字带值，见
-         * [io.legado.app.feature.reader.legacy.LegacyReaderStyleRangeMapper]）。断行、自然宽度
-         * 与落笔推进都要用它，否则一行的实际占宽会比算出来的宽，两端对齐会算错间隙。
-         */
-        val matchSpacingPx = FloatArray(paragraph.items.size)
         paragraph.items.forEachIndexed { index, item ->
             when (item) {
                 is ReaderMeasuredInlineItem.Text -> {
                     if (item.style.backgroundImage != null) hasBackgroundImages = true
                     if (item.rubyGroupId != 0) hasRubyGroups = true
-                    matchSpacingPx[index] =
-                        item.style.matchSpacingBeforePx + item.style.matchSpacingAfterPx
                     clusters += item.value
                 }
 
@@ -660,6 +652,22 @@ internal class ReaderPaginationSession(
             return true
         }
 
+        /** 命中段首字左侧留白：同一行前侧还有可见字时才生效，行首与纯缩进前侧不让。 */
+        fun matchSpacingBefore(index: Int, lineStart: Int): Float {
+            val spacing = (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
+                ?.style?.matchSpacingBeforePx?.takeIf { it > 0f } ?: return 0f
+            if (index == lineStart || onlyBlankGlyphs(lineStart, index)) return 0f
+            return spacing
+        }
+
+        /** 命中段末字右侧留白：同一行后侧还有可见字时才生效，行尾与纯尾随空白后侧不让。 */
+        fun matchSpacingAfter(index: Int, lineEnd: Int): Float {
+            val spacing = (paragraph.items[index] as? ReaderMeasuredInlineItem.Text)
+                ?.style?.matchSpacingAfterPx?.takeIf { it > 0f } ?: return 0f
+            if (index + 1 == lineEnd || onlyBlankGlyphs(index + 1, lineEnd)) return 0f
+            return spacing
+        }
+
         /**
          * 命中段首字前要让出的外边距（负值钳为 0）。留白的作用是把命中段和它**前面**的文字
          * 横向拉开，所以只有前面确实还有可见字时才让；命中段正好落在行首，或前面只剩段首
@@ -691,7 +699,7 @@ internal class ReaderPaginationSession(
         } else null
 
         val breakerWidthsPx = FloatArray(paragraph.items.size) { index ->
-            paragraph.items[index].widthPx + letterSpacing + matchSpacingPx[index]
+            paragraph.items[index].widthPx + letterSpacing
         }
         val breaker = ChineseLineBreaker(
             clusters = clusters,
@@ -709,9 +717,9 @@ internal class ReaderPaginationSession(
         val refineStartNs = if (metrics != null) System.nanoTime() else 0L
         val starts = mutableListOf(0)
         // 背景图本身不参与排版：它只是压在字后面的装饰，内边距超出的部分也只超出图本身
-        // （见 ReaderTextBackgroundRun.textBackgroundRuns 现算的外框）。只有九宫格的
-        // 外边距例外——它按旧引擎语义在命中段两侧让出排版留白（见 backgroundMarginBefore/
-        // After），且只在那一侧确实还有文字时才让，所以这里按字形宽 + 命中字距 + 外边距收紧行尾。
+        // （见 ReaderTextBackgroundRun.textBackgroundRuns 现算的外框）。命中字距与九宫格外边距
+        // 按旧引擎语义在命中段两侧让出排版留白，且只在那一侧确实还有可见字时才让，因此主断行
+        // 先按字形宽度计算，再在这里按候选行边界收紧行尾。
         // Keep a forbidden Chinese break intact even if its row has to consume the
         // remaining slack, matching the legacy punctuation priority.
         // 谓词里「同一标点连打可断」那条例外同样作用在这里：行尾收紧时也能切在 `！！！` 中间。
@@ -727,7 +735,8 @@ internal class ReaderPaginationSession(
                 var widthSum = 0.0
                 for (index in from until endExclusive) {
                     widthSum += (paragraph.items[index].widthPx +
-                            matchSpacingPx[index] +
+                            matchSpacingBefore(index, from) +
+                            matchSpacingAfter(index, endExclusive) +
                             backgroundMarginBefore(index, from) +
                             backgroundMarginAfter(index, endExclusive)).toDouble()
                 }
@@ -777,7 +786,8 @@ internal class ReaderPaginationSession(
             for (itemIndex in 0 until itemCount) {
                 val item = lineItems[itemIndex]
                 widthSum += item.widthPx.toDouble()
-                matchSum += matchSpacingPx[from + itemIndex].toDouble()
+                matchSum += (matchSpacingBefore(from + itemIndex, from) +
+                        matchSpacingAfter(from + itemIndex, until)).toDouble()
                 marginSum += (backgroundMarginBefore(from + itemIndex, from) +
                         backgroundMarginAfter(from + itemIndex, until)).toDouble()
                 if (item is ReaderMeasuredInlineItem.Text) {
@@ -865,7 +875,9 @@ internal class ReaderPaginationSession(
                 ChineseLineBreaker.isWordSpace(clusters[from + visibleItemCount - 1])
             ) {
                 visibleItemCount--
-                visibleWidth -= lineItems[visibleItemCount].widthPx + matchSpacingPx[from + visibleItemCount] +
+                visibleWidth -= lineItems[visibleItemCount].widthPx +
+                        matchSpacingBefore(from + visibleItemCount, from) +
+                        matchSpacingAfter(from + visibleItemCount, until) +
                         if (visibleItemCount > 0) letterSpacing else 0f
             }
             val compressibleGaps = if (visibleWidth > available) {
@@ -934,10 +946,10 @@ internal class ReaderPaginationSession(
             var previousMatchSpacingAfterPx = 0f
             lineItems.forEachIndexed { itemIndex, item ->
                 val matchStyle = (item as? ReaderMeasuredInlineItem.Text)?.style
-                val spacingBefore = matchStyle?.matchSpacingBeforePx ?: 0f
+                val spacingBefore = matchSpacingBefore(from + itemIndex, from)
                 x += spacingBefore
-                // 外边距按旧引擎语义落成排版留白：命中段首字前推开 marginStart，但行首
-                // 前面没有字、相邻同图段之间（段内）也不推。气泡外框由文字矩形现算，留白落在图外。
+                // 命中字距与九宫格外边距都按旧引擎语义落成排版留白：同侧没有可见字时不让，
+                // 相邻同图段之间（段内）也不推。气泡外框由文字矩形现算，留白落在图外。
                 x += backgroundMarginBefore(from + itemIndex, from)
                 val itemBackground = backgroundOf(from + itemIndex)
                 when (item) {
@@ -1052,7 +1064,7 @@ internal class ReaderPaginationSession(
                     },
                 )
                 x += item.widthPx + letterSpacing +
-                        (matchStyle?.matchSpacingAfterPx ?: 0f) +
+                        matchSpacingAfter(from + itemIndex, until) +
                         // 命中段末字后同样推进 marginEnd（段内为 0，见 backgroundMarginAfter）
                         backgroundMarginAfter(from + itemIndex, until) +
                         if (item is ReaderMeasuredInlineItem.Text && item.value == " " && item.rubyGroupId == 0) wordSpaceExtra else 0f
@@ -1067,7 +1079,7 @@ internal class ReaderPaginationSession(
                     item !is ReaderMeasuredInlineItem.BgmScene
                 ) {
                     previousItemBackground = itemBackground
-                    previousMatchSpacingAfterPx = matchStyle?.matchSpacingAfterPx ?: 0f
+                    previousMatchSpacingAfterPx = matchSpacingAfter(from + itemIndex, until)
                 }
             }
             if (hasRubyGroups) {

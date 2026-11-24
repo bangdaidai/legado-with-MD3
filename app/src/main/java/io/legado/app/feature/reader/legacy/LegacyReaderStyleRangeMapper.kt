@@ -246,8 +246,10 @@ object LegacyReaderStyleRangeMapper {
      * 好让 [overriddenBy] 与正文的 [matchRanges] 用同一份口径。
      */
     fun styleOf(rule: HighlightRule, isNightTheme: Boolean = false): ReaderCharacterStyle = rule.toReaderStyle(isNightTheme).copy(
-        matchSpacingBeforePx = rule.letterSpacingBefore.dpToPx().takeIf { it > 0f } ?: 0f,
-        matchSpacingAfterPx = rule.letterSpacingAfter.dpToPx().takeIf { it > 0f } ?: 0f,
+        matchSpacingBeforePx = rule.effectiveMatchSpacingBeforeDp()
+            .dpToPx().takeIf { it > 0f } ?: 0f,
+        matchSpacingAfterPx = rule.effectiveMatchSpacingAfterDp()
+            .dpToPx().takeIf { it > 0f } ?: 0f,
     )
 
     /**
@@ -305,9 +307,9 @@ object LegacyReaderStyleRangeMapper {
     /**
      * 一次命中拆成「首字 / 段内 / 末字」三段互不重叠的区间。
      *
-     * 命中字距属于命中段与相邻字之间：只有首字那一段带 before、只有末字那一段带 after，
-     * 段内一个字都不加——段内也加的话，调的就不是间距而是整段的字号了。行距是行级属性，
-     * 三段都带上，由分页那边按整行取较大值（同一行里两条命中也只抬一次）。
+     * 首字携带 before、末字携带 after，作为候选值交给分页按同一可视行的可见邻字决定是否生效；
+     * 行首、行尾与纯空白邻侧不让。段内一个字都不加——段内也加的话，调的就不是间距而是整段的字号了。
+     * 行距是行级属性，三段都带上，由分页那边按整行取较大值（同一行里两条命中也只抬一次）。
      */
     private fun HighlightRule.matchRanges(
         start: Int,
@@ -317,10 +319,10 @@ object LegacyReaderStyleRangeMapper {
         isNightTheme: Boolean,
     ): List<ReaderStyleRange> {
         val base = toReaderStyle(isNightTheme)
-        val before = letterSpacingBefore.dpToPx().takeIf { it > 0f } ?: 0f
-        val after = letterSpacingAfter.dpToPx().takeIf { it > 0f } ?: 0f
+        val before = effectiveMatchSpacingBeforeDp().dpToPx().takeIf { it > 0f } ?: 0f
+        val after = effectiveMatchSpacingAfterDp().dpToPx().takeIf { it > 0f } ?: 0f
         if (endExclusive - start == 1) {
-            // 单字命中：它既是首字也是末字，两边都要让。
+            // 单字命中同时是首尾，两侧候选值都带上，是否生效仍由分页判断。
             return listOf(
                 ReaderStyleRange(
                     start = start,
@@ -423,8 +425,8 @@ object LegacyReaderStyleRangeMapper {
         fontWeight = fontWeight.takeIf { it != 400 },
         italic = isItalic,
         fontSizeOffsetPx = fontSizeOffset.toFloat().spToPx(),
-        linePadTopPx = lineSpacingTop.dpToPx().takeIf { it > 0f } ?: 0f,
-        linePadBottomPx = lineSpacingBottom.dpToPx().takeIf { it > 0f } ?: 0f,
+        linePadTopPx = effectiveLineSpacingTopDp().dpToPx().takeIf { it > 0f } ?: 0f,
+        linePadBottomPx = effectiveLineSpacingBottomDp().dpToPx().takeIf { it > 0f } ?: 0f,
         backgroundImage = bgImage?.takeIf(String::isNotBlank)?.let {
             val automatic = if (manualNineSlice) null else {
                 ReaderTextBackgroundLoader.nineSliceFractions(it)
@@ -442,8 +444,6 @@ object LegacyReaderStyleRangeMapper {
                 paddingRightPx = bgPaddingEnd.dpToPx(),
                 paddingTopPx = bgPaddingTop.dpToPx(),
                 paddingBottomPx = bgPaddingBottom.dpToPx(),
-                marginStartPx = bgMarginStart.dpToPx(),
-                marginEndPx = bgMarginEnd.dpToPx(),
                 lengthOffsetLeftPx = bgLengthOffsetLeft.dpToPx(),
                 lengthOffsetRightPx = bgLengthOffsetRight.dpToPx(),
             ).let { image ->

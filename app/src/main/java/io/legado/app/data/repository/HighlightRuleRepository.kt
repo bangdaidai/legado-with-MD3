@@ -186,6 +186,27 @@ class HighlightRuleRepository(
             npTop *= ratio
             npBottom *= ratio
         }
+        val bgMarginStart = runCatching { rule.bgMarginStart }.getOrDefault(0f).coerceIn(-16f, 64f)
+        val bgMarginEnd = runCatching { rule.bgMarginEnd }.getOrDefault(0f).coerceIn(-16f, 64f)
+        val bgMarginTop = runCatching { rule.bgMarginTop }.getOrDefault(0f).coerceIn(-16f, 64f)
+        val bgMarginBottom = runCatching { rule.bgMarginBottom }.getOrDefault(0f).coerceIn(-16f, 64f)
+        // 通用留白是保存后的唯一口径；旧外边距只在对应通用值为零时迁移，随后清零，避免用户改回零后旧值复活。
+        val letterSpacingBefore = runCatching { rule.letterSpacingBefore }.getOrDefault(0f)
+            .coerceIn(0f, MAX_MATCH_SPACING_DP).let {
+                if (it == 0f) bgMarginStart.coerceIn(0f, MAX_MATCH_SPACING_DP) else it
+            }
+        val letterSpacingAfter = runCatching { rule.letterSpacingAfter }.getOrDefault(0f)
+            .coerceIn(0f, MAX_MATCH_SPACING_DP).let {
+                if (it == 0f) bgMarginEnd.coerceIn(0f, MAX_MATCH_SPACING_DP) else it
+            }
+        val lineSpacingTop = runCatching { rule.lineSpacingTop }.getOrDefault(0f)
+            .coerceIn(0f, MAX_MATCH_SPACING_DP).let {
+                if (it == 0f) bgMarginTop.coerceIn(0f, MAX_MATCH_SPACING_DP) else it
+            }
+        val lineSpacingBottom = runCatching { rule.lineSpacingBottom }.getOrDefault(0f)
+            .coerceIn(0f, MAX_MATCH_SPACING_DP).let {
+                if (it == 0f) bgMarginBottom.coerceIn(0f, MAX_MATCH_SPACING_DP) else it
+            }
         // 从 rule 本身 copy：新增字段只要不写进下面这张清单就不会被静默清零。
         // 逐字段重建会丢命中字距 / 命中行行距 / 九宫格左右偏移（保存后滑杆失效），必须整体 copy。
         return rule.copy(
@@ -246,20 +267,16 @@ class HighlightRuleRepository(
             bgPaddingEnd = runCatching { rule.bgPaddingEnd }.getOrDefault(0f).coerceIn(-32f, 64f),
             bgPaddingTop = runCatching { rule.bgPaddingTop }.getOrDefault(0f).coerceIn(-32f, 64f),
             bgPaddingBottom = runCatching { rule.bgPaddingBottom }.getOrDefault(0f).coerceIn(-32f, 64f),
-            bgMarginStart = runCatching { rule.bgMarginStart }.getOrDefault(0f).coerceIn(-16f, 64f),
-            bgMarginEnd = runCatching { rule.bgMarginEnd }.getOrDefault(0f).coerceIn(-16f, 64f),
-            bgMarginTop = runCatching { rule.bgMarginTop }.getOrDefault(0f).coerceIn(-16f, 64f),
-            bgMarginBottom = runCatching { rule.bgMarginBottom }.getOrDefault(0f).coerceIn(-16f, 64f),
+            bgMarginStart = 0f,
+            bgMarginEnd = 0f,
+            bgMarginTop = 0f,
+            bgMarginBottom = 0f,
             underlineBelowText = runCatching { rule.underlineBelowText }.getOrDefault(false),
             manualNineSlice = runCatching { rule.manualNineSlice }.getOrDefault(true),
-            letterSpacingBefore = runCatching { rule.letterSpacingBefore }.getOrDefault(0f)
-                .coerceIn(0f, MAX_MATCH_SPACING_DP),
-            letterSpacingAfter = runCatching { rule.letterSpacingAfter }.getOrDefault(0f)
-                .coerceIn(0f, MAX_MATCH_SPACING_DP),
-            lineSpacingTop = runCatching { rule.lineSpacingTop }.getOrDefault(0f)
-                .coerceIn(0f, MAX_MATCH_SPACING_DP),
-            lineSpacingBottom = runCatching { rule.lineSpacingBottom }.getOrDefault(0f)
-                .coerceIn(0f, MAX_MATCH_SPACING_DP),
+            letterSpacingBefore = letterSpacingBefore,
+            letterSpacingAfter = letterSpacingAfter,
+            lineSpacingTop = lineSpacingTop,
+            lineSpacingBottom = lineSpacingBottom,
             bgLengthOffsetLeft = runCatching { rule.bgLengthOffsetLeft }.getOrDefault(0f)
                 .coerceIn(-MAX_MATCH_SPACING_DP, MAX_MATCH_SPACING_DP),
             bgLengthOffsetRight = runCatching { rule.bgLengthOffsetRight }.getOrDefault(0f)

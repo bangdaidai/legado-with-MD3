@@ -912,21 +912,22 @@ class ReaderPaginatorTest {
 
     /**
      * 命中字距只在命中段的两端留白：段首让出 before、段末让出 after，段内一个字都不加
-     * （段内也加的话，调的就不是间距而是字号了）。
+     * （段内也加的话，调的就不是间距而是字号了）；两侧仍须有可见邻字。
      */
     @Test
     fun matchSpacingOnlyWidensTheTwoEndsOfAHit() {
         val page = ReaderPaginator.paginateBlocks(
             listOf(ReaderMeasuredBlock.InlineParagraph(
                 items = listOf(
+                    ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
                     ReaderMeasuredInlineItem.Text(
-                        "甲", 10f, style.copy(matchSpacingBeforePx = 6f), 0
+                        "甲", 10f, style.copy(matchSpacingBeforePx = 6f), 1
                     ),
-                    ReaderMeasuredInlineItem.Text("乙", 10f, style, 1),
+                    ReaderMeasuredInlineItem.Text("乙", 10f, style, 2),
                     ReaderMeasuredInlineItem.Text(
-                        "丙", 10f, style.copy(matchSpacingAfterPx = 6f), 2
+                        "丙", 10f, style.copy(matchSpacingAfterPx = 6f), 3
                     ),
-                    ReaderMeasuredInlineItem.Text("丁", 10f, style, 3),
+                    ReaderMeasuredInlineItem.Text("丁", 10f, style, 4),
                 ),
                 indentCharacters = 0,
                 alignment = ReaderTextAlignment.START,
@@ -934,12 +935,153 @@ class ReaderPaginatorTest {
                 baselineOffsetPx = 15f,
                 baseTextSizePx = 10f,
             )),
-            config.copy(viewportWidthPx = 60, viewportHeightPx = 100),
+            config.copy(viewportWidthPx = 80, viewportHeightPx = 100),
         ).single()
 
         val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
 
-        assertEquals(listOf(6f, 16f, 26f, 42f), glyphs.map { it.bounds.left })
+        assertEquals(listOf(0f, 16f, 26f, 36f, 52f), glyphs.map { it.bounds.left })
+    }
+
+    @Test
+    fun matchSpacingVanishesOnTheSideWithoutVisibleNeighbourText() {
+        val spaced = style.copy(matchSpacingBeforePx = 5f, matchSpacingAfterPx = 7f)
+        fun page(texts: List<Pair<String, Boolean>>) = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = texts.mapIndexed { index, (value, matched) ->
+                        ReaderMeasuredInlineItem.Text(
+                            value, 10f, if (matched) spaced else style, index,
+                        )
+                    },
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 100, viewportHeightPx = 100),
+        ).single()
+
+        val whole = page(listOf("甲" to true, "乙" to true))
+        assertEquals(
+            listOf(0f, 10f),
+            whole.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+
+        val atHead = page(listOf("甲" to true, "乙" to true, "后" to false))
+        assertEquals(
+            listOf(0f, 10f, 27f),
+            atHead.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+
+        val atTail = page(listOf("前" to false, "甲" to true, "乙" to true))
+        assertEquals(
+            listOf(0f, 15f, 25f),
+            atTail.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+    }
+
+    @Test
+    fun matchSpacingIgnoresLeadingIndentAndTrailingBlankGlyphs() {
+        val spaced = style.copy(matchSpacingBeforePx = 5f, matchSpacingAfterPx = 7f)
+        fun page(items: List<ReaderMeasuredInlineItem.Text>) = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = items,
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 100, viewportHeightPx = 100),
+        ).single()
+
+        val atHead = page(
+            listOf(
+                ReaderMeasuredInlineItem.Text("\u3000", 10f, style, 0),
+                ReaderMeasuredInlineItem.Text("\u3000", 10f, style, 1),
+                ReaderMeasuredInlineItem.Text("甲", 10f, spaced, 2),
+                ReaderMeasuredInlineItem.Text("乙", 10f, spaced, 3),
+            )
+        )
+        assertEquals(
+            listOf(0f, 10f, 20f, 30f),
+            atHead.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+
+        val atTail = page(
+            listOf(
+                ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                ReaderMeasuredInlineItem.Text("甲", 10f, spaced, 1),
+                ReaderMeasuredInlineItem.Text("乙", 10f, spaced, 2),
+                ReaderMeasuredInlineItem.Text(" ", 10f, style, 3),
+                ReaderMeasuredInlineItem.Text(" ", 10f, style, 4),
+            )
+        )
+        assertEquals(
+            listOf(0f, 15f, 25f, 35f, 45f),
+            atTail.elements.filterIsInstance<ReaderElement.Text>().map { it.bounds.left },
+        )
+    }
+
+    @Test
+    fun matchSpacingBeforeVanishesWhenTheHitStartsAWrappedLine() {
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = listOf(
+                        ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                        ReaderMeasuredInlineItem.Text(
+                            "甲", 10f, style.copy(matchSpacingBeforePx = 6f), 1,
+                        ),
+                        ReaderMeasuredInlineItem.Text("后", 10f, style, 2),
+                    ),
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 20, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        assertEquals(listOf("前", "甲", "后"), glyphs.map { it.value })
+        assertEquals(listOf(0f, 0f, 0f), glyphs.map { it.bounds.top })
+        assertEquals(listOf(0f, 0f, 10f), glyphs.map { it.bounds.left })
+    }
+
+    @Test
+    fun matchSpacingAfterTightensTheLineThenVanishesAtItsTail() {
+        val page = ReaderPaginator.paginateBlocks(
+            listOf(
+                ReaderMeasuredBlock.InlineParagraph(
+                    items = listOf(
+                        ReaderMeasuredInlineItem.Text("前", 10f, style, 0),
+                        ReaderMeasuredInlineItem.Text(
+                            "甲", 10f, style.copy(matchSpacingAfterPx = 6f), 1,
+                        ),
+                        ReaderMeasuredInlineItem.Text("后", 10f, style, 2),
+                    ),
+                    indentCharacters = 0,
+                    alignment = ReaderTextAlignment.START,
+                    lineHeightPx = 20f,
+                    baselineOffsetPx = 15f,
+                    baseTextSizePx = 10f,
+                )
+            ),
+            config.copy(viewportWidthPx = 30, viewportHeightPx = 100),
+        ).single()
+
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        assertEquals(listOf("前", "甲", "后"), glyphs.map { it.value })
+        assertEquals(listOf(0f, 0f, 20f), glyphs.map { it.bounds.top })
+        assertEquals(listOf(0f, 10f, 0f), glyphs.map { it.bounds.left })
     }
 
     /**
