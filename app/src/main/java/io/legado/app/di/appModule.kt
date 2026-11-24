@@ -267,6 +267,7 @@ import io.legado.app.model.ReadAloudSessionStore
 import io.legado.app.model.ReaderSession
 import io.legado.app.service.playback.PlaybackCapsuleGatewayAdapter
 import io.legado.app.ui.about.AboutViewModel
+import io.legado.app.ui.ai.AiModelSwitchViewModel
 import io.legado.app.ui.ai.chat.AiChatViewModel
 import io.legado.app.ui.association.ImportDictRuleViewModel
 import io.legado.app.ui.association.ImportHttpTtsViewModel
@@ -782,6 +783,7 @@ val appModule = module {
     viewModelOf(::AiWebSearchConfigViewModel)
     viewModelOf(::AiLogViewModel)
     viewModelOf(::AiChatViewModel)
+    viewModelOf(::AiModelSwitchViewModel)
     viewModelOf(::ShareCardManageViewModel)
     viewModel { (providerId: String?) ->
         AiProviderEditViewModel(

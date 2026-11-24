@@ -4114,7 +4114,6 @@
     <string name="ai_web_search_topic_general">通用</string>
     <string name="ai_web_search_topic_news">新闻</string>
     <string name="author_bio_generate_cancel">取消</string>
-    <string name="author_bio_generate_cancelled">已取消生成</string>
     <string name="author_bio_generate_done">已为 %1$d 位作者生成简介，%2$d 位失败</string>
     <string name="author_bio_generate_missing">一键生成缺失简介</string>
     <string name="author_bio_generate_rate_limited">接口连续限流，已中止生成（成功 %1$d，失败 %2$d），可稍后再试</string>

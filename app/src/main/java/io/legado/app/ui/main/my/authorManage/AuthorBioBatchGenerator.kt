@@ -58,12 +58,7 @@ class AuthorBioBatchGenerator(
     fun cancel() {
         job?.cancel()
         job = null
-        _state.update {
-            it.copy(
-                bioGeneration = null,
-                message = appCtx.getString(R.string.author_bio_generate_cancelled),
-            )
-        }
+        _state.update { State() }
     }
 
     /** 一键生成缺失简介：逐个为没有简介的作者调用 AI，完成后写档并刷新列表 */
