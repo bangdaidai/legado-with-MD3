@@ -24,6 +24,12 @@ data class ExploreRule(
     var pageParam: String? = null
 ) : BookListRule, Parcelable {
 
+    // pageParam 不参与 toString，避免改变依赖 Java 对象字符串做指纹的书源签名。
+    override fun toString(): String =
+        "ExploreRule(bookList=$bookList, name=$name, author=$author, intro=$intro, " +
+            "kind=$kind, lastChapter=$lastChapter, updateTime=$updateTime, " +
+            "bookUrl=$bookUrl, coverUrl=$coverUrl, wordCount=$wordCount)"
+
     companion object {
 
         val jsonDeserializer = JsonDeserializer<ExploreRule?> { json, _, _ ->
