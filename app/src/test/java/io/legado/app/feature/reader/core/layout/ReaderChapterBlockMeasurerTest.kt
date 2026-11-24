@@ -15,6 +15,7 @@ import io.legado.app.feature.reader.core.source.ReaderTitleSegmentation
 import io.legado.app.feature.reader.core.style.ReaderCharacterStyle
 import io.legado.app.feature.reader.core.style.ReaderStyleRange
 import io.legado.app.feature.reader.core.style.ReaderStyleTarget
+import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
 import io.legado.app.feature.reader.platform.ReaderLocalPresentationResolver
 import io.legado.app.help.book.MixedContentSegments
 import io.legado.app.model.localBook.LocalBookSemanticHtml
@@ -371,6 +372,44 @@ class ReaderChapterBlockMeasurerTest {
         assertEquals(ReaderTextAlignment.CENTER, title.alignment)
         assertEquals(2, body.indentCharacters)
         assertEquals(40f, image.intrinsicHeightPx, 0f)
+    }
+
+    @Test
+    fun borderTripletSurvivesMeasurementAndBackgroundBandMerge() = runBlocking {
+        val borderColor = 0xFF63C37D.toInt()
+        val source = ReaderChapterSource(1, "", listOf(
+            ReaderChapterSourceBlock.Text("甲乙丙丁", 0),
+        ), 4)
+        val measured = ReaderChapterBlockMeasurer(shaper, shaper, { null }).measure(
+            source,
+            style.copy(
+                bodyIndentCharacters = 0,
+                styleRanges = listOf(
+                    ReaderStyleRange(
+                        1, 3, ReaderStyleTarget.BODY,
+                        ReaderCharacterStyle(
+                            borderColorArgb = borderColor,
+                            borderWidthPx = 2f,
+                            borderRadiusPx = 6f,
+                        ),
+                    )
+                ),
+            ),
+        ) as ReaderChapterMeasureResult.Success
+        val page = ReaderPaginator.paginateBlocks(
+            measured.blocks,
+            ReaderPaginationConfig(0, "", 1000, 1000, 0f, 0f, 0f, 0f, 10f, 8f),
+        ).single()
+        val glyphs = page.elements.filterIsInstance<ReaderElement.Text>()
+        val bordered = glyphs.filter { it.style.borderColorArgb != null }
+        assertEquals(listOf("乙", "丙"), bordered.map { it.value })
+        assertTrue(bordered.all { it.style.borderWidthPx == 2f && it.style.borderRadiusPx == 6f })
+
+        val band = glyphs.mergeBackgroundBounds().single { it.borderColorArgb != null }
+        assertEquals(borderColor, band.borderColorArgb)
+        assertEquals(2f, band.borderWidthPx, 0f)
+        assertEquals(6f, band.borderRadiusPx, 0f)
+        assertEquals(20f, band.bounds.width, 0f)
     }
 
     @Test

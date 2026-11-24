@@ -112,6 +112,7 @@ import io.legado.app.feature.reader.core.layout.ReaderTextAlignment
 import io.legado.app.feature.reader.core.layout.ReaderTextShaperFactory
 import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderPage
+import io.legado.app.feature.reader.core.model.ReaderRect
 import io.legado.app.feature.reader.core.model.ReaderTextBackgroundRun
 import io.legado.app.feature.reader.core.model.ReaderTextStyle
 import io.legado.app.feature.reader.core.model.contentClipRect
@@ -120,6 +121,7 @@ import io.legado.app.feature.reader.core.source.ReaderChapterSource
 import io.legado.app.feature.reader.core.source.ReaderChapterSourceBlock
 import io.legado.app.feature.reader.core.style.READER_DOUBLE_LINE_GAP_DP
 import io.legado.app.feature.reader.core.style.READER_STRIKE_HEIGHT_RATIO
+import io.legado.app.feature.reader.core.style.ReaderBackgroundBand
 import io.legado.app.feature.reader.core.style.ReaderStyleTarget
 import io.legado.app.feature.reader.core.style.mergeBackgroundBounds
 import io.legado.app.feature.reader.core.style.underlineControlSupport
@@ -239,10 +241,16 @@ fun HighlightRuleEditSheet(
     var hasBgImage by remember(show, rule) { mutableStateOf(initial.bgImage?.isNotBlank() == true) }
 
     // Border state — 颜色为 null 就当没开；粗细与圆角只在颜色非空时参与绘制与保存。
-    var hasBorder by remember(show, rule) { mutableStateOf(initial.borderColor != null) }
-    var borderColor by remember(show, rule) {
-        mutableIntStateOf(initial.borderColor ?: 0xFF63C37D.toInt())
+    var hasBorder by remember(show, rule) {
+        mutableStateOf(initial.borderColor != null || initial.borderColorNight != null)
     }
+    var borderColor by remember(show, rule) {
+        mutableIntStateOf(
+            initial.borderColor ?: initial.borderColorNight?.let { ColorUtils.flipLightness(it) }
+                ?: 0xFF63C37D.toInt()
+        )
+    }
+    var borderColorNight by remember(show, rule) { mutableStateOf(initial.borderColorNight) }
     var borderWidth by remember(show, rule) { mutableFloatStateOf(initial.borderWidth) }
     var borderRadius by remember(show, rule) { mutableFloatStateOf(initial.borderRadius) }
 
@@ -400,6 +408,7 @@ fun HighlightRuleEditSheet(
                             bgColor = bgColor,
                             bgColorNight = bgColorNight,
                             borderColor = if (hasBorder) borderColor else null,
+                            borderColorNight = if (hasBorder) borderColorNight else null,
                             borderWidth = borderWidth,
                             borderRadius = borderRadius,
                             underlineMode = underlineMode,
@@ -1124,6 +1133,9 @@ fun HighlightRuleEditSheet(
                             pattern = pattern,
                             textColor = textColor,
                             bgColor = bgColor,
+                            borderColor = if (hasBorder) borderColor else null,
+                            borderWidth = borderWidth,
+                            borderRadius = borderRadius,
                             bgImage = if (hasBgImage) bgImage else "",
                             bgImageFit = bgImageFit,
                             bgImageScale = bgImageScale,
@@ -1170,6 +1182,11 @@ fun HighlightRuleEditSheet(
                             pattern = pattern,
                             textColor = nightTextColor,
                             bgColor = nightBgColor,
+                            borderColor = if (hasBorder) {
+                                borderColorNight ?: ColorUtils.flipLightness(borderColor)
+                            } else null,
+                            borderWidth = borderWidth,
+                            borderRadius = borderRadius,
                             bgImage = "",
                             bgImageFit = bgImageFit,
                             bgImageScale = bgImageScale,
@@ -1307,6 +1324,9 @@ fun HighlightRuleEditSheet(
         onDismissRequest = { showBorderColorPicker = false },
         onColorSelected = { color ->
             borderColor = color
+            if (borderColorNight == null) {
+                borderColorNight = ColorUtils.flipLightness(color)
+            }
             showBorderColorPicker = false
         },
     )
@@ -1642,6 +1662,7 @@ private suspend fun buildReaderPreviewLayout(
                     endExclusive = hitEnd,
                     target = ReaderStyleTarget.BODY,
                     priority = 0,
+                    isNightTheme = ReadStyleResolver.isNightTheme(),
                 )
             } ?: LegacyReaderStyleRangeMapper.map(
                 source = source,
@@ -1649,6 +1670,7 @@ private suspend fun buildReaderPreviewLayout(
                 processes = emptyList(),
                 // 预览没有真实书：书级角色气泡按空表走
                 bookUrl = "",
+                isNightTheme = ReadStyleResolver.isNightTheme(),
             ),
         ),
     ) as? ReaderChapterMeasureResult.Success ?: return null
@@ -1809,6 +1831,9 @@ internal fun HighlightRulePreview(
     pattern: String,
     textColor: Int?,
     bgColor: Int?,
+    borderColor: Int? = null,
+    borderWidth: Float = 0f,
+    borderRadius: Float = 0f,
     bgImage: String,
     bgImageFit: Int,
     bgImageScale: Float,
@@ -2087,18 +2112,28 @@ internal fun HighlightRulePreview(
                 } else {
                     0f
                 }
+                // 正文在带背景图时只画图、不画边框；预览沿用同一条件。
+                val borderStrokeWidthPx = if (borderColor != null && bgImage.isBlank()) {
+                    with(density) { borderWidth.dp.toPx() }.coerceAtLeast(0f)
+                } else {
+                    0f
+                }
+                val borderOverhangPx = borderStrokeWidthPx / 2f
+                val topOverhangPx = maxOf(ninePatchTopOverhang, borderOverhangPx)
+                val bottomOverhangPx = maxOf(
+                    ninePatchBottomOverhang, underlineBottomOverhangPx, borderOverhangPx,
+                )
                 val canvasHeightDp = with(density) {
-                    (previewTextResult.size.height + ninePatchTopOverhang +
-                        maxOf(ninePatchBottomOverhang, underlineBottomOverhangPx)).toDp()
+                    (previewTextResult.size.height + topOverhangPx + bottomOverhangPx).toDp()
                 }
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(canvasHeightDp)
                 ) {
-                    // 九宫格外扩部分超出文本区，整体下移让上角块完整显示（Canvas 高度已预留）
-                    if (ninePatchTopOverhang != 0f) {
-                        drawContext.canvas.translate(0f, ninePatchTopOverhang)
+                    // 外扩部分超出文本区，整体下移让上描边/上角块完整显示（Canvas 高度已预留）
+                    if (topOverhangPx != 0f) {
+                        drawContext.canvas.translate(0f, topOverhangPx)
                     }
 
                     // 在匹配区域画背景图（外边距已作为排版留白插在命中段前后：气泡只
@@ -2169,6 +2204,24 @@ internal fun HighlightRulePreview(
                         }
                     }
 
+                    if (borderStrokeWidthPx > 0f) {
+                        val radiusPx = borderRadius.dp.toPx().coerceAtLeast(0f)
+                        marginSegmentation.ranges.forEach { range ->
+                            val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
+                            previewTextResult.forEachLineSegment(range.first, endExclusive) { left, right, top, bottom, _ ->
+                                drawBackgroundBand(
+                                    ReaderBackgroundBand(
+                                        fillColorArgb = null,
+                                        bounds = ReaderRect(left, top, right, bottom),
+                                        borderColorArgb = borderColor,
+                                        borderWidthPx = borderStrokeWidthPx,
+                                        borderRadiusPx = radiusPx,
+                                    )
+                                )
+                            }
+                        }
+                    }
+
                     // 下划线绘制块（可在文字上层或下层）
                     val drawUnderlinesBlock: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
                         if (underlineMode > 0) {
@@ -2234,8 +2287,8 @@ internal fun HighlightRulePreview(
                     if (!belowText) drawUnderlinesBlock()
 
                     // 恢复画布，避免平移泄漏到后续绘制
-                    if (ninePatchTopOverhang != 0f) {
-                        drawContext.canvas.translate(0f, -ninePatchTopOverhang)
+                    if (topOverhangPx != 0f) {
+                        drawContext.canvas.translate(0f, -topOverhangPx)
                     }
                 }
             }

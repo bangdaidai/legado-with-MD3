@@ -8,6 +8,7 @@ import io.legado.app.feature.reader.core.source.ReaderChapterSourceBlock
 import io.legado.app.feature.reader.core.source.ReaderChapterSourceParser
 import io.legado.app.feature.reader.core.style.ReaderCharacterStyle
 import io.legado.app.feature.reader.core.style.ReaderStyleTarget
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.dpToPx
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -144,7 +145,7 @@ class LegacyReaderStyleRangeMapperTest {
     }
 
     /**
-     * 深浅两套颜色：夜间那一栏没设就跟随白天（老规则行为逐字节不变），设了只在夜间那套生效。
+     * 深浅两套颜色：优先用当前模式那一栏，缺失时从另一栏反相派生。
      * 墨水屏由调用方判成白天，这里只负责「给哪一套用哪一套」。
      */
     @Test
@@ -154,6 +155,7 @@ class LegacyReaderStyleRangeMapperTest {
             targetScope = HighlightRule.TARGET_BODY,
             textColor = 0xFF8B0000.toInt(),
             bgColor = 0x20FFEB3B,
+            borderColor = 0xFF112233.toInt(),
             underlineMode = 1,
             underlineColor = 0xFF8B0000.toInt(),
         )
@@ -161,16 +163,19 @@ class LegacyReaderStyleRangeMapperTest {
         val dayColors = rangesFor(rule, isNightTheme = false)
         assertEquals(0xFF8B0000.toInt(), dayColors.first().style.colorArgb)
         assertEquals(0x20FFEB3B, dayColors.first().style.backgroundArgb)
+        assertEquals(0xFF112233.toInt(), dayColors.first().style.borderColorArgb)
         assertEquals(0xFF8B0000.toInt(), dayColors.first().style.underline?.colorArgb)
 
-        // 夜间栏为空：仍是白天那套，与加夜间色之前一模一样
+        // 夜间栏为空：文字、背景与边框都从白天那一套反相派生
         val nightFallback = rangesFor(rule, isNightTheme = true)
-        assertEquals(0xFF8B0000.toInt(), nightFallback.first().style.colorArgb)
-        assertEquals(0x20FFEB3B, nightFallback.first().style.backgroundArgb)
+        assertEquals(ColorUtils.flipLightness(0xFF8B0000.toInt()), nightFallback.first().style.colorArgb)
+        assertEquals(ColorUtils.flipLightness(0x20FFEB3B), nightFallback.first().style.backgroundArgb)
+        assertEquals(ColorUtils.flipLightness(0xFF112233.toInt()), nightFallback.first().style.borderColorArgb)
 
         val withNight = rule.copy(
             textColorNight = 0xFFFFB6C1.toInt(),
             bgColorNight = 0x33FFB6C1,
+            borderColorNight = 0xFF445566.toInt(),
             underlineColorNight = 0xFFFFB6C1.toInt(),
         )
         // 白天那套不受夜间值影响
@@ -182,6 +187,7 @@ class LegacyReaderStyleRangeMapperTest {
         val nightColors = rangesFor(withNight, isNightTheme = true)
         assertEquals(0xFFFFB6C1.toInt(), nightColors.first().style.colorArgb)
         assertEquals(0x33FFB6C1, nightColors.first().style.backgroundArgb)
+        assertEquals(0xFF445566.toInt(), nightColors.first().style.borderColorArgb)
         assertEquals(0xFFFFB6C1.toInt(), nightColors.first().style.underline?.colorArgb)
     }
 
@@ -211,6 +217,23 @@ class LegacyReaderStyleRangeMapperTest {
             assertEquals(0f, it.style.borderWidthPx)
             assertEquals(0f, it.style.borderRadiusPx)
         }
+    }
+
+    @Test
+    fun characterBubbleStyleUsesTheRequestedNightBorder() {
+        val style = LegacyReaderStyleRangeMapper.styleOf(
+            rule = HighlightRule(
+                borderColor = 0xFF112233.toInt(),
+                borderColorNight = 0xFF445566.toInt(),
+                borderWidth = 2f,
+                borderRadius = 6f,
+            ),
+            isNightTheme = true,
+        )
+
+        assertEquals(0xFF445566.toInt(), style.borderColorArgb)
+        assertEquals(2f.dpToPx(), style.borderWidthPx)
+        assertEquals(6f.dpToPx(), style.borderRadiusPx)
     }
 
     /**

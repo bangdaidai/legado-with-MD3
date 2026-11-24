@@ -73,8 +73,9 @@ private fun bodyTypography() = ReadSheetConfigUiState(
 )
 
 /** 一个可见效果都没设：这时保存等于把气泡撤掉，别在库里留一条空规则。 */
-private fun HighlightRule.setsNothing(): Boolean = bgImage.isNullOrBlank() &&
-    bgColor == null && textColor == null && underlineMode == 0 && fontPath.isNullOrBlank() &&
+internal fun HighlightRule.setsNothing(): Boolean = bgImage.isNullOrBlank() &&
+    bgColor == null && borderColor == null && borderColorNight == null &&
+    textColor == null && underlineMode == 0 && fontPath.isNullOrBlank() &&
     fontWeight == 400 && !isItalic && fontSizeOffset == 0 &&
     letterSpacingBefore == 0f && letterSpacingAfter == 0f &&
     lineSpacingTop == 0f && lineSpacingBottom == 0f

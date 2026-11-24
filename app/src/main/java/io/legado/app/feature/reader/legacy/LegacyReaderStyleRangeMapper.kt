@@ -47,7 +47,7 @@ object LegacyReaderStyleRangeMapper {
         bookUrl: String,
         /** 角色名 → 该角色自己设的气泡样式；空表 = 本书没人设气泡。 */
         castBubbles: Map<String, ReaderCharacterStyle> = emptyMap(),
-        // 上游按阅读模式选夜间色；fork 的夜间色走 resolveModeColor 自动派生，参数保留兼容调用方
+        // 按本次排版实际使用的阅读模式解析日夜色，避免预览或角色气泡误读全局状态。
         isNightTheme: Boolean = false,
     ): List<ReaderStyleRange> {
         val result = mutableListOf<ReaderStyleRange>()
@@ -82,7 +82,7 @@ object LegacyReaderStyleRangeMapper {
                         val start = match.range.first
                         val endExclusive = match.range.last + 1
                         if (start < endExclusive) {
-                            result += rule.matchRanges(start, endExclusive, target, priority)
+                            result += rule.matchRanges(start, endExclusive, target, priority, isNightTheme)
                         }
                     }
                 }
@@ -245,8 +245,7 @@ object LegacyReaderStyleRangeMapper {
      * [toReaderStyle] 里（它按字拆段时才落到首字/末字上），这里补带过去，
      * 好让 [overriddenBy] 与正文的 [matchRanges] 用同一份口径。
      */
-    // 上游调用方会传 isNightTheme（按阅读模式选色）；fork 的夜间色走 toReaderStyle 自动派生，参数保留兼容
-    fun styleOf(rule: HighlightRule, isNightTheme: Boolean = false): ReaderCharacterStyle = rule.toReaderStyle().copy(
+    fun styleOf(rule: HighlightRule, isNightTheme: Boolean = false): ReaderCharacterStyle = rule.toReaderStyle(isNightTheme).copy(
         matchSpacingBeforePx = rule.letterSpacingBefore.dpToPx().takeIf { it > 0f } ?: 0f,
         matchSpacingAfterPx = rule.letterSpacingAfter.dpToPx().takeIf { it > 0f } ?: 0f,
     )
@@ -265,8 +264,9 @@ object LegacyReaderStyleRangeMapper {
         endExclusive: Int,
         target: ReaderStyleTarget,
         priority: Int,
+        isNightTheme: Boolean,
     ): List<ReaderStyleRange> =
-        if (start < endExclusive) rule.matchRanges(start, endExclusive, target, priority)
+        if (start < endExclusive) rule.matchRanges(start, endExclusive, target, priority, isNightTheme)
         else emptyList()
 
     private fun semanticBodyText(source: ReaderChapterSource): String {
@@ -314,8 +314,9 @@ object LegacyReaderStyleRangeMapper {
         endExclusive: Int,
         target: ReaderStyleTarget,
         priority: Int,
+        isNightTheme: Boolean,
     ): List<ReaderStyleRange> {
-        val base = toReaderStyle()
+        val base = toReaderStyle(isNightTheme)
         val before = letterSpacingBefore.dpToPx().takeIf { it > 0f } ?: 0f
         val after = letterSpacingAfter.dpToPx().takeIf { it > 0f } ?: 0f
         if (endExclusive - start == 1) {
@@ -364,14 +365,21 @@ object LegacyReaderStyleRangeMapper {
         }
     }
 
-    private fun HighlightRule.toReaderStyle() = ReaderCharacterStyle(
-        colorArgb = resolveModeColor(textColor, textColorNight, hasBgImage = false),
-        backgroundArgb = resolveModeColor(bgColor, bgColorNight, bgImage?.isNotBlank() == true),
-        // 边框是一个整体：颜色没给，粗细与圆角就不单独存在，样式里不会出现无主的三件套。
-        // 上游只给了日间一个色，日夜共用同一条描边（本 fork 未新增夜间边框列）。
-        borderColorArgb = borderColor,
-        borderWidthPx = borderColor?.let { borderWidth.dpToPx() } ?: 0f,
-        borderRadiusPx = borderColor?.let { borderRadius.dpToPx() } ?: 0f,
+    private fun HighlightRule.toReaderStyle(isNightTheme: Boolean) = ReaderCharacterStyle(
+        colorArgb = resolveModeColor(textColor, textColorNight, hasBgImage = false, isNightTheme = isNightTheme),
+        backgroundArgb = resolveModeColor(
+            bgColor, bgColorNight, bgImage?.isNotBlank() == true, isNightTheme = isNightTheme,
+        ),
+        // 边框与文字、背景色共用同一套日夜派生；颜色没给时，粗细与圆角也不单独存在。
+        borderColorArgb = resolveModeColor(
+            borderColor, borderColorNight, hasBgImage = false, isNightTheme = isNightTheme,
+        ),
+        borderWidthPx = resolveModeColor(
+            borderColor, borderColorNight, hasBgImage = false, isNightTheme = isNightTheme,
+        )?.let { borderWidth.dpToPx() } ?: 0f,
+        borderRadiusPx = resolveModeColor(
+            borderColor, borderColorNight, hasBgImage = false, isNightTheme = isNightTheme,
+        )?.let { borderRadius.dpToPx() } ?: 0f,
         underline = underlineMode.takeIf { it != 0 }?.let {
             ReaderUnderline(
                 mode = it,
@@ -382,6 +390,7 @@ object LegacyReaderStyleRangeMapper {
                     underlineColor ?: textColor,
                     underlineColorNight ?: textColorNight,
                     bgImage?.isNotBlank() == true,
+                    isNightTheme = isNightTheme,
                 ) ?: ReadBookConfig.textColor,
                 widthPx = underlineWidth.dpToPx(),
                 offsetPx = underlineOffset.dpToPx(),
@@ -483,8 +492,13 @@ object LegacyReaderStyleRangeMapper {
      * （文字色不受 [hasBgImage] 限制；背景/下划线色在配了背景图时不反相，
      * 因为图案底上反相色会突兀）。排版期解析一次，日夜间切换由整章重排消化。
      */
-    private fun resolveModeColor(dayColor: Int?, nightColor: Int?, hasBgImage: Boolean): Int? {
-        if (!ReadStyleResolver.isNightTheme()) {
+    private fun resolveModeColor(
+        dayColor: Int?,
+        nightColor: Int?,
+        hasBgImage: Boolean,
+        isNightTheme: Boolean = ReadStyleResolver.isNightTheme(),
+    ): Int? {
+        if (!isNightTheme) {
             dayColor?.let { return it }
             nightColor?.let { return ColorUtils.flipLightness(it) }
             return null
