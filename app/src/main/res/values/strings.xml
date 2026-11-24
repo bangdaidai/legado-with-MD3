@@ -975,6 +975,8 @@
     <string name="highlight_border">Border</string>
     <string name="highlight_border_width">Border Width</string>
     <string name="highlight_border_radius">Corner Radius</string>
+    <string name="highlight_match_spacing">Match Spacing</string>
+    <string name="highlight_match_spacing_summary">%1$s %2$.0f · %3$s %4$.0f · %5$s %6$.0f · %7$s %8$.0f dp</string>
     <string name="highlight_bg_length_offset_left">Bubble Left Offset</string>
     <string name="highlight_bg_length_offset_right">Bubble Right Offset</string>
     <string name="cast_bubble_menu">Set bubble</string>

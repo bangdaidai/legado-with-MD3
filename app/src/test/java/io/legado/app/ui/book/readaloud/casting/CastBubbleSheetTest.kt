@@ -23,6 +23,11 @@ class CastBubbleSheetTest {
     }
 
     @Test
+    fun `legacy margin only bubble is a visible style`() {
+        assertFalse(HighlightRule(bgMarginStart = 4f, bgMarginBottom = 6f).setsNothing())
+    }
+
+    @Test
     fun `empty bubble is discarded`() {
         assertTrue(HighlightRule().setsNothing())
     }

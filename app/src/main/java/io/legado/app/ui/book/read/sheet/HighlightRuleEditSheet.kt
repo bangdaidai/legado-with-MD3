@@ -268,13 +268,21 @@ fun HighlightRuleEditSheet(
     var bgPaddingEnd by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingEnd) }
     var bgPaddingTop by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingTop) }
     var bgPaddingBottom by remember(show, rule) { mutableFloatStateOf(initial.bgPaddingBottom) }
-    var bgMarginStart by remember(show, rule) { mutableFloatStateOf(initial.bgMarginStart) }
-    var bgMarginEnd by remember(show, rule) { mutableFloatStateOf(initial.bgMarginEnd) }
-    var bgMarginTop by remember(show, rule) { mutableFloatStateOf(initial.bgMarginTop) }
-    var bgMarginBottom by remember(show, rule) { mutableFloatStateOf(initial.bgMarginBottom) }
+    var matchSpacingBefore by remember(show, rule) {
+        mutableFloatStateOf(initial.effectiveMatchSpacingBeforeDp().coerceIn(0f, 40f))
+    }
+    var matchSpacingAfter by remember(show, rule) {
+        mutableFloatStateOf(initial.effectiveMatchSpacingAfterDp().coerceIn(0f, 40f))
+    }
+    var lineSpacingTop by remember(show, rule) {
+        mutableFloatStateOf(initial.effectiveLineSpacingTopDp().coerceIn(0f, 40f))
+    }
+    var lineSpacingBottom by remember(show, rule) {
+        mutableFloatStateOf(initial.effectiveLineSpacingBottomDp().coerceIn(0f, 40f))
+    }
     var showNinePatchEditor by remember(show, rule) { mutableStateOf(false) }
     var showInsetEditor by remember { mutableStateOf(false) }
-    var showMarginEditor by remember { mutableStateOf(false) }
+    var showMatchSpacingEditor by remember { mutableStateOf(false) }
     var manualNineSlice by remember(show, rule) { mutableStateOf(initial.manualNineSlice) }
 
     // 预览必须与正文渲染取同一份切分线来源：非手动且图片带 .9.png 引导线时正文吃自动值，
@@ -440,14 +448,14 @@ fun HighlightRuleEditSheet(
                             bgPaddingEnd = bgPaddingEnd,
                             bgPaddingTop = bgPaddingTop,
                             bgPaddingBottom = bgPaddingBottom,
-                            bgMarginStart = bgMarginStart,
-                            bgMarginEnd = bgMarginEnd,
-                            bgMarginTop = bgMarginTop,
-                            bgMarginBottom = bgMarginBottom,
+                            letterSpacingBefore = matchSpacingBefore,
+                            letterSpacingAfter = matchSpacingAfter,
+                            lineSpacingTop = lineSpacingTop,
+                            lineSpacingBottom = lineSpacingBottom,
                             useProtagonist = useProtagonist,
                             characterRole = characterRole.ifBlank { null },
                             manualNineSlice = manualNineSlice,
-                        )
+                        ).withoutLegacyMargins()
                     )
                 },
                 icon = Icons.Default.Done,
@@ -901,72 +909,84 @@ fun HighlightRuleEditSheet(
                                         }
                                     }
                                 }
-                                TinyClickableSettingItem(
-                                    title = "外边距",
-                                    description = String.format("左%.0f 右%.0f 上%.0f 下%.0f", bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom),
-                                    onClick = { showMarginEditor = !showMarginEditor },
-                                )
-                                AnimatedVisibility(visible = showMarginEditor) {
-                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                        var activeMargin by remember { mutableIntStateOf(-1) }
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            listOf("左" to 0, "右" to 1, "上" to 2, "下" to 3).forEach { (label, idx) ->
-                                                val selected = activeMargin == idx
-                                                val values = listOf(bgMarginStart, bgMarginEnd, bgMarginTop, bgMarginBottom)
-                                                NormalCard(
-                                                    onClick = { activeMargin = if (selected) -1 else idx },
-                                                    containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
-                                                        else LegadoTheme.colorScheme.surfaceContainerLow,
-                                                    cornerRadius = 8.dp,
-                                                    modifier = Modifier.weight(1f),
-                                                ) {
-                                                    AppText(
-                                                        "$label ${values[idx].toInt()}",
-                                                        style = LegadoTheme.typography.labelSmall,
-                                                        color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
-                                                            else LegadoTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(),
-                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        AnimatedVisibility(visible = activeMargin >= 0) {
-                                            val currentVal = when (activeMargin) {
-                                                0 -> bgMarginStart; 1 -> bgMarginEnd
-                                                2 -> bgMarginTop; else -> bgMarginBottom
-                                            }
-                                            val updateMargin: (Float) -> Unit = { v ->
-                                                val rounded = v.toInt().toFloat()
-                                                when (activeMargin) {
-                                                    0 -> bgMarginStart = rounded
-                                                    1 -> bgMarginEnd = rounded
-                                                    2 -> bgMarginTop = rounded
-                                                    else -> bgMarginBottom = rounded
-                                                }
-                                            }
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Slider(
-                                                    value = currentVal,
-                                                    onValueChange = updateMargin,
-                                                    valueRange = -16f..64f,
-                                                    modifier = Modifier.weight(1f),
-                                                )
-                                                // 步进按钮：1dp 精调，滑块粗调
-                                                ValueStepper(
-                                                    value = currentVal,
-                                                    displayValue = currentVal,
-                                                    valueRange = -16f..64f,
-                                                    onValueChange = updateMargin,
-                                                    stepSize = 1f,
-                                                )
-                                            }
-                                        }
-                                    }
+                            }
+                        }
+                    }
+                }
+
+                TinyClickableSettingItem(
+                    title = stringResource(R.string.highlight_match_spacing),
+                    description = stringResource(
+                        R.string.highlight_match_spacing_summary,
+                        stringResource(R.string.left), matchSpacingBefore,
+                        stringResource(R.string.right), matchSpacingAfter,
+                        stringResource(R.string.top), lineSpacingTop,
+                        stringResource(R.string.bottom), lineSpacingBottom,
+                    ),
+                    onClick = { showMatchSpacingEditor = !showMatchSpacingEditor },
+                )
+                AnimatedVisibility(visible = showMatchSpacingEditor) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        var activeDirection by remember { mutableIntStateOf(-1) }
+                        val values = listOf(
+                            matchSpacingBefore, matchSpacingAfter, lineSpacingTop, lineSpacingBottom,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val directions = listOf(
+                                stringResource(R.string.left) to 0,
+                                stringResource(R.string.right) to 1,
+                                stringResource(R.string.top) to 2,
+                                stringResource(R.string.bottom) to 3,
+                            )
+                            directions.forEach { (label, index) ->
+                                val selected = activeDirection == index
+                                NormalCard(
+                                    onClick = { activeDirection = if (selected) -1 else index },
+                                    containerColor = if (selected) LegadoTheme.colorScheme.secondaryContainer
+                                        else LegadoTheme.colorScheme.surfaceContainerLow,
+                                    cornerRadius = 8.dp,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    AppText(
+                                        "$label ${values[index].toInt()}",
+                                        style = LegadoTheme.typography.labelSmall,
+                                        color = if (selected) LegadoTheme.colorScheme.onSecondaryContainer
+                                            else LegadoTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                            .fillMaxWidth(),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    )
                                 }
+                            }
+                        }
+                        AnimatedVisibility(visible = activeDirection >= 0) {
+                            val currentValue = values[activeDirection]
+                            val updateValue: (Float) -> Unit = { value ->
+                                val rounded = value.toInt().toFloat()
+                                when (activeDirection) {
+                                    0 -> matchSpacingBefore = rounded
+                                    1 -> matchSpacingAfter = rounded
+                                    2 -> lineSpacingTop = rounded
+                                    else -> lineSpacingBottom = rounded
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Slider(
+                                    value = currentValue,
+                                    onValueChange = updateValue,
+                                    valueRange = 0f..40f,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ValueStepper(
+                                    value = currentValue,
+                                    displayValue = currentValue,
+                                    valueRange = 0f..40f,
+                                    onValueChange = updateValue,
+                                    stepSize = 1f,
+                                )
                             }
                         }
                     }
@@ -1156,10 +1176,10 @@ fun HighlightRuleEditSheet(
                             bgPadEnd = bgPaddingEnd,
                             bgPadTop = bgPaddingTop,
                             bgPadBottom = bgPaddingBottom,
-                            bgMarginStart = bgMarginStart,
-                            bgMarginEnd = bgMarginEnd,
-                            bgMarginTop = bgMarginTop,
-                            bgMarginBottom = bgMarginBottom,
+                            matchSpacingBefore = matchSpacingBefore,
+                            matchSpacingAfter = matchSpacingAfter,
+                            lineSpacingTop = lineSpacingTop,
+                            lineSpacingBottom = lineSpacingBottom,
                             fontSizeOffset = fontSizeOffset,
                             fontWeight = fontWeight,
                             isItalic = isItalic,
@@ -1208,10 +1228,10 @@ fun HighlightRuleEditSheet(
                             bgPadEnd = bgPaddingEnd,
                             bgPadTop = bgPaddingTop,
                             bgPadBottom = bgPaddingBottom,
-                            bgMarginStart = bgMarginStart,
-                            bgMarginEnd = bgMarginEnd,
-                            bgMarginTop = bgMarginTop,
-                            bgMarginBottom = bgMarginBottom,
+                            matchSpacingBefore = matchSpacingBefore,
+                            matchSpacingAfter = matchSpacingAfter,
+                            lineSpacingTop = lineSpacingTop,
+                            lineSpacingBottom = lineSpacingBottom,
                             fontSizeOffset = fontSizeOffset,
                             fontWeight = fontWeight,
                             isItalic = isItalic,
@@ -1442,11 +1462,10 @@ internal fun HighlightPreviewCard(
 }
 
 /**
- * 预览文本与外边距留白的分段结果。
+ * 预览文本与命中留白的分段结果。
  *
- * 外边距在引擎里是排版留白（ReaderPaginator.backgroundMarginBefore/After）：预览在命中段
- * 那一侧**确实还有文字**时插一个宽度=外边距的占位空格来复现同一排版（见
- * [buildMarginSegmentation]）。[text] 是插入占位后的显示文本，[ranges] 是命中文字在
+ * 左右留白沿用正文的同行可见邻字条件，只在命中段对应侧还有可见文字时插入等宽占位
+ * （见 [buildMarginSegmentation]）。[text] 是插入占位后的显示文本，[ranges] 是命中文字在
  * [text] 中的新区间（画气泡与下划线都用它），[placeholders] 交给 TextMeasurer 渲染成对应
  * 宽度的空白，占位本身没有字形、也不落在气泡里。
  */
@@ -1713,12 +1732,9 @@ private fun DrawScope.drawReaderPreviewPage(
 }
 
 /**
- * 先把贴合命中的区间合并成 run，再在每一侧**确实还有可见字**处插一个宽度=外边距的占位空格。
- *
- * 「有没有字」按 [baseResult] 的**可视行边界**判断（同一行上命中段前面/后面还有可见字形才
- * 让白，命中段正好落在折行后的行首/行尾、或那一侧只剩段首缩进/尾随空格时不让），与引擎的
- * [io.legado.app.feature.reader.core.layout.ReaderPaginator] `backgroundMarginBefore/After`
- * 同一口径——样本文本按卡片宽度折行后，只在样本文本首尾判断会让折行处的行首长出一截缩进。
+ * 在命中段两侧插入等宽占位，复现通用命中字距的排版留白。
+ * 先按无占位文本量折行，只有同一行前侧或后侧仍有可见文字时才插对应占位；
+ * 行首、行尾、纯缩进和纯尾随空白都不让。占位没有字形，也不属于背景框。
  */
 private fun buildMarginSegmentation(
     sampleText: String,
@@ -1727,20 +1743,8 @@ private fun buildMarginSegmentation(
     marginStartWidth: androidx.compose.ui.unit.TextUnit,
     marginEndWidth: androidx.compose.ui.unit.TextUnit,
 ): MarginSegmentation {
-    val runs = ArrayList<IntRange>(matchRanges.size)
-    matchRanges.forEach { range ->
-        val last = runs.lastOrNull()
-        if (last != null && range.first <= last.last + 1) {
-            runs[runs.lastIndex] = last.first..maxOf(last.last, range.last)
-        } else {
-            runs += range
-        }
-    }
-    // 该偏移前面/后面在同一可视行上是否还有**可见**字形（换行处的边界由 baseResult 给出）。
-    // 只有段首缩进/尾随空格这类不可见空白时不算「还有字」，与引擎 backgroundMarginBefore/
-    // After 的 onlyBlankGlyphs 同一口径，否则命中段紧跟缩进之后也会在预览里让出一截外边距。
-    fun hasVisibleOnLine(startExclusive: Int, endExclusive: Int): Boolean {
-        for (index in startExclusive until endExclusive) {
+    fun hasVisibleOnLine(start: Int, endExclusive: Int): Boolean {
+        for (index in start until endExclusive) {
             if (!sampleText[index].isWhitespace()) return true
         }
         return false
@@ -1763,6 +1767,15 @@ private fun buildMarginSegmentation(
         return hasVisibleOnLine(offset + 1, lineEnd)
     }
 
+    val runs = ArrayList<IntRange>(matchRanges.size)
+    matchRanges.forEach { range ->
+        val last = runs.lastOrNull()
+        if (last != null && range.first <= last.last + 1) {
+            runs[runs.lastIndex] = last.first..maxOf(last.last, range.last)
+        } else {
+            runs += range
+        }
+    }
     val builder = StringBuilder(sampleText.length)
     val shifted = ArrayList<IntRange>(runs.size)
     val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>(runs.size * 2)
@@ -1857,10 +1870,10 @@ internal fun HighlightRulePreview(
     bgPadEnd: Float = 0f,
     bgPadTop: Float = 0f,
     bgPadBottom: Float = 0f,
-    bgMarginStart: Float = 0f,
-    bgMarginEnd: Float = 0f,
-    bgMarginTop: Float = 0f,
-    bgMarginBottom: Float = 0f,
+    matchSpacingBefore: Float = 0f,
+    matchSpacingAfter: Float = 0f,
+    lineSpacingTop: Float = 0f,
+    lineSpacingBottom: Float = 0f,
     fontSizeOffset: Int = 0,
     fontWeight: Int = 400,
     isItalic: Boolean = false,
@@ -1914,18 +1927,14 @@ internal fun HighlightRulePreview(
         }
     }
 
-    // 外边距预览：引擎只在九宫格（fit==3）背景下消费 bgMargin——它按旧引擎语义参与排版，
-    // 把命中段前后的文字推开（ReaderPaginator.backgroundMarginBefore/After），背景图本身
-    // 不因外边距变宽。留白只在命中段那一侧**确实还有文字**时才出现：命中段落在行首/行尾
-    // （前面/后面没有字）时不再让白，否则整段命中会凭空多出前后缩进。预览据此在命中段
-    // 前后插入宽度=外边距的占位空格复现同一排版：占位本身无字形，气泡仍画在命中文字矩形上，
-    // 留白落在图外。引擎把相邻的同图文字视作一个 run（中间不产生间隙），所以先合并贴合的
-    // 命中区间再插占位。
+    // 命中字距是排版留白：把命中段前后的文字推开，背景框本身不因此变宽。
+    // 只在命中段那一侧确实还有文字时出现，避免整段命中凭空多出前后缩进。
     val density = LocalDensity.current
-    val marginStartWidth = with(density) { bgMarginStart.coerceAtLeast(0f).dp.toSp() }
-    val marginEndWidth = with(density) { bgMarginEnd.coerceAtLeast(0f).dp.toSp() }
-    val applyBgMargins = bgBitmap != null && bgImageFit == 3 &&
-            (marginStartWidth.value > 0f || marginEndWidth.value > 0f)
+    val marginStartWidth = with(density) { matchSpacingBefore.coerceAtLeast(0f).dp.toSp() }
+    val marginEndWidth = with(density) { matchSpacingAfter.coerceAtLeast(0f).dp.toSp() }
+    val applyMatchSpacing = marginStartWidth.value > 0f || marginEndWidth.value > 0f
+    val matchLineTopPx = with(density) { lineSpacingTop.coerceAtLeast(0f).dp.toPx() }
+    val matchLineBottomPx = with(density) { lineSpacingBottom.coerceAtLeast(0f).dp.toPx() }
 
     val labelColor = if (ColorUtils.isColorLight(pageBgColor)) {
         Color(0x99000000)
@@ -2024,16 +2033,13 @@ internal fun HighlightRulePreview(
                     lineHeight = with(density) { bodyLineHeight.toSp() },
                     letterSpacing = ReadBookConfig.letterSpacing.em,
                 )
-                // 先按不含外边距占位的文本量一次，拿到每个命中段折行后的可视行边界：
-                // 行首/行尾没有字的一侧不插外边距占位，与引擎 backgroundMarginBefore/After
-                // 同一口径（预览折行后也不会在行首凭空多出一截缩进）。
                 val baseAnnotated = remember(
                     sampleText, matchRanges, resolvedTextColor, bgColor, bgBitmap,
                     fontWeight, isItalic, fontSizeOffset,
                 ) {
                     buildPreviewAnnotated(
-                        sampleText, matchRanges, resolvedTextColor, bgColor, bgBitmap,
-                        fontWeight, isItalic, fontSizeOffset,
+                        sampleText, matchRanges, resolvedTextColor,
+                        bgColor, bgBitmap, fontWeight, isItalic, fontSizeOffset,
                     )
                 }
                 val basePreviewResult = textMeasurer.measure(
@@ -2043,10 +2049,10 @@ internal fun HighlightRulePreview(
                     constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
                 )
                 val marginSegmentation = remember(
-                    applyBgMargins, sampleText, matchRanges, marginStartWidth, marginEndWidth,
-                    basePreviewResult,
+                    applyMatchSpacing, sampleText, matchRanges, basePreviewResult,
+                    marginStartWidth, marginEndWidth,
                 ) {
-                    if (!applyBgMargins) {
+                    if (!applyMatchSpacing) {
                         MarginSegmentation(sampleText, matchRanges, emptyList())
                     } else {
                         buildMarginSegmentation(
@@ -2071,6 +2077,30 @@ internal fun HighlightRulePreview(
                     maxLines = 5,
                     constraints = androidx.compose.ui.unit.Constraints(maxWidth = previewConstraintWidth),
                 )
+                val matchedLineIndices = remember(
+                    previewTextResult, marginSegmentation.ranges,
+                ) {
+                    buildSet {
+                        marginSegmentation.ranges.forEach { range ->
+                            val firstLine = previewTextResult.getLineForOffset(range.first)
+                            val lastLine = previewTextResult.getLineForOffset(range.last)
+                            for (line in firstLine..lastLine) add(line)
+                        }
+                    }
+                }
+                val lineShifts = remember(
+                    previewTextResult.lineCount, matchedLineIndices, matchLineTopPx, matchLineBottomPx,
+                ) {
+                    FloatArray(previewTextResult.lineCount).also { shifts ->
+                        var shift = 0f
+                        for (line in shifts.indices) {
+                            val matched = line in matchedLineIndices
+                            shifts[line] = shift + if (matched) matchLineTopPx else 0f
+                            if (matched) shift += matchLineTopPx + matchLineBottomPx
+                        }
+                    }
+                }
+                val extraLineSpacePx = matchedLineIndices.size * (matchLineTopPx + matchLineBottomPx)
                 // 九宫格背景会向外扩角块与 padding，超出行高的部分要给 Canvas 预留空间，否则预览被裁掉
                 var ninePatchTopOverhang = 0f
                 var ninePatchBottomOverhang = 0f
@@ -2124,7 +2154,7 @@ internal fun HighlightRulePreview(
                     ninePatchBottomOverhang, underlineBottomOverhangPx, borderOverhangPx,
                 )
                 val canvasHeightDp = with(density) {
-                    (previewTextResult.size.height + topOverhangPx + bottomOverhangPx).toDp()
+                    (previewTextResult.size.height + extraLineSpacePx + topOverhangPx + bottomOverhangPx).toDp()
                 }
                 Canvas(
                     modifier = Modifier
@@ -2136,7 +2166,15 @@ internal fun HighlightRulePreview(
                         drawContext.canvas.translate(0f, topOverhangPx)
                     }
 
-                    // 在匹配区域画背景图（外边距已作为排版留白插在命中段前后：气泡只
+                    // 行级留白只作用于命中的行；背景、边框、下划线与文字共用同一个行位移。
+                    fun lineShift(top: Float): Float {
+                        val line = (0 until previewTextResult.lineCount).firstOrNull {
+                            abs(previewTextResult.getLineTop(it) - top) < 0.5f
+                        } ?: return 0f
+                        return lineShifts.getOrElse(line) { 0f }
+                    }
+
+                    // 在匹配区域画背景图（命中字距已作为排版留白插在命中段前后：气泡只
                     // 包住命中文字矩形，角块落在文字 ± 内边距处，留白落在图外）
                     if (bgBitmap != null && marginSegmentation.ranges.isNotEmpty()) {
                         val density = this.density
@@ -2150,8 +2188,8 @@ internal fun HighlightRulePreview(
                             segments.forEach { segment ->
                                 val rectL = segment.l
                                 val rectR = segment.r
-                                val rectT = segment.t
-                                val rectB = segment.b
+                                val rectT = segment.t + lineShift(segment.t)
+                                val rectB = segment.b + lineShift(segment.t)
                                 if (bgImageFit == 3 && bgRawBitmap != null) {
                                     // 与渲染层同一套几何（NinePatchDrawHelper.layout）：
                                     // 以行高为锚算四角并外扩背景框，文字落在中段拉伸区内；
@@ -2181,7 +2219,7 @@ internal fun HighlightRulePreview(
                                 } else {
                                     // 非九宫格也吃「图片大小」：整张图按倍率居中缩放，再裁到行框内
                                     // （与正文 fit 1/2 的居中缩放 + clipRect 同口径）。倍率 1 时
-                                    // 与原样拉伸到行框完全一致。外边距不作用于非九宫格。
+                                    // 与原样拉伸到行框完全一致；命中留白只推开文字，不改变图片框。
                                     val boxW = rectR - rectL
                                     val boxH = rectB - rectT
                                     val drawW = boxW * bgImageScale
@@ -2212,7 +2250,9 @@ internal fun HighlightRulePreview(
                                 drawBackgroundBand(
                                     ReaderBackgroundBand(
                                         fillColorArgb = null,
-                                        bounds = ReaderRect(left, top, right, bottom),
+                                        bounds = ReaderRect(
+                                            left, top + lineShift(top), right, bottom + lineShift(top),
+                                        ),
                                         borderColorArgb = borderColor,
                                         borderWidthPx = borderStrokeWidthPx,
                                         borderRadiusPx = radiusPx,
@@ -2229,6 +2269,7 @@ internal fun HighlightRulePreview(
                                 val start = range.first
                                 val endExclusive = (range.last + 1).coerceAtMost(marginSegmentation.text.length)
                                 previewTextResult.forEachLineSegment(start, endExclusive) { left, right, top, bottom, _ ->
+                                    val shift = lineShift(top)
                                     when (underlineMode) {
                                         // 7 荧光：不是下划线，是铺下半行的填充色带（正文
                                         // ReaderHalfHighlightDrawCommand 同口径）。宽度/偏移/圆头/
@@ -2237,8 +2278,8 @@ internal fun HighlightRulePreview(
                                         7 -> drawFluorescentBand(
                                             left = left,
                                             right = right,
-                                            top = top,
-                                            bottom = bottom,
+                                            top = top + shift,
+                                            bottom = bottom + shift,
                                             color = resolvedUnderlineColor,
                                             feather = if (underlineControlSupport(7).feather) underlineFeather else 0f,
                                         )
@@ -2252,7 +2293,7 @@ internal fun HighlightRulePreview(
                                             widthDp = underlineWidth,
                                             startX = left,
                                             endX = right,
-                                            y = top + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
+                                            y = top + shift + (bottom - top) * READER_STRIKE_HEIGHT_RATIO,
                                         )
 
                                         else -> drawUnderlineSegment(
@@ -2261,7 +2302,7 @@ internal fun HighlightRulePreview(
                                             widthDp = underlineWidth,
                                             startX = left,
                                             endX = right,
-                                            y = bottom + underlineOffset.dp.toPx(),
+                                            y = bottom + shift + underlineOffset.dp.toPx(),
                                             // 羽化按线型适用性取：双实线/删除线/自定义 SVG 不开放，旧数据里存的值                                             // 不该在这里画出来。正文侧走 ReaderUnderline 的 featherEffective，                                             // 两边读同一份 underlineControlSupport。
                                             feather = if (underlineControlSupport(underlineMode).feather) {
                                                 underlineFeather
@@ -2283,7 +2324,21 @@ internal fun HighlightRulePreview(
                     // 荧光色带必须压在文字层之下，与正文渲染一致，不受「下层」开关影响
                     val belowText = underlineBelowText || underlineMode == 7
                     if (belowText) drawUnderlinesBlock()
-                    drawText(previewTextResult)
+                    if (extraLineSpacePx > 0f) {
+                        for (line in 0 until previewTextResult.lineCount) {
+                            val shift = lineShifts.getOrElse(line) { 0f }
+                            clipRect(
+                                left = 0f,
+                                top = previewTextResult.getLineTop(line) + shift,
+                                right = size.width,
+                                bottom = previewTextResult.getLineBottom(line) + shift,
+                            ) {
+                                translate(top = shift) { drawText(previewTextResult) }
+                            }
+                        }
+                    } else {
+                        drawText(previewTextResult)
+                    }
                     if (!belowText) drawUnderlinesBlock()
 
                     // 恢复画布，避免平移泄漏到后续绘制

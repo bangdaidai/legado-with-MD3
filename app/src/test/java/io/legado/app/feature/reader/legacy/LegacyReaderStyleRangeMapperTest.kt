@@ -75,6 +75,49 @@ class LegacyReaderStyleRangeMapperTest {
     }
 
     @Test
+    fun legacyMarginsFeedUnifiedSpacingWithoutAddingImageMargins() {
+        val ranges = rangesFor(
+            HighlightRule(
+                pattern = "我是李四",
+                targetScope = HighlightRule.TARGET_BODY,
+                bgImage = "/tmp/unified-spacing.png",
+                bgImageFit = 3,
+                bgMarginStart = 4f,
+                bgMarginEnd = 6f,
+                bgMarginTop = 2f,
+                bgMarginBottom = 3f,
+                letterSpacingAfter = 8f,
+            )
+        )
+
+        assertEquals(listOf(4f, 0f, 0f), ranges.map { it.style.matchSpacingBeforePx })
+        assertEquals(listOf(0f, 0f, 8f), ranges.map { it.style.matchSpacingAfterPx })
+        assertEquals(listOf(2f, 2f, 2f), ranges.map { it.style.linePadTopPx })
+        assertEquals(listOf(3f, 3f, 3f), ranges.map { it.style.linePadBottomPx })
+        ranges.forEach {
+            assertEquals(0f, it.style.backgroundImage?.marginStartPx)
+            assertEquals(0f, it.style.backgroundImage?.marginEndPx)
+        }
+    }
+
+    @Test
+    fun characterBubbleStyleAlsoFallsBackToLegacyMargins() {
+        val style = LegacyReaderStyleRangeMapper.styleOf(
+            HighlightRule(
+                bgMarginStart = 4f,
+                bgMarginEnd = 6f,
+                bgMarginTop = 2f,
+                bgMarginBottom = 3f,
+            )
+        )
+
+        assertEquals(4f, style.matchSpacingBeforePx, 0.001f)
+        assertEquals(6f, style.matchSpacingAfterPx, 0.001f)
+        assertEquals(2f, style.linePadTopPx, 0.001f)
+        assertEquals(3f, style.linePadBottomPx, 0.001f)
+    }
+
+    @Test
     fun aSingleCharacterHitCarriesBothSides() {
         val ranges = rangesFor(
             HighlightRule(

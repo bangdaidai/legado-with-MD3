@@ -359,7 +359,7 @@ class ReadHighlightRuleDelegate(
     // --- 导出 ---
 
     fun exportToFile(uri: Uri) {
-        val rules = _uiState.value.rules
+        val rules = _uiState.value.rules.map(highlightRuleRepository::sanitizeRule)
         Coroutine.async(scope, Dispatchers.IO) {
             context.contentResolver.openOutputStream(uri)?.use { output ->
                 output.bufferedWriter().use { writer ->
@@ -374,7 +374,7 @@ class ReadHighlightRuleDelegate(
     }
 
     fun exportAsUrl() {
-        val rules = _uiState.value.rules
+        val rules = _uiState.value.rules.map(highlightRuleRepository::sanitizeRule)
         Coroutine.async(scope, Dispatchers.IO) {
             uploadRepository.upload(
                 fileName = HighlightRuleRepository.backupFileName,

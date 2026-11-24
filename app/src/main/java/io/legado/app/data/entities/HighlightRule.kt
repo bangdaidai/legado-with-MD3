@@ -65,7 +65,7 @@ data class HighlightRule(
     var bgPaddingTop: Float = 0f,
     @ColumnInfo(defaultValue = "0")
     var bgPaddingBottom: Float = 0f,
-    // 外边距：背景图与相邻文字/行之间的距离（dp）
+    // 兼容外边距：不再由编辑页维护；通用命中留白为零时按方向回填旧数据。
     @ColumnInfo(defaultValue = "0")
     var bgMarginStart: Float = 0f,
     @ColumnInfo(defaultValue = "0")
@@ -97,10 +97,10 @@ data class HighlightRule(
     // 下划线层级：true=文字下方（被文字笔画遮挡），false=文字上方（默认）
     @ColumnInfo(defaultValue = "0")
     var underlineBelowText: Boolean = false,
-    /** 命中字距（dp）：命中段与相邻字之间让出的空白，0 表示不让。只落在段首/段尾那一个字上。 */
+    /** 命中字距（dp）：同一行前侧还有可见字时，命中段首字左侧让出的空白；0 表示不让。 */
     @ColumnInfo(defaultValue = "0")
     var letterSpacingBefore: Float = 0f,
-    /** 命中字距（dp）：见 [letterSpacingBefore]。 */
+    /** 命中字距（dp）：同一行后侧还有可见字时，命中段末字右侧让出的空白；见 [letterSpacingBefore]。 */
     @ColumnInfo(defaultValue = "0")
     var letterSpacingAfter: Float = 0f,
     /** 命中行行距（dp）：把包含命中的那一行整行往下抬，行盒高度不变。 */
@@ -126,9 +126,32 @@ data class HighlightRule(
     /** 边框圆角（dp）：0 = 直角。色块填充跟随同一个圆角，色块与描边才对得上。 */
     @ColumnInfo(defaultValue = "4")
     var borderRadius: Float = 4f,
-    /** 深色模式边框颜色：null = 跟随 [borderColor]（本 fork 的编辑页不设夜间边框，列保留为空即回落日间值）。 */
+    /** 深色模式边框颜色：null = 由日间色反相派生。 */
     var borderColorNight: Int? = null,
 ) {
+
+    fun effectiveMatchSpacingBeforeDp(): Float =
+        letterSpacingBefore.takeIf { it != 0f } ?: bgMarginStart
+
+    fun effectiveMatchSpacingAfterDp(): Float =
+        letterSpacingAfter.takeIf { it != 0f } ?: bgMarginEnd
+
+    fun effectiveLineSpacingTopDp(): Float =
+        lineSpacingTop.takeIf { it != 0f } ?: bgMarginTop
+
+    fun effectiveLineSpacingBottomDp(): Float =
+        lineSpacingBottom.takeIf { it != 0f } ?: bgMarginBottom
+
+    fun hasMatchSpacing(): Boolean =
+        effectiveMatchSpacingBeforeDp() > 0f || effectiveMatchSpacingAfterDp() > 0f ||
+            effectiveLineSpacingTopDp() > 0f || effectiveLineSpacingBottomDp() > 0f
+
+    fun withoutLegacyMargins(): HighlightRule = copy(
+        bgMarginStart = 0f,
+        bgMarginEnd = 0f,
+        bgMarginTop = 0f,
+        bgMarginBottom = 0f,
+    )
 
     /**
      * 一条规则在**指定阅读模式**下真正生效的四栏颜色。
@@ -195,11 +218,13 @@ data class HighlightRule(
                 }
             )
         }
-        if (letterSpacingBefore > 0f || letterSpacingAfter > 0f) {
-            parts.add("命中字距 ${letterSpacingBefore.toInt()} / ${letterSpacingAfter.toInt()}dp")
-        }
-        if (lineSpacingTop > 0f || lineSpacingBottom > 0f) {
-            parts.add("命中行行距 ${lineSpacingTop.toInt()} / ${lineSpacingBottom.toInt()}dp")
+        if (hasMatchSpacing()) {
+            parts.add(
+                "命中留白 ${effectiveMatchSpacingBeforeDp().toInt()} / " +
+                    "${effectiveMatchSpacingAfterDp().toInt()} / " +
+                    "${effectiveLineSpacingTopDp().toInt()} / " +
+                    "${effectiveLineSpacingBottomDp().toInt()}dp"
+            )
         }
         if (!fontPath.isNullOrBlank()) {
             parts.add("自定义字体")

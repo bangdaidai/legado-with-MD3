@@ -133,6 +133,50 @@ class HighlightRuleSanitizeTest {
     }
 
     @Test
+    fun sanitizeMigratesLegacyMarginsAndClearsThemPermanently() {
+        RuntimeEnvironment.getApplication().injectAsAppCtx()
+        InMemoryAppDatabaseFixture(RuntimeEnvironment.getApplication()).use { fixture ->
+            val repository = HighlightRuleRepository(
+                dao = fixture.database.highlightRuleDao,
+                context = RuntimeEnvironment.getApplication(),
+            )
+            val legacy = HighlightRule(
+                id = "legacy-margins",
+                bgMarginStart = 64f,
+                bgMarginEnd = -4f,
+                bgMarginTop = 12f,
+                bgMarginBottom = 5f,
+                letterSpacingAfter = 3f,
+            )
+
+            val sanitized = repository.sanitizeRule(legacy)
+
+            assertEquals(40f, sanitized.letterSpacingBefore, 0.001f)
+            assertEquals(3f, sanitized.letterSpacingAfter, 0.001f)
+            assertEquals(12f, sanitized.lineSpacingTop, 0.001f)
+            assertEquals(5f, sanitized.lineSpacingBottom, 0.001f)
+            assertEquals(0f, sanitized.bgMarginStart, 0.001f)
+            assertEquals(0f, sanitized.bgMarginEnd, 0.001f)
+            assertEquals(0f, sanitized.bgMarginTop, 0.001f)
+            assertEquals(0f, sanitized.bgMarginBottom, 0.001f)
+            assertEquals(sanitized, repository.sanitizeRule(sanitized))
+
+            val cleared = repository.sanitizeRule(
+                sanitized.copy(
+                    letterSpacingBefore = 0f,
+                    letterSpacingAfter = 0f,
+                    lineSpacingTop = 0f,
+                    lineSpacingBottom = 0f,
+                )
+            )
+            assertEquals(0f, cleared.letterSpacingBefore, 0.001f)
+            assertEquals(0f, cleared.letterSpacingAfter, 0.001f)
+            assertEquals(0f, cleared.lineSpacingTop, 0.001f)
+            assertEquals(0f, cleared.lineSpacingBottom, 0.001f)
+        }
+    }
+
+    @Test
     fun sanitizeClampsBorderWidthAndRadius() {
         RuntimeEnvironment.getApplication().injectAsAppCtx()
         InMemoryAppDatabaseFixture(RuntimeEnvironment.getApplication()).use { fixture ->

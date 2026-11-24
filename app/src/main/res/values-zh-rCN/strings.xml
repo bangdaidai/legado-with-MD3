@@ -943,6 +943,8 @@
     <string name="highlight_border">边框</string>
     <string name="highlight_border_width">边框粗细</string>
     <string name="highlight_border_radius">边框圆角</string>
+    <string name="highlight_match_spacing">命中留白</string>
+    <string name="highlight_match_spacing_summary">%1$s %2$.0f · %3$s %4$.0f · %5$s %6$.0f · %7$s %8$.0f dp</string>
     <string name="highlight_bg_length_offset_left">九宫格左偏移</string>
     <string name="highlight_bg_length_offset_right">九宫格右偏移</string>
     <string name="cast_bubble_menu">设置气泡</string>
