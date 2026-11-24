@@ -102,6 +102,40 @@ class ReaderCharacterStyleTest {
     }
 
     @Test
+    fun higherPriorityBorderReplacesTheTripletAndUnsetBorderPreservesIt() {
+        val lower = ReaderCharacterStyle(
+            borderColorArgb = 0xFF112233.toInt(),
+            borderWidthPx = 2f,
+            borderRadiusPx = 3f,
+        )
+        val higher = ReaderCharacterStyle(
+            borderColorArgb = 0xFF445566.toInt(),
+            borderWidthPx = 4f,
+            borderRadiusPx = 5f,
+        )
+        val ranges = listOf(
+            ReaderStyleRange(0, 8, ReaderStyleTarget.BODY, lower, priority = 0),
+            ReaderStyleRange(2, 4, ReaderStyleTarget.BODY, higher, priority = 10_000),
+        )
+
+        val overridden = ReaderCharacterStyleResolver.resolve(ranges, 3, false)!!
+        assertEquals(0xFF445566.toInt(), overridden.borderColorArgb)
+        assertEquals(4f, overridden.borderWidthPx, 0f)
+        assertEquals(5f, overridden.borderRadiusPx, 0f)
+
+        val preserved = ReaderCharacterStyleResolver.resolve(
+            ranges + ReaderStyleRange(
+                2, 4, ReaderStyleTarget.BODY, ReaderCharacterStyle(colorArgb = 7), priority = 20_000,
+            ),
+            3,
+            false,
+        )!!
+        assertEquals(0xFF445566.toInt(), preserved.borderColorArgb)
+        assertEquals(4f, preserved.borderWidthPx, 0f)
+        assertEquals(5f, preserved.borderRadiusPx, 0f)
+    }
+
+    @Test
     fun equalPriorityUsesLastMatchingRangeWithoutCrossingTarget() {
         val ranges = listOf(
             ReaderStyleRange(

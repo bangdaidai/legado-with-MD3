@@ -975,12 +975,6 @@
     <string name="highlight_border">Border</string>
     <string name="highlight_border_width">Border Width</string>
     <string name="highlight_border_radius">Corner Radius</string>
-    <string name="highlight_match_typography">Match Typography</string>
-    <string name="highlight_match_typography_hint">Everything below applies to the text your regex matches, and to nothing else.</string>
-    <string name="highlight_spacing_before">Spacing Before Match</string>
-    <string name="highlight_spacing_after">Spacing After Match</string>
-    <string name="highlight_line_spacing_above">Line Gap Above Match</string>
-    <string name="highlight_line_spacing_below">Line Gap Below Match</string>
     <string name="highlight_bg_length_offset_left">Bubble Left Offset</string>
     <string name="highlight_bg_length_offset_right">Bubble Right Offset</string>
     <string name="cast_bubble_menu">Set bubble</string>

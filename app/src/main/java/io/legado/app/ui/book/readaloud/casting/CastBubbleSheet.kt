@@ -18,7 +18,7 @@ import io.legado.app.utils.fromJsonObject
  * 角色气泡设置：**就是高亮规则那一整套编辑器**，只是没有「规则信息」那一段
  * （名字 / 正则 / 作用域 / 停用）——哪一句归这个角色由分配表给定，不需要正则去匹配。
  *
- * 所以样式设置、命中排版、应用排版、字体替换、预览卡全都在，与规则那边同一份实现、
+ * 所以样式设置、应用排版、字体替换、预览卡全都在，与规则那边同一份实现、
  * 同一份换算（`LegacyReaderStyleRangeMapper.styleOf`）。存进库的是这条规则本身的 JSON
  * （`CastCharacter.bubbleRuleJson`），渲染时按角色命中句整段覆盖到高亮规则之上。
  *

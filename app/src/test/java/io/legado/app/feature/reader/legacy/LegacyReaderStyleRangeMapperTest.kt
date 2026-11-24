@@ -294,6 +294,9 @@ class LegacyReaderStyleRangeMapperTest {
             fontWeight = 700,
             italic = true,
             backgroundImage = bubbleImage(),
+            borderColorArgb = 0xFF445566.toInt(),
+            borderWidthPx = 4f,
+            borderRadiusPx = 5f,
             matchSpacingBeforePx = 3f,
             matchSpacingAfterPx = 4f,
             linePadTopPx = 5f,
@@ -308,6 +311,9 @@ class LegacyReaderStyleRangeMapperTest {
                     targetScope = HighlightRule.TARGET_BODY,
                     textColor = 0xFF112233.toInt(),
                     fontPath = "/sdjs/rule.ttf",
+                    borderColor = 0xFF112233.toInt(),
+                    borderWidth = 2f,
+                    borderRadius = 3f,
                     letterSpacingBefore = 20f,
                     letterSpacingAfter = 20f,
                     lineSpacingTop = 20f,
@@ -324,6 +330,8 @@ class LegacyReaderStyleRangeMapperTest {
         assertTrue(ranges.all { it.style.fontPath == "/sdjs/cast.ttf" })
         assertTrue(ranges.all { it.style.fontWeight == 700 && it.style.italic == true })
         assertTrue(ranges.all { it.style.backgroundImage != null })
+        assertTrue(ranges.all { it.style.borderColorArgb == 0xFF445566.toInt() })
+        assertTrue(ranges.all { it.style.borderWidthPx == 4f && it.style.borderRadiusPx == 5f })
         assertTrue(ranges.all { it.style.linePadTopPx == 5f && it.style.linePadBottomPx == 6f })
         // 命中字距只让在整句的首字（开引号 3）与末字（闭引号 19）上，段内一个字都不加
         val head = ranges.first { it.start == 3 }

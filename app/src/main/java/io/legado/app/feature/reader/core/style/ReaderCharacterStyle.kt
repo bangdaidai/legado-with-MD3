@@ -111,6 +111,9 @@ class ReaderCompiledStyleRanges internal constructor(
 private fun ReaderCharacterStyle.mergedUnder(override: ReaderCharacterStyle) = copy(
     colorArgb = override.colorArgb ?: colorArgb,
     backgroundArgb = override.backgroundArgb ?: backgroundArgb,
+    borderColorArgb = override.borderColorArgb ?: borderColorArgb,
+    borderWidthPx = if (override.borderColorArgb != null) override.borderWidthPx else borderWidthPx,
+    borderRadiusPx = if (override.borderColorArgb != null) override.borderRadiusPx else borderRadiusPx,
     underline = override.underline ?: underline,
     fontPath = override.fontPath ?: fontPath,
     fontWeight = override.fontWeight ?: fontWeight,

@@ -943,12 +943,6 @@
     <string name="highlight_border">边框</string>
     <string name="highlight_border_width">边框粗细</string>
     <string name="highlight_border_radius">边框圆角</string>
-    <string name="highlight_match_typography">命中排版</string>
-    <string name="highlight_match_typography_hint">下面这些调整只作用在正则命中的那一段文字上，命中之外的一个字都不动。</string>
-    <string name="highlight_spacing_before">命中字距（前）</string>
-    <string name="highlight_spacing_after">命中字距（后）</string>
-    <string name="highlight_line_spacing_above">命中行行距（上）</string>
-    <string name="highlight_line_spacing_below">命中行行距（下）</string>
     <string name="highlight_bg_length_offset_left">九宫格左偏移</string>
     <string name="highlight_bg_length_offset_right">九宫格右偏移</string>
     <string name="cast_bubble_menu">设置气泡</string>

@@ -246,22 +246,6 @@ fun HighlightRuleEditSheet(
     var borderWidth by remember(show, rule) { mutableFloatStateOf(initial.borderWidth) }
     var borderRadius by remember(show, rule) { mutableFloatStateOf(initial.borderRadius) }
 
-    // 命中排版 state：只作用在正则命中的那一段上，没设（0）就一个浮点差异都不引入。
-    var matchSpacingBefore by remember(show, rule) {
-        mutableFloatStateOf(initial.letterSpacingBefore)
-    }
-    var matchSpacingAfter by remember(show, rule) { mutableFloatStateOf(initial.letterSpacingAfter) }
-    var hitLineSpacingTop by remember(show, rule) { mutableFloatStateOf(initial.lineSpacingTop) }
-    var hitLineSpacingBottom by remember(show, rule) {
-        mutableFloatStateOf(initial.lineSpacingBottom)
-    }
-    var bgLengthOffsetLeft by remember(show, rule) {
-        mutableFloatStateOf(initial.bgLengthOffsetLeft)
-    }
-    var bgLengthOffsetRight by remember(show, rule) {
-        mutableFloatStateOf(initial.bgLengthOffsetRight)
-    }
-
     // Font weight state
     var fontWeight by remember(show, rule) { mutableIntStateOf(initial.fontWeight) }
     var isItalic by remember(show, rule) { mutableStateOf(initial.isItalic) }
@@ -373,50 +357,6 @@ fun HighlightRuleEditSheet(
         }
     }
 
-    /**
-     * 预览与保存共用这一份数据：预览看到的就是按下保存会写进库的那条规则，
-     * 不存在「预览一套、正文一套」的第二套口径。
-     */
-    val previewRule = HighlightRule(
-        id = initial.id,
-        name = name,
-        pattern = pattern,
-        sampleText = sampleText,
-        targetScope = targetScope,
-        enabled = enabled,
-        position = initial.position,
-        // fork 的颜色状态本身可空：null = 自动派生，与保存构建同一口径
-        textColor = textColor,
-        bgColor = bgColor,
-        borderColor = if (hasBorder) borderColor else null,
-        borderWidth = borderWidth,
-        borderRadius = borderRadius,
-        underlineMode = underlineMode,
-        underlineColor = if (underlineMode > 0) underlineColor else null,
-        underlineWidth = underlineWidth,
-        underlineOffset = underlineOffset,
-        underlineSvgPath = underlineSvgPath.ifBlank { null },
-        bgImage = if (hasBgImage) bgImage.ifBlank { null } else null,
-        bgImageFit = bgImageFit,
-        bgImageScale = bgImageScale,
-        configName = if (configNames.isEmpty()) null else configNames.toList().toJsonArray(),
-        fontPath = if (hasFont) fontPath.ifBlank { null } else null,
-        fontWeight = fontWeight,
-        isItalic = isItalic,
-        fontSizeOffset = fontSizeOffset,
-        npLeft = npLeft,
-        npRight = npRight,
-        npTop = npTop,
-        npBottom = npBottom,
-        manualNineSlice = manualNineSlice,
-        letterSpacingBefore = matchSpacingBefore,
-        letterSpacingAfter = matchSpacingAfter,
-        lineSpacingTop = hitLineSpacingTop,
-        lineSpacingBottom = hitLineSpacingBottom,
-        bgLengthOffsetLeft = bgLengthOffsetLeft,
-        bgLengthOffsetRight = bgLengthOffsetRight,
-    )
-
     val titleRes = if (isNew) R.string.new_rule else R.string.edit_rule
 
     AppModalBottomSheet(
@@ -449,18 +389,19 @@ fun HighlightRuleEditSheet(
                     }
                     patternError = null
                     onSave(
-                        HighlightRule(
-                            id = initial.id,
+                        initial.copy(
                             name = name,
                             pattern = pattern,
                             sampleText = sampleText,
                             targetScope = targetScope,
                             enabled = enabled,
-                            position = initial.position,
                             textColor = textColor,
                             textColorNight = textColorNight,
                             bgColor = bgColor,
                             bgColorNight = bgColorNight,
+                            borderColor = if (hasBorder) borderColor else null,
+                            borderWidth = borderWidth,
+                            borderRadius = borderRadius,
                             underlineMode = underlineMode,
                             underlineColor = if (underlineMode > 0) underlineColor else null,
                             underlineColorNight = if (underlineMode > 0) underlineColorNight else null,
@@ -1051,59 +992,6 @@ fun HighlightRuleEditSheet(
                         )
                     }
                 }
-
-                // === Section 2b: Match typography ===
-                SectionTitle(stringResource(R.string.highlight_match_typography))
-                AppText(
-                    stringResource(R.string.highlight_match_typography_hint),
-                    style = LegadoTheme.typography.labelMedium,
-                    color = LegadoTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-                TinySliderSettingItem(
-                    title = stringResource(R.string.highlight_spacing_before),
-                    value = matchSpacingBefore,
-                    valueRange = 0f..40f,
-                    steps = 79,
-                    stepSize = 0.5f,
-                    showDecimal = true,
-                    valueFormat = { String.format("%.1f", it) },
-                    description = String.format("%.1f dp", matchSpacingBefore),
-                    onValueChange = { matchSpacingBefore = (it * 2).roundToInt() / 2f },
-                )
-                TinySliderSettingItem(
-                    title = stringResource(R.string.highlight_spacing_after),
-                    value = matchSpacingAfter,
-                    valueRange = 0f..40f,
-                    steps = 79,
-                    stepSize = 0.5f,
-                    showDecimal = true,
-                    valueFormat = { String.format("%.1f", it) },
-                    description = String.format("%.1f dp", matchSpacingAfter),
-                    onValueChange = { matchSpacingAfter = (it * 2).roundToInt() / 2f },
-                )
-                TinySliderSettingItem(
-                    title = stringResource(R.string.highlight_line_spacing_above),
-                    value = hitLineSpacingTop,
-                    valueRange = 0f..40f,
-                    steps = 79,
-                    stepSize = 0.5f,
-                    showDecimal = true,
-                    valueFormat = { String.format("%.1f", it) },
-                    description = String.format("%.1f dp", hitLineSpacingTop),
-                    onValueChange = { hitLineSpacingTop = (it * 2).roundToInt() / 2f },
-                )
-                TinySliderSettingItem(
-                    title = stringResource(R.string.highlight_line_spacing_below),
-                    value = hitLineSpacingBottom,
-                    valueRange = 0f..40f,
-                    steps = 79,
-                    stepSize = 0.5f,
-                    showDecimal = true,
-                    valueFormat = { String.format("%.1f", it) },
-                    description = String.format("%.1f dp", hitLineSpacingBottom),
-                    onValueChange = { hitLineSpacingBottom = (it * 2).roundToInt() / 2f },
-                )
 
                 // === Section 3: Config Binding ===
                 if (allConfigNames.isNotEmpty()) {

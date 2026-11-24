@@ -213,6 +213,9 @@ object LegacyReaderStyleRangeMapper {
         return base.copy(
             colorArgb = cast.colorArgb ?: base.colorArgb,
             backgroundArgb = cast.backgroundArgb ?: base.backgroundArgb,
+            borderColorArgb = cast.borderColorArgb ?: base.borderColorArgb,
+            borderWidthPx = if (cast.borderColorArgb != null) cast.borderWidthPx else base.borderWidthPx,
+            borderRadiusPx = if (cast.borderColorArgb != null) cast.borderRadiusPx else base.borderRadiusPx,
             underline = cast.underline ?: base.underline,
             fontPath = cast.fontPath ?: base.fontPath,
             fontWeight = cast.fontWeight ?: base.fontWeight,
