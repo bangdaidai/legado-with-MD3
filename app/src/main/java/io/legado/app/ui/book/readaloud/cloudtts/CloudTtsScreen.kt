@@ -911,7 +911,9 @@ private fun EngineCard(
         },
         trailingContent = {
             AppActionMenu(
-                groups = persistentListOf(AppActionGroup("engine_actions", actions)),
+                groups = persistentListOf(
+                    AppActionGroup(id = "engine_actions", actions = actions)
+                ),
                 onAction = { id ->
                     when (id) {
                         "set_default" -> onIntent(
@@ -970,7 +972,9 @@ private fun VoiceActionsMenu(
         AppAction("edit", stringResource(R.string.edit)),
     )
     AppActionMenu(
-        groups = persistentListOf(AppActionGroup("voice_actions", actions)),
+        groups = persistentListOf(
+            AppActionGroup(id = "voice_actions", actions = actions)
+        ),
         onAction = { id ->
             when (id) {
                 "toggle_default_narrator" ->
@@ -1979,13 +1983,14 @@ private fun TtsVoicePresetEditorContent(
                         AppAnchoredPanel(
                             expanded = poolMenu,
                             onExpandedChange = { poolMenu = it },
-                        ) {
-                            MediumTonalButton(
-                                onClick = null,
-                                text = poolTitle,
-                                modifier = this.modifier.fillMaxWidth(),
-                            )
-                        } { _ ->
+                            trigger = {
+                                MediumTonalButton(
+                                    onClick = null,
+                                    text = poolTitle,
+                                    modifier = this.modifier.fillMaxWidth(),
+                                )
+                            },
+                        ) { _ ->
                             editor.memberPools.forEach { pool ->
                                 RoundDropdownMenuItem(
                                     text = (if (pool.checked) "✓ " else "") + pool.name,
