@@ -2,8 +2,8 @@ package io.legado.app.ui.book.readaloud.cloudtts
 
 import android.content.ClipData
 import android.media.MediaPlayer
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -40,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,10 +77,17 @@ import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.filePicker.FilePickerSheet
+import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.importComponents.BatchImportDialog
 import io.legado.app.ui.widget.components.importComponents.SourceInputDialog
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
+import io.legado.app.ui.widget.components.menu.AppAction
+import io.legado.app.ui.widget.components.menu.AppActionGroup
+import io.legado.app.ui.widget.components.menu.AppActionMenu
+import io.legado.app.ui.widget.components.menu.AppAnchoredPanel
+import io.legado.app.ui.widget.components.menu.AppChoiceDropdown
+import io.legado.app.ui.widget.components.menu.AppChoiceOption
+import io.legado.app.ui.widget.components.menu.AppMenuAnchor
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.OptionCard
@@ -88,8 +95,6 @@ import io.legado.app.ui.widget.components.modalBottomSheet.OptionSheet
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
-import io.legado.app.ui.widget.components.tabRow.AppTabRow
-import io.legado.app.ui.widget.components.tabRow.rememberTabPagerState
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
 import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
@@ -98,6 +103,8 @@ import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.toastOnUi
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -114,15 +121,34 @@ fun CloudTtsScreen(
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
-    // tab 是唯一事实源（在 VM 里）：点 tab / 滑页都回到同一个 SelectTab，见 rememberTabPagerState
-    val pagerState = rememberTabPagerState(
-        selectedIndex = state.selectedTab.ordinal,
-        pageCount = CloudTtsTab.entries.size,
-        onPageSelected = { page ->
-            CloudTtsTab.entries.getOrNull(page)
-                ?.let { onIntent(CloudTtsIntent.SelectTab(it)) }
-        },
-    )
+    val selectedEngineKey = state.selectedEngineKey
+    val selectedEngineTitle = when (val key = selectedEngineKey) {
+        null -> null
+        else -> when (key.engineType) {
+            ReadAloudVoice.ENGINE_CLOUD -> state.engines
+                .firstOrNull { it.id == key.engineId }?.title
+
+            ReadAloudVoice.ENGINE_HTTP -> state.httpEngines
+                .firstOrNull { it.engineId == key.engineId }?.title
+
+            ReadAloudVoice.ENGINE_SYSTEM -> state.systemEngines
+                .firstOrNull { it.engineId == key.engineId }?.title
+
+            else -> null
+        }
+    }
+    val selectedEngineLoginUrl = selectedEngineKey
+        ?.takeIf { it.engineType == ReadAloudVoice.ENGINE_HTTP }
+        ?.let { key -> state.httpEngines.firstOrNull { it.engineId == key.engineId }?.loginUrl }
+        .orEmpty()
+    val handleBack = {
+        when {
+            selectedEngineKey == null -> onBack()
+            state.voiceBatchMode -> onIntent(CloudTtsIntent.ToggleVoiceBatchMode)
+            else -> onIntent(CloudTtsIntent.CloseEngine)
+        }
+    }
+    BackHandler(enabled = selectedEngineKey != null) { handleBack() }
     var showAddEngineSheet by remember { mutableStateOf(false) }
     var showHttpTtsImportSheet by remember { mutableStateOf(false) }
     var showHttpTtsUrlInput by remember { mutableStateOf(false) }
@@ -170,15 +196,101 @@ fun CloudTtsScreen(
             }
         }
     }
+    val topBarMenuGroups = if (selectedEngineKey == null) {
+        persistentListOf(
+            AppActionGroup(
+                id = "engine_list",
+                actions = persistentListOf(
+                    AppAction("import_tts", stringResource(R.string.import_tts)),
+                    AppAction("export_tts_file", stringResource(R.string.export)),
+                    AppAction("copy_tts_url", stringResource(R.string.copy_url)),
+                    AppAction("clear_tts_cache", stringResource(R.string.clear_cache)),
+                ),
+            )
+        )
+    } else {
+        buildList {
+            add(
+                AppActionGroup(
+                    id = "engine_detail",
+                    actions = buildList {
+                        add(AppAction("add_voice", stringResource(R.string.cloud_tts_add_voice)))
+                        add(
+                            AppAction(
+                                "set_default_engine",
+                                stringResource(R.string.cloud_tts_set_default_engine),
+                            )
+                        )
+                        if (selectedEngineLoginUrl.isNotBlank()) {
+                            add(AppAction("login", stringResource(R.string.login)))
+                        }
+                    }.toPersistentList(),
+                )
+            )
+            add(
+                AppActionGroup(
+                    id = "voice_gender",
+                    actions = persistentListOf(
+                        AppAction(
+                            "gender:",
+                            stringResource(R.string.voice_gender_all),
+                            selected = state.voiceGenderFilter.isBlank(),
+                        ),
+                        AppAction(
+                            "gender:${ReadAloudVoiceTraits.GENDER_MALE}",
+                            stringResource(R.string.voice_gender_male),
+                            selected = state.voiceGenderFilter == ReadAloudVoiceTraits.GENDER_MALE,
+                        ),
+                        AppAction(
+                            "gender:${ReadAloudVoiceTraits.GENDER_FEMALE}",
+                            stringResource(R.string.voice_gender_female),
+                            selected = state.voiceGenderFilter == ReadAloudVoiceTraits.GENDER_FEMALE,
+                        ),
+                        AppAction(
+                            "gender:${ReadAloudVoiceTraits.GENDER_UNKNOWN}",
+                            stringResource(R.string.voice_gender_unknown),
+                            selected = state.voiceGenderFilter == ReadAloudVoiceTraits.GENDER_UNKNOWN,
+                        ),
+                    ),
+                )
+            )
+        }.toPersistentList()
+    }
+    val onTopBarMenuAction: (String) -> Unit = { id ->
+        val key = selectedEngineKey
+        when {
+            key == null -> when (id) {
+                "import_tts" -> showHttpTtsImportSheet = true
+                "export_tts_file" -> onIntent(CloudTtsIntent.ExportHttpTtsFile)
+                "copy_tts_url" -> onIntent(CloudTtsIntent.ExportHttpTtsUrl)
+                "clear_tts_cache" -> onIntent(CloudTtsIntent.ClearTtsCache)
+            }
+
+            id == "add_voice" -> {
+                if (key.engineType == ReadAloudVoice.ENGINE_SYSTEM && key.engineId.isBlank()) {
+                    onIntent(CloudTtsIntent.AddVoice)
+                } else {
+                    onIntent(CloudTtsIntent.AddVoiceForEngine(key.engineType, key.engineId))
+                }
+            }
+
+            id == "set_default_engine" ->
+                onIntent(CloudTtsIntent.SetDefaultEngine(key.engineType, key.engineId))
+
+            id == "login" -> onIntent(CloudTtsIntent.OpenHttpTtsLogin(key.engineId))
+            id.startsWith("gender:") ->
+                onIntent(CloudTtsIntent.SetVoiceGenderFilter(id.removePrefix("gender:")))
+        }
+    }
     val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
     AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             GlassMediumFlexibleTopAppBar(
-                title = stringResource(R.string.read_aloud_engines_and_voices),
-                navigationIcon = { TopBarNavigationButton(onClick = onBack) },
+                title = selectedEngineTitle ?: stringResource(R.string.read_aloud_engines_and_voices),
+                navigationIcon = { TopBarNavigationButton(onClick = handleBack) },
                 actions = {
-                    if (state.selectedTab == CloudTtsTab.Voices) {
+                    if (selectedEngineKey != null) {
                         TopBarActionButton(
                             onClick = { onIntent(CloudTtsIntent.ToggleVoiceBatchMode) },
                             imageVector = if (state.voiceBatchMode) {
@@ -195,89 +307,23 @@ fun CloudTtsScreen(
                             ),
                         )
                     }
-                    if (state.selectedTab == CloudTtsTab.Voices) {
-                        // 性别筛选：列表顶部那排 chips 挪进这里的溢出菜单，✓ 标当前项
-                        var expanded by remember { mutableStateOf(false) }
-                        Box {
-                            TopBarActionButton(
-                                onClick = { expanded = true },
-                                imageVector = AppIcons.MoreVert,
-                                contentDescription = stringResource(R.string.more_menu),
-                            )
-                            RoundDropdownMenu(expanded, { expanded = false }) {
-                                listOf(
-                                    "" to R.string.voice_gender_all,
-                                    ReadAloudVoiceTraits.GENDER_MALE to R.string.voice_gender_male,
-                                    ReadAloudVoiceTraits.GENDER_FEMALE to R.string.voice_gender_female,
-                                    ReadAloudVoiceTraits.GENDER_UNKNOWN to R.string.voice_gender_unknown,
-                                ).forEach { (gender, labelRes) ->
-                                    RoundDropdownMenuItem(
-                                        text = (if (state.voiceGenderFilter == gender) "✓ " else "") +
-                                            stringResource(labelRes),
-                                        onClick = {
-                                            expanded = false
-                                            onIntent(CloudTtsIntent.SetVoiceGenderFilter(gender))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    if (state.selectedTab == CloudTtsTab.Engines) {
-                        var expanded by remember { mutableStateOf(false) }
-                        Box {
-                            TopBarActionButton(
-                                onClick = { expanded = true },
-                                imageVector = AppIcons.MoreVert,
-                                contentDescription = stringResource(R.string.more_menu),
-                            )
-                            RoundDropdownMenu(expanded, { expanded = false }) {
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.import_tts),
-                                    onClick = { expanded = false; showHttpTtsImportSheet = true },
-                                )
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.export),
-                                    onClick = {
-                                        expanded = false; onIntent(CloudTtsIntent.ExportHttpTtsFile)
-                                    },
-                                )
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.copy_url),
-                                    onClick = {
-                                        expanded = false; onIntent(CloudTtsIntent.ExportHttpTtsUrl)
-                                    },
-                                )
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.clear_cache),
-                                    onClick = {
-                                        expanded = false; onIntent(CloudTtsIntent.ClearTtsCache)
-                                    },
-                                )
-                            }
-                        }
+                    AppActionMenu(
+                        groups = topBarMenuGroups,
+                        onAction = onTopBarMenuAction,
+                    ) {
+                        AppIcon(
+                            imageVector = AppIcons.MoreVert,
+                            contentDescription = stringResource(R.string.more_menu),
+                            modifier = this.modifier,
+                        )
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                bottomContent = {
-                    AppTabRow(
-                        tabTitles = listOf(
-                            stringResource(R.string.cloud_tts_voices_tab),
-                            stringResource(R.string.cloud_tts_engines_tab),
-                        ),
-                        selectedTabIndex = state.selectedTab.ordinal,
-                        // 点 tab 只派发意图；滚页交给上面那个 LaunchedEffect，保持一条同步路径
-                        onTabSelected = { page ->
-                            onIntent(CloudTtsIntent.SelectTab(CloudTtsTab.entries[page]))
-                        },
-                        isScrollable = false,
-                    )
-                }
             )
         },
         floatingActionButton = {
             // 批量操作放右下角折叠菜单：列表顶部那条横排按钮划到下面就够不着了
-            if (state.selectedTab == CloudTtsTab.Voices && state.voiceBatchMode) {
+            if (selectedEngineKey != null && state.voiceBatchMode) {
                 val selectedCount = state.selectedVoiceIds.size
                 // 删除只作用于用户/外部目录音色，菜单项按这个子集决定显隐与计数；
                 // 「加入声音池」不限 managedBy，用全量 selectedCount。
@@ -333,34 +379,46 @@ fun CloudTtsScreen(
             } else {
                 AppFloatingActionButton(
                     onClick = {
-                        if (state.selectedTab == CloudTtsTab.Engines) showAddEngineSheet = true
-                        else onIntent(CloudTtsIntent.AddVoice)
+                        val key = selectedEngineKey
+                        when {
+                            key == null -> showAddEngineSheet = true
+                            key.engineType == ReadAloudVoice.ENGINE_SYSTEM && key.engineId.isBlank() ->
+                                onIntent(CloudTtsIntent.AddVoice)
+
+                            else -> onIntent(
+                                CloudTtsIntent.AddVoiceForEngine(key.engineType, key.engineId)
+                            )
+                        }
                     },
-                    icon = if (state.selectedTab == CloudTtsTab.Engines) Icons.Default.Add
-                        else Icons.Default.RecordVoiceOver,
+                    icon = if (selectedEngineKey == null) {
+                        Icons.Default.Add
+                    } else {
+                        Icons.Default.RecordVoiceOver
+                    },
                     tooltipText = stringResource(
-                        if (state.selectedTab == CloudTtsTab.Engines) R.string.cloud_tts_add_engine
+                        if (selectedEngineKey == null) R.string.cloud_tts_add_engine
                         else R.string.cloud_tts_add_voice
                     ),
                 )
             }
         },
     ) { padding ->
-        HorizontalPager(
-            state = pagerState,
+        LazyColumn(
             modifier = Modifier.fillMaxSize(),
-        ) { page ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = adaptiveContentPadding(
-                    top = padding.calculateTopPadding(),
-                    bottom = padding.calculateBottomPadding() + 96.dp,
-                ),
-            ) {
-                if (page == CloudTtsTab.Voices.ordinal) {
-                // 性别筛选挪进了顶栏溢出菜单（下拉选择），列表顶上不再铺一排 chips
+            contentPadding = adaptiveContentPadding(
+                top = padding.calculateTopPadding(),
+                bottom = padding.calculateBottomPadding() + 96.dp,
+            ),
+        ) {
+            if (selectedEngineKey != null) {
+                item { EngineSectionTitle(R.string.cloud_tts_saved_voices) }
                 if (state.voices.isEmpty() && !state.loading) {
-                    item { AppText(stringResource(R.string.cloud_tts_no_saved_voices), Modifier.padding(24.dp)) }
+                    item {
+                        AppText(
+                            stringResource(R.string.cloud_tts_no_engine_voices),
+                            Modifier.padding(24.dp),
+                        )
+                    }
                 }
                 items(state.voices, key = { "voice:${it.id}" }) { voice ->
                     VoiceCardItem(
@@ -372,6 +430,13 @@ fun CloudTtsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
+                                if (voice.isDefaultNarrator) {
+                                    VoiceTraitTag(
+                                        text = stringResource(R.string.cloud_tts_default_narrator_marker),
+                                        container = LegadoTheme.colorScheme.primaryContainer,
+                                        content = LegadoTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                }
                                 voice.genderLabel.takeIf(String::isNotBlank)?.let {
                                     VoiceTraitTag(
                                         text = when (voice.gender) {
@@ -459,14 +524,16 @@ fun CloudTtsScreen(
                                         stringResource(R.string.cloud_tts_batch_mode),
                                 )
                             } else {
-                                // 右侧只留试听；改名/入池/删除都收进「编辑音色预设」
-                                MediumTonalButton(
-                                    onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
-                                    onLongClick = { previewTextVoice = voice },
-                                    selected = state.previewingVoiceId == voice.id,
-                                    icon = Icons.Default.PlayArrow,
-                                    contentDescription = stringResource(R.string.voice_preview),
-                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    MediumTonalButton(
+                                        onClick = { onIntent(CloudTtsIntent.PreviewSavedVoice(voice.id)) },
+                                        onLongClick = { previewTextVoice = voice },
+                                        selected = state.previewingVoiceId == voice.id,
+                                        icon = Icons.Default.PlayArrow,
+                                        contentDescription = stringResource(R.string.voice_preview),
+                                    )
+                                    VoiceActionsMenu(voice, onIntent)
+                                }
                             }
                         },
                         onClick = {
@@ -477,9 +544,8 @@ fun CloudTtsScreen(
                                 else -> onIntent(CloudTtsIntent.EditVoice(voice.id))
                             }
                         },
-                        // 与引擎行「点一下设默认」同一套语法：长按＝设为/取消默认旁白音色。
-                        onLongClick = {
-                            onIntent(CloudTtsIntent.ToggleDefaultNarratorVoice(voice.id))
+                        onLongClick = if (state.voiceBatchMode) null else {
+                            { onIntent(CloudTtsIntent.ToggleDefaultNarratorVoice(voice.id)) }
                         },
                     )
                 }
@@ -495,93 +561,54 @@ fun CloudTtsScreen(
                     }
                 }
             } else {
-                    item { EngineSectionTitle(R.string.cloud_tts_cloud_engines) }
-                items(state.engines, key = { "engine:${it.id}" }) { engine ->
-                    TinyClickableSettingItem(
+                item { EngineSectionTitle(R.string.cloud_tts_cloud_engines) }
+                items(
+                    state.engines,
+                    key = { "engine:${it.key.engineType}:${it.key.engineId}" },
+                ) { engine ->
+                    EngineCard(
+                        engineKey = engine.key,
                         title = engine.title,
-                        description = listOf(
-                            engine.summary,
-                            stringResource(R.string.read_aloud_current_default_summary).takeIf { engine.selected },
-                        ).filterNotNull().filter(String::isNotBlank).joinToString(" | "),
-                        trailingContent = {
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                MediumTonalButton(
-                                    onClick = { onIntent(CloudTtsIntent.EditEngine(engine.id)) },
-                                    icon = Icons.Default.Edit,
-                                    contentDescription = stringResource(R.string.edit),
-                                )
-                                MediumTonalButton(
-                                    onClick = { onIntent(CloudTtsIntent.DeleteEngine(engine.id)) },
-                                    icon = Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.delete),
-                                )
-                            }
-                        },
-                        onClick = {
-                            onIntent(
-                                CloudTtsIntent.SetDefaultEngine(
-                                    ReadAloudVoice.ENGINE_CLOUD,
-                                    engine.id
-                                )
-                            )
-                        },
+                        summary = engine.summary,
+                        selectedDefault = engine.selected,
+                        voiceCount = engine.voiceCount,
+                        hasScript = false,
+                        loginUrl = "",
+                        onIntent = onIntent,
                     )
                 }
-                    item { EngineSectionTitle(R.string.cloud_tts_http_engines) }
-                    items(state.httpEngines, key = { "http:${it.engineId}" }) { engine ->
-                        TinyClickableSettingItem(
-                            title = engine.title,
-                            description = listOf(
-                                stringResource(R.string.tts_script_badge).takeIf { engine.hasScript },
-                                engine.summary,
-                                stringResource(R.string.read_aloud_current_default_summary).takeIf { engine.selected },
-                            ).filterNotNull().filter(String::isNotBlank).joinToString(" | "),
-                            onClick = {
-                                onIntent(
-                                    CloudTtsIntent.SetDefaultEngine(
-                                        engine.engineType,
-                                        engine.engineId
-                                    )
-                                )
-                            },
-                            onLongClick = engine.loginUrl.takeIf(String::isNotBlank)?.let {
-                                { onIntent(CloudTtsIntent.OpenHttpTtsLogin(engine.engineId)) }
-                            },
-                            trailingContent = {
-                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    MediumTonalButton(
-                                        onClick = { onIntent(CloudTtsIntent.EditHttpTts(engine.engineId)) },
-                                        icon = Icons.Default.Edit,
-                                        contentDescription = stringResource(R.string.edit),
-                                    )
-                                    MediumTonalButton(
-                                        onClick = { onIntent(CloudTtsIntent.DeleteHttpTts(engine.engineId)) },
-                                        icon = Icons.Default.Delete,
-                                        contentDescription = stringResource(R.string.delete),
-                                    )
-                                }
-                        },
-                    )
-                }
-                    item { EngineSectionTitle(R.string.cloud_tts_system_engines) }
-                    items(state.systemEngines, key = { "system:${it.engineId}" }) { engine ->
-                    TinyClickableSettingItem(
+                item { EngineSectionTitle(R.string.cloud_tts_http_engines) }
+                items(
+                    state.httpEngines,
+                    key = { "engine:${it.key.engineType}:${it.key.engineId}" },
+                ) { engine ->
+                    EngineCard(
+                        engineKey = engine.key,
                         title = engine.title,
-                        description = listOf(
-                            engine.summary,
-                            stringResource(R.string.read_aloud_current_default_summary).takeIf { engine.selected },
-                        ).filterNotNull().filter(String::isNotBlank).joinToString(" | "),
-                        onClick = {
-                            onIntent(
-                                CloudTtsIntent.SetDefaultEngine(
-                                    engine.engineType,
-                                    engine.engineId
-                                )
-                            )
-                        },
+                        summary = engine.summary,
+                        selectedDefault = engine.selected,
+                        voiceCount = engine.voiceCount,
+                        hasScript = engine.hasScript,
+                        loginUrl = engine.loginUrl,
+                        onIntent = onIntent,
                     )
                 }
-            }
+                item { EngineSectionTitle(R.string.cloud_tts_system_engines) }
+                items(
+                    state.systemEngines,
+                    key = { "engine:${it.key.engineType}:${it.key.engineId}" },
+                ) { engine ->
+                    EngineCard(
+                        engineKey = engine.key,
+                        title = engine.title,
+                        summary = engine.summary,
+                        selectedDefault = engine.selected,
+                        voiceCount = engine.voiceCount,
+                        hasScript = false,
+                        loginUrl = "",
+                        onIntent = onIntent,
+                    )
+                }
             }
         }
     }
@@ -796,6 +823,173 @@ private fun EngineSectionTitle(titleRes: Int) {
     )
 }
 
+@Composable
+private fun EngineCard(
+    engineKey: TtsEngineKey,
+    title: String,
+    summary: String,
+    selectedDefault: Boolean,
+    voiceCount: Int,
+    hasScript: Boolean,
+    loginUrl: String,
+    onIntent: (CloudTtsIntent) -> Unit,
+) {
+    val actions = buildList {
+        add(
+            AppAction(
+                id = "set_default",
+                label = stringResource(R.string.cloud_tts_set_default_engine),
+                selected = selectedDefault,
+            )
+        )
+        when (engineKey.engineType) {
+            ReadAloudVoice.ENGINE_CLOUD -> {
+                add(AppAction("edit", stringResource(R.string.edit)))
+                add(
+                    AppAction(
+                        "delete",
+                        stringResource(R.string.delete),
+                        destructive = true,
+                    )
+                )
+            }
+
+            ReadAloudVoice.ENGINE_HTTP -> {
+                if (loginUrl.isNotBlank()) {
+                    add(AppAction("login", stringResource(R.string.login)))
+                }
+                add(AppAction("edit", stringResource(R.string.edit)))
+                add(
+                    AppAction(
+                        "delete",
+                        stringResource(R.string.delete),
+                        destructive = true,
+                    )
+                )
+            }
+        }
+    }.toPersistentList()
+    VoiceCardItem(
+        title = title,
+        tags = if (selectedDefault) {
+            {
+                VoiceTraitTag(
+                    text = stringResource(R.string.cloud_tts_default_engine_marker),
+                    container = LegadoTheme.colorScheme.primaryContainer,
+                    content = LegadoTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        } else null,
+        scrollableTags = {
+            Row(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (hasScript) {
+                    VoiceTraitTag(
+                        text = stringResource(R.string.tts_script_badge),
+                        container = LegadoTheme.colorScheme.secondaryContainer,
+                        content = LegadoTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+                summary.takeIf(String::isNotBlank)?.let {
+                    VoiceTraitTag(
+                        text = it,
+                        container = LegadoTheme.colorScheme.surfaceVariant,
+                        content = LegadoTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                VoiceTraitTag(
+                    text = stringResource(R.string.cloud_tts_voice_count, voiceCount),
+                    container = LegadoTheme.colorScheme.tertiaryContainer,
+                    content = LegadoTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+        },
+        trailingContent = {
+            AppActionMenu(
+                groups = persistentListOf(AppActionGroup("engine_actions", actions)),
+                onAction = { id ->
+                    when (id) {
+                        "set_default" -> onIntent(
+                            CloudTtsIntent.SetDefaultEngine(engineKey.engineType, engineKey.engineId)
+                        )
+
+                        "edit" -> if (engineKey.engineType == ReadAloudVoice.ENGINE_CLOUD) {
+                            onIntent(CloudTtsIntent.EditEngine(engineKey.engineId))
+                        } else {
+                            onIntent(CloudTtsIntent.EditHttpTts(engineKey.engineId))
+                        }
+
+                        "delete" -> if (engineKey.engineType == ReadAloudVoice.ENGINE_CLOUD) {
+                            onIntent(CloudTtsIntent.DeleteEngine(engineKey.engineId))
+                        } else {
+                            onIntent(CloudTtsIntent.DeleteHttpTts(engineKey.engineId))
+                        }
+
+                        "login" -> onIntent(CloudTtsIntent.OpenHttpTtsLogin(engineKey.engineId))
+                    }
+                },
+                anchor = AppMenuAnchor.Row,
+                title = stringResource(R.string.more_menu),
+            ) {
+                MediumTonalButton(
+                    onClick = null,
+                    modifier = this.modifier,
+                    icon = Icons.Default.MoreVert,
+                    contentDescription = null,
+                )
+            }
+        },
+        onClick = {
+            onIntent(CloudTtsIntent.OpenEngine(engineKey.engineType, engineKey.engineId))
+        },
+        onLongClick = {
+            onIntent(CloudTtsIntent.SetDefaultEngine(engineKey.engineType, engineKey.engineId))
+        },
+    )
+}
+
+@Composable
+private fun VoiceActionsMenu(
+    voice: CloudTtsVoiceItemUi,
+    onIntent: (CloudTtsIntent) -> Unit,
+) {
+    val actions = persistentListOf(
+        AppAction(
+            id = "toggle_default_narrator",
+            label = stringResource(
+                if (voice.isDefaultNarrator) R.string.cloud_tts_clear_default_narrator
+                else R.string.cloud_tts_set_default_narrator
+            ),
+            selected = voice.isDefaultNarrator,
+        ),
+        AppAction("edit", stringResource(R.string.edit)),
+    )
+    AppActionMenu(
+        groups = persistentListOf(AppActionGroup("voice_actions", actions)),
+        onAction = { id ->
+            when (id) {
+                "toggle_default_narrator" ->
+                    onIntent(CloudTtsIntent.ToggleDefaultNarratorVoice(voice.id))
+
+                "edit" -> onIntent(CloudTtsIntent.EditVoice(voice.id))
+            }
+        },
+        anchor = AppMenuAnchor.Row,
+        title = stringResource(R.string.more_menu),
+    ) {
+        MediumTonalButton(
+            onClick = null,
+            modifier = this.modifier,
+            icon = Icons.Default.MoreVert,
+            contentDescription = null,
+        )
+    }
+}
 
 @Composable
 private fun HttpTtsEditorSheet(
@@ -847,59 +1041,60 @@ private fun HttpTtsEditorSheet(
         onDismissRequest = { onIntent(CloudTtsIntent.DismissHttpTtsEditor) },
         title = stringResource(R.string.speak_engine),
         startAction = {
-            var expanded by remember { mutableStateOf(false) }
-            Box {
-                MediumTonalButton(
-                    onClick = { expanded = true },
-                    icon = Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.more_menu),
-                )
-                RoundDropdownMenu(expanded, { expanded = false }) {
-                    RoundDropdownMenuItem(
-                        text = stringResource(R.string.copy_text),
-                        onClick = {
-                            expanded = false
-                            scope.launch {
-                                clipboard.setClipEntry(
-                                    ClipEntry(
-                                        ClipData.newPlainText(
-                                            "httpTTS",
-                                            GSON.toJson(current())
-                                        )
+            AppActionMenu(
+                groups = persistentListOf(
+                    AppActionGroup(
+                        id = "http_tts_clipboard",
+                        actions = persistentListOf(
+                            AppAction("copy_text", stringResource(R.string.copy_text)),
+                            AppAction("paste_source", stringResource(R.string.paste_source)),
+                        ),
+                    )
+                ),
+                onAction = { id ->
+                    when (id) {
+                        "copy_text" -> scope.launch {
+                            clipboard.setClipEntry(
+                                ClipEntry(
+                                    ClipData.newPlainText(
+                                        "httpTTS",
+                                        GSON.toJson(current())
                                     )
                                 )
+                            )
+                        }
+
+                        "paste_source" -> scope.launch {
+                            val text = clipboard.getClipEntry()?.clipData
+                                ?.getItemAt(0)?.coerceToText(context)?.toString()
+                                ?: return@launch
+                            HttpTTS.fromJson(text).getOrNull()?.let { imported ->
+                                name = imported.name
+                                url = imported.url
+                                script = imported.script.orEmpty()
+                                optionValues = runCatching {
+                                    GSON.fromJsonObject<Map<String, String>>(
+                                        imported.scriptOptionsJson
+                                    ).getOrNull().orEmpty()
+                                }.getOrNull().orEmpty()
+                                contentType = imported.contentType.orEmpty()
+                                concurrentRate = imported.concurrentRate ?: "0"
+                                header = imported.header.orEmpty()
+                                loginUrl = imported.loginUrl.orEmpty()
+                                loginUi = imported.loginUi.orEmpty()
+                                loginCheckJs = imported.loginCheckJs.orEmpty()
+                                jsLib = imported.jsLib.orEmpty()
+                                speed = (imported.speed ?: 5).toFloat()
                             }
-                        },
-                    )
-                    RoundDropdownMenuItem(
-                        text = stringResource(R.string.paste_source),
-                        onClick = {
-                            expanded = false
-                            scope.launch {
-                                val text = clipboard.getClipEntry()?.clipData
-                                    ?.getItemAt(0)?.coerceToText(context)?.toString()
-                                    ?: return@launch
-                                HttpTTS.fromJson(text).getOrNull()?.let { imported ->
-                                    name = imported.name; url = imported.url
-                                    script = imported.script.orEmpty()
-                                    optionValues = runCatching {
-                                        GSON.fromJsonObject<Map<String, String>>(
-                                            imported.scriptOptionsJson
-                                        ).getOrNull().orEmpty()
-                                    }.getOrNull().orEmpty()
-                                    contentType = imported.contentType.orEmpty()
-                                    concurrentRate = imported.concurrentRate ?: "0"
-                                    header = imported.header.orEmpty(); loginUrl =
-                                    imported.loginUrl.orEmpty()
-                                    loginUi = imported.loginUi.orEmpty(); loginCheckJs =
-                                    imported.loginCheckJs.orEmpty()
-                                    jsLib = imported.jsLib.orEmpty()
-                                    speed = (imported.speed ?: 5).toFloat()
-                                }
-                            }
-                        },
-                    )
-                }
+                        }
+                    }
+                },
+            ) {
+                AppIcon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = stringResource(R.string.more_menu),
+                    modifier = this.modifier,
+                )
             }
         },
         endAction = {
@@ -1158,24 +1353,24 @@ private fun ScriptSelectField(
     value: String,
     onChange: (String) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Box(modifier = Modifier.fillMaxWidth()) {
+    val choices = remember(option) {
+        option.values.map { AppChoiceOption(it.value, it.label) }.toImmutableList()
+    }
+    val title = "${option.label}: ${value.ifBlank { "—" }}"
+    AppChoiceDropdown(
+        options = choices,
+        selectedId = value,
+        onSelect = onChange,
+        title = title,
+        modifier = Modifier.fillMaxWidth(),
+        compact = true,
+        triggerShape = IconButtonDefaults.extraSmallRoundShape,
+    ) {
         MediumTonalButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
-            text = "${option.label}: ${value.ifBlank { "—" }}",
+            onClick = null,
+            text = title,
+            modifier = this.modifier.fillMaxWidth(),
         )
-        RoundDropdownMenu(expanded, { expanded = false }) {
-            option.values.forEach { item ->
-                RoundDropdownMenuItem(
-                    text = item.label,
-                    onClick = {
-                        expanded = false
-                        onChange(item.value)
-                    },
-                )
-            }
-        }
     }
 }
 
@@ -1217,9 +1412,6 @@ private fun CloudTtsEngineEditorContent(
     editor: CloudTtsEngineEditorUi,
     onIntent: (CloudTtsIntent) -> Unit,
 ) {
-    var providerMenu by remember { mutableStateOf(false) }
-    var modelMenu by remember { mutableStateOf(false) }
-    var regionMenu by remember { mutableStateOf(false) }
     var customRegion by remember(editor.provider, editor.editingEngineId) {
         val options = CloudTtsProviderType.entries.firstOrNull {
             it.storageValue == editor.provider
@@ -1235,27 +1427,45 @@ private fun CloudTtsEngineEditorContent(
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                MenuButton(profile.displayName) { providerMenu = true }
-                RoundDropdownMenu(providerMenu, { providerMenu = false }) {
-                    CloudTtsProviderType.entries.forEach { option ->
-                        RoundDropdownMenuItem(
-                            text = option.profile.displayName,
-                            onClick = {
-                                providerMenu = false
+                val providerChoices = remember {
+                    CloudTtsProviderType.entries
+                        .map { AppChoiceOption(it.storageValue, it.profile.displayName) }
+                        .toImmutableList()
+                }
+                AppChoiceDropdown(
+                    options = providerChoices,
+                    selectedId = editor.provider,
+                    onSelect = { providerValue ->
+                        CloudTtsProviderType.entries
+                            .firstOrNull { it.storageValue == providerValue }
+                            ?.let { option ->
                                 update(
                                     editor.copy(
                                         provider = option.storageValue,
-                                        name = if (editor.name.isBlank() || editor.name == profile.displayName) {
+                                        name = if (editor.name.isBlank() ||
+                                            editor.name == profile.displayName
+                                        ) {
                                             option.profile.displayName
-                                        } else editor.name,
+                                        } else {
+                                            editor.name
+                                        },
                                         model = option.profile.defaultModel,
                                         region = option.profile.regionOptions.firstOrNull()
                                             .orEmpty(),
                                     )
                                 )
-                            },
-                        )
-                    }
+                            }
+                    },
+                    title = profile.displayName,
+                    modifier = Modifier.fillMaxWidth(),
+                    compact = true,
+                    triggerShape = IconButtonDefaults.extraSmallRoundShape,
+                ) {
+                    MediumTonalButton(
+                        onClick = null,
+                        text = profile.displayName,
+                        modifier = this.modifier.fillMaxWidth(),
+                    )
                 }
                 Field(
                     editor.name,
@@ -1276,29 +1486,52 @@ private fun CloudTtsEngineEditorContent(
                     )
                 }
                 if (profile.regionOptions.isNotEmpty()) {
-                    MenuButton(
-                        stringResource(
-                            R.string.cloud_tts_region_value,
-                            editor.region.ifBlank { stringResource(R.string.cloud_tts_please_select) })
-                    ) { regionMenu = true }
-                    RoundDropdownMenu(regionMenu, { regionMenu = false }) {
-                        profile.regionOptions.forEach { region ->
-                            RoundDropdownMenuItem(
-                                text = region,
-                                onClick = {
-                                    regionMenu = false
-                                    customRegion = false
-                                    update(editor.copy(region = region))
-                                },
+                    val regionTitle = stringResource(
+                        R.string.cloud_tts_region_value,
+                        editor.region.ifBlank { stringResource(R.string.cloud_tts_please_select) }
+                    )
+                    // 区域是预设单选与自定义命令的混合菜单，不能迁成纯单选。
+                    AppActionMenu(
+                        groups = persistentListOf(
+                            AppActionGroup(
+                                id = "cloud_tts_region",
+                                actions = buildList {
+                                    profile.regionOptions.forEach { region ->
+                                        add(
+                                            AppAction(
+                                                id = "region_$region",
+                                                label = region,
+                                                checked = editor.region == region,
+                                            )
+                                        )
+                                    }
+                                    add(
+                                        AppAction(
+                                            id = "custom_region",
+                                            label = stringResource(
+                                                R.string.cloud_tts_custom_region_action
+                                            ),
+                                        )
+                                    )
+                                }.toImmutableList(),
                             )
-                        }
-                        RoundDropdownMenuItem(
-                            text = stringResource(R.string.cloud_tts_custom_region_action),
-                            onClick = {
-                                regionMenu = false
+                        ),
+                        onAction = { id ->
+                            if (id == "custom_region") {
                                 customRegion = true
                                 update(editor.copy(region = ""))
-                            },
+                            } else {
+                                customRegion = false
+                                update(editor.copy(region = id.removePrefix("region_")))
+                            }
+                        },
+                        anchor = AppMenuAnchor.Row,
+                        title = regionTitle,
+                    ) {
+                        MediumTonalButton(
+                            onClick = null,
+                            text = regionTitle,
+                            modifier = this.modifier.fillMaxWidth(),
                         )
                     }
                     if (customRegion) {
@@ -1313,18 +1546,27 @@ private fun CloudTtsEngineEditorContent(
                     Field(editor.appId, { update(editor.copy(appId = it)) }, "App ID")
                 }
                 if (profile.modelOptions.isNotEmpty()) {
-                    MenuButton(
-                        stringResource(
-                            R.string.cloud_tts_model_value,
-                            editor.model.ifBlank { "neural" })
-                    ) { modelMenu = true }
-                    RoundDropdownMenu(modelMenu, { modelMenu = false }) {
-                        profile.modelOptions.forEach { model ->
-                            RoundDropdownMenuItem(
-                                text = model,
-                                onClick = { modelMenu = false; update(editor.copy(model = model)) },
-                            )
-                        }
+                    val modelTitle = stringResource(
+                        R.string.cloud_tts_model_value,
+                        editor.model.ifBlank { "neural" }
+                    )
+                    val modelChoices = remember(profile) {
+                        profile.modelOptions.map { AppChoiceOption(it, it) }.toImmutableList()
+                    }
+                    AppChoiceDropdown(
+                        options = modelChoices,
+                        selectedId = editor.model,
+                        onSelect = { model -> update(editor.copy(model = model)) },
+                        title = modelTitle,
+                        modifier = Modifier.fillMaxWidth(),
+                        compact = true,
+                        triggerShape = IconButtonDefaults.extraSmallRoundShape,
+                    ) {
+                        MediumTonalButton(
+                            onClick = null,
+                            text = modelTitle,
+                            modifier = this.modifier.fillMaxWidth(),
+                        )
                     }
                 } else {
                     Field(editor.model, { update(editor.copy(model = it)) }, profile.modelLabel)
@@ -1386,9 +1628,6 @@ private fun TtsVoicePresetEditorContent(
     editor: TtsVoicePresetEditorUi,
     onIntent: (CloudTtsIntent) -> Unit,
 ) {
-    var styleMenu by remember { mutableStateOf(false) }
-    var roleMenu by remember { mutableStateOf(false) }
-    var formatMenu by remember { mutableStateOf(false) }
     var voiceQuery by remember { mutableStateOf("") }
     var manualVoiceIdVisible by remember(editor.engineId) { mutableStateOf(false) }
     val selectedVoice = state.discoveredVoices.firstOrNull { it.id == editor.voiceId }
@@ -1555,18 +1794,33 @@ private fun TtsVoicePresetEditorContent(
                         if (editor.engineType == ReadAloudVoice.ENGINE_CLOUD &&
                             !selectedVoice?.styles.isNullOrEmpty()
                         ) {
-                            MenuButton(stringResource(R.string.cloud_tts_style_value, editor.style.ifBlank { stringResource(R.string.cloud_tts_default) })) { styleMenu = true }
-                            RoundDropdownMenu(styleMenu, { styleMenu = false }) {
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.cloud_tts_default),
-                                    onClick = { styleMenu = false; update(editor.copy(style = "")) },
+                            val defaultLabel = stringResource(R.string.cloud_tts_default)
+                            val styleTitle = stringResource(
+                                R.string.cloud_tts_style_value,
+                                editor.style.ifBlank { defaultLabel }
+                            )
+                            val styleChoices = remember(selectedVoice, defaultLabel) {
+                                buildList {
+                                    add(AppChoiceOption("", defaultLabel))
+                                    selectedVoice?.styles.orEmpty().forEach {
+                                        add(AppChoiceOption(it, it))
+                                    }
+                                }.toImmutableList()
+                            }
+                            AppChoiceDropdown(
+                                options = styleChoices,
+                                selectedId = editor.style,
+                                onSelect = { style -> update(editor.copy(style = style)) },
+                                title = styleTitle,
+                                modifier = Modifier.fillMaxWidth(),
+                                compact = true,
+                                triggerShape = IconButtonDefaults.extraSmallRoundShape,
+                            ) {
+                                MediumTonalButton(
+                                    onClick = null,
+                                    text = styleTitle,
+                                    modifier = this.modifier.fillMaxWidth(),
                                 )
-                                selectedVoice.styles.forEach { style ->
-                                    RoundDropdownMenuItem(
-                                        text = style,
-                                        onClick = { styleMenu = false; update(editor.copy(style = style)) },
-                                    )
-                                }
                             }
                         }
                         // 声音调节：数值统一用一行一个滑块（0.5x..2x，0.25 档），不再三个挤一行
@@ -1594,14 +1848,29 @@ private fun TtsVoicePresetEditorContent(
                                         },
                                     )
                                 }
-                                MenuButton(stringResource(R.string.cloud_tts_audio_format, editor.format)) { formatMenu = true }
-                                RoundDropdownMenu(formatMenu, { formatMenu = false }) {
-                                    editor.formatOptions.forEach { format ->
-                                        RoundDropdownMenuItem(
-                                            text = format,
-                                            onClick = { formatMenu = false; update(editor.copy(format = format)) },
-                                        )
-                                    }
+                                val formatTitle = stringResource(
+                                    R.string.cloud_tts_audio_format,
+                                    editor.format
+                                )
+                                val formatChoices = remember(editor.formatOptions) {
+                                    editor.formatOptions
+                                        .map { AppChoiceOption(it, it) }
+                                        .toImmutableList()
+                                }
+                                AppChoiceDropdown(
+                                    options = formatChoices,
+                                    selectedId = editor.format,
+                                    onSelect = { format -> update(editor.copy(format = format)) },
+                                    title = formatTitle,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    compact = true,
+                                    triggerShape = IconButtonDefaults.extraSmallRoundShape,
+                                ) {
+                                    MediumTonalButton(
+                                        onClick = null,
+                                        text = formatTitle,
+                                        modifier = this.modifier.fillMaxWidth(),
+                                    )
                                 }
                             }
 
@@ -1637,18 +1906,33 @@ private fun TtsVoicePresetEditorContent(
                         // 朗读表演：角色/指令与三个表演开关，都属于“念的时候怎么演”，跟参数分开一级
                         EngineSectionTitle(R.string.cloud_tts_section_performance)
                         if (!selectedVoice?.roles.isNullOrEmpty()) {
-                            MenuButton(stringResource(R.string.cloud_tts_role_value, editor.role.ifBlank { stringResource(R.string.cloud_tts_default) })) { roleMenu = true }
-                            RoundDropdownMenu(roleMenu, { roleMenu = false }) {
-                                RoundDropdownMenuItem(
-                                    text = stringResource(R.string.cloud_tts_default),
-                                    onClick = { roleMenu = false; update(editor.copy(role = "")) },
+                            val defaultLabel = stringResource(R.string.cloud_tts_default)
+                            val roleTitle = stringResource(
+                                R.string.cloud_tts_role_value,
+                                editor.role.ifBlank { defaultLabel }
+                            )
+                            val roleChoices = remember(selectedVoice, defaultLabel) {
+                                buildList {
+                                    add(AppChoiceOption("", defaultLabel))
+                                    selectedVoice?.roles.orEmpty().forEach {
+                                        add(AppChoiceOption(it, it))
+                                    }
+                                }.toImmutableList()
+                            }
+                            AppChoiceDropdown(
+                                options = roleChoices,
+                                selectedId = editor.role,
+                                onSelect = { role -> update(editor.copy(role = role)) },
+                                title = roleTitle,
+                                modifier = Modifier.fillMaxWidth(),
+                                compact = true,
+                                triggerShape = IconButtonDefaults.extraSmallRoundShape,
+                            ) {
+                                MediumTonalButton(
+                                    onClick = null,
+                                    text = roleTitle,
+                                    modifier = this.modifier.fillMaxWidth(),
                                 )
-                                selectedVoice.roles.forEach { role ->
-                                    RoundDropdownMenuItem(
-                                        text = role,
-                                        onClick = { roleMenu = false; update(editor.copy(role = role)) },
-                                    )
-                                }
                             }
                         }
                         Field(editor.instructions, { update(editor.copy(instructions = it)) }, stringResource(R.string.cloud_tts_instructions))
@@ -1688,16 +1972,24 @@ private fun TtsVoicePresetEditorContent(
                         val selectedPoolNames = editor.memberPools
                             .filter { it.checked }
                             .joinToString("、") { it.name }
-                        MenuButton(
-                            stringResource(
-                                R.string.voice_pool_value,
-                                selectedPoolNames.ifBlank { stringResource(R.string.voice_pool_none) },
+                        val poolTitle = stringResource(
+                            R.string.voice_pool_value,
+                            selectedPoolNames.ifBlank { stringResource(R.string.voice_pool_none) },
+                        )
+                        AppAnchoredPanel(
+                            expanded = poolMenu,
+                            onExpandedChange = { poolMenu = it },
+                        ) {
+                            MediumTonalButton(
+                                onClick = null,
+                                text = poolTitle,
+                                modifier = this.modifier.fillMaxWidth(),
                             )
-                        ) { poolMenu = true }
-                        RoundDropdownMenu(poolMenu, { poolMenu = false }) {
+                        } { _ ->
                             editor.memberPools.forEach { pool ->
                                 RoundDropdownMenuItem(
                                     text = (if (pool.checked) "✓ " else "") + pool.name,
+                                    isSelected = pool.checked,
                                     onClick = {
                                         update(
                                             editor.copy(
@@ -1749,18 +2041,6 @@ private fun Field(value: String, onValueChange: (String) -> Unit, label: String)
         label = label,
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         singleLine = true,
-    )
-}
-
-@Composable
-private fun MenuButton(
-    text: String,
-    onClick: () -> Unit,
-) {
-    MediumTonalButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        text = text,
     )
 }
 

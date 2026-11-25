@@ -118,7 +118,7 @@ data class HighlightRule(
     /** 九宫格右偏移（dp）：见 [bgLengthOffsetLeft]，方向相反。 */
     @ColumnInfo(defaultValue = "0")
     var bgLengthOffsetRight: Float = 0f,
-    /** 边框颜色：null = 不描边。粗细与圆角只在颜色非空时参与绘制。 */
+    /** 日间边框颜色：null 时由夜间色反相派生；两者均为 null 时不描边。粗细与圆角只在有颜色时参与绘制。 */
     var borderColor: Int? = null,
     /** 边框粗细（dp）。 */
     @ColumnInfo(defaultValue = "1")
@@ -126,7 +126,7 @@ data class HighlightRule(
     /** 边框圆角（dp）：0 = 直角。色块填充跟随同一个圆角，色块与描边才对得上。 */
     @ColumnInfo(defaultValue = "4")
     var borderRadius: Float = 4f,
-    /** 深色模式边框颜色：null = 由日间色反相派生。 */
+    /** 深色模式边框颜色：null 时由日间色反相派生。 */
     var borderColorNight: Int? = null,
 ) {
 

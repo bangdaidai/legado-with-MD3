@@ -3,6 +3,7 @@ package io.legado.app.ui.book.readaloud.cloudtts
 import android.net.Uri
 import androidx.compose.runtime.Stable
 import io.legado.app.data.entities.HttpTTS
+import io.legado.app.domain.model.readaloud.ReadAloudVoice
 import io.legado.app.help.readaloud.ReadAloudVoiceTraits
 import io.legado.app.ui.widget.components.importComponents.BaseImportUiState
 import kotlinx.collections.immutable.ImmutableList
@@ -33,7 +34,8 @@ data class CloudTtsUiState(
     val previewingCandidateVoiceId: String? = null,
     /** 音色列表的性别筛选，空串为不筛选；取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
     val voiceGenderFilter: String = "",
-    val selectedTab: CloudTtsTab = CloudTtsTab.Voices,
+    /** null = 引擎列表；非 null = 只展示该引擎名下音色的详情。 */
+    val selectedEngineKey: TtsEngineKey? = null,
     /** 试听文本（用户改过的或内置默认），试听悬浮窗打开时填它。 */
     val previewText: String = "",
     /**
@@ -44,11 +46,7 @@ data class CloudTtsUiState(
     val selectedVoiceIds: ImmutableSet<String> = persistentSetOf(),
     /** 「添加到声音池」弹层：非空 = 打开，带着要加进去的音色 id。 */
     val poolPicker: VoicePoolPickerUi? = null,
-    /**
-     * 被用户排除的音色数（源自带目录里不想用的那些）。
-     *
-     * 大于 0 时才给「恢复」入口——没有排除项时那个按钮按下去没有任何意义。
-     */
+    /** 当前引擎被用户排除的音色数；大于 0 时才给「恢复」入口。 */
     val excludedVoiceCount: Int = 0,
 )
 
@@ -68,7 +66,11 @@ data class VoicePoolOptionUi(
     val memberCount: Int,
 )
 
-enum class CloudTtsTab { Voices, Engines }
+@Stable
+data class TtsEngineKey(
+    val engineType: String,
+    val engineId: String,
+)
 
 @Stable
 data class CloudTtsEngineItemUi(
@@ -76,7 +78,11 @@ data class CloudTtsEngineItemUi(
     val title: String,
     val summary: String,
     val selected: Boolean = false,
-)
+    val voiceCount: Int = 0,
+) {
+    val key: TtsEngineKey
+        get() = TtsEngineKey(ReadAloudVoice.ENGINE_CLOUD, id)
+}
 
 @Stable
 data class TtsManagedEngineItemUi(
@@ -87,13 +93,21 @@ data class TtsManagedEngineItemUi(
     val selected: Boolean = false,
     val loginUrl: String = "",
     val hasScript: Boolean = false,
-)
+    val voiceCount: Int = 0,
+) {
+    val key: TtsEngineKey
+        get() = TtsEngineKey(engineType, engineId)
+}
+
 @Stable data class CloudTtsVoiceItemUi(
     val id: String,
     val title: String,
     val summary: String,
     val deletable: Boolean,
     val editable: Boolean,
+    val engineType: String,
+    val engineId: String,
+    val isDefaultNarrator: Boolean = false,
     /** 筛选用的性别，取值见 [io.legado.app.help.readaloud.ReadAloudVoiceTraits] */
     val gender: String = "",
     /** 第一行的小标记：性别 / 语言 / 风格（图标化短块，不再重复进第二行） */
@@ -180,8 +194,9 @@ data class TtsVoicePresetEditorUi(
 )
 
 sealed interface CloudTtsIntent {
-    data class SelectTab(val tab: CloudTtsTab) : CloudTtsIntent
     data class SetBookContext(val bookUrl: String?) : CloudTtsIntent
+    data class OpenEngine(val engineType: String, val engineId: String) : CloudTtsIntent
+    data object CloseEngine : CloudTtsIntent
     data object AddEngine : CloudTtsIntent
     data object AddVoice : CloudTtsIntent
     data class AddVoiceForEngine(val engineType: String, val engineId: String) : CloudTtsIntent
@@ -207,7 +222,7 @@ sealed interface CloudTtsIntent {
     data class ExportHttpTtsFileSelected(val uri: Uri) : CloudTtsIntent
     data object ExportHttpTtsUrl : CloudTtsIntent
     data object ClearTtsCache : CloudTtsIntent
-       data class RequestDeleteVoice(val id: String) : CloudTtsIntent
+    data class RequestDeleteVoice(val id: String) : CloudTtsIntent
     /** 目录同步音色的「不再显示」：置 excluded，可从列表「恢复已排除音色」找回 */
     data class RequestExcludeVoice(val id: String) : CloudTtsIntent
     data object ConfirmDeleteVoice : CloudTtsIntent
@@ -218,7 +233,7 @@ sealed interface CloudTtsIntent {
     data object ToggleSelectAllVoices : CloudTtsIntent
     data object RequestDeleteSelectedVoices : CloudTtsIntent
     data object ConfirmDeleteSelectedVoices : CloudTtsIntent
-    /** 把排除掉的音色全部放回来（源自带目录的那些）。 */
+    /** 把当前引擎排除掉的音色放回来（源自带目录的那些）。 */
     data object RestoreExcludedVoices : CloudTtsIntent
     /** 打开「添加到声音池」弹层；[ids] 为空时按批量勾选的那一批处理。 */
     data class RequestAddToPool(val ids: List<String>) : CloudTtsIntent

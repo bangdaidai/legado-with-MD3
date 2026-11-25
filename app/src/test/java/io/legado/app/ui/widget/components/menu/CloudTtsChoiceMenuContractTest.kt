@@ -28,32 +28,35 @@ class CloudTtsChoiceMenuContractTest {
     fun pureSelectorsUseCompactAppChoiceDropdown() {
         val source = sourceOf(SCREEN)
         assertEquals(
-            "纯单选菜单数量（服务商 / 模型 / 风格 / 角色 / 格式）",
-            5,
+            "纯单选菜单数量（脚本选项 / 服务商 / 模型 / 风格 / 角色 / 格式）",
+            6,
             Regex("AppChoiceDropdown\\(").findAll(source).count(),
         )
-        assertEquals(5, Regex("selectedId =").findAll(source).count())
-        assertEquals(5, Regex("onSelect =").findAll(source).count())
-        assertEquals(5, Regex("compact = true").findAll(source).count())
+        assertEquals(6, Regex("selectedId =").findAll(source).count())
+        assertEquals(6, Regex("onSelect =").findAll(source).count())
+        assertEquals(6, Regex("compact = true").findAll(source).count())
     }
 
     @Test
     fun triggersAreDisplayOnlyAndCarryAnchorModifier() {
         val source = sourceOf(SCREEN)
+        val editorSource = source
+            .substringAfter("private fun ScriptSelectField")
+            .substringBefore("private fun VoiceEnginePickerSheet")
         assertFalse(
             "纯展示 trigger 不应再引入平行组件，沿用 MediumTonalButton(onClick = null)",
-            source.contains("MediumTonalButtonDisplay"),
+            editorSource.contains("MediumTonalButtonDisplay"),
         )
-        val displayTriggers = Regex("onClick = null").findAll(source).count()
+        val displayTriggers = Regex("onClick = null").findAll(editorSource).count()
         assertEquals(
-            "纯展示 trigger 数量（5 处纯单选 + 区域混合菜单）",
-            6,
+            "纯展示 trigger 数量（6 处纯单选 + 区域混合菜单 + 声音池多选）",
+            8,
             displayTriggers,
         )
         assertEquals(
             "每个纯展示 trigger 都必须透传入口给的锚点 modifier（区域混合菜单同样依赖 COUI 锚点，不留例外）",
             displayTriggers,
-            Regex("modifier = this\\.modifier\\.fillMaxWidth\\(\\)").findAll(source).count(),
+            Regex("modifier = this\\.modifier\\.fillMaxWidth\\(\\)").findAll(editorSource).count(),
         )
     }
 

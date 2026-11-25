@@ -3,10 +3,13 @@ package io.legado.app.model.jsSource
 import com.script.CompiledScript
 import com.script.ScriptBindings
 import com.script.rhino.RhinoScriptEngine
-import splitties.init.appCtx
+import org.mozilla.javascript.BaseFunction
+import org.mozilla.javascript.Context
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
 import org.mozilla.javascript.Undefined
+import splitties.init.appCtx
+import java.security.SecureRandom
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -17,8 +20,10 @@ import kotlin.coroutines.CoroutineContext
 internal object JsSourceCrypto {
 
     private const val CRYPTO_JS_ASSET = "scripts/cryptojs.min.js"
+    private const val SECURE_RANDOM_BINDING = "__legadoSecureRandomInt"
 
     private val lock = Any()
+    private val secureRandom by lazy { SecureRandom() }
 
     @Volatile
     private var compiled: CompiledScript? = null
@@ -49,6 +54,24 @@ internal object JsSourceCrypto {
         }
         val cryptoJs = compiledCryptoJs() ?: return
         cryptoJs.eval(scope, coroutineContext)
+        val secureRandomFunction = object : BaseFunction() {
+            override fun call(
+                cx: Context,
+                callScope: Scriptable,
+                thisObj: Scriptable,
+                args: Array<Any?>?,
+            ): Any = secureRandom.nextInt().toDouble()
+        }.apply {
+            parentScope = scope
+            prototype = ScriptableObject.getFunctionPrototype(scope)
+        }
+        ScriptableObject.putProperty(scope, SECURE_RANDOM_BINDING, secureRandomFunction)
+        try {
+            // Rhino 没有 CryptoJS 依赖的原生 crypto，随机字改用 JCA 提供。
+            RhinoScriptEngine.eval(SECURE_RANDOM_PATCH, scope, coroutineContext)
+        } finally {
+            scope.delete(SECURE_RANDOM_BINDING)
+        }
     }
 
     /**
@@ -67,4 +90,16 @@ internal object JsSourceCrypto {
             return scope
         }
     }
+
+    private const val SECURE_RANDOM_PATCH = """
+        CryptoJS.lib.WordArray.random = (function(nextInt) {
+            return function(nBytes) {
+                var words = [];
+                for (var i = 0; i < nBytes; i += 4) {
+                    words.push(nextInt());
+                }
+                return CryptoJS.lib.WordArray.create(words, nBytes);
+            };
+        })(__legadoSecureRandomInt);
+    """
 }

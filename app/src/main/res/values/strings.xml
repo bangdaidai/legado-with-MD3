@@ -3406,6 +3406,8 @@
     <string name="cloud_tts_http_engines">HTTP protocol TTS</string>
     <string name="cloud_tts_system_engines">System TTS</string>
     <string name="cloud_tts_default_requires_voice">Save at least one voice for this cloud engine before making it the default.</string>
+    <string name="cloud_tts_default_engine_marker">Default engine</string>
+    <string name="cloud_tts_set_default_engine">Set as default engine</string>
     <string name="read_aloud_default_engine_updated">Default read-aloud engine updated</string>
     <string name="cloud_tts_delete_voice_message">Delete the voice preset “%1$s”? Character assignments using it will fall back to another voice.</string>
     <string name="cloud_tts_delete_voices_message">Delete the %1$d selected voices? Character assignments using them will fall back to another voice.</string>
@@ -3439,6 +3441,7 @@
     <string name="cloud_tts_select_voice">Select voice</string>
     <string name="cloud_tts_saved_voices">Saved voices</string>
     <string name="cloud_tts_no_saved_voices">No saved voices. Choose an engine above first.</string>
+    <string name="cloud_tts_no_engine_voices">No saved voices for this engine yet.</string>
     <string name="cloud_tts_engines">Cloud TTS engines</string>
     <string name="cloud_tts_no_engines">No cloud TTS engine configured</string>
     <string name="cloud_tts_available_engines">Available reading engines</string>
@@ -4210,6 +4213,8 @@
     <string name="cloud_tts_default_narrator_cleared">Default narrator voice cleared, following the engine default</string>
     <string name="cloud_tts_default_narrator_disabled">This voice is disabled. Enable it before setting it as the default narrator.</string>
     <string name="cloud_tts_default_narrator_marker">Default narrator</string>
+    <string name="cloud_tts_set_default_narrator">Set as default narrator</string>
+    <string name="cloud_tts_clear_default_narrator">Clear default narrator</string>
     <string name="cloud_tts_default_narrator_set">Default narrator voice updated</string>
     <string name="cloud_tts_gender_value">Gender: %1$s</string>
     <string name="cloud_tts_preset_notes">Notes (overrides style tags)</string>

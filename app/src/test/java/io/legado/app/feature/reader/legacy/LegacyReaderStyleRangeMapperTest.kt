@@ -279,6 +279,28 @@ class LegacyReaderStyleRangeMapperTest {
         assertEquals(6f.dpToPx(), style.borderRadiusPx)
     }
 
+    @Test
+    fun nightOnlyBorderDerivesTheDayColorWithoutLosingTheNightOverride() {
+        val nightColor = 0xFF445566.toInt()
+        val rule = HighlightRule(
+            pattern = "我是李四",
+            targetScope = HighlightRule.TARGET_BODY,
+            borderColorNight = nightColor,
+            borderWidth = 2f,
+            borderRadius = 6f,
+        )
+
+        val day = rangesFor(rule, isNightTheme = false).first().style
+        assertEquals(ColorUtils.flipLightness(nightColor), day.borderColorArgb)
+        assertEquals(2f.dpToPx(), day.borderWidthPx)
+        assertEquals(6f.dpToPx(), day.borderRadiusPx)
+
+        val night = rangesFor(rule, isNightTheme = true).first().style
+        assertEquals(nightColor, night.borderColorArgb)
+        assertEquals(2f.dpToPx(), night.borderWidthPx)
+        assertEquals(6f.dpToPx(), night.borderRadiusPx)
+    }
+
     /**
      * 角色气泡：区间是「整句台词连同引号」，压在句首的角色胶囊因此落在同一个气泡里。
      *

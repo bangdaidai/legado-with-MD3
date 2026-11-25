@@ -143,7 +143,6 @@ import io.legado.app.ui.book.read.ReadSheetConfigUiState
 import io.legado.app.ui.widget.components.NinePatchEditorDialog
 import io.legado.app.ui.widget.components.SectionTitle
 import io.legado.app.ui.widget.components.ValueStepper
-import io.legado.app.ui.widget.components.settingItem.TinyColorSettingItem
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
@@ -244,12 +243,7 @@ fun HighlightRuleEditSheet(
     var hasBorder by remember(show, rule) {
         mutableStateOf(initial.borderColor != null || initial.borderColorNight != null)
     }
-    var borderColor by remember(show, rule) {
-        mutableIntStateOf(
-            initial.borderColor ?: initial.borderColorNight?.let { ColorUtils.flipLightness(it) }
-                ?: 0xFF63C37D.toInt()
-        )
-    }
+    var borderColor by remember(show, rule) { mutableStateOf(initial.borderColor) }
     var borderColorNight by remember(show, rule) { mutableStateOf(initial.borderColorNight) }
     var borderWidth by remember(show, rule) { mutableFloatStateOf(initial.borderWidth) }
     var borderRadius by remember(show, rule) { mutableFloatStateOf(initial.borderRadius) }
@@ -316,6 +310,7 @@ fun HighlightRuleEditSheet(
     var showUnderlineColorPicker by remember(show, rule) { mutableStateOf(false) }
     var showUnderlineColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showBorderColorPicker by remember(show, rule) { mutableStateOf(false) }
+    var showBorderColorNightPicker by remember(show, rule) { mutableStateOf(false) }
     var showFontSelect by remember(show, rule) { mutableStateOf(false) }
 
     // Validation
@@ -996,14 +991,28 @@ fun HighlightRuleEditSheet(
                 TinySwitchSettingItem(
                     title = stringResource(R.string.highlight_border),
                     checked = hasBorder,
-                    onCheckedChange = { hasBorder = it },
+                    onCheckedChange = {
+                        hasBorder = it
+                        if (it && borderColor == null && borderColorNight == null) {
+                            borderColor = 0xFF63C37D.toInt()
+                        }
+                    },
                 )
                 AnimatedVisibility(visible = hasBorder) {
                     Column {
-                        TinyColorSettingItem(
+                        TinyClearColorModeSettingItem(
                             title = stringResource(R.string.select_color),
-                            colorValue = borderColor,
-                            onClick = { showBorderColorPicker = true },
+                            dayColor = borderColor,
+                            nightColor = borderColorNight,
+                            onClickColor = { isNight ->
+                                if (isNight) showBorderColorNightPicker = true
+                                else showBorderColorPicker = true
+                            },
+                            onClearColor = {
+                                borderColor = null
+                                borderColorNight = null
+                                hasBorder = false
+                            },
                         )
                         TinySliderSettingItem(
                             title = stringResource(R.string.highlight_border_width),
@@ -1153,7 +1162,9 @@ fun HighlightRuleEditSheet(
                             pattern = pattern,
                             textColor = textColor,
                             bgColor = bgColor,
-                            borderColor = if (hasBorder) borderColor else null,
+                            borderColor = if (hasBorder) {
+                                borderColor ?: borderColorNight?.let { ColorUtils.flipLightness(it) }
+                            } else null,
                             borderWidth = borderWidth,
                             borderRadius = borderRadius,
                             bgImage = if (hasBgImage) bgImage else "",
@@ -1203,7 +1214,7 @@ fun HighlightRuleEditSheet(
                             textColor = nightTextColor,
                             bgColor = nightBgColor,
                             borderColor = if (hasBorder) {
-                                borderColorNight ?: ColorUtils.flipLightness(borderColor)
+                                borderColorNight ?: borderColor?.let { ColorUtils.flipLightness(it) }
                             } else null,
                             borderWidth = borderWidth,
                             borderRadius = borderRadius,
@@ -1340,7 +1351,7 @@ fun HighlightRuleEditSheet(
     )
     ColorPickerSheet(
         show = showBorderColorPicker,
-        initialColor = borderColor,
+        initialColor = borderColor ?: borderColorNight?.let { ColorUtils.flipLightness(it) } ?: 0,
         onDismissRequest = { showBorderColorPicker = false },
         onColorSelected = { color ->
             borderColor = color
@@ -1348,6 +1359,18 @@ fun HighlightRuleEditSheet(
                 borderColorNight = ColorUtils.flipLightness(color)
             }
             showBorderColorPicker = false
+        },
+    )
+    ColorPickerSheet(
+        show = showBorderColorNightPicker,
+        initialColor = borderColorNight ?: borderColor?.let { ColorUtils.flipLightness(it) } ?: 0,
+        onDismissRequest = { showBorderColorNightPicker = false },
+        onColorSelected = { color ->
+            borderColorNight = color
+            if (borderColor == null) {
+                borderColor = ColorUtils.flipLightness(color)
+            }
+            showBorderColorNightPicker = false
         },
     )
 

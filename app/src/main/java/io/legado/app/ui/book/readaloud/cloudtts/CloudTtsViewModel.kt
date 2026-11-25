@@ -65,6 +65,7 @@ import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isDataUrl
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
@@ -200,14 +201,22 @@ class CloudTtsViewModel(
         }
         voices = savedVoices
         labels = VoiceLabelStore.all()
-        // 列表本身已经滤掉排除项，这个数要从全量里数，用来决定要不要给「恢复」入口
-        val excludedCount = voiceGateway.countExcludedVoices()
+        // 列表本身已经滤掉排除项，恢复入口只统计当前引擎，避免在详情里操作别的引擎。
+        val excludedVoices = voiceGateway.getVoices().filter { it.excluded }
         _uiState.update { state ->
+            val selectedEngineKey = state.selectedEngineKey?.takeIf(::engineExists)
+            val visibleVoices = voiceItems(state.voiceGenderFilter, selectedEngineKey)
+            val excludedCount = selectedEngineKey?.let { key ->
+                excludedVoices.count { belongsToEngine(it, key) }
+            } ?: 0
             state.copy(
                 // 勾选语义按「可加入声音池」定义：任何音色都能入池，不再局限于用户音色。
                 selectedVoiceIds = state.selectedVoiceIds.intersect(
-                    voices.mapTo(mutableSetOf()) { it.id }
+                    visibleVoices.mapTo(mutableSetOf()) { it.id }
                 ).toPersistentSet(),
+                selectedEngineKey = selectedEngineKey,
+                voiceGenderFilter = state.voiceGenderFilter.takeIf { selectedEngineKey != null }.orEmpty(),
+                voiceBatchMode = state.voiceBatchMode && selectedEngineKey != null,
                 loading = false,
                 excludedVoiceCount = excludedCount,
                 previewText = previewText(defaultPreviewText()),
@@ -217,6 +226,7 @@ class CloudTtsViewModel(
                         engine.name,
                         engine.provider.profile.displayName,
                         isDefaultEngine(ReadAloudVoice.ENGINE_CLOUD, engine.id),
+                        voiceCount(ReadAloudVoice.ENGINE_CLOUD, engine.id),
                     )
                 }.toImmutableList(),
                 systemEngines = systemEngineItems(),
@@ -229,9 +239,10 @@ class CloudTtsViewModel(
                         selected = isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engine.sourceId),
                         loginUrl = engine.loginUrl,
                         hasScript = engine.hasScript,
+                        voiceCount = voiceCount(ReadAloudVoice.ENGINE_HTTP, engine.sourceId),
                     )
                 }.toImmutableList(),
-                voices = voiceItems(state.voiceGenderFilter),
+                voices = visibleVoices,
                 availableEngines = engineOptions(),
             )
         }
@@ -239,8 +250,9 @@ class CloudTtsViewModel(
 
     fun onIntent(intent: CloudTtsIntent) {
         when (intent) {
-            is CloudTtsIntent.SelectTab -> _uiState.update { it.copy(selectedTab = intent.tab) }
             is CloudTtsIntent.SetBookContext -> setBookContext(intent.bookUrl)
+            is CloudTtsIntent.OpenEngine -> openEngine(intent.engineType, intent.engineId)
+            CloudTtsIntent.CloseEngine -> closeEngine()
             CloudTtsIntent.AddEngine -> _uiState.update { it.copy(
                 engineEditor = CloudTtsEngineEditorUi(name = "MiMo", model = "mimo-v2.5-tts"),
             ) }
@@ -296,18 +308,21 @@ class CloudTtsViewModel(
                 )
             }
 
-            is CloudTtsIntent.ToggleVoiceSelection -> _uiState.update {
-                val picked = it.selectedVoiceIds.toMutableSet()
-                if (voices.none { voice -> voice.id == intent.id }) return@update it
+            is CloudTtsIntent.ToggleVoiceSelection -> _uiState.update { state ->
+                val picked = state.selectedVoiceIds.toMutableSet()
+                val visibleIds = voiceItems(state.voiceGenderFilter, state.selectedEngineKey)
+                    .mapTo(mutableSetOf()) { it.id }
+                if (intent.id !in visibleIds) return@update state
                 if (!picked.remove(intent.id)) picked += intent.id
-                it.copy(selectedVoiceIds = picked.toPersistentSet())
+                state.copy(selectedVoiceIds = picked.toPersistentSet())
             }
 
-            CloudTtsIntent.ToggleSelectAllVoices -> _uiState.update {
-                val candidates = voices.mapTo(mutableSetOf()) { it.id }
+            CloudTtsIntent.ToggleSelectAllVoices -> _uiState.update { state ->
+                val candidates = voiceItems(state.voiceGenderFilter, state.selectedEngineKey)
+                    .mapTo(mutableSetOf()) { it.id }
                 val picked =
-                    if (it.selectedVoiceIds.containsAll(candidates)) emptySet() else candidates
-                it.copy(selectedVoiceIds = picked.toPersistentSet())
+                    if (state.selectedVoiceIds.containsAll(candidates)) emptySet() else candidates
+                state.copy(selectedVoiceIds = picked.toPersistentSet())
             }
 
             // 删除只对「可移走」的音色生效：目录自动音色能勾选入池，但不能被删。
@@ -340,10 +355,14 @@ class CloudTtsViewModel(
             is CloudTtsIntent.PreviewSavedVoice -> previewSavedVoice(intent.id)
             is CloudTtsIntent.RequestRenameVoice -> requestRenameVoice(intent.id)
             is CloudTtsIntent.ToggleDefaultNarratorVoice -> toggleDefaultNarratorVoice(intent.id)
-            is CloudTtsIntent.SetVoiceGenderFilter -> _uiState.update {
-                val gender = intent.gender.takeUnless { value -> value == it.voiceGenderFilter }
+            is CloudTtsIntent.SetVoiceGenderFilter -> _uiState.update { state ->
+                val gender = intent.gender.takeUnless { value -> value == state.voiceGenderFilter }
                     .orEmpty()
-                it.copy(voiceGenderFilter = gender, voices = voiceItems(gender))
+                state.copy(
+                    voiceGenderFilter = gender,
+                    selectedVoiceIds = persistentSetOf(),
+                    voices = voiceItems(gender, state.selectedEngineKey),
+                )
             }
             is CloudTtsIntent.ConfirmRenameVoice -> confirmRenameVoice(intent.name)
             is CloudTtsIntent.UpdateEngineEditor -> _uiState.update { it.copy(engineEditor = intent.editor) }
@@ -365,6 +384,36 @@ class CloudTtsViewModel(
             CloudTtsIntent.DismissError -> _uiState.update { it.copy(activeDialog = null) }
             CloudTtsIntent.CopyError -> copyError()
             is CloudTtsIntent.ReportError -> showError(intent.message)
+        }
+    }
+
+    private fun openEngine(engineType: String, engineId: String) {
+        val key = TtsEngineKey(engineType, engineId)
+        if (!engineExists(key)) return
+        _uiState.update { state ->
+            state.copy(
+                selectedEngineKey = key,
+                voiceGenderFilter = "",
+                voiceBatchMode = false,
+                selectedVoiceIds = persistentSetOf(),
+                excludedVoiceCount = voices.count { voice ->
+                    voice.excluded && belongsToEngine(voice, key)
+                },
+                voices = voiceItems("", key),
+            )
+        }
+    }
+
+    private fun closeEngine() {
+        _uiState.update { state ->
+            state.copy(
+                selectedEngineKey = null,
+                voiceGenderFilter = "",
+                voiceBatchMode = false,
+                selectedVoiceIds = persistentSetOf(),
+                excludedVoiceCount = 0,
+                voices = persistentListOf(),
+            )
         }
     }
 
@@ -412,9 +461,8 @@ class CloudTtsViewModel(
     private fun editVoice(id: String) = viewModelScope.launch {
         // 目录同步的音色也允许点开：只开放「分类标注 + 声音池」，预设参数保持只读
         val voice = voices.firstOrNull { it.id == id } ?: return@launch
-        val engine = _uiState.value.availableEngines.firstOrNull {
-            it.engineType == voice.engineType && it.engineId == voice.engineId
-        } ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
+        val engine = engineOptionOf(voice.engineType, voice.engineId)
+            ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
         val editor = withContext(Dispatchers.IO) { voiceEditorOf(voice, engine.title) }
         _uiState.update { state -> state.copy(
             voiceEditor = editor,
@@ -519,7 +567,8 @@ class CloudTtsViewModel(
         _uiState.update { it.copy(discovering = true) }
         runCatching {
             if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
-                systemCatalog.getVoices(editor.engineId).map { voice ->
+                val enginePackage = editor.engineId.removePrefix("${ReadAloudVoice.ENGINE_SYSTEM}:")
+                systemCatalog.getVoices(enginePackage).map { voice ->
                     CloudTtsDiscoveredVoiceUi(
                         id = voice.id,
                         label = listOf(voice.displayName, voice.locale)
@@ -820,9 +869,8 @@ class CloudTtsViewModel(
     /** 列表行上的试听按钮：拿这一行音色自己的参数合成一句，不碰编辑弹窗。 */
     private fun previewVoice(id: String, text: String? = null) = viewModelScope.launch {
         val voice = voices.firstOrNull { it.id == id } ?: return@launch
-        val engine = _uiState.value.availableEngines.firstOrNull {
-            it.engineType == voice.engineType && it.engineId == voice.engineId
-        } ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
+        val engine = engineOptionOf(voice.engineType, voice.engineId)
+            ?: return@launch toast(application.getString(R.string.cloud_tts_voice_engine_unavailable))
         // 取参数这一份要读音色标注（[voiceEditorOf] 是挂起函数、要碰库），所以行内试听也得起协程；
         // 参数取好之后仍走 [previewWith]，与弹窗试听共用同一套合成，不另写一份。
         val editor = withContext(Dispatchers.IO) { voiceEditorOf(voice, engine.title) }
@@ -841,7 +889,7 @@ class CloudTtsViewModel(
                 val file = File(application.cacheDir, "cloud_tts_preview/${editor.engineId.hashCode()}.audio")
                 if (editor.engineType == ReadAloudVoice.ENGINE_SYSTEM) {
                     check(systemSynthesizer.synthesize(
-                        engine = editor.engineId,
+                        engine = editor.engineId.removePrefix("${ReadAloudVoice.ENGINE_SYSTEM}:"),
                         voiceName = editor.voiceId,
                         text = draft ?: previewText(
                             application.getString(R.string.system_tts_preview_text)
@@ -1013,6 +1061,16 @@ class CloudTtsViewModel(
         )
     }
 
+    private fun engineOptionOf(engineType: String, engineId: String): TtsEngineOptionUi? =
+        _uiState.value.availableEngines.firstOrNull { option ->
+            option.engineType == engineType && when (engineType) {
+                ReadAloudVoice.ENGINE_SYSTEM -> option.engineId == engineId ||
+                    option.engineId == engineId.removePrefix("${ReadAloudVoice.ENGINE_SYSTEM}:")
+
+                else -> option.engineId == engineId
+            }
+        }
+
     private fun engineOptions(): kotlinx.collections.immutable.ImmutableList<TtsEngineOptionUi> =
         buildList {
             addAll(systemEngines.map { engine ->
@@ -1057,37 +1115,71 @@ class CloudTtsViewModel(
      * 标签来自 [ReadAloudVoiceTraits]（http 引擎脚本 `voices()` 声明的 gender/style/tags、
      * 云端音色的 style/role），音色表本身没有这些列。
      */
-    private fun voiceItems(genderFilter: String) = voices.mapNotNull { voice ->
-        val traits = traitsOf(voice)
-        if (genderFilter.isNotEmpty() && traits.gender != genderFilter) return@mapNotNull null
-        val defaultNarrator = voice.id ==
-            readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId &&
-            voice.id.isNotBlank()
-        // 用户标注里与第一行（性别/风格）重复的词不再进第二行，避免同一信息出现两遍
-        val firstRow = setOfNotNull(
-            genderLabel(traits.gender),
-            traits.style.takeIf(String::isNotBlank),
-        ).map { it.lowercase() }.toSet()
-        val secondary = buildList {
-            if (!voice.available) add(application.getString(R.string.cloud_tts_unavailable_suffix))
-            if (defaultNarrator) add(application.getString(R.string.cloud_tts_default_narrator_marker))
-            addAll(voicePoolNames[voice.id].orEmpty())
-            addAll(traits.tags)
-        }.map(String::trim).filter { it.isNotEmpty() && it.lowercase() !in firstRow }.distinct()
-        CloudTtsVoiceItemUi(
-            voice.id,
-            voice.displayName,
-            summary = "",
-            deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
-            editable = true,
-            gender = traits.gender,
-            genderLabel = genderLabel(traits.gender).orEmpty(),
-            languageLabel = traits.language.takeIf(String::isNotBlank).orEmpty(),
-            styleLabel = traits.style.takeIf(String::isNotBlank).orEmpty(),
-            secondaryTags = secondary.take(6),
-            engineName = engineName(voice.engineType, voice.engineId),
-        )
-    }.toImmutableList()
+    private fun voiceItems(
+        genderFilter: String,
+        engineKey: TtsEngineKey?,
+    ): ImmutableList<CloudTtsVoiceItemUi> {
+        if (engineKey == null) return persistentListOf()
+        return voices.mapNotNull { voice ->
+            if (!belongsToEngine(voice, engineKey)) return@mapNotNull null
+            val traits = traitsOf(voice)
+            if (genderFilter.isNotEmpty() && traits.gender != genderFilter) return@mapNotNull null
+            val defaultNarrator = voice.id ==
+                readAloudSettingsGateway.currentSettings.defaultNarratorVoiceId &&
+                voice.id.isNotBlank()
+            // 用户标注里与第一行（性别/风格）重复的词不再进第二行，避免同一信息出现两遍
+            val firstRow = setOfNotNull(
+                genderLabel(traits.gender),
+                traits.style.takeIf(String::isNotBlank),
+            ).map { it.lowercase() }.toSet()
+            val secondary = buildList {
+                if (!voice.available) add(application.getString(R.string.cloud_tts_unavailable_suffix))
+                addAll(voicePoolNames[voice.id].orEmpty())
+                addAll(traits.tags)
+            }.map(String::trim).filter { it.isNotEmpty() && it.lowercase() !in firstRow }.distinct()
+            CloudTtsVoiceItemUi(
+                id = voice.id,
+                title = voice.displayName,
+                summary = "",
+                deletable = voice.managedBy == ReadAloudVoice.MANAGED_BY_USER,
+                editable = true,
+                engineType = voice.engineType,
+                engineId = voice.engineId,
+                isDefaultNarrator = defaultNarrator,
+                gender = traits.gender,
+                genderLabel = genderLabel(traits.gender).orEmpty(),
+                languageLabel = traits.language.takeIf(String::isNotBlank).orEmpty(),
+                styleLabel = traits.style.takeIf(String::isNotBlank).orEmpty(),
+                secondaryTags = secondary.take(6),
+                engineName = engineName(voice.engineType, voice.engineId),
+            )
+        }.toImmutableList()
+    }
+
+    private fun belongsToEngine(voice: ReadAloudVoice, key: TtsEngineKey): Boolean {
+        if (voice.engineType != key.engineType) return false
+        return when (key.engineType) {
+            ReadAloudVoice.ENGINE_SYSTEM -> key.engineId.isNotBlank() &&
+                (voice.engineId == key.engineId ||
+                    voice.engineId == SystemTtsVoiceCatalog.engineId(key.engineId))
+
+            else -> voice.engineId == key.engineId
+        }
+    }
+
+    private fun voiceCount(engineType: String, engineId: String): Int {
+        val key = TtsEngineKey(engineType, engineId)
+        return voices.count { belongsToEngine(it, key) }
+    }
+
+    private fun engineExists(key: TtsEngineKey): Boolean = when (key.engineType) {
+        ReadAloudVoice.ENGINE_CLOUD -> engines.any { it.id == key.engineId }
+        ReadAloudVoice.ENGINE_HTTP -> httpEngines.any { it.sourceId == key.engineId }
+        ReadAloudVoice.ENGINE_SYSTEM -> key.engineId.isBlank() ||
+            systemEngines.any { it.sourceId == key.engineId || it.id == key.engineId }
+
+        else -> false
+    }
 
     /**
      * 长按音色行：设为/取消全局默认旁白音色。
@@ -1108,7 +1200,7 @@ class CloudTtsViewModel(
         readAloudSettingsGateway.update {
             it.copy(defaultNarratorVoiceId = if (cleared) "" else id)
         }
-        _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter)) }
+        _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter, state.selectedEngineKey)) }
         toast(
             application.getString(
                 if (cleared) R.string.cloud_tts_default_narrator_cleared
@@ -1218,6 +1310,7 @@ class CloudTtsViewModel(
                 engineId = "",
                 title = application.getString(R.string.system_tts),
                 selected = isDefaultEngine(ReadAloudVoice.ENGINE_SYSTEM, ""),
+                voiceCount = 0,
             )
         )
         addAll(systemEngines.map { engine ->
@@ -1227,6 +1320,7 @@ class CloudTtsViewModel(
                 title = engine.displayName,
                 summary = engine.providerName,
                 selected = isDefaultEngine(ReadAloudVoice.ENGINE_SYSTEM, engine.sourceId),
+                voiceCount = voiceCount(ReadAloudVoice.ENGINE_SYSTEM, engine.sourceId),
             )
         })
     }.toImmutableList()
@@ -1257,6 +1351,7 @@ class CloudTtsViewModel(
                         engine.name,
                         engine.provider.profile.displayName,
                         isDefaultEngine(ReadAloudVoice.ENGINE_CLOUD, engine.id),
+                        voiceCount(ReadAloudVoice.ENGINE_CLOUD, engine.id),
                     )
                 }.toImmutableList(),
                 systemEngines = systemEngineItems(),
@@ -1269,6 +1364,7 @@ class CloudTtsViewModel(
                         selected = isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engine.sourceId),
                         loginUrl = engine.loginUrl,
                         hasScript = engine.hasScript,
+                        voiceCount = voiceCount(ReadAloudVoice.ENGINE_HTTP, engine.sourceId),
                     )
                 }.toImmutableList(),
             )
@@ -1399,7 +1495,7 @@ class CloudTtsViewModel(
         val autoJoined = VoicePoolStore.autoAssignByTags()
         if (autoJoined > 0) {
             voicePoolNames = VoicePoolStore.poolNamesOfVoices()
-            _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter)) }
+            _uiState.update { state -> state.copy(voices = voiceItems(state.voiceGenderFilter, state.selectedEngineKey)) }
         }
     }
 
@@ -1407,6 +1503,9 @@ class CloudTtsViewModel(
         val id = engineId.toLongOrNull() ?: return@launch
         httpTtsRepository.deleteById(id)
         refreshHttpVoiceCatalog()
+        if (_uiState.value.selectedEngineKey == TtsEngineKey(ReadAloudVoice.ENGINE_HTTP, engineId)) {
+            closeEngine()
+        }
         if (isDefaultEngine(ReadAloudVoice.ENGINE_HTTP, engineId)) {
             readAloudSettingsGateway.update { it.copy(ttsEngine = null) }
             ReadAloud.upReadAloudClass()
@@ -1600,6 +1699,9 @@ class CloudTtsViewModel(
     private fun deleteEngine(id: String) = viewModelScope.launch {
         voices.filter { it.engineId == id }.forEach { voiceGateway.deleteVoice(it) }
         engines.firstOrNull { it.id == id }?.let { engineGateway.delete(it) }
+        if (_uiState.value.selectedEngineKey == TtsEngineKey(ReadAloudVoice.ENGINE_CLOUD, id)) {
+            closeEngine()
+        }
         if (isDefaultEngine(ReadAloudVoice.ENGINE_CLOUD, id)) {
             readAloudSettingsGateway.update { it.copy(ttsEngine = null) }
             ReadAloud.upReadAloudClass()
@@ -1667,11 +1769,14 @@ class CloudTtsViewModel(
         }
     }
 
-    /** 把排除掉的音色放回来。行一直留着，所以能原样恢复。 */
+    /** 把当前引擎排除掉的音色放回来。行一直留着，所以能原样恢复。 */
     private fun restoreExcludedVoices() = viewModelScope.launch {
+        val engineKey = _uiState.value.selectedEngineKey ?: return@launch
         val restored = withContext(Dispatchers.IO) {
             val now = System.currentTimeMillis()
-            val excluded = voiceGateway.getVoices().filter { it.excluded }
+            val excluded = voiceGateway.getVoices().filter {
+                it.excluded && belongsToEngine(it, engineKey)
+            }
             excluded.forEach { voiceGateway.upsertVoice(it.copy(excluded = false, updatedAt = now)) }
             excluded.size
         }
@@ -1689,8 +1794,8 @@ class CloudTtsViewModel(
      * 顺带 ensureSeeded 一次，否则新设备上弹层里一个池都没有。
      */
     private fun openPoolPicker(ids: List<String>) = viewModelScope.launch {
-        // 候选是页面上全部音色：入池不限 managedBy，目录自动音色一样能进池。
-        val candidates = voices.mapTo(mutableSetOf()) { it.id }
+        // 候选只取当前引擎可见音色：入池不限 managedBy，目录自动音色一样能进池。
+        val candidates = _uiState.value.voices.mapTo(mutableSetOf()) { it.id }
         val picked = ids.ifEmpty { _uiState.value.selectedVoiceIds.toList() }.filter { it in candidates }
         if (picked.isEmpty()) return@launch
         val pools = withContext(Dispatchers.IO) {

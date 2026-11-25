@@ -156,6 +156,69 @@ object AiProviderPresets {
             modelId = "mimo-v2.5-pro"
         ),
         AiProviderPreset(
+            id = "siliconflow",
+            name = "硅基流动",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://api.siliconflow.cn/v1",
+            modelsUrl = "https://api.siliconflow.cn/v1/models",
+            modelName = "",
+            modelId = ""
+        ),
+        AiProviderPreset(
+            id = "openrouter",
+            name = "OpenRouter",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://openrouter.ai/api/v1",
+            modelsUrl = "https://openrouter.ai/api/v1/models",
+            modelName = "",
+            modelId = ""
+        ),
+        AiProviderPreset(
+            id = "sensenova",
+            name = "商汤",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://token.sensenova.cn/v1",
+            modelsUrl = "https://token.sensenova.cn/v1/models",
+            modelName = "SenseNova 6.7 Flash Lite",
+            modelId = "sensenova-6.7-flash-lite"
+        ),
+        AiProviderPreset(
+            id = "aliyun_bailian",
+            name = "阿里云百炼",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            modelsUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+            modelName = "",
+            modelId = ""
+        ),
+        AiProviderPreset(
+            id = "volcengine",
+            name = "火山引擎",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://ark.cn-beijing.volces.com/api/v3",
+            modelsUrl = "https://ark.cn-beijing.volces.com/api/v3/models",
+            modelName = "",
+            modelId = ""
+        ),
+        AiProviderPreset(
+            id = "moonshot",
+            name = "月之暗面",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://api.moonshot.cn/v1",
+            modelsUrl = "https://api.moonshot.cn/v1/models",
+            modelName = "",
+            modelId = ""
+        ),
+        AiProviderPreset(
+            id = "zhipu",
+            name = "智谱",
+            protocol = AiProtocol.OPENAI_CHAT_COMPLETIONS,
+            baseUrl = "https://open.bigmodel.cn/api/paas/v4",
+            modelsUrl = "https://open.bigmodel.cn/api/paas/v4/models",
+            modelName = "",
+            modelId = ""
+        ),
+        AiProviderPreset(
             id = "anthropic",
             name = "Anthropic",
             protocol = AiProtocol.ANTHROPIC_MESSAGES,
