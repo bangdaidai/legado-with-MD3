@@ -61,6 +61,30 @@ class CloudTtsTopBarMenuContractTest {
         )
     }
 
+    /**
+     * 引擎卡与音色行尾的 ⋮ 是 `MediumTonalButton(onClick = null)` 纯展示 trigger：
+     * 外层 [AppActionMenu] 提供点击节点，但图标本身仍必须带可访问名称。缺名称时
+     * `SeriesButtonContent` 的图标按钮护栏会直接抛
+     * `IllegalArgumentException: Icon-only buttons must provide a contentDescription`，
+     * 整个「朗读引擎与音色」页在组合阶段崩溃。
+     */
+    @Test
+    fun rowMoreTriggersKeepAccessibleName() {
+        val blocks = Regex("MediumTonalButton\\((.*?)\\)", RegexOption.DOT_MATCHES_ALL)
+            .findAll(sourceOf(CLOUD_TTS))
+            .map { it.groupValues[1] }
+            .filter { it.contains("onClick = null") && it.contains("MoreVert") }
+            .toList()
+        assertTrue("找不到引擎/音色行尾的 ⋮ 纯展示 trigger", blocks.isNotEmpty())
+        blocks.forEach { block ->
+            assertTrue(
+                "图标按钮缺少 contentDescription，运行期会被 SeriesButtonContent 拦截",
+                block.contains("contentDescription =") &&
+                    !block.contains("contentDescription = null"),
+            )
+        }
+    }
+
     private fun sourceOf(path: String): String {
         var directory: File? = File("").absoluteFile
         while (directory != null) {

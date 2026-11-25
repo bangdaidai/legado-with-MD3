@@ -942,7 +942,7 @@ private fun EngineCard(
                     onClick = null,
                     modifier = this.modifier,
                     icon = Icons.Default.MoreVert,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.more_menu),
                 )
             }
         },
@@ -990,7 +990,7 @@ private fun VoiceActionsMenu(
             onClick = null,
             modifier = this.modifier,
             icon = Icons.Default.MoreVert,
-            contentDescription = null,
+            contentDescription = stringResource(R.string.more_menu),
         )
     }
 }
