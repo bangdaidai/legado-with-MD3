@@ -71,6 +71,7 @@ palette = "1.0.0"
 preference = "1.2.1"
 protobufJavalite = "4.26.1"
 quickChineseTransfer = "0.2.17"
+quickjsKt = "1.0.4"
 # 书源 JS 通过 Packages.cn.hutool.* 直接调用，Hutool 作为书源运行时加密库保留在 classpath。
 # 应用代码不直接依赖它；加密走 JCA / help/crypto/CryptoUtils.kt。版本固定，勿升级（参考上游基线）。
 hutool = "5.8.22"
@@ -222,6 +223,7 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobufJavalite" }
 
 quick-chinese-transfer-core = { module = "com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core", version.ref = "quickChineseTransfer" }
+quickjs-kt = { module = "io.github.dokar3:quickjs-kt", version.ref = "quickjsKt" }
 
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }

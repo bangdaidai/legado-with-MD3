@@ -12,6 +12,8 @@ import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.getShareScope
+import io.legado.app.quickjs.QuickJsSandboxBridge
+import io.legado.app.quickjs.QuickJsSandboxExecution
 import io.legado.app.utils.GSON
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -22,6 +24,7 @@ import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
 import org.mozilla.javascript.Undefined
 import org.mozilla.javascript.Wrapper
+import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
@@ -36,6 +39,7 @@ import kotlin.coroutines.EmptyCoroutineContext
  *
  * 每次业务调用创建全新局部作用域并重新求值主脚本（编译结果按脚本文本缓存），
  * 共享部分只读地挂在作用域父级：jsLib 共享库或内置 CryptoJS。
+ * java 宿主仅额外提供字符串输入输出的 QuickJS 隔离执行入口。
  * 声明式书源继续走原有 AnalyzeRule 链，两种书源只在 WebBook 入口分流。
  */
 class JsSourceEngine(
@@ -46,9 +50,31 @@ class JsSourceEngine(
     private val coroutineContext =
         coroutineContext?.withoutScriptDispatcher() ?: EmptyCoroutineContext
 
+    private val quickJsSandboxBridge by lazy { QuickJsSandboxBridge(appCtx) }
+    private val quickJsExecution = ThreadLocal<Lazy<QuickJsSandboxExecution>>()
+
     override fun getSource(): BaseSource = source
 
     override fun getTag(): String = source.getTag()
+
+    /** 仅单文件 JS 运行时可达，QuickJS 本体不暴露给 Rhino。 */
+    fun getQuickJsSandbox(): QuickJsSandboxBridge {
+        val execution = quickJsExecution.get()?.value ?: return quickJsSandboxBridge
+        execution.prepare()
+        return execution.bridge
+    }
+
+    private fun <T> withQuickJsExecution(block: () -> T): T {
+        val previous = quickJsExecution.get()
+        val execution = lazy { QuickJsSandboxExecution(appCtx) }
+        quickJsExecution.set(execution)
+        return try {
+            block()
+        } finally {
+            if (previous == null) quickJsExecution.remove() else quickJsExecution.set(previous)
+            if (execution.isInitialized()) execution.value.close()
+        }
+    }
 
     /** 把 UTF-8 文本压成可安全跨 Rhino 边界传递的 Base64（gzip/zlib 自动识别解包）。 */
     fun gzipUtf8ToBase64(value: String): String {
@@ -72,29 +98,31 @@ class JsSourceEngine(
         return stream.use { it.readBytes().toString(Charsets.UTF_8) }
     }
 
-    fun callFunction(name: String, args: List<Pair<String, Any?>>): String? {
-        val scope = buildScope(args)
-        if (ScriptableObject.getProperty(scope, name) !is Function) {
-            throw NoStackTraceException("JS源缺少函数 $name")
+    fun callFunction(name: String, args: List<Pair<String, Any?>>): String? =
+        withQuickJsExecution {
+            val scope = buildScope(args)
+            if (ScriptableObject.getProperty(scope, name) !is Function) {
+                throw NoStackTraceException("JS源缺少函数 $name")
+            }
+            val expression = "$name(${args.joinToString(", ") { it.first }})"
+            normalizeJsResult(
+                compile(expression).eval(scope, coroutineContext),
+                coroutineContext,
+            )
         }
-        val expression = "$name(${args.joinToString(", ") { it.first }})"
-        return normalizeJsResult(
-            compile(expression).eval(scope, coroutineContext),
-            coroutineContext,
-        )
-    }
 
-    fun callFunctionIfExists(name: String, args: List<Pair<String, Any?>>): String? {
-        val scope = buildScope(args)
-        if (ScriptableObject.getProperty(scope, name) !is Function) {
-            return null
+    fun callFunctionIfExists(name: String, args: List<Pair<String, Any?>>): String? =
+        withQuickJsExecution {
+            val scope = buildScope(args)
+            if (ScriptableObject.getProperty(scope, name) !is Function) {
+                return@withQuickJsExecution null
+            }
+            val expression = "$name(${args.joinToString(", ") { it.first }})"
+            normalizeJsResult(
+                compile(expression).eval(scope, coroutineContext),
+                coroutineContext,
+            )
         }
-        val expression = "$name(${args.joinToString(", ") { it.first }})"
-        return normalizeJsResult(
-            compile(expression).eval(scope, coroutineContext),
-            coroutineContext,
-        )
-    }
 
     private fun buildScope(args: List<Pair<String, Any?>>): Scriptable {
         val script = source.mainJs?.takeIf { it.isNotBlank() }

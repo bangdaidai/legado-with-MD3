@@ -69,6 +69,7 @@ import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.BookCover
+import io.legado.app.quickjs.QuickJsSandboxProcess
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.FirebaseManager
 import io.legado.app.utils.LogUtils
@@ -103,6 +104,8 @@ class App : Application(), SingletonImageLoader.Factory {
     }
 
     override fun onCreate() {
+        super.onCreate()
+        if (QuickJsSandboxProcess.isCurrentProcess()) return
         // 首行初始化设置快照层：同步预加载 DataStore（触发 SP 迁移），
         // 之后所有 getPref* 门面读取均为纯内存查找，须先于一切主题/配置读取
         AppConfigStore.init(this)
@@ -172,7 +175,6 @@ class App : Application(), SingletonImageLoader.Factory {
                 )
             }
         }
-        super.onCreate()
         FirebaseManager.init(this)
         CrashHandler(this)
         if (isDebuggable) {
