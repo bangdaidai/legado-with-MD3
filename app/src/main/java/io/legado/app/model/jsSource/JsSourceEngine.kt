@@ -75,7 +75,7 @@ class JsSourceEngine(
         return execution.bridge
     }
 
-    /** 发送 NGJS 的二进制 POST；限制 HTTPS 和正文大小，避免被用作通用内网或内存放大器。 */
+    /** 发送 NGJS 的二进制 POST；限制传输协议和正文大小，避免明文传输及无界内存分配。 */
     fun postBase64Body(url: String, bodyBase64: String, headersJson: String?): String {
         val httpUrl = url.toHttpUrl()
         require(httpUrl.isHttps) { "二进制请求只允许 HTTPS" }
