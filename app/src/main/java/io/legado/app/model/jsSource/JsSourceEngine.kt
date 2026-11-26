@@ -88,7 +88,7 @@ class JsSourceEngine(
         val contentType = headers.entries
             .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
             ?.value
-            ?.toMediaTypeOrNull
+            ?.toMediaTypeOrNull()
         val response = runBlocking(coroutineContext) {
             okHttpClient.newCallResponse {
                 url(httpUrl)
