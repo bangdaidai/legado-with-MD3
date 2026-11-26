@@ -5,9 +5,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -15,11 +21,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.repository.ReadPreferences
 import io.legado.app.data.repository.ReadSettingsRepository
+import io.legado.app.domain.model.settings.ReadSettings
+import io.legado.app.feature.reader.core.model.ReaderBookmarkBadgePosition
 import io.legado.app.ui.book.read.ConfigUpdate
 import io.legado.app.ui.book.read.ReadBookIntent
 import io.legado.app.ui.book.read.ReadBookSheet
 import io.legado.app.ui.widget.components.SectionTitle
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
@@ -47,6 +56,16 @@ fun MoreConfigSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.more_setting),
+        // 自定义角标的复位属于面板级操作，沿用上游声明式 SheetAction API。
+        endSheetAction = if (preferences.bookmarkBadgeImage.isNotBlank()) {
+            SheetAction(
+                onClick = onResetBookmarkBadge,
+                icon = Icons.Default.Refresh,
+                contentDescription = stringResource(R.string.bookmark_badge_reset),
+            )
+        } else {
+            null
+        },
     ) {
         Column(
             modifier = Modifier
@@ -111,9 +130,17 @@ fun MoreConfigSheet(
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.SwipeToAddBookmark(it)))
                 },
                 onPickBookmarkBadgeImage = onPickBookmarkBadgeImage,
-                onResetBookmarkBadge = onResetBookmarkBadge,
                 onBookmarkBadgeSizeChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.BookmarkBadgeSize(it)))
+                },
+                onBookmarkBadgePositionChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.BookmarkBadgePosition(it)))
+                },
+                onBookmarkBadgeOffsetXChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.BookmarkBadgeOffsetX(it)))
+                },
+                onBookmarkBadgeOffsetYChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.BookmarkBadgeOffsetY(it)))
                 },
             )
 
@@ -133,6 +160,9 @@ fun MoreConfigSheet(
                 },
                 onReadAloudDetachReminderEnabledChange = {
                     onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ReadAloudDetachReminderEnabled(it)))
+                },
+                onParagraphCommentHeightChange = {
+                    onIntent(ReadBookIntent.UpdateConfig(ConfigUpdate.ParagraphCommentHeight(it)))
                 },
             )
 
@@ -269,13 +299,24 @@ private fun PageControlSettings(
     onNoAnimScrollPageChange: (Boolean) -> Unit,
     onSwipeToAddBookmarkChange: (Boolean) -> Unit,
     onPickBookmarkBadgeImage: () -> Unit,
-    onResetBookmarkBadge: () -> Unit,
     onBookmarkBadgeSizeChange: (Int) -> Unit,
+    onBookmarkBadgePositionChange: (String) -> Unit,
+    onBookmarkBadgeOffsetXChange: (Int) -> Unit,
+    onBookmarkBadgeOffsetYChange: (Int) -> Unit,
 ) {
     val doublePageEntries = stringArrayResource(R.array.double_page_title)
     val doublePageValues = stringArrayResource(R.array.double_page_value)
     val progressBarEntries = stringArrayResource(R.array.progress_bar_behavior_title)
     val progressBarValues = stringArrayResource(R.array.progress_bar_behavior_value)
+    val badgePositionEntries = stringArrayResource(R.array.bookmark_badge_position_title)
+    val badgePositionValues = stringArrayResource(R.array.bookmark_badge_position_value)
+    // 拖动中只更新本地草稿，松手才写设置：每帧回写 value 会让滑块来回跳。
+    var badgeOffsetXDraft by remember(preferences.bookmarkBadgeOffsetX) {
+        mutableFloatStateOf(preferences.bookmarkBadgeOffsetX.toFloat())
+    }
+    var badgeOffsetYDraft by remember(preferences.bookmarkBadgeOffsetY) {
+        mutableFloatStateOf(preferences.bookmarkBadgeOffsetY.toFloat())
+    }
 
     TinyDropdownSettingItem(
         title = stringResource(R.string.double_page_horizontal),
@@ -334,10 +375,36 @@ private fun PageControlSettings(
         },
         onClick = onPickBookmarkBadgeImage,
     )
-    if (preferences.bookmarkBadgeImage.isNotBlank()) {
-        TinyClickableSettingItem(
-            title = stringResource(R.string.bookmark_badge_reset),
-            onClick = onResetBookmarkBadge,
+    TinyDropdownSettingItem(
+        title = stringResource(R.string.bookmark_badge_position),
+        selectedValue = preferences.bookmarkBadgePosition,
+        displayEntries = badgePositionEntries,
+        entryValues = badgePositionValues,
+        onValueChange = onBookmarkBadgePositionChange,
+    )
+    if (preferences.bookmarkBadgePosition == ReaderBookmarkBadgePosition.CUSTOM.preferenceValue) {
+        // 行程取屏幕尺寸：角标最多移动到页面另一侧，滑块不会被越界夹取浪费一半。
+        val configuration = LocalConfiguration.current
+        TinySliderSettingItem(
+            title = stringResource(R.string.bookmark_badge_offset_x),
+            description = stringResource(R.string.bookmark_badge_offset_origin),
+            value = preferences.bookmarkBadgeOffsetX.toFloat(),
+            valueRange = 0f..configuration.screenWidthDp.toFloat().coerceAtLeast(1f),
+            valueFormat = { "${it.roundToInt()}dp" },
+            onValueChange = { badgeOffsetXDraft = it },
+            onValueChangeFinished = {
+                onBookmarkBadgeOffsetXChange(badgeOffsetXDraft.roundToInt())
+            },
+        )
+        TinySliderSettingItem(
+            title = stringResource(R.string.bookmark_badge_offset_y),
+            value = preferences.bookmarkBadgeOffsetY.toFloat(),
+            valueRange = 0f..configuration.screenHeightDp.toFloat().coerceAtLeast(1f),
+            valueFormat = { "${it.roundToInt()}dp" },
+            onValueChange = { badgeOffsetYDraft = it },
+            onValueChangeFinished = {
+                onBookmarkBadgeOffsetYChange(badgeOffsetYDraft.roundToInt())
+            },
         )
     }
     TinySliderSettingItem(
@@ -357,9 +424,11 @@ private fun SelectionSettings(
     onOpenTextSelectMenuConfig: () -> Unit,
     onShowMenuIconChange: (Boolean) -> Unit,
     onReadAloudDetachReminderEnabledChange: (Boolean) -> Unit,
+    onParagraphCommentHeightChange: (Int) -> Unit,
 ) {
     val selectionUnitEntries = stringArrayResource(R.array.select_text_unit_title)
     val selectionUnitValues = stringArrayResource(R.array.select_text_unit_value)
+    val commentHeightOptions = ReadSettings.paragraphCommentHeightOptions
 
     TinySwitchSettingItem(
         title = stringResource(R.string.selectText),
@@ -392,6 +461,20 @@ private fun SelectionSettings(
         description = stringResource(R.string.read_aloud_detach_reminder_summary),
         checked = preferences.readAloudDetachReminderEnabled,
         onCheckedChange = onReadAloudDetachReminderEnabledChange,
+    )
+
+    TinyDropdownSettingItem(
+        title = stringResource(R.string.paragraph_comment_height),
+        selectedValue = preferences.paragraphCommentHeightPercent.toString(),
+        displayEntries = commentHeightOptions.map { percent ->
+            if (percent == 0) {
+                stringResource(R.string.paragraph_comment_height_follow_source)
+            } else {
+                stringResource(R.string.paragraph_comment_height_percent, percent)
+            }
+        }.toTypedArray(),
+        entryValues = commentHeightOptions.map(Int::toString).toTypedArray(),
+        onValueChange = { onParagraphCommentHeightChange(it.toInt()) },
     )
 }
 

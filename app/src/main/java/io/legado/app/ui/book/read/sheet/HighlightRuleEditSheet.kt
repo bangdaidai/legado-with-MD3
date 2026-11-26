@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -144,9 +143,9 @@ import io.legado.app.ui.widget.components.NinePatchEditorDialog
 import io.legado.app.ui.widget.components.SectionTitle
 import io.legado.app.ui.widget.components.ValueStepper
 import io.legado.app.ui.widget.components.card.NormalCard
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.settingItem.TinyClickableSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyClearColorModeSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinyDropdownSettingItem
@@ -374,30 +373,27 @@ fun HighlightRuleEditSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = title ?: stringResource(titleRes),
-        startAction = {
-            // 预览折叠开关与右侧「保存」对称，都走标题栏图标按钮
-            MediumTonalButton(
-                icon = if (previewDockExpanded) {
-                    Icons.Default.KeyboardArrowDown
+        startSheetAction = SheetAction(
+            icon = if (previewDockExpanded) {
+                Icons.Default.KeyboardArrowDown
+            } else {
+                Icons.Default.KeyboardArrowUp
+            },
+            contentDescription = stringResource(
+                if (previewDockExpanded) R.string.collapse else R.string.expand
+            ),
+            onClick = { previewDockExpanded = !previewDockExpanded },
+        ),
+        endSheetAction = SheetAction(
+            onClick = {
+                val failure = if (showRuleInfo && pattern.isNotBlank()) {
+                    runCatching { Regex(pattern) }.exceptionOrNull()
                 } else {
-                    Icons.Default.KeyboardArrowUp
-                },
-                contentDescription = stringResource(
-                    if (previewDockExpanded) R.string.collapse else R.string.expand
-                ),
-                onClick = { previewDockExpanded = !previewDockExpanded },
-            )
-        },
-        endAction = {
-            MediumTonalButton(
-                onClick = {
-                    if (pattern.isNotBlank()) {
-                        val result = runCatching { Regex(pattern) }
-                        if (result.isFailure) {
-                            patternError = result.exceptionOrNull()?.message
-                            return@MediumTonalButton
-                        }
-                    }
+                    null
+                }
+                if (failure != null) {
+                    patternError = failure.message
+                } else {
                     patternError = null
                     onSave(
                         initial.copy(
@@ -452,11 +448,11 @@ fun HighlightRuleEditSheet(
                             manualNineSlice = manualNineSlice,
                         ).withoutLegacyMargins()
                     )
-                },
-                icon = Icons.Default.Done,
-                contentDescription = stringResource(R.string.save),
-            )
-        },
+                }
+            },
+            icon = Icons.Default.Done,
+            contentDescription = stringResource(R.string.save),
+        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 设置项滚动区：预览停到底部后，表单只能分到「弹层高度 - 预览高度」，
@@ -493,7 +489,7 @@ fun HighlightRuleEditSheet(
                         isError = patternError != null,
                         enabled = !useProtagonist,
                         supportingText = patternError?.let {
-                            { AppText(it, color = MaterialTheme.colorScheme.error) }
+                            { AppText(it, color = LegadoTheme.colorScheme.error) }
                         },
                     )
 
@@ -1752,6 +1748,21 @@ private fun DrawScope.drawReaderPreviewPage(
     textElements.mergeBackgroundBounds().forEach { band ->
         drawBackgroundBand(band)
     }
+    layout.background?.let { bitmap ->
+        backgroundRuns.forEach { run ->
+            drawTextBackground(native, bitmap, run, backgroundPaint)
+        }
+    }
+    decorations.halfHighlights.forEach { it.draw(native) }
+    textElements.forEach { element ->
+        val paint = stylePaints.getOrPut(element.style) {
+            ReaderAndroidPaintFactory.create(element.style)
+        }
+        native.drawText(element.value, element.bounds.left, element.baselinePx, paint)
+    }
+    decorations.contentRules.forEach { it.draw(native) }
+    decorations.styledUnderlines.forEach { it.draw(native) }
+    decorations.overlayRules.forEach { it.draw(native) }
 }
 
 /**

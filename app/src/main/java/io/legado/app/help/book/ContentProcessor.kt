@@ -10,18 +10,21 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookContentProcess
 import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.ReplaceRule
+import io.legado.app.domain.gateway.OtherSettingsGateway
+import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.domain.model.BookContentProcessEngine
 import io.legado.app.domain.model.TextProcessAction
 import io.legado.app.domain.model.TextProcessStyle
+import io.legado.app.domain.model.TextProjection
 import io.legado.app.exception.RegexTimeoutException
-import io.legado.app.domain.gateway.OtherSettingsGateway
-import io.legado.app.domain.gateway.ReadSettingsGateway
+import io.legado.app.feature.reader.core.source.ReaderLocalPresentation
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.escapeRegex
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.replace
+import io.legado.app.utils.replaceMapped
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
@@ -39,12 +42,16 @@ class ContentProcessor private constructor(
     companion object {
         private val processors = hashMapOf<String, WeakReference<ContentProcessor>>()
         private val isAndroid8 = Build.VERSION.SDK_INT in 26..27
-        // ── 语义内容修订计数（上游同步）：缓存失效按书/章递增，见 invalidateSemanticContent。
         private val revision = AtomicLong()
         private val ruleRevision = AtomicLong()
         private val bookRevisions = ConcurrentHashMap<String, Long>()
         private val wholeBookRevisions = ConcurrentHashMap<String, Long>()
         private val chapterRevisions = ConcurrentHashMap<Pair<String, Int>, Long>()
+        private val specialImageRegex = Regex(
+            """<img\b(?:"[^"]*"|'[^']*'|[^'">])*>""",
+            RegexOption.IGNORE_CASE,
+        )
+        private val specialNewPageRegex = Regex("""(?m)^[ \t\u3000]*\[newpage][ \t\u3000]*$""")
         val rulesRevision: Long get() = ruleRevision.get()
 
         fun semanticRevision(bookUrl: String): Long = bookRevisions[bookUrl] ?: 0
@@ -58,8 +65,7 @@ class ContentProcessor private constructor(
             val next = revision.incrementAndGet()
             if (chapterIndex == null) {
                 wholeBookRevisions.merge(bookUrl, next) { a, b -> maxOf(a, b) }
-                // The whole-book revision supersedes per-chapter entries; drop them so the maps do
-                // not grow with every chapter the user has ever opened.
+                // 整书修订取代章修订，移除旧项避免随阅读历史无限增长。
                 chapterRevisions.keys.removeIf { it.first == bookUrl }
             } else {
                 chapterRevisions.merge(bookUrl to chapterIndex, next) { a, b -> maxOf(a, b) }
@@ -69,6 +75,7 @@ class ContentProcessor private constructor(
 
         fun get(book: Book) = get(book.name, book.origin)
 
+        @Synchronized
         fun get(bookName: String, bookOrigin: String): ContentProcessor {
             val processorWr = processors[bookName + bookOrigin]
             var processor: ContentProcessor? = processorWr?.get()
@@ -79,14 +86,25 @@ class ContentProcessor private constructor(
             return processor
         }
 
+        @Synchronized
         fun upReplaceRules() {
             processors.forEach {
-                it.value.get()?.upReplaceRules()
+                it.value.get()?.loadReplaceRules()
             }
+            // 批量重载只发布一次修订，避免每个处理器重复触发缓存失效。
+            ruleRevision.incrementAndGet()
         }
 
+        private fun specialPlaceholder(index: Int): String =
+            "\uE000LEGADO_SPECIAL_${index}\uE001"
     }
 
+    private data class ProtectedSpecials(
+        val token: SpecialContentProtector.Protected,
+        val originals: Map<String, String>,
+    )
+
+    // 整表重读后原子换引用：读者只会看到旧快照或新快照，不会看到清空后的中间态。
     @Volatile
     private var titleReplaceRules: List<ReplaceRule> = emptyList()
     @Volatile
@@ -97,17 +115,21 @@ class ContentProcessor private constructor(
     private val readGateway by lazy { GlobalContext.get().get<ReadSettingsGateway>() }
 
     init {
-        upReplaceRules()
+        loadReplaceRules()
         upRemoveSameTitle()
     }
 
+    @Synchronized
     fun upReplaceRules() {
-        // 整表重读后整体替换引用：clear()+addAll() 分两步会被并发调用方交错成
-        // [A,B,A,B] 这样的重复列表，目录/正文预览按 rule.id 做 LazyColumn key 时
-        // 会直接崩 IllegalStateException/IllegalArgumentException。原子换引用后，
-        // 读者要么看到旧快照要么看到新快照，永远不会是拼了一半的中间态。
-        titleReplaceRules = appDb.replaceRuleDao.findEnabledByTitleScope(bookName, bookOrigin)
-        contentReplaceRules = appDb.replaceRuleDao.findEnabledByContentScope(bookName, bookOrigin)
+        loadReplaceRules()
+        ruleRevision.incrementAndGet()
+    }
+
+    private fun loadReplaceRules() {
+        val titleRules = appDb.replaceRuleDao.findEnabledByTitleScope(bookName, bookOrigin)
+        val contentRules = appDb.replaceRuleDao.findEnabledByContentScope(bookName, bookOrigin)
+        titleReplaceRules = titleRules
+        contentReplaceRules = contentRules
     }
 
     private fun upRemoveSameTitle() {
@@ -127,17 +149,6 @@ class ContentProcessor private constructor(
     fun getContentReplaceRules(): List<ReplaceRule> {
         return contentReplaceRules
     }
-
-    fun getContent(
-        book: Book,
-        chapter: BookChapter,
-        content: String,
-        includeTitle: Boolean = true,
-        useReplace: Boolean = true,
-        chineseConvert: Boolean = true,
-        reSegment: Boolean = true,
-    ): BookContent = getContent(book, chapter, content, includeTitle, useReplace, chineseConvert,
-        reSegment, paragraphIndent = null)
 
     data class SettingsSnapshot(
         val chineseConverterType: Int,
@@ -160,90 +171,225 @@ class ContentProcessor private constructor(
         useReplace: Boolean = true,
         chineseConvert: Boolean = true,
         reSegment: Boolean = true,
+    ): BookContent = getContent(book, chapter, content, includeTitle, useReplace, chineseConvert,
+        reSegment, paragraphIndent = null)
+
+    fun getContent(
+        book: Book,
+        chapter: BookChapter,
+        content: String,
+        includeTitle: Boolean = true,
+        useReplace: Boolean = true,
+        chineseConvert: Boolean = true,
+        reSegment: Boolean = true,
         paragraphIndent: String?,
-        /** 请求开始时捕获的设置快照：同一请求内口径一致（Web API 与正文处理共用）。 */
         settings: SettingsSnapshot = captureSettings(),
-        // 签名对齐上游（EPUB/MOBI/Markdown 富文本呈现）。fork 管道暂按旧口径处理正文，
-        // 呈现注入待后续切片吸收；参数保留以兼容上游调用方。
         includePresentation: Boolean = false,
-        localPresentationProvider: (() -> io.legado.app.feature.reader.core.source.ReaderLocalPresentation?)? = null,
+    ): BookContent = getContent(book, chapter, content, includeTitle, useReplace, chineseConvert,
+        reSegment, paragraphIndent, settings, includePresentation, localPresentationProvider = null)
+
+    internal fun getContent(
+        book: Book,
+        chapter: BookChapter,
+        content: String,
+        includeTitle: Boolean = true,
+        useReplace: Boolean = true,
+        chineseConvert: Boolean = true,
+        reSegment: Boolean = true,
+        paragraphIndent: String?,
+        settings: SettingsSnapshot = captureSettings(),
+        includePresentation: Boolean = false,
+        localPresentationProvider: (() -> ReaderLocalPresentation?)?,
     ): BookContent {
-        var mContent = content
+        val indent = paragraphIndent ?: ReadBookConfig.paragraphIndent
+        val canonicalInput = content
+        var presentation = if (includePresentation && !includeTitle && settings.adaptSpecialStyle &&
+            (book.isEpub || book.isMobi || book.isMarkdown)) {
+            try {
+                if (localPresentationProvider != null) {
+                    localPresentationProvider()
+                } else {
+                    io.legado.app.model.localBook.LocalBook.getPresentation(book, chapter)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                AppLog.put("本地呈现读取失败: chapter=${chapter.index}, ${error.javaClass.simpleName}")
+                null
+            }
+        } else {
+            null
+        }
+        val originalPresentation = presentation
+        presentation = presentation?.bind(canonicalInput)
+        if (originalPresentation != null && presentation == null) {
+            AppLog.put("本地呈现来源不匹配: chapter=${chapter.index}")
+        }
+        var projection = presentation?.let { TextProjection(canonicalInput.length) }
+        var mContent = canonicalInput
+
+        fun removeTitle(end: Int) {
+            projection?.replace(0, end, 0)
+            mContent = mContent.substring(end)
+            val map = projection
+            if (map != null) {
+                presentation = presentation?.let { original ->
+                    val starts = original.chapterStartAnchors +
+                        original.anchors.filterValues { it < end }.keys
+                    original.copy(chapterStartAnchors = starts)
+                        .remapOrNull(map, mContent, keepDeletedAnchors = true)
+                }
+            }
+            projection = presentation?.let { TextProjection(mContent.length) }
+        }
+
         var sameTitleRemoved = false
         var effectiveReplaceRules: ArrayList<ReplaceRule>? = null
         var effectiveContentProcesses: List<BookContentProcess> = emptyList()
         if (content != "null") {
-            //去除重复标题
+            // 去除重复标题；标题改写后的形式也必须能匹配正文开头。
             val fileName = chapter.getFileName("nr")
             if (!removeSameTitleCache.contains(fileName)) try {
                 val name = Regex.escape(book.name)
                 var title = chapter.title.escapeRegex().replace(spaceRegex, "\\\\s*")
-                var match = Regex("^(\\s|\\p{P}|${name})*${title}(\\s)*")
-                    .find(mContent)
+                var match = if (chapter.title.isNotBlank()) {
+                    Regex("^(\\s|\\p{P}|${name})*${title}(\\s)*").find(mContent)
+                } else {
+                    null
+                }
                 if (match != null) {
-                    mContent = mContent.substring(match.range.last + 1)
+                    removeTitle(match.range.last + 1)
                     sameTitleRemoved = true
                 } else if (useReplace && book.getUseReplaceRuleToc(settings.replaceEnableDefault)) {
-                    title = Regex.escape(
-                        chapter.getDisplayTitle(
-                            contentReplaceRules,
-                            chineseConvert = false,
-                            chineseConverterType = settings.chineseConverterType,
-                        )
+                    val replacedTitle = chapter.getDisplayTitle(
+                        getTitleReplaceRules(),
+                        chineseConvert = false,
+                        chineseConverterType = settings.chineseConverterType,
                     )
-                    match = Regex("^(\\s|\\p{P}|${name})*${title}(\\s)*")
-                        .find(mContent)
-                    if (match != null) {
-                        mContent = mContent.substring(match.range.last + 1)
-                        sameTitleRemoved = true
+                    // 空标题会生成零长度正则并误删正文首段，必须先判空。
+                    if (replacedTitle.isNotBlank()) {
+                        title = Regex.escape(replacedTitle)
+                        match = Regex("^(\\s|\\p{P}|${name})*${title}(\\s)*")
+                            .find(mContent)
+                        if (match != null) {
+                            removeTitle(match.range.last + 1)
+                            sameTitleRemoved = true
+                        }
                     }
                 }
             } catch (e: Exception) {
                 AppLog.put("去除重复标题出错\n${e.localizedMessage}", e)
             }
             if (reSegment && book.getReSegment()) {
-                //重新分段
-                mContent = ContentHelp.reSegment(mContent, chapter.title)
+                mContent = if (projection != null) {
+                    ContentHelp.reSegmentMapped(mContent, chapter.title, projection)
+                } else if (settings.adaptSpecialStyle) {
+                    MixedContentSegments.transform(
+                        mContent,
+                        plain = { ContentHelp.reSegment(it, chapter.title) },
+                        rich = { it },
+                    )
+                } else {
+                    ContentHelp.reSegment(mContent, chapter.title)
+                }
             }
             if (chineseConvert) {
-                //简繁转换
                 try {
-                    when (settings.chineseConverterType) {
-                        1 -> mContent = ChineseUtils.t2s(mContent)
-                        2 -> mContent = ChineseUtils.s2t(mContent)
+                    val convert: ((String) -> String)? = when (settings.chineseConverterType) {
+                        1 -> ChineseUtils::t2s
+                        2 -> ChineseUtils::s2t
+                        else -> null
+                    }
+                    if (convert != null) {
+                        mContent = if (projection != null) {
+                            MixedContentSegments.transformPlainTextMapped(mContent, projection) { text, map ->
+                                ChineseUtils.convertMapped(text, settings.chineseConverterType, map)
+                            }
+                        } else {
+                            MixedContentSegments.transform(
+                                mContent,
+                                plain = { MixedContentSegments.transformPlainText(it, convert) },
+                                rich = { MixedContentSegments.transformHtmlText(it, convert) },
+                            )
+                        }
                     }
                 } catch (_: Exception) {
                     appCtx.toastOnUi("简繁转换出错")
                 }
             }
-            val useHtmlMap = mutableMapOf<String, String>()
-            if (settings.adaptSpecialStyle) { //html处理
-                mContent = AppPattern.useHtmlRegex.replace(mContent) { matchResult ->
-                    val placeholder = "特殊格式的占位不应该被看见${useHtmlMap.size}。"
-                    useHtmlMap[placeholder] = "\n${matchResult.value.replace("\n", "")}\n"
-                    placeholder
-                }
-            }
             if (useReplace && book.getUseReplaceRule(settings.replaceEnableDefault)) {
                 val replaceBook = book.toSearchBook()
-                //替换
                 effectiveReplaceRules = arrayListOf()
-                mContent = mContent.lines().joinToString("\n") { it.trim() }
-                getContentReplaceRules().forEach { item ->
-                    if (item.pattern.isEmpty()) {
-                        return@forEach
+                fun trimLines(text: String) = text.lines().joinToString("\n") { it.trim() }
+                val beforeTrim = mContent
+                mContent = if (settings.adaptSpecialStyle) {
+                    if (projection != null) {
+                        transformOutsideRichMapped(mContent, projection) { text, map ->
+                            val trimmed = trimLines(text)
+                            map?.let { check(it.bindWhitespace(text, trimmed)) }
+                            trimmed
+                        }
+                    } else {
+                        MixedContentSegments.transform(
+                            mContent,
+                            plain = ::trimLines,
+                            rich = { it },
+                        )
                     }
+                } else {
+                    trimLines(mContent)
+                }
+                projection?.let { check(it.bindWhitespace(beforeTrim, mContent)) }
+
+                // 图片与分页标记先替换为占位符；有呈现投影时同步重建来源映射。
+                val specials = protectSpecialContent(mContent, projection)
+                mContent = specials.token.content
+                getContentReplaceRules().forEach { item ->
+                    if (item.pattern.isEmpty()) return@forEach
                     try {
-                        val tmp = if (item.isRegex) {
-                            mContent.replace(
+                        val started = System.nanoTime()
+                        val timeout = item.getValidTimeoutMillisecond()
+
+                        fun replaceText(text: String, map: TextProjection?): String = if (item.isRegex) {
+                            val remaining = timeout - (System.nanoTime() - started) / 1_000_000
+                            if (remaining <= 0) {
+                                throw RegexTimeoutException("替换规则超时: ${item.name}")
+                            }
+                            val edits = mutableListOf<TextProjection.Edit>()
+                            val result = text.replace(
                                 item.regex,
                                 item.replacement,
-                                item.getValidTimeoutMillisecond(),
+                                remaining,
                                 chapter,
-                                replaceBook
+                                replaceBook,
+                                onReplace = if (map == null) null else { start, end, count ->
+                                    edits += TextProjection.Edit(start, end, count)
+                                },
                             )
+                            map?.replace(edits)
+                            result
                         } else {
-                            mContent.replace(item.pattern, item.replacement)
+                            text.replaceMapped(item.pattern, item.replacement, map)
+                        }
+
+                        // 无投影时只替换富文本标签外的正文并保留全部属性；有投影时
+                        // 跳过富文本段，避免逐节点改写破坏呈现锚点。
+                        fun replaceRichText(html: String): String =
+                            if (projection != null) html
+                            else MixedContentSegments.transformPlainText(html) { replaceText(it, null) }
+
+                        val tmp = if (settings.adaptSpecialStyle) {
+                            if (projection != null) {
+                                transformOutsideRichMapped(mContent, projection, ::replaceText)
+                            } else {
+                                MixedContentSegments.transform(
+                                    mContent,
+                                    plain = { replaceText(it, null) },
+                                    rich = ::replaceRichText,
+                                )
+                            }
+                        } else {
+                            replaceText(mContent, projection)
                         }
                         if (mContent != tmp) {
                             effectiveReplaceRules.add(item)
@@ -253,69 +399,193 @@ class ContentProcessor private constructor(
                         item.isEnabled = false
                         appDb.replaceRuleDao.update(item)
                         mContent = item.name + e.stackTraceStr
+                        projection = null
+                        presentation = null
                     } catch (_: CancellationException) {
                     } catch (e: Exception) {
                         AppLog.put("替换净化: 规则 ${item.name}替换出错.\n${mContent}", e)
                         appCtx.toastOnUi("替换净化: 规则 ${item.name}替换出错")
                     }
                 }
-            }
-            useHtmlMap.forEach { (placeholder, originalContent) ->
-                mContent = mContent.replace(placeholder, originalContent)
+                mContent = restoreSpecialContent(mContent, specials, projection)
             }
             val contentProcesses = appDb.bookContentProcessDao.getForChapterSync(
                 bookUrl = book.bookUrl,
                 chapterIndex = chapter.index,
             )
-            // 用户划线/高亮笔记独立存于 book_marks，渲染时转成合成 BookContentProcess
-            // 混进现有管线（锚点/样式不变，引擎对标记类不改文本）。
+            // 用户划线/高亮笔记独立存于 book_marks，渲染时转成合成正文处理记录。
             val markings = appDb.bookMarkingDao.getForChapterSync(
                 bookUrl = book.bookUrl,
                 chapterIndex = chapter.index,
             ).map { it.toRenderProcess() }
             if (contentProcesses.isNotEmpty() || markings.isNotEmpty()) {
-                val applyResult =
-                    BookContentProcessEngine.apply(mContent, contentProcesses + markings)
-                mContent = applyResult.text
+                val original = mContent
+                val editInput = if (contentProcesses.any {
+                        it.enabled && it.status == BookContentProcess.STATUS_ACTIVE &&
+                            it.stage == BookContentProcess.STAGE_CONTENT &&
+                            it.kind != BookContentProcess.KIND_USER_HIGHLIGHT &&
+                            it.kind != BookContentProcess.KIND_USER_UNDERLINE
+                    }) {
+                    MixedContentSegments.toPlainText(mContent)
+                } else {
+                    mContent
+                }
+                if (editInput != original) {
+                    projection = null
+                    presentation = null
+                }
+                val applyResult = BookContentProcessEngine.apply(
+                    editInput,
+                    contentProcesses + markings,
+                    onReplace = if (projection == null) null else { start, end, replacement ->
+                        projection?.replace(start, end, replacement.length)
+                    },
+                )
+                val edited = applyResult.effectiveProcesses.any {
+                    it.kind != BookContentProcess.KIND_USER_HIGHLIGHT &&
+                        it.kind != BookContentProcess.KIND_USER_UNDERLINE
+                }
+                mContent = if (editInput != original && !edited) original else applyResult.text
                 effectiveContentProcesses = applyResult.effectiveProcesses
             }
         }
         if (includeTitle) {
-            //重新添加标题
+            // 目录标题保留 fork 独立替换开关，并沿用本次请求的设置快照。
             mContent = chapter.getDisplayTitle(
                 getTitleReplaceRules(),
-                useReplace = useReplace && book.getUseReplaceRuleToc(otherGateway.currentSettings.replaceEnableDefault),
-                chineseConverterType = readGateway.currentSettings.chineseConverterType,
+                useReplace = useReplace && book.getUseReplaceRuleToc(settings.replaceEnableDefault),
+                chineseConverterType = settings.chineseConverterType,
             ) + "\n" + mContent
         }
         if (isAndroid8) {
-            mContent = mContent.replace('\u00A0', ' ')
-        }
-        val contents = arrayListOf<String>()
-        mContent.split("\n").forEach { str ->
-            val paragraph = str.trim {
-                it.code <= 0x20 || it == '　'
+            mContent = if (projection != null) {
+                mContent.replaceMapped("\u00A0", " ", projection)
+            } else {
+                mContent.replace('\u00A0', ' ')
             }
-            if (paragraph.isNotEmpty()) {
-                if (contents.isEmpty() && includeTitle) {
-                    contents.add(paragraph)
-                } else {
-                    contents.add("${paragraphIndent ?: ReadBookConfig.paragraphIndent}$paragraph")
+        }
+        val contents = MixedContentSegments.paragraphs(
+            mContent,
+            indent,
+            settings.adaptSpecialStyle,
+            firstUnindented = includeTitle,
+        )
+        projection?.let { map ->
+            val transport = if (contents.isEmpty()) "" else contents.joinToString("\n", postfix = "\n")
+            if (map.bindWhitespace(mContent, transport)) {
+                val remapped = presentation?.remapOrNull(map, transport)
+                if (remapped == null && presentation != null) {
+                    AppLog.put("本地呈现分段重映射失败: chapter=${chapter.index}")
                 }
+                presentation = remapped
+            } else {
+                AppLog.put("本地呈现分段映射失败: chapter=${chapter.index}")
+                presentation = null
             }
         }
-        return BookContent(sameTitleRemoved, contents, effectiveReplaceRules, effectiveContentProcesses)
+        return BookContent(
+            sameTitleRemoved,
+            contents,
+            effectiveReplaceRules,
+            effectiveContentProcesses,
+            presentation,
+        )
+    }
+
+    /** 只变换普通段，富文本外壳原样保留；每段使用切片投影，避免局部索引写到全局映射。 */
+    private fun transformOutsideRichMapped(
+        content: String,
+        projection: TextProjection,
+        transform: (String, TextProjection?) -> String,
+    ): String {
+        val parts = mutableListOf<TextProjection>()
+        var cursor = 0
+        val result = buildString {
+            AppPattern.useHtmlRegex.findAll(content).forEach { match ->
+                val before = projection.slice(cursor, match.range.first)
+                append(transform(content.substring(cursor, match.range.first), before))
+                parts += before
+                append(match.value)
+                parts += projection.slice(match.range.first, match.range.last + 1)
+                cursor = match.range.last + 1
+            }
+            val tail = projection.slice(cursor, content.length)
+            append(transform(content.substring(cursor), tail))
+            parts += tail
+        }
+        projection.join(parts)
+        return result
+    }
+
+    /** 复用上游保护器，并把占位符与原 token 的来源范围同步到 TextProjection。 */
+    private fun protectSpecialContent(
+        content: String,
+        projection: TextProjection?,
+    ): ProtectedSpecials {
+        val token = SpecialContentProtector.protect(content)
+        val replacements = linkedMapOf<IntRange, String>()
+        val imageRanges = specialImageRegex.findAll(content).map { it.range }.toList()
+        imageRanges.forEach { range ->
+            replacements[range] = specialPlaceholder(replacements.size)
+        }
+        var imageIndex = 0
+        val afterImages = specialImageRegex.replace(content) {
+            specialPlaceholder(imageIndex++)
+        }
+        val protectedPageBreaks = specialNewPageRegex.findAll(afterImages).toList()
+        val originalPageBreaks = specialNewPageRegex.findAll(content).filter { match ->
+            imageRanges.none { match.range.first in it }
+        }.toList()
+        check(protectedPageBreaks.size == originalPageBreaks.size)
+        protectedPageBreaks.zip(originalPageBreaks).forEach { (protected, original) ->
+            replacements[original.range] = specialPlaceholder(replacements.size)
+        }
+        val sorted = replacements.toSortedMap()
+        val originals = sorted.mapValues { content.substring(it.key) }
+        val expected = buildString {
+            var cursor = 0
+            sorted.forEach { (range, placeholder) ->
+                append(content, cursor, range.first)
+                append(placeholder)
+                cursor = range.last + 1
+            }
+            append(content, cursor, content.length)
+        }
+        check(token.content == expected)
+        if (projection != null) {
+            val pieces = mutableListOf<TextProjection.Piece>()
+            var cursor = 0
+            sorted.forEach { (range, placeholder) ->
+                pieces += TextProjection.Piece(cursor, range.first)
+                pieces += TextProjection.Piece(range.first, range.last + 1, placeholder.length)
+                cursor = range.last + 1
+            }
+            pieces += TextProjection.Piece(cursor, content.length)
+            projection.rebuild(pieces)
+        }
+        return ProtectedSpecials(token, originals)
+    }
+
+    private fun restoreSpecialContent(
+        content: String,
+        specials: ProtectedSpecials,
+        projection: TextProjection?,
+    ): String {
+        if (projection == null) return specials.token.restore(content)
+        var restored = content
+        specials.originals.forEach { (placeholder, original) ->
+            restored = restored.replaceMapped(placeholder, original, projection)
+        }
+        return restored
     }
 
     /**
      * 把用户划线/高亮笔记转成「仅供渲染」的合成正文处理记录。
      *
-     * 引擎对标记类（KIND_USER_UNDERLINE/HIGHLIGHT）不改文本，只按锚点能否解析决定
-     * 是否计入 effectiveProcesses；渲染层用 anchorJson + styleJson 画线。id 加
-     * `mark:` 前缀避免与真实正文处理记录冲突。
+     * 引擎对标记类不改文本，只按锚点能否解析决定是否计入 effectiveProcesses；
+     * 渲染层用 anchorJson + styleJson 画线。id 加 mark: 前缀避免与真实记录冲突。
      */
     private fun BookMarking.toRenderProcess(): BookContentProcess {
-        // book_marks 无 kind 列（样式即类型）：按 styleJson 推导，供引擎/渲染层识别
         val style = styleJson?.let { GSON.fromJsonObject<TextProcessStyle>(it).getOrNull() }
         val derivedKind = if (style?.underlineMode != 0) {
             BookContentProcess.KIND_USER_UNDERLINE
@@ -340,5 +610,4 @@ class ContentProcessor private constructor(
             updatedAt = updatedAt,
         )
     }
-
 }

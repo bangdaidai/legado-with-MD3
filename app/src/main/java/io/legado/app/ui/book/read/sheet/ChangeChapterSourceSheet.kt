@@ -3,7 +3,6 @@ package io.legado.app.ui.book.read.sheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,15 +39,16 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.button.series.MediumPlainButton
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.dialog.TextListInputDialog
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetMenuAction
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
+import kotlinx.collections.immutable.persistentListOf
 
 @Composable
 fun ChangeChapterSourceSheet(
@@ -61,7 +61,6 @@ fun ChangeChapterSourceSheet(
     onBookScoreClick: (SearchBook) -> Unit,
     onEditSource: (String) -> Unit,
 ) {
-    var showOptionsMenu by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var showWordCountThresholdDialog by remember { mutableStateOf(false) }
 
@@ -69,87 +68,72 @@ fun ChangeChapterSourceSheet(
         show = show,
         onDismissRequest = onAnimationFinish,
         title = if (state.showToc) state.selectedSourceName else stringResource(R.string.chapter_change_source),
-        startAction = {
-            if (!state.showToc) {
-                Box {
-                    MediumTonalButton(
-                        onClick = { showOptionsMenu = true },
-                icon = Icons.Default.MoreVert,
-                contentDescription = stringResource(R.string.more_menu)
-                    )
-                    RoundDropdownMenu(
-                        expanded = showOptionsMenu,
-                        onDismissRequest = { showOptionsMenu = false }
-                    ) { dismiss ->
-                        RoundDropdownMenuItem(
-                            text = "校验作者",
-                            isSelected = state.checkAuthor,
-                            onClick = {
-                                onIntent(ChangeChapterSourceIntent.SetCheckAuthor(!state.checkAuthor))
-                                dismiss()
-                            }
+        startSheetAction = if (!state.showToc) SheetAction(
+            icon = Icons.Default.MoreVert,
+            contentDescription = stringResource(R.string.more_menu),
+            menu = persistentListOf(
+                SheetMenuAction(
+                    id = "check_author",
+                    label = "校验作者",
+                    checked = state.checkAuthor,
+                    onClick = {
+                        onIntent(ChangeChapterSourceIntent.SetCheckAuthor(!state.checkAuthor))
+                    },
+                ),
+                SheetMenuAction(
+                    id = "load_info",
+                    label = "加载详情",
+                    checked = state.loadInfo,
+                    onClick = { onIntent(ChangeChapterSourceIntent.SetLoadInfo(!state.loadInfo)) },
+                ),
+                SheetMenuAction(
+                    id = "load_toc",
+                    label = "加载目录",
+                    checked = state.loadToc,
+                    onClick = { onIntent(ChangeChapterSourceIntent.SetLoadToc(!state.loadToc)) },
+                ),
+                SheetMenuAction(
+                    id = "load_word_count",
+                    label = "显示更多信息",
+                    checked = state.loadWordCount,
+                    onClick = {
+                        onIntent(ChangeChapterSourceIntent.SetLoadWordCount(!state.loadWordCount))
+                    },
+                ),
+                SheetMenuAction(
+                    id = "filter_low_word_count",
+                    label = "过滤少于${state.wordCountThreshold}字",
+                    checked = state.filterLowWordCount,
+                    onClick = {
+                        onIntent(
+                            ChangeChapterSourceIntent.SetFilterLowWordCount(
+                                !state.filterLowWordCount
+                            )
                         )
-                        RoundDropdownMenuItem(
-                            text = "加载详情",
-                            isSelected = state.loadInfo,
-                            onClick = {
-                                onIntent(ChangeChapterSourceIntent.SetLoadInfo(!state.loadInfo))
-                                dismiss()
-                            }
-                        )
-                        RoundDropdownMenuItem(
-                            text = "加载目录",
-                            isSelected = state.loadToc,
-                            onClick = {
-                                onIntent(ChangeChapterSourceIntent.SetLoadToc(!state.loadToc))
-                                dismiss()
-                            }
-                        )
-                        RoundDropdownMenuItem(
-                            text = "显示更多信息",
-                            isSelected = state.loadWordCount,
-                            onClick = {
-                                onIntent(ChangeChapterSourceIntent.SetLoadWordCount(!state.loadWordCount))
-                                dismiss()
-                            }
-                        )
-                        RoundDropdownMenuItem(
-                            text = "过滤少于${state.wordCountThreshold}字",
-                            isSelected = state.filterLowWordCount,
-                            onClick = {
-                                onIntent(ChangeChapterSourceIntent.SetFilterLowWordCount(!state.filterLowWordCount))
-                                dismiss()
-                            }
-                        )
-                        RoundDropdownMenuItem(
-                            text = "设置过滤字数…",
-                            onClick = {
-                                showWordCountThresholdDialog = true
-                                dismiss()
-                            }
-                        )
-                    }
-                }
-            }
-        },
-        endAction = {
-            if (!state.showToc) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MediumTonalButton(
-                        onClick = { onIntent(ChangeChapterSourceIntent.StartStopSearch) },
-                icon = if (state.isSearching) Icons.Default.PauseCircleOutline else Icons.Default.Refresh,
+                    },
+                ),
+                SheetMenuAction(
+                    id = "word_count_threshold",
+                    label = "设置过滤字数…",
+                    onClick = { showWordCountThresholdDialog = true },
+                ),
+            ),
+        ) else null,
+        endSheetActions = if (!state.showToc) persistentListOf(
+            SheetAction(
+                onClick = { onIntent(ChangeChapterSourceIntent.StartStopSearch) },
+                icon = if (state.isSearching) Icons.Default.PauseCircleOutline
+                else Icons.Default.Refresh,
                 contentDescription = stringResource(
                     if (state.isSearching) R.string.pause else R.string.refresh
                 ),
-                    )
-                    MediumTonalButton(
-                        onClick = { showFilterSheet = true },
+            ),
+            SheetAction(
+                onClick = { showFilterSheet = true },
                 icon = Icons.Default.FilterList,
-                contentDescription = stringResource(R.string.screen)
-                    )
-                }
-            }
-        }
+                contentDescription = stringResource(R.string.screen),
+            ),
+        ) else persistentListOf()
     ) {
         if (state.showToc) {
             TocContent(

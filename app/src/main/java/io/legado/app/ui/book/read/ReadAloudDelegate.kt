@@ -352,7 +352,10 @@ class ReadAloudDelegate(
     }
 
     fun setTtsFollowSys(value: Boolean) {
-        updateSettings { it.copy(ttsFollowSys = value) }
+        scope.launch {
+            readAloudSettingsRepository.update { it.copy(ttsFollowSys = value) }
+            ReadAloud.upTtsSpeechRate(context)
+        }
         host.updateState { it.copy(readAloudTtsFollowSys = value) }
     }
 

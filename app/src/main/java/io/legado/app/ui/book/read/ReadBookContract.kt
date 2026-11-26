@@ -2076,6 +2076,15 @@ sealed interface ConfigUpdate {
     data class BookmarkBadgeSize(val value: Int) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }
+    data class BookmarkBadgePosition(val value: String) : ConfigUpdate {
+        override val actions = emptySet<ConfigUpdateAction>()
+    }
+    data class BookmarkBadgeOffsetX(val value: Int) : ConfigUpdate {
+        override val actions = emptySet<ConfigUpdateAction>()
+    }
+    data class BookmarkBadgeOffsetY(val value: Int) : ConfigUpdate {
+        override val actions = emptySet<ConfigUpdateAction>()
+    }
     data class ParagraphCommentHeight(val percent: Int) : ConfigUpdate {
         override val actions = emptySet<ConfigUpdateAction>()
     }

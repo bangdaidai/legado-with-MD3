@@ -54,7 +54,7 @@ import io.legado.app.domain.usecase.ChangeSourceMigrationOptions
 import io.legado.app.ui.book.changecover.ChangeCoverViewModel
 import io.legado.app.ui.book.group.GroupEditSheet
 import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.SelectionItemCard
@@ -121,20 +121,16 @@ fun GroupSelectSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.group_select),
-        startAction = {
-            MediumTonalButton(
-                onClick = { showAddGroup = true },
-                icon = Icons.Default.Add,
-                contentDescription = stringResource(R.string.group_add)
-            )
-        },
-        endAction = {
-            MediumTonalButton(
-                onClick = { onConfirm(selectedGroupId) },
-                icon = Icons.Default.Check,
-                contentDescription = stringResource(R.string.confirm)
-            )
-        }
+        startSheetAction = SheetAction(
+            onClick = { showAddGroup = true },
+            icon = Icons.Default.Add,
+            contentDescription = stringResource(R.string.group_add),
+        ),
+        endSheetAction = SheetAction(
+            onClick = { onConfirm(selectedGroupId) },
+            icon = Icons.Default.Check,
+            contentDescription = stringResource(R.string.confirm),
+        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             LazyColumn(
@@ -224,15 +220,13 @@ fun ChangeCoverSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.change_cover_source),
-        endAction = {
-            MediumTonalButton(
-                onClick = { viewModel.startOrStopSearch() },
-                icon = if (isSearching) Icons.Default.MoreVert else Icons.Default.Refresh,
-                contentDescription = stringResource(
-                    if (isSearching) R.string.more_menu else R.string.refresh
-                )
-            )
-        }
+        endSheetAction = SheetAction(
+            onClick = { viewModel.startOrStopSearch() },
+            icon = if (isSearching) Icons.Default.MoreVert else Icons.Default.Refresh,
+            contentDescription = stringResource(
+                if (isSearching) R.string.more_menu else R.string.refresh
+            ),
+        )
     ) {
         if (isSearching) {
             AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth())

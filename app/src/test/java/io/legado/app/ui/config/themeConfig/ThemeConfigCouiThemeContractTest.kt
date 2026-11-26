@@ -1,5 +1,6 @@
 package io.legado.app.ui.config.themeConfig
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,7 +15,7 @@ import java.io.File
  * 恒为「动态取色」：COUI 不再把 `appTheme == "0"` 改名成「COUI 默认」，且必须真正
  * 走系统动态取色（内置预设只在关闭开关且选中首项时接管）。主题风格项与同页下拉项
  * 一样走 `DropdownListSettingItem`（包装器负责拼接分隔线与 Miuix 原生行），靠新增的
- * `commitAfterDismiss` 透传保住 Mochi 浮层收起后再切根主题的行为。
+ * `commitAfterDismiss` 透传保住各引擎浮层收起后再切根主题的行为。
  *
  * 静态契约只锁结构与文案；四引擎真机外观、TalkBack 未复核。
  */
@@ -303,6 +304,48 @@ class ThemeConfigCouiThemeContractTest {
     }
 
     @Test
+    fun choiceDropdownDefersCouiAndOxygenCommitsUntilPopupIsRemoved() {
+        val source = sourceOf(APP_CHOICE_DROPDOWN)
+        val coui = source.substringAfter("private fun CouiChoice(")
+            .substringBefore("private fun MaterialChoice(")
+        assertTrue("COUI 分支丢失延迟提交参数", coui.contains("commitAfterDismiss: Boolean"))
+        assertTrue(
+            "COUI 选中后仍在回调里直接提交业务动作",
+            coui.contains("selectionCommit.submit(commitAfterDismiss, dismissSelection)"),
+        )
+        assertTrue(
+            "COUI 未等待 Popup 退场完成",
+            coui.contains("onDismissFinished = selectionCommit::onDismissed"),
+        )
+
+        val material = source.substringAfter("private fun MaterialChoice(")
+        assertTrue("Material / Oxygen 分支丢失延迟提交参数", material.contains("commitAfterDismiss: Boolean"))
+        assertTrue(
+            "Material / Oxygen 选中后仍在回调里直接提交业务动作",
+            material.contains("selectionCommit.submit(commitAfterDismiss, dismissSelection)"),
+        )
+        assertTrue(
+            "Material / Oxygen 未观察 Popup content 的真实销毁",
+            material.contains("PopupDismissObserver(selectionCommit::onDismissed)"),
+        )
+        assertTrue("延迟提交未跨过 Popup 移除帧", source.contains("withFrameNanos { }"))
+        assertTrue("重复选择可能提交两次根主题", source.contains("if (pending != null) return"))
+
+        val dispatch = source.substringAfter("fun AppChoiceDropdown(")
+            .substringBefore("private class MenuSelectionCommit")
+        val couiDispatch = dispatch.substringAfter("ComposeEngine.Coui ->")
+            .substringBefore("ComposeEngine.Oxygen")
+        assertEquals(
+            "COUI 原生与降级分支都必须接收 commitAfterDismiss",
+            2,
+            Regex("commitAfterDismiss, anchor").findAll(couiDispatch).count(),
+        )
+        val oxygenDispatch = dispatch.substringAfter("ComposeEngine.Oxygen")
+            .substringBefore("ComposeEngine.Miuix")
+        assertTrue("Oxygen / Material 分派丢失延迟提交参数", oxygenDispatch.contains("commitAfterDismiss, anchor"))
+    }
+
+    @Test
     fun textAnimationPreviewRowIsRemoved() {
         val source = sourceOf(THEME_CONFIG)
         assertFalse(
@@ -369,6 +412,7 @@ class ThemeConfigCouiThemeContractTest {
             "app/src/main/java/io/legado/app/ui/config/themeConfig/TopBottomBarSettingsSheet.kt"
         const val SETTING_ITEM = "io/legado/app/ui/widget/components/settingItem/SettingItem.kt"
         const val LIST_SETTING_ITEM = "io/legado/app/ui/widget/components/settingItem/ListSettingItem.kt"
+        const val APP_CHOICE_DROPDOWN = "io/legado/app/ui/widget/components/menu/AppChoiceDropdown.kt"
         const val APP_THEME = "io/legado/app/ui/theme/AppTheme.kt"
         const val THEME_ENGINE = "io/legado/app/ui/theme/ThemeEngine.kt"
         const val THEME_RESOLVER = "io/legado/app/ui/theme/ThemeResolver.kt"

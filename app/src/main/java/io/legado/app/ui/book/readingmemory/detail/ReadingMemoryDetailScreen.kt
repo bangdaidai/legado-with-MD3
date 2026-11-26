@@ -69,8 +69,8 @@ import io.legado.app.data.entities.BookMarking
 import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.book.read.sheet.MarkingSheet
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.icon.AppIcons
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import java.util.Locale
 import io.legado.app.ui.widget.shareCard.ShareCardPreviewSheet
 import io.legado.app.ui.widget.components.AppScaffold
@@ -734,22 +734,18 @@ private fun ReviewEditorSheet(
         show = true,
         onDismissRequest = onDismiss,
         title = "编辑书评",
-        startAction = if (onDelete != null && draft.isNotBlank()) {
-            {
-                MediumTonalButton(
-                    onClick = onDelete,
-                    icon = AppIcons.Delete,
-                    contentDescription = "删除书评",
-                )
-            }
-        } else null,
-        endAction = {
-            MediumTonalButton(
-                onClick = onSave,
-                icon = AppIcons.Check,
-                contentDescription = "保存",
+        startSheetAction = if (onDelete != null && draft.isNotBlank()) {
+            SheetAction(
+                onClick = onDelete,
+                icon = AppIcons.Delete,
+                contentDescription = "删除书评",
             )
-        },
+        } else null,
+        endSheetAction = SheetAction(
+            onClick = onSave,
+            icon = AppIcons.Check,
+            contentDescription = "保存",
+        ),
     ) {
         OutlinedTextField(
             value = draft,

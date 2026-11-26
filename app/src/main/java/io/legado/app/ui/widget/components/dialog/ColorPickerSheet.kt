@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -66,15 +65,22 @@ import androidx.compose.ui.platform.LocalDensity
 import io.legado.app.R
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.utils.isHex
+import kotlinx.collections.immutable.persistentListOf
 import top.yukonga.miuix.kmp.basic.ColorPalette
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/**
+ * 取色面板。
+ *
+ * @param windowPresentation 调用点位于独立窗口（如划词浮层 Popup）时置 true，强制面板用
+ * 独立窗口呈现，避免被该窗口盖住；见 [AppModalBottomSheet]。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ColorPickerSheet(
@@ -82,6 +88,7 @@ fun ColorPickerSheet(
     initialColor: Int,
     onDismissRequest: () -> Unit,
     onColorSelected: (Int) -> Unit,
+    windowPresentation: Boolean = false,
 ) {
     var currentColor by remember { mutableStateOf(Color(initialColor)) }
     var hexInput by remember { mutableStateOf(initialColor.asHexColorString()) }
@@ -111,75 +118,69 @@ fun ColorPickerSheet(
         isHexInputError = false
     }
 
+    fun startEyedropper() {
+        val window = context.findActivity()?.window ?: return
+        val decor = window.decorView
+        if (decor.width <= 0 || decor.height <= 0) return
+        // PixelCopy 只复制 Activity 窗口自身内容；取色弹层在独立窗口里，不会出现在快照中。
+        val bitmap = Bitmap.createBitmap(
+            decor.width,
+            decor.height,
+            Bitmap.Config.ARGB_8888
+        )
+        PixelCopy.request(
+            window,
+            bitmap,
+            { result ->
+                if (result == PixelCopy.SUCCESS) {
+                    eyedropperBitmap = bitmap
+                }
+            },
+            Handler(Looper.getMainLooper())
+        )
+    }
+
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
+        windowPresentation = windowPresentation,
         title = stringResource(R.string.select_color),
-        startAction = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MediumTonalButton(
-                    onClick = {
-                        currentColor = Color.Transparent
-                        hexInput = "#00000000"
-                        isHexInputError = false
-                    },
-                    icon = Icons.Default.Restore,
-                    contentDescription = stringResource(R.string.reset),
-                )
-                // 取色笔：抓一帧弹层背后的页面快照，全屏拖动取色，松手回填到面板
-                MediumTonalButton(
-                    onClick = {
-                        val window = context.findActivity()?.window ?: return@MediumTonalButton
-                        val decor = window.decorView
-                        if (decor.width <= 0 || decor.height <= 0) {
-                            return@MediumTonalButton
-                        }
-                        // PixelCopy 只复制 Activity 窗口自身内容；
-                        // 取色弹层在独立窗口里，不会出现在快照中
-                        val bitmap = Bitmap.createBitmap(
-                            decor.width,
-                            decor.height,
-                            Bitmap.Config.ARGB_8888
-                        )
-                        PixelCopy.request(
-                            window,
-                            bitmap,
-                            { result ->
-                                if (result == PixelCopy.SUCCESS) {
-                                    eyedropperBitmap = bitmap
-                                }
-                            },
-                            Handler(Looper.getMainLooper())
-                        )
-                    },
-                    icon = Icons.Default.Colorize,
-                    contentDescription = stringResource(R.string.color_eyedropper),
-                )
-            }
-        },
-        endAction = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 取色方式切换：与保存按钮同形式、紧邻保存按钮（对齐分享卡片「切换模板」按钮）
-                MediumTonalButton(
-                    onClick = { isPaletteMode = !isPaletteMode },
-                    icon = Icons.Default.SwapHoriz,
-                    contentDescription = if (isPaletteMode) {
-                        stringResource(R.string.color_mixer)
-                    } else {
-                        stringResource(R.string.color_palette)
-                    },
-                )
-                MediumTonalButton(
-                    onClick = {
-                        onColorSelected(currentColor.toArgb())
-                        onDismissRequest()
-                    },
-                    enabled = parsedHexColor != null && !isHexInputError,
-                    icon = Icons.Default.Save,
-                    contentDescription = stringResource(R.string.action_save),
-                )
-            }
-        },
+        startSheetActions = persistentListOf(
+            SheetAction(
+                onClick = {
+                    currentColor = Color.Transparent
+                    hexInput = "#00000000"
+                    isHexInputError = false
+                },
+                icon = Icons.Default.Restore,
+                contentDescription = stringResource(R.string.reset),
+            ),
+            SheetAction(
+                onClick = { startEyedropper() },
+                icon = Icons.Default.Colorize,
+                contentDescription = stringResource(R.string.color_eyedropper),
+            ),
+        ),
+        endSheetActions = persistentListOf(
+            SheetAction(
+                onClick = { isPaletteMode = !isPaletteMode },
+                icon = Icons.Default.SwapHoriz,
+                contentDescription = if (isPaletteMode) {
+                    stringResource(R.string.color_mixer)
+                } else {
+                    stringResource(R.string.color_palette)
+                },
+            ),
+            SheetAction(
+                onClick = {
+                    onColorSelected(currentColor.toArgb())
+                    onDismissRequest()
+                },
+                icon = Icons.Default.Save,
+                enabled = parsedHexColor != null && !isHexInputError,
+                contentDescription = stringResource(R.string.action_save),
+            ),
+        ),
     ) {
         Column(
             modifier = Modifier

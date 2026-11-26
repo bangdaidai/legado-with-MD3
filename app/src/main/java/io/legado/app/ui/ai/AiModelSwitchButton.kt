@@ -40,7 +40,7 @@ import kotlinx.collections.immutable.toImmutableList
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * AI 弹层通用的模型切换按钮（与 [AiReasoningModeButton] 同形态：tonal 图标按钮 + 点开选择弹层）。
+ * AI 弹层通用的模型切换按钮（与 [AiReasoningLevelControl] 同形态：tonal 图标按钮 + 点开选择弹层）。
  * 自带迷你 ViewModel，任何 AI 弹层一行接入；选择即改 CHAT 默认预设，
  * 各任务预设级联跟随（与对话页「切换模型与默认模型同步」同一入口）。
  */

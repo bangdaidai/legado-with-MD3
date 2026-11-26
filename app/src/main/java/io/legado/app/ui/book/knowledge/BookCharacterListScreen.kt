@@ -19,9 +19,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,11 +49,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.compose.AsyncImage
 import io.legado.app.R
 import io.legado.app.data.entities.BookCharacterProfile
-import io.legado.app.ui.ai.AiModelSwitchSheet
-import io.legado.app.ui.ai.AiReasoningModeButton
+import io.legado.app.domain.model.AiReasoningLevel
+import io.legado.app.ui.ai.AiModelSwitchButton
+import io.legado.app.ui.ai.AiReasoningLevelSection
 import io.legado.app.ui.ai.AiTaskResultSheet
 import io.legado.app.ui.ai.chat.AiThinkingStepsCard
 import io.legado.app.ui.widget.components.modalBottomSheet.MarkdownSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.ai.chat.ReasoningCard
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
@@ -230,45 +232,45 @@ private fun CharacterIdentifySheet(
     visible: Boolean,
     onIntent: (CharacterListIntent) -> Unit,
 ) {
-    // 点按重试、长按切换模型，替代原先"切换模型 + 刷新 + 思考模式"三个按钮
-    var showModelPicker by rememberSaveable { mutableStateOf(false) }
     AiTaskResultSheet(
         show = visible && sheet != null,
         onDismissRequest = { onIntent(CharacterListIntent.DismissAiIdentify) },
         title = stringResource(R.string.ai_identify_characters),
-        startAction = if (sheet != null) {
-            {
-                MediumTonalButton(
-                    onClick = { onIntent(CharacterListIntent.RunAiIdentify) },
-                    onLongClick = { showModelPicker = true },
-                    icon = Icons.Default.AutoAwesome,
-                    contentDescription = stringResource(R.string.ai_identify_retry_or_switch),
-                    enabled = !sheet.loading,
-                )
-            }
-        } else null,
-        endAction = if (sheet != null) {
-            {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AiReasoningModeButton(
-                        level = sheet.reasoningLevel,
-                        enabled = !sheet.loading,
-                        onLevelChange = {
-                            onIntent(CharacterListIntent.SetAiIdentifyReasoningLevel(it))
-                        },
-                    )
-                    if (sheet.candidates.isNotEmpty()) {
-                        MediumTonalButton(
-                            onClick = { onIntent(CharacterListIntent.SaveAiCandidates) },
-                            contentDescription = stringResource(R.string.ai_identify_characters_save),
-                            icon = Icons.Default.Save,
-                            enabled = !sheet.loading,
-                        )
-                    }
-                }
-            }
-        } else null,
+        startSheetAction = if (sheet != null) SheetAction(
+            onClick = { onIntent(CharacterListIntent.RunAiIdentify) },
+            icon = Icons.Default.Refresh,
+            contentDescription = stringResource(R.string.retry),
+            enabled = !sheet.loading,
+        ) else null,
+        endSheetAction = if (sheet != null && sheet.candidates.isNotEmpty()) SheetAction(
+            onClick = { onIntent(CharacterListIntent.SaveAiCandidates) },
+            contentDescription = stringResource(R.string.ai_identify_characters_save),
+            icon = Icons.Default.Save,
+            enabled = !sheet.loading,
+        ) else null,
     ) {
+        // 思考档位原本是头部按钮点开的二级面板，头部槽位只表达单颗按钮，改为正文内选择。
+        AiReasoningLevelSection(
+            level = sheet?.reasoningLevel ?: AiReasoningLevel.AUTO,
+            enabled = sheet != null && !sheet.loading,
+            onLevelChange = { onIntent(CharacterListIntent.SetAiIdentifyReasoningLevel(it)) },
+        )
+        // 模型切换从头部按钮移入正文，保留“选完模型自动重试”的 fork 能力。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AppText(
+                text = stringResource(R.string.ai_select_model),
+                modifier = Modifier.weight(1f),
+                style = LegadoTheme.typography.bodyMedium,
+            )
+            AiModelSwitchButton(
+                enabled = sheet != null && !sheet.loading,
+                onSelected = { onIntent(CharacterListIntent.RunAiIdentify) },
+            )
+        }
         when {
             sheet == null -> Unit
             sheet.loading -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -313,13 +315,6 @@ private fun CharacterIdentifySheet(
             }
         }
     }
-    AiModelSwitchSheet(
-        show = showModelPicker,
-        onDismissRequest = { showModelPicker = false },
-        // 与原"切换模型"按钮一致：选完模型自动重试当前任务
-        onSelected = { onIntent(CharacterListIntent.RunAiIdentify) },
-    )
-}
 @Composable
 private fun CharacterIdentifyCandidateRow(
     candidate: CharacterIdentifyCandidateUi,

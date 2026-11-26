@@ -26,14 +26,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
-import io.legado.app.ui.theme.LegadoTheme
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
-import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.ai.AiModelSwitchButton
+import io.legado.app.ui.theme.LegadoTheme
+import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
+import kotlinx.collections.immutable.toImmutableList
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -72,40 +73,47 @@ fun CharacterQuerySheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = state.name.ifBlank { name },
-        startAction = {
-            AiModelSwitchButton(onSelected = {
-                // 切换模型后自动重跑当前查询，与新模型的归纳缓存键不冲突
-                viewModel.onIntent(CharacterQueryIntent.Retry)
-            })
-        },
-        endAction = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 从头追查：对话框级动作（更新原文出处 + 重跑 AI 归纳），与保存在一起放标题栏
-                if (!state.searchFullyCovered && !state.traceFinished) {
-                    MediumTonalButton(
+        endSheetActions = buildList {
+            // 从头追查：对话框级动作（更新原文出处 + 重跑 AI 归纳），与保存在一起放标题栏
+            if (!state.searchFullyCovered && !state.traceFinished) {
+                add(
+                    SheetAction(
                         onClick = { viewModel.onIntent(CharacterQueryIntent.TraceFromStart) },
                         enabled = !state.tracing,
                         icon = AppIcons.Replay,
                         contentDescription = stringResource(R.string.character_trace_start),
                     )
-                }
-                if (state.profile == null && state.aiSummary.isNotBlank()) {
-                    MediumTonalButton(
+                )
+            }
+            if (state.profile == null && state.aiSummary.isNotBlank()) {
+                add(
+                    SheetAction(
                         onClick = { viewModel.onIntent(CharacterQueryIntent.SaveProfile) },
                         enabled = state.saveState != CharacterQueryUiState.SaveState.Saving &&
                             state.saveState != CharacterQueryUiState.SaveState.Saved,
                         icon = AppIcons.Check,
                         contentDescription = stringResource(R.string.character_save_profile),
                     )
-                }
+                )
             }
-        },
+        }.toImmutableList(),
     ) {
-        CharacterQueryContent(
-            state = state,
-            onIntent = viewModel::onIntent,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                AiModelSwitchButton(onSelected = {
+                    // 切换模型后自动重跑当前查询，与新模型的归纳缓存键不冲突
+                    viewModel.onIntent(CharacterQueryIntent.Retry)
+                })
+            }
+            CharacterQueryContent(
+                state = state,
+                onIntent = viewModel::onIntent,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

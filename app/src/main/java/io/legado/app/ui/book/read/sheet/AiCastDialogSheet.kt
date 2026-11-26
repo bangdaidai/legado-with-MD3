@@ -50,11 +50,11 @@ import io.legado.app.ui.widget.components.CastFieldStack
 import io.legado.app.ui.widget.components.CastImeTextField
 import io.legado.app.ui.widget.components.CollapsibleHeader
 import io.legado.app.ui.widget.components.button.ToggleChip
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallOutlinedButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySwitchSettingItem
@@ -203,38 +203,30 @@ fun AiCastDialogSheet(
     val title = stringResource(R.string.ai_cast_scene_only)
     // 这一章有没有配乐段可清
     val deletable = sceneCount > 0
-    val startAction: @Composable () -> Unit = {
-        MediumTonalButton(
-            onClick = {
-                onIntent(ReadBookIntent.DeleteChapterBgmScenes(chapterIndex))
-                sceneCount = 0
-            },
-            icon = AppIcons.Delete,
-            contentDescription = stringResource(R.string.ai_cast_delete_scenes),
-            enabled = !running && deletable,
-        )
-    }
+    val startSheetAction = SheetAction(
+        onClick = {
+            onIntent(ReadBookIntent.DeleteChapterBgmScenes(chapterIndex))
+            sceneCount = 0
+        },
+        icon = AppIcons.Delete,
+        contentDescription = stringResource(R.string.ai_cast_delete_scenes),
+        enabled = !running && deletable,
+    )
 
     AppModalBottomSheet(
         show = show && book != null,
         onDismissRequest = onDismissRequest,
         title = title,
-        startAction = startAction,
-        endAction = {
-            if (running) {
-                MediumTonalButton(
-                    onClick = { onIntent(ReadBookIntent.CancelAiCast) },
-                    icon = AppIcons.Close,
-                    contentDescription = stringResource(R.string.cancel),
-                )
-            } else {
-                MediumTonalButton(
-                    onClick = { startCast(emptyList()) },
-                    icon = Icons.Default.PlayArrow,
-                    contentDescription = stringResource(R.string.ai_cast_start),
-                )
-            }
-        },
+        startSheetAction = startSheetAction,
+        endSheetAction = SheetAction(
+            onClick = {
+                if (running) onIntent(ReadBookIntent.CancelAiCast) else startCast(emptyList())
+            },
+            icon = if (running) AppIcons.Close else Icons.Default.PlayArrow,
+            contentDescription = stringResource(
+                if (running) R.string.cancel else R.string.ai_cast_start
+            ),
+        ),
     ) {
         Column(
             modifier = Modifier

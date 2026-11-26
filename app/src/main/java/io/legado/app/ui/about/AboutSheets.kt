@@ -2,13 +2,16 @@ package io.legado.app.ui.about
 
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Alignment
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +55,67 @@ fun UpdateSheet(
                 .verticalScroll(rememberScrollState())
         ) {
             if (mode == UpdateMode.UPDATE) {
+                Row(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppText(
+                        text = stringResource(R.string.about_current_version),
+                        style = LegadoTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AppText(
+                        text = BuildConfig.VERSION_NAME,
+                        style = LegadoTheme.typography.bodyMedium,
+                        color = LegadoTheme.colorScheme.outline,
+                    )
+                }
+                Row(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppText(
+                        text = stringResource(R.string.about_new_version),
+                        style = LegadoTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AppText(
+                        text = updateInfo.tagName,
+                        style = LegadoTheme.typography.bodyMedium,
+                        color = LegadoTheme.colorScheme.primary,
+                    )
+                }
+                Row(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppText(
+                        text = "ABI",
+                        style = LegadoTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AppText(
+                        text = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown",
+                        style = LegadoTheme.typography.bodyMedium,
+                        color = LegadoTheme.colorScheme.outline,
+                    )
+                }
+                Row(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppText(
+                        text = stringResource(R.string.about_update_channel),
+                        style = LegadoTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AppText(
+                        text = updateToVariant,
+                        style = LegadoTheme.typography.bodyMedium,
+                        color = LegadoTheme.colorScheme.outline,
+                    )
+                }
+            } else {
                 AppText(
                     text = stringResource(R.string.about_current_version) + " " + BuildConfig.VERSION_NAME,
                     style = LegadoTheme.typography.bodyMedium,

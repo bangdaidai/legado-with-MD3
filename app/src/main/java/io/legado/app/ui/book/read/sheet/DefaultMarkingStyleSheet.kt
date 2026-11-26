@@ -18,9 +18,9 @@ import io.legado.app.R
 import io.legado.app.domain.model.MarkingEffect
 import io.legado.app.domain.model.TextProcessStyle
 import io.legado.app.help.config.ReadBookConfig
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 
 /**
  * 「笔记默认样式」编辑 Sheet：颜色行 + 效果格 + 预览，
@@ -52,13 +52,11 @@ fun DefaultMarkingStyleSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.default_marking_style),
-        endAction = {
-            MediumTonalButton(
-                onClick = { onSave(editingStyle) },
-                icon = Icons.Default.Save,
-                contentDescription = stringResource(android.R.string.ok),
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = { onSave(editingStyle) },
+            icon = Icons.Default.Save,
+            contentDescription = stringResource(android.R.string.ok),
+        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 各段间距统一 12dp。不用 verticalArrangement：颜色行自带 8dp 纵向内边距、

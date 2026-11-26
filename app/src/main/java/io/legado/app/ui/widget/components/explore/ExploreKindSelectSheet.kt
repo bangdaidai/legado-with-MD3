@@ -16,7 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,8 +32,8 @@ import io.legado.app.domain.usecase.ExploreKindUiUseCase
 import io.legado.app.ui.theme.ComposeEngine
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.SearchBar
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,20 +118,16 @@ fun ExploreKindSelectSheet(
     AppModalBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
-        endAction = {
-            if (multiple && selectedIndices.isNotEmpty()) {
-                MediumTonalButton(
-                    onClick = {
-                        val selectedKinds = selectedIndices.sorted()
-                            .mapNotNull { kinds.getOrNull(it) }
-                        onSelected(selectedKinds)
-                        onDismissRequest()
-                    },
-                    icon = Icons.Default.Check,
-                    contentDescription = stringResource(R.string.confirm)
-                )
-            }
-        }
+        endSheetAction = if (multiple && selectedIndices.isNotEmpty()) SheetAction(
+            onClick = {
+                val selectedKinds = selectedIndices.sorted()
+                    .mapNotNull { kinds.getOrNull(it) }
+                onSelected(selectedKinds)
+                onDismissRequest()
+            },
+            icon = Icons.Default.Check,
+            contentDescription = stringResource(R.string.confirm),
+        ) else null
     ) {
         Column {
             SearchBar(

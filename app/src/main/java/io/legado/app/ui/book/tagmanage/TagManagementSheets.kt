@@ -77,10 +77,10 @@ import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.PrimaryButton
 import io.legado.app.ui.widget.components.button.SecondaryButton
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.checkBox.CheckboxItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.R
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -352,13 +352,11 @@ fun GroupManageSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = "分组管理",
-        endAction = {
-            MediumTonalButton(
-                onClick = onAdd,
-                icon = Icons.Default.Add,
-                contentDescription = stringResource(R.string.add),
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = onAdd,
+            icon = Icons.Default.Add,
+            contentDescription = stringResource(R.string.add),
+        ),
     ) {
         LazyColumn(
             state = listState,
@@ -648,13 +646,11 @@ fun BatchShowOnBookshelfSheet(
         show = show,
         onDismissRequest = onDismiss,
         title = "批量编辑标签展示",
-        endAction = {
-            MediumTonalButton(
-                onClick = onSave,
-                icon = Icons.Default.Check,
-                contentDescription = "保存",
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = onSave,
+            icon = Icons.Default.Check,
+            contentDescription = "保存",
+        ),
     ) {
         // 按分组组织标签
         val grouped = tags.filter { it.groupId != 0L }.groupBy { it.groupId }

@@ -4,10 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -56,6 +60,8 @@ import ui.feice.mochi.basic.MochiBarIconButton
 import ui.feice.mochi.basic.MochiDropdownDefaults
 import ui.feice.mochi.basic.MochiDropdownMenu
 import ui.feice.mochi.basic.MochiItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * 单选菜单的统一入口：业务只提供选项、当前选中 [selectedId] 与稳定 ID 回调 [onSelect]。
@@ -100,7 +106,8 @@ fun AppChoiceDropdown(
     onUnavailableSelected: ((String) -> Unit)? = null,
     /**
      * 选中后先关菜单、等浮层从 DecorView 摘掉再回调。切换根主题这类会立刻重建 composition
-     * 的操作必须开启，否则 Mochi 的 `InWindowOverlay` 子视图会在测量期间被移除。
+     * 的操作必须开启，否则 Mochi 的 InWindowOverlay 或 COUI / M3 / Oxygen 的 Popup 会在测量
+     * 期间被移除。Miuix 分支暂由库自行管理弹层生命周期。
      */
     commitAfterDismiss: Boolean = false,
     /** 紧凑图标按钮形态：让 Miuix 也用 [trigger] 而不是渲染整行设置项。 */
@@ -136,20 +143,20 @@ fun AppChoiceDropdown(
         ComposeEngine.Coui -> if (canUseCouiSettingMenu()) {
             CouiChoice(
                 options, selectedId, onSelect, title, modifier, enabled,
-                unavailableIds, onUnavailableSelected, anchor,
+                unavailableIds, onUnavailableSelected, commitAfterDismiss, anchor,
                 embeddedExpanded, onDismissRequest, triggerShape, trigger,
             )
         } else {
             MaterialChoice(
                 options, selectedId, onSelect, title, modifier, enabled,
-                unavailableIds, onUnavailableSelected, anchor,
+                unavailableIds, onUnavailableSelected, commitAfterDismiss, anchor,
                 embeddedExpanded, onDismissRequest, triggerShape, trigger,
             )
         }
 
         ComposeEngine.Oxygen, ComposeEngine.Material -> MaterialChoice(
             options, selectedId, onSelect, title, modifier, enabled,
-            unavailableIds, onUnavailableSelected, anchor,
+            unavailableIds, onUnavailableSelected, commitAfterDismiss, anchor,
             embeddedExpanded, onDismissRequest, triggerShape, trigger,
         )
 
@@ -185,6 +192,49 @@ fun AppChoiceDropdown(
                 onValueChange = onSelect,
             )
         }
+    }
+}
+
+/** 只延迟业务提交，不延迟 expanded；弹层真正销毁后才运行业务动作。 */
+private class MenuSelectionCommit(private val scope: CoroutineScope) {
+    private var pending: (() -> Unit)? = null
+
+    fun submit(commitAfterDismiss: Boolean, dismiss: () -> Unit, deliver: () -> Unit) {
+        if (!commitAfterDismiss) {
+            dismiss()
+            deliver()
+            return
+        }
+        // 第一次提交后菜单已进入收起流程，忽略重复语义点击，避免切换两次根主题。
+        if (pending != null) return
+        pending = deliver
+        dismiss()
+    }
+
+    fun onDismissed() {
+        val deliver = pending ?: return
+        pending = null
+        scope.launch {
+            // 退场信号来自 composition 的移除阶段；再跨一帧，避免根主题重建与当前
+            // Popup 的移除、测量挤在同一帧。
+            withFrameNanos { }
+            deliver()
+        }
+    }
+}
+
+@Composable
+private fun rememberMenuSelectionCommit(): MenuSelectionCommit {
+    val scope = rememberCoroutineScope()
+    return remember(scope) { MenuSelectionCommit(scope) }
+}
+
+/** M3 / Oxygen Popup 没有退场完成参数，用内容 composition 的销毁作为真实移除信号。 */
+@Composable
+private fun PopupDismissObserver(onDismissed: () -> Unit) {
+    val currentOnDismissed by rememberUpdatedState(onDismissed)
+    DisposableEffect(Unit) {
+        onDispose { currentOnDismissed() }
     }
 }
 
@@ -475,6 +525,7 @@ private fun CouiChoice(
     enabled: Boolean,
     unavailableIds: Set<String>,
     onUnavailableSelected: ((String) -> Unit)?,
+    commitAfterDismiss: Boolean,
     anchor: AppMenuAnchor,
     embeddedExpanded: Boolean?,
     onDismissRequest: () -> Unit,
@@ -484,6 +535,7 @@ private fun CouiChoice(
     var expanded by remember { mutableStateOf(false) }
     val isOpen = embeddedExpanded ?: expanded
     val couiAnchor = rememberCouiMenuAnchor()
+    val selectionCommit = rememberMenuSelectionCommit()
     val items = remember(options, selectedId, unavailableIds, onUnavailableSelected) {
         options.map { option ->
             val blocked = option.id in unavailableIds && onUnavailableSelected == null
@@ -502,6 +554,11 @@ private fun CouiChoice(
             modifier = Modifier.couiMenuAnchor(couiAnchor),
             onOpen = { couiAnchor.open { expanded = true } },
         )
+    }
+    val dismissSelection = {
+        expanded = false
+        // COUI 的 Menu 不会在选中后自动回调 onDismissRequest，受控模式下必须显式通知。
+        if (embeddedExpanded != null) onDismissRequest()
     }
     // 受控模式**不能**把 couiMenuAnchor 挂到容器上：该修饰符内含 pointerInput，会成为覆盖层里
     // 命中的唯一节点，同层兄弟（调用方的取值区 / 触发内容）收不到触摸。定位也不需要它——
@@ -555,14 +612,14 @@ private fun CouiChoice(
             },
             items = items,
             onItemClick = { item ->
-                expanded = false
-                // COUI 的 Menu 不会在选中后自动回调 onDismissRequest，受控模式下必须显式通知。
-                if (embeddedExpanded != null) onDismissRequest()
-                if (item.value in unavailableIds) onUnavailableSelected?.invoke(item.value)
-                else onSelect(item.value)
+                selectionCommit.submit(commitAfterDismiss, dismissSelection) {
+                    if (item.value in unavailableIds) onUnavailableSelected?.invoke(item.value)
+                    else onSelect(item.value)
+                }
             },
             // 受控模式没有触点锚点；传 anchor 只会得到 null 坐标，见上面对容器修饰符的说明。
             anchor = if (embeddedExpanded == null) couiAnchor else null,
+            onDismissFinished = selectionCommit::onDismissed,
         )
     }
 }
@@ -577,6 +634,7 @@ private fun MaterialChoice(
     enabled: Boolean,
     unavailableIds: Set<String>,
     onUnavailableSelected: ((String) -> Unit)?,
+    commitAfterDismiss: Boolean,
     anchor: AppMenuAnchor,
     embeddedExpanded: Boolean?,
     onDismissRequest: () -> Unit,
@@ -586,6 +644,13 @@ private fun MaterialChoice(
     var expanded by remember { mutableStateOf(false) }
     val isOpen = embeddedExpanded ?: expanded
     val scope = remember { AppMenuTriggerScopeImpl(Modifier) { expanded = true } }
+    val selectionCommit = rememberMenuSelectionCommit()
+    val dismissSelection = {
+        expanded = false
+        // M3 的 DropdownMenu 不会在选中后自动回调 onDismissRequest；
+        // 受控模式下只改内部 expanded 关不掉，必须显式通知调用方。
+        if (embeddedExpanded != null) onDismissRequest()
+    }
     Box(modifier) {
         if (embeddedExpanded != null) {
             // 受控模式：弹层锚在调用方给定的位置，入口不包可点节点。
@@ -611,6 +676,7 @@ private fun MaterialChoice(
                 onDismissRequest()
             },
         ) { _ ->
+            PopupDismissObserver(selectionCommit::onDismissed)
             options.forEach { option ->
                 if (option.dividerBefore) PillDivider()
                 val blocked = option.id in unavailableIds && onUnavailableSelected == null
@@ -619,14 +685,12 @@ private fun MaterialChoice(
                     enabled = option.enabled && !blocked,
                     isSelected = option.id == selectedId,
                     onClick = {
-                        expanded = false
-                        // M3 的 DropdownMenu 不会在选中后自动回调 onDismissRequest；
-                        // 受控模式下只改内部 expanded 关不掉，必须显式通知调用方。
-                        if (embeddedExpanded != null) onDismissRequest()
-                        if (option.id in unavailableIds) {
-                            onUnavailableSelected?.invoke(option.id)
-                        } else {
-                            onSelect(option.id)
+                        selectionCommit.submit(commitAfterDismiss, dismissSelection) {
+                            if (option.id in unavailableIds) {
+                                onUnavailableSelected?.invoke(option.id)
+                            } else {
+                                onSelect(option.id)
+                            }
                         }
                     },
                 )

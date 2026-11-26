@@ -36,9 +36,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
-import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import java.io.File
 
 /**
@@ -74,13 +73,11 @@ fun NinePatchEditorDialog(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.nine_patch_editor),
-        endAction = {
-            MediumTonalButton(
-                onClick = { onSave(left, right, top, bottom) },
-                icon = Icons.Default.Done,
-                contentDescription = stringResource(R.string.save),
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = { onSave(left, right, top, bottom) },
+            icon = Icons.Default.Done,
+            contentDescription = stringResource(R.string.save),
+        ),
     ) {
         Column(
             modifier = Modifier

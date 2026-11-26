@@ -30,6 +30,8 @@ import io.legado.app.domain.usecase.AddBookUseCase
 import io.legado.app.domain.usecase.BatchCacheDownloadUseCase
 import io.legado.app.domain.usecase.DeleteBooksUseCase
 import io.legado.app.domain.usecase.ExportBookshelfUseCase
+import io.legado.app.domain.repository.BookDomainRepository
+import io.legado.app.domain.usecase.BookshelfSeriesUseCase
 import io.legado.app.domain.usecase.FindShelfDuplicatesUseCase
 import io.legado.app.domain.usecase.ImportBookshelfUseCase
 import io.legado.app.domain.usecase.RefreshTocUseCase
@@ -41,7 +43,6 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.CacheBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.service.CacheBookService
-import io.legado.app.ui.config.themeConfig.TagColorPair
 import io.legado.app.utils.GSON
 import io.legado.app.utils.eventBus.FlowEventBus
 import io.legado.app.utils.move
@@ -89,12 +90,14 @@ import kotlin.math.min
 class BookshelfViewModel(
     application: Application,
     private val bookRepository: BookRepository,
+    private val bookDomainRepository: BookDomainRepository,
     private val bookGroupRepository: BookGroupRepository,
     private val bookSourceRepository: BookSourceRepository,
     private val bookshelfRepository: BookshelfRepository,
     private val uploadRepository: UploadRepository,
     private val batchCacheDownloadUseCase: BatchCacheDownloadUseCase,
     private val updateBooksGroupUseCase: UpdateBooksGroupUseCase,
+    private val bookshelfSeriesUseCase: BookshelfSeriesUseCase,
     private val refreshTocUseCase: RefreshTocUseCase,
     private val addBookUseCase: AddBookUseCase,
     private val deleteBooksUseCase: DeleteBooksUseCase,
@@ -117,6 +120,9 @@ class BookshelfViewModel(
     private val searchModeFlow = MutableStateFlow(false)
     private val loadingTextFlow = MutableStateFlow<String?>(null)
     private val activeOverlayFlow = MutableStateFlow<BookshelfOverlay?>(null)
+
+    /** 就地展开的系列名；放 ViewModel 才能在跳阅读器返回后保住 */
+    private val expandedSeriesFlow = MutableStateFlow<String?>(null)
     private val isEditModeFlow = MutableStateFlow(false)
     private val selectedBookUrlsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val isInFolderRootFlow = MutableStateFlow(initialSettings.bookGroupStyle == 2)
@@ -666,6 +672,8 @@ class BookshelfViewModel(
             internal = core.internal,
             allGroupBooks = allGroupBooks
         )
+    }.combine(bookDomainRepository.flowSeriesCovers()) { core, seriesCovers ->
+        core.copy(seriesCovers = seriesCovers.toImmutableMap())
     }
 
     private data class BookshelfDataCore(
@@ -682,7 +690,8 @@ class BookshelfViewModel(
         val allGroups: List<BookGroupUi>,
         val previews: GroupPreviewState,
         val internal: InternalState,
-        val allGroupBooks: ImmutableMap<Long, ImmutableList<BookUiItem>>
+        val allGroupBooks: ImmutableMap<Long, ImmutableList<BookUiItem>>,
+        val seriesCovers: ImmutableMap<String, String> = persistentMapOf(),
     )
 
     private val contentUiState: Flow<BookshelfUiState> = combine(
@@ -814,10 +823,13 @@ class BookshelfViewModel(
             visibleGroupBooks = visibleGroupBooks,
             bookshelfTags = bookshelfTags.toImmutableList(),
             selectedTagIds = selectedTagIds.toImmutableSet(),
+            seriesCovers = data.seriesCovers,
             privateAccess = privateAccess,
             privateSettings = privateSettings,
             pendingOpenBookUrl = internal.pendingOpenBookUrl,
         )
+    }.combine(expandedSeriesFlow) { state, expandedSeries ->
+        state.copy(expandedSeriesName = expandedSeries)
     }
 
     val uiState: StateFlow<BookshelfUiState> = combine(
@@ -970,6 +982,18 @@ class BookshelfViewModel(
 
             BookshelfIntent.ScanShelfDuplicates -> scanShelfDuplicates()
             is BookshelfIntent.DeleteShelfDuplicate -> deleteShelfDuplicate(intent.bookUrl)
+
+            is BookshelfIntent.CreateSeries -> createSeries(intent.name, intent.bookUrls)
+            is BookshelfIntent.RenameSeries -> renameSeries(intent.oldName, intent.newName)
+            is BookshelfIntent.DissolveSeries -> dissolveSeries(intent.seriesName)
+            is BookshelfIntent.RemoveBooksFromSeries ->
+                removeBooksFromSeries(intent.bookUrls)
+
+            is BookshelfIntent.EditSeries -> editSeries(intent.bookUrls)
+            is BookshelfIntent.SetSeriesCover ->
+                setSeriesCover(intent.seriesName, intent.cover)
+
+            is BookshelfIntent.SetExpandedSeries -> setExpandedSeries(intent.seriesName)
         }
     }
 
@@ -1072,6 +1096,75 @@ class BookshelfViewModel(
             showMessage(
                 context.getString(R.string.private_mark_failed, it.localizedMessage.orEmpty())
             )
+        }
+    }
+
+    private fun createSeries(name: String, bookUrls: List<String>) {
+        if (name.isBlank() || bookUrls.isEmpty()) return
+        viewModelScope.launch {
+            val created = bookshelfSeriesUseCase.createSeries(bookUrls, name)
+            activeOverlayFlow.value = null
+            if (created == null) {
+                showMessage(R.string.bookshelf_series_name_empty)
+                return@launch
+            }
+            // 收纳后立刻退出编辑态：折叠只在非编辑态生效，留在编辑态看不到结果
+            exitEditMode()
+            showMessage(
+                context.getString(R.string.bookshelf_series_created, created, bookUrls.size)
+            )
+        }
+    }
+
+    private fun renameSeries(oldName: String, newName: String) {
+        val target = newName.trim()
+        activeOverlayFlow.value = null
+        if (target.isEmpty() || target == oldName) return
+        viewModelScope.launch {
+            if (!bookshelfSeriesUseCase.renameSeries(oldName, target)) {
+                showMessage(R.string.bookshelf_series_name_conflict)
+            } else if (expandedSeriesFlow.value == oldName) {
+                expandedSeriesFlow.value = target
+            }
+        }
+    }
+
+    private fun dissolveSeries(seriesName: String) {
+        activeOverlayFlow.value = null
+        if (seriesName.isBlank()) return
+        if (expandedSeriesFlow.value == seriesName) {
+            expandedSeriesFlow.value = null
+        }
+        viewModelScope.launch {
+            bookshelfSeriesUseCase.dissolveSeries(seriesName)
+            showMessage(context.getString(R.string.bookshelf_series_dissolved, seriesName))
+        }
+    }
+
+    private fun setSeriesCover(seriesName: String, cover: String?) {
+        if (seriesName.isBlank()) return
+        viewModelScope.launch {
+            bookshelfSeriesUseCase.setCover(seriesName, cover)
+        }
+    }
+
+    private fun setExpandedSeries(seriesName: String?) {
+        expandedSeriesFlow.value = seriesName
+    }
+
+    private fun editSeries(bookUrls: Set<String>) {
+        if (bookUrls.isEmpty()) return
+        isEditModeFlow.value = true
+        clearDragState()
+        selectedBookUrlsFlow.value = bookUrls
+    }
+
+    private fun removeBooksFromSeries(bookUrls: Set<String>) {
+        if (bookUrls.isEmpty()) return
+        viewModelScope.launch {
+            bookshelfSeriesUseCase.removeBooksFromSeries(bookUrls)
+            clearSelection()
+            showMessage(context.getString(R.string.bookshelf_series_removed, bookUrls.size))
         }
     }
 

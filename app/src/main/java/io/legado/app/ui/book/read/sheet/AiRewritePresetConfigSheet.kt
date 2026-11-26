@@ -31,6 +31,7 @@ import io.legado.app.ui.widget.components.button.ConfirmDismissButtonsRow
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.text.AppText
 
 @Composable
@@ -44,13 +45,11 @@ fun AiRewritePresetConfigSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.ai_rewrite_presets),
-        endAction = {
-            MediumTonalButton(
-                onClick = { onIntent(ReadBookIntent.AddAiRewritePreset) },
-                icon = Icons.Default.Add,
-                contentDescription = stringResource(R.string.add),
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = { onIntent(ReadBookIntent.AddAiRewritePreset) },
+            icon = Icons.Default.Add,
+            contentDescription = stringResource(R.string.add),
+        ),
     ) {
         Column(
             modifier = Modifier

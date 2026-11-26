@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -41,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -48,6 +51,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -61,6 +65,7 @@ import io.legado.app.ui.book.read.MarkingUiState
 import io.legado.app.ui.book.read.TextMenuPositionProvider
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.ProvideAppDensity
+import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.card.NormalCard
@@ -68,10 +73,13 @@ import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetMenuAction
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
+import kotlinx.collections.immutable.toImmutableList
 
 /**
  * 划线/高亮笔记配置 Sheet。
@@ -156,6 +164,8 @@ fun MarkingSheet(
         mutableStateOf(if (editingKeepsGeometry) editingStyle?.underlineSvgPath else null)
     }
     var showColorPicker by remember(show, editing) { mutableStateOf(false) }
+    var showDeleteConfirm by remember(show, editing) { mutableStateOf(false) }
+    val requestDelete: () -> Unit = { showDeleteConfirm = true }
     // 打开取色器的种子色：点色板入口用当前选中色，长按预设色则以被长按的色为基准微调。
     var colorPickerSeed by remember(show, editing) { mutableStateOf(markColor) }
     // 「样式来源」下拉（自定义 + 高亮规则）的展开状态，锚在标题行的调色按钮上。
@@ -191,20 +201,17 @@ fun MarkingSheet(
         if (dirty) onSave(currentStyle, noteState.text.toString()) else onDismissRequest()
     }
 
-    // 左侧动作：仅删除（编辑模式）。删除是破坏性操作，单独放左侧，
-    // 与右侧的调色/分享按钮隔开标题，降低误触。
-    val startAction: @Composable (() -> Unit)? =
+    // 悬浮面板仍用项目按钮与下拉组件；左侧仅删除，右侧为样式来源和分享。
+    val startAction: (@Composable () -> Unit)? =
         if (editing != null) {
             {
                 MediumTonalButton(
-                    onClick = onDelete,
+                    onClick = requestDelete,
                     icon = Icons.Default.Delete,
                     contentDescription = stringResource(R.string.delete)
                 )
             }
         } else null
-    // 右侧动作：样式来源下拉入口（调色按钮）+ 分享卡片。
-    // 保存按钮已按「关闭即保存」语义移除。
     val endAction: (@Composable () -> Unit)? =
         if (showStyleConfig || onGenerateShareCard != null) {
             {
@@ -240,6 +247,63 @@ fun MarkingSheet(
                 }
             }
         } else null
+
+    // 底部弹层没有 Composable 动作槽，样式来源收进 SheetAction.menu；同侧分享另起一颗按钮。
+    val endSheetActions = buildList {
+        if (showStyleConfig) {
+            val styleMenuActions = buildList {
+                add(
+                    SheetMenuAction(
+                        id = "marking_style_custom",
+                        label = stringResource(R.string.bookmark_mark_custom),
+                        checked = !useRule,
+                        onClick = { useRule = false },
+                    )
+                )
+                if (state.highlightRules.isEmpty()) {
+                    add(
+                        SheetMenuAction(
+                            id = "marking_style_no_rules",
+                            label = stringResource(R.string.bookmark_mark_no_rules),
+                            enabled = false,
+                            onClick = {},
+                        )
+                    )
+                } else {
+                    state.highlightRules.forEach { rule ->
+                        add(
+                            SheetMenuAction(
+                                id = "marking_style_rule:${rule.id}",
+                                label = rule.name.ifBlank { rule.displayPattern() },
+                                checked = useRule && selectedRuleId == rule.id,
+                                onClick = {
+                                    useRule = true
+                                    selectedRuleId = rule.id
+                                },
+                            )
+                        )
+                    }
+                }
+            }.toImmutableList()
+            add(
+                SheetAction(
+                    icon = Icons.Default.Palette,
+                    contentDescription = stringResource(R.string.bookmark_mark_style_source),
+                    menu = styleMenuActions,
+                )
+            )
+        }
+        onGenerateShareCard?.let { share ->
+            add(
+                SheetAction(
+                    onClick = share,
+                    icon = Icons.Outlined.Image,
+                    contentDescription = stringResource(R.string.generate_share_card),
+                )
+            )
+        }
+    }.toImmutableList()
+
     // 底部弹层与悬浮两种形态共用的主体内容。
     val body: @Composable ColumnScope.() -> Unit = {
         if (selection == null && editing == null) {
@@ -333,16 +397,34 @@ fun MarkingSheet(
             show = show,
             onDismissRequest = requestClose,
             title = position,
-            startAction = startAction,
-            endAction = endAction,
+            startSheetAction = if (editing != null) SheetAction(
+                onClick = requestDelete,
+                icon = Icons.Default.Delete,
+                contentDescription = stringResource(R.string.delete),
+            ) else null,
+            endSheetActions = endSheetActions,
             content = body,
         )
     }
+
+    AppAlertDialog(
+        show = showDeleteConfirm,
+        onDismissRequest = { showDeleteConfirm = false },
+        title = stringResource(R.string.confirm_delete_bookmark),
+        confirmText = stringResource(R.string.delete),
+        onConfirm = {
+            showDeleteConfirm = false
+            onDelete()
+        },
+        dismissText = stringResource(R.string.cancel),
+        onDismiss = { showDeleteConfirm = false },
+    )
 
     if (showStyleConfig) {
         ColorPickerSheet(
             show = showColorPicker,
             initialColor = colorPickerSeed,
+            windowPresentation = floatingAnchor != null,
             onDismissRequest = { showColorPicker = false },
             onColorSelected = { color ->
                 markColor = color
@@ -425,9 +507,18 @@ private fun MarkingFloatingPanel(
     val density = LocalDensity.current
     val shadowPadding = 12.dp
     val windowSize = LocalWindowInfo.current.containerSize
-    val panelWidth = with(density) { windowSize.width.toDp() } - 32.dp
-    val panelMaxHeight = with(density) { (windowSize.height * 0.6f).toDp() }
-    val positionProvider = remember(anchor, density.density) {
+    val safeInsets = WindowInsets.safeDrawing
+    val layoutDirection = LocalLayoutDirection.current
+    val safeLeft = safeInsets.getLeft(density, layoutDirection)
+    val safeTop = safeInsets.getTop(density)
+    val safeRight = windowSize.width - safeInsets.getRight(density, layoutDirection)
+    val safeBottom = windowSize.height - safeInsets.getBottom(density)
+    val availableBounds = {
+        IntRect(left = safeLeft, top = safeTop, right = safeRight, bottom = safeBottom)
+    }
+    val panelWidth = with(density) { (safeRight - safeLeft).toDp() } - 32.dp
+    val panelMaxHeight = with(density) { ((safeBottom - safeTop) * 0.6f).toDp() }
+    val positionProvider = remember(anchor, density.density, windowSize, safeInsets, layoutDirection) {
         TextMenuPositionProvider(
             density = density.density,
             startX = anchor.startX.toInt(),
@@ -436,6 +527,7 @@ private fun MarkingFloatingPanel(
             endX = anchor.endX.toInt(),
             endBottomY = anchor.endBottomY.toInt(),
             shadowPadding = with(density) { shadowPadding.roundToPx() },
+            availableBounds = availableBounds,
         )
     }
     Popup(

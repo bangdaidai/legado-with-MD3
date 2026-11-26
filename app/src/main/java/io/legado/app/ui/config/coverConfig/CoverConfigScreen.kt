@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -21,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
+import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.SplicedColumnGroup
@@ -247,7 +247,7 @@ fun CoverConfigScreen(
                                     .size(28.dp)
                                     .clip(CircleShape)
                                     .background(Color(settings.textColor))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                    .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
                             )
                         }
                     )
@@ -270,7 +270,7 @@ fun CoverConfigScreen(
                                     .size(28.dp)
                                     .clip(CircleShape)
                                     .background(Color(settings.shadowColor))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                    .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
                             )
                         }
                     )
@@ -318,7 +318,7 @@ fun CoverConfigScreen(
                                     .size(28.dp)
                                     .clip(CircleShape)
                                     .background(Color(settings.textColorDark))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                    .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
                             )
                         }
                     )
@@ -341,7 +341,7 @@ fun CoverConfigScreen(
                                     .size(28.dp)
                                     .clip(CircleShape)
                                     .background(Color(settings.shadowColorDark))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                    .border(1.dp, LegadoTheme.colorScheme.outlineVariant, CircleShape)
                             )
                         }
                     )

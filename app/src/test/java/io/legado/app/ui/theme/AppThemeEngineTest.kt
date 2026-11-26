@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.itos.coui.theme.CouiColorScheme
 import com.itos.coui.theme.CouiPresets
 import com.itos.coui.theme.CouiTheme
+import com.itos.coui.topappbar.ProvideCouiTopAppBarBlur
 import io.legado.app.R
 import io.legado.app.domain.model.settings.AppShellSettings
 import io.legado.app.domain.model.settings.AppUiConfiguration
@@ -67,6 +70,8 @@ import io.legado.app.ui.widget.components.SplicedColumnGroup
 import io.legado.app.ui.widget.components.checkBox.AppCheckbox
 import io.legado.app.ui.widget.components.coui.CouiGlassScrollBehavior
 import io.legado.app.ui.widget.components.coui.LocalAppCouiTopBarHost
+import io.legado.app.ui.widget.components.menu.AppChoiceDropdown
+import io.legado.app.ui.widget.components.menu.AppChoiceOption
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
 import io.legado.app.ui.widget.components.settingItem.CompactDropdownSettingItem
 import io.legado.app.ui.widget.components.settingItem.DropdownListSettingItem
@@ -90,6 +95,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
+import kotlinx.collections.immutable.persistentListOf
 import splitties.init.injectAsAppCtx
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import ui.feice.mochi.theme.MochiTheme
@@ -206,6 +212,68 @@ class AppThemeEngineTest {
                     assertSame("$storedValue content survives theme switch", initialContent, observedContent)
                 }
             }
+        }
+    }
+
+    @Test
+    // COUI 菜单材质含 RuntimeShader；这里只验证关闭时序与状态连续性，跳过绘制。
+    @GraphicsMode(GraphicsMode.Mode.LEGACY)
+    fun couiToOxygenEngineSwitchWaitsForControlledMenuDismissal() {
+        switchEngineThroughControlledMenu("coui", "oxygen", "OxygenX")
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.LEGACY)
+    fun oxygenToCouiEngineSwitchWaitsForControlledMenuDismissal() {
+        switchEngineThroughControlledMenu("oxygen", "coui", "COUI")
+    }
+
+    private fun switchEngineThroughControlledMenu(
+        initialEngine: String,
+        targetEngine: String,
+        targetLabel: String,
+    ) {
+        RuntimeEnvironment.getApplication().injectAsAppCtx()
+        val configuration = mutableStateOf(
+            AppUiConfiguration(appShell = AppShellSettings(composeEngine = initialEngine))
+        )
+        val expanded = mutableStateOf(true)
+        var commits = 0
+        var contentToken: Any? = null
+        compose.setContent {
+            AppTheme(configuration.value, applyBackground = false) {
+                val token = remember { Any() }
+                SideEffect { contentToken = token }
+                Box(Modifier.size(280.dp)) {
+                    AppChoiceDropdown(
+                        options = persistentListOf(AppChoiceOption(targetEngine, targetLabel)),
+                        selectedId = initialEngine,
+                        onSelect = {
+                            commits++
+                            configuration.value = configuration.value.copy(
+                                appShell = configuration.value.appShell.copy(composeEngine = it)
+                            )
+                        },
+                        title = "Compose engine",
+                        modifier = Modifier.matchParentSize(),
+                        embeddedExpanded = expanded.value,
+                        onDismissRequest = { expanded.value = false },
+                        commitAfterDismiss = true,
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        val initialToken = compose.runOnIdle { checkNotNull(contentToken) }
+        compose.onNodeWithText(targetLabel, useUnmergedTree = true)
+            .assertIsDisplayed()
+            .performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertFalse("菜单关闭后仍保持 expanded", expanded.value)
+            assertEquals("选中只能提交一次", 1, commits)
+            assertEquals(targetEngine, configuration.value.appShell.composeEngine)
+            assertSame("切换根主题不能重置原页面内容", initialToken, contentToken)
         }
     }
 
@@ -458,6 +526,9 @@ class AppThemeEngineTest {
 
     @Test
     @Config(sdk = [34])
+    // COUI 面板材质走 Kawase RuntimeShader，Robolectric 的 NATIVE 解析不了该 shader；
+    // LEGACY 只跳过绘制，语义、点击与排版照常，和 CouiAlertDialogTest 同口径。
+    @GraphicsMode(GraphicsMode.Mode.LEGACY)
     fun couiSheetDropdownsOpenAndCommitIndependently() {
         RuntimeEnvironment.getApplication().injectAsAppCtx()
         val tiny = mutableStateOf("initial")
@@ -510,6 +581,10 @@ class AppThemeEngineTest {
                     theme = ThemeSettings(enableBlur = blur.value),
                 ),
             ) {
+                // 上游 alpha16 起顶栏默认走 Compose 渐变模糊，其 AGSL 在 Robolectric 下
+                // 编译失败（'color' is not a valid layout qualifier）；本测试验证外壳采样与
+                // 动作透传，与模糊实现无关，显式退回 COUI 后端。
+                ProvideCouiTopAppBarBlur(useComposeBlur = false) {
                 val behavior = GlassTopAppBarDefaults.defaultScrollBehavior()
                 SideEffect { scrollBehavior = behavior }
                 val actions: @Composable RowScope.() -> Unit = {
@@ -530,6 +605,7 @@ class AppThemeEngineTest {
                     val receivesSource = LocalAppCouiTopBarHost.current?.backdrop != null
                     SideEffect { bodyReceivesSource = receivesSource }
                     Box(Modifier.fillMaxSize().padding(padding))
+                }
                 }
             }
         }
@@ -574,6 +650,8 @@ class AppThemeEngineTest {
                     theme = ThemeSettings(enableBlur = blur.value),
                 ),
             ) {
+                // 同上：Robolectric 无法编译上游新 Compose 渐变模糊的 AGSL，退回 COUI 后端。
+                ProvideCouiTopAppBarBlur(useComposeBlur = false) {
                 val checked = remember { mutableStateOf(false) }
                 AppScaffold(topBar = {
                     GlassSmallTopAppBar("Page", actions = {
@@ -594,6 +672,7 @@ class AppThemeEngineTest {
                         )
                     })
                 }) { padding -> Box(Modifier.fillMaxSize().padding(padding)) }
+                }
             }
         }
 

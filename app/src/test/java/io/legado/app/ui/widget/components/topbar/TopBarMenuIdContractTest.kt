@@ -115,7 +115,6 @@ class TopBarMenuIdContractTest {
             "io/legado/app/ui/book/toc/rule/TxtRuleScreen.kt",
             "io/legado/app/ui/main/rss/RssScreen.kt",
             "io/legado/app/ui/main/explore/ExploreScreen.kt",
-            "io/legado/app/feature/explore/ExploreMainRoute.kt",
             "io/legado/app/ui/book/import/remote/RemoteBookScreen.kt",
             "io/legado/app/ui/book/import/local/ImportBookScreen.kt",
             "io/legado/app/ui/rss/source/manage/RssSourceScreen.kt",
@@ -124,7 +123,6 @@ class TopBarMenuIdContractTest {
         /** 只靠动态 `group:` ID 的菜单，没有其它字面量动作 ID。 */
         val GROUP_ONLY_MENUS = setOf(
             "io/legado/app/ui/main/explore/ExploreScreen.kt",
-            "io/legado/app/feature/explore/ExploreMainRoute.kt",
         )
 
         val GROUP_PREFIX_MENUS = GROUP_ONLY_MENUS + setOf(

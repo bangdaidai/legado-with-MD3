@@ -45,13 +45,13 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.AppTextField
 import io.legado.app.ui.widget.components.GroupManageBottomSheet
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.SelectionItemCard
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
 import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.tabRow.AppTabRow
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
@@ -577,13 +577,11 @@ private fun ShareCardEditSheet(
         show = true,
         onDismissRequest = { onIntent(ShareCardManageIntent.CancelEdit) },
         title = if (editing.id == 0L) "新建模板" else "编辑模板",
-        endAction = {
-            MediumTonalButton(
-                onClick = { onIntent(ShareCardManageIntent.SaveTemplate(name, html, group)) },
-                icon = AppIcons.Check,
-                contentDescription = "保存",
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = { onIntent(ShareCardManageIntent.SaveTemplate(name, html, group)) },
+            icon = AppIcons.Check,
+            contentDescription = "保存",
+        ),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),

@@ -24,6 +24,7 @@ import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,23 +44,19 @@ fun BookmarkEditSheet(
         show = show,
         onDismissRequest = onDismiss,
         title = bookmark.chapterName,
-        startAction = {
-            MediumTonalButton(
-                onClick = { showDeleteConfirmDialog = true },
-                icon = AppIcons.Delete,
-                contentDescription = stringResource(R.string.delete)
-            )
-        },
-        endAction = {
-            MediumTonalButton(
-                onClick = {
-                    // 必须用 copy 而非 apply：原地修改会让上游 StateFlow 的新旧状态相等而被去重，导致列表不刷新
-                    onSave(bookmark.copy(bookText = bookText, content = content))
-                },
-                icon = AppIcons.Check,
-                contentDescription = stringResource(R.string.action_save)
-            )
-        }
+        startSheetAction = SheetAction(
+            onClick = { showDeleteConfirmDialog = true },
+            icon = AppIcons.Delete,
+            contentDescription = stringResource(R.string.delete),
+        ),
+        endSheetAction = SheetAction(
+            onClick = {
+                // 必须用 copy 而非 apply：原地修改会让上游 StateFlow 的新旧状态相等而被去重，导致列表不刷新
+                onSave(bookmark.copy(bookText = bookText, content = content))
+            },
+            icon = AppIcons.Check,
+            contentDescription = stringResource(R.string.action_save),
+        )
     ) {
         BookmarkEditContent(
             bookmark = bookmark,

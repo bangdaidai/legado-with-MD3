@@ -94,6 +94,7 @@ object BackupConfig {
     private const val dbKeyServer = "server"
     private const val dbKeyShareCardTemplate = "shareCardTemplate"
     private const val dbKeyAiConfig = "aiConfig"
+    private const val dbKeyBookSeries = "bookSeries"
 
     val dbIgnoreKeys = arrayOf(
         dbKeyBookmark, dbKeyBookGroup, dbKeyBookSource, dbKeyRssSource,
@@ -101,7 +102,7 @@ object BackupConfig {
         dbKeySourceSub, dbKeyTxtTocRule, dbKeyHttpTts, dbKeyKeyboardAssists,
         dbKeyDictRule, dbKeyHomepageModules, dbKeyHomepageCustomSets,
         dbKeyHighlightRule, dbKeyHighlightTagRule, dbKeyTagGroupRule, dbKeyServer,
-        dbKeyShareCardTemplate, dbKeyAiConfig
+        dbKeyShareCardTemplate, dbKeyAiConfig, dbKeyBookSeries
     )
 
     val dbIgnoreTitle = arrayOf(
@@ -125,7 +126,8 @@ object BackupConfig {
         appCtx.getString(R.string.tag_group_rules),
         appCtx.getString(R.string.server_config),
         appCtx.getString(R.string.share_card_template),
-        appCtx.getString(R.string.ai_config)
+        appCtx.getString(R.string.ai_config),
+        appCtx.getString(R.string.bookshelf_series),
     )
 
     val backupDbIgnoreKeys = dbIgnoreKeys
@@ -409,6 +411,7 @@ object BackupConfig {
         PreferKey.bookshelfGridCoverWidth,
         PreferKey.bookshelfGridFixedColumns,
         PreferKey.bookshelfGridFixedCoverWidth,
+        PreferKey.bookshelfGridImmersive,
         PreferKey.bookshelfRefreshingLimit,
         PreferKey.bookshelfShowIntro,
         PreferKey.bookshelfShowTag,

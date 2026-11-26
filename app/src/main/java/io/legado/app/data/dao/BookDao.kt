@@ -151,7 +151,7 @@ interface BookDao {
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         where type & ${BookType.text} > 0
@@ -194,7 +194,7 @@ interface BookDao {
         ifnull(customIntro, ifnull(listIntro, intro)) as intro,
         kind,
         customTag,
-        wordCount,
+        seriesId, seriesOrder, wordCount,
         $RATING_SUBQUERY
 FROM books
 
@@ -235,7 +235,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -270,7 +270,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -308,7 +308,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -351,7 +351,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -395,7 +395,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -434,7 +434,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -474,7 +474,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -514,7 +514,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -553,7 +553,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -591,7 +591,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -631,7 +631,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -671,7 +671,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -711,7 +711,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -749,7 +749,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -787,7 +787,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -825,7 +825,7 @@ FROM books
             ifnull(customIntro, ifnull(listIntro, intro)) as intro,
             kind,
             customTag,
-            wordCount,
+            seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
     FROM books
 
@@ -1088,6 +1088,34 @@ FROM books
     @Query("update books set `group` = `group` - :group where `group` & :group > 0")
     fun removeGroup(group: Long)
 
+    // ── 书架折叠收纳（同系列多卷）的归属与卷序 ──
+
+    @Query("update books set seriesId = :seriesId, seriesOrder = :seriesOrder where bookUrl = :bookUrl")
+    suspend fun upSeries(bookUrl: String, seriesId: String, seriesOrder: Int)
+
+    @Query("update books set seriesId = :newName where seriesId = :oldName")
+    suspend fun renameSeries(oldName: String, newName: String)
+
+    @Query("update books set seriesId = null, seriesOrder = 0 where seriesId = :seriesName")
+    suspend fun clearSeries(seriesName: String)
+
+    @Query("update books set seriesId = null, seriesOrder = 0 where bookUrl in (:bookUrls)")
+    suspend fun clearSeriesForBooks(bookUrls: List<String>)
+
+    @Query("select distinct seriesId from books where seriesId != '' and seriesId is not null")
+    suspend fun getAllSeriesNames(): List<String>
+
+    @Query("select ifnull(max(seriesOrder), -1) from books where seriesId = :seriesName")
+    suspend fun maxSeriesOrder(seriesName: String): Int
+
+    /** 按传入顺序连续写入卷序，供「收纳为系列 / 移入系列」使用。 */
+    @Transaction
+    suspend fun assignSeries(bookUrls: List<String>, seriesId: String, startOrder: Int) {
+        bookUrls.forEachIndexed { index, bookUrl ->
+            upSeries(bookUrl, seriesId, startOrder + index)
+        }
+    }
+
     @Query(
         """
         delete from books
@@ -1182,7 +1210,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE $PUBLIC_BOOK_FILTER
@@ -1199,7 +1227,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.text} > 0 AND type & ${BookType.local} = 0
@@ -1219,7 +1247,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.local} > 0
@@ -1237,7 +1265,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.audio} > 0
@@ -1255,7 +1283,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.video} > 0
@@ -1273,7 +1301,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.audio} = 0 AND type & ${BookType.local} = 0
@@ -1292,7 +1320,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.local} > 0
@@ -1311,7 +1339,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.image} > 0
@@ -1329,7 +1357,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.text} > 0
@@ -1347,7 +1375,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE type & ${BookType.updateError} > 0
@@ -1365,7 +1393,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE durChapterIndex = 0 AND durChapterPos = 0
@@ -1383,7 +1411,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex > 0 AND durChapterIndex < totalChapterNum - 1
@@ -1401,7 +1429,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1
@@ -1419,7 +1447,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_SERIAL_CONDITION
@@ -1437,7 +1465,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_COMPLETE_CONDITION
@@ -1455,7 +1483,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE totalChapterNum > 0 AND durChapterIndex >= totalChapterNum - 1 AND $READ_FINISHED_PIT_CONDITION
@@ -1473,7 +1501,7 @@ FROM books
             durChapterPos, latestChapterTitle, latestChapterTime,
             lastCheckCount, totalChapterNum, durChapterIndex,
             type, `group`, `order`, canUpdate,
-            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, wordCount,
+            ifnull(customIntro, ifnull(listIntro, intro)) as intro, kind, customTag, seriesId, seriesOrder, wordCount,
             $RATING_SUBQUERY
         FROM books
         WHERE (`group` & :groupId) > 0

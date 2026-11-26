@@ -78,6 +78,7 @@ object Backup {
             "bookmark.json",
             "bookMarking.json",
             "bookGroup.json",
+            "bookSeries.json",
             "bookSource.json",
             "rssSources.json",
             "rssStar.json",
@@ -258,6 +259,9 @@ object Backup {
         }
         if (BackupConfig.dbIsNotIgnored("bookGroup", true)) {
             writeListToJson(appDb.bookGroupDao.all, "bookGroup.json", backupPath)
+        }
+        if (BackupConfig.dbIsNotIgnored("bookSeries", true)) {
+            writeListToJson(appDb.bookSeriesDao.all(), "bookSeries.json", backupPath)
         }
         if (BackupConfig.dbIsNotIgnored("bookSource", true)) {
             writeListToJson(appDb.bookSourceDao.all, "bookSource.json", backupPath)

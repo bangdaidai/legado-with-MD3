@@ -24,6 +24,7 @@ import io.legado.app.data.dao.BookUpdateDao
 import io.legado.app.data.dao.BookGroupDao
 import io.legado.app.data.dao.BookKnowledgeDao
 import io.legado.app.data.dao.BookMarkingDao
+import io.legado.app.data.dao.BookSeriesDao
 import io.legado.app.data.dao.BookSourceDao
 import io.legado.app.data.dao.BookmarkDao
 import io.legado.app.data.dao.ShareCardTemplateDao
@@ -95,6 +96,7 @@ import io.legado.app.data.entities.BookKnowledgeEntry
 import io.legado.app.data.entities.BookMarking
 import io.legado.app.data.entities.ReadAloudAudioDownload
 import io.legado.app.data.entities.BookOutlineNode
+import io.legado.app.data.entities.BookSeries
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.BookVoiceBindingEntity
@@ -158,9 +160,9 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 135,
+    version = 137,
     exportSchema = true,
-    entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
+    entities = [Book::class, BookSeries::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
         RssSource::class, Bookmark::class, RssArticle::class,
         RssReadRecord::class, ReadRecordDetail::class, ReadRecordSession::class,
@@ -305,14 +307,14 @@ val appDb by lazy {
         // 132→133、133→134 与 134→135 都走 DatabaseMigrations 的手写迁移（mainJs / script /
         // scriptOptionsJson 三列 + highlight_rules 边框三列 + bookUpdates 新表）：
         // AutoMigration 要求两端 schema JSON 齐备，133.json 在版本越过 133 后无法再导出，
-        // 中间版本只能手写。上游把边框三列单独提成 AutoMigration(132,133)，本 fork 的 133
-        // 已被自己的列占用，故并入同一跳、不再新增版本号。
+        // 中间版本只能手写。135→136、136→137 同样手写，保留本 fork 的迁移链并接入系列功能。
     ]
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract val bookDao: BookDao
     abstract val bookUpdateDao: BookUpdateDao
+    abstract val bookSeriesDao: BookSeriesDao
     abstract val bookGroupDao: BookGroupDao
     abstract val bookSourceDao: BookSourceDao
     abstract val bookChapterDao: BookChapterDao

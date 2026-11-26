@@ -23,6 +23,7 @@ object DatabaseMigrations {
             migration_82_83, migration_98_99, migration_99_100, migration_100_101,
             migration_102_103, migration_123_124, migration_124_125, migration_127_128,
             migration_132_133, migration_133_134, migration_134_135,
+            migration_135_136, migration_136_137,
         )
     }
 
@@ -76,6 +77,30 @@ object DatabaseMigrations {
             db.execSQL("ALTER TABLE `highlightRules` ADD COLUMN `borderColorNight` INTEGER")
             db.execSQL(
                 "ALTER TABLE `read_aloud_audio_downloads` ADD COLUMN `expectedSentenceCount` INTEGER"
+            )
+        }
+    }
+
+    /**
+     * 135 → 136：书架同系列多卷折叠的书籍归属与卷序。
+     */
+    private val migration_135_136 = object : Migration(135, 136) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `books` ADD COLUMN `seriesId` TEXT")
+            db.execSQL("ALTER TABLE `books` ADD COLUMN `seriesOrder` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    /**
+     * 136 → 137：系列独立封面；系列归属仍保存在 books.seriesId。
+     */
+    private val migration_136_137 = object : Migration(136, 137) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `book_series` (
+                    `name` TEXT NOT NULL,
+                    `cover` TEXT,
+                    PRIMARY KEY(`name`))"""
             )
         }
     }

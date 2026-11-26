@@ -77,7 +77,6 @@ import io.legado.app.ui.widget.components.SearchBar
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
 import io.legado.app.ui.widget.components.book.SearchBookListItem
 import io.legado.app.ui.widget.components.book.SearchBookPreviewSheet
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.card.SelectionItemCard
@@ -85,6 +84,7 @@ import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.icon.AppIcons
 import io.legado.app.ui.widget.components.list.TopFloatingStickyItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.privacy.rememberPrivateLockedBookUrls
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.settingItem.CompactClickableSettingItem
@@ -842,14 +842,13 @@ private fun ContentQualitySheet(
         show = state.showSheet,
         onDismissRequest = { onIntent(SearchIntent.CloseContentQuality) },
         title = stringResource(R.string.content_quality_detection),
-        endAction = {
-            MediumTonalButton(
-                onClick = { onIntent(SearchIntent.StartContentQuality) },
-                enabled = !state.isRunning && resultCount > 0,
-                icon = AppIcons.Check,
-                contentDescription = stringResource(R.string.content_quality_start),
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = { onIntent(SearchIntent.StartContentQuality) },
+            enabled = !state.isRunning && resultCount > 0,
+            icon = AppIcons.Check,
+            text = stringResource(R.string.content_quality_start),
+            contentDescription = stringResource(R.string.content_quality_start),
+        ),
     ) {
         Column(
             modifier = Modifier.padding(bottom = 16.dp),

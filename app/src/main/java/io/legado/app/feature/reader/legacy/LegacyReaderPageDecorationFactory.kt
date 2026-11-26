@@ -7,6 +7,7 @@ import io.legado.app.constant.AppConst.timeFormat
 import io.legado.app.constant.ReadTipType
 import io.legado.app.domain.gateway.ReadSettingsGateway
 import io.legado.app.feature.reader.core.model.ReaderBookmarkBadge
+import io.legado.app.feature.reader.core.model.ReaderBookmarkBadgePosition
 import io.legado.app.feature.reader.core.model.ReaderElement
 import io.legado.app.feature.reader.core.model.ReaderMarkingNoteBadge
 import io.legado.app.feature.reader.core.model.ReaderPage
@@ -217,10 +218,21 @@ object LegacyReaderPageDecorationFactory : KoinComponent {
                 hasBookmark = hasBookmark,
                 isScroll = ReadBook.pageAnim() == 3,
                 pageWidthPx = page.widthPx,
-                headerTopPx = headerPaddingTopPx,
-                headerRightPaddingPx = headerPaddingRightPx,
+                // 减去正文顶部内边距后即页眉下边；页眉关闭时为视口顶部。
+                headerBottomPx = page.contentTopPx - ReadBookConfig.paddingTop.dpToPx(),
+                contentRightPaddingPx = ReadBookConfig.paddingRight.dpToPx(),
+                contentLeftPaddingPx = ReadBookConfig.paddingLeft.dpToPx(),
+                pageHeightPx = page.heightPx,
                 density = density,
                 sizeDp = settings.bookmarkBadgeSize,
+                position = ReaderBookmarkBadgePosition.fromPreference(
+                    settings.bookmarkBadgePosition,
+                ),
+                offsetXDp = settings.bookmarkBadgeOffsetX,
+                offsetYDp = settings.bookmarkBadgeOffsetY,
+                // 默认右上角仍跟随 fork 的右页眉，并避让右页眉文字。
+                headerTopPx = headerPaddingTopPx,
+                headerRightPaddingPx = headerPaddingRightPx,
                 rightTipWidthPx = headerEndTipWidthPx,
                 rightTipGapPx = 4f.dpToPx().toFloat(),
                 imageSource = settings.bookmarkBadgeImage,

@@ -32,6 +32,7 @@ import io.legado.app.ui.widget.components.button.series.SmallTonalButton
 import io.legado.app.ui.widget.components.card.NormalCard
 import io.legado.app.ui.widget.components.icon.AppIcon
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.settingItem.SliderSettingItem
 import io.legado.app.ui.widget.components.settingItem.TinySliderSettingItem
 import io.legado.app.ui.widget.components.text.AppText
@@ -88,14 +89,13 @@ fun BackgroundImageManageSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = title,
-        endAction = {
-            SmallTonalButton(
-                onClick = { useFilePicker = !useFilePicker },
-                icon = Icons.Default.FolderOpen,
-                selected = useFilePicker,
-                contentDescription = "文件选择器",
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = { useFilePicker = !useFilePicker },
+            icon = Icons.Default.FolderOpen,
+            selected = useFilePicker,
+            contentDescription = "文件选择器",
+            compact = true,
+        ),
     ) {
         Column(
             modifier = Modifier

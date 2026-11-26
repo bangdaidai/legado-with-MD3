@@ -33,6 +33,10 @@ data class BookShelfItem(
     val intro: String? = null,
     val kind: String? = null,
     val customTag: String? = null,
+    /** 收纳系列名，null 表示未收纳；同一系列的书共享这个值 */
+    val seriesId: String? = null,
+    /** 系列内卷序，仅 [seriesId] 非空时有意义 */
+    val seriesOrder: Int = 0,
     val wordCount: String? = null,
     /** 用户评分 (0..5)，来自 readingMemory 表 */
     val rating: Float = 0f
@@ -116,5 +120,7 @@ fun BookShelfItem.toLightBook() = Book(
     canUpdate = canUpdate,
     wordCount = wordCount,
     kind = kind,
-    customTag = customTag
+    customTag = customTag,
+    seriesId = seriesId,
+    seriesOrder = seriesOrder
 )

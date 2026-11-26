@@ -2,16 +2,11 @@ package io.legado.app.ui.widget.shareCard
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
@@ -31,8 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -44,13 +37,14 @@ import io.legado.app.data.repository.ShareCardRepository
 import io.legado.app.help.book.ShareCardGenerator
 import io.legado.app.ui.book.shareCard.ShareCardScene
 import io.legado.app.help.book.ShareCardHtmlRenderer
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.dialog.ColorPickerSheet
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenu
-import io.legado.app.ui.widget.components.menuItem.RoundDropdownMenuItem
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetMenuAction
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toastOnUi
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -97,10 +91,8 @@ fun ShareCardPreviewSheet(
     var visibleTemplates by remember { mutableStateOf<List<ShareCardTemplate>>(emptyList()) }
     // 按场景记忆上次选中的模板：切换场景时归零并重新解析该场景的默认/绑定模板
     var selectedTemplateId by remember(scene) { mutableLongStateOf(0L) }
-    var showTemplateMenu by remember { mutableStateOf(false) }
     // 临时主题色：null = 用模板自身配色，不写库、关闭后不保留
     var accentColor by remember { mutableStateOf<Int?>(null) }
-    var showPaletteMenu by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     // 方案覆盖：null=自动（按所选色明度判定），false=强制亮，true=强制暗。
     var schemeOverride by remember { mutableStateOf<Boolean?>(null) }
@@ -243,127 +235,115 @@ fun ShareCardPreviewSheet(
         sheetOpened = true
     }
 
+    val templateMenu = visibleTemplates.map { tpl ->
+        SheetMenuAction(
+            id = "template:${tpl.id}",
+            label = tpl.name.ifBlank { "未命名" },
+            checked = tpl.id == selectedTemplateId,
+            onClick = {
+                if (tpl.id == selectedTemplateId) return@SheetMenuAction
+                selectedTemplateId = tpl.id
+                // 记住该场景下上次选中的模板
+                shareCardRepository.setSelectedTemplateId(scene?.key, tpl.id)
+                // 切模板复位临时配色，新模板用自身默认色起手；
+                // 实际渲染交由下方协调 effect（selectedTemplateId 变化触发）
+                accentColor = null
+                schemeOverride = null
+            },
+        )
+    }.toImmutableList()
+    val paletteMenu = buildList {
+        add(
+            SheetMenuAction(
+                id = "palette:default",
+                label = "默认（模板自带）",
+                checked = accentColor == null,
+                onClick = {
+                    if (accentColor == null) return@SheetMenuAction
+                    accentColor = null
+                    schemeOverride = null
+                    rerender(selectedTemplateId, null, null)
+                },
+            )
+        )
+        ACCENT_PRESETS.forEach { (label, argb) ->
+            add(
+                SheetMenuAction(
+                    id = "palette:$argb",
+                    label = label,
+                    checked = accentColor == argb,
+                    onClick = {
+                        if (accentColor == argb) return@SheetMenuAction
+                        accentColor = argb
+                        // 选色回到「按该色明度自动判明暗」，明暗只由日夜按钮独立控制；
+                        // 不再沿用上一次方案，避免「从暗色切到新色直接是暗」的困惑。
+                        schemeOverride = null
+                        rerender(selectedTemplateId, argb, null)
+                    },
+                )
+            )
+        }
+        add(
+            SheetMenuAction(
+                id = "palette:custom",
+                label = "自定义…",
+                checked = accentColor != null &&
+                    ACCENT_PRESETS.none { it.second == accentColor },
+                onClick = { showColorPicker = true },
+            )
+        )
+    }.toImmutableList()
+    val accent = accentColor
+    val effectiveDark = if (accent == null) {
+        null
+    } else {
+        schemeOverride ?: ShareCardHtmlRenderer.isDarkByDefault(accent)
+    }
+
     AppModalBottomSheet(
         show = show && sheetOpened,
         onDismissRequest = onDismissRequest,
         title = "分享卡片",
-        startAction = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box {
-                    MediumTonalButton(
-                        onClick = { showTemplateMenu = true },
-                        // 不把 rendering 计入 enabled：这两个按钮只负责「打开模板/色盘菜单」，不直接出图；
-                        // 渲染中开菜单无害，真正选中项时 rerender 已用 renderJob.cancel 串行化。
-                        // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
-                        enabled = visibleTemplates.isNotEmpty() && !loading,
-                        icon = Icons.Default.SwapHoriz,
-                        contentDescription = "切换模板",
-                    )
-                    RoundDropdownMenu(
-                        expanded = showTemplateMenu,
-                        onDismissRequest = { showTemplateMenu = false },
-                    ) { dismiss ->
-                        visibleTemplates.forEach { tpl ->
-                            RoundDropdownMenuItem(
-                                text = tpl.name.ifBlank { "未命名" },
-                                isSelected = tpl.id == selectedTemplateId,
-                                onClick = {
-                                    dismiss()
-                                    if (tpl.id == selectedTemplateId) return@RoundDropdownMenuItem
-                                    selectedTemplateId = tpl.id
-                                    // 记住该场景下上次选中的模板
-                                    shareCardRepository.setSelectedTemplateId(scene?.key, tpl.id)
-                                    // 切模板复位临时配色，新模板用自身默认色起手；
-                                    // 实际渲染交由下方协调 effect（selectedTemplateId 变化触发）
-                                    accentColor = null
-                                    schemeOverride = null
-                                },
-                            )
-                        }
-                    }
-                }
-                Box {
-                    MediumTonalButton(
-                        onClick = { showPaletteMenu = true },
-                        enabled = visibleTemplates.isNotEmpty() && !loading,
-                        selected = accentColor != null,
-                        icon = Icons.Default.Palette,
-                        contentDescription = "切换颜色",
-                    )
-                    RoundDropdownMenu(
-                        expanded = showPaletteMenu,
-                        onDismissRequest = { showPaletteMenu = false },
-                    ) { dismiss ->
-                        RoundDropdownMenuItem(
-                            text = "默认（模板自带）",
-                            isSelected = accentColor == null,
-                            onClick = {
-                                dismiss()
-                                if (accentColor == null) return@RoundDropdownMenuItem
-                                accentColor = null
-                                schemeOverride = null
-                                rerender(selectedTemplateId, null, null)
-                            },
-                        )
-                        ACCENT_PRESETS.forEach { (label, argb) ->
-                            RoundDropdownMenuItem(
-                                text = label,
-                                isSelected = accentColor == argb,
-                                leadingIcon = { ColorSwatch(argb) },
-                                onClick = {
-                                    dismiss()
-                                    if (accentColor == argb) return@RoundDropdownMenuItem
-                                    accentColor = argb
-                                    // 选色回到「按该色明度自动判明暗」，明暗只由日夜按钮独立控制；
-                                    // 不再沿用上一次方案，避免「从暗色切到新色直接是暗」的困惑。
-                                    schemeOverride = null
-                                    rerender(selectedTemplateId, argb, null)
-                                },
-                            )
-                        }
-                        RoundDropdownMenuItem(
-                            text = "自定义…",
-                            isSelected = accentColor != null &&
-                                ACCENT_PRESETS.none { it.second == accentColor },
-                            onClick = {
-                                dismiss()
-                                showColorPicker = true
-                            },
-                        )
-                    }
-                }
-            }
-        },
-        endAction = {
-            val accent = accentColor
-            val effectiveDark = if (accent == null) {
-                null
-            } else {
-                schemeOverride ?: ShareCardHtmlRenderer.isDarkByDefault(accent)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MediumTonalButton(
-                    onClick = {
-                        val next = effectiveDark != true
-                        schemeOverride = next
-                        rerender(selectedTemplateId, accentColor, next)
-                    },
-                    // 只去掉初始灰色：点击逻辑与之前完全一致，accentColor 为空时切换本身无效果
-                    enabled = !loading,
-                    selected = schemeOverride != null,
-                    icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
-                    contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
-                )
-                MediumTonalButton(
-                    onClick = { saveCurrentBitmap() },
-                    // 不把 rendering 计入 enabled：保存的是当前已渲染好的旧图，重渲期间仍可保存；
-                    // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
-                    enabled = currentBitmap != null && !saving,
-                    icon = Icons.Default.Save,
-                    contentDescription = "保存卡片",
-                )
-            }
-        },
+        startSheetActions = persistentListOf(
+            SheetAction(
+                // 不把 rendering 计入 enabled：这两个按钮只负责「打开模板/色盘菜单」，不直接出图；
+                // 渲染中开菜单无害，真正选中项时 rerender 已用 renderJob.cancel 串行化。
+                // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
+                enabled = visibleTemplates.isNotEmpty() && !loading,
+                icon = Icons.Default.SwapHoriz,
+                contentDescription = "切换模板",
+                menu = templateMenu,
+            ),
+            SheetAction(
+                enabled = visibleTemplates.isNotEmpty() && !loading,
+                selected = accentColor != null,
+                icon = Icons.Default.Palette,
+                contentDescription = "切换颜色",
+                menu = paletteMenu,
+            ),
+        ),
+        endSheetActions = persistentListOf(
+            SheetAction(
+                onClick = {
+                    val next = effectiveDark != true
+                    schemeOverride = next
+                    rerender(selectedTemplateId, accentColor, next)
+                },
+                // 只去掉初始灰色：点击逻辑与之前完全一致，accentColor 为空时切换本身无效果
+                enabled = !loading,
+                selected = schemeOverride != null,
+                icon = if (effectiveDark == true) Icons.Filled.DarkMode else Icons.Filled.LightMode,
+                contentDescription = "切换亮/暗（当前${if (effectiveDark == true) "暗色" else "亮色"}）",
+            ),
+            SheetAction(
+                onClick = { saveCurrentBitmap() },
+                // 不把 rendering 计入 enabled：保存的是当前已渲染好的旧图，重渲期间仍可保存；
+                // 计入 rendering 会让快路径换色时按钮在正常/禁用色间闪一下。
+                enabled = currentBitmap != null && !saving,
+                icon = Icons.Default.Save,
+                contentDescription = "保存卡片",
+            ),
+        ),
     ) {
         val maxPreviewHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
         val bmp = currentBitmap
@@ -425,16 +405,6 @@ fun ShareCardPreviewSheet(
                 rerender(selectedTemplateId, picked, null)
             }
         },
-    )
-}
-
-@Composable
-private fun ColorSwatch(argb: Int) {
-    Box(
-        Modifier
-            .size(18.dp)
-            .clip(CircleShape)
-            .background(Color(argb))
     )
 }
 

@@ -32,13 +32,13 @@ import io.legado.app.domain.model.ShelfDuplicateGroup
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.EmptyMessage
 import io.legado.app.ui.widget.components.alert.AppAlertDialog
-import io.legado.app.ui.widget.components.button.series.MediumTonalButton
 import io.legado.app.ui.widget.components.button.series.SmallPlainButton
 import io.legado.app.ui.widget.components.card.GlassCard
 import io.legado.app.ui.widget.components.card.TextCard
 import io.legado.app.ui.widget.components.divider.PillDivider
 import io.legado.app.ui.widget.components.image.cover.CoilBookCover
 import io.legado.app.ui.widget.components.modalBottomSheet.AppModalBottomSheet
+import io.legado.app.ui.widget.components.modalBottomSheet.SheetAction
 import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.utils.toTimeAgo
@@ -104,14 +104,12 @@ fun ShelfDuplicateScanSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.bookshelf_duplicate_scan),
-        endAction = {
-            MediumTonalButton(
-                onClick = onScan,
-                icon = Icons.Default.Refresh,
-                contentDescription = stringResource(R.string.retry),
-                enabled = !state.isScanning,
-            )
-        },
+        endSheetAction = SheetAction(
+            onClick = onScan,
+            icon = Icons.Default.Refresh,
+            contentDescription = stringResource(R.string.retry),
+            enabled = !state.isScanning,
+        ),
     ) {
         when {
             // 失败不是"没有结果"，用纯文案而不是 EmptyMessage —— 后者的随机颜文字
