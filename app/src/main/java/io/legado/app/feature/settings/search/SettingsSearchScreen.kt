@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
@@ -30,7 +31,6 @@ import io.legado.app.feature.settings.reading.ReadSetting
 import io.legado.app.ui.theme.ComposeEngine
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.theme.adaptiveContentPadding
-import io.legado.app.ui.theme.adaptiveHorizontalPadding
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.coui.rememberAppVerticalOverscrollEffect
 import io.legado.app.ui.widget.components.SearchBar
@@ -38,6 +38,7 @@ import io.legado.app.ui.widget.components.SplicedColumnGroup
 import io.legado.app.ui.widget.components.settingItem.ClickableSettingItem
 import io.legado.app.ui.widget.components.text.AppText
 import io.legado.app.ui.widget.components.topbar.GlassMediumFlexibleTopAppBar
+import io.legado.app.ui.widget.components.topbar.GlassTopAppBarDefaults
 import io.legado.app.ui.widget.components.topbar.TopBarNavigationButton
 import kotlinx.collections.immutable.toPersistentList
 import org.koin.androidx.compose.koinViewModel
@@ -116,22 +117,17 @@ fun SettingsSearchScreen(
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    AppScaffold(topBar = {
-        GlassMediumFlexibleTopAppBar(
-            title = stringResource(R.string.settings_search_title),
-            navigationIcon = { TopBarNavigationButton(onClick = onBackClick) },
-            bottomContent = {
-                SearchBar(
-                    modifier = Modifier.adaptiveHorizontalPadding().padding(bottom = 8.dp),
-                    query = state.query,
-                    onQueryChange = { onIntent(SettingsSearchIntent.QueryChanged(it)) },
-                    placeholder = stringResource(R.string.settings_search_scope),
-                    onClear = { onIntent(SettingsSearchIntent.QueryChanged("")) },
-                    clearDescription = stringResource(R.string.settings_search_clear),
-                )
-            },
-        )
-    }) { padding ->
+    val scrollBehavior = GlassTopAppBarDefaults.defaultScrollBehavior()
+    AppScaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            GlassMediumFlexibleTopAppBar(
+                title = stringResource(R.string.settings_search_title),
+                scrollBehavior = scrollBehavior,
+                navigationIcon = { TopBarNavigationButton(onClick = onBackClick) },
+            )
+        },
+    ) { padding ->
         LazyColumn(
             overscrollEffect = rememberAppVerticalOverscrollEffect(),
             modifier = Modifier.fillMaxSize().consumeWindowInsets(padding).imePadding(),
@@ -139,6 +135,15 @@ fun SettingsSearchScreen(
                 top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp,
             ),
         ) {
+            item("search") {
+                SearchBar(
+                    query = state.query,
+                    onQueryChange = { onIntent(SettingsSearchIntent.QueryChanged(it)) },
+                    placeholder = stringResource(R.string.settings_search_scope),
+                    onClear = { onIntent(SettingsSearchIntent.QueryChanged("")) },
+                    clearDescription = stringResource(R.string.settings_search_clear),
+                )
+            }
             item("status") {
                 AppText(
                     text = when {
