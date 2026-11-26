@@ -123,6 +123,8 @@ class ExploreKindSelectSheetTest {
             override fun getExploreSources(query: String, selectedGroup: String) =
                 flowOf(emptyList<BookSourcePart>())
 
+            override fun getLoginUiSourceUrls() = flowOf(emptyList<String>())
+
             override suspend fun getBookSource(sourceUrl: String): BookSource? = null
             override suspend fun getSourceExploreKinds(sourceUrl: String) =
                 listOf(dropdown, books, refresh)

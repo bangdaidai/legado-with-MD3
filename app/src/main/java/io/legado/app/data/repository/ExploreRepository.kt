@@ -19,6 +19,7 @@ interface ExploreRepository {
     fun getBookshelfItems(): Flow<List<SearchBook>>
     fun getExploreGroups(): Flow<List<String>>
     fun getExploreSources(query: String, selectedGroup: String): Flow<List<BookSourcePart>>
+    fun getLoginUiSourceUrls(): Flow<List<String>>
     suspend fun getBookSource(sourceUrl: String): BookSource?
     suspend fun getSourceExploreKinds(sourceUrl: String): List<ExploreKind>
     suspend fun refreshSourceExploreKinds(sourceUrl: String): List<ExploreKind>
@@ -49,6 +50,10 @@ class ExploreRepositoryImpl(
 
     override fun getExploreGroups(): Flow<List<String>> {
         return appDb.bookSourceDao.flowExploreGroups()
+    }
+
+    override fun getLoginUiSourceUrls(): Flow<List<String>> {
+        return appDb.bookSourceDao.flowLoginUiSourceUrls()
     }
 
     override fun getExploreSources(

@@ -142,4 +142,39 @@ class JsSourceEngineTest {
         assertEquals("1", engine.callFunction("bump", emptyList()))
         assertEquals("1", engine.callFunction("bump", emptyList()))
     }
+
+    @Test
+    fun `callJsonFunction passes decoded objects to dynamic login protocol`() {
+        val engine = JsSourceEngine(
+            newSource(
+                """
+                function loginUi(state) {
+                    return { rows: [{ name: state ? state.deviceReady ? "ready" : "waiting" : "empty" }] };
+                }
+                function loginAction(action, state, form) {
+                    return { state: { action: action, previous: state, user: form.user } };
+                }
+                """.trimIndent()
+            )
+        )
+        assertEquals(
+            """{"rows":[{"name":"ready"}]}""",
+            engine.callJsonFunction("loginUi", listOf("""{"deviceReady":true}""")),
+        )
+        assertEquals(
+            """{"state":{"action":"refresh","previous":{"deviceReady":true},"user":"reader"}}""",
+            engine.callJsonFunction(
+                "loginAction",
+                listOf(
+                    """"refresh"""",
+                    """{"deviceReady":true}""",
+                    """{"user":"reader"}""",
+                ),
+            ),
+        )
+        assertEquals(
+            """{"rows":[{"name":"empty"}]}""",
+            engine.callJsonFunction("loginUi", listOf(null)),
+        )
+    }
 }

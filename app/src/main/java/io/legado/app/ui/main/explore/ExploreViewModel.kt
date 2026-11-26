@@ -52,6 +52,7 @@ class ExploreViewModel(
     init {
         observeGroups()
         observeExplore()
+        observeLoginUiSources()
     }
 
     fun onIntent(intent: ExploreIntent) {
@@ -114,6 +115,16 @@ class ExploreViewModel(
                 .flowOn(IO)
                 .collectLatest { items ->
                     _uiState.update { it.copy(items = items.toImmutableList()) }
+                }
+        }
+    }
+
+    private fun observeLoginUiSources() {
+        viewModelScope.launch {
+            exploreRepository.getLoginUiSourceUrls()
+                .flowOn(IO)
+                .collectLatest { sourceUrls ->
+                    _uiState.update { it.copy(loginUiSourceUrls = sourceUrls.toImmutableSet()) }
                 }
         }
     }
@@ -226,6 +237,7 @@ class ExploreViewModel(
         val exploreKinds: ImmutableList<ExploreKind> = persistentListOf(),
         val kindDisplayNames: ImmutableMap<String, String> = persistentMapOf(),
         val kindValues: ImmutableMap<String, String> = persistentMapOf(),
+        val loginUiSourceUrls: ImmutableSet<String> = persistentSetOf(),
         val loadingKinds: Boolean = false
     ) : ListUiState<BookSourcePart>
 

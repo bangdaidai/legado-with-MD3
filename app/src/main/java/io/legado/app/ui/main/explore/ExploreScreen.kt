@@ -218,6 +218,7 @@ fun ExploreScreen(
                             onEdit = { onIntent(ExploreIntent.OpenEdit(item)) },
                             onSearch = { onIntent(ExploreIntent.OpenSearch(item)) },
                             onLogin = { onIntent(ExploreIntent.OpenLogin(item)) },
+                            hasLogin = item.hasLoginUrl || item.bookSourceUrl in state.loginUiSourceUrls,
                             onRefresh = { onIntent(ExploreIntent.RefreshKinds(item)) },
                             onDelete = { sourceToDeleteUrl = item.bookSourceUrl },
                             isMiuix = isMiuix
@@ -382,6 +383,7 @@ fun ExploreSourceHeader(
     onEdit: () -> Unit,
     onSearch: () -> Unit,
     onLogin: () -> Unit,
+    hasLogin: Boolean,
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
     isMiuix: Boolean,
@@ -474,7 +476,7 @@ fun ExploreSourceHeader(
                         text = stringResource(R.string.search),
                         onClick = { onSearch(); showMenu = false }
                     )
-                    if (item.hasLoginUrl) {
+                    if (hasLogin) {
                         RoundDropdownMenuItem(
                             leadingIcon = { MenuItemIcon(Icons.AutoMirrored.Filled.Login) },
                             text = stringResource(R.string.login),

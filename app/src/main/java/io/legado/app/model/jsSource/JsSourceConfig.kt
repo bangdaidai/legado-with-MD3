@@ -19,6 +19,8 @@ object JsSourceConfig {
     private const val CONFIG_PROPERTY = "config"
     private const val LEGACY_CONFIG_PROPERTY = "source"
 
+    internal const val DYNAMIC_LOGIN_UI = """{"version":2}"""
+
     val requiredFunctions = listOf("search", "getChapters", "getContent")
     private val fileSourceRequiredFunctions = listOf("search", "getBookInfo")
     private val strippedKeys = listOf(
@@ -90,20 +92,32 @@ object JsSourceConfig {
         ) {
             throw NoStackTraceException("JS源声明了 exploreUrl，缺少配对的 explore 函数")
         }
-        val loginUiFunction = ScriptableObject.getProperty(scope, "loginUi")
-        if (loginUiFunction is Function) {
-            // 本版本未移植动态登录协议（loginUi(state)/loginAction），显式拒绝以免静默失效
-            throw NoStackTraceException(
-                "JS源使用了动态登录（loginUi 函数），当前版本暂不支持"
-            )
+        val hasLoginUiFunction = ScriptableObject.getProperty(scope, "loginUi") is Function
+        if (isDynamicLoginUi(source.loginUi) && !hasLoginUiFunction) {
+            throw NoStackTraceException("JS源声明了动态登录，缺少配对的 loginUi 函数")
         }
-        if (!source.loginUi.isNullOrBlank() &&
+        if (hasLoginUiFunction) {
+            if (ScriptableObject.getProperty(scope, "loginAction") !is Function) {
+                throw NoStackTraceException("JS源声明了 loginUi 函数，缺少配对的 loginAction 函数")
+            }
+            source.loginUi = DYNAMIC_LOGIN_UI
+        } else if (!source.loginUi.isNullOrBlank() &&
             ScriptableObject.getProperty(scope, "login") !is Function
         ) {
             throw NoStackTraceException("JS源声明了 loginUi，缺少配对的 login 函数")
         }
         source.mainJs = text
         return source
+    }
+
+    internal fun isDynamicLoginUi(loginUi: String?): Boolean {
+        if (loginUi.isNullOrBlank()) return false
+        return runCatching {
+            GSON.fromJson(loginUi, JsonObject::class.java)
+                ?.get("version")
+                ?.takeIf { it.isJsonPrimitive }
+                ?.asInt == 2
+        }.getOrDefault(false)
     }
 
     private fun findConfig(scope: Scriptable): Pair<String, Any> {
@@ -152,6 +166,15 @@ object JsSourceConfig {
         if (element.isJsonPrimitive && element.asJsonPrimitive.isString) {
             if (element.asString.filterNot(Char::isWhitespace) == "[]") {
                 jsonObject.remove("loginUi")
+            }
+            return
+        }
+        if (element.isJsonObject) {
+            val version = runCatching {
+                element.asJsonObject.get("version")?.takeIf { it.isJsonPrimitive }?.asInt
+            }.getOrNull()
+            if (version == 2) {
+                jsonObject.addProperty("loginUi", DYNAMIC_LOGIN_UI)
             }
             return
         }

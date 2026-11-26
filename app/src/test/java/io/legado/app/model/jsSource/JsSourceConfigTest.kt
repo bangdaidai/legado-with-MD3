@@ -139,7 +139,7 @@ class JsSourceConfigTest {
     }
 
     @Test
-    fun `dynamic loginUi function is rejected explicitly`() {
+    fun `dynamic loginUi function enables version 2 protocol`() {
         val script = """
             var config = {
                 bookSourceUrl: "https://example.com",
@@ -149,10 +149,44 @@ class JsSourceConfigTest {
             function getChapters(book) { return []; }
             function getContent(chapter, book, nextChapterUrl) { return "ok"; }
             function loginUi(state) { return { rows: [] }; }
+            function loginAction(action, state, form) { return { state: state }; }
+        """.trimIndent()
+        val source = JsSourceConfig.extract(script)
+        assertEquals(JsSourceConfig.DYNAMIC_LOGIN_UI, source.loginUi)
+        assertEquals(script, source.mainJs)
+    }
+
+    @Test
+    fun `dynamic loginUi function requires loginAction`() {
+        val script = """
+            var config = {
+                bookSourceUrl: "https://example.com",
+                bookSourceName: "示例JS书源"
+            };
+            function search(key, page) { return []; }
+            function getChapters(book) { return []; }
+            function getContent(chapter, book, nextChapterUrl) { return "ok"; }
+            function loginUi(state) { return { rows: [] }; }
+        """.trimIndent()
+        val error = runCatching { JsSourceConfig.extract(script) }.exceptionOrNull()
+        assertTrue(error!!.message!!.contains("loginAction"))
+    }
+
+    @Test
+    fun `dynamic login marker requires loginUi function`() {
+        val script = """
+            var config = {
+                bookSourceUrl: "https://example.com",
+                bookSourceName: "示例JS书源",
+                loginUi: { version: 2 }
+            };
+            function search(key, page) { return []; }
+            function getChapters(book) { return []; }
+            function getContent(chapter, book, nextChapterUrl) { return "ok"; }
             function loginAction(action, state, form) { return {}; }
         """.trimIndent()
         val error = runCatching { JsSourceConfig.extract(script) }.exceptionOrNull()
-        assertTrue(error!!.message!!.contains("动态登录"))
+        assertTrue(error!!.message!!.contains("loginUi"))
     }
 
     @Test

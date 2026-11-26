@@ -164,6 +164,21 @@ class JsSourceEngine(
             )
         }
 
+    fun callJsonFunction(name: String, jsonArgs: List<String?>): String? =
+        withQuickJsExecution {
+            val scope = buildScope(emptyList())
+            if (ScriptableObject.getProperty(scope, name) !is Function) {
+                throw NoStackTraceException("JS源缺少函数 $name")
+            }
+            val expression = "$name(${jsonArgs.joinToString(", ") { json ->
+                json?.let { "JSON.parse(${GSON.toJson(it)})" } ?: "null"
+            }})"
+            normalizeJsResult(
+                compile(expression).eval(scope, coroutineContext),
+                coroutineContext,
+            )
+        }
+
     private fun buildScope(args: List<Pair<String, Any?>>): Scriptable {
         val script = source.mainJs?.takeIf { it.isNotBlank() }
             ?: throw NoStackTraceException("mainJs 为空，不是 JS 书源")

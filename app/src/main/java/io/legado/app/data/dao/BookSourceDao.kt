@@ -112,6 +112,9 @@ interface BookSourceDao {
     @Query("select * from book_sources_part where hasLoginUrl = 1 order by customOrder asc")
     fun flowLogin(): Flow<List<BookSourcePart>>
 
+    @Query("select bookSourceUrl from book_sources where loginUi is not null and trim(loginUi) <> ''")
+    fun flowLoginUiSourceUrls(): Flow<List<String>>
+
     @Query(
         """select * from book_sources_part 
         where bookSourceGroup is null or bookSourceGroup = '' or bookSourceGroup like '%未分组%'

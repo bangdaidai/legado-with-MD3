@@ -4,12 +4,14 @@ import android.app.Application
 import android.webkit.CookieManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.JsonParser
 import com.script.rhino.runScriptWithContext
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.RowUi
 import io.legado.app.data.repository.BookRepository
 import io.legado.app.data.repository.BookSourceRepository
@@ -17,9 +19,12 @@ import io.legado.app.data.repository.HttpTtsRepository
 import io.legado.app.data.repository.RssRepository
 import io.legado.app.data.repository.SearchRepository
 import io.legado.app.domain.gateway.DownloadCacheSettingsGateway
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.CookieStore
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.ReadBook
+import io.legado.app.model.jsSource.JsSourceConfig
+import io.legado.app.model.jsSource.JsSourceEngine
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.isAbsUrl
@@ -60,6 +65,9 @@ class SourceLoginViewModel(
     private var hasChanges = false
     private var submitted = false
     private var jsExtensions: SourceLoginJsExtensions? = null
+    private var dynamicLogin = false
+    private var jsSourceEngine: JsSourceEngine? = null
+    private var dynamicStateJson: String? = null
 
     fun onIntent(intent: SourceLoginIntent) {
         when (intent) {
@@ -136,6 +144,9 @@ class SourceLoginViewModel(
                     _effects.tryEmit(SourceLoginEffect.Finish)
                     return@onSuccess
                 }
+                val jsSource = loaded as? BookSource
+                dynamicLogin = jsSource != null && JsSourceConfig.isDynamicLoginUi(loaded.loginUi)
+                jsSourceEngine = jsSource?.takeIf { dynamicLogin }?.let { JsSourceEngine(it) }
                 loginInfo = withContext(Dispatchers.IO) { loaded.getLoginInfoMap() }
                 val headers = withContext(Dispatchers.IO) {
                     runScriptWithContext {
@@ -208,14 +219,21 @@ class SourceLoginViewModel(
     private suspend fun buildForm() {
         val currentSource = source ?: return
         val loginUi = currentSource.loginUi.orEmpty()
-        val json = if (loginUi.startsWith("@js:")) {
-            evaluate(loginUi.substring(4))
-        } else if (loginUi.startsWith("<js>")) {
-            evaluate(loginUi.substring(4, loginUi.lastIndexOf("<")))
-        } else loginUi
-        rows = GSON.fromJsonArray<RowUi>(json).getOrElse {
-            AppLog.put("${currentSource.getTag()} loginUi parse error", it)
-            emptyList()
+        val json = when {
+            dynamicLogin -> withContext(Dispatchers.IO) {
+                jsSourceEngine?.callJsonFunction("loginUi", listOf(dynamicStateJson))
+            }
+            loginUi.startsWith("@js:") -> evaluate(loginUi.substring(4))
+            loginUi.startsWith("<js>") -> evaluate(loginUi.substring(4, loginUi.lastIndexOf("<")))
+            else -> loginUi
+        }
+        rows = if (dynamicLogin) {
+            parseDynamicRows(json)
+        } else {
+            GSON.fromJsonArray<RowUi>(json).getOrElse {
+                AppLog.put("${currentSource.getTag()} loginUi parse error", it)
+                emptyList()
+            }
         }
         val resolved = rows.map { row ->
             val title = resolveTitle(row)
@@ -235,11 +253,26 @@ class SourceLoginViewModel(
         }
     }
 
+    private fun parseDynamicRows(json: String?): List<RowUi> {
+        val root = json?.let(JsonParser::parseString)
+            ?: throw NoStackTraceException("动态登录 loginUi 未返回界面配置")
+        val rowsJson = when {
+            root.isJsonArray -> root.asJsonArray
+            root.isJsonObject -> root.asJsonObject.getAsJsonArray("rows")
+            else -> null
+        } ?: throw NoStackTraceException("动态登录 loginUi 返回值缺少 rows 数组")
+        return GSON.fromJsonArray<RowUi>(rowsJson.toString()).getOrElse { error ->
+            AppLog.put("${source?.getTag()} 动态 loginUi parse error", error)
+            throw NoStackTraceException("动态登录界面配置解析失败: ${error.localizedMessage}")
+        }
+    }
+
     private suspend fun resolveTitle(row: RowUi): String {
         val viewName = row.viewName ?: return row.name
         if (viewName.length in 3..19 && viewName.first() == '\'' && viewName.last() == '\'') {
             return viewName.substring(1, viewName.lastIndex)
         }
+        if (dynamicLogin) return row.name
         return evaluate(viewName).takeUnless { it.isNullOrEmpty() } ?: row.name
     }
 
@@ -248,6 +281,10 @@ class SourceLoginViewModel(
         val action = row.action ?: return
         if (action.isAbsUrl()) {
             _effects.tryEmit(SourceLoginEffect.OpenExternalUrl(action))
+            return
+        }
+        if (dynamicLogin) {
+            runDynamicRowAction(row)
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -264,6 +301,32 @@ class SourceLoginViewModel(
                 }
             }.onFailure { AppLog.put("LoginUI Button $key JavaScript error", it) }
         }
+    }
+
+    private fun runDynamicRowAction(row: RowUi) {
+        val engine = jsSourceEngine ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val result = engine.callJsonFunction(
+                    "loginAction",
+                    listOf(GSON.toJson(row.action), dynamicStateJson, GSON.toJson(loginInfo)),
+                )
+                updateDynamicState(result)
+                buildForm()
+            }.onFailure { error ->
+                AppLog.put("动态登录动作 ${row.name} 执行失败", error)
+                _effects.tryEmit(
+                    SourceLoginEffect.ShowMessage(error.localizedMessage ?: "登录动作执行失败")
+                )
+            }
+        }
+    }
+
+    private fun updateDynamicState(result: String?) {
+        val root = result?.let(JsonParser::parseString) ?: return
+        if (!root.isJsonObject) return
+        val state = root.asJsonObject.get("state") ?: return
+        dynamicStateJson = if (state.isJsonNull) null else state.toString()
     }
 
     private suspend fun evaluate(script: String): String? = withContext(Dispatchers.IO) {
@@ -284,6 +347,26 @@ class SourceLoginViewModel(
     private fun confirm() {
         if (_uiState.value.mode == SourceLoginMode.Web) {
             _uiState.update { it.copy(checkingCookie = true) }
+            return
+        }
+        if (dynamicLogin) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val currentSource = source ?: return@launch
+                runCatching {
+                    if (loginInfo.isNotEmpty()) {
+                        currentSource.putLoginInfo(GSON.toJson(loginInfo))
+                    }
+                }.onSuccess {
+                    submitted = true
+                    _effects.tryEmit(SourceLoginEffect.ShowMessage(application.getString(R.string.success)))
+                    _effects.tryEmit(SourceLoginEffect.Finish)
+                }.onFailure { error ->
+                    AppLog.put("保存动态登录信息失败\n${error.localizedMessage}", error)
+                    _effects.tryEmit(
+                        SourceLoginEffect.ShowMessage(error.localizedMessage ?: "登录信息保存失败")
+                    )
+                }
+            }
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -318,7 +401,9 @@ class SourceLoginViewModel(
     private fun finish(saveDraft: Boolean) {
         if (saveDraft && hasChanges && !submitted) {
             source?.let { currentSource ->
-                if (loginInfo.isEmpty()) currentSource.removeLoginInfo()
+                if (dynamicLogin) {
+                    if (loginInfo.isNotEmpty()) currentSource.putLoginInfo(GSON.toJson(loginInfo))
+                } else if (loginInfo.isEmpty()) currentSource.removeLoginInfo()
                 else currentSource.putLoginInfo(GSON.toJson(loginInfo))
             }
         }
