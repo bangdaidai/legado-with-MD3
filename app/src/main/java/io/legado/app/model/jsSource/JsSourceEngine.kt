@@ -1,6 +1,8 @@
 package io.legado.app.model.jsSource
 
 import androidx.collection.LruCache
+import cn.hutool.core.codec.Base64
+import com.google.gson.JsonObject
 import com.script.CompiledScript
 import com.script.buildScriptBindings
 import com.script.rhino.RhinoScriptEngine
@@ -11,12 +13,21 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
+import io.legado.app.help.http.addHeaders
+import io.legado.app.help.http.newCallResponse
+import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.http.text
 import io.legado.app.help.source.getShareScope
 import io.legado.app.quickjs.QuickJsSandboxBridge
 import io.legado.app.quickjs.QuickJsSandboxExecution
 import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.Function
 import org.mozilla.javascript.NativeJSON
@@ -62,6 +73,35 @@ class JsSourceEngine(
         val execution = quickJsExecution.get()?.value ?: return quickJsSandboxBridge
         execution.prepare()
         return execution.bridge
+    }
+
+    /** 发送 NGJS 的二进制 POST；限制 HTTPS 和正文大小，避免被用作通用内网或内存放大器。 */
+    fun postBase64Body(url: String, bodyBase64: String, headersJson: String?): String {
+        val httpUrl = url.toHttpUrl()
+        require(httpUrl.isHttps) { "二进制请求只允许 HTTPS" }
+        val body = Base64.decode(bodyBase64)
+        require(body.isNotEmpty()) { "二进制请求正文不能为空" }
+        require(body.size <= MAX_BINARY_REQUEST_BYTES) { "二进制请求正文过大" }
+        val headers = headersJson
+            ?.let { GSON.fromJsonObject<Map<String, String>>(it).getOrNull() }
+            ?: emptyMap()
+        val contentType = headers.entries
+            .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+            ?.value
+            ?.toMediaTypeOrNull
+        val response = runBlocking(coroutineContext) {
+            okHttpClient.newCallResponse {
+                url(httpUrl)
+                addHeaders(headers)
+                post(body.toRequestBody(contentType))
+            }
+        }
+        response.use {
+            return JsonObject().apply {
+                addProperty("code", it.code)
+                addProperty("body", it.body.text())
+            }.toString()
+        }
     }
 
     private fun <T> withQuickJsExecution(block: () -> T): T {
@@ -149,6 +189,7 @@ class JsSourceEngine(
     companion object {
 
         private val scriptCache = LruCache<String, CompiledScript>(64)
+        private const val MAX_BINARY_REQUEST_BYTES = 512 * 1024
 
         private fun compile(script: String): CompiledScript {
             scriptCache.get(script)?.let { return it }
