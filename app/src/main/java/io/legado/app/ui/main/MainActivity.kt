@@ -817,7 +817,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
         PrivateAppStartGate {
             Box(modifier = Modifier.fillMaxSize()) {
-                val navSharedTransitionScope = LocalMainSharedTransitionScope.current
+                val navSharedTransitionScope = checkNotNull(LocalMainSharedTransitionScope.current)
                 // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
                 // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
                 // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
