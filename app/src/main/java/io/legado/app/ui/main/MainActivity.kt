@@ -506,7 +506,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         )
     }
 
-    // SharedTransitionLayout 必须留在 AppTheme 的 movableContent 之外，避免切引擎时搬迁 lookahead 根。
+    // SharedTransitionLayout 跟随 AppTheme 的 movable content 整体迁移，避免只搬迁子内容。
     @OptIn(ExperimentalSharedTransitionApi::class)
     @Composable
     override fun AppRoot(content: @Composable () -> Unit) {
