@@ -1172,6 +1172,7 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                 show = true,
                 updateInfo = data.updateInfo,
                 mode = data.mode,
+                updateToVariant = otherSettingsGateway.currentSettings.updateToVariant,
                 onDismissRequest = {
                     updateSheetFlow.value = null
                     data.onDismiss?.invoke()

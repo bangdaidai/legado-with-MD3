@@ -9,6 +9,7 @@ data class AboutUiState(
     val sheet: AboutSheet = AboutSheet.None,
     val dialog: AboutDialog? = null,
     val crashLogFiles: List<FileDoc> = emptyList(),
+    val updateToVariant: String = "official_version",
 )
 
 sealed interface AboutSheet {

@@ -285,6 +285,7 @@ private fun AboutOverlays(
             show = currentSheet is AboutSheet.Update,
             updateInfo = sheet.updateInfo,
             mode = sheet.mode,
+            updateToVariant = state.updateToVariant,
             onDismissRequest = { onIntent(AboutIntent.DismissSheet) },
             onStartDownload = { onIntent(AboutIntent.StartDownload) },
         )

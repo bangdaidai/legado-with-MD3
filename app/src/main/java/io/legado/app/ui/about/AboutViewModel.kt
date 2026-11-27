@@ -40,7 +40,9 @@ class AboutViewModel(
     private val backupSettingsGateway: BackupSettingsGateway,
 ) : BaseViewModel(application) {
 
-    private val _uiState = MutableStateFlow(AboutUiState())
+    private val _uiState = MutableStateFlow(
+        AboutUiState(updateToVariant = otherSettingsGateway.currentSettings.updateToVariant)
+    )
     val uiState: StateFlow<AboutUiState> = _uiState.asStateFlow()
 
     private val _effects = MutableSharedFlow<AboutEffect>(extraBufferCapacity = 8)
