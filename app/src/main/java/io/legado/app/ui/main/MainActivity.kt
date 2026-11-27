@@ -15,6 +15,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -41,6 +42,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.IntSize
@@ -128,6 +130,8 @@ import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+
+private val LocalMainSharedTransitionScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
 
 /**
  * 主界面
@@ -502,6 +506,17 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
         )
     }
 
+    // SharedTransitionLayout 必须留在 AppTheme 的 movableContent 之外，避免切引擎时搬迁 lookahead 根。
+    @OptIn(ExperimentalSharedTransitionApi::class)
+    @Composable
+    override fun AppRoot(content: @Composable () -> Unit) {
+        SharedTransitionLayout {
+            CompositionLocalProvider(LocalMainSharedTransitionScope provides this@SharedTransitionLayout) {
+                content()
+            }
+        }
+    }
+
     @OptIn(ExperimentalSharedTransitionApi::class)
     @Composable
     override fun Content() {
@@ -798,350 +813,348 @@ open class MainActivity : BaseComposeActivity(), AudioPlay.CallBack {
                     }
                 }
         }
-        SharedTransitionLayout {
-            // 启动验证做成单独的 screen：门槛未过时完全不组合应用界面，
-            // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
-            PrivateAppStartGate {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    val navSharedTransitionScope = this@SharedTransitionLayout
-                    // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
-                    // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
-                    // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
-                    // provider 重建条目，与被摘栈手势开始时捕获的场景必然不相等，
-                    // NavDisplay 松手校验 targetState == scene 失败就把预测手势判为
-                    // "取消"——先退回当前页再重放一次摘栈（两拍闪），已组合的露出页
-                    // 也随销毁重建冷启动。用 remember 锁住 provider 代次，跨重组不换代。
-                    // 换代键只含会影响 mainEntryProvider 返回值的输入：相对 merge 前
-                    // fork 版，上游合并后新增了 panesEnabled 入参，把派生它的
-                    // listDetailEnabled 纳入键；useHomeCapsule 同时决定
-                    // readAloudMorph 是否透传与 homePlaybackCapsuleEnabled，照旧参与换代。
-                    val navEntryProvider = remember(
-                        backStack,
-                        configuration,
-                        mangaSettings.showMangaUi,
-                        useRail,
-                        navRouteTracker,
-                        navSharedTransitionScope,
-                        listDetailEnabled,
-                        useHomeCapsule,
-                        capsuleAnchorPreview,
-                    ) {
-                        mainEntryProvider(
-                            backStack = backStack,
-                            configuration = configuration,
-                            showMangaUi = mangaSettings.showMangaUi,
-                            useRail = useRail,
-                            sharedTransitionScope = navSharedTransitionScope,
-                            panesEnabled = listDetailEnabled,
-                            onNavigationRailWidthChanged = { navigationRailWidth = it },
-                            navigateToRoute = { route ->
-                                if (route is MainRouteAudioPlay) {
-                                    pageShellCapsuleScope.launch {
-                                        openPlayer(
-                                            PlaybackCapsuleState(
-                                                source = PlaybackCapsuleSource.AudioBook,
-                                                bookUrl = route.bookUrl.orEmpty(),
-                                                inBookshelf = route.inBookshelf,
-                                            )
-                                        )
-                                    }
-                                } else {
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        route,
-                                        navRouteTracker
-                                    )
-                                }
-                            },
-                            onNavigateBack = {
-                                MainNavigator.navigateBack(
-                                    this@MainActivity,
-                                    backStack,
-                                    navRouteTracker
-                                )
-                            },
-                            readAloudMorph = readAloudMorph.takeIf { useHomeCapsule },
-                            homePlaybackCapsuleEnabled = useHomeCapsule,
-                            capsuleAnchorPreview = capsuleAnchorPreview,
-                        )
-                    }
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .playerUnderlaySemantics(playerVisible || morphPresent)
-                    ) {
-                        NavDisplay(
-                            modifier = adaptiveDisplayModifier,
-                            backStack = backStack,
-                            // 交给 nav3 装上 SharedEntryInSceneNavEntryDecorator：这是跨 scene 保持
-                            // 共享元素登记的官方机制。少了它，书架 scene 一被销毁封面的登记就没了——
-                            // 打开书后「马上返回」还有封面转场、'待一会儿再返回'会退化成
-                            // 普通淡入淡出。
-                            sharedTransitionScope = this@SharedTransitionLayout,
-                            entryDecorators = listOf(
-                                rememberSaveableStateHolderNavEntryDecorator(),
-                                rememberViewModelStoreNavEntryDecorator(),
-                            ),
-                            sceneStrategies = listOf(
-                                remember {
-                                    ModalOverlaySceneStrategy(
-                                        isTopEntry = isTopEntry,
-                                        predictiveBackEnabled = { predictiveBackEnabled },
-                                    )
-                                },
-                                // 必须在 SinglePane 之前：宽窗口下把「列表/首页 → 详情」
-                                // 合成一个双栏场景，窄窗口自己 return null 退回单栏。
-                                remember(listDetailEnabled) {
-                                    ListDetailSceneStrategy(
-                                        isEnabled = { listDetailEnabled },
-                                        isEntryRetained = { contentKey ->
-                                            backStack.any { NavEntry(it) {}.contentKey == contentKey }
-                                        },
-                                        stackSize = { backStack.size },
-                                        environment = { currentAdaptiveEnvironment },
-                                        canCollapse = { !currentHasAdaptivePair },
-                                    )
-                                },
-                                SinglePaneSceneStrategy(),
-                            ),
-                            transitionSpec = {
-                                if (targetState is ListDetailScene) {
-                                    // 双栏自己演形变：左栏从占满窗口收到窗格宽度、右栏从右侧滑进来。
-                                    // 场景级再滑一次会让左栏里的首页跟着从头滑入，看起来像换了页面。
-                                    EnterTransition.None togetherWith ExitTransition.None
-                                } else {
-                                    (slideIntoContainer(
-                                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                        animationSpec = tween(
-                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
-                                            easing = FastOutSlowInEasing
-                                        ),
-                                        initialOffset = { fullWidth -> fullWidth }
-                                    ) + fadeIn(
-                                        animationSpec = tween(
-                                            durationMillis = NAV_FADE_DURATION_MILLIS,
-                                            easing = LinearOutSlowInEasing
-                                        )
-                                    )) togetherWith (slideOutOfContainer(
-                                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                        animationSpec = tween(
-                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
-                                            easing = FastOutSlowInEasing
-                                        ),
-                                        targetOffset = { fullWidth -> fullWidth / 4 }
-                                    ) + fadeOut(
-                                        animationSpec = tween(
-                                            durationMillis = NAV_FADE_DURATION_MILLIS,
-                                            easing = LinearOutSlowInEasing
-                                        )
-                                    ))
-                                }
-                            },
-                            popTransitionSpec = {
-                                if (initialState is ListDetailScene) {
-                                    // 返回时双栏要做「右栏滑出、左栏回满」的收拢动画，所以离场场景
-                                    // 必须活到动画结束；淡出叠加在收拢之上，下方已经恢复成单栏的同一页面。
-                                    EnterTransition.None togetherWith
-                                            fadeOut(
-                                                animationSpec = tween(
-                                                    durationMillis = NAV_SLIDE_DURATION_MILLIS,
-                                                    easing = LinearOutSlowInEasing
-                                                )
-                                            )
-                                } else {
-                                    (slideIntoContainer(
-                                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                        animationSpec = tween(
-                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
-                                            easing = FastOutSlowInEasing
-                                        ),
-                                        initialOffset = { fullWidth -> -fullWidth / 4 }
-                                    ) + fadeIn(
-                                        animationSpec = tween(
-                                            durationMillis = NAV_FADE_DURATION_MILLIS,
-                                            easing = LinearOutSlowInEasing
-                                        )
-                                    )) togetherWith (scaleOut(
-                                        targetScale = 0.8f,
-                                        animationSpec = tween(
-                                            durationMillis = NAV_SLIDE_DURATION_MILLIS,
-                                            easing = FastOutSlowInEasing
-                                        )
-                                    ) + fadeOut(animationSpec = tween(durationMillis = NAV_FADE_DURATION_MILLIS)))
-                                }
-                            },
-                            predictivePopTransitionSpec = { _ ->
-                                (slideIntoContainer(
-                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                    animationSpec = tween(easing = FastOutSlowInEasing),
-                                    initialOffset = { fullWidth -> -fullWidth / 4 }
-                                ) + fadeIn(animationSpec = tween(easing = LinearOutSlowInEasing))) togetherWith (scaleOut(
-                                    targetScale = 0.8f,
-                                    animationSpec = tween(easing = FastOutSlowInEasing)
-                                ) + fadeOut(animationSpec = tween()))
-                            },
-                            onBack = { MainNavigator.navigateBack(this@MainActivity, backStack) },
-                            entryProvider = navEntryProvider,
-                        )
-                    }
-                    // 全局胶囊与导航容器并列，始终画在阅读等 Nav3 叠层之上。
-                    // 主页开启悬浮底栏时仍使用主页自己的圆形胶囊。
-                    CompositionLocalProvider(
-                        // 收起完成后不再用残留进度给可点击胶囊加透明层。
-                        LocalReadAloudMorph provides readAloudMorph.takeIf {
-                            !useHomeCapsule && (playerVisible || readAloudMorph.progress.isRunning)
-                        }
-                    ) {
-                        ReadAloudShellHost(
-                            showCapsule = pageShellShowCapsule,
-                            hidden = useHomeCapsule,
-                            anchorPreview = capsuleAnchorPreview,
-                            onCapsulePositionChanged = { x, y ->
+        // 启动验证做成单独的 screen：门槛未过时完全不组合应用界面，
+        // 因此验证页背后看不到书架/阅读界面，也没有可交互的入口
+        PrivateAppStartGate {
+            Box(modifier = Modifier.fillMaxSize()) {
+                val navSharedTransitionScope = LocalMainSharedTransitionScope.current
+                // entryProvider 每次重建都会把各条目注册的 content/metadata 换成
+                // 全新的 lambda 实例，而 NavEntry 的相等判定要求 content 同身份、
+                // metadata 按值可比（lambda 只能按身份比）。摘栈瞬间库用最新一代
+                // provider 重建条目，与被摘栈手势开始时捕获的场景必然不相等，
+                // NavDisplay 松手校验 targetState == scene 失败就把预测手势判为
+                // "取消"——先退回当前页再重放一次摘栈（两拍闪），已组合的露出页
+                // 也随销毁重建冷启动。用 remember 锁住 provider 代次，跨重组不换代。
+                // 换代键只含会影响 mainEntryProvider 返回值的输入：相对 merge 前
+                // fork 版，上游合并后新增了 panesEnabled 入参，把派生它的
+                // listDetailEnabled 纳入键；useHomeCapsule 同时决定
+                // readAloudMorph 是否透传与 homePlaybackCapsuleEnabled，照旧参与换代。
+                val navEntryProvider = remember(
+                    backStack,
+                    configuration,
+                    mangaSettings.showMangaUi,
+                    useRail,
+                    navRouteTracker,
+                    navSharedTransitionScope,
+                    listDetailEnabled,
+                    useHomeCapsule,
+                    capsuleAnchorPreview,
+                ) {
+                    mainEntryProvider(
+                        backStack = backStack,
+                        configuration = configuration,
+                        showMangaUi = mangaSettings.showMangaUi,
+                        useRail = useRail,
+                        sharedTransitionScope = navSharedTransitionScope,
+                        panesEnabled = listDetailEnabled,
+                        onNavigationRailWidthChanged = { navigationRailWidth = it },
+                        navigateToRoute = { route ->
+                            if (route is MainRouteAudioPlay) {
                                 pageShellCapsuleScope.launch {
-                                    readAloudSettingsRepository.putCapsulePosition(x, y)
+                                    openPlayer(
+                                        PlaybackCapsuleState(
+                                            source = PlaybackCapsuleSource.AudioBook,
+                                            bookUrl = route.bookUrl.orEmpty(),
+                                            inBookshelf = route.inBookshelf,
+                                        )
+                                    )
                                 }
-                            },
-                            onOpenPlayer = { ReadAloudPlayerOverlayBus.request(it) },
-                        )
-                    }
-                    // 听书播放页：同窗口 morph 面板，从胶囊位置长出来。
-                    if (playerSource == PlaybackCapsuleSource.ReadAloud) ReadAloudPlayerMorphHost(
-                        playerViewModel = pageShellPlayerViewModel,
-                        playerState = pageShellPlayerState,
-                        morph = readAloudMorph,
-                        visible = readAloudPlayerVisible,
-                        awaitCapsuleAnchor = pageShellShowCapsule,
-                        predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
-                        onDismiss = { readAloudPlayerVisible = false },
-                        onSwitchToClassic = { bookUrl ->
-                            // 栈顶是阅读界面：让它直接落在经典朗读控制页；
-                            // 否则没有可用的阅读界面，打开一个新的。
-                            if (isReaderOnTop(backStack) &&
-                                io.legado.app.model.ReadBook.book?.bookUrl == bookUrl
-                            ) {
-                                ReadAloudControlsRequestBus.request()
                             } else {
                                 MainNavigator.navigateToRoute(
                                     backStack,
-                                    MainRouteReadBook(bookUrl = bookUrl.ifBlank { null }),
-                                    navRouteTracker,
+                                    route,
+                                    navRouteTracker
                                 )
                             }
                         },
-                        // 浮层设置弹窗里的跳页/提示意图：与朗读设置整页同一批目的地，
-                        // 由宿主统一处理导航与 toast。
-                        // 跳 nav3 页面记下来源栈顶，返回时重新展开浮层（见 playerReopenOnBack）。
-                        onSettingsEffect = { effect ->
-                            when (effect) {
-                                is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
-                                    val target = MainRouteCloudTtsEngines(
-                                        effect.bookUrl?.takeIf(String::isNotBlank)
+                        onNavigateBack = {
+                            MainNavigator.navigateBack(
+                                this@MainActivity,
+                                backStack,
+                                navRouteTracker
+                            )
+                        },
+                        readAloudMorph = readAloudMorph.takeIf { useHomeCapsule },
+                        homePlaybackCapsuleEnabled = useHomeCapsule,
+                        capsuleAnchorPreview = capsuleAnchorPreview,
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .playerUnderlaySemantics(playerVisible || morphPresent)
+                ) {
+                    NavDisplay(
+                        modifier = adaptiveDisplayModifier,
+                        backStack = backStack,
+                        // 交给 nav3 装上 SharedEntryInSceneNavEntryDecorator：这是跨 scene 保持
+                        // 共享元素登记的官方机制。少了它，书架 scene 一被销毁封面的登记就没了——
+                        // 打开书后「马上返回」还有封面转场、'待一会儿再返回'会退化成
+                        // 普通淡入淡出。
+                        sharedTransitionScope = navSharedTransitionScope,
+                        entryDecorators = listOf(
+                            rememberSaveableStateHolderNavEntryDecorator(),
+                            rememberViewModelStoreNavEntryDecorator(),
+                        ),
+                        sceneStrategies = listOf(
+                            remember {
+                                ModalOverlaySceneStrategy(
+                                    isTopEntry = isTopEntry,
+                                    predictiveBackEnabled = { predictiveBackEnabled },
+                                )
+                            },
+                            // 必须在 SinglePane 之前：宽窗口下把「列表/首页 → 详情」
+                            // 合成一个双栏场景，窄窗口自己 return null 退回单栏。
+                            remember(listDetailEnabled) {
+                                ListDetailSceneStrategy(
+                                    isEnabled = { listDetailEnabled },
+                                    isEntryRetained = { contentKey ->
+                                        backStack.any { NavEntry(it) {}.contentKey == contentKey }
+                                    },
+                                    stackSize = { backStack.size },
+                                    environment = { currentAdaptiveEnvironment },
+                                    canCollapse = { !currentHasAdaptivePair },
+                                )
+                            },
+                            SinglePaneSceneStrategy(),
+                        ),
+                        transitionSpec = {
+                            if (targetState is ListDetailScene) {
+                                // 双栏自己演形变：左栏从占满窗口收到窗格宽度、右栏从右侧滑进来。
+                                // 场景级再滑一次会让左栏里的首页跟着从头滑入，看起来像换了页面。
+                                EnterTransition.None togetherWith ExitTransition.None
+                            } else {
+                                (slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(
+                                        durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                        easing = FastOutSlowInEasing
+                                    ),
+                                    initialOffset = { fullWidth -> fullWidth }
+                                ) + fadeIn(
+                                    animationSpec = tween(
+                                        durationMillis = NAV_FADE_DURATION_MILLIS,
+                                        easing = LinearOutSlowInEasing
                                     )
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
+                                )) togetherWith (slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(
+                                        durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                        easing = FastOutSlowInEasing
+                                    ),
+                                    targetOffset = { fullWidth -> fullWidth / 4 }
+                                ) + fadeOut(
+                                    animationSpec = tween(
+                                        durationMillis = NAV_FADE_DURATION_MILLIS,
+                                        easing = LinearOutSlowInEasing
                                     )
-                                }
-
-                                is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
-                                    val target = MainRouteBookVoiceCasting(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-
-                                is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
-                                    val target = MainRouteSpeechStoryboard(effect.bookUrl)
-                                    playerReopenOnBack =
-                                        target.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack, target, navRouteTracker,
-                                    )
-                                }
-
-                                ReadAloudPlayerEffect.OpenTtsCache -> {
-                                    playerReopenOnBack =
-                                        MainRouteTtsCache.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteTtsCache,
-                                        navRouteTracker,
-                                    )
-                                }
-
-                                // 声音池 / 配乐池：与「设置 → 朗读设置 → 多角色朗读」hub
-                                // 是同一批目的地，这里把听书页的入口也接上。
-                                // 与上面几个跳页分支同理记下来源栈顶，返回时重开浮层。
-                                ReadAloudPlayerEffect.OpenVoicePool -> {
-                                    playerReopenOnBack =
-                                        MainRouteVoicePool.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteVoicePool,
-                                        navRouteTracker,
-                                    )
-                                }
-
-                                ReadAloudPlayerEffect.OpenBgmPool -> {
-                                    playerReopenOnBack =
-                                        MainRouteBgmPool.toString() to
-                                            (backStack.lastOrNull() ?: MainRouteHome).toString()
-                                    MainNavigator.navigateToRoute(
-                                        backStack,
-                                        MainRouteBgmPool,
-                                        navRouteTracker,
-                                    )
-                                }
-
-                                ReadAloudPlayerEffect.OpenSystemTtsSettings ->
-                                    IntentHelp.openTTSSetting()
-
-                                ReadAloudPlayerEffect.TtsCacheCleared ->
-                                    toastOnUi(getString(R.string.clear_cache_success))
-
-                                ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired ->
-                                    toastOnUi(
-                                        getString(R.string.speech_analysis_ai_model_required)
-                                    )
-
-                                else -> Unit
+                                ))
                             }
                         },
+                        popTransitionSpec = {
+                            if (initialState is ListDetailScene) {
+                                // 返回时双栏要做「右栏滑出、左栏回满」的收拢动画，所以离场场景
+                                // 必须活到动画结束；淡出叠加在收拢之上，下方已经恢复成单栏的同一页面。
+                                EnterTransition.None togetherWith
+                                        fadeOut(
+                                            animationSpec = tween(
+                                                durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                                easing = LinearOutSlowInEasing
+                                            )
+                                        )
+                            } else {
+                                (slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(
+                                        durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                        easing = FastOutSlowInEasing
+                                    ),
+                                    initialOffset = { fullWidth -> -fullWidth / 4 }
+                                ) + fadeIn(
+                                    animationSpec = tween(
+                                        durationMillis = NAV_FADE_DURATION_MILLIS,
+                                        easing = LinearOutSlowInEasing
+                                    )
+                                )) togetherWith (scaleOut(
+                                    targetScale = 0.8f,
+                                    animationSpec = tween(
+                                        durationMillis = NAV_SLIDE_DURATION_MILLIS,
+                                        easing = FastOutSlowInEasing
+                                    )
+                                ) + fadeOut(animationSpec = tween(durationMillis = NAV_FADE_DURATION_MILLIS)))
+                            }
+                        },
+                        predictivePopTransitionSpec = { _ ->
+                            (slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                animationSpec = tween(easing = FastOutSlowInEasing),
+                                initialOffset = { fullWidth -> -fullWidth / 4 }
+                            ) + fadeIn(animationSpec = tween(easing = LinearOutSlowInEasing))) togetherWith (scaleOut(
+                                targetScale = 0.8f,
+                                animationSpec = tween(easing = FastOutSlowInEasing)
+                            ) + fadeOut(animationSpec = tween()))
+                        },
+                        onBack = { MainNavigator.navigateBack(this@MainActivity, backStack) },
+                        entryProvider = navEntryProvider,
                     )
-                    if (playerSource == PlaybackCapsuleSource.AudioBook &&
-                        (audioPlayerVisible || morphPresent)
-                    ) {
-                        key(audioPlayerBookUrl, audioPlayerInBookshelf) {
-                            AudioPlayerMorphOverlay(
-                                bookUrl = audioPlayerBookUrl,
-                                inBookshelf = audioPlayerInBookshelf,
-                                morph = readAloudMorph,
-                                visible = audioPlayerVisible,
-                                awaitCapsuleAnchor = pageShellShowCapsule,
-                                predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
-                                onDismiss = { audioPlayerVisible = false },
+                }
+                // 全局胶囊与导航容器并列，始终画在阅读等 Nav3 叠层之上。
+                // 主页开启悬浮底栏时仍使用主页自己的圆形胶囊。
+                CompositionLocalProvider(
+                    // 收起完成后不再用残留进度给可点击胶囊加透明层。
+                    LocalReadAloudMorph provides readAloudMorph.takeIf {
+                        !useHomeCapsule && (playerVisible || readAloudMorph.progress.isRunning)
+                    }
+                ) {
+                    ReadAloudShellHost(
+                        showCapsule = pageShellShowCapsule,
+                        hidden = useHomeCapsule,
+                        anchorPreview = capsuleAnchorPreview,
+                        onCapsulePositionChanged = { x, y ->
+                            pageShellCapsuleScope.launch {
+                                readAloudSettingsRepository.putCapsulePosition(x, y)
+                            }
+                        },
+                        onOpenPlayer = { ReadAloudPlayerOverlayBus.request(it) },
+                    )
+                }
+                // 听书播放页：同窗口 morph 面板，从胶囊位置长出来。
+                if (playerSource == PlaybackCapsuleSource.ReadAloud) ReadAloudPlayerMorphHost(
+                    playerViewModel = pageShellPlayerViewModel,
+                    playerState = pageShellPlayerState,
+                    morph = readAloudMorph,
+                    visible = readAloudPlayerVisible,
+                    awaitCapsuleAnchor = pageShellShowCapsule,
+                    predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
+                    onDismiss = { readAloudPlayerVisible = false },
+                    onSwitchToClassic = { bookUrl ->
+                        // 栈顶是阅读界面：让它直接落在经典朗读控制页；
+                        // 否则没有可用的阅读界面，打开一个新的。
+                        if (isReaderOnTop(backStack) &&
+                            io.legado.app.model.ReadBook.book?.bookUrl == bookUrl
+                        ) {
+                            ReadAloudControlsRequestBus.request()
+                        } else {
+                            MainNavigator.navigateToRoute(
+                                backStack,
+                                MainRouteReadBook(bookUrl = bookUrl.ifBlank { null }),
+                                navRouteTracker,
                             )
                         }
+                    },
+                    // 浮层设置弹窗里的跳页/提示意图：与朗读设置整页同一批目的地，
+                    // 由宿主统一处理导航与 toast。
+                    // 跳 nav3 页面记下来源栈顶，返回时重新展开浮层（见 playerReopenOnBack）。
+                    onSettingsEffect = { effect ->
+                        when (effect) {
+                            is ReadAloudPlayerEffect.OpenEnginesAndVoices -> {
+                                val target = MainRouteCloudTtsEngines(
+                                    effect.bookUrl?.takeIf(String::isNotBlank)
+                                )
+                                playerReopenOnBack =
+                                    target.toString() to
+                                        (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                MainNavigator.navigateToRoute(
+                                    backStack, target, navRouteTracker,
+                                )
+                            }
+
+                            is ReadAloudPlayerEffect.OpenBookVoiceCasting -> {
+                                val target = MainRouteBookVoiceCasting(effect.bookUrl)
+                                playerReopenOnBack =
+                                    target.toString() to
+                                        (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                MainNavigator.navigateToRoute(
+                                    backStack, target, navRouteTracker,
+                                )
+                            }
+
+                            is ReadAloudPlayerEffect.OpenSpeechStoryboard -> {
+                                val target = MainRouteSpeechStoryboard(effect.bookUrl)
+                                playerReopenOnBack =
+                                    target.toString() to
+                                        (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                MainNavigator.navigateToRoute(
+                                    backStack, target, navRouteTracker,
+                                )
+                            }
+
+                            ReadAloudPlayerEffect.OpenTtsCache -> {
+                                playerReopenOnBack =
+                                    MainRouteTtsCache.toString() to
+                                        (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                MainNavigator.navigateToRoute(
+                                    backStack,
+                                    MainRouteTtsCache,
+                                    navRouteTracker,
+                                )
+                            }
+
+                            // 声音池 / 配乐池：与「设置 → 朗读设置 → 多角色朗读」hub
+                            // 是同一批目的地，这里把听书页的入口也接上。
+                            // 与上面几个跳页分支同理记下来源栈顶，返回时重开浮层。
+                            ReadAloudPlayerEffect.OpenVoicePool -> {
+                                playerReopenOnBack =
+                                    MainRouteVoicePool.toString() to
+                                        (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                MainNavigator.navigateToRoute(
+                                    backStack,
+                                    MainRouteVoicePool,
+                                    navRouteTracker,
+                                )
+                            }
+
+                            ReadAloudPlayerEffect.OpenBgmPool -> {
+                                playerReopenOnBack =
+                                    MainRouteBgmPool.toString() to
+                                        (backStack.lastOrNull() ?: MainRouteHome).toString()
+                                MainNavigator.navigateToRoute(
+                                    backStack,
+                                    MainRouteBgmPool,
+                                    navRouteTracker,
+                                )
+                            }
+
+                            ReadAloudPlayerEffect.OpenSystemTtsSettings ->
+                                IntentHelp.openTTSSetting()
+
+                            ReadAloudPlayerEffect.TtsCacheCleared ->
+                                toastOnUi(getString(R.string.clear_cache_success))
+
+                            ReadAloudPlayerEffect.SpeechAnalysisAiModelRequired ->
+                                toastOnUi(
+                                    getString(R.string.speech_analysis_ai_model_required)
+                                )
+
+                            else -> Unit
+                        }
+                    },
+                )
+                if (playerSource == PlaybackCapsuleSource.AudioBook &&
+                    (audioPlayerVisible || morphPresent)
+                ) {
+                    key(audioPlayerBookUrl, audioPlayerInBookshelf) {
+                        AudioPlayerMorphOverlay(
+                            bookUrl = audioPlayerBookUrl,
+                            inBookshelf = audioPlayerInBookshelf,
+                            morph = readAloudMorph,
+                            visible = audioPlayerVisible,
+                            awaitCapsuleAnchor = pageShellShowCapsule,
+                            predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
+                            onDismiss = { audioPlayerVisible = false },
+                        )
                     }
                 }
-                // 关闭预见性返回时由宿主在导航层之前接管返回：手势不跟手预览，
-                // 松手后走普通出栈，popTransitionSpec 的返回动画照常播放。
-                BackHandler(
-                    enabled = shouldHandleActivityBack(
-                        predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
-                        playerPresent = playerVisible || morphPresent,
-                    )
-                ) {
-                    MainNavigator.navigateBack(this@MainActivity, backStack)
-                }
+            }
+            // 关闭预见性返回时由宿主在导航层之前接管返回：手势不跟手预览，
+            // 松手后走普通出栈，popTransitionSpec 的返回动画照常播放。
+            BackHandler(
+                enabled = shouldHandleActivityBack(
+                    predictiveBackEnabled = configuration.appShell.predictiveBackEnabled,
+                    playerPresent = playerVisible || morphPresent,
+                )
+            ) {
+                MainNavigator.navigateBack(this@MainActivity, backStack)
             }
         }
         TextSheetHost()

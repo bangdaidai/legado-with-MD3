@@ -64,6 +64,11 @@ abstract class BaseComposeActivity(
     @Composable
     protected abstract fun Content()
 
+    @Composable
+    protected open fun AppRoot(content: @Composable () -> Unit) {
+        content()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         window.decorView.disableAutoFill()
         AppContextWrapper.applyFont(this)
@@ -85,7 +90,7 @@ abstract class BaseComposeActivity(
         setContent {
             val uiConfiguration by appUiConfigurationGateway.configuration
                 .collectAsStateWithLifecycle(initialUiConfiguration)
-            AppTheme(configuration = uiConfiguration) {
+            AppTheme(configuration = uiConfiguration, root = { AppRoot(it) }) {
                 SyncWindowBackground()
                 val themeSettings by themeSettingsGateway.settings
                     .collectAsStateWithLifecycle(initialThemeSettings)

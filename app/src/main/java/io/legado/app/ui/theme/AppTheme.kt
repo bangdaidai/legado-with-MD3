@@ -29,6 +29,7 @@ fun AppTheme(
     configuration: AppUiConfiguration,
     darkTheme: Boolean = configuration.isDarkTheme,
     applyBackground: Boolean = true,
+    root: @Composable (@Composable () -> Unit) -> Unit = { it() },
     content: @Composable () -> Unit
 ) {
     val currentContent by rememberUpdatedState(content)
@@ -37,7 +38,7 @@ fun AppTheme(
         if (LocalInspectionMode.current) {
             AppThemePreview(darkTheme, applyBackground, themedContent)
         } else {
-            AppThemeActual(configuration, darkTheme, applyBackground, themedContent)
+            AppThemeActual(configuration, darkTheme, applyBackground, root, themedContent)
         }
     }
 }
@@ -77,6 +78,7 @@ private fun AppThemeActual(
     configuration: AppUiConfiguration,
     darkTheme: Boolean,
     applyBackground: Boolean,
+    root: @Composable (@Composable () -> Unit) -> Unit,
     content: @Composable () -> Unit
 ) {
     val appShellSettings = configuration.appShell
@@ -190,52 +192,54 @@ private fun AppThemeActual(
         LocalLegadoThemeColors provides themeColors,
         LocalDensity provides appDensity,
     ) {
-        when (themeColors.composeEngine) {
-            ComposeEngine.Miuix -> {
-                MiuixThemeWrapper(
-                    themeColors = themeColors,
-                    customFontFamily = customFontFamily,
-                    applyBackground = applyBackground,
-                    content = content
-                )
-            }
-            ComposeEngine.Mochi -> {
-                val parentRegistry = LocalMochiBackdropRegistry.current
-                val registry = parentRegistry ?: remember { MochiBackdropRegistry() }
-                CompositionLocalProvider(LocalMochiBackdropRegistry provides registry) {
-                    val themedContent: @Composable () -> Unit = {
-                        MaterialThemeWrapper(themeColors, customFontFamily, applyBackground) {
-                            ProvideMochiTheme(themeColors.colorScheme, themeColors.isDark, content = content)
-                        }
-                    }
-                    if (parentRegistry == null) {
-                        val backdrop = registry.currentSheet?.let { Modifier.mochiSheetBackdrop(it) }
-                        Box(backdrop ?: Modifier, propagateMinConstraints = true) { themedContent() }
-                    } else {
-                        themedContent()
-                    }
+        root {
+            when (themeColors.composeEngine) {
+                ComposeEngine.Miuix -> {
+                    MiuixThemeWrapper(
+                        themeColors = themeColors,
+                        customFontFamily = customFontFamily,
+                        applyBackground = applyBackground,
+                        content = content
+                    )
                 }
-            }
-            ComposeEngine.Oxygen, ComposeEngine.Material, ComposeEngine.Coui -> {
-                MaterialThemeWrapper(
-                    themeColors = themeColors,
-                    customFontFamily = customFontFamily,
-                    applyBackground = applyBackground,
-                ) {
-                    if (themeColors.composeEngine == ComposeEngine.Oxygen) {
-                        ProvideOxygenTheme(useDefaultColors = useBuiltInPalette, content = content)
-                    } else if (themeColors.composeEngine == ComposeEngine.Coui && ThemeResolver.isCouiSupported()) {
-                        ProvideCouiTheme(themeColors.isDark, useBuiltInPalette) {
-                            // COUI 菜单的玻璃材质要采样所属窗口的内容根；单参数版保留隔离，
-                            // 与 Mochi 分支一样用 propagateMinConstraints 保持内容测量不变。
-                            ProvideCouiMenuBackdrop { backdropModifier ->
-                                Box(backdropModifier, propagateMinConstraints = true) {
-                                    content()
-                                }
+                ComposeEngine.Mochi -> {
+                    val parentRegistry = LocalMochiBackdropRegistry.current
+                    val registry = parentRegistry ?: remember { MochiBackdropRegistry() }
+                    CompositionLocalProvider(LocalMochiBackdropRegistry provides registry) {
+                        val themedContent: @Composable () -> Unit = {
+                            MaterialThemeWrapper(themeColors, customFontFamily, applyBackground) {
+                                ProvideMochiTheme(themeColors.colorScheme, themeColors.isDark, content = content)
                             }
                         }
-                    } else {
-                        content()
+                        if (parentRegistry == null) {
+                            val backdrop = registry.currentSheet?.let { Modifier.mochiSheetBackdrop(it) }
+                            Box(backdrop ?: Modifier, propagateMinConstraints = true) { themedContent() }
+                        } else {
+                            themedContent()
+                        }
+                    }
+                }
+                ComposeEngine.Oxygen, ComposeEngine.Material, ComposeEngine.Coui -> {
+                    MaterialThemeWrapper(
+                        themeColors = themeColors,
+                        customFontFamily = customFontFamily,
+                        applyBackground = applyBackground,
+                    ) {
+                        if (themeColors.composeEngine == ComposeEngine.Oxygen) {
+                            ProvideOxygenTheme(useDefaultColors = useBuiltInPalette, content = content)
+                        } else if (themeColors.composeEngine == ComposeEngine.Coui && ThemeResolver.isCouiSupported()) {
+                            ProvideCouiTheme(themeColors.isDark, useBuiltInPalette) {
+                                // COUI 菜单的玻璃材质要采样所属窗口的内容根；单参数版保留隔离，
+                                // 与 Mochi 分支一样用 propagateMinConstraints 保持内容测量不变。
+                                ProvideCouiMenuBackdrop { backdropModifier ->
+                                    Box(backdropModifier, propagateMinConstraints = true) {
+                                        content()
+                                    }
+                                }
+                            }
+                        } else {
+                            content()
+                        }
                     }
                 }
             }
