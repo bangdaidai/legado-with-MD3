@@ -534,6 +534,7 @@ fun ExploreSourceHeader(
                     onDismissRequest = { showMenu = false },
                     trigger = {},
                 )
+            }
         }
     }
 }

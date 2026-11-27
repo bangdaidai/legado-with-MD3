@@ -315,6 +315,8 @@ private fun CharacterIdentifySheet(
             }
         }
     }
+}
+
 @Composable
 private fun CharacterIdentifyCandidateRow(
     candidate: CharacterIdentifyCandidateUi,
