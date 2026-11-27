@@ -322,9 +322,10 @@ class ContentProcessor private constructor(
                 effectiveReplaceRules = arrayListOf()
                 fun trimLines(text: String) = text.lines().joinToString("\n") { it.trim() }
                 val beforeTrim = mContent
+                val trimProjection = projection
                 mContent = if (settings.adaptSpecialStyle) {
-                    if (projection != null) {
-                        transformOutsideRichMapped(mContent, projection) { text, map ->
+                    if (trimProjection != null) {
+                        transformOutsideRichMapped(mContent, trimProjection) { text, map ->
                             val trimmed = trimLines(text)
                             map?.let { check(it.bindWhitespace(text, trimmed)) }
                             trimmed
