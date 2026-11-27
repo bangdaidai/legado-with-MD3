@@ -41,7 +41,7 @@ fun ImportRssSourceScreen(
         onToggleItem = { onIntent(ImportRssSourceIntent.ToggleItem(it)) },
         onToggleAll = { onIntent(ImportRssSourceIntent.ToggleAll(it)) },
         onUpdateItem = { index, source -> onIntent(ImportRssSourceIntent.UpdateItem(index, source)) },
-        topBarActions = {
+        configContent = {
             Box {
                 MediumTonalButton(
                     icon = AppIcons.MoreVert,

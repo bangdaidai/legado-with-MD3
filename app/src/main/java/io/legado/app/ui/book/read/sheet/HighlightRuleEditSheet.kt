@@ -1750,7 +1750,7 @@ private fun DrawScope.drawReaderPreviewPage(
     }
     layout.background?.let { bitmap ->
         backgroundRuns.forEach { run ->
-            drawTextBackground(native, bitmap, run, backgroundPaint)
+            drawTextBackground(native, bitmap, run, backgroundPaint, 1.dp.toPx())
         }
     }
     decorations.halfHighlights.forEach { it.draw(native) }

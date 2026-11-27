@@ -65,6 +65,7 @@ import io.legado.app.ui.widget.components.progressIndicator.AppCircularProgressI
 import io.legado.app.ui.widget.components.progressIndicator.AppLinearProgressIndicator
 import io.legado.app.ui.widget.components.text.AppText
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import io.legado.app.utils.takePersistablePermissionSafely
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
@@ -270,7 +271,7 @@ fun ChangeSourceSheet(
             SheetAction(
                 icon = Icons.Default.MoreVert,
                 contentDescription = stringResource(R.string.more_menu),
-                menu = persistentListOf(
+                menu = (persistentListOf(
                     SheetMenuAction(
                         id = "check_author",
                         label = "校验作者",
@@ -327,7 +328,7 @@ fun ChangeSourceSheet(
                     )
                 } else {
                     persistentListOf()
-                },
+                }).toImmutableList(),
             ),
             SheetAction(
                 onClick = { showMigrationOptions = true },

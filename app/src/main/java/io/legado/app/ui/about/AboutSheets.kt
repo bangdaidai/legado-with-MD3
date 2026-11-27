@@ -2,7 +2,6 @@ package io.legado.app.ui.about
 
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Alignment
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,12 +16,14 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.legado.app.BuildConfig
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.button.PrimaryButton
@@ -110,7 +111,7 @@ fun UpdateSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     AppText(
-                        text = updateToVariant,
+                        text = AppConfig.updateToVariant,
                         style = LegadoTheme.typography.bodyMedium,
                         color = LegadoTheme.colorScheme.outline,
                     )

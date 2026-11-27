@@ -2290,7 +2290,7 @@ fun BookshelfPage(
             contentPadding = adaptiveContentPaddingBookshelfCoverGrid(
                 top = paddingValues.calculateTopPadding(),
                 bottom = (if (uiState.useRaisedBottomInset) 120.dp else 8.dp)
-                    .coerceAtLeast(bottomOverlayPadding),
+                    .coerceAtLeast(LocalBottomOverlayPadding.current),
                 immersive = immersiveGrid,
             ),
             // 列表模式同样支持每行多本：卡片宽度被切分后，相邻卡片的边框会贴成一条线，

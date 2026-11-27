@@ -15,6 +15,7 @@ object BookContentProcessEngine {
     fun apply(
         content: String,
         processes: List<BookContentProcess>,
+        onReplace: ((start: Int, end: Int, replacement: String) -> Unit)? = null,
     ): ApplyResult {
         if (content.isEmpty() || processes.isEmpty()) {
             return ApplyResult(content, emptyList())
@@ -50,27 +51,26 @@ object BookContentProcessEngine {
                 val range = findTargetRange(output, anchor) ?: return@forEach
                 val next = when (action.type) {
                     TextProcessAction.TYPE_REPLACE -> {
-                        output.replaceRange(
-                            range,
-                            normalizeProcessText(action.replacement.orEmpty())
-                        )
+                        val replacement = normalizeProcessText(action.replacement.orEmpty())
+                        onReplace?.invoke(range.first, range.last + 1, replacement)
+                        output.replaceRange(range, replacement)
                     }
 
-                    TextProcessAction.TYPE_DELETE -> output.removeRange(range)
+                    TextProcessAction.TYPE_DELETE -> {
+                        onReplace?.invoke(range.first, range.last + 1, "")
+                        output.removeRange(range)
+                    }
+
                     TextProcessAction.TYPE_INSERT_BEFORE -> {
-                        output.replaceRange(
-                            range.first,
-                            range.first,
-                            normalizeProcessText(action.text.orEmpty())
-                        )
+                        val text = normalizeProcessText(action.text.orEmpty())
+                        onReplace?.invoke(range.first, range.first, text)
+                        output.replaceRange(range.first, range.first, text)
                     }
 
                     TextProcessAction.TYPE_INSERT_AFTER -> {
-                        output.replaceRange(
-                            range.last + 1,
-                            range.last + 1,
-                            normalizeProcessText(action.text.orEmpty())
-                        )
+                        val text = normalizeProcessText(action.text.orEmpty())
+                        onReplace?.invoke(range.last + 1, range.last + 1, text)
+                        output.replaceRange(range.last + 1, range.last + 1, text)
                     }
 
                     else -> output

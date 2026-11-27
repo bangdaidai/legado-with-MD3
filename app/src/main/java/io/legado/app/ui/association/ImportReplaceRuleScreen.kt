@@ -40,7 +40,7 @@ fun ImportReplaceRuleScreen(
         onToggleItem = { onIntent(ImportReplaceRuleIntent.ToggleItem(it)) },
         onToggleAll = { onIntent(ImportReplaceRuleIntent.ToggleAll(it)) },
         onUpdateItem = { index, rule -> onIntent(ImportReplaceRuleIntent.UpdateItem(index, rule)) },
-        topBarActions = {
+        configContent = {
             Box {
                 MediumTonalButton(
                     icon = AppIcons.MoreVert,

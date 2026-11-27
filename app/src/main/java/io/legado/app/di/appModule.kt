@@ -733,7 +733,33 @@ val appModule = module {
     }
     viewModelOf(::ExploreShowViewModel)
     viewModelOf(::MyViewModel)
-    viewModelOf(::BookshelfViewModel)
+    viewModel {
+        BookshelfViewModel(
+            application = get(),
+            bookRepository = get(),
+            bookDomainRepository = get(),
+            bookGroupRepository = get(),
+            bookSourceRepository = get(),
+            bookshelfRepository = get(),
+            uploadRepository = get(),
+            batchCacheDownloadUseCase = get(),
+            updateBooksGroupUseCase = get(),
+            bookshelfSeriesUseCase = get(),
+            refreshTocUseCase = get(),
+            addBookUseCase = get(),
+            deleteBooksUseCase = get(),
+            importBookshelfUseCase = get(),
+            exportBookshelfUseCase = get(),
+            findShelfDuplicatesUseCase = get(),
+            bookshelfSettingsGateway = get(),
+            bookshelfTagGateway = get(),
+            appShellSettingsGateway = get(),
+            themeSettingsGateway = get(),
+            downloadCacheSettingsGateway = get(),
+            privateAccessGateway = get(),
+            privateContentGateway = get(),
+        )
+    }
     viewModelOf(::AiAutoGroupViewModel)
     viewModelOf(::MainViewModel)
     viewModelOf(::HomeViewModel)

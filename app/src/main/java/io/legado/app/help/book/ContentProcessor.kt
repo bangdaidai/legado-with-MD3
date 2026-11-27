@@ -347,6 +347,7 @@ class ContentProcessor private constructor(
                 getContentReplaceRules().forEach { item ->
                     if (item.pattern.isEmpty()) return@forEach
                     try {
+                        val ruleProjection = projection
                         val started = System.nanoTime()
                         val timeout = item.getValidTimeoutMillisecond()
 
@@ -375,12 +376,12 @@ class ContentProcessor private constructor(
                         // 无投影时只替换富文本标签外的正文并保留全部属性；有投影时
                         // 跳过富文本段，避免逐节点改写破坏呈现锚点。
                         fun replaceRichText(html: String): String =
-                            if (projection != null) html
+                            if (ruleProjection != null) html
                             else MixedContentSegments.transformPlainText(html) { replaceText(it, null) }
 
                         val tmp = if (settings.adaptSpecialStyle) {
-                            if (projection != null) {
-                                transformOutsideRichMapped(mContent, projection, ::replaceText)
+                            if (ruleProjection != null) {
+                                transformOutsideRichMapped(mContent, ruleProjection, ::replaceText)
                             } else {
                                 MixedContentSegments.transform(
                                     mContent,
@@ -389,7 +390,7 @@ class ContentProcessor private constructor(
                                 )
                             }
                         } else {
-                            replaceText(mContent, projection)
+                            replaceText(mContent, ruleProjection)
                         }
                         if (mContent != tmp) {
                             effectiveReplaceRules.add(item)
@@ -540,8 +541,10 @@ class ContentProcessor private constructor(
         protectedPageBreaks.zip(originalPageBreaks).forEach { (protected, original) ->
             replacements[original.range] = specialPlaceholder(replacements.size)
         }
-        val sorted = replacements.toSortedMap()
-        val originals = sorted.mapValues { content.substring(it.key) }
+        val sorted = replacements.toSortedMap(compareBy { it.first })
+        val originals = sorted.entries.associate { (range, placeholder) ->
+            placeholder to content.substring(range)
+        }
         val expected = buildString {
             var cursor = 0
             sorted.forEach { (range, placeholder) ->
